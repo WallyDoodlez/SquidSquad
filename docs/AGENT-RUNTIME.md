@@ -58,7 +58,7 @@ Every agent in an install runs in the same mode — there is one global mode for
 
 | Mode | What wakes the agent | Event-bus relationship | When to use |
 |---|---|---|---|
-| **Loop (polling)** | Cron timer (`/loop 30m execute one Ralph Loop cycle`) | **Emit-only** — agents may publish transient events for observability, but do NOT consume from the bus and do NOT maintain a cursor. Work queue + mechanical reactions both derive from tracker state. | Battle-tested fallback; works without the harness; current default |
+| **Loop (polling)** | Cron timer (e.g. `/loop 30m execute one Ralph Loop cycle` — interval per-install, see §6.2) | **Emit-only** — agents may publish transient events for observability, but do NOT consume from the bus and do NOT maintain a cursor. Work queue + mechanical reactions both derive from tracker state. | Battle-tested fallback; works without the harness; current default |
 | **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | **Emit + consume** — agents subscribe with a cursor; nudges + per-event reactions both originate from the bus. | Target steady-state; lower latency; no idle token burn |
 
 The cycle wrapper (pre → creative → post) is the same in both modes — only *what initiates the wrapper* and *where reactions derive from* differs. In loop mode the wrapper fires once per `/loop` timer tick. In event mode it fires once **per cared event** during a nudge-walk; a single nudge can produce multiple cycle wrappers (one per cared event) or zero (if every event in the batch is filtered out by the care filter). See §7.1 for the per-event sequence.
@@ -108,7 +108,7 @@ flowchart LR
 
 ## 3. The agent process tree (shared)
 
-Both modes use the same per-agent subprocess shape. Differences are inside the Claude session, not in the tree.
+Both modes use the same `cmd → thin_launcher → claude` core. **Event mode additionally spawns a sibling `event_poll` process** for the nudge contract (the dashed `Poll` sibling and harness-API edges in §3.2 below are event-mode-only). Loop mode runs only the core triple; `event_poll` is not spawned, and the harness-API edges originating from it do not exist. Differences are otherwise inside the Claude session, not in the tree.
 
 ### 3.1 System overview
 
@@ -171,7 +171,7 @@ flowchart TB
         TL["thin_launcher.py<br/>· writes .claude-pid<br/>· singleton enforcement (#8692)<br/>· spawns claude, waits for exit"]
         Claude["claude (the agent)<br/>· runs composed CLAUDE.md<br/>· has Monitor tool built in"]
         Monitor["Monitor tool<br/>(inside claude)<br/>reads stdin → wakes session"]
-        Poll["event_poll.py --wait --role <role> --target stdout<br/>(separate sibling process)<br/>· polls harness for events<br/>· writes one nudge line per batch"]
+        Poll["event_poll.py --wait --role <role> --target stdout<br/>(separate sibling process — EVENT MODE ONLY)<br/>· polls harness for events<br/>· writes one nudge line per batch"]
 
         Cmd --> TL
         TL --> Claude
@@ -180,7 +180,7 @@ flowchart TB
     end
 
     HarnessAPI[("Harness HTTP API")]
-    Poll -- "GET /events/for/{role}<br/>?since=cursor" --> HarnessAPI
+    Poll -- "GET /events/for/{role}<br/>?since=cursor<br/>(event mode only)" --> HarnessAPI
     Claude -- "POST /events<br/>(booted, ack)<br/>POST /work/assign" --> HarnessAPI
 ```
 
@@ -219,7 +219,7 @@ In loop mode, `event_poll` is not spawned — only `cmd → thin_launcher → cl
 
 The event bus is the harness HTTP API at port `7373` (default). Both modes use it:
 
-- **In loop mode**: optional observability layer. Agents emit events for diagnostics; pre-cycle reads recent events and applies mechanical reactions (e.g., PR merge → status transition). When the harness is down, agents fall back silently to git-only coordination.
+- **In loop mode**: emit-only observability layer (per §2 mutual exclusivity). Agents may emit events for diagnostics, but they do NOT consume from the bus and do NOT maintain a cursor. Pre-cycle mechanical reactions (e.g., PR merge → status transition) derive from tracker state changes since last cycle (§6.3) — never from event reads. When the harness is down, emits silently no-op.
 - **In event-driven mode**: load-bearing. The bus is how the harness wakes the agent in the first place. When the harness is down, event-mode agents sit idle until it recovers (see §8.4); falling back to loop mode is a manual operator action (recompose + restart), not an automatic runtime path.
 
 ### 4.1 Architectural commitments (locked principles)
@@ -245,6 +245,8 @@ In v2 the catalog collapses to **3 signal concepts / 4 catalog entries**:
 
 `ack-cursor` and `ack-stop` are sub-types of one concept (receipt confirmation) — shipped in `#9873-A`. Three signal concepts, four catalog entries.
 
+> **Naming note**: The `role` field in `booted` / `ack-cursor` payloads is the agent's **alias** value, preserved under the field-name `role` for code-compat with the wire format. Same pattern as `{role}` in HTTP path parameters (see §4.3). Field rename to `alias` is in the same family as #10358. `ack-stop.result` enum values are tracked as §9 Q11.
+
 #### Signal-flow at a glance
 
 ```mermaid
@@ -267,8 +269,8 @@ Removed under v2 (collectively 20 catalog entries):
 
 - **Lifecycle ticks**: `cycle-start`, `cycle-end` — local to the agent, no other agent cares.
 - **Git activity**: `git-pull`, `git-push`, `git-commit`, `branch-checkout` — local side effects, recorded in git itself.
-- **PR activity**: `pr-create`, `pr-merge`, `pr-merged` — recorded in forge; if relevant to another role, harness translates to `assigned-to`.
-- **Tracker activity**: `status-transition`, `tracker-comment` — recorded in forge as source of truth; if relevant to another role, harness translates to `assigned-to`.
+- **PR activity**: `pr-create`, `pr-merge`, `pr-merged` — recorded in forge; if relevant to another alias, harness translates to `assigned-to`.
+- **Tracker activity**: `status-transition`, `tracker-comment` — recorded in forge as source of truth; if relevant to another alias, harness translates to `assigned-to`.
 - **Harness internal**: `compose-completed`, `agent-health` — harness sees these in its own state; if action needed, harness emits `assigned-to`.
 - **Speculative RECOGNIZED entries**: `verification-passed`, `verification-failed`, `phase-change`, `request-merge`, `stop-requested`, `shipped`, `version-bump` — never emitted under v1, dead weight.
 
@@ -362,7 +364,7 @@ The endpoints throughout this section use `{role}` in path parameters (e.g., `GE
 ```mermaid
 sequenceDiagram
     participant ES as .event-state.json<br/>(harness-owned)
-    participant CP as cycle_pre.py / event_poll
+    participant CP as event_poll (event mode) /<br/>cycle_pre.py (event mode only)
     participant H as Harness
     participant CPO as cycle_post.py / agent ack
 
@@ -392,7 +394,7 @@ At-least-once delivery: cursor advances only after a successful ack. Crashed age
 
 #### Role-based filtering
 
-Under v2 the filter collapses to a single rule: **every role reacts only to `assigned-to`**. Specificity moves to `event_context` and the alias-match care filter (§7.4). There is no per-role event-type allowlist in the v2 catalog because the v2 catalog itself collapses to 3 signal concepts (§4.2) — multi-type filtering is moot once the catalog has one routing signal.
+Under v2 the filter collapses to a single rule: **every role-class reacts only to `assigned-to`**. Specificity moves to `event_context` and the alias-match care filter (§7.4). There is no per-role-class event-type allowlist in the v2 catalog because the v2 catalog itself collapses to 3 signal concepts (§4.2) — multi-type filtering is moot once the catalog has one routing signal.
 
 ```mermaid
 graph TD
@@ -403,7 +405,7 @@ graph TD
     ALL --> DM["dm: assigned-to (care filter on alias)"]
 ```
 
-> **v1 loop-mode legacy**. Today's loop-mode codebase still has a per-role event-type allowlist (client-side filter in `cycle_pre.py` via `_ROLE_EVENT_TYPES` dict; roles not in the dict receive all events). That filter exists because loop mode still emits the broader v1 catalog (lifecycle ticks, git/PR/tracker activity, etc. — see §4.2 "What is OUT of the v2 catalog"). The filter is retired as the v2 catalog migration completes (see §8); the diagram above is the v2 target.
+> **v1 loop-mode legacy**. Today's loop-mode codebase still has a per-role-class event-type allowlist (client-side filter in `cycle_pre.py` via `_ROLE_EVENT_TYPES` dict; role-classes not in the dict receive all events). That filter exists because loop mode still emits the broader v1 catalog (lifecycle ticks, git/PR/tracker activity, etc. — see §4.2 "What is OUT of the v2 catalog"). The filter is retired as the v2 catalog migration completes (see §8); the diagram above is the v2 target.
 
 ### 4.4 ExternalActivityDetector (EAD)
 
@@ -411,7 +413,7 @@ EAD is the bridge from forge → bus. It runs inside the harness on a polling lo
 
 1. Polls GitHub via REST API (`gh api repos/<owner>/<repo>/issues?since=<last_seen_iso>&state=all&per_page=100`).
 2. Diffs against last-seen timestamp on disk.
-3. For each changed issue, maps to a target role per a rule table (status label changes, comments, PR state changes).
+3. For each changed issue, maps to a target alias per a rule table (status label changes, comments, PR state changes).
 4. Emits one `assigned-to` per (forge change, target_alias) pair into the deque.
 5. Records the new last-seen timestamp so it doesn't re-emit on restart.
 
@@ -449,7 +451,7 @@ Two-tier backoff: 10s → 30s → 60s. A quiet period stabilizes at 60s after �
 
 | State | Polls/hr | Calls/hr (incl. 1–3 follow-ups per change) | % of quota |
 |---|---|---|---|
-| Steady-state quiet | ~120 | ~120 | 2% |
+| Steady-state quiet (60s ceiling) | ~60 | ~60 | 1% |
 | Steady-state active | ~360 | ~360–720 | 7–14% |
 | Worst-case burst (10 changes/poll, sustained) | ~360 | ~3600 | 72% |
 
@@ -636,7 +638,7 @@ Both are idempotent against already-handled issues (e.g., transitioning a closed
 
 ### 6.4 Improvement subloop (loop mode)
 
-In loop mode, when a cycle finds no work in the queue (no pending-test, no pending-ship, no nudges to process, no human input), the cycle is **quiet**. Quiet cycles run an improvement scan as their creative phase — the same activity event mode triggers via §7.6's drained-queue path. The trigger is "the cycle wrapper fired and found nothing else to do," not a separate timer; throttling, ownership per role, and output routing all match §7.6.
+In loop mode, when a cycle finds no work in the queue (no pending-test, no pending-ship, no nudges to process, no human input), the cycle is **quiet**. Quiet cycles run an improvement scan as their creative phase — the same activity event mode triggers via §7.6's drained-queue path. The trigger is "the cycle wrapper fired and found nothing else to do," not a separate timer; throttling, ownership per role-class, and output routing all match §7.6.
 
 See §7.6 for the substantive scan rules; this section's purpose is to anchor that those rules are not event-mode-exclusive.
 
@@ -678,7 +680,7 @@ Agents may delegate work to subagents via the Agent tool. This subsection descri
 - Reserve Opus 4.7 for complex reasoning, multi-step planning, architectural review, or work that requires holding many constraints simultaneously.
 - The parent agent's own model is independent of subagent model choice.
 
-**Per-role overrides** (L3 content authored alongside the role's other L3 sub-skills; takes effect by appearing later in compose's `(slot, ordinal)` order than the L1 default):
+**Per-role-class overrides** (L3 content authored alongside the role-class's other L3 sub-skills; takes effect by appearing later in compose's `(slot, ordinal)` order than the L1 default):
 
 - `worker` (and variants like `skill`): subagent spawns default to Sonnet — the heavy thinking is in the parent. (Authority: memory rule `feedback_skill_sonnet_subagents`.)
 - `dm`: subagent spawns default to Sonnet — `dm`'s work is mostly mechanical packaging. (Authority: memory rule `feedback_dm_sonnet_subagents`.)
@@ -742,7 +744,9 @@ Two-tier backoff: 5s → 30s → 60s. A drained queue stabilizes at 60s after �
 
 Nudge format is literal `NUDGE\n` with no payload — the agent always does `GET /events/for/{role}?since=cursor` to find out what's new. False positives (a `NUDGE` arriving when no relevant events exist) are harmless because the GET returns `[]`.
 
-`event_poll`'s lifecycle is harness-owned: `boot_agent(role)` spawns it sequentially after `thin_launcher` has been launched and before the harness awaits the `booted` handshake (see §7.2 boot diagram), the health poller watches its PID, and the harness respawns it on death while `intent=running`. `event_poll` discovers the harness port via the same mechanism documented for agents in §4.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. The harness does not pass a `--port` argument; the discovery file is sufficient and avoids stale-port hardcoding if the harness restarts on a different port. On harness restart, any `event_poll` orphaned by the prior harness exits when its `--wait` parent pipe closes; the new harness re-spawns it as part of the §7.2 boot sequence for each `intent=running` agent. event_poll does not attempt independent reconnect — it dies with the harness it was spawned by.
+`event_poll`'s lifecycle is harness-owned: the health poller watches its PID and the harness respawns it on death while `intent=running`. `event_poll` discovers the harness port via the same mechanism documented for agents in §4.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. The harness does not pass a `--port` argument; the discovery file is sufficient and avoids stale-port hardcoding if the harness restarts on a different port. On harness restart, any `event_poll` orphaned by the prior harness exits when its `--wait` parent pipe closes; the new harness re-spawns it as part of the boot sequence for each `intent=running` agent. event_poll does not attempt independent reconnect — it dies with the harness it was spawned by.
+
+`event_poll`'s spawn ordering relative to the rest of the boot sequence is canonical in [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md). In summary: `event_poll` spawns as a harness-direct sibling of the `thin_launcher → claude` chain (not a descendant), begins polling immediately on spawn, and is unaffected by the `booted` handshake (which gates routed-work delivery, not `event_poll` activity).
 
 ### 7.1 The nudge contract
 
@@ -803,56 +807,21 @@ sequenceDiagram
 
 ### 7.2 Boot sequence
 
+For the full process spawn ordering across harness, launcher, claude, and event_poll, see [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md). This section focuses on the **agent-side boot** — what the `claude` process does once it's running.
+
 The harness tracks each agent with two distinct fields in `.squidsquad/.harness-state.json`:
 - **`intent`** = what the operator wants (`running` | `stopping` | `stopped`)
 - **`status`** = what the agent is actually doing (`booting` | `ready` | `stopping` | `stopped` | `crashed`)
 
 These move independently. The operator sets `intent`; the harness updates `status` as it observes lifecycle transitions.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Op as Operator/Harness
-    participant H as Harness
-    participant TL as thin_launcher
-    participant C as claude.exe (agent)
-    participant EP as event_poll
-    participant WS as working-state.md
+**Agent-side boot steps** (what the `claude` process does after it starts):
 
-    Op->>H: start agent (role)
-    H->>H: write intent=running, status=booting<br/>in .harness-state.json
-    H->>TL: spawn (cmd.exe → thin_launcher role)
-    H->>EP: spawn (event_poll --wait)
-    TL->>TL: write .claude-pid<br/>(cmd.exe PID)
-    TL->>C: spawn claude.exe
-    Note over C: Boot bootstrap runs<br/>(common/boot-bootstrap.md)<br/>status still = booting
-
-    C->>H: POST /events {type: booted,<br/>role, pid, clone_path, version}
-    H->>H: validate intent==running<br/>(reject if stopping/stopped)
-    H->>H: write status=ready<br/>(transition: booting → ready)
-    H-->>C: 200 OK + event_id
-
-    C->>H: GET /events/cursor/{role}
-    H-->>C: {cursor: <id> | null}
-
-    C->>WS: read working-state.md
-    WS-->>C: state (active task, key decisions)
-
-    alt working-state has active task matching cursor
-        C->>C: resume work
-    else working-state shows task already done
-        C->>H: POST /events {type: ack-cursor, event_id, role}
-        Note over C,H: advance past stale events
-    else clean state
-        C->>H: GET /events/for/{role}?since=cursor
-        H-->>C: [any queued events]
-        Note over C: process per §7.1 walk if any,<br/>otherwise enter idle wait
-    end
-
-    Note over C,EP: Agent now status=ready.<br/>Next nudge wakes it.
-```
-
-event_poll begins polling immediately on spawn; the harness's deque retains events from boot onward so any work the agent should pick up is durably available — but cursor-clean handshake (`booted`) happens before the harness considers the agent ready to receive routed work via `POST /work/assign`. The race window is bounded by the deque maxlen=1000 and the typical sub-second boot delay.
+1. Read the composed `CLAUDE.md` (already on disk in the agent's clone dir at boot — written by the compose pipeline).
+2. Read `.squidsquad/<alias>/working-state.md` for crash-recovery context (active task, key decisions).
+3. Emit `booted` event (`POST /events {type: booted, role, pid, clone_path, version}`) — this is the cursor-clean handshake. The harness transitions `status: booting → ready` on receipt.
+4. Read events at cursor (`GET /events/for/{role}?since=cursor`) or wait for nudge if queue is empty.
+5. Enter ready state — process queued events per §7.1 walk, then idle-wait for next nudge.
 
 #### Agent state machine
 
@@ -870,7 +839,7 @@ stateDiagram-v2
 ```
 
 State semantics:
-- **`booting`** — `intent=running`, subprocess spawned, `booted` event NOT yet received. Health poller does NOT count agent as alive yet (boot-grace window applies). Any `assigned-to` events for the role queue but are NOT delivered until status flips to `ready`.
+- **`booting`** — `intent=running`, subprocess spawned, `booted` event NOT yet received. Health poller does NOT count agent as alive yet (boot-grace window applies). Any `assigned-to` events for the alias queue but are NOT delivered until status flips to `ready`.
 - **`ready`** — `intent=running`, `booted` received, agent listening for nudges. Steady-state "alive". Both idle and actively-working agents are `ready`.
 - **`stopping`** — `intent=stopping`; harness emits `assigned-to(role, event_context="stop-intent")` so the agent finishes current work and emits `ack-stop`. Timeout: 30s grace → SIGTERM → 10s → SIGKILL.
 - **`stopped`** — process is dead AND `intent=stopped`. Terminal until operator restarts.
@@ -1057,13 +1026,13 @@ flowchart TD
 
 **Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
 
-**What the subloop does** (role-specific, one bounded task per fire):
+**What the subloop does** (role-class-specific, one bounded task per fire):
 - **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
 - **verifier**: TEST-PLAN backlog catch-up
 - **worker**: doc-scan or test-coverage scan on owned modules
 - **dm**: doc realignment + CHANGELOG hygiene + version-bump readiness
 
-Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and routes it). That nudges the owning role into work — via the same `/work/assign` path everything else uses.
+Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and routes it). That nudges the owning alias into work — via the same `/work/assign` path everything else uses.
 
 ---
 
@@ -1077,11 +1046,11 @@ Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and ro
 event-driven: no    # global — applies to all agents
 ```
 
-There is no per-role override and no runtime mode-detection — mode is settled at compose time for every agent in the install. An install is either entirely event-driven or entirely loop-mode at any given moment; mixed states only exist transiently during a recompose roll-out (some agents restarted, others not yet — §8.2). The installer writes `event-driven: no` as the default at install time (per INSTALLER-ARCH §4.8 Phase 5 step 1). The operator subsequently edits this field to flip modes per §8.2.
+There is no per-role-class override and no runtime mode-detection — mode is settled at compose time for every agent in the install. An install is either entirely event-driven or entirely loop-mode at any given moment; mixed states only exist transiently during a recompose roll-out (some agents restarted, others not yet — §8.2). The installer writes `event-driven: no` as the default at install time (per INSTALLER-ARCH §4.8 Phase 5 step 1). The operator subsequently edits this field to flip modes per §8.2.
 
 **How mode selection actually works** (compose-time only):
 
-`compose.py` reads `event-driven:` and produces a *mode-specific* composed CLAUDE.md for each role. The manifest choice (`includes.yml` vs `includes-events.yml`) is made at compose time. The procedural fragments split by mode:
+`compose.py` reads `event-driven:` and produces a *mode-specific* composed CLAUDE.md for each role-class. The manifest choice (`includes.yml` vs `includes-events.yml`) is made at compose time. The procedural fragments split by mode:
 
 - **Loop mode** — `roles/<role>/ralph-loop-overview.md` is inlined into the composed CLAUDE.md at compose time.
 - **Event mode** — uses a **two-tier mechanism**. `boot-bootstrap` (one of the sub-skills the event manifest declares) IS inlined at compose time. But `boot-bootstrap` contains Read-tool instructions that **load the `common-events/*.md` fragments** (`l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling`) **at agent session start**, not at compose time. The `common-events/*` files are therefore not in the composed CLAUDE.md body — they enter the agent's context on boot via `boot-bootstrap`'s Read calls.
@@ -1138,7 +1107,7 @@ In **loop mode**, the harness's reachability is not a boot gate at all — loop-
 
 ### 8.5 Migration from loop → event mode (v2 closure plan)
 
-The v2 build ships as 5 grouped PRs. The **letters** (A–F) are logical-grouping identifiers — they cluster related work; the **numbers** (1–5) are the dependency-driven implementation order. The two orderings differ on purpose: e.g., Group A is the foundation and ships first, but Group B (cursor wire) is held until after C has landed so its wire-format changes don't conflict with EAD restart-safety.
+The v2 build ships as 6 grouped PRs. The **letters** (A–F) are logical-grouping identifiers — they cluster related work; the **numbers** (1–6) are the dependency-driven implementation order. The two orderings differ on purpose: e.g., Group A is the foundation and ships first, but Group B (cursor wire) is held until after C has landed so its wire-format changes don't conflict with EAD restart-safety.
 
 | # | Group | What it does | Risk |
 |---|---|---|---|
@@ -1164,7 +1133,7 @@ PM's inbox is disambiguated by `event_context`. The full set in use:
 - From the `tracker.py` auto-routing table (§7.3): `"planning-needed"`, `"human-needed"` (for `* → pending-human-review|setup` transitions), `"unowned-rejection"` (fallback for rejected items with no `role:*` label), `"unowned-approval"` (fallback for approved items with no `role:*` label).
 - From the catalog-trim translators (§8.5): `"compose-needed"` (recompose required), `"agent-down"` (health-poller observed an agent stall).
 - From EAD: `"human-comment"` (forge comment by a human author).
-- From agents calling `/work/assign` directly: `"process-concern"` for ad-hoc routing of cross-role process issues to PM; `"route-help"` for mis-route recovery (an agent received work it doesn't own and re-routed to PM for triage — see §7.3).
+- From agents calling `/work/assign` directly: `"process-concern"` for ad-hoc routing of cross-role-class process issues to PM; `"route-help"` for mis-route recovery (an agent received work it doesn't own and re-routed to PM for triage — see §7.3).
 
 PM agents recognize this set as their care-filter; new values added in future require both an emitter update and an entry in this list.
 
@@ -1187,7 +1156,14 @@ PM agents recognize this set as their care-filter; new values added in future re
 | Q9 | `compose.py` changes for v2 | Trim catalog, retire emit calls, add `compose-needed` translator |
 | Q10 | Migration plan | Feature flag `event-driven: yes/no` in `.squidsquad/config.md` |
 
-> Net-new open questions surfaced during the loop+event merge (this doc): NONE so far. Add below as they surface.
+> Net-new open questions surfaced during the loop+event merge (this doc): listed below.
+
+| # | Question | Status |
+|---|---|---|
+| Q11 | `ack-stop.result` enum values | Open — target shape `'checkpointed' \| 'aborted' \| 'drained'`; not yet locked. Pin alongside harness stop-path spec. |
+| Q12 | `role:*` label rewrite timing | Open — the §7.3 routing table assumes the issue's `role:*` label reflects the target alias for the *new* state at the moment of `/work/assign`. The rewrite mechanism (who rewrites; whether `tracker.py transition` carries a state-machine table from `(new-state, prior role:*)` → `new role:*`) is unspecified. Block on `tracker.py transition` spec; see #10358 family. |
+| Q13 | `emitter_alias` derivation for self-assign invariant | Open — §7.3 says the harness rejects `assigned-to` where `target_alias == emitter_alias`, but the `/work/assign` request shape (§7.3 sequence diagram) carries no `emitter_alias` field. Target mechanism likely an `X-Squidsquad-Alias` request header set by `tracker.py` (and by direct callers); EAD-emitted events would set `emitter_alias = '__ead__'` exempt from the check. Pin alongside group D (alias-existence validation, §8.5). |
+
 
 ---
 
@@ -1199,7 +1175,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 - **Nudge**: a single stdin line written by `event_poll` to wake a Claude session via the Monitor tool.
 - **Cursor**: per-alias harness-owned pointer to "events tended through here."
 - **EAD**: ExternalActivityDetector — the harness's forge poller that translates forge state changes into `assigned-to` events.
-- **Care filter**: the per-role decision of whether to act on an event or skip it.
+- **Care filter**: the per-alias decision of whether to act on an event or skip it. In v2 the filter is `target_alias == my_alias`; see §7.4.
 - **Improvement subloop**: time-throttled self-care work the agent runs when its queue is empty. Applies in both modes — quiet cycles in loop mode (§6.4) and drained-queue detection in event mode (§7.6).
 
 ### 10.2 Related docs
@@ -1229,14 +1205,14 @@ PM agents recognize this set as their care-filter; new values added in future re
   - **Terminology**: removed all current-repo concrete-instance references (no `skill`, no `dev`, no "concrete-install snapshot" framing). The doc uses only the four L2 categorical role names: `pm`, `verifier`, `worker`, `dm` — sourced from the L2 capability layer (`agent-boundaries`), which is the canonical name source. *(Per later revisions: L2 is **Role** in the L1-L4 compose model and `agent-boundaries` was retired — see PR #10359. This entry preserves the then-current framing as historical context.)* Terminology table simplified to 4 rows with no concrete-instance column; role-filtering diagram drops the per-install qualifier and uses categorical names directly; stack-specific specialization is noted as `worker`/`verifier` variants rather than as alternative role names.
   - **Mode flag**: dropped per-role event-driven config (`event-driven-pm: yes` etc.). `event-driven:` is now a single global flag for the install — the whole squad runs in loop mode together or event-driven mode together. §8.1 rewritten; §8.2 mode-flip steps now install-wide; §8.3 boot decision tree simplified to one ConfigGate before the harness probe. Rationale: keeps the harness contract uniform (load-bearing for everyone, or observational for everyone), avoids the cross-role coordination puzzle of mixed modes.
 - **2026-05-23 (rev 7) — post-rev-6 DS verification + §7.6 diagram fix.** DS round-7 verification found 2 actionable findings (1 MED, 1 LOW); both applied: §8.1 clarified that mixed modes are not *configurable* but degraded fallback can produce a transient mixed-mode state per-agent (the previous wording falsely implied install-wide uniformity even under fallback); §8.4 reworded to distinguish the configured `event-driven: no` path (loop mode by design) from the `event-driven: yes` + probe-fail fallback path (the prior "regardless of config" wording collapsed the two). Also: §7.6 subloop diagram nodes now use quoted-label form ({"…"}, ["…"]) so unquoted parentheses can't break Mermaid rendering. The "sub-skill" terminology is retained as the canonical compose-fragment term and is distinct from the "skill" agent-role term that was removed in rev 6 (DS flagged as info, accepted as intentional). DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-7.md`.
-- **2026-05-23 (rev 8) — final convergence + cadence-math fixes.** DS round-8 confirmed all R7 fixes correct and returned 2 LOW math errors: EAD cadence "≈3 minutes" → "≈2 minutes" (correct: 6 polls × 10/20/30/60/90/120s = 120s = 2 min); event_poll cadence "≈2.5 minutes idle" → "≈1.75 minutes idle" (correct: 6 polls × 5/10/15/45/75/105s = 105s ≈ 1.75 min). Both fixed. The doc is now mathematically and architecturally converged. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-8.md`.
+- **2026-05-23 (rev 8) — final convergence + cadence-math fixes.** DS round-8 confirmed all R7 fixes correct and returned 2 LOW math errors: EAD cadence "≈3 minutes" → "≈2 minutes" (correct: 3 polls at 10s + 3 polls at 30s = 120s = 2 min to reach the 60s ceiling); event_poll cadence "≈2.5 minutes idle" → "≈1.75 minutes idle" (correct: 3 polls at 5s + 3 polls at 30s = 105s ≈ 1.75 min). Both fixed. The doc is now mathematically and architecturally converged. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-8.md`.
 - **2026-05-25 (rev 9) — post-#6274 `qa` → `verifier` rename + loop/event mutual-exclusivity on event-bus axis + vault invocation polish.** Three coordinated edits:
   - **Role rename**: post-#6274 (shipped 2026-05-23) the canonical role is `verifier`, not `qa`. Swept all instance-level references in this doc (Terminology table, §2.1 latency-floor example, §3.1 + §3.2 mermaid subgraph and tree labels, §4.3 role-filtering diagram, §7.3 verification-needed sequence diagram + routing table, §7.5 EAD safety-net sequence diagram, §7.6 subloop role list). Wire-format strings updated too: `target_role:qa` → `target_alias:verifier`, `role:qa` → `role:verifier`, `event_context:"qa-rejected"` → `event_context:"verifier-rejected"`, `GET /events/for/qa` → `GET /events/for/verifier`. Note: live code (`references/scripts/triage.py`, `cycle_pre.py:614`) still emits `qa-rejected` — doc now describes architectural target; code task to skill.
   - **Loop/event mutual exclusivity** (§2 + §4.5 + §4.6 + §6.1 + §6.3 + §7 lead): loop mode is now documented as emit-only on the event bus (no consume, no cursor); event mode is the exclusive home for bus consumption + cursor logic. Loop-mode mechanical reactions derive from tracker state changes since last cycle (timestamp dedup in working-state.md), not from event-bus reads. Rationale: keeps the harness contract uniform — loop is observational-only, event is load-bearing.
   - **Vault invocation** (§6.1 diagram + §6.6 new sub-section): named the four Phase 2 vault touchpoints + boot-time BRIEFING read + the inline-vs-subagent execution lane principle (heavy sub-skills `vault-remember` and `vault-synthesis` run on the `sonnet` tier via background subagent; light ones `vault-protocol` and `vault-optimize` stay inline). Cross-references VAULT-ARCH §7 for the lane principle's full rationale.
   - **Vault flag retirement** (§6.1 diagram): dropped the `· read vault-remember + vault-optimize flags` line from Phase 1 and the `· advance event cursor` line from Phase 3 (both per the above changes). The vault-remember/vault-optimize `Enabled` flags in `config.md` are being retired; both sub-skills are always-on and self-gate via their per-cycle conditions. Code task to skill.
 - **2026-05-25 (rev 10) — class vs alias as routing primitive + responsibility.md / permission-table retirement.** Architectural simplification arc:
-  - **Class vs alias** (Terminology refactor + wire-format swap): role classes (pm/dm/worker/verifier) are categorical and have uniform L2/L3 + bus contract per class; aliases are per-agent unique names from `config.md` `## Aliases`. An install may have 1..N agents per class — e.g., 2 frontend + 2 backend worker-class agents named `frontend-1`, `frontend-2`, `backend-1`, `backend-2` (four worker-class agents, four distinct aliases). Specialty/skill (FE/BE/iOS/etc.) lives in SOUL.md + L4, not in a separate class. Wire-format field `target_role` renamed to `target_alias` across all 16 catalog + sequence-diagram + routing-table references; care filter is now `target_alias == my_alias`; EAD emits one assigned-to per (forge change, target_alias) pair.
+  - **Class vs alias** (Terminology refactor + wire-format swap): role classes (pm/dm/worker/verifier) are categorical and have uniform L2/L3 + bus contract per class; aliases are per-agent unique names from `config.md` `## Aliases`. An install may have 1..N agents per class — e.g., 2 frontend + 2 backend worker-class agents named `frontend-1`, `frontend-2`, `backend-1`, `backend-2` (four worker-class agents, four distinct aliases). Specialty/skill (FE/BE/iOS/etc.) lives in SOUL.md + L4, not in a separate class. *(Note: §1 Terminology now locates specialty in **L3 (the domain layer)** instead — see `feedback-l3-specialty-layering`. This rev-10 entry preserves the as-of-rev-10 framing; current canonical statement is §1.)* Wire-format field `target_role` renamed to `target_alias` across all 16 catalog + sequence-diagram + routing-table references; care filter is now `target_alias == my_alias`; EAD emits one assigned-to per (forge change, target_alias) pair.
   - **`responsibility.md` retired**: the file's prose responsibility narrative was ~90% redundant with L2/L3 (which compose into each agent's CLAUDE.md anyway); the only load-bearing content was the `## Bus contract` section. Permission tables are being retired entirely (next bullet), so `responsibility.md` has no remaining purpose. Marked for code-task deletion.
   - **Permission table retired**: the harness no longer maintains a class-from-class `accepts assigned-to from:` permission table. Rationale: it duplicated discipline that already lives in each agent's L2/L3/L4 + SOUL.md; it conflicted with §4.1's "harness is a transport bus, not an orchestrator" principle; and the human-team analogy (mis-routed tickets get pushed back, no security guard at the assignment desk) applies. Replaced with two minimal harness checks: (1) target-alias existence (404 if unknown) and (2) self-assign invariant (rejected by structure, not by permission). Mis-route recovery happens at the agent layer: receiving agent recognizes out-of-domain work and re-assigns via the same `/work/assign` call to the correct alias; if recipient is unknown, routes to `pm` with `event_context="route-help"`.
   - §7.3 `/work/assign permission model` subsection replaced with `/work/assign validation + mis-route recovery`. §7.4 care filter section drops the L2-derived permission-table mention. §8.5 Group D row repurposed from "L2-derived permissions" to "alias-existence validation". §9 Q2 and Q6 updated to match.

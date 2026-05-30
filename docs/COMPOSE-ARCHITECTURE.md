@@ -22,7 +22,7 @@ Establish a single source of truth for how SquidSquad **composes** the per-agent
 >
 > CLI flag names in this codebase (`--role`, `SQUIDSQUAD_ROLE`, `cycle.py status-bar <role>`, `compose.py deploy <role>`) accept **alias** values, not role-class names — the `<role>` parameter name predates the alias/role-class distinction and is preserved for code-compat. Callers (including the installer's Phase 6 invocation, see INSTALLER-ARCH §4.9) pass the install-time alias (e.g. `pm`, `frontend-1`, `verifier`) as the argument. Compose internally resolves the alias → role-class via `.squidsquad/config.md`'s `## Aliases` registry to find the right L4 file. See [AGENT-RUNTIME §4.3 Vocabulary note](AGENT-RUNTIME.md) and [HARNESS-ARCH §9](HARNESS-ARCH.md).
 
-The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault description. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their authored sources under `references/sub-skills/` (plain markdown fragments). A **project-scoped Claude-skills installer** that materializes each sub-skill into the project's local `.claude/skills/<name>/SKILL.md` is target-state but not yet shipped — see §4.5.1 Gap.
+The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault slot content. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their authored sources under `references/sub-skills/` (plain markdown fragments). A **project-scoped Claude-skills installer** that materializes each sub-skill into the project's local `.claude/skills/<name>/SKILL.md` is target-state but not yet shipped — see §4.5.1 Gap.
 
 The composition must:
 
@@ -78,7 +78,7 @@ flowchart LR
 
 - Redesigning the L1-L4 *responsibility model* itself — that landed in #9925 and is preserved as-is.
 - Defining the event bus, harness lifecycle, or agent state machine — see [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md).
-- Replacing the role concept itself (pm / verifier / worker / dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology) — those are stable.
+- Replacing the role-class concept itself (pm / verifier / worker / dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology) — those are stable.
 - Specifying the wizard install flow beyond compose hooks — see `WIZARD.md`.
 
 ---
@@ -89,12 +89,12 @@ Four layers, in shipping/precedence order:
 
 | Layer | Purpose | Authoring location | Authored by |
 |---|---|---|---|
-| **L1** — Base | What ANY SquidSquad agent is. Universal baseline: identity foundation, core principles, tracker protocol, cycle runner transport, inter-agent communication via forge (§5.1.1). Every role on every install starts from here. | `references/sub-skills/common/` (sub-skills L1 references) and the L1 portion of role source files | SquidSquad maintainers (shipped) |
-| **L2** — Role | Role-specific behaviours: `pm` coordinates, `verifier` verifies, `dm` packages, `worker` implements. The role-defining contract (responsibility, role-specific instructions, role-specific tone). | `references/roles/<role>/instructions.md` + `references/roles/<role>/SOUL.md` + `references/sub-skills/roles/<role>/` | SquidSquad maintainers (shipped) |
-| **L3** — Variant (role + domain) | Per-stack or per-domain specialization of a role: a `worker` for the android stack, a `verifier` for the web stack, etc. Same role contract narrowed to a domain. | `references/roles/<role>/<domain>/` (e.g. `roles/worker/android/`, `roles/verifier/web/`) | SquidSquad maintainers (shipped) |
-| **L4** — Project (per-install + role-class) | **Long-living** project-local customizations of one role-class for this install. Permanent or load-bearing facts about THIS project that diverge from default SquidSquad behaviour — not short-term cycle state. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context (durable facts), identity overlays. (Does NOT include `vault` — L1-exclusive per §3.3.) | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
+| **L1** — Base | What ANY SquidSquad agent is. Universal baseline: identity foundation, core principles, tracker protocol, cycle runner transport, inter-agent communication via forge (§5.1.1). Every role-class on every install starts from here. | `references/sub-skills/common/` (sub-skills L1 references) and the L1 portion of role source files | SquidSquad maintainers (shipped) |
+| **L2** — Role | Role-class-specific behaviours: `pm` coordinates, `verifier` verifies, `dm` packages, `worker` implements. The role-class-defining contract (responsibility, role-class-specific instructions, role-class-specific tone). | `references/roles/<role>/instructions.md` + `references/roles/<role>/SOUL.md` + `references/sub-skills/roles/<role>/` | SquidSquad maintainers (shipped) |
+| **L3** — Variant (role-class + domain) | Per-stack or per-domain specialization of a role-class: a `worker` for the android stack, a `verifier` for the web stack, etc. Same role-class contract narrowed to a domain. | `references/roles/<role>/<domain>/` (e.g. `roles/worker/android/`, `roles/verifier/web/`) | SquidSquad maintainers (shipped) |
+| **L4** — Project (per-install + role-class) | **Long-living** project-local customizations of one role-class for this install. Permanent or load-bearing facts about THIS project that diverge from default SquidSquad behaviour — not short-term cycle state. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context (durable facts), identity overlays. (Does NOT include the `vault` slot — vault slot is L1-exclusive per §3.3.) | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
 
-**Each layer is *more specific* than the previous**: L1 = every agent → L2 = this role → L3 = this role + this domain → L4 = this role + this domain + this install. Cross-cutting sub-skills like `vault-protocol`, `improvement-scan`, `git-commit`, `agent-lifecycle` live in `references/sub-skills/common/` and are **referenced from** the appropriate layer (usually L1) — they aren't a layer themselves; they're shared procedures that layered instructions invoke.
+**Each layer is *more specific* than the previous**: L1 = every agent → L2 = this role-class → L3 = this role-class + this domain → L4 = this role-class + this domain + this install. Cross-cutting sub-skills like `vault-protocol`, `improvement-scan`, `git-commit`, `agent-lifecycle` live in `references/sub-skills/common/` and are **referenced from** the appropriate layer (usually L1) — they aren't a layer themselves; they're shared procedures that layered instructions invoke.
 
 **Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **long-living memory of how this project diverges from default SquidSquad behaviour** — permanent project traits, standing human preferences, and load-bearing facts. Short-term state (current phase, in-flight PRs, today's blockers, cycle counters) is **NOT** L4 — it belongs in `.squidsquad/vault/BRIEFING.md` (the working short-term summary) or the tracker itself.
 
@@ -122,7 +122,7 @@ flowchart TB
     L4["<b>L4 — Project</b><br/>Per-install + role-class customizations.<br/>replace / insert / append ops on L1-L3.<br/><i>.squidsquad/project/&lt;role-class&gt;.md</i>"]
   end
   L3 --> L4
-  L4 -->|"compose.py deploy &lt;role&gt;"| OUT["<b>.squidsquad/&lt;role&gt;/CLAUDE.md</b><br/>composed output — DO NOT EDIT"]
+  L4 -->|"compose.py deploy &lt;alias&gt; (per §1: alias-valued)"| OUT["<b>.squidsquad/&lt;alias&gt;/CLAUDE.md</b><br/>composed output — DO NOT EDIT"]
 ```
 
 ---
@@ -133,7 +133,7 @@ flowchart TB
 
 Compose has **two distinct input axes**, easy to conflate:
 
-- **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
+- **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role-class → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
 - **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory). It is a sibling of `.squidsquad/project/` and `.squidsquad/<alias>/`, NOT under `project/` — distinct from L4 files. **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by an optional `## Aliases` H2 section listing each install-time alias → role-class + L3 domain mapping (used by `compose.py` for alias-existence validation and by `tracker.py` for routing). It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, top-level `event-driven:` mode flag, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
 
 The two axes interact at compose time. Examples:
@@ -198,7 +198,7 @@ flowchart LR
         L4A["one file, multiple<br/>H2 sections — each<br/>declares an op against<br/>one slot (§3.3)"]
     end
 
-    Gather{{"<b>Link</b> (§4.1–§4.5)<br/><br/>1. Gather all L1-L4 files for target role<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Validate sub-skill refs"}}
+    Gather{{"<b>Link</b> (§4.1–§4.5)<br/><br/>1. Gather all L1-L4 files for target role-class<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Validate sub-skill refs"}}
 
     L1A & L1B & L1C --> Gather
     L2A & L2B & L2C --> Gather
@@ -229,7 +229,7 @@ flowchart LR
 
 **Read this diagram from left to right**: each layer holds *many* files; each file declares one slot via frontmatter; compose gathers + groups + sorts, applies L4 ops, and the result lands in one of six composed sections. The same composed section is fed by files from multiple layers — Identity in the composed output is the concatenation of every `slot: identity` file from L1 + L2 + L3 (in ordinal order), then any L4 op applied on top.
 
-**Why this model** — sub-skills, role-specific fragments, and cross-cutting content can each live in their own source file with their own frontmatter, but still land in the right composed section. L4 ops target slots + step IDs (not source filenames), so reorganizing L1-L3 files doesn't break L4 customizations.
+**Why this model** — sub-skills, role-class-specific fragments, and cross-cutting content can each live in their own source file with their own frontmatter, but still land in the right composed section. L4 ops target slots + step IDs (not source filenames), so reorganizing L1-L3 files doesn't break L4 customizations.
 
 ---
 
@@ -253,7 +253,7 @@ step-ids: [step:cycle/<name>, step:boot/<name>, ...]  # for instructions slot on
 >
 > May be replaced by a regular `.md` with explicit frontmatter; the shorthand is equivalent, not load-bearing.
 >
-> (Responsibility-slot content used to have a parallel shorthand at `references/sub-skills/roles/<role>/responsibility.md`. That file is retired per §5.5; responsibility content now lives in the role's L2 source via explicit `slot: responsibility` frontmatter, not via filename convention. The shorthand is gone.)
+> (Responsibility-slot content used to have a parallel shorthand at `references/sub-skills/roles/<role>/responsibility.md`. That file is retired per §5.5; responsibility content now lives in the role-class's L2 source via explicit `slot: responsibility` frontmatter, not via filename convention. The shorthand is gone.)
 
 Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10, 20, 30) so future inserts don't require renumbering.
 
@@ -333,13 +333,13 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 | `project-context` | append only | **L4-only slot** — L1-L3 cannot author this slot (no cross-install layer can know about a specific project — see §5.5). Compose rejects any L1-L3 source file with `slot: project-context` frontmatter. L4 entries seeded by installer Phase 1 + accumulated at runtime by `l4-curation`. |
 | `vault` | N/A (L1-exclusive — L4 cannot contain a `## Vault` section at all) | **Scope of "L1-exclusive"**: refers to *the composed `## Vault` section text in CLAUDE.md* — the short framework-shipped slot describing the vault contract (PARAG model, entity types, wikilink grammar, confidence levels). It does NOT refer to the on-disk vault knowledge store at `.squidsquad/vault/`, which is read/written at runtime by agents via vault sub-skills (see `references/sub-skills/common/vault-protocol.md` and VAULT-ARCH). The "Legal ops" column reflects what L4 H3 blocks may target; for vault specifically, this differs from other "no legal ops" rows — vault sections in L4 are *structurally forbidden*, not just op-restricted. Compose rejects any L2/L3/L4 source file with `slot: vault` frontmatter. (L1 fragments still compose via the normal `(slot, ordinal)` ordering — that's fragment combination, not an op.) Guardrail (2026-05-29): per-role / per-domain / per-project customization is currently disallowed to keep the vault contract stable; revisit if a concrete customization pattern emerges. See G4. |
 
-Compose **must reject** any L4 file whose section structure violates these constraints. Examples of rejections: a `### replace` (any form) H3 under `## Soul`; a bare `### replace` (no target) under any slot except `## Responsibility`; a step-targeted `### replace step:cycle/<step-id>` under `## Responsibility` (no step IDs to target there); any `## Vault` section in an L4 file (vault is L1-exclusive — see §5.6 + G4). Compose **also rejects** any L1-L3 source file that declares `slot: project-context` (Project Context is L4-exclusive — see §5.5), and any L2/L3/L4 source file that declares `slot: vault` (Vault is L1-exclusive — see §5.6).
+Compose **must reject** any L4 file whose section structure violates these constraints. Examples of rejections: a `### replace` (any form) H3 under `## Soul`; a bare `### replace` (no target) under any slot except `## Responsibility`; a step-targeted `### replace step:cycle/<step-id>` under `## Responsibility` (no step IDs to target there); any `## Vault` section in an L4 file (vault slot is L1-exclusive — see §5.6 + G4). Compose **also rejects** any L1-L3 source file that declares `slot: project-context` (Project Context is L4-exclusive — see §5.5), and any L2/L3/L4 source file that declares `slot: vault` (vault slot is L1-exclusive — see §5.6).
 
 > **Vault differs from other "no legal ops" rows.** For most slots, "no legal ops" means L4 may not perform any H3 op on that slot's content. Vault is stricter: a `## Vault` H2 section in an L4 file is *structurally forbidden* — compose rejects the entire L4 source file if it contains one. The N/A in the table is not "the slot exists but L4 has no ops to perform on it"; it means the slot must not appear in L4 at all.
 
 #### 3.4 Soul slot — semantic-merge precedence
 
-The soul slot encodes a role's identity (values, tone, professional posture). Because identity is not safe to overwrite positionally, soul L4 is restricted to append-only (per §3.3 above). At compose time, the L4 `## Soul` section content is concatenated after the shipped L1–L3 soul content within the slot.
+The soul slot encodes a role-class's identity (values, tone, professional posture). Because identity is not safe to overwrite positionally, soul L4 is restricted to append-only (per §3.3 above). At compose time, the L4 `## Soul` section content is concatenated after the shipped L1–L3 soul content within the slot.
 
 The composed CLAUDE.md therefore presents both views: shipped soul first, project-local append second. When an agent reads the composed soul section and notices that the L4 append contradicts the shipped L1–L3 soul, **the L4 append wins**. This semantic-merge precedence is a runtime rule the agent applies when interpreting its own composed identity, not a compose-time rewrite — the shipped soul stays on disk for traceability, and the precedence is settled by ordering convention (L4 last) plus an explicit precedence note that the soul slot emits at the L4 append boundary.
 
@@ -393,7 +393,7 @@ Compose is a **two-stage compiler**: **link** then **assemble**.
 
 | Stage | What it does | Determinism |
 |---|---|---|
-| **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. |
+| **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role-class, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role-class, wake-mode, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. |
 | **Assemble** (§4.6) | Each linked slot body is rewritten by an agent into a single coherent voice — eliminates contradictions, conditional negations, awkward insertions left over from op layering. Produces the final agent-consumable **assembled** prose. | Stochastic on first run; cached by `(linked-body, slot-purpose, model-id)` hash, so deterministic from the caller's POV across re-deploys with unchanged inputs. |
 
 Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). The **linked** output is preserved as a sibling artifact (`.squidsquad/<alias>/CLAUDE.linked.md`) for audit, debugging, and fallback when the assemble pass fails. Both are git-tracked.
@@ -405,7 +405,7 @@ Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). 
 Compose processes L1-L3 deterministically:
 
 1. **Collect**: walk `references/sub-skills/`, `references/roles/<role>/`. For each file with frontmatter, read its `slot` and `ordinal`. For files in the `instructions` slot, also extract the sub-skill name referenced in the file body (e.g. from `→ run sub-skill: <name>` directives) — this is a body-extracted reference, not a frontmatter field. Files whose frontmatter declares an L4-exclusive slot (`slot: project-context`) or a higher-layer-only slot (e.g., `slot: vault` from L2-L4) are **rejected with a diagnostic — compose aborts** with a clear error pointing at the offending file. This is a validation rule, not a silent skip — invalid frontmatter blocks composition entirely so the operator can fix the source.
-2. **Filter by role**: each file may declare which roles it applies to (via `roles:` frontmatter list; default = all). Files not applicable to the current role are dropped.
+2. **Filter by role-class**: each file may declare which role-classes it applies to (via `roles:` frontmatter list; default = all). Files not applicable to the current role-class are dropped.
 3. **Sort**: stable sort by `(slot_index, ordinal)`. `slot_index` is a fixed enum: identity=0, responsibility=1, soul=2, instructions=3, project-context=4, vault=5.
 4. **Emit orchestration**: under the appropriate top-level section header, emit each file's orchestration content verbatim. Inside the `instructions` slot, step bodies are **references to sub-skills by name** (e.g. `→ run sub-skill: pipeline-sentinel`) rather than inlined sub-skill content. The catalog of available sub-skills lives at [`sub-skill-catalog.md`](sub-skill-catalog.md) — composed CLAUDE.md never duplicates it.
 
@@ -426,7 +426,7 @@ After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsqu
 3. Validate:
    - every `step:` reference resolves to a real L1-L3 step ID;
    - no two `replace` H3 blocks target the same ID;
-   - H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` in any form is forbidden under `## Soul`, `## Identity`, and `## Project Context`; bare `### replace` (no target) is forbidden under `## Instructions` (only step-targeted `replace` is legal there); step-targeted `### replace step:…` is forbidden under `## Responsibility` (no step IDs to target); `## Vault` is forbidden entirely in L4 — vault is L1-exclusive per §3.3 + §5.6);
+   - H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` in any form is forbidden under `## Soul`, `## Identity`, and `## Project Context`; bare `### replace` (no target) is forbidden under `## Instructions` (only step-targeted `replace` is legal there); step-targeted `### replace step:…` is forbidden under `## Responsibility` (no step IDs to target); `## Vault` is forbidden entirely in L4 — vault slot is L1-exclusive per §3.3 + §5.6);
    - every L4 `append` block under `## Instructions` contains at least one `→ run sub-skill: <name>` reference resolvable against the catalog (§4.5) — arbitrary prose without a reference aborts compose with a clear error.
 
 If validation fails, compose **aborts with a diagnostic** naming the offending H3 block. No partial output is written.
@@ -443,9 +443,9 @@ L4 is not instructions-only. Project customization spans every slot:
 | `soul` | A soul overlay tightening a default trait (e.g. "More formal tone in customer-facing communication.") |
 | `instructions` | Project-specific cycle step ("On every cycle, also check `incidents.md` for open SEV1 tickets.") |
 | `project-context` | "Production deploys go through `infra/deploy.sh`, not `gh`. Use the bundled script for any deployment work." |
-| `vault` | *(not L4-authorable — vault is L1-exclusive per §3.3 + §5.6. Projects that need bespoke vault behaviour file a framework feature request.)* |
+| `vault` | *(not L4-authorable — vault slot is L1-exclusive per §3.3 + §5.6. Projects that need bespoke vault behaviour file a framework feature request.)* |
 
-Op grammar varies per slot (see §3.3 "Per-slot op constraints"): `instructions` accepts all four ops (`append` / `insert-before` / `insert-after` / `replace`); `responsibility` accepts `append` plus a whole-slot `replace` (no step targeting); `identity` and `soul` are append-only; `project-context` is L4-exclusive append-only (L1-L3 reject); `vault` is L1-exclusive append-only (L2-L4 reject). This makes L4 the **single project-level customization mechanism** — there is no other place where deployed projects add or override behaviour — *except* the vault slot, which is framework-owned for now (see §5.6 + G4).
+Op grammar varies per slot (see §3.3 "Per-slot op constraints"): `instructions` accepts all four ops (`append` / `insert-before` / `insert-after` / `replace`); `responsibility` accepts `append` plus a whole-slot `replace` (no step targeting); `identity` and `soul` are append-only; `project-context` is L4-exclusive append-only (L1-L3 reject); `vault` slot is L1-exclusive (L2-L4 reject). This makes L4 the **single project-level customization mechanism** — there is no other place where deployed projects add or override behaviour — *except* the vault slot, which is framework-owned for now (see §5.6 + G4).
 
 ### 4.4 End-to-end pipeline (link + assemble)
 
@@ -462,7 +462,7 @@ flowchart TB
   MP --> Sort
   ME --> Sort[Stable sort by<br/>slot_index, ordinal]
   Sort --> Base[L1-L3 base composition<br/>built in memory]
-  Base --> L4Walk["Read .squidsquad/project/&lt;role&gt;.md<br/>(one file; H2 slot sections + H3 op blocks)"]
+  Base --> L4Walk["Read .squidsquad/project/&lt;role-class&gt;.md<br/>(one file per role-class — per §3.3;<br/>H2 slot sections + H3 op blocks)"]
   L4Walk --> L4Group[Group L4 ops by slot]
   L4Group --> L4Apply[Within each slot, apply ops:<br/>1. all replace<br/>2. all insert-before / insert-after<br/>3. all append]
   L4Apply --> Validate{Validate:<br/>L4 targets resolve?<br/>DRY ok? no orphans?}
@@ -487,7 +487,7 @@ flowchart TB
 
 `CLAUDE.linked.md` is written **only on full success**, alongside `CLAUDE.md` and `CLAUDE.conflicts.md`, in a single atomic write. There is no scenario where `CLAUDE.linked.md` exists without a successful `CLAUDE.md`.
 
-**Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose.
+**Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role-class, wake-mode, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose.
 
 ### 4.5 Link: Sub-skill reference resolution
 
@@ -683,7 +683,7 @@ The link stage and the assemble stage are both load-bearing under this contract.
 
 ## 5. Composed-output structure
 
-Every role's composed `CLAUDE.md` has exactly **six top-level H2 sections**, in this order:
+Every role-class's composed `CLAUDE.md` has exactly **six top-level H2 sections**, in this order:
 
 ```
 # <Role> Agent
@@ -700,7 +700,7 @@ No other H2 may appear at the document top level. (Sub-sections at H3+ are unres
 
 ### 5.1 Identity
 
-- What this agent's primary function is (role-specific: "pm coordinates the squad", "verifier verifies worker output", etc.).
+- What this agent's primary function is (role-class-specific: "pm coordinates the squad", "verifier verifies worker output", etc.).
 - Team membership ("You are a SquidSquad agent on a four-role team: pm, verifier, worker, dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology section.").
 - Lifecycle governance ("Your wake mechanism — polling or event-driven — is determined by the harness. The harness owns all start/stop/restart authority.").
 - Team-awareness: who the other roles are and what they do (one short paragraph each).
@@ -752,7 +752,7 @@ sequenceDiagram
 
 ### 5.2 Responsibility
 
-The role-boundary contract: **what this role does, what it does NOT do, and why it matters.** Distinct from Identity (which is the short "what this agent is" headline) and from Soul (which is values/voice). Responsibility is the explicit enumeration of role scope that prevents drift into other roles' lanes.
+The role-class boundary contract: **what this role-class does, what it does NOT do, and why it matters.** Distinct from Identity (which is the short "what this agent is" headline) and from Soul (which is values/voice). Responsibility is the explicit enumeration of role-class scope that prevents drift into other role-classes' lanes.
 
 Typical structure within the section:
 
@@ -769,20 +769,20 @@ Typical structure within the section:
 (one paragraph framing the seam this role holds)
 ```
 
-**Responsibility is not a sub-skill.** Sub-skills are focused units of how-to (per [`sub-skill-catalog.md`](sub-skill-catalog.md)); responsibility is identity-layer content that defines *who the role is*, not *how it does things*. It is therefore composed as a dedicated slot — not via the sub-skill catalog.
+**Responsibility is not a sub-skill.** Sub-skills are focused units of how-to (per [`sub-skill-catalog.md`](sub-skill-catalog.md)); responsibility is identity-layer content that defines *who the role-class is*, not *how it does things*. It is therefore composed as a dedicated slot — not via the sub-skill catalog.
 
 **Authoring across layers:**
 
-- **L1** — universal team-discipline base (e.g. "every SquidSquad agent declines out-of-scope work by routing to the correct role, not by leaving it stalled").
-- **L2** — the role-specific does/doesn't/why contract. This is the primary authoring location for each role's responsibility content.
+- **L1** — universal team-discipline base (e.g. "every SquidSquad agent declines out-of-scope work by routing to the correct alias, not by leaving it stalled").
+- **L2** — the role-class-specific does/doesn't/why contract. This is the primary authoring location for each role-class's responsibility content.
 - **L3** — variant-specific additions (e.g. a frontend-specialized worker may add stack-specific "does NOT" rules around backend work).
-- **L4** — optional. Project-local installs may `append` extra role-boundary rules (e.g. "this project's PM also owns release-note review") OR `replace` the whole slot to fully redefine the role for an unusual install. See §3.3 per-slot op constraints.
+- **L4** — optional. Project-local installs may `append` extra role-class boundary rules (e.g. "this project's PM also owns release-note review") OR `replace` the whole slot to fully redefine the role-class for an unusual install. See §3.3 per-slot op constraints.
 
-The composed section stacks all L1-L3 responsibility content in `(slot, ordinal)` order (per §3.2), then applies any L4 op. With no L4 responsibility section, the role inherits L1-L3 unchanged.
+The composed section stacks all L1-L3 responsibility content in `(slot, ordinal)` order (per §3.2), then applies any L4 op. With no L4 responsibility section, the role-class inherits L1-L3 unchanged.
 
-> **Whole-slot `replace` on responsibility is an escape hatch, not a default tool.** Unlike `soul` (which is append-only with §3.4 semantic-merge precedence so shipped persona stays on disk), an L4 `### replace` on `## Responsibility` **silently discards the entire L1-L3 responsibility block** for that role — including L1's universal team-discipline base ("decline by routing to the correct role") and L2's role-specific does/does-NOT/why contract. The `l4-curation` elicitation dialog must surface this consequence to the human before persisting any whole-slot replace on responsibility, and route most "I want to change PM's boundaries" requests toward `append` instead. Whole-slot replace is intended for genuinely unusual installs where the shipped role contract doesn't apply (e.g. a single-human project that has no DM at all), not for incremental tweaks.
+> **Whole-slot `replace` on responsibility is an escape hatch, not a default tool.** Unlike `soul` (which is append-only with §3.4 semantic-merge precedence so shipped persona stays on disk), an L4 `### replace` on `## Responsibility` **silently discards the entire L1-L3 responsibility block** for that role-class — including L1's universal team-discipline base ("decline by routing to the correct alias") and L2's role-class-specific does/does-NOT/why contract. The `l4-curation` elicitation dialog must surface this consequence to the human before persisting any whole-slot replace on responsibility, and route most "I want to change PM's boundaries" requests toward `append` instead. Whole-slot replace is intended for genuinely unusual installs where the shipped role-class contract doesn't apply (e.g. a single-human project that has no DM at all), not for incremental tweaks.
 
-The team-awareness baseline (role roster — who else is on the team) lives in §5.1 Identity, *not* in this slot. Responsibility is the *self*-awareness content (what THIS role does and does NOT do); Identity carries the *team*-awareness content (who other roles are). The decline-and-route discipline that formerly lived in the retired `agent-boundaries` sub-skill is folded into this slot's "does NOT do" sub-section as the rule "decline out-of-scope work by routing to the role that owns it, never by leaving it stalled."
+The team-awareness baseline (role roster — who else is on the team) lives in §5.1 Identity, *not* in this slot. Responsibility is the *self*-awareness content (what THIS role-class does and does NOT do); Identity carries the *team*-awareness content (who other role-classes are). The decline-and-route discipline that formerly lived in the retired `agent-boundaries` sub-skill is folded into this slot's "does NOT do" sub-section as the rule "decline out-of-scope work by routing to the alias that owns it, never by leaving it stalled."
 
 ### 5.3 Soul
 
@@ -791,7 +791,7 @@ The agent's professional identity, voice, perspective. **A regular L1-L4 slot, n
 **Authoring across layers:**
 
 - **L1** — universal voice baseline (e.g. "speak in first person; never invent claims you cannot verify").
-- **L2** — role-specific persona. The conventional authoring filename is `references/roles/<role>/SOUL.md`, which compose treats as **shorthand for a file with `slot: soul, ordinal: 1` frontmatter**. No magic — just a documented filename convention so the source file is easy to find. A regular `.md` with explicit `slot: soul` frontmatter under `references/sub-skills/` or `references/roles/<role>/` works identically.
+- **L2** — role-class-specific persona. The conventional authoring filename is `references/roles/<role>/SOUL.md`, which compose treats as **shorthand for a file with `slot: soul, ordinal: 1` frontmatter**. No magic — just a documented filename convention so the source file is easy to find. A regular `.md` with explicit `slot: soul` frontmatter under `references/sub-skills/` or `references/roles/<role>/` works identically.
 - **L3** — variant-specific persona adjustments (e.g. a frontend-specialized worker's voice). Same frontmatter mechanism.
 - **L4** — optional. Lives inside the per-role-class L4 file (`.squidsquad/project/<role-class>.md`) under a `## Soul` H2 section per §3.3. The legacy `*-soul-directives.md` multi-file L4 pattern is deprecated (see §7.3).
 
@@ -865,7 +865,7 @@ Why no sub-skill: statusline writes are too granular (a single `cycle.py status-
 
 ### 5.5 Project Context
 
-Project-shaped descriptive facts — *what is true about this project / role*, not *how the role does work*. Concretely the slot covers:
+Project-shaped descriptive facts — *what is true about this project / role-class*, not *how the role-class does work*. Concretely the slot covers:
 
 - **Domain / audience** — what this project is, who uses it, what kind of project it is.
 - **Repositories of record, external systems, sensitive constraints, project-specific tone-or-language notes** — anything that's a project-level fact the agent needs to know but isn't an instruction.
@@ -895,12 +895,22 @@ L4 op grammar for this slot is **`append`-only** per §3.3 — no targeted ops, 
 
 ### 5.6 Vault
 
+> **Vault terminology** — this doc and VAULT-ARCH use three distinct terms; conflating them is the source of long-running audit confusion:
+>
+> | Term | What it is | Authored by | Read by |
+> |---|---|---|---|
+> | **vault slot** | The `## Vault` H2 section in composed CLAUDE.md — short framework-shipped prose describing the vault contract | L1 only (this slot is L1-exclusive per §3.3) | Runtime agents at boot |
+> | **vault store** | The on-disk knowledge store at `.squidsquad/vault/` (markdown notes organized via PARAG) | All agents at runtime via vault sub-skills (vault-remember, etc.) | All agents at runtime |
+> | **vault contract** | The framework-owned design spec — PARAG taxonomy, entity types, wikilink grammar, confidence levels | SquidSquad framework (`references/sub-skills/common/vault-protocol.md` + VAULT-ARCH) | Vault sub-skills + agents that read the slot |
+>
+> When this doc says "vault" without a qualifier, assume the most specific applicable term from context. When the meaning is structurally significant (e.g., "L1-exclusive"), the qualifier is mandatory.
+
 - A short description of the shared memory layer the agent reads/writes.
 - Wikilink format reminder, entity model, confidence levels.
 
-**Vault slot is L1-exclusive.** L2 / L3 / L4 do NOT author this slot — compose rejects any `slot: vault` fragment from those layers (per §3.3). The rationale: the vault is a SquidSquad framework feature with a precise contract (PARAG model, entity types, wikilink grammar, confidence levels — see [`VAULT-ARCH.md`](VAULT-ARCH.md)). Per-role, per-domain, or per-project customization of the slot body would fragment that contract before we have a clear customization pattern to standardize on. Projects that need bespoke vault behaviour file a framework feature request — see G4. Guardrail dated 2026-05-29; revisit when a real customization need surfaces.
+**Vault slot is L1-exclusive.** L2 / L3 / L4 do NOT author this slot — compose rejects any `slot: vault` fragment from those layers (per §3.3). The rationale: the vault contract is a SquidSquad framework feature with a precise spec (PARAG model, entity types, wikilink grammar, confidence levels — see [`VAULT-ARCH.md`](VAULT-ARCH.md)). Per-role, per-domain, or per-project customization of the vault slot body would fragment that contract before we have a clear customization pattern to standardize on. Projects that need bespoke vault behaviour file a framework feature request — see G4. Guardrail dated 2026-05-29; revisit when a real customization need surfaces.
 
-This section is intentionally short — most vault detail belongs in `references/sub-skills/common/vault-protocol.md` (per-cycle usage contract) and [`VAULT-ARCH.md`](VAULT-ARCH.md) (vault architecture: PARAG model, entity types, sub-skills, scripts, cycle integration).
+This section is intentionally short — most vault detail belongs in `references/sub-skills/common/vault-protocol.md` (per-cycle usage contract) and [`VAULT-ARCH.md`](VAULT-ARCH.md) (vault store architecture: PARAG model, entity types, sub-skills, scripts, cycle integration).
 
 ### 5.7 Worked example: pm composed CLAUDE.md TOC (both modes)
 
@@ -926,7 +936,9 @@ This section is intentionally short — most vault detail belongs in `references
    2.3 Why this matters (the seam discipline)
 
 ## 3. Soul
-   (SOUL.md inlined verbatim)
+   3.1 L1 voice baseline           (slot: soul, ord: 10)
+   3.2 L2 role-class persona       (slot: soul, ord: 20 — sourced from SOUL.md shorthand per §5.3)
+   3.3 L4 append (optional)        (composed only when L4's ## Soul has ### append blocks)
 
 ## 4. Instructions
    4.1 On boot
@@ -975,7 +987,9 @@ This section is intentionally short — most vault detail belongs in `references
    2.3 Why this matters (the seam discipline)
 
 ## 3. Soul
-   (SOUL.md inlined verbatim)
+   3.1 L1 voice baseline           (slot: soul, ord: 10)
+   3.2 L2 role-class persona       (slot: soul, ord: 20 — sourced from SOUL.md shorthand per §5.3)
+   3.3 L4 append (optional)        (composed only when L4's ## Soul has ### append blocks)
 
 ## 4. Instructions
    4.1 On boot
@@ -1138,7 +1152,7 @@ This eliminates two problems v1 created: (a) sub-skill bodies bloated composed C
 
 Today's standalone H2 sections like `## What You Must Never Do`, `## File Conventions`, `## Status Line` are **also folded** under v2 — but with the reference-only discipline applied:
 
-- **"Never do" prohibitions that apply broadly** fold into **Identity** as "Boundaries" (one or two short lists at the bottom of the Identity section). These are orchestration-layer assertions about the agent's overall character — short, top-level, emitted verbatim.
+- **"Never do" prohibitions that apply broadly** fold into **Identity** as "Boundaries" — a terminal anchor sub-section of the L1 Identity content (the last L1-L3 fragment in the identity slot). These are orchestration-layer assertions about the agent's overall character — short, top-level, emitted verbatim. L4 `### append` blocks on `## Identity` land **after** the Boundaries anchor per §3.3 (Boundaries itself stays L1-immutable; L4 prohibitions are added below it).
 - **"Never do" prohibitions that are step-specific** are NOT inlined into the composed CLAUDE.md. Under v2, step-specific prohibitions live in the **sub-skill** that owns the step (e.g. "Never amend a published commit" lives in the `git-commit` sub-skill's source file, not in the composed orchestration). The step reference in §4.2 pulls them in implicitly when the model invokes the sub-skill. Step-specific prohibitions are part of SquidSquad's **shipped behaviour layer** — they are not the intended target of L4 `replace` ops, and projects that need to lift a prohibition file the change upstream against the SquidSquad repo rather than overriding it per-install. Compose does not block a `replace` op pointed at a prohibition-bearing step (the op grammar in §3.3 is structurally permissive), but `l4-curation`'s elicitation dialog routes such requests to the upstream feature-request path.
 - **File conventions** fold into **Project Context** when they're project-shaped (most are). When they're sub-skill-shaped (e.g. "verifier writes `TEST-PLAN-<n>.md` under `.squidsquad/verifier/planning/`"), they live in the relevant sub-skill's source file.
 - **Status Line description** folds into **Project Context** — it's a project-display fact, not an instruction.
@@ -1173,11 +1187,11 @@ SquidSquad agents support two wake mechanisms: **event-driven** (a harness-manag
 **Architectural rule** (matches today's `compose.py` implementation per #8697): the two modes are **two parallel manifests selected at compose time**, not a runtime branch.
 
 - `references/roles/<role>/includes.yml`        — polling manifest (default)
-- `references/roles/<role>/includes-events.yml` — event-driven manifest. If the role hasn't been ported to event mode yet and this file is absent while `event-driven: yes` is set globally, compose silently uses the polling manifest for that role; this is a **per-role compose-time** fallback distinct from the operator-level mode flip in AGENT-RUNTIME §8.2.
+- `references/roles/<role>/includes-events.yml` — event-driven manifest. If the role-class hasn't been ported to event mode yet and this file is absent while `event-driven: yes` is set globally, compose silently uses the polling manifest for that role-class; this is a **per-role-class compose-time** fallback distinct from the operator-level mode flip in AGENT-RUNTIME §8.2.
 
 `compose.py:_load_manifest` reads `config.get_wake_mode()` (a global flag — there is no per-role wake mode; see AGENT-RUNTIME §8.1) and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §4.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `.squidsquad/config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
 
-> **Compose-time inline vs runtime Read — two-tier mechanism for `common-events/`.** The `includes-events.yml` manifest's sub-skills (`boot-bootstrap`, the event-mode cycle-runner sibling, etc.) ARE inlined into the composed CLAUDE.md at compose time, same as polling-mode sub-skills. But one of those inlined sub-skills — `boot-bootstrap` — contains Read-tool instructions that pull the `common-events/*` fragments (`l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling`) into context **at agent session start**, not at compose time. So the manifest selection is compose-time (which sub-skills get inlined); the `common-events/` fragments themselves are runtime-loaded (they sit on disk, not in any composed CLAUDE.md body). This two-tier shape is intentional: it keeps the composed CLAUDE.md small while still letting event-mode add ~6 fragments of behavior. The catalog's `common-events/` section header documents this; this paragraph is the spec.
+> **Compose-time reference vs runtime Read — two-tier mechanism for `common-events/`.** The `includes-events.yml` manifest's sub-skills (`boot-bootstrap`, the event-mode cycle-runner sibling, etc.) appear as `→ run sub-skill: <name>` **references** in the composed CLAUDE.md at compose time — bodies are NEVER inlined (per §4.1 step 4 + §6.2.1; the catalog is the resolution gate). What's compose-time-selected is *which sub-skills get referenced* (the manifest decides). One of those referenced sub-skills — `boot-bootstrap` — contains Read-tool instructions that pull the `common-events/*` fragments (`l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling`) into the agent's context **at agent session start**, not at compose time. So the two-tier shape is: (1) the manifest selection at compose time chooses which sub-skill references emit into CLAUDE.md; (2) the `common-events/*` fragments those sub-skills Read are loaded at runtime (they sit on disk, never in any composed CLAUDE.md body). The thin-orchestration invariant holds for both modes: composed CLAUDE.md is references-only.
 
 ```mermaid
 flowchart LR
@@ -1198,7 +1212,7 @@ Mode flip = recompose + agent restart, never mid-session. The two outputs differ
 
 - Keeps fragment bodies clean — no `{% if event %}…{% else %}…{% endif %}` ladders in human-authored prose.
 - Lets each mode evolve its sub-skill set independently (event mode pulls in `common-events/*`; polling pulls in `roles/<role>/ralph-loop-overview` + sentinel + check-in).
-- Composes deterministically — given (role, wake-mode), the output is bit-stable; reviewable in PRs without runtime context.
+- Composes deterministically — given (role-class, wake-mode), the output is bit-stable; reviewable in PRs without runtime context.
 - Matches harness reality — the harness decides mode at agent-spawn time; trying to defer that decision into the agent process adds complexity for no gain.
 
 **Why event is treated as the canonical/primary track** (even though both manifests are first-class):
@@ -1211,25 +1225,25 @@ Mode flip = recompose + agent restart, never mid-session. The two outputs differ
 **Why polling is kept as a fully maintained parallel manifest, not deleted**:
 
 - Polling has proven stable across harness outages — it does not depend on a live harness HTTP endpoint.
-- The polling manifest is the documented compose-time fallback when `includes-events.yml` is absent for a role (e.g. a new role not yet ported to event mode).
+- The polling manifest is the documented compose-time fallback when `includes-events.yml` is absent for a role-class (e.g. a new role-class not yet ported to event mode).
 - Polling stays available as the **manual recovery target** when event-mode is failing for any reason (harness wedged, event-bus regression, etc.). Recovery is an explicit operator action — flip `event-driven: no` in `.squidsquad/config.md`, recompose, restart. There is no automatic runtime fallback (see AGENT-RUNTIME §8.4).
 - Operators may explicitly select polling via `.squidsquad/config.md` (`event-driven: no`) while debugging the event bus, or until event mode reaches GA in their install.
 
-**Authoring discipline**: both manifests must stay in sync on what an agent *does* — same status transitions, same comment etiquette, same vault behaviors. Only the *how* differs (event stream vs `/loop` tick). The two `5.7.x` worked examples should diff only on §4.2; if a non-§4.2 section diverges between modes, that is a bug, not a feature.
+**Authoring discipline**: both manifests must stay in sync on what an agent *does* — same status transitions, same comment etiquette, same vault store behaviors. Only the *how* differs (event stream vs `/loop` tick). The two `5.7.x` worked examples should diff only on §4.2; if a non-§4.2 section diverges between modes, that is a bug, not a feature.
 
 **Current development convention** (as of this doc — pre-event-GA): every role's `includes.yml` and `includes-events.yml` are both maintained, but most installs ship with `.squidsquad/config.md` `event-driven: no` so the polling manifest is what gets composed in production. The event manifest is exercised in CI and on opt-in installs; it becomes the default once event mode reaches GA. This lets us iterate the event-mode authoring (and lets reviewers diff the two flavored outputs) without forcing production fleets onto event mode before it is proven.
 
 ### 6.6 Subagent invocation rules — moved to AGENT-RUNTIME §6.7
 
-Subagent usage rules (default model selection, per-role overrides, spawn-vs-inline, prompt hygiene, trust-but-verify, parallelism) are runtime behavior — they describe how an agent uses the Agent tool while it's running, not compose-time mechanics. The rules now live in [AGENT-RUNTIME.md §6.7](AGENT-RUNTIME.md#67-subagent-invocation-rules).
+Subagent usage rules (default model selection, per-role-class overrides, spawn-vs-inline, prompt hygiene, trust-but-verify, parallelism) are runtime behavior — they describe how an agent uses the Agent tool while it's running, not compose-time mechanics. The rules now live in [AGENT-RUNTIME.md §6.7](AGENT-RUNTIME.md#67-subagent-invocation-rules).
 
-The L1-L3 authoring location for these rules remains compose-side: the default-model paragraph is authored once at L1 (e.g. `references/sub-skills/common/subagent-defaults.md` with `slot: identity`). Per-role L3 files (under `references/sub-skills/roles/<role>/`) declare their own slot-`identity` content that emits later in `(slot, ordinal)` order — effectively overriding the default for that role at compose time. The composition mechanism is no different from any other L1-L3 source; see §3.2 for the general slot+ordinal contract.
+The L1-L3 authoring location for these rules remains compose-side: the default-model paragraph is authored once at L1 (e.g. `references/sub-skills/common/subagent-defaults.md` with `slot: identity`). Per-role-class L3 files (under `references/sub-skills/roles/<role>/`) declare their own slot-`identity` content that emits later in `(slot, ordinal)` order — effectively overriding the default for that role-class at compose time. The composition mechanism is no different from any other L1-L3 source; see §3.2 for the general slot+ordinal contract.
 
 ---
 
 ## 7. Runtime L4 writes by the agent
 
-The agent (any role) writes to L4 at runtime in response to human instructions in the deployed project. This section covers the *write path* — the structural compose mechanics, the safety gates, and the audit trail. The *upstream dialog* (how the agent detects a customization request, elicits scope and rationale from the human, and chooses the right L4 bucket) is owned by `references/sub-skills/common/l4-curation.md` — see §7.7 for the boundary.
+The agent (of any role-class) writes to L4 at runtime in response to human instructions in the deployed project. This section covers the *write path* — the structural compose mechanics, the safety gates, and the audit trail. The *upstream dialog* (how the agent detects a customization request, elicits scope and rationale from the human, and chooses the right L4 bucket) is owned by `references/sub-skills/common/l4-curation.md` — see §7.7 for the boundary.
 
 ### 7.1 The trigger
 
@@ -1241,7 +1255,7 @@ When the human gives the agent a new instruction in conversation:
 
 These are project-specific instruction changes. They don't belong in L1-L3 (which ships globally) — they belong in L4 (which is project-local).
 
-The `l4-curation` sub-skill defines the detection patterns (durable vs one-off, customization vs feature request) and the elicitation dialog (role + bucket + why + edge cases + draft + approval). By the time §7.2's decision tree fires, the curation sub-skill has already produced a well-scoped request with an identified bucket; §7.2 just classifies the structural op.
+The `l4-curation` sub-skill defines the detection patterns (durable vs one-off, customization vs feature request) and the elicitation dialog (role-class + bucket + why + edge cases + draft + approval). By the time §7.2's decision tree fires, the curation sub-skill has already produced a well-scoped request with an identified bucket; §7.2 just classifies the structural op.
 
 **Conflict pre-emption (paired with §4.6 assemble-pass conflict resolution).** Before drafting any new L4 op, `l4-curation` MUST read the linked composite for the target slot and check whether the new entry would materially contradict existing L1-L3 prose. The assemble pass (§4.6) WILL detect such conflicts at compose time and prefer the higher layer, but a clean L4 author avoids creating them in the first place. When `l4-curation` detects a likely conflict, it must:
 
@@ -1272,24 +1286,31 @@ When the agent receives a new instruction, it walks this decision tree:
 4. Is the instruction not an instruction at all — but a project context fact?
    → Add prose under ## Project Context (append-only; no H3 op grammar).
 
-5. Does the instruction require functionality that maps to a NEW sub-skill
-   not yet in the catalog?
-   → Stop. This is shipped-content work, not L4 customization.
-     a. Check the catalog (sub-skill-catalog.md) and disk
-        (references/sub-skills/) for an existing sub-skill that covers
-        the need — usually one exists and the instruction can become a
-        cycle/insert-after that references it.
-     b. If genuinely no existing sub-skill fits, the agent surfaces
-        this to the human as a "feature request against the SquidSquad
-        repo" — new sub-skills are part of shipped L1-L3 behaviour and
-        must be authored upstream, then released, then composed in.
-     c. Do NOT write an L4 op that references a sub-skill name not
-        already in the catalog — §4.5 catalog-drift validation will
-        reject it, and the failure mode is confusing (compose error,
-        not a clear "you can't add new sub-skills here"). (This is the
-        same gate as §4.5 — the catalog is consulted at compose time;
-        sub-skill name resolution failures abort the compose with a
-        clear error pointing at the offending L4 op.)
+5. Does the instruction require functionality that maps to a **sub-skill
+   not already catalogued in sub-skill-catalog.md**?
+   → Stop. **Authoring a new sub-skill** is shipped-content work, not L4
+   customization. Distinguish from "introducing a new REFERENCE to a
+   sub-skill that IS catalogued but isn't currently referenced anywhere
+   in L1-L3" — that case IS L4-legal (per §11.2 G7) and resolves cleanly
+   through §4.5 catalog gate. The forbidden case is referencing a
+   sub-skill name with no catalog entry.
+     a. Check the catalog (sub-skill-catalog.md) for an existing entry.
+        If the sub-skill IS catalogued, an L4 op referencing it is legal
+        (the catalog is the gate, not the L1-L3 reference set) — proceed
+        with the appropriate insert-before / insert-after / append.
+     b. If the sub-skill is NOT in the catalog and disk
+        (references/sub-skills/) doesn't have a fitting source either,
+        the agent surfaces this to the human as a "feature request
+        against the SquidSquad repo" — new sub-skills (catalog entry +
+        source file) are part of shipped L1-L3 behaviour and must be
+        authored upstream, then released, then composed in.
+     c. Do NOT write an L4 op that references a sub-skill name with no
+        catalog entry — §4.5 catalog-resolution validation will reject
+        it, and the failure mode is confusing (compose error, not a clear
+        "you can't add new sub-skills here"). (This is the same gate as
+        §4.5 — the catalog is consulted at compose time; sub-skill name
+        resolution failures abort the compose with a clear error pointing
+        at the offending L4 op.)
 ```
 
 If the agent cannot decide between `replace` and `insert-after` (e.g. the new instruction is ambiguous), the agent **asks the human a single clarifying question** before persisting.
@@ -1368,7 +1389,7 @@ Every L4 write is:
 
 - A separate file in `.squidsquad/project/`.
 - Committed as its own git commit on main with message `<role>: L4 write — <slot>/<op>/<target>` and a body quoting the human directive verbatim.
-- Logged in the role's iteration file for the cycle that performed the write.
+- Logged in the alias's iteration file for the cycle that performed the write.
 - Reversible: a human can `git revert` the L4 commit, or the agent can produce a counter-L4 file (`replace` with empty body, or matching `insert-before` removal).
 
 The composed `.squidsquad/<alias>/CLAUDE.md` for **every alias** of the affected role-class regenerates on each L4 write (compose runs as a post-commit hook for files in `.squidsquad/project/`). Two `worker`-class instances sharing one L4 file produce two regenerated CLAUDE.md files at their respective alias paths.
@@ -1445,7 +1466,7 @@ A GitHub Actions check (or local pre-commit hook) inspects every PR:
 
 - Commits the diff to main as a follow-up commit: `dm: post-merge recompose for #<PR>`.
 - Comments on the original PR with the diff for traceability.
-- Files a `severity:low` bug against the role that owned the PR — they should have run compose before pushing.
+- Files a `severity:low` bug against the alias that owned the PR — they should have run compose before pushing.
 
 ### 8.3 Pre-ship gate
 
@@ -1484,7 +1505,7 @@ New sub-skill: `references/sub-skills/common/compose-output-review.md`. Composed
 
 The checklist (suggested initial content):
 
-1. **Heading-level check** — Did my source change introduce a new H2 section in any composed output? If yes, does it belong as an H2 under one of the five canonical sections, or should it be H3+ inside an existing section?
+1. **Heading-level check** — Did my source change introduce a new H2 section in any composed output? If yes, does it belong as an H2 under one of the six canonical sections (Identity / Responsibility / Soul / Instructions / Project Context / Vault per §5), or should it be H3+ inside an existing section?
 2. **DRY check** — Did I introduce content that already exists in another L1-L4 layer? Use `grep -r` to confirm.
 3. **Step-ID stability** — Did I rename or remove any step IDs? If yes, did I follow the §6.1 breaking-change protocol?
 4. **L4 resolution** — Did I delete or rename a step that L4 H3 blocks target? If yes, find them (grep `.squidsquad/project/*.md` for the step ID) and update them.
@@ -1546,19 +1567,19 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 
 1. ~~**Soul overlay semantics**~~ **CLOSED** — see §3.3 per-slot op constraints + §3.4. Soul L4 is append-only (no targeted ops). The composed CLAUDE.md presents shipped soul + L4 append in order; on semantic conflict between them, L4 wins at the agent's interpretation layer. The shipped soul stays on disk for traceability; only the agent's runtime interpretation is overridden.
 2. ~~**L4 conflict resolution**~~ **CLOSED** — see §3.3 + §7.3. Each agent class has exactly one L4 file; within that file, two `### replace step:cycle/<step-id>` H3 blocks targeting the same step is a validation error and aborts compose. The author resolves the conflict by editing the file.
-3. ~~**Multi-role L4 files**~~ **CLOSED** — see §3.3 + §7.3. L4 is **one file per agent class** (`.squidsquad/project/<role>.md`); role-scoping is the filename. There is no multi-role L4; cross-role customizations expand to one per-role file.
+3. ~~**Multi-role-class L4 files**~~ **CLOSED** — see §3.3 + §7.3. L4 is **one file per agent class** (`.squidsquad/project/<role>.md`); role-class-scoping is the filename. There is no multi-role-class L4; cross-role-class customizations expand to one per-role-class file.
 4. ~~**L4 versioning**~~ **CLOSED** — see §6.1 "Renaming a step ID". Compose-time migration emits a warning when it sees an L4 H3 block targeting an old (renamed) step ID, and offers an auto-rewrite or aborts pending operator confirmation.
 5. **Composed output as derived artifact** — should `.squidsquad/<alias>/CLAUDE.md` be `.gitignore`d (always regenerated, never committed) instead of committed-and-diffed? (Trade-off: gitignore eliminates §8.1 PR-check entirely but loses easy historical review.)
 
 ### 11.2 Known gaps in this doc
 
 - **G1** — ✅ CLOSED (v2). Step ID grammar formalized in §6.1 (BNF + character set + nesting depth + global uniqueness rule).
-- **G2** — Compose's role-filter (§4.1 step 2) is sketched but not fully specified: what does the `roles:` frontmatter list support beyond literal role names? (e.g. wildcards like `*`, role classes like `worker:*`.) For v2, only literal role names are supported; wildcards/classes are deferred.
+- **G2** — Compose's role-class filter (§4.1 step 2) is sketched but not fully specified: what does the `roles:` frontmatter list support beyond literal role-class names? (e.g. wildcards like `*`, role classes like `worker:*`.) For v2, only literal role-class names are supported; wildcards/classes are deferred.
 - **G3** — Boot/cycle/shutdown sub-slot boundaries inside `instructions` are still informal. v2 working definition: `boot` = one-time session-start work; `cycle` = repeated work (per `/loop` tick in polling mode, per nudge in event mode — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md)); `shutdown` = clean-stop work. Formal acceptance tests for sub-slot membership are a follow-up.
-- **G4** — ✅ CLOSED (2026-05-29). [`VAULT-ARCH.md`](VAULT-ARCH.md) covers entity types (§4), wikilink grammar (§4.5), confidence levels (§4.4), and the relationship to `vault-protocol.md` (§7). The remaining "slot contract" gap is closed by making the slot **L1-exclusive** (§3.3 + §5.6) — only the L1 short-descriptor pattern is valid; L2-L4 cannot author this slot. Guardrail rationale: the vault is a framework feature whose contract should not fragment across roles/domains/installs without a concrete customization pattern. Revisit when a real customization need surfaces; the framing then is "introduce L2 vault customization with constraints X/Y/Z" rather than "open up arbitrary append".
+- **G4** — ✅ CLOSED (2026-05-29). [`VAULT-ARCH.md`](VAULT-ARCH.md) covers entity types (§4), wikilink grammar (§4.5), confidence levels (§4.4), and the relationship to `vault-protocol.md` (§7). The remaining "slot contract" gap is closed by making the slot **L1-exclusive** (§3.3 + §5.6) — only the L1 short-descriptor pattern is valid; L2-L4 cannot author this slot. Guardrail rationale: the vault contract is a framework feature that should not fragment across roles/domains/installs without a concrete customization pattern. Revisit when a real customization need surfaces; the framing then is "introduce L2 vault customization with constraints X/Y/Z" rather than "open up arbitrary append".
 - ~~**G5** — L4 file naming collision rules~~ **CLOSED** — see §7.3. There is exactly one L4 file per role-class, named `<role-class>.md` (e.g. `pm.md`, `fe-worker.md`, `be-worker.md` in installs with worker specialization; `pm.md`, `worker.md`, `verifier.md`, `dm.md` in installs without). The filename IS the role-class identity — collision is structurally impossible since each role-class has exactly one expected filename.
-- **G6** — ✅ CLOSED (v2). Subagent usage rules now in [AGENT-RUNTIME §6.7](AGENT-RUNTIME.md#67-subagent-invocation-rules) (default-model + per-role overrides + spawn-vs-inline + prompt hygiene + parallelism + trust-but-verify). L3 `replace` overlays on the L1 default cover the per-role Sonnet defaults for `worker`/`dm`. Rules originally added to COMPOSE §6.6 then relocated to AGENT-RUNTIME because they describe runtime behavior, not compose mechanics.
-- **G7** — Sub-skill reference resolution semantics for L4. Open: can L4 *insert* a new step that references a sub-skill not yet referenced anywhere in L1-L3? Yes per §4.5 (catalog is the source of truth, not the L1-L3 reference set), but the L4-write decision tree in §7.2 should explicitly cover the "introduce a new sub-skill reference" case.
+- **G6** — ✅ CLOSED (v2). Subagent usage rules now in [AGENT-RUNTIME §6.7](AGENT-RUNTIME.md#67-subagent-invocation-rules) (default-model + per-role-class overrides + spawn-vs-inline + prompt hygiene + parallelism + trust-but-verify). L3 `replace` overlays on the L1 default cover the per-role-class Sonnet defaults for `worker`/`dm`. Rules originally added to COMPOSE §6.6 then relocated to AGENT-RUNTIME because they describe runtime behavior, not compose mechanics.
+- **G7** — Sub-skill reference resolution semantics for L4. **CLOSED**: L4 can introduce a new reference to a *catalogued* sub-skill (e.g., one never before referenced from L1-L3); §4.5 catalog gate handles this cleanly. L4 cannot introduce a reference to an *uncatalogued* sub-skill name (compose rejects at §4.5 validation). §7.2 step 5 now disambiguates these two cases explicitly.
 
 Each open gap is filed for explicit closure in §12.
 
@@ -1566,7 +1587,7 @@ Each open gap is filed for explicit closure in §12.
 
 ## 12. Closure plan (implementation epic)
 
-Once this doc is merged, the implementation epic spawns these sub-PRs in order. Each is filed as its own task issue against the assigned role.
+Once this doc is merged, the implementation epic spawns these sub-PRs in order. Each is filed as its own task issue against the assigned alias.
 
 | # | Title | Owner | Depends on |
 |---|---|---|---|
@@ -1617,11 +1638,11 @@ Total: ~14 sub-PRs. Comparable to event-arch v2's implementation epic (6 PRs in 
 ## 13a. Revision log
 
 - **2026-05-23 (v1.3)** — shipped under #9968 cycle 1616 (commit `8b33aebd`). Established the L1-L4 composition pipeline and 5-section composed-output structure. Treated sub-skill bodies as inlined content within the composed CLAUDE.md.
-- **2026-05-23 (v2 draft)** — reframe: composed CLAUDE.md becomes a **thin orchestration layer** that references sub-skills rather than inlining them. Aligns with the Claude-skills direction locked in #9968 cycle 1619. Substantive changes: §1 goal + new model diagram; §3.1 DRY now explicitly covers sub-skill bodies as single-source; §4.1 emits references not inline; §5.3 Instructions section is references-only; §6.2 sub-procedures are sub-skills (with their own catalog entry), not folded into step bodies; §5.6 worked examples clarified as step-reference TOCs; §14 references updated for the archived event docs and the new `sub-skill-catalog.md` / `sub-skill-guide.md` companions.
+- **2026-05-23 (v2 draft)** — reframe: composed CLAUDE.md becomes a **thin orchestration layer** that references sub-skills rather than inlining them. Aligns with the Claude-skills direction locked in #9968 cycle 1619. Substantive changes: §1 goal + new model diagram; §3.1 DRY now explicitly covers sub-skill bodies as single-source; §4.1 emits references not inline; §5.4 Instructions section is references-only (renumbered from §5.3 in later passes); §6.2 sub-procedures are sub-skills (with their own catalog entry), not folded into step bodies; §5.7 worked examples clarified as step-reference TOCs (renumbered from §5.6); §14 references updated for the archived event docs and the new `sub-skill-catalog.md` / `sub-skill-guide.md` companions.
 - **2026-05-23 (v2 draft, R1 fixes)** — DS round-1 surfaced 5 findings (2 HIGH, 1 MED, 2 LOW). Applied: §1 non-goals "see EVENT-ARCHITECTURE.md" → "see AGENT-RUNTIME.md" (stale ref); §13 glossary "Sub-procedure" entry updated to v2 (no longer says "written inline at H4 level"; added a "Sub-skill" entry for clarity); §4.1 step 1 clarifies the sub-skill reference is body-extracted, not a frontmatter field; §6.5 `common/boot-bootstrap.md` → `references/sub-skills/common/boot-bootstrap.md` (full path); §5.2 "Inlined directly" → "Emitted verbatim" with explicit note that Soul is orchestration-layer content, not a sub-skill (avoids confusion with v1 inline-sub-skill anti-pattern). DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-1.md`.
 - **2026-05-23 (v2 draft, R2 fix + CONVERGED)** — DS round-2 confirmed all R1 fixes applied and returned 1 LOW residual finding (CONVERGED with the fix). §3.2 emit-rule clarified: "emits the literal content of each" was unqualified and would have led implementers to inline sub-skill bodies in the `instructions` slot (the v1 anti-pattern). Rewrote to specify that non-instructions slots are emitted verbatim while the `instructions` slot is emitted as sub-skill *references* per §4.1 step 4. DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-2.md`.
 - **2026-05-23 (v2 draft, fill-out pass)** — Filled in under-specified areas and closed two of the §11.2 gaps. Substantive additions: NEW §4.5 specifies sub-skill reference resolution (compose validates every `→ run sub-skill: <name>` ref against catalog + source + skill-registry; aborts on unresolved or catalog drift); §6.1 step ID grammar formalized with BNF + character set + nesting depth + global-uniqueness rule, and the step↔sub-skill mapping (1:1 default, N:1 allowed, 1:N forbidden) made explicit (closes G1); §6.3 constraints reframed for v2 (step-specific prohibitions live in the owning sub-skill, not inlined into composed orchestration); NEW §6.6 subagent usage rules — default Sonnet for `worker`/`dm`, parent-context for `pm`/`verifier`, spawn-vs-inline, prompt hygiene, trust-but-verify (closes G6); NEW §10.3 sub-skill catalog maintenance (hand-authored, single source of truth, compose validates drift); §5.1 swapped concrete-instance leak to L2 categorical names (`pm`/`verifier`/`worker`/`dm`) per the AGENT-RUNTIME rev-6 terminology lock; §11.2 marks G1+G6 closed, adds G7 (L4 introducing new sub-skill refs).
-- **2026-05-23 (v2 draft, R3 fixes)** — DS round 3 surfaced 5 findings on the fill-out pass (1 HIGH BNF contradiction, 4 MED). All applied: §6.1 BNF `(/segment)*` "max depth 3" → `(/segment)?` matching the prose "one nesting level"; §4.5 step 1 cross-ref to step grammar fixed (was §6.1 which is step ID grammar; correct ref is §4.1 step 4 + §5.3 for reference grammar); §6.6 L3 "replace overlays" rewritten — `replace` is L4-only, L3 overrides happen via natural `(slot, ordinal)` ordering; §4.5 step 4 catalog-drift cross-ref clarified — that's an in-pipeline compose check, distinct from §8 source-output sync gates. Also: doc-wide naming pass to match AGENT-RUNTIME rev 6 — all remaining concrete-instance references in prose, diagrams, and §5.6 worked-example TOCs use the L2 categorical names `pm`/`verifier`/`worker`/`dm`. DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-3.md`.
+- **2026-05-23 (v2 draft, R3 fixes)** — DS round 3 surfaced 5 findings on the fill-out pass (1 HIGH BNF contradiction, 4 MED). All applied: §6.1 BNF `(/segment)*` "max depth 3" → `(/segment)?` matching the prose "one nesting level"; §4.5 step 1 cross-ref to step grammar fixed (was §6.1 which is step ID grammar; correct ref is §4.1 step 4 + §5.3 for reference grammar); §6.6 L3 "replace overlays" rewritten — `replace` is L4-only, L3 overrides happen via natural `(slot, ordinal)` ordering; §4.5 step 4 catalog-drift cross-ref clarified — that's an in-pipeline compose check, distinct from §8 source-output sync gates. Also: doc-wide naming pass to match AGENT-RUNTIME rev 6 — all remaining concrete-instance references in prose, diagrams, and §5.7 worked-example TOCs use the L2 categorical names `pm`/`verifier`/`worker`/`dm`. DS artifact: `.squidsquad/pm/planning/REVIEW-COMPOSE-ARCH-DEEPSEEK-3.md`.
 - **2026-05-23 (v2 draft, capability removal)** — §2 L2 row dropped the `references/sub-skills/capabilities/` reference; the L2 diagram node updated to point at `references/sub-skills/common/` only. Rationale: SquidSquad no longer has a "capability" framework — tool/MCP/CLI configuration is per-agent post-install via the §7 runtime L4 write flow. See [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md) for the replacement model. The existing `references/sub-skills/capabilities/` directory and `common/capability-check.md` are slated for removal as architectural deadwood.
 
 ---
