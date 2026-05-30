@@ -324,7 +324,7 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 └── (runtime) .harness-port, .harness-state.json, .event-state.json — created when the harness boots
 ```
 
-> **L4 file naming**: the `project/` tree above shows default-preset filenames (`worker.md`, `verifier.md`). Specialized worker presets use concrete role-class names instead (e.g., `fe-worker.md`, `be-worker.md`). The filename is always the role-class identity, never a generic placeholder. See COMPOSE-ARCHITECTURE §3.3 and §7.3.
+> **L4 file naming**: the four possible L4 filenames are `pm.md`, `worker.md`, `verifier.md`, `dm.md` — one per L2 role-class, max 4 per install. L3 specialization (FE/BE/iOS/etc.) does NOT differentiate L4 files; all worker-class agents share `worker.md` regardless of L3 domain. See COMPOSE-ARCHITECTURE §3.3 and §7.3.
 
 And the per-user shared filesystem (not part of any single repo):
 

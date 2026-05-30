@@ -140,7 +140,7 @@ Reusable across multiple roles.
 | `improvement-scan` | Full proactive scan for process/template gaps | PM, dev |
 | `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | QA |
 | `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; removal paired with the broader capability-framework retirement per [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md), not this PR) |
-| `l4-curation` | Elicitation dialog for runtime L4 writes — detect customization request, scope bucket + rationale, draft + approve | dev (runtime-invoked from §7 of [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md); not yet wired into any role's `includes.yml`) |
+| `l4-curation` | **Pending creation** — source file at `references/sub-skills/common/l4-curation.md` is referenced from COMPOSE §7 + INSTALLER §4.8 but not yet authored. Target behavior: elicitation dialog for runtime L4 writes — detect customization request, scope bucket + rationale, draft + three-gate (DeepSeek audit / mini-CQ / compose dry-run) / approve. Implements the same three-gate model used by the installer migration walk. Authoring tracked as code-task. | dev (runtime-invoked from §7 of [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md); not yet wired into any role's `includes.yml`) |
 | `compose-output-review` | Sub-procedure for reviewing composed CLAUDE.md output for source-output drift — invoked during code review | dev (planned per COMPOSE-ARCHITECTURE.md §9; implementation pending) |
 
 ### Chat & coordination (deferred — chat-integration roadmap)
@@ -262,9 +262,9 @@ These are **seed templates** copied to `.squidsquad/project/` at install time. T
 | `pm.md` | PM L4 — H2 sections for Identity / Responsibility / Soul / Instructions / Project Context / Vault as needed |
 | `verifier.md` | Verifier L4 — same H2 grammar |
 | `dm.md` | DM L4 — same H2 grammar |
-| `<worker-class>.md` | Worker L4 — exactly one file per worker class. The class name is whatever the install declares in `.squidsquad/config.md` Workers: an install with a single class named `worker` creates `worker.md`; an install with `fe-worker` and `be-worker` classes creates `fe-worker.md` and `be-worker.md`. The two configurations are alternatives, not a base + variants (no inheritance — `worker` is just one possible class name, not a parent of `fe-worker`/`be-worker`). The filename IS the class identity (per [COMPOSE-ARCHITECTURE.md §3.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay)). Same H2 grammar as the other role-class seeds. |
+| `worker.md` | Worker L4 — exactly one file, shared by ALL worker-class agents regardless of L3 specialization (FE/BE/iOS/etc.). Same H2 grammar as the other role-class seeds. |
 
-Per §3.3 the filename IS the role-class identity; `compose.py deploy <role-class>` reads exactly one L4 file. Multi-instance installs (e.g. two `fe-worker` agents) share the one L4 file for that class — instances of the same class compose to byte-identical output.
+Per [COMPOSE-ARCHITECTURE.md §3.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay): the four L4 filenames are fixed (`pm.md` / `worker.md` / `verifier.md` / `dm.md`) — one per L2 role-class. L3 specialization does NOT differentiate L4 files. `compose.py deploy <alias>` resolves alias → role-class via the `## Aliases` registry, then reads the corresponding L4 file. Multi-instance installs of the same role-class share that one L4 file.
 
 **Legacy multi-file L4 seeds (deprecated)** — earlier installs scattered L4 content across per-slot files. These remain on disk under `references/sub-skills/project/` until the unified model is implemented (see #10359 doc spec; implementation tracked separately), at which point they collapse into the per-role-class files above:
 

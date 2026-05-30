@@ -17,7 +17,7 @@ Establish a single source of truth for how SquidSquad **composes** the per-agent
 > | Path pattern | Keyed by | Meaning |
 > |---|---|---|
 > | `.squidsquad/<alias>/CLAUDE.md` | **alias** (install-time agent instance name) | The composed output — one per running agent. Two `worker`-class instances named `frontend-1` and `backend-1` produce two distinct CLAUDE.md files at two distinct paths. |
-> | `.squidsquad/project/<role-class>.md` | **role-class** (categorical: pm/verifier/worker/dm or sub-classes like fe-worker) | The L4 source — one per role-class. Both `frontend-1` and `backend-1` *share* the same L4 file if they belong to the same role-class. |
+> | `.squidsquad/project/<role-class>.md` | **L2 role-class** (categorical only: `pm` / `worker` / `verifier` / `dm`) | The L4 source — one per L2 role-class. L3 specialization does NOT differentiate L4 files: all worker-class instances share `worker.md` regardless of whether they're fe-flavored, be-flavored, iOS-flavored, etc. Maximum 4 L4 files per install. |
 > | `references/roles/<role>/...` and `references/sub-skills/roles/<role>/...` | **role-class** | The L1-L3 authoring source paths. The literal `<role>` segment in these paths is role-class-typed; the directory name predates the class/alias distinction. |
 >
 > CLI flag names in this codebase (`--role`, `SQUIDSQUAD_ROLE`, `cycle.py status-bar <role>`, `compose.py deploy <role>`) accept **alias** values, not role-class names — the `<role>` parameter name predates the alias/role-class distinction and is preserved for code-compat. Callers (including the installer's Phase 6 invocation, see INSTALLER-ARCH §4.9) pass the install-time alias (e.g. `pm`, `frontend-1`, `verifier`) as the argument. Compose internally resolves the alias → role-class via `.squidsquad/config.md`'s `## Aliases` registry to find the right L4 file. See [AGENT-RUNTIME §4.3 Vocabulary note](AGENT-RUNTIME.md) and [HARNESS-ARCH §9](HARNESS-ARCH.md).
@@ -134,7 +134,23 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role-class → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory). It is a sibling of `.squidsquad/project/` and `.squidsquad/<alias>/`, NOT under `project/` — distinct from L4 files. **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by an optional `## Aliases` H2 section listing each install-time alias → role-class + L3 domain mapping (used by `compose.py` for alias-existence validation and by `tracker.py` for routing). It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc. **Wake mode is NOT a config.md field**: compose is mode-agnostic; event mode is the unconditional composed-output shape; the boot-time harness probe selects the wake mechanism at runtime (see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
+- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory). It is a sibling of `.squidsquad/project/` and `.squidsquad/<alias>/`, NOT under `project/` — distinct from L4 files. **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by the required `## Aliases` H2 section in the exact schema below. It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — what placeholder values to substitute, which aliases exist for `compose.py deploy-all`, etc. **Wake mode is NOT a config.md field**: compose is mode-agnostic; event mode is the unconditional composed-output shape; the boot-time harness probe selects the wake mechanism at runtime (see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
+
+  **`## Aliases` schema** (canonical):
+
+  ```markdown
+  ## Aliases
+
+  | alias | role-class | L3 domain |
+  |---|---|---|
+  | pm | pm | — |
+  | frontend-1 | worker | fe |
+  | backend-1 | worker | be |
+  | verifier | verifier | — |
+  | dm | dm | — |
+  ```
+
+  Three columns, all required. `alias` is the install-time agent instance name. `role-class` is one of the four L2 categorical classes (`pm` / `worker` / `verifier` / `dm`) and drives L4 file selection (per §3.3). `L3 domain` is the technical specialization (e.g., `fe`, `be`, `ios`, `android`, `web`) and drives L3 source-file selection (per §4); use `—` for role-classes without L3 specialization. Multiple aliases may share a role-class (with different or same L3 domains); they share the L4 file. Each row's alias must be unique within an install. Missing alias from the registry causes `compose.py deploy <alias>` to abort with a diagnostic; the harness rejects `/work/assign` with `target_alias` not in the registry as 404 (per AGENT-RUNTIME §7.3).
 
 The two axes interact at compose time. Examples:
 
@@ -154,7 +170,7 @@ Per-install customization paths therefore split:
 - **Project-local content changes** (new instructions, role-boundary additions, soul tweaks, project facts) → L4 file (`.squidsquad/project/<role-class>.md` with H2 slot sections)
 - **Install configuration changes** (different Workers roster, different cycle interval, feature toggle) → `.squidsquad/config.md`
 
-A project that wants to *describe* its team differently in agent prompts adds an L4 `## Identity` `### append` block. A project that wants to *change the install's actual roster* (e.g. add an `fe-worker` class) edits `.squidsquad/config.md`'s Workers list and re-runs `compose.py deploy-all`. Both can coexist.
+A project that wants to *describe* its team differently in agent prompts adds an L4 `## Identity` `### append` block. A project that wants to *change the install's actual roster* (e.g. add an `fe-worker` instance — a worker-class agent with FE L3 specialization) edits `.squidsquad/config.md`'s `## Aliases` registry and re-runs `compose.py deploy-all`. Both can coexist.
 
 ### 3.1 DRY across layers + sub-skill catalog (single authoring location)
 
@@ -261,17 +277,16 @@ Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10
 
 ### 3.3 L4 operations (creative overlay)
 
-**There is exactly one L4 file per role-class** in an install: `.squidsquad/project/<role-class>.md`. Class is the *kind* of agent (pm, fe-worker, be-worker, verifier, dm); instance is a spawned agent process. **Multiple instances of the same class share one L4 file.**
+**There is exactly one L4 file per L2 role-class** in an install: `.squidsquad/project/<role-class>.md` where `<role-class>` is one of the four categorical L2 classes (`pm`, `worker`, `verifier`, `dm`). **L3 specialization does NOT differentiate L4 files** — all worker-class instances (FE-flavored, BE-flavored, iOS-flavored, etc.) share `worker.md`; same for verifier. Maximum 4 L4 files per install. Rationale: L4 is project-specific overlay, and the project's policies about "what a worker does" don't change based on which technical domain a given worker is in. Per-domain content lives in L3 source files, not L4.
 
-Example — a team preset spawning `pm + 2 fe-worker + 1 be-worker + verifier + dm` produces **5 L4 files**, not 7:
+Example — a team preset spawning `pm + 2 FE-flavored workers + 1 BE-flavored worker + verifier + dm` (5 agent instances, but only 3 distinct role-classes appear among the workers) produces **4 L4 files**:
 
 - `.squidsquad/project/pm.md` — used by the pm agent
-- `.squidsquad/project/fe-worker.md` — shared by both fe-worker instances
-- `.squidsquad/project/be-worker.md` — used by the be-worker agent
+- `.squidsquad/project/worker.md` — shared by all three worker instances (FE-flavored and BE-flavored alike)
 - `.squidsquad/project/verifier.md` — used by the verifier
 - `.squidsquad/project/dm.md` — used by the dm
 
-The filename IS the role-class identity. `compose.py deploy <role-class>` reads exactly one L4 file when composing that class — no per-customization files, no cross-class files, no fallback or inheritance between classes (e.g., no generic `worker.md` that fe-worker and be-worker both inherit from). Two instances of the same class compose to byte-identical output because they share the same L4.
+`compose.py deploy <alias>` resolves the alias → role-class via `.squidsquad/config.md`'s `## Aliases` registry, then reads `.squidsquad/project/<role-class>.md` to find the L4 file. Two instances of the same role-class compose to byte-identical L4 input. L3 specialization (FE vs BE etc.) is applied separately during compose by selecting the right L3 source files from `references/roles/<role>/<domain>/` — see §4 for the pipeline.
 
 > **Deprecates the multi-file L4 pattern.** Earlier installs scattered L4 content across per-slot files (`<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-instructions.md`, etc.) under `.squidsquad/project/`. Those are legacy. Under the unified L1-L4 model every slot's L4 content lives inside the same per-role-class `<role>.md` under its slot H2. The legacy seed files in `references/sub-skills/project/` are slated for collapse to one seed per role-class (see §7.3 and the L4-seed section of [`sub-skill-catalog.md`](sub-skill-catalog.md)).
 
@@ -1250,22 +1265,16 @@ If the agent cannot decide between `replace` and `insert-after` (e.g. the new in
 
 ### 7.3 L4 file format
 
-There is exactly **one L4 file per role-class** in an install — see §3.3 for the class-vs-instance distinction. The **default `software-dev` preset** installs `pm`, `worker`, `verifier`, `dm` — one class each, no specialization — producing four L4 files:
+There is exactly **one L4 file per L2 role-class** in an install — see §3.3 for the class-vs-instance distinction. The four possible L4 files are:
 
 - `.squidsquad/project/pm.md`
-- `.squidsquad/project/verifier.md`
 - `.squidsquad/project/worker.md`
-- `.squidsquad/project/dm.md`
-
-Specialized presets like `software-dev/fe-be-split` instead install `pm`, `fe-worker`, `be-worker`, `verifier`, `dm` — producing **5 L4 files** (not 7 even when two fe-worker instances run) — the two fe-worker instances share `fe-worker.md`. The rule remains: one L4 file per role-class regardless of preset choice.
-
-- `.squidsquad/project/pm.md`
-- `.squidsquad/project/fe-worker.md` *(shared by both fe-worker instances)*
-- `.squidsquad/project/be-worker.md`
 - `.squidsquad/project/verifier.md`
 - `.squidsquad/project/dm.md`
 
-Each class is independent — no fallback or inheritance from a generic `worker.md`. The filename IS the role-class. `compose.py deploy <role-class>` reads exactly one L4 file when composing that class. The file is **created at install time by the installer** (see [§5.5](#55-project-context) and INSTALLER-ARCH §4.8 Phase 5 step 4 — the installer seeds the `## Project Context` block from Phase 1 intake answers; other slots start empty). The file then **grows over time** as more customizations are added via the runtime L4 write flow (`l4-curation`, §7).
+Maximum 4 files per install; fewer if some role-classes aren't in the team preset. **L3 specialization does not differentiate L4** — an install with FE-flavored and BE-flavored workers has ONE `worker.md` file shared across both, not two. The technical-domain content lives in L3 source files; L4 is project-overlay policy that applies uniformly to all instances of a role-class.
+
+`compose.py deploy <alias>` resolves alias → role-class via `.squidsquad/config.md`'s `## Aliases` registry (§3.0), then reads `.squidsquad/project/<role-class>.md` to find the L4 file. The file is **created at install time by the installer** (see [§5.5](#55-project-context) and INSTALLER-ARCH §4.8 Phase 5 step 4 — the installer seeds the `## Project Context` block from Phase 1 intake answers; other slots start empty). The file then **grows over time** as more customizations are added via the runtime L4 write flow (`l4-curation`, §7).
 
 Internal structure mirrors the composed-output grammar (§5): top-level H2 sections name the slot; under `## Instructions`, H3 blocks name the op + target:
 
@@ -1510,7 +1519,7 @@ This collapses today's two-system memory architecture (per-user memory + L4) int
 - **G2** — Compose's role-class filter (§4.1 step 2) is sketched but not fully specified: what does the `roles:` frontmatter list support beyond literal role-class names? (e.g. wildcards like `*`, role classes like `worker:*`.) For v2, only literal role-class names are supported; wildcards/classes are deferred.
 - **G3** — Boot/cycle/shutdown sub-slot boundaries inside `instructions` are still informal. v2 working definition: `boot` = one-time session-start work; `cycle` = repeated work (per `/loop` tick in polling mode, per nudge in event mode — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md)); `shutdown` = clean-stop work. Formal acceptance tests for sub-slot membership are a follow-up.
 - **G4** — ✅ CLOSED (2026-05-29). [`VAULT-ARCH.md`](VAULT-ARCH.md) covers entity types (§4), wikilink grammar (§4.5), confidence levels (§4.4), and the relationship to `vault-protocol.md` (§7). The remaining "slot contract" gap is closed by making the slot **L1-exclusive** (§3.3 + §5.6) — only the L1 short-descriptor pattern is valid; L2-L4 cannot author this slot. Guardrail rationale: the vault contract is a framework feature that should not fragment across roles/domains/installs without a concrete customization pattern. Revisit when a real customization need surfaces; the framing then is "introduce L2 vault customization with constraints X/Y/Z" rather than "open up arbitrary append".
-- ~~**G5** — L4 file naming collision rules~~ **CLOSED** — see §7.3. There is exactly one L4 file per role-class, named `<role-class>.md` (e.g. `pm.md`, `fe-worker.md`, `be-worker.md` in installs with worker specialization; `pm.md`, `worker.md`, `verifier.md`, `dm.md` in installs without). The filename IS the role-class identity — collision is structurally impossible since each role-class has exactly one expected filename.
+- ~~**G5** — L4 file naming collision rules~~ **CLOSED** — see §7.3. There is exactly one L4 file per L2 role-class. The four possible filenames are `pm.md`, `worker.md`, `verifier.md`, `dm.md`. L3 specialization does not differentiate L4 files; collision is structurally impossible since each role-class has exactly one expected filename.
 - **G6** — ✅ CLOSED (v2). Subagent usage rules now in [AGENT-RUNTIME §6.7](AGENT-RUNTIME.md#67-subagent-invocation-rules) (default-model + per-role-class overrides + spawn-vs-inline + prompt hygiene + parallelism + trust-but-verify). L3 `replace` overlays on the L1 default cover the per-role-class Sonnet defaults for `worker`/`dm`. Rules originally added to COMPOSE §6.6 then relocated to AGENT-RUNTIME because they describe runtime behavior, not compose mechanics.
 - **G7** — Sub-skill reference resolution semantics for L4. **CLOSED**: L4 can introduce a new reference to a *catalogued* sub-skill (e.g., one never before referenced from L1-L3); §4.5 catalog gate handles this cleanly. L4 cannot introduce a reference to an *uncatalogued* sub-skill name (compose rejects at §4.5 validation). §7.2 step 5 now disambiguates these two cases explicitly.
 
