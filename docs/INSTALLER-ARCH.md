@@ -35,7 +35,7 @@ In scope:
 - How the installer is structured (agent + helpers + runbook)
 - The phases an install passes through
 - Inputs (human conversation + repo state) and outputs (`.squidsquad/` tree + GitHub labels + booted harness)
-- The upgrade flow (vs first install)
+- The migration-walk step that runs when re-installing on top of an existing `.squidsquad/`
 - Idempotency and recovery
 
 Out of scope:
@@ -73,7 +73,7 @@ Three commitments:
 
 1. **Ephemeral agent.** The installer is a one-shot Claude Code session. It boots, talks to the human, runs helpers, commits the final state, prints "SquidSquad ready", and exits. No background process, no daemon, no long-lived install state.
 2. **Two halves — pure conversation, then writes-and-commit.** Phases 0–4 (per §4 below) are pure conversation + helper queries — no writes to the target repo. From Phase 5 onward the installer writes to the local filesystem; Phase 8 is the atomic git commit + push that publishes everything. The user can abort cleanly through Phase 4; aborting between Phase 5 and Phase 8 is also clean but requires re-running the installer (which detects the partial state per §11.1's interrupted-install recovery — user-initiated mid-flow abort is not a first-class supported path; the installer either completes or is re-run).
-3. **Idempotent re-runs.** Re-running the installer detects an existing `.squidsquad/` and routes to the upgrade flow (§10). Helpers like `shared_fs.py init` are idempotent — safe to run on re-installs.
+3. **One flow, fresh and re-run.** There is no distinct "upgrade flow". Re-running the installer on a repo that already has `.squidsquad/` walks the same phases; the existing-install case is handled by a migration-walk step (§4.4) that consults per-version `references/migrations/v<N-1>-to-v<N>.md` files. Helpers like `shared_fs.py init` are idempotent — safe to run on re-installs.
 
 > **Numbering note.** This doc's "Phases 0–9" are an architectural decomposition of the install flow. The companion runbook [`WIZARD.md`](../references/wizard/WIZARD.md) uses its own "Step 0 / 0a / 0b / 1 / 1b / 2 / 3 / 4 / 5 / 5b / 5c / 5d / 6 / 7" numbering that maps roughly onto these phases. When this doc references a `Step <N>` it means the WIZARD step; `Phase <N>` is always this doc's numbering.
 
@@ -86,7 +86,7 @@ Three commitments:
 | Source | What the installer reads |
 |---|---|
 | **Human conversation** | Project domain, **team preset** (which workers and verifiers to install — see §1.1), loop interval, model routing preferences, tracker backend (GitHub Issues default, Forgejo alt), git workflow preferences. **NOT collected at install: tool/MCP/CLI configuration** — those are per-agent decisions made post-install (see §8). |
-| **Repo state** | Git existence + branch + history; existing `.squidsquad/` (triggers upgrade flow); language/stack hints from filesystem |
+| **Repo state** | Git existence + branch + history; existing `.squidsquad/` (triggers the migration-walk step inside the standard flow — §4.4); language/stack hints from filesystem |
 | **Environment** | `gh` CLI installed + authenticated; Python 3 + `pip`; OS (Windows, macOS, Linux); `claude` CLI on PATH |
 | **`~/.squidsquad/`** | Cross-install shared filesystem — existing secrets, clone registry, prior config |
 
@@ -168,9 +168,16 @@ Helper: `references/scripts/wizard.py check-gh` returns a JSON envelope with `ok
 
 Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
 
-### 4.3 Phase 0b — Re-run detection
+### 4.3 Phase 0b — Re-run detection + migration walk
 
-If `.squidsquad/` exists in the target repo, this is an upgrade, not a fresh install. The installer routes to the upgrade flow (§10). Otherwise it proceeds to Phase 1.
+The installer checks for `.squidsquad/` in the target repo.
+
+- **Fresh case** (directory absent): proceed directly to Phase 1.
+- **Existing-install case** (directory present): run the **migration walk** before Phase 1.
+
+The migration walk is the only step that differs between fresh and re-run installs; every other phase (1 through 9) runs identically. The walk reads the existing install's `squidsquad_version:` stamp from `.squidsquad/config.md` and applies per-version migration markdowns shipped under `references/migrations/` to bring the on-disk state forward to the current version. Full mechanics in §10.
+
+The installer never wipes existing-install content as a flow-level rule. Whatever needs to change is changed *by* a migration markdown (under the three-gate model); anything no migration touches is preserved automatically because the installer's other phases write only to fresh-scaffold paths.
 
 ### 4.4 Phase 1 — Conversation (no writes)
 
@@ -415,55 +422,50 @@ The choice is recorded in `.squidsquad/config.md` under `Tracker Backend`. Agent
 
 ---
 
-## 10. Upgrade flow
+## 10. Migration walk (existing-install step)
 
-When the installer detects an existing `.squidsquad/` at Phase 0b, it routes here instead of the fresh-install path.
+This section details the migration walk introduced at §4.3. **There is no distinct "upgrade flow"** — the migration walk is one step of the standard installer flow, invoked when `.squidsquad/` already exists at Phase 0b. Every other phase (1 through 9) runs identically regardless of whether this is the first installer run on this repo or the hundredth.
 
-The upgrade model is **upgrade = sequential migration**: every release that breaks the L4 file schema or the `.squidsquad/config.md` schema ships a per-version migration file at `references/migrations/v<N-1>-to-v<N>.md`. The upgrade flow walks them in version order against the operator's current L4 + config, recomposes, and restarts.
+The walk model is **sequential per-version migration**: every release that needs to change existing on-disk state (L4 file schema, `.squidsquad/config.md` schema, vault store shape, etc.) ships a per-version migration markdown at `references/migrations/v<N-1>-to-v<N>.md`. The walk reads them in version order and applies them to whatever's currently on disk, under the three-gate model. Migrations are the only mechanism that mutates existing-install content; anything no migration touches is preserved automatically because the installer's other phases write only to fresh-scaffold paths.
 
 ```mermaid
 flowchart LR
-    Existing(["Existing .squidsquad/"])
+    Existing(["Existing .squidsquad/<br/>(detected at Phase 0b)"])
     Pull["Pull source updates<br/>into references/"]
     ReadV["Read installed version<br/>from config.md squidsquad_version:"]
     Walk["Walk migrations in order<br/>v_installed → v_current<br/>(three-gate per step)"]
-    Recompose["Run compose.py deploy-all<br/>regenerate all CLAUDE.md"]
-    Restart["Stop + restart all agents<br/>via harness HTTP API"]
-    Done(["Upgrade complete"])
+    Stamp["Update squidsquad_version:<br/>after successful walk"]
+    Cont(["Continue with Phase 1+<br/>(standard installer flow)"])
 
-    Existing --> Pull --> ReadV --> Walk --> Recompose --> Restart --> Done
-    style Done fill:#dfd
+    Existing --> Pull --> ReadV --> Walk --> Stamp --> Cont
 ```
 
-**Steps:**
+**Walk steps:**
 
 1. **Pull**: latest SquidSquad sources into `references/` (L1-L3 sub-skills, role-class files, manifests, helper scripts, and any new `migrations/v*-to-v*.md` files shipped with this release).
-2. **Read installed version**: one-line read of `.squidsquad/config.md`'s `squidsquad_version:` field (written at install time per §3.2 + §4.8). If the operator's `squidsquad_version:` field is absent — possible on installs predating the version-stamp convention — treat as `pre-1.0` and walk all migration files in order.
+2. **Read installed version**: one-line read of `.squidsquad/config.md`'s `squidsquad_version:` field (written by the previous successful installer run per §3.2 + §4.8). If the field is absent — possible on installs predating the version-stamp convention — treat as `pre-1.0` and walk all available migration files in order.
 
-   **Version sources**: `installed-version` reads from `.squidsquad/config.md`'s `squidsquad_version:` field. `installer-version` reads from `references/VERSION` *after* step 1's pull — meaning it reflects the source the operator pulled in this upgrade session, not the version of the running installer binary. If the operator's installer binary is older than what's on `main`, step 1's pull still refreshes `references/VERSION` to current main, so the comparison always reflects what they're upgrading *to*.
-
-   If `installer-version ≤ installed-version`, there's nothing to migrate; print 'already current' and exit. (The pulled-but-not-migrated `references/` source is still updated on disk — operators who pulled accidentally can `git checkout HEAD references/` to revert.)
-3. **Walk migrations**: for each version step between installed → current (e.g. `1.2→1.3`, `1.3→1.4`, `1.4→1.5`), find the matching `references/migrations/v<N-1>-to-v<N>.md` file. If a version step has no migration file, **skip it** — that release shipped no schema break, so there's nothing for the operator to migrate. For each found migration file, apply its instructions to the current L4 + config under the **three-gate model** (same gating as `l4-curation`, per [COMPOSE-ARCHITECTURE.md §7.4](COMPOSE-ARCHITECTURE.md)):
-   1. **DeepSeek audit**: a deepseek-class model reviews the proposed L4 / config edit against the migration prose
+   **Version sources**: `installed-version` reads from `.squidsquad/config.md`'s `squidsquad_version:` field. `installer-version` reads from `references/VERSION` *after* step 1's pull — so the comparison always reflects what the operator is moving *to*. If `installer-version ≤ installed-version`, the walk is a no-op (no migration markdowns to apply); the installer falls through to the standard phases (1+). (The pulled-but-not-migrated `references/` source is still updated on disk — operators who pulled accidentally can `git checkout HEAD references/` to revert.)
+3. **Walk migrations**: for each version step between installed → current (e.g. `1.2→1.3`, `1.3→1.4`, `1.4→1.5`), find the matching `references/migrations/v<N-1>-to-v<N>.md` file. If a version step has no migration file, **skip it** — that release shipped no on-disk change. For each found migration file, apply its instructions under the **three-gate model** (same gating as `l4-curation`, per [COMPOSE-ARCHITECTURE.md §7.4](COMPOSE-ARCHITECTURE.md)):
+   1. **DeepSeek audit**: a deepseek-class model reviews the proposed edit against the migration prose
    2. **Mini-CQ**: one-line plain-language confirmation to the human ("Migration v1.4 → v1.5 wants to rename `Iteration_Interval` to `Iteration Interval` in your config — OK?"); rejection aborts that step with no file change
    3. **Compose dry-run**: `compose.py deploy-all --check` validates the migrated content composes cleanly before any write
-   
+
    Migrations are stepped through one at a time — failure at any gate aborts that step (and the rest of the walk) cleanly; nothing partial is written.
-4. **Recompose**: `compose.py deploy-all` regenerates every role-class's CLAUDE.md from the now-current source + migrated L4. The composed outputs reflect both the new sub-skill versions and the migrated L4 customizations. `deploy-all` iterates the alias roster from `.squidsquad/config.md`'s `## Aliases` registry and runs `compose.py deploy <alias>` for each (see COMPOSE-ARCHITECTURE §8.2).
-5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer is an ephemeral Claude Code session but has full Bash tooling — it makes these HTTP calls via `curl` (or equivalent) against the harness's localhost port (read from `.squidsquad/.harness-port` per [HARNESS-ARCH.md §6](HARNESS-ARCH.md)). "Ephemeral" refers to lifetime, not capability: the installer can do anything its Claude Code tooling permits before it exits at Phase 9.
+4. **Stamp**: after a successful walk, the installer writes the now-current version to `.squidsquad/config.md`'s `squidsquad_version:` field. This is the only field the installer writes outside the three-gate model during the walk. Partial walks (failed at some step k) leave the stamp unchanged so the next run resumes at k. Migration files MUST NOT modify the `squidsquad_version:` field directly.
+5. **Continue with Phase 1+**: the installer proceeds with the standard phases exactly as in the fresh case. Phase 5 scaffolding writes only fresh-scaffold paths and never overwrites existing files; Phase 6 recompose regenerates every `.squidsquad/<alias>/CLAUDE.md` from the now-current source + migrated L4; Phase 8 commits + pushes; Phase 9 restarts via the harness HTTP API (or `start.sh` cold-start when the harness is unreachable).
 
-   The harness remains the sole lifecycle authority — agents are never spawned outside it. The installer's upgrade-flow restarts happen through the harness's public HTTP API; the installer is just another localhost client of the same endpoints the operator uses. See HARNESS-ARCH §2.
+   The harness remains the sole lifecycle authority. The installer's restarts go through the harness's public HTTP API:
 
-   Detection logic: the installer issues a `GET http://localhost:<port>/health` (port read from `.squidsquad/.harness-port`) with a 5-second timeout. If the harness responds 200, proceed with per-agent lifecycle calls. If the file is missing, the port is unreachable, or the request times out, the installer invokes `start.sh` from the repo root as the cold-start path. The most common case where `.harness-port` is missing: an upgrade is run immediately after install but before the operator has ever started the harness. The `start.sh` fallback handles this cleanly — it boots the harness for the first time, which both creates `.harness-port` and applies the now-recomposed agent CLAUDE.md files.
+   Detection logic: the installer issues a `GET http://localhost:<port>/status` (port read from `.squidsquad/.harness-port`) with a 5-second timeout. If the harness responds 200, proceed with per-agent lifecycle calls. If the file is missing, the port is unreachable, or the request times out, the installer invokes `start.sh` from the repo root as the cold-start path.
 
-   The installer calls the harness's per-agent lifecycle endpoints in sequence:
    ```
    POST /agents/<alias>/stop    # graceful stop; harness handles ack-stop / timeout
    POST /agents/<alias>/start   # boot with new composed CLAUDE.md
    ```
-   for each agent (e.g. `pm`, `frontend-1`, `verifier`). The URL-template token is named `{role}` in the source code for legacy compatibility, but the value is always the alias; the token-name rename to `{alias}` is tracked in HARNESS-ARCH §4.1 + #10358 (value semantics are stable and won't change with the rename). If the harness is not running, the installer instead invokes `start.sh` from the repo root (which reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots the agents). `start.sh` is a thin shell wrapper that invokes `squidsquad_cli.py start` with the right environment — see HARNESS-ARCH §2 for the underlying entry point. The installer uses `start.sh` for parity with how operators boot the harness manually. Either way, the next session each agent starts is reading the new composed CLAUDE.md. If the restarted agent's boot probe succeeds, the harness also spawns its `event_poll.py` sidecar (per [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md) `boot_agent`); the installer doesn't need to manage `event_poll` directly.
+   for each agent. The URL-template token is named `{role}` in the source code for legacy compatibility, but the value is always the alias; rename to `{alias}` tracked in HARNESS-ARCH §4.1 + #10358. If the harness is not running, `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots the agents. If the restarted agent's boot probe succeeds, the harness also spawns its `event_poll.py` sidecar.
 
-   **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (i.e., it is in the creative phase between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `.squidsquad/<alias>/working-state.md` + any in-flight changes), and then exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent reads `.squidsquad/<alias>/working-state.md` to recover from the checkpoint (see AGENT-RUNTIME §5 state-persistence map + §6.5 context-pressure exit-42 model). No in-flight state is lost because `.squidsquad/<alias>/working-state.md` is the durable checkpoint that survives restarts.
+   **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent recovers from `working-state.md` (see AGENT-RUNTIME §5 + §6.5).
 
 ### 10.1 Migration file format
 
@@ -490,31 +492,25 @@ Migrations describe both **mechanical** changes (deterministic renames, additive
 
 If the release does NOT break L4 or config schema, **no migration file is needed** — the version walk simply skips that step.
 
-### 10.2 What is preserved (not bulk-overwritten) during upgrade
+### 10.2 What gets touched, what doesn't
 
-During upgrade, the items below are preserved — never bulk-overwritten or regenerated. Fresh install creates these files in Phase 5 step 4 from Phase 1 project-intake answers; this section describes the upgrade-flow guarantee specifically.
+The installer never wipes existing-install content as a flow-level rule. The split is mechanical:
 
-(Migrations may modify specific fields through the three-gate model — "preserved" here means "not bulk-overwritten or regenerated", not "never touched".)
+- **Touched only by migration markdowns** (under the three-gate model): `.squidsquad/config.md` body fields, `.squidsquad/project/` L4 files, anything else a per-version migration explicitly names. If no migration markdown touches it, it stays.
+- **Touched by the installer outside the three-gate model**: only the `squidsquad_version:` field in `config.md`, stamped after a successful walk per §10 step 4. Migration files MUST NOT modify this field directly.
+- **Always regenerated by Phase 6 recompose**: `.squidsquad/<alias>/CLAUDE.md` (composed orchestration; rebuilt from the now-current source + migrated L4 every time the installer runs).
+- **Never touched by the installer**: `.squidsquad/vault/` store, per-alias `working-state.md` / `iterations/` / `planning/`, GitHub Issue labels (already present from prior install).
 
-- `.squidsquad/project/` — L4 project-local customizations. Migrations may *modify* L4 contents, but only through the three-gate model in step 3; the upgrade flow never bulk-overwrites or regenerates L4 files.
-- `.squidsquad/vault/` — shared memory layer (never touched by upgrade; created at fresh install by `vault-init` per VAULT-ARCH §7.1)
-- `.squidsquad/<alias>/working-state.md`, `iterations/`, `planning/` — agent state
-- `.squidsquad/config.md` — project configuration. Migrations may modify specific fields under the three-gate model; the installer never blindly overwrites. (Fresh install writes this file from Phase 1 + Phase 2 conversational output.)
-- GitHub Issue labels — already present from prior install
-
-### 10.3 What's regenerated
-
-- `.squidsquad/<alias>/CLAUDE.md` — composed orchestration. The Soul section (§3) is recomposed from the latest `references/roles/<role-class>/SOUL.md` source plus any L4 `## Soul` append, per [COMPOSE-ARCHITECTURE.md §3.2 + §5.3](COMPOSE-ARCHITECTURE.md). No separate per-alias SOUL.md file exists (sidecar retired).
-- `.squidsquad/config.md` `squidsquad_version:` field — updated to the current installer version after a successful walk. This is the only field the installer writes outside the three-gate model **during upgrade** — it's updated by the installer itself *after* all migrations in the walk have completed successfully (not unconditionally; failure at any gate aborts the walk and the version field is not bumped); every other change during upgrade moves through migrations. (Fresh-install writes are a distinct write surface, not gated — see §4.8 step 4 for L4 Project-Context seeding and §10.2 for the fresh-vs-upgrade distinction.) Migration files MUST NOT modify the `squidsquad_version:` field directly — that's the installer's sole write surface for this field. Migrations that need to react to a missing or pre-1.0 stamp should write a separate marker key (e.g., `squidsquad_version_migration_applied: v1.2`) that the installer reads after the walk and uses to determine the final version stamp.
+The previous "preserved during upgrade" framing is retired — there is no separate upgrade flow whose preservation rules differ from fresh install. Existing-state preservation is automatic because the installer's other phases write only to fresh-scaffold paths and never to existing content.
 
 ### 10.4 Edge cases
 
-- **Missing version stamp** (operator on a pre-version-stamp install): treat as `pre-1.0` and walk all available migrations in order. The first migration that runs writes `squidsquad_version:` to the current version on completion.
-- **Missing migration file for a version step**: that release shipped no schema break — skip it silently. No error.
-- **Operator aborts mid-walk** (mini-CQ rejection at step k): the walk aborts at step k; no further steps run; no recompose; no restart. The L4 / config changes from steps 1..k-1 (which were already gated through and written) persist; the version stamp is *not* advanced to current. Next upgrade run picks up at step k. This makes partial-upgrade safe.
-- **DeepSeek audit rejects a step** (LLM judgment misalignment): same as operator abort — clean stop at step k. Operator can investigate, edit the migration file or their L4 manually, then re-run upgrade.
+- **Missing version stamp** (re-run on a pre-version-stamp install): treat as `pre-1.0` and walk all available migrations in order. After a successful walk the installer writes `squidsquad_version:` to the current version.
+- **Missing migration file for a version step**: that release shipped no on-disk change — skip it silently. No error.
+- **Operator aborts mid-walk** (mini-CQ rejection at step k): the walk aborts at step k; no further steps run; no Phase 6 recompose; no Phase 9 restart. The changes from steps 1..k-1 (already gated through and written) persist; the version stamp is *not* advanced. The next installer run picks up at step k. This makes partial walks safe.
+- **DeepSeek audit rejects a step** (LLM judgment misalignment): same as operator abort — clean stop at step k. Operator can investigate, edit the migration file or their L4 manually, then re-run the installer.
 - **Compose dry-run failure at step k**: the migration produced L4 / config that doesn't compose. Same clean-stop semantics. Bug-level: this should not happen if migration files and L4 are well-formed; treat as a release-quality regression and file upstream.
-- **Skipped versions** (operator on v1.0 jumping to v1.5): same flow — walk v1.0→1.1, 1.1→1.2, …, 1.4→1.5 in order. Each step is independently gated; the operator approves each. No "diff two versions of the source tree" computation is needed.
+- **Skipped versions** (re-run on v1.0 jumping to v1.5): same flow — walk v1.0→1.1, 1.1→1.2, …, 1.4→1.5 in order. Each step is independently gated; the operator approves each. No "diff two versions of the source tree" computation is needed.
 
 ### 10.5 Migration files are framework-shipped, not operator-written
 
@@ -552,7 +548,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 
 ## 12. Open questions & gaps
 
-- **G1** — Migration steps for pre-#9925 installs (before the four-layer responsibility model). The upgrade flow assumes the existing install already has the L1-L4 structure; pre-#9925 installs would need a one-off migration. Not yet specified.
+- **G1** — Migration steps for pre-#9925 installs (before the four-layer responsibility model). The migration walk (§10) assumes the existing install already has the L1-L4 structure; pre-#9925 installs would need a one-off migration. Not yet specified.
 - **G2** — L4 backfill from the human's auto-memory directory (`~/.claude/projects/<repo>/memory/`) — referenced from [COMPOSE-ARCHITECTURE.md §10.4](COMPOSE-ARCHITECTURE.md) but not yet implemented as an installer step. Open: should the installer offer to import these on upgrade, or is this a separate one-off tool?
 - **G3** — Multi-tenant install (one repo hosting multiple SquidSquad teams) — likely deferred. Today's model is one SquidSquad install per repo.
 - **G4** — Atomic install across Phase 5–8. Today the scaffold (Phase 5) writes locally before the commit (Phase 8); a hard crash between them leaves the filesystem written but no git history. The interrupted-install recovery path in §11.2 handles this, but the model isn't truly atomic.
@@ -583,3 +579,4 @@ Across both upgrade and clean-rebuild, these are always preserved:
 - **2026-05-23 (v1 draft, categorical roles + R2 fixes)** — Two related changes.
   - **Categorical roles**: prose now talks about the four categorical role classes (**PM / workers / verifiers / DM**) rather than specific concrete role names (`be`, `fe`, `skill`, `qa`, `dev`, etc.). The concrete roster — `pm/dev/qa/dm` for the default preset, `pm/fe/be/qa/dm` for the frontend-backend preset, etc. — is now framed as a *team preset* selected during install. NEW §1.1 introduces this terminology. §3.1 inputs row now says "team preset (which workers and verifiers)" rather than "team shape (which dev roles)". §4.4 Phase 1 conversation reframes "Intent + specialist roster" as "Team preset" with the wizard offering a small named set (default, frontend-backend, multi-platform, custom). §4.5 install spec uses `team_preset:` + `workers:` + `verifiers:` keys. §4.6 review screen example uses preset-shape language ("PM + N workers + M verifiers + DM"). §4.9 compose iterates "PM, each worker, each verifier, DM" not concrete names. §5 file layout uses `<worker-role>/` + `<verifier-role>/` placeholders alongside the always-present `pm/` and `dm/`; explicit note that the default-preset names shown are illustrative.
   - **R2 fixes**: DS round-2 returned 3 new findings (1 ERROR, 2 WARNING) on top of R1. Applied: (1) dead `(MEMORY)` link targets in §3.2 and §9 replaced with inline descriptions (clone isolation principle, tracker abstraction principle); (2) Phase 7 flowchart node "(labels + initial issues)" → "(initial issues)" — labels were already documented as Phase 5 work; (3) §12 G4 reference to "Phase 5.1" → "§11.2" (the interrupted-install recovery path; "Phase 5.1" was not a real section ID). DS artifact: `.squidsquad/pm/planning/REVIEW-INSTALLER-ARCH-DEEPSEEK-2.md`.
+- **2026-05-30 — Upgrade flow retired; one installer flow with migration-walk step.** Architectural simplification: there is no distinct "upgrade flow". Re-running the installer on a repo with `.squidsquad/` already present runs the same phases as a fresh install; the existing-install case is handled by a migration-walk step (§10) consulting per-version `references/migrations/v<N-1>-to-v<N>.md` files. §10 retitled "Migration walk (existing-install step)"; §10.2 "What is preserved during upgrade" deleted; replaced by §10.2 "What gets touched, what doesn't" with the rule that the installer never wipes existing-install content (preservation is automatic; migrations are the only mutator). §10.3 "What's regenerated" folded into §10.2. §4.3 Phase 0b retitled "Re-run detection + migration walk" with the inline rule that fresh and re-run cases use the same flow. §2 commitment 3 ("Idempotent re-runs") restated as "One flow, fresh and re-run". The pre-existing INSTALLER M1 audit finding (§10.2 vs §11.2 contradiction) is resolved by removing §10.2's separate preservation list entirely. Memory rule: `project_upgrade_is_fresh_install.md`.
