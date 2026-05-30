@@ -194,6 +194,8 @@ flowchart TB
 
 `thin_launcher` (Python) and `event_poll.py` (Python) are cross-platform — they run identically on all three OSes. Singleton enforcement via `.claude-pid` and the Monitor stdin contract behave the same regardless of host OS.
 
+> **Future-state note**: the process tree described in this section is current. [`HARNESS-ARCH.md §14`](HARNESS-ARCH.md) documents a proposed simplification that deletes `thin_launcher.py` entirely and has `wt.exe` invoke `claude.exe` directly. That section is **proposal**, not implemented; if it ever lands, this §3.2 ships an updated tree in the same change.
+
 **The composed `CLAUDE.md`** that `claude` reads at boot is the agent's full instruction artifact — produced by `compose.py` from L1 (base) + L2 (role class) + L3 (domain) + L4 (install overrides) + per-agent `SOUL.md`, selected per the agent's alias from `.squidsquad/config.md`. AGENT-RUNTIME is intentionally silent on the format itself — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) for the layering model, slot order, frontmatter spec, and how the L1-L4 + SOUL.md inputs become one composed file. **Compose is the agent compiler**; every runtime behavior described in this doc is downstream of what compose produced.
 
 `thin_launcher` and `event_poll` are intentionally separate processes (decided 2026-05-22):
@@ -339,7 +341,7 @@ flowchart TB
 
 #### Vocabulary note — `{role}` in HTTP paths is actually `{alias}`
 
-The endpoints throughout this section use `{role}` in path parameters (e.g., `GET /events/for/{role}`, `GET /events/cursor/{role}`, `GET /agents/{role}`). **The value passed is always the agent's alias** (e.g., `skill`, `verifier`, `human`, `frontend-1`), not the L2 categorical class (`pm`/`verifier`/`worker`/`dm`). The path-parameter name `{role}` predates the alias concept and is misleading; see [HARNESS-ARCH.md §9](HARNESS-ARCH.md#9-vocabulary-notes) for the canonical statement. A rename to `{alias}` is in the same family as #10358 (`role` → `alias` identifier rename) but is out of scope on that task to limit blast radius. Implementers should treat `{role}` as a synonym for `{alias}` until the rename lands.
+The endpoints throughout this section use `{role}` in path parameters (e.g., `GET /events/for/{role}`, `GET /events/cursor/{role}`, `GET /agents/{role}`). **The value passed is always the agent's alias** (e.g., `skill`, `verifier`, `human`, `frontend-1`), not the L2 categorical class (`pm`/`verifier`/`worker`/`dm`). The path-parameter *name* (`{role}`) is the legacy form preserved for code-compat — see #10358 for the rename to `{alias}`. Throughout this doc we write `{alias}` to surface the actual semantics; the code on `main` still uses `{role}` as the URL token. The path-parameter name `{role}` predates the alias concept and is misleading; see [HARNESS-ARCH.md §9](HARNESS-ARCH.md#9-vocabulary-notes) for the canonical statement. A rename to `{alias}` is in the same family as #10358 (`role` → `alias` identifier rename) but is out of scope on that task to limit blast radius. Implementers should treat `{role}` as a synonym for `{alias}` until the rename lands.
 
 #### Event store (deque)
 
@@ -552,7 +554,7 @@ Each agent typically runs in its own git clone. The harness writes its port to `
 | In-flight events | `.squidsquad/.event-state.json` | harness | Re-delivery on timeout (#9873-E) |
 | Agent intent + PID | `.squidsquad/.harness-state.json` | harness | Harness owns agent lifecycle |
 | Agent singleton PID | `.squidsquad/<alias>/.claude-pid` | agent (thin_launcher) | Singleton enforcement (#8692) + harness health-poller's process-liveness check (see §3.3) |
-| Agent current-work state | `.squidsquad/<alias>/working-state.md` | agent | Resume-from-crash checkpoint for the agent's OWN current work. Does NOT carry an event queue (harness deque + cursor own that) AND does NOT carry a nudge flag (per §7.5 — nudge memory lives only in conversation context) |
+| Agent current-work state | `.squidsquad/<alias>/working-state.md` | agent | Resume-from-crash checkpoint for the agent's OWN current work. Does NOT carry an event queue (harness deque + cursor own that) AND does NOT carry a nudge flag (per §7.5 — nudge memory lives only in conversation context). It DOES carry an agent-private `last_cycle_timestamp` field used for tracker-state deduplication within the agent's own logic (see §6.3). This is cycle-tracking metadata, not event-delivery state — the harness does not read this file; the agent writes and reads it itself. The cursor-vs-timestamp distinction: cursor is harness-owned for event-delivery dedup; timestamp is agent-owned for tracker-state-change dedup. |
 | Improvement subloop throttle | `.squidsquad/<alias>/.subloop-last-run` | agent | Last-fire timestamp; gates next eligibility (§7.6) |
 | Last-seen forge event | EAD-internal persistence | harness | Don't re-emit assigned-to on restart |
 | Work state | GitHub Issues (forge) | forge | Source of truth for status, comments, PRs |
@@ -721,7 +723,7 @@ Event mode is the **exclusive home** for event-bus consumption and cursor logic 
 
 ### 7.0 The `event_poll` sidecar
 
-A sibling `event_poll.py --wait --role <role> --target stdout` process polls the harness on the agent's behalf and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor. That line is what wakes the Claude session via Monitor. The `--role` flag accepts the **alias** value (per the §4.3 vocabulary note: the legacy `--role` / `{role}` naming accepts alias values for code-compat; rename to `--alias` ships with #10358).
+A sibling `event_poll.py --wait --role <role> --target stdout` process polls the harness on the agent's behalf and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor. That line is what wakes the Claude session via Monitor. The `--role` flag accepts the **alias** value (e.g., `--role frontend-1` not `--role worker`). The flag name is `--role` for code-compat with the wire format described in §4.3; rename to `--alias` ships with #10358.
 
 **Polling cadence** (locked, same adaptive pattern as EAD §4.4 but for the harness HTTP API, not the forge):
 
@@ -740,7 +742,7 @@ Two-tier backoff: 5s → 30s → 60s. A drained queue stabilizes at 60s after �
 
 Nudge format is literal `NUDGE\n` with no payload — the agent always does `GET /events/for/{role}?since=cursor` to find out what's new. False positives (a `NUDGE` arriving when no relevant events exist) are harmless because the GET returns `[]`.
 
-`event_poll`'s lifecycle is harness-owned: `boot_agent(role)` spawns it alongside `thin_launcher`, the health poller watches its PID, and the harness respawns it on death while `intent=running`.
+`event_poll`'s lifecycle is harness-owned: `boot_agent(role)` spawns it sequentially after `thin_launcher` has been launched and before the harness awaits the `booted` handshake (see §7.2 boot diagram), the health poller watches its PID, and the harness respawns it on death while `intent=running`. `event_poll` discovers the harness port via the same mechanism documented for agents in §4.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. The harness does not pass a `--port` argument; the discovery file is sufficient and avoids stale-port hardcoding if the harness restarts on a different port. On harness restart, any `event_poll` orphaned by the prior harness exits when its `--wait` parent pipe closes; the new harness re-spawns it as part of the §7.2 boot sequence for each `intent=running` agent. event_poll does not attempt independent reconnect — it dies with the harness it was spawned by.
 
 ### 7.1 The nudge contract
 
@@ -850,6 +852,8 @@ sequenceDiagram
     Note over C,EP: Agent now status=ready.<br/>Next nudge wakes it.
 ```
 
+event_poll begins polling immediately on spawn; the harness's deque retains events from boot onward so any work the agent should pick up is durably available — but cursor-clean handshake (`booted`) happens before the harness considers the agent ready to receive routed work via `POST /work/assign`. The race window is bounded by the deque maxlen=1000 and the typical sub-second boot delay.
+
 #### Agent state machine
 
 ```mermaid
@@ -952,6 +956,8 @@ The sender comments on the issue with a one-line routing rationale when the lane
 - **Unknown alias** → `HTTP 404 Not Found` with body `{"error": "unknown alias", "target_alias": "<value>", "known_aliases": [...]}`. Prevents typos and misconfigurations from reaching the deque.
 - **Self-assign** → forbidden by built-in invariant (the harness rejects any `assigned-to` where `target_alias == emitter_alias`). Structural anti-loop, not a permission table.
 - **No class-from-class permissions**: any alias may assign-to any other alias. Process discipline lives in each agent's L2/L3/L4 — not in a harness gate. This aligns with §4.1's "harness is a transport bus, not an orchestrator" principle (adding a permission table would make the harness gate-keep work assignment, which it explicitly doesn't do).
+
+  > **Status**: the alias-existence-only validation rule above is the **target architecture** (decision locked 2026-05-25, per `decision-class-vs-alias-routing-model`). Current code still reads `responsibility.md` and enforces class-from-class permission checks; removal is tracked in #10182. See [HARNESS-ARCH.md §13.5](HARNESS-ARCH.md#135-alias-routing-migration) for migration status.
 
 **Mis-route recovery** (the human-team analogy): when an agent receives `assigned-to` work that doesn't match its declared specialty:
 
@@ -1071,7 +1077,7 @@ Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and ro
 event-driven: no    # global — applies to all agents
 ```
 
-There is no per-role override and no runtime mode-detection — mode is settled at compose time for every agent in the install. An install is either entirely event-driven or entirely loop-mode at any given moment; mixed states only exist transiently during a recompose roll-out (some agents restarted, others not yet — §8.2).
+There is no per-role override and no runtime mode-detection — mode is settled at compose time for every agent in the install. An install is either entirely event-driven or entirely loop-mode at any given moment; mixed states only exist transiently during a recompose roll-out (some agents restarted, others not yet — §8.2). The installer writes `event-driven: no` as the default at install time (per INSTALLER-ARCH §4.8 Phase 5 step 1). The operator subsequently edits this field to flip modes per §8.2.
 
 **How mode selection actually works** (compose-time only):
 
@@ -1158,7 +1164,7 @@ PM's inbox is disambiguated by `event_context`. The full set in use:
 - From the `tracker.py` auto-routing table (§7.3): `"planning-needed"`, `"human-needed"` (for `* → pending-human-review|setup` transitions), `"unowned-rejection"` (fallback for rejected items with no `role:*` label), `"unowned-approval"` (fallback for approved items with no `role:*` label).
 - From the catalog-trim translators (§8.5): `"compose-needed"` (recompose required), `"agent-down"` (health-poller observed an agent stall).
 - From EAD: `"human-comment"` (forge comment by a human author).
-- From agents calling `/work/assign` directly: `"process-concern"` for ad-hoc routing of cross-role process issues to PM.
+- From agents calling `/work/assign` directly: `"process-concern"` for ad-hoc routing of cross-role process issues to PM; `"route-help"` for mis-route recovery (an agent received work it doesn't own and re-routed to PM for triage — see §7.3).
 
 PM agents recognize this set as their care-filter; new values added in future require both an emitter update and an entry in this list.
 

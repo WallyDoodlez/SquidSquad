@@ -326,7 +326,7 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 
 | Slot | Legal ops | Notes |
 |---|---|---|
-| `identity` | append only | the slot is short prose; project additions go at the end. **Universal prohibitions** (the "Boundaries" sub-section per §5.1 + §6.3) are part of this slot — L4 may `append` new universal prohibitions ("in this project, no agent ever X") but cannot remove or modify the shipped L1-L3 Boundaries content. See `l4-curation` for the curation dialog. |
+| `identity` | append only | the slot is short prose; project additions go at the end. **Universal prohibitions** (the "Boundaries" sub-section per §5.1 + §6.3) are part of this slot — L4 may `append` new universal prohibitions ("in this project, no agent ever X") but cannot remove or modify the shipped L1-L3 Boundaries content. See `l4-curation` for the curation dialog. **Boundaries sub-section is L1-only and immutable from L4** — its content (universal prohibitions shipped with the framework) cannot be removed, reordered, or replaced by L4 ops. Project-specific universal prohibitions are added via L4 `append` to Identity, which appends content *after* the Boundaries sub-section. L4 cannot insert between Identity prose and the Boundaries list. |
 | `responsibility` | append OR replace (whole-slot) — mutually exclusive in a single L4 file | role-boundary prose has no step IDs, so step-targeted ops do not apply. **Whole-slot `replace` is terminal**: if `### replace` appears under `## Responsibility`, no other ops are permitted in that slot for the same L4 file. Multiple `### replace` blocks or mixing `### append` with a whole-slot `### replace` is a validation error (see §4.2 step 2.i). `append`-only is the default; `replace` swaps the entire L1-L3 responsibility block for the L4 body. |
 | `soul` | **append only** | no targeted ops; see §3.4 for semantic-merge precedence |
 | `instructions` | append + insert-before + insert-after + replace (step-targeted only) | the primary surface for behaviour customization; whole-slot `replace` is forbidden (the slot has step IDs and must target one) |
@@ -334,6 +334,8 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 | `vault` | N/A (L1-exclusive — L4 cannot contain a `## Vault` section at all) | **Scope of "L1-exclusive"**: refers to *the composed `## Vault` section text in CLAUDE.md* — the short framework-shipped slot describing the vault contract (PARAG model, entity types, wikilink grammar, confidence levels). It does NOT refer to the on-disk vault knowledge store at `.squidsquad/vault/`, which is read/written at runtime by agents via vault sub-skills (see `references/sub-skills/common/vault-protocol.md` and VAULT-ARCH). The "Legal ops" column reflects what L4 H3 blocks may target; for vault specifically, this differs from other "no legal ops" rows — vault sections in L4 are *structurally forbidden*, not just op-restricted. Compose rejects any L2/L3/L4 source file with `slot: vault` frontmatter. (L1 fragments still compose via the normal `(slot, ordinal)` ordering — that's fragment combination, not an op.) Guardrail (2026-05-29): per-role / per-domain / per-project customization is currently disallowed to keep the vault contract stable; revisit if a concrete customization pattern emerges. See G4. |
 
 Compose **must reject** any L4 file whose section structure violates these constraints. Examples of rejections: a `### replace` (any form) H3 under `## Soul`; a bare `### replace` (no target) under any slot except `## Responsibility`; a step-targeted `### replace step:cycle/<step-id>` under `## Responsibility` (no step IDs to target there); any `## Vault` section in an L4 file (vault is L1-exclusive — see §5.6 + G4). Compose **also rejects** any L1-L3 source file that declares `slot: project-context` (Project Context is L4-exclusive — see §5.5), and any L2/L3/L4 source file that declares `slot: vault` (Vault is L1-exclusive — see §5.6).
+
+> **Vault differs from other "no legal ops" rows.** For most slots, "no legal ops" means L4 may not perform any H3 op on that slot's content. Vault is stricter: a `## Vault` H2 section in an L4 file is *structurally forbidden* — compose rejects the entire L4 source file if it contains one. The N/A in the table is not "the slot exists but L4 has no ops to perform on it"; it means the slot must not appear in L4 at all.
 
 #### 3.4 Soul slot — semantic-merge precedence
 
@@ -402,7 +404,7 @@ Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). 
 
 Compose processes L1-L3 deterministically:
 
-1. **Collect**: walk `references/sub-skills/`, `references/roles/<role>/`. For each file with frontmatter, read its `slot` and `ordinal`. For files in the `instructions` slot, also extract the sub-skill name referenced in the file body (e.g. from `→ run sub-skill: <name>` directives) — this is a body-extracted reference, not a frontmatter field.
+1. **Collect**: walk `references/sub-skills/`, `references/roles/<role>/`. For each file with frontmatter, read its `slot` and `ordinal`. For files in the `instructions` slot, also extract the sub-skill name referenced in the file body (e.g. from `→ run sub-skill: <name>` directives) — this is a body-extracted reference, not a frontmatter field. Files whose frontmatter declares an L4-exclusive slot (`slot: project-context`) or a higher-layer-only slot (e.g., `slot: vault` from L2-L4) are **rejected with a diagnostic — compose aborts** with a clear error pointing at the offending file. This is a validation rule, not a silent skip — invalid frontmatter blocks composition entirely so the operator can fix the source.
 2. **Filter by role**: each file may declare which roles it applies to (via `roles:` frontmatter list; default = all). Files not applicable to the current role are dropped.
 3. **Sort**: stable sort by `(slot_index, ordinal)`. `slot_index` is a fixed enum: identity=0, responsibility=1, soul=2, instructions=3, project-context=4, vault=5.
 4. **Emit orchestration**: under the appropriate top-level section header, emit each file's orchestration content verbatim. Inside the `instructions` slot, step bodies are **references to sub-skills by name** (e.g. `→ run sub-skill: pipeline-sentinel`) rather than inlined sub-skill content. The catalog of available sub-skills lives at [`sub-skill-catalog.md`](sub-skill-catalog.md) — composed CLAUDE.md never duplicates it.
@@ -420,14 +422,20 @@ After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsqu
    1. **Whole-slot replace (responsibility only).** If the slot is `responsibility` and the section contains a bare `### replace` (no `step:` target), apply it first — the L4 H3 block body replaces the entire L1-L3 responsibility base. Whole-slot replace is **terminal**: no other ops are applied to that slot in this L4 file (multiple `### replace` blocks under `## Responsibility` is a validation error; mixing whole-slot replace with `### append` under the same `## Responsibility` is a validation error). If the slot has no bare `### replace`, skip this sub-step and proceed.
    2. All `### replace step:cycle/<step-id>` H3 blocks. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose. **Semantics**: `replace` swaps the *body* of the targeted step; the **step ID and its ordinal position are preserved** as ordering anchors in the linked sequence. Subsequent `insert-before` / `insert-after` ops can still target the replaced step ID and will resolve correctly. A `### replace step:cycle/<id>` with an empty body produces a no-op anchor — the step ID remains in the sequence (and can still be targeted by later inserts) but contributes no content to the linked output.
    3. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** ordering — the step IDs from step 2.ii are still present (only their bodies changed), so inserts targeting replaced steps resolve normally. New steps introduced by `insert-before` / `insert-after` are assigned ordinals between the anchor step's ordinal and its neighbor's (using fractional ordinals internally; never exposed to the L4 author).
-   4. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). `append` blocks are placed at the **end of the slot's content**, after the L1-L3 base AND after all step 2.ii / 2.iii ops have been applied. Multiple `### append` blocks land in their L4-file order. There is no mechanism to place `append` content before other L4 ops; if the author needs that, they should use `insert-before` targeting the first step in the slot. No ordinal field on `append` — the author controls ordering by reordering H3 blocks within the source file.
-3. Validate: every `step:` reference resolves to a real L1-L3 step ID; no two `replace` H3 blocks target the same ID; H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` in any form is forbidden under `## Soul`, `## Identity`, and `## Project Context`; bare `### replace` (no target) is forbidden under `## Instructions` (only step-targeted `replace` is legal there); step-targeted `### replace step:…` is forbidden under `## Responsibility` (no step IDs to target); `## Vault` is forbidden entirely in L4 — vault is L1-exclusive per §3.3 + §5.6).
+   4. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). `append` blocks are placed at the **end of the slot's content**, after the L1-L3 base AND after all step 2.ii / 2.iii ops have been applied. Multiple `### append` blocks land in their L4-file order. There is no mechanism to place `append` content before other L4 ops; if the author needs that, they should use `insert-before` targeting the first step in the slot. No ordinal field on `append` — the author controls ordering by reordering H3 blocks within the source file. **Constraint for the `instructions` slot**: L4 `append` content under `## Instructions` must follow the sub-skill reference grammar (§6.2) — every appended block must contain at least one `→ run sub-skill: <name>` reference resolvable against the catalog (§4.5). Arbitrary prose without a sub-skill reference is a validation error. This preserves the thin-orchestration invariant: the composed CLAUDE.md never contains inlined sub-skill bodies, even from L4.
+3. Validate:
+   - every `step:` reference resolves to a real L1-L3 step ID;
+   - no two `replace` H3 blocks target the same ID;
+   - H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` in any form is forbidden under `## Soul`, `## Identity`, and `## Project Context`; bare `### replace` (no target) is forbidden under `## Instructions` (only step-targeted `replace` is legal there); step-targeted `### replace step:…` is forbidden under `## Responsibility` (no step IDs to target); `## Vault` is forbidden entirely in L4 — vault is L1-exclusive per §3.3 + §5.6);
+   - every L4 `append` block under `## Instructions` contains at least one `→ run sub-skill: <name>` reference resolvable against the catalog (§4.5) — arbitrary prose without a reference aborts compose with a clear error.
 
 If validation fails, compose **aborts with a diagnostic** naming the offending H3 block. No partial output is written.
 
 ### 4.3 Link: Multi-domain L4
 
 L4 is not instructions-only. Project customization spans every slot:
+
+> **Runtime-authored content.** The examples below illustrate **runtime-authored** L4 content added later via `l4-curation`. At install time, only the `## Project Context` slot in each role-class L4 file is seeded by the installer (INSTALLER-ARCH §4.8 Phase 5 step 4); the other slots (`## Identity`, `## Soul`, `## Instructions`) start empty and grow during normal operation.
 
 | Slot | Example L4 content |
 |---|---|
@@ -1278,21 +1286,24 @@ When the agent receives a new instruction, it walks this decision tree:
      c. Do NOT write an L4 op that references a sub-skill name not
         already in the catalog — §4.5 catalog-drift validation will
         reject it, and the failure mode is confusing (compose error,
-        not a clear "you can't add new sub-skills here").
+        not a clear "you can't add new sub-skills here"). (This is the
+        same gate as §4.5 — the catalog is consulted at compose time;
+        sub-skill name resolution failures abort the compose with a
+        clear error pointing at the offending L4 op.)
 ```
 
 If the agent cannot decide between `replace` and `insert-after` (e.g. the new instruction is ambiguous), the agent **asks the human a single clarifying question** before persisting.
 
 ### 7.3 L4 file format
 
-There is exactly **one L4 file per role-class** in an install — see §3.3 for the class-vs-instance distinction. The base team preset has four classes:
+There is exactly **one L4 file per role-class** in an install — see §3.3 for the class-vs-instance distinction. The **default `software-dev` preset** installs `pm`, `worker`, `verifier`, `dm` — one class each, no specialization — producing four L4 files:
 
 - `.squidsquad/project/pm.md`
 - `.squidsquad/project/verifier.md`
 - `.squidsquad/project/worker.md`
 - `.squidsquad/project/dm.md`
 
-Team presets with specialized worker or verifier classes get one L4 file per class. For example, a preset that spawns `pm + 2 fe-worker + 1 be-worker + verifier + dm` produces **5 L4 files** (not 7) — the two fe-worker instances share `fe-worker.md`:
+Specialized presets like `software-dev/fe-be-split` instead install `pm`, `fe-worker`, `be-worker`, `verifier`, `dm` — producing **5 L4 files** (not 7 even when two fe-worker instances run) — the two fe-worker instances share `fe-worker.md`. The rule remains: one L4 file per role-class regardless of preset choice.
 
 - `.squidsquad/project/pm.md`
 - `.squidsquad/project/fe-worker.md` *(shared by both fe-worker instances)*
@@ -1427,6 +1438,8 @@ A GitHub Actions check (or local pre-commit hook) inspects every PR:
 - Failure message links to the offending source/output mismatch and suggests `compose.py deploy-all` to fix.
 
 ### 8.2 Auto-recompose on merge
+
+`compose.py deploy-all` reads the alias roster from `.squidsquad/config.md`'s `## Aliases` registry and runs `compose.py deploy <alias>` for each entry. It is the canonical way to regenerate all composed outputs after an L1-L3 source change.
 
 `dm`'s delivery flow runs `compose.py deploy-all` immediately after merging any PR that touched L1-L3 sources. If the post-recompose diff is non-empty (composer found drift the PR didn't catch), `dm`:
 

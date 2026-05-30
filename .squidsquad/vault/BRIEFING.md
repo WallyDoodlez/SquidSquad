@@ -5,8 +5,9 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Active Priorities
 
 - #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — paused per 2026-05-24 scope refocus; awaiting human disposition (close / re-scope / keep)
-- #9968 EPIC: L1-L4 review + compose-architecture doc (in-progress, medium, role:pm) — HELD pending doc-closure of arch docs
-- #10003 Massage docs/VAULT-ARCH.md (in-progress, medium, role:pm) — active PR #10004; current PM focus
+- #9968 EPIC: L1-L4 review + compose-architecture doc (in-progress, medium, role:pm) — current PM focus; advanced by PRs #10378 + #10379 this session
+- PR #10378 (in flight) — multi-doc TRD polish across COMPOSE/AGENT-RUNTIME/HARNESS/INSTALLER, 13 commits + 5 DS audit rounds; INSTALLER×COMPOSE cross-audit converged to 0 contradictions; awaiting human review
+- PR #10379 (in flight) — Agent Skill Dev Team preset rename + L1-L3 (`references/seed-v2/*`) + L4 (`.squidsquad/project/<role>.md`) new-compose-model seed; awaiting human review with 4 memory-vs-old-L4 contradictions surfaced for triage
 - #5855 Vault is static decision log, not living memory (pending, high, role:skill)
 - #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill)
 - #5620 L3 PM stuck-rebase recovery (pending, high, role:skill)
