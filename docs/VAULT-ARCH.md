@@ -276,7 +276,7 @@ Each sub-skill's **Cycle integration** line below names its lane.
 
 **Cycle integration**: Post-cycle Step 4b. Gated by the per-cycle quiet check only — always-on, no feature toggle (the 4-gate filter already provides sufficient noise control; a blunt on/off flag on top earns no use case). **Lane**: background subagent (`sonnet`). The consuming agent hands the iteration log + write-budget + dedup-tool access to the subagent; the subagent runs the 4-gate evaluation and returns a structured list of `{action: write|update|skip, path, type, body, reason}` decisions plus the resulting note paths. The reflection transcript stays out of the consuming agent's context.
 
-**Scripts used** (from §8): `vault_remember.py is-quiet`/`reset-writes`/`write-budget`/`inc-writes`/`briefing-budget` (gating and accounting), `vault_check.py dedup-check` (gate 2). (The legacy `config.py get vault-remember` enabled-flag read is being retired — see follow-up.)
+**Scripts used** (from §8): `vault_remember.py is-quiet`/`reset-writes`/`write-budget`/`inc-writes`/`briefing-budget` (gating and accounting), `vault_check.py dedup-check` (gate 2). (The legacy `config.py get vault-remember` enabled-flag read has been retired — the sub-skill is always-on and self-gates per its own per-cycle conditions.)
 
 **Outputs**: Up to 2 new `.squidsquad/vault/galaxy/*.md` notes per cycle (`decision-*`/`pattern-*`/`learning-*`), optional `BRIEFING.md` staleness updates, iteration-log notes for deferred candidates.
 
@@ -387,7 +387,7 @@ The vault is touched at four points in a cycle:
 
 ### 9.2 Pre-cycle (mechanical)
 
-- No vault read or write. (Earlier revisions had `cycle_pre.py` read `vault-remember` and `vault-optimize` enabled-flags into `cycle-input.json`; those flags are being retired — both sub-skills are always-on and self-gate via their per-cycle conditions.)
+- No vault read or write. (Earlier revisions had `cycle_pre.py` read `vault-remember` and `vault-optimize` enabled-flags into `cycle-input.json`; those flags have been retired — both sub-skills are always-on and self-gate via their per-cycle conditions.)
 
 ### 9.3 Creative phase (agent)
 
