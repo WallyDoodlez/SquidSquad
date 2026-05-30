@@ -225,7 +225,7 @@ Once approved, the installer:
 
 1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts).
 2. **Serializes the install spec** to a temporary location for the scaffold step.
-3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs (CLAUDE.md placeholders, working-state.md skeletons, planning/, iterations/), vault skeleton, project-local L4 directory, and `config.md`. `config.md` includes the **`squidsquad_version:` field** stamped with the SquidSquad source release this installer ships with (read at upgrade time per §10 step 1). No per-alias `SOUL.md` files (the v1 sidecar is retired; SOUL.md content is composed into `CLAUDE.md §3 Soul` per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md)). No tool/MCP wiring (per §8).
+3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs (CLAUDE.md placeholders, working-state.md skeletons, planning/, iterations/), vault skeleton, project-local L4 directory, and `.squidsquad/config.md`. `.squidsquad/config.md` includes the **`squidsquad_version:` field** stamped with the SquidSquad source release this installer ships with (read at upgrade time per §10 step 1). No per-alias `SOUL.md` files (the v1 sidecar is retired; SOUL.md content is composed into `CLAUDE.md §3 Soul` per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md)). No tool/MCP wiring (per §8).
 4. **Seeds L4 Project Context** — for each role-class in the chosen preset, writes the Phase 1 project-intake answers (domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes) into `.squidsquad/project/<role-class>.md` under the `## Project Context` H2 section. This is the single unified L4 file per role-class (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md) and the "two complementary sources" callout in [§5.5](COMPOSE-ARCHITECTURE.md)). Other L4 slots (Identity / Soul / Instructions / etc.) start empty at install time and are populated at runtime by the `l4-curation` sub-skill (per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md)).
 
    > **Historical context (no installer code needed):** earlier installs used a multi-file L4 seed pattern (`references/sub-skills/project/<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-*.md`, `setup-upgrade-gate.md`). That pattern is retired and replaced by the unified `<role-class>.md` model above. The installer does **not** carry migration code for the legacy pattern — fresh installs never see it, and existing installs are migrated by a separate one-time tool (out of scope for this doc). This callout exists only to disambiguate the docs; an implementer reading §4.8 should write the unified-file path and not the legacy multi-file path.
@@ -372,7 +372,7 @@ API keys and secrets stay in `~/.squidsquad/secrets` (created by the installer's
 - No `capabilities/` sub-skill set in the install scaffold.
 - No `setup.md` walk per tool.
 - No `common/capability-check` sub-skill in any role's compose manifest.
-- No `Capabilities:` section in `config.md`.
+- No `Capabilities:` section in `.squidsquad/config.md`.
 
 The existing `references/sub-skills/capabilities/` directory and `common/capability-check.md` are slated for removal — they are architectural deadwood from the prior model. Tracker: follow-up issue against the worker class (default-preset assignee: `skill`) when this doc lands.
 
@@ -391,7 +391,7 @@ The default tracker backend is **GitHub Issues** — the canonical tracker descr
 - **GitHub Issues** (default): the installer creates the standard label taxonomy via `gh label create` in Phase 5.
 - **Forgejo** (experimental): `references/scripts/forgejo_setup.py` provides the alternate-backend init flow. The installer offers this during the forge-backend conversation step ([WIZARD.md Step 5c](../references/wizard/WIZARD.md)) if the human explicitly requests it. This conversation happens during this doc's Phase 1.
 
-The choice is recorded in `config.md` under `Tracker Backend`. Agents read it at boot and route their tracker calls accordingly through `tracker.py`.
+The choice is recorded in `.squidsquad/config.md` under `Tracker Backend`. Agents read it at boot and route their tracker calls accordingly through `tracker.py`.
 
 ---
 
@@ -439,7 +439,7 @@ flowchart LR
 - `.squidsquad/project/` — L4 project-local customizations
 - `.squidsquad/vault/` — shared memory layer
 - `.squidsquad/<alias>/working-state.md`, `iterations/`, `planning/` — agent state
-- `config.md` — project configuration (the installer may *add* new fields with defaults if the new version requires them, but it never overwrites existing fields)
+- `.squidsquad/config.md` — project configuration (the installer may *add* new fields with defaults if the new version requires them, but it never overwrites existing fields)
 - GitHub Issue labels — already present from prior install
 
 **What's regenerated:**
