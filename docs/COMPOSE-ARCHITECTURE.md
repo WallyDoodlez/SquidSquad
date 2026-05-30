@@ -303,10 +303,12 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 | `responsibility` | append + replace (whole-slot) | role-boundary prose has no step IDs, so step-targeted ops do not apply; `replace` swaps the entire L1-L3 responsibility block for the L4 body |
 | `soul` | **append only** | no targeted ops; see §3.4 for semantic-merge precedence |
 | `instructions` | append + insert-before + insert-after + replace (step-targeted only) | the primary surface for behaviour customization; whole-slot `replace` is forbidden (the slot has step IDs and must target one) |
-| `project-context` | append only — **L4-exclusive** | L1-L3 do NOT author this slot (no cross-install layer can know about a specific project — see §5.5). Compose rejects any L1-L3 source file with `slot: project-context` frontmatter. L4 entries seeded by installer Phase 1 + accumulated at runtime by `l4-curation`. |
-| `vault` | none — **L1-exclusive** | The "Legal ops" column reflects what L4 H3 blocks may target; vault is L1-only authored, so no L4 ops are legal. L2 and L3 also do NOT contribute `slot: vault` fragments. (L1 fragments still compose via the normal `(slot, ordinal)` ordering — that's fragment combination, not an op.) The vault contract is framework-owned (PARAG model, entity types, wikilink grammar, confidence levels) — see [`VAULT-ARCH.md`](VAULT-ARCH.md). Compose rejects any L2/L3/L4 source file with `slot: vault` frontmatter. Guardrail (2026-05-29): per-role / per-domain / per-project customization is currently disallowed to keep the vault contract stable; revisit if a concrete customization pattern emerges. See G4. |
+| `project-context` | append only | L1-L3 do NOT author this slot (L4-exclusive). Compose rejects any L1-L3 source file with `slot: project-context` frontmatter. L4 entries seeded by installer Phase 1 + accumulated at runtime by `l4-curation`. (No cross-install layer can know about a specific project — see §5.5.) |
+| `vault` | N/A (L1-exclusive — L4 cannot contain a `## Vault` section at all) | L2 and L3 also do NOT contribute `slot: vault` fragments. (L1 fragments still compose via the normal `(slot, ordinal)` ordering — that's fragment combination, not an op.) The vault contract is framework-owned (PARAG model, entity types, wikilink grammar, confidence levels) — see [`VAULT-ARCH.md`](VAULT-ARCH.md). Compose rejects any L2/L3/L4 source file with `slot: vault` frontmatter. Guardrail (2026-05-29): per-role / per-domain / per-project customization is currently disallowed to keep the vault contract stable; revisit if a concrete customization pattern emerges. See G4. |
 
 Compose **must reject** any L4 file whose section structure violates these constraints. Examples of rejections: a `### replace` (any form) H3 under `## Soul`; a bare `### replace` (no target) under any slot except `## Responsibility`; a step-targeted `### replace step:cycle/<step-id>` under `## Responsibility` (no step IDs to target there); any `## Vault` section in an L4 file (vault is L1-exclusive — see §5.6 + G4). Compose **also rejects** any L1-L3 source file that declares `slot: project-context` (Project Context is L4-exclusive — see §5.5), and any L2/L3/L4 source file that declares `slot: vault` (Vault is L1-exclusive — see §5.6).
+
+> **Vault differs from other "no legal ops" rows.** For most slots, "no legal ops" means L4 may not perform any H3 op on that slot's content. Vault is stricter: a `## Vault` H2 section in an L4 file is *structurally forbidden* — compose rejects the entire L4 source file if it contains one. The N/A in the table is not "the slot exists but L4 has no ops to perform on it"; it means the slot must not appear in L4 at all.
 
 #### 3.4 Soul slot — semantic-merge precedence
 
@@ -382,7 +384,7 @@ After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsqu
    1. **Whole-slot replace (responsibility only).** If the slot is `responsibility` and the section contains a bare `### replace` (no `step:` target), apply it first — the L4 H3 block body replaces the entire L1-L3 responsibility base. Whole-slot replace is **terminal**: no other ops are applied to that slot in this L4 file (multiple `### replace` blocks under `## Responsibility` is a validation error; mixing whole-slot replace with `### append` under the same `## Responsibility` is a validation error). If the slot has no bare `### replace`, skip this sub-step and proceed.
    2. All `### replace step:cycle/<step-id>` H3 blocks. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose.
    3. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** base (i.e., after step 2.ii completes).
-   4. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). No ordinal field; the author controls ordering by reordering H3 blocks within the source file.
+   4. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). No ordinal field; the author controls ordering by reordering H3 blocks within the source file. **Constraint for the `instructions` slot**: L4 `append` content under `## Instructions` must follow the sub-skill reference grammar (§6.2) — every appended block must contain at least one `→ run sub-skill: <name>` reference resolvable against the catalog (§4.5). Arbitrary prose without a sub-skill reference is a validation error. This preserves the thin-orchestration invariant: the composed CLAUDE.md never contains inlined sub-skill bodies, even from L4.
 3. Validate: every `step:` reference resolves to a real L1-L3 step ID; no two `replace` H3 blocks target the same ID; H3 op-types are legal for the enclosing slot per §3.3 per-slot constraints (e.g., `### replace` in any form is forbidden under `## Soul`, `## Identity`, and `## Project Context`; bare `### replace` (no target) is forbidden under `## Instructions` (only step-targeted `replace` is legal there); step-targeted `### replace step:…` is forbidden under `## Responsibility` (no step IDs to target); `## Vault` is forbidden entirely in L4 — vault is L1-exclusive per §3.3 + §5.6).
 
 If validation fails, compose **aborts with a diagnostic** naming the offending H3 block. No partial output is written.
@@ -1086,7 +1088,10 @@ When the agent receives a new instruction, it walks this decision tree:
      c. Do NOT write an L4 op that references a sub-skill name not
         already in the catalog — §4.5 catalog-drift validation will
         reject it, and the failure mode is confusing (compose error,
-        not a clear "you can't add new sub-skills here").
+        not a clear "you can't add new sub-skills here"). (This is the
+        same gate as §4.5 — the catalog is consulted at compose time;
+        sub-skill name resolution failures abort the compose with a
+        clear error pointing at the offending L4 op.)
 ```
 
 If the agent cannot decide between `replace` and `insert-after` (e.g. the new instruction is ambiguous), the agent **asks the human a single clarifying question** before persisting.
@@ -1143,10 +1148,9 @@ Once a week, run the security smoke tests as part of the cycle.
 
 ## Project Context
 ...project-specific facts...
-
-## Vault
-...project-specific vault customization...
 ```
+
+> **Note**: this example does not include a `## Vault` H2 — vault is L1-exclusive and cannot appear in L4 (see §3.3 and §5.6). Compose rejects any L4 source file that declares `## Vault` content.
 
 Each H3 op-block carries an optional HTML-comment metadata trailer (`authored-by`, `authored-at`, `source-conversation`) for the audit trail. The trailer is invisible to compose's parser but preserved in the file for human review and `git blame` traceability. Compose does not require or validate the metadata; only the section structure (H2 slot, H3 op + target) is load-bearing.
 
