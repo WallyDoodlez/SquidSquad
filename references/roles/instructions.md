@@ -1,20 +1,60 @@
+---
+slot: instructions
+ordinal: 10
+step-ids: [step:cycle/boot, step:cycle/resume, step:cycle/pickup, step:cycle/work, step:cycle/checkpoint, step:cycle/cleanup, step:cycle/exit]
+---
+
 <!-- Layer 1: Base Agent Definition -->
 <!-- This content is prepended to every agent's CLAUDE.md at deploy time. -->
 <!-- It defines what ANY SquidSquad agent is, regardless of role. -->
 
-## Agent Foundation
+<!-- NOTE: step IDs below are the canonical base step IDs for L2/L3 targeting via insert-after / replace.
+     The Tracker Protocol section below is the full inline content for the instructions slot.
+     Sub-skill references use → run sub-skill: <name> grammar. -->
 
-You are a SquidSquad agent. You work autonomously, coordinating with other agents through Discussion entries on the forge and maintaining institutional knowledge in the shared vault. Your wake mechanism (polling-loop or event-driven) is defined in the role-specific sections that follow.
+### step:cycle/boot
 
-### Core Principles
+→ run sub-skill: boot-bootstrap
 
-- Operate in discrete units of work — whether triggered by a `/loop` cycle or by an event dispatch, each unit is self-contained.
-- All timestamps come from `python references/scripts/cycle.py timestamp-short` — never guess or fabricate times.
-- Use atomic writes (write to `.tmp` then `mv`) for any file other agents or the statusline may read concurrently.
-- Discussion comments on the forge are append-only — never edit or delete previous comments.
-- Git is the audit trail. Never push without pulling first.
-- When spawning subagents via the Agent tool, evaluate the best model for the task — use lighter models for mechanical subtasks, reserve heavier models for complex reasoning.
-- When referencing issue or PR numbers, always include a short description (3-5 words) so readers without forge access understand the context. Example: `#5932 (code review loop)` not just `#5932`.
+Verify tracker access, read `.squidsquad/config.md` for interval and mode, check cron schedule. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit.
+
+### step:cycle/resume
+
+→ run sub-skill: resume-working-state
+
+Read `working-state.md`. If an active task exists (status `in-progress`), resume it and skip to `step:cycle/work`. Otherwise proceed normally.
+
+### step:cycle/pickup
+
+→ run sub-skill: task-pickup
+
+Query tracker for approved tasks assigned to this role. Select highest-priority item. Record in `working-state.md`.
+
+### step:cycle/work
+
+Do the unit of work for the current cycle. Content varies by role-class (see L2 additions below).
+
+### step:cycle/checkpoint
+
+→ run sub-skill: git-commit
+
+Commit interim progress with a descriptive message. Update `working-state.md`. Emit statusline.
+
+### step:cycle/cleanup
+
+→ run sub-skill: working-state
+
+Clear or update `working-state.md`. Write iteration log entry. Run vault-remember if real work occurred.
+
+→ run sub-skill: improvement-scan-slim
+
+If cycle was quiet (no task picked up), run improvement scan per configured policy.
+
+### step:cycle/exit
+
+→ run sub-skill: agent-lifecycle
+
+Check stop signal. If stop requested, emit final statusline and exit. Otherwise schedule next cycle.
 
 ---
 

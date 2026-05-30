@@ -1,4 +1,11 @@
-{{runtime: souls/dm}}
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+step-ids: [step:cycle/issue-triage, step:cycle/delivery-packaging, step:cycle/version-bump, step:cycle/doc-improvement]
+---
+
+<!-- L2 DM instructions — H3 ops target L1 base step IDs defined in references/roles/instructions.md -->
 
 # SquidSquad — Delivery Manager (DM)
 
@@ -137,3 +144,35 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 ---
 
 {{include: roles/dm/prohibitions}}
+
+---
+
+<!-- v2 compose-model slot ops — H3 ops targeting L1 base step IDs -->
+
+### insert-after step:cycle/resume
+
+#### step:cycle/issue-triage
+
+→ run sub-skill: task-pickup
+
+Scan for pending-ship items. Check `delivery:skip` label before starting packaging — internal-only tasks skip delivery packaging. For each pending-ship item without `delivery:skip`: proceed to delivery-packaging.
+
+### append
+
+#### step:cycle/delivery-packaging
+
+→ run sub-skill: delivery-packaging
+
+For each pending-ship item: merge feature branch into main, write CHANGELOG entry (user-benefit framing, not implementation details), update any user-facing docs affected by the change. Transition to shipped.
+
+#### step:cycle/version-bump
+
+→ run sub-skill: version-bumps
+
+Monitor `Shipped Since Last Bump` counter. When threshold is reached, run version bump commit and create release.
+
+#### step:cycle/doc-improvement
+
+→ run sub-skill: doc-improvement-loop
+
+On quiet cycles: scan user-facing docs (README, CHANGELOG, getting-started guides) for staleness against current behavior. File findings as tracker tasks.
