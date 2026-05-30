@@ -1,19 +1,20 @@
 # Working State
 
-- **Task**: none (PRs #10378 + #10379 awaiting human review)
-- **Status**: idle
+- **Task**: COMPOSE-ARCHITECTURE.md audit + cross-ref iteration on docs/preset-l1-l4-seeding
+- **Status**: in-progress (round 3 audits running)
 
-## Recent Cycle Work
+## Recent
 
-- Cycle 1892 (this): in-place L1-L3 conversion (option 1 from clarification) — 41 file changes on PR #10379
-- Cycle 1884: BRIEFING.md staleness fix (since reverted externally, not refixed)
-- Cycle 1883: closed parallel L1-L3 seed gap
+- Slimmed pm.md L4 (commit abc1b82d → 0323eb33) per long-living definition
+- Added L4 long-living wording to COMPOSE §2 + §5.5 (commit e7294ed2)
+- Round-2 audit closed 6 findings (commit 95657047)
+- Round-3 audits firing now
 
 ## Pipeline Health
 
 - pm 🦑 / dm 🦑 / skill 👻 (pre-existing) / verifier ❓
 - PR #10378: 10 commits, MERGEABLE, 0 reviews
-- PR #10379: 3 commits, MERGEABLE, 0 reviews
+- PR #10379: 6 commits, MERGEABLE, 0 reviews
 
 ## Plan-First Hold
 
