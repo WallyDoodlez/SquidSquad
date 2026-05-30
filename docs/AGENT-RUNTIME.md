@@ -666,6 +666,43 @@ The model pin for subagent-lane sub-skills is the **`sonnet`** tier — see [`VA
 
 For the full vault architecture (storage model, frontmatter spec, scripts, cycle integration detail beyond what this sub-section captures), see [`VAULT-ARCH.md`](VAULT-ARCH.md) — §7 for sub-skills, §9 for cycle integration, §11 for known gaps.
 
+### 6.7 Subagent invocation rules
+
+Agents may delegate work to subagents via the Agent tool. This subsection describes the **runtime rules** for spawning, model selection, prompt hygiene, and result handling. The L1-L3 source authoring of these rules (which slot, which ordinal) is documented in [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) §3.2 — the rules compose into each agent's CLAUDE.md via the regular `(slot, ordinal)` mechanism.
+
+**Default model selection** (L1 baseline, applies to all roles):
+
+- Use the lightest model that can do the job. Sonnet 4.6 is the default for mechanical or scoped subtasks (file searches, summarization, lint passes, narrow research).
+- Reserve Opus 4.7 for complex reasoning, multi-step planning, architectural review, or work that requires holding many constraints simultaneously.
+- The parent agent's own model is independent of subagent model choice.
+
+**Per-role overrides** (L3 content authored alongside the role's other L3 sub-skills; takes effect by appearing later in compose's `(slot, ordinal)` order than the L1 default):
+
+- `worker` (and variants like `skill`): subagent spawns default to Sonnet — the heavy thinking is in the parent. (Authority: memory rule `feedback_skill_sonnet_subagents`.)
+- `dm`: subagent spawns default to Sonnet — `dm`'s work is mostly mechanical packaging. (Authority: memory rule `feedback_dm_sonnet_subagents`.)
+- `pm`, `verifier`: use the L1 default — pick per task.
+
+**When to spawn vs inline**:
+
+- **Spawn** when the work is genuinely parallelizable (multiple independent investigations) OR when the output volume would blow the parent's context window (large grep/scan results).
+- **Inline** for small lookups (known file path, single grep), narrow questions, anything the parent already has context for.
+
+**Prompt hygiene**:
+
+- Subagent prompts must be self-contained. The subagent doesn't see the parent's conversation; brief it like a smart colleague who just walked in.
+- Include exact file paths, line numbers, and what specifically to change/check. Don't write "based on your findings, fix the bug" — that delegates the synthesis the parent should already have done.
+- Ask for a length cap when one is appropriate ("report in under 200 words") — keeps the subagent's response from re-bloating the parent's context.
+
+**Trust but verify**:
+
+- A subagent's summary describes what it *intended* to do, not necessarily what it did.
+- When a subagent writes or edits code, the parent verifies the actual diff before reporting the work as done.
+
+**Parallelism**:
+
+- Independent subagent calls go in a single tool-use batch (one message, multiple Agent calls) so they run concurrently.
+- Sequential dependencies are sequential — don't parallelize when output of A feeds B.
+
 ---
 
 ## 7. Event-driven mode in detail
