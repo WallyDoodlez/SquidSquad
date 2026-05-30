@@ -526,7 +526,7 @@ Events are **not** a communication channel — they carry no semantic payload. A
 
 1. **Write to forge** — append a tracker comment via the `discussion` sub-skill (durable, role-tagged, visible to humans and future agents).
 2. **Route to target** — update issue state (assignee, labels) so the message lands in the target's normal pipeline queries.
-3. **Nudge** — fire a nudge event with `target=<role>` so an idle target wakes early. Lost or missed nudges are harmless: the next natural polling cycle still picks up the forge change.
+3. **Nudge** — fire a nudge event with `target_alias=<alias>` so an idle target wakes early. Lost or missed nudges are harmless: the next natural polling cycle still picks up the forge change.
 
 ```mermaid
 sequenceDiagram
@@ -974,7 +974,7 @@ Migration from today's mixed numbering is mechanical (one-time renumber as part 
 
 ### 6.5 Wake-mode handling — two parallel manifests, compose-time selection
 
-SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `event_poll.py` polls the harness with adaptive backoff and writes one `NUDGE\n` line to stdout per batch; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
+SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `event_poll.py` polls the harness with adaptive backoff and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
 
 **Architectural rule** (matches today's `compose.py` implementation per #8697): the two modes are **two parallel manifests selected at compose time**, not a runtime branch.
 

@@ -721,7 +721,7 @@ Event mode is the **exclusive home** for event-bus consumption and cursor logic 
 
 ### 7.0 The `event_poll` sidecar
 
-A sibling `event_poll.py --wait --role <role> --target stdout` process polls the harness on the agent's behalf and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor. That line is what wakes the Claude session via Monitor.
+A sibling `event_poll.py --wait --role <role> --target stdout` process polls the harness on the agent's behalf and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor. That line is what wakes the Claude session via Monitor. The `--role` flag accepts the **alias** value (per the §4.3 vocabulary note: the legacy `--role` / `{role}` naming accepts alias values for code-compat; rename to `--alias` ships with #10358).
 
 **Polling cadence** (locked, same adaptive pattern as EAD §4.4 but for the harness HTTP API, not the forge):
 
