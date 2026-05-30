@@ -443,24 +443,25 @@ flowchart TB
   L4Group --> L4Apply[Within each slot, apply ops:<br/>1. all replace<br/>2. all insert-before / insert-after<br/>3. all append]
   L4Apply --> Validate{Validate:<br/>L4 targets resolve?<br/>DRY ok? no orphans?}
   Validate -->|fail| Abort([Abort with diagnostic<br/>no output written])
-  Validate -->|pass| EmitLinked["Emit linked composite<br/>(per-slot bodies in memory)"]
-  EmitLinked --> WriteLinked[Write .squidsquad/&lt;role&gt;/<b>CLAUDE.linked.md</b><br/>audit / debug / fallback artifact]
+  Validate -->|pass| EmitLinked["Emit linked composite<br/>(per-slot bodies in memory only)"]
   EmitLinked --> Assemble{{"§4.6 — Assemble pass<br/>(per slot)"}}
   Assemble --> Cache{Cache hit on<br/>hash(linked, slot, model)?}
   Cache -->|hit| FromCache[Reuse cached<br/>assembled body]
   Cache -->|miss| LLM[Agent rewrites linked body<br/>into coherent voice]
-  LLM --> AsmValidate{Preservation check:<br/>sub-skill refs +<br/>step IDs preserved?<br/>length ≥ floor?}
-  AsmValidate -->|fail| Fallback[Use linked body<br/>+ emit warning]
+  LLM -->|LLM error| AbortAsm([Abort with diagnostic<br/>no output written])
+  LLM --> AsmValidate{Preservation check:<br/>sub-skill refs +<br/>step IDs preserved?<br/>length ≥ floor?<br/>code-block parity?}
+  AsmValidate -->|fail| AbortAsm
   AsmValidate -->|pass| StoreCache[Store in cache]
-  FromCache --> WriteAsm
-  StoreCache --> WriteAsm
-  Fallback --> WriteAsm
-  WriteAsm([Write .squidsquad/&lt;role&gt;/<b>CLAUDE.md</b><br/>assembled — what the agent reads])
+  FromCache --> WriteAtomic
+  StoreCache --> WriteAtomic
+  WriteAtomic{{"Atomic write:<br/>CLAUDE.md + CLAUDE.linked.md +<br/>CLAUDE.conflicts.md"}}
+  WriteAtomic --> Done([Done — agents read CLAUDE.md])
   style Abort fill:#fdd
-  style WriteLinked fill:#dfd
-  style WriteAsm fill:#dfd
-  style Fallback fill:#ffd
+  style AbortAsm fill:#fdd
+  style Done fill:#dfd
 ```
+
+`CLAUDE.linked.md` is written **only on full success**, alongside `CLAUDE.md` and `CLAUDE.conflicts.md`, in a single atomic write. There is no scenario where `CLAUDE.linked.md` exists without a successful `CLAUDE.md`.
 
 **Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose.
 
@@ -587,7 +588,7 @@ If zero conflicts were detected during the run, the report file is still emitted
 - **Convert to `### replace`** if the human confirms the override is intentional — replace is more honest than `append` for "we don't do this anymore" semantics, and the link stage handles it deterministically (no LLM interpretation needed at runtime).
 - **Surface to the human** if the curation step cannot determine whether the contradiction is intentional.
 
-In other words: the assembler's conflict-resolution rule is the runtime safety net; `l4-curation` is the authoring-time discipline that should make the safety net rarely fire. A conflict report with many entries is a signal that L4 curation is letting too many ambiguous overrides through and should be tightened.
+In other words: the assembler's conflict-resolution rule is the **compose-time enforcement**; `l4-curation` is the **authoring-time discipline**. They share the same precedence rule (higher L wins) so authoring intent matches compose-time resolution. A conflict report with many entries on a compose run is a signal that L4 curation is letting too many ambiguous overrides through and should be tightened — curation's job is to make conflicts rare, not to rely on the assembler to clean them up.
 
 **Post-pass validation.** Before accepting the assembled output, the pipeline checks:
 
@@ -596,7 +597,7 @@ In other words: the assembler's conflict-resolution rule is the runtime safety n
 3. **Length floor** — `len(assembled) >= 0.8 * len(linked)` (configurable in `config.md` as `Assemble Length Floor`; default 0.8). Catches silent content drop.
 4. **Code-block parity** — count of fenced code blocks and inline backticks should match within ±10% (catches accidental stripping of literal blocks).
 
-If any check fails, the slot's assembled body is **rejected** and the linked body is used as the fallback. Compose emits a warning naming the slot and the failed check, and continues — compose itself does not abort on assemble-pass failure.
+If any check fails, **compose aborts with a diagnostic**. There is no fallback to the linked body for runtime: shipping inconsistent prose to the agent on every cycle would be worse than failing the deploy. The operator fixes the source of the failure (e.g., re-tries the LLM call, removes a malformed L4 op, adjusts the length floor) and re-runs compose. The previously-written `CLAUDE.md` (from the prior successful compose run, if any) is left untouched, so any running agents continue with the last good output until compose succeeds again.
 
 **Caching.**
 
@@ -609,23 +610,28 @@ If any check fails, the slot's assembled body is **rejected** and the linked bod
 **Audit artifacts.** Compose emits three outputs to `.squidsquad/<alias>/`:
 
 - `CLAUDE.md` — the **assembled** output. This is what the runtime agent reads. Always present.
-- `CLAUDE.linked.md` — the **linked** output. Audit / debug / fallback artifact. Always present.
+- `CLAUDE.linked.md` — the **linked** output. **Audit / debug only — NOT a runtime fallback.** Runtime always reads `CLAUDE.md`. Always present on success.
 - `CLAUDE.conflicts.md` — the **conflict report** from the assemble pass (see format above). Always present, even when zero conflicts (proof the pass ran). PR review against an L4 change inspects this file to confirm overrides resolved as intended.
 
 PR review compares the two when an L4 op lands; if the assembled output drops or distorts an op's intent, the reviewer catches it before merge. The assemble pass is not a black box.
 
-**Failure mode summary.**
+**Failure mode summary.** Any failure during compose aborts — there is no degraded-output path. The assembler runs inside the agent session that started compose; if the agent's LLM is unavailable, compose itself doesn't start, so there is no "agent partially works" state to fall back from. If the assembler runs but its output fails a preservation check, the linked body is **not** silently published as the runtime artifact — that would ship inconsistent prose to the agent on every cycle. Better to fail loud and have the operator re-run.
 
 | Failure | Result | Compose succeeds? |
 |---|---|---|
-| LLM call errors (timeout, rate limit, network) | Use linked body + warning | Yes |
-| Sub-skill ref set inequality | Use linked body + warning | Yes |
-| Step ID set inequality | Use linked body + warning | Yes |
-| Length below floor | Use linked body + warning | Yes |
-| Cache corruption | Re-run LLM call; if that fails too, use linked body | Yes |
-| Link stage (§4.1–§4.5) fails | Abort (no assemble pass attempted) | **No** |
+| LLM call errors (timeout, rate limit, network) during the assemble pass | Abort with diagnostic; no `CLAUDE.md` written | **No** |
+| Sub-skill ref set inequality (assembled ≠ linked) | Abort with diagnostic | **No** |
+| Step ID set inequality (assembled ≠ linked) | Abort with diagnostic | **No** |
+| Length below floor | Abort with diagnostic | **No** |
+| Code-block parity check fails | Abort with diagnostic | **No** |
+| Cache corruption | Re-run LLM call once; if that also fails, abort | **No** |
+| Conflict report write fails (disk full, permission) | Abort with diagnostic | **No** |
+| Conflict resolution violates precedence (assembler picks lower L) | Abort with diagnostic — this is a hard contract bug | **No** |
+| Link stage (§4.1–§4.5) fails | Abort with diagnostic; no assemble pass attempted | **No** |
 
-The link stage is load-bearing; the assemble stage is enrichment. A failed assemble pass leaves the system in a working-but-uglier state, never broken.
+When compose aborts on an assemble-side failure, the previously-written `CLAUDE.md` (from the prior successful compose run, if any) is **left untouched** on disk — the operator's running agents continue reading the last good output until compose succeeds. The current compose run produces no partial artifacts: no half-written `CLAUDE.md`, no `CLAUDE.linked.md` orphan, no `CLAUDE.conflicts.md` from the aborted run. The audit-artifact triple (`CLAUDE.md` + `CLAUDE.linked.md` + `CLAUDE.conflicts.md`) is emitted **atomically** on success or not at all.
+
+The link stage and the assemble stage are both load-bearing under this contract. `CLAUDE.linked.md` is an audit/debug artifact, NOT a runtime fallback — runtime always reads the assembled `CLAUDE.md`. If an operator needs to bypass the assemble pass for a specific install (e.g., during initial bring-up before the LLM gateway is configured), set `Assemble: no` in `config.md` — compose then skips the assemble stage entirely and emits the linked body as `CLAUDE.md` (with no `CLAUDE.linked.md` sibling, since they'd be identical, and no `CLAUDE.conflicts.md`, since no conflict-detection ran). This is an explicit opt-out, not a degradation.
 
 **First-run determinism trade-off.** The first deploy of unchanged inputs is stochastic — two operators deploying at the same commit may get prose that differs in wording. After the first deploy, the cached output is committed to git and subsequent deploys reuse it; the system is deterministic from that point forward for those inputs. This is the irreducible trade-off for collapsing layered linked output into a single coherent voice. Operators who want bit-stable assembled output across fresh deploys can disable the assemble pass via `Assemble: no` in `config.md` (compose then emits the linked body as `CLAUDE.md` directly, with no `CLAUDE.linked.md` sibling since the two would be identical).
 
