@@ -58,7 +58,7 @@ Every agent in an install runs in the same mode — there is one global mode for
 
 | Mode | What wakes the agent | Event-bus relationship | When to use |
 |---|---|---|---|
-| **Loop (polling)** | Cron timer (`/loop 30m execute one Ralph Loop cycle`) | **Emit-only** — agents may publish transient events for observability, but do NOT consume from the bus and do NOT maintain a cursor. Work queue + mechanical reactions both derive from tracker state. | Battle-tested fallback; works without the harness; current default |
+| **Loop (polling)** | Cron timer (e.g. `/loop 30m execute one Ralph Loop cycle` — interval per-install, see §6.2) | **Emit-only** — agents may publish transient events for observability, but do NOT consume from the bus and do NOT maintain a cursor. Work queue + mechanical reactions both derive from tracker state. | Battle-tested fallback; works without the harness; current default |
 | **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | **Emit + consume** — agents subscribe with a cursor; nudges + per-event reactions both originate from the bus. | Target steady-state; lower latency; no idle token burn |
 
 The cycle wrapper (pre → creative → post) is the same in both modes — only *what initiates the wrapper* and *where reactions derive from* differs. In loop mode the wrapper fires once per `/loop` timer tick. In event mode it fires once **per cared event** during a nudge-walk; a single nudge can produce multiple cycle wrappers (one per cared event) or zero (if every event in the batch is filtered out by the care filter). See §7.1 for the per-event sequence.
@@ -108,7 +108,7 @@ flowchart LR
 
 ## 3. The agent process tree (shared)
 
-Both modes use the same per-agent subprocess shape. Differences are inside the Claude session, not in the tree.
+Both modes use the same `cmd → thin_launcher → claude` core. **Event mode additionally spawns a sibling `event_poll` process** for the nudge contract (the dashed `Poll` sibling and harness-API edges in §3.2 below are event-mode-only). Loop mode runs only the core triple; `event_poll` is not spawned, and the harness-API edges originating from it do not exist. Differences are otherwise inside the Claude session, not in the tree.
 
 ### 3.1 System overview
 
@@ -171,7 +171,7 @@ flowchart TB
         TL["thin_launcher.py<br/>· writes .claude-pid<br/>· singleton enforcement (#8692)<br/>· spawns claude, waits for exit"]
         Claude["claude (the agent)<br/>· runs composed CLAUDE.md<br/>· has Monitor tool built in"]
         Monitor["Monitor tool<br/>(inside claude)<br/>reads stdin → wakes session"]
-        Poll["event_poll.py --wait --role <role> --target stdout<br/>(separate sibling process)<br/>· polls harness for events<br/>· writes one nudge line per batch"]
+        Poll["event_poll.py --wait --role <role> --target stdout<br/>(separate sibling process — EVENT MODE ONLY)<br/>· polls harness for events<br/>· writes one nudge line per batch"]
 
         Cmd --> TL
         TL --> Claude
@@ -180,7 +180,7 @@ flowchart TB
     end
 
     HarnessAPI[("Harness HTTP API")]
-    Poll -- "GET /events/for/{role}<br/>?since=cursor" --> HarnessAPI
+    Poll -- "GET /events/for/{role}<br/>?since=cursor<br/>(event mode only)" --> HarnessAPI
     Claude -- "POST /events<br/>(booted, ack)<br/>POST /work/assign" --> HarnessAPI
 ```
 
@@ -219,7 +219,7 @@ In loop mode, `event_poll` is not spawned — only `cmd → thin_launcher → cl
 
 The event bus is the harness HTTP API at port `7373` (default). Both modes use it:
 
-- **In loop mode**: optional observability layer. Agents emit events for diagnostics; pre-cycle reads recent events and applies mechanical reactions (e.g., PR merge → status transition). When the harness is down, agents fall back silently to git-only coordination.
+- **In loop mode**: emit-only observability layer (per §2 mutual exclusivity). Agents may emit events for diagnostics, but they do NOT consume from the bus and do NOT maintain a cursor. Pre-cycle mechanical reactions (e.g., PR merge → status transition) derive from tracker state changes since last cycle (§6.3) — never from event reads. When the harness is down, emits silently no-op.
 - **In event-driven mode**: load-bearing. The bus is how the harness wakes the agent in the first place. When the harness is down, event-mode agents sit idle until it recovers (see §8.4); falling back to loop mode is a manual operator action (recompose + restart), not an automatic runtime path.
 
 ### 4.1 Architectural commitments (locked principles)
@@ -244,6 +244,8 @@ In v2 the catalog collapses to **3 signal concepts / 4 catalog entries**:
 | **`ack-stop`** | agent → harness | Agent has accepted a stop intent and is checkpointing | `{event_id, result}` |
 
 `ack-cursor` and `ack-stop` are sub-types of one concept (receipt confirmation) — shipped in `#9873-A`. Three signal concepts, four catalog entries.
+
+> **Naming note**: The `role` field in `booted` / `ack-cursor` payloads is the agent's **alias** value, preserved under the field-name `role` for code-compat with the wire format. Same pattern as `{role}` in HTTP path parameters (see §4.3). Field rename to `alias` is in the same family as #10358. `ack-stop.result` enum values are tracked as §9 Q11.
 
 #### Signal-flow at a glance
 
@@ -362,7 +364,7 @@ The endpoints throughout this section use `{role}` in path parameters (e.g., `GE
 ```mermaid
 sequenceDiagram
     participant ES as .event-state.json<br/>(harness-owned)
-    participant CP as cycle_pre.py / event_poll
+    participant CP as event_poll (event mode) /<br/>cycle_pre.py (event mode only)
     participant H as Harness
     participant CPO as cycle_post.py / agent ack
 
@@ -449,7 +451,7 @@ Two-tier backoff: 10s → 30s → 60s. A quiet period stabilizes at 60s after �
 
 | State | Polls/hr | Calls/hr (incl. 1–3 follow-ups per change) | % of quota |
 |---|---|---|---|
-| Steady-state quiet | ~120 | ~120 | 2% |
+| Steady-state quiet (60s ceiling) | ~60 | ~60 | 1% |
 | Steady-state active | ~360 | ~360–720 | 7–14% |
 | Worst-case burst (10 changes/poll, sustained) | ~360 | ~3600 | 72% |
 
@@ -1105,7 +1107,7 @@ In **loop mode**, the harness's reachability is not a boot gate at all — loop-
 
 ### 8.5 Migration from loop → event mode (v2 closure plan)
 
-The v2 build ships as 5 grouped PRs. The **letters** (A–F) are logical-grouping identifiers — they cluster related work; the **numbers** (1–5) are the dependency-driven implementation order. The two orderings differ on purpose: e.g., Group A is the foundation and ships first, but Group B (cursor wire) is held until after C has landed so its wire-format changes don't conflict with EAD restart-safety.
+The v2 build ships as 6 grouped PRs. The **letters** (A–F) are logical-grouping identifiers — they cluster related work; the **numbers** (1–6) are the dependency-driven implementation order. The two orderings differ on purpose: e.g., Group A is the foundation and ships first, but Group B (cursor wire) is held until after C has landed so its wire-format changes don't conflict with EAD restart-safety.
 
 | # | Group | What it does | Risk |
 |---|---|---|---|
@@ -1154,7 +1156,14 @@ PM agents recognize this set as their care-filter; new values added in future re
 | Q9 | `compose.py` changes for v2 | Trim catalog, retire emit calls, add `compose-needed` translator |
 | Q10 | Migration plan | Feature flag `event-driven: yes/no` in `.squidsquad/config.md` |
 
-> Net-new open questions surfaced during the loop+event merge (this doc): NONE so far. Add below as they surface.
+> Net-new open questions surfaced during the loop+event merge (this doc): listed below.
+
+| # | Question | Status |
+|---|---|---|
+| Q11 | `ack-stop.result` enum values | Open — target shape `'checkpointed' \| 'aborted' \| 'drained'`; not yet locked. Pin alongside harness stop-path spec. |
+| Q12 | `role:*` label rewrite timing | Open — the §7.3 routing table assumes the issue's `role:*` label reflects the target alias for the *new* state at the moment of `/work/assign`. The rewrite mechanism (who rewrites; whether `tracker.py transition` carries a state-machine table from `(new-state, prior role:*)` → `new role:*`) is unspecified. Block on `tracker.py transition` spec; see #10358 family. |
+| Q13 | `emitter_alias` derivation for self-assign invariant | Open — §7.3 says the harness rejects `assigned-to` where `target_alias == emitter_alias`, but the `/work/assign` request shape (§7.3 sequence diagram) carries no `emitter_alias` field. Target mechanism likely an `X-Squidsquad-Alias` request header set by `tracker.py` (and by direct callers); EAD-emitted events would set `emitter_alias = '__ead__'` exempt from the check. Pin alongside group D (alias-existence validation, §8.5). |
+
 
 ---
 
@@ -1166,7 +1175,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 - **Nudge**: a single stdin line written by `event_poll` to wake a Claude session via the Monitor tool.
 - **Cursor**: per-alias harness-owned pointer to "events tended through here."
 - **EAD**: ExternalActivityDetector — the harness's forge poller that translates forge state changes into `assigned-to` events.
-- **Care filter**: the per-role-class decision of whether to act on an event or skip it.
+- **Care filter**: the per-alias decision of whether to act on an event or skip it. In v2 the filter is `target_alias == my_alias`; see §7.4.
 - **Improvement subloop**: time-throttled self-care work the agent runs when its queue is empty. Applies in both modes — quiet cycles in loop mode (§6.4) and drained-queue detection in event mode (§7.6).
 
 ### 10.2 Related docs
@@ -1196,14 +1205,14 @@ PM agents recognize this set as their care-filter; new values added in future re
   - **Terminology**: removed all current-repo concrete-instance references (no `skill`, no `dev`, no "concrete-install snapshot" framing). The doc uses only the four L2 categorical role names: `pm`, `verifier`, `worker`, `dm` — sourced from the L2 capability layer (`agent-boundaries`), which is the canonical name source. *(Per later revisions: L2 is **Role** in the L1-L4 compose model and `agent-boundaries` was retired — see PR #10359. This entry preserves the then-current framing as historical context.)* Terminology table simplified to 4 rows with no concrete-instance column; role-filtering diagram drops the per-install qualifier and uses categorical names directly; stack-specific specialization is noted as `worker`/`verifier` variants rather than as alternative role names.
   - **Mode flag**: dropped per-role event-driven config (`event-driven-pm: yes` etc.). `event-driven:` is now a single global flag for the install — the whole squad runs in loop mode together or event-driven mode together. §8.1 rewritten; §8.2 mode-flip steps now install-wide; §8.3 boot decision tree simplified to one ConfigGate before the harness probe. Rationale: keeps the harness contract uniform (load-bearing for everyone, or observational for everyone), avoids the cross-role coordination puzzle of mixed modes.
 - **2026-05-23 (rev 7) — post-rev-6 DS verification + §7.6 diagram fix.** DS round-7 verification found 2 actionable findings (1 MED, 1 LOW); both applied: §8.1 clarified that mixed modes are not *configurable* but degraded fallback can produce a transient mixed-mode state per-agent (the previous wording falsely implied install-wide uniformity even under fallback); §8.4 reworded to distinguish the configured `event-driven: no` path (loop mode by design) from the `event-driven: yes` + probe-fail fallback path (the prior "regardless of config" wording collapsed the two). Also: §7.6 subloop diagram nodes now use quoted-label form ({"…"}, ["…"]) so unquoted parentheses can't break Mermaid rendering. The "sub-skill" terminology is retained as the canonical compose-fragment term and is distinct from the "skill" agent-role term that was removed in rev 6 (DS flagged as info, accepted as intentional). DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-7.md`.
-- **2026-05-23 (rev 8) — final convergence + cadence-math fixes.** DS round-8 confirmed all R7 fixes correct and returned 2 LOW math errors: EAD cadence "≈3 minutes" → "≈2 minutes" (correct: 6 polls × 10/20/30/60/90/120s = 120s = 2 min); event_poll cadence "≈2.5 minutes idle" → "≈1.75 minutes idle" (correct: 6 polls × 5/10/15/45/75/105s = 105s ≈ 1.75 min). Both fixed. The doc is now mathematically and architecturally converged. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-8.md`.
+- **2026-05-23 (rev 8) — final convergence + cadence-math fixes.** DS round-8 confirmed all R7 fixes correct and returned 2 LOW math errors: EAD cadence "≈3 minutes" → "≈2 minutes" (correct: 3 polls at 10s + 3 polls at 30s = 120s = 2 min to reach the 60s ceiling); event_poll cadence "≈2.5 minutes idle" → "≈1.75 minutes idle" (correct: 3 polls at 5s + 3 polls at 30s = 105s ≈ 1.75 min). Both fixed. The doc is now mathematically and architecturally converged. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-8.md`.
 - **2026-05-25 (rev 9) — post-#6274 `qa` → `verifier` rename + loop/event mutual-exclusivity on event-bus axis + vault invocation polish.** Three coordinated edits:
   - **Role rename**: post-#6274 (shipped 2026-05-23) the canonical role is `verifier`, not `qa`. Swept all instance-level references in this doc (Terminology table, §2.1 latency-floor example, §3.1 + §3.2 mermaid subgraph and tree labels, §4.3 role-filtering diagram, §7.3 verification-needed sequence diagram + routing table, §7.5 EAD safety-net sequence diagram, §7.6 subloop role list). Wire-format strings updated too: `target_role:qa` → `target_alias:verifier`, `role:qa` → `role:verifier`, `event_context:"qa-rejected"` → `event_context:"verifier-rejected"`, `GET /events/for/qa` → `GET /events/for/verifier`. Note: live code (`references/scripts/triage.py`, `cycle_pre.py:614`) still emits `qa-rejected` — doc now describes architectural target; code task to skill.
   - **Loop/event mutual exclusivity** (§2 + §4.5 + §4.6 + §6.1 + §6.3 + §7 lead): loop mode is now documented as emit-only on the event bus (no consume, no cursor); event mode is the exclusive home for bus consumption + cursor logic. Loop-mode mechanical reactions derive from tracker state changes since last cycle (timestamp dedup in working-state.md), not from event-bus reads. Rationale: keeps the harness contract uniform — loop is observational-only, event is load-bearing.
   - **Vault invocation** (§6.1 diagram + §6.6 new sub-section): named the four Phase 2 vault touchpoints + boot-time BRIEFING read + the inline-vs-subagent execution lane principle (heavy sub-skills `vault-remember` and `vault-synthesis` run on the `sonnet` tier via background subagent; light ones `vault-protocol` and `vault-optimize` stay inline). Cross-references VAULT-ARCH §7 for the lane principle's full rationale.
   - **Vault flag retirement** (§6.1 diagram): dropped the `· read vault-remember + vault-optimize flags` line from Phase 1 and the `· advance event cursor` line from Phase 3 (both per the above changes). The vault-remember/vault-optimize `Enabled` flags in `config.md` are being retired; both sub-skills are always-on and self-gate via their per-cycle conditions. Code task to skill.
 - **2026-05-25 (rev 10) — class vs alias as routing primitive + responsibility.md / permission-table retirement.** Architectural simplification arc:
-  - **Class vs alias** (Terminology refactor + wire-format swap): role classes (pm/dm/worker/verifier) are categorical and have uniform L2/L3 + bus contract per class; aliases are per-agent unique names from `config.md` `## Aliases`. An install may have 1..N agents per class — e.g., 2 frontend + 2 backend worker-class agents named `frontend-1`, `frontend-2`, `backend-1`, `backend-2` (four worker-class agents, four distinct aliases). Specialty/skill (FE/BE/iOS/etc.) lives in SOUL.md + L4, not in a separate class. Wire-format field `target_role` renamed to `target_alias` across all 16 catalog + sequence-diagram + routing-table references; care filter is now `target_alias == my_alias`; EAD emits one assigned-to per (forge change, target_alias) pair.
+  - **Class vs alias** (Terminology refactor + wire-format swap): role classes (pm/dm/worker/verifier) are categorical and have uniform L2/L3 + bus contract per class; aliases are per-agent unique names from `config.md` `## Aliases`. An install may have 1..N agents per class — e.g., 2 frontend + 2 backend worker-class agents named `frontend-1`, `frontend-2`, `backend-1`, `backend-2` (four worker-class agents, four distinct aliases). Specialty/skill (FE/BE/iOS/etc.) lives in SOUL.md + L4, not in a separate class. *(Note: §1 Terminology now locates specialty in **L3 (the domain layer)** instead — see `feedback-l3-specialty-layering`. This rev-10 entry preserves the as-of-rev-10 framing; current canonical statement is §1.)* Wire-format field `target_role` renamed to `target_alias` across all 16 catalog + sequence-diagram + routing-table references; care filter is now `target_alias == my_alias`; EAD emits one assigned-to per (forge change, target_alias) pair.
   - **`responsibility.md` retired**: the file's prose responsibility narrative was ~90% redundant with L2/L3 (which compose into each agent's CLAUDE.md anyway); the only load-bearing content was the `## Bus contract` section. Permission tables are being retired entirely (next bullet), so `responsibility.md` has no remaining purpose. Marked for code-task deletion.
   - **Permission table retired**: the harness no longer maintains a class-from-class `accepts assigned-to from:` permission table. Rationale: it duplicated discipline that already lives in each agent's L2/L3/L4 + SOUL.md; it conflicted with §4.1's "harness is a transport bus, not an orchestrator" principle; and the human-team analogy (mis-routed tickets get pushed back, no security guard at the assignment desk) applies. Replaced with two minimal harness checks: (1) target-alias existence (404 if unknown) and (2) self-assign invariant (rejected by structure, not by permission). Mis-route recovery happens at the agent layer: receiving agent recognizes out-of-domain work and re-assigns via the same `/work/assign` call to the correct alias; if recipient is unknown, routes to `pm` with `event_context="route-help"`.
   - §7.3 `/work/assign permission model` subsection replaced with `/work/assign validation + mis-route recovery`. §7.4 care filter section drops the L2-derived permission-table mention. §8.5 Group D row repurposed from "L2-derived permissions" to "alias-existence validation". §9 Q2 and Q6 updated to match.
