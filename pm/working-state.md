@@ -5,7 +5,8 @@
 
 ## Recent Cycle Work
 
-- Cycle 1885 (this): quiet — improvement scan found config.md Dev Agents key drift (not fixed; pm_docs_only)
+- Cycle 1886 (this): genuinely quiet, no Tier 1 fixes surfaced
+- Cycle 1885: scan flagged config.md Dev Agents key (not auto-fixed; pm_docs_only)
 - Cycle 1884: BRIEFING.md staleness fix
 - Cycle 1883: closed L1-L3 seed gap on PR #10379
 
@@ -16,4 +17,4 @@
 
 ## Plan-First Hold
 
-Active. Improvement-scan finding (config.md Dev Agents key) deliberately not auto-fixed — crosses pm_docs_only boundary into code-consumed data. Worth flagging for human disposition; not filing as Tier 2 task per plan-first hold (only Tier 1 own-domain fixes).
+Active. Bulk cleanup of stale planning artifacts deferred — review post-wake.
