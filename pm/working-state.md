@@ -1,20 +1,19 @@
 # Working State
 
-- **Task**: docs/root-cause-fixes branch — 3 root-cause fixes for recurring DS audit churn
-- **Status**: verification-audit-pending (analysis incomplete)
+- **Task**: investigate Claude audit findings (5 actionable issues found in COMPOSE-ARCHITECTURE.md)
+- **Status**: awaiting user direction on which finding to dig into first
 
-## Findings so far (post-fix)
+## Claude audit findings (post-root-cause-fix)
 
-- Internal COMPOSE: 8 (2H/3M/3L) — was 7
-- COMPOSE × VAULT: 4 (2H/1M/1L) — was 3
-- COMPOSE × HARNESS: 4 (2H/1M/1L) — was 2
-- COMPOSE × INSTALLER: 5 (2H/2M/1L) — was 5
-- AGENT × HARNESS: 3 (1H/1M/1L) — was 3
+- H1: §6.5 callout says manifest sub-skills 'ARE inlined' — contradicts v2 thesis
+- H2: §5.7 worked examples 'SOUL.md inlined verbatim' — retired terminology
+- M2: <role> still in §4.4 + §2 diagrams (prose-rename diagram leakage)
+- M3: Boundaries position contradiction — §3.3 vs §6.3 vs worked examples
+- M4: §9 'five canonical sections' vs doc-wide 'six'
 
-## Pipeline
+## DS vs Claude
 
-- PR #10380 (3 small post-merge audit fixes) — open
-- New branch docs/root-cause-fixes — committed locally, pushed
+Claude says DS over-flags vault/role-terminology; DS missed Claude's H1+H2 contradictions. Switching audit pipeline to Claude recommended.
 
 ## Plan-First Hold
 
