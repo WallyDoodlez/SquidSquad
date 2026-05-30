@@ -21,14 +21,14 @@ SquidSquad has a small fixed set of **role classes** and a per-install set of **
 | **`worker`** | Implements technical work to acceptance criteria |
 | **`dm`** | Delivers (CHANGELOG, version bumps, releases) |
 
-**Agent aliases** (1..N per class, install-defined in `config.md` `## Aliases`):
+**Agent aliases** (1..N per class, install-defined in `.squidsquad/config.md` `## Aliases`):
 
 - Every running agent has a unique alias. The alias IS the agent's name in all routing.
 - A single-instance install can use the class name as its alias (default: a `worker`-class agent is named `worker`).
 - A multi-instance install MUST give each agent of the same class a distinct alias. Example: an install with 2 frontend + 2 backend worker-class agents might use aliases `frontend-1`, `frontend-2`, `backend-1`, `backend-2` — four worker-class agents, four distinct aliases.
 - **Instances of the same class + L3 domain are interchangeable.** All instances of the same `(L2 class, L3 domain)` pair (e.g., two FE-worker agents, or two PM agents) compose from byte-identical L1–L4 and share **one L4 file per `(class, domain)` pair** (per `COMPOSE-ARCHITECTURE.md` §3.3 / §7.3). Aliases differ only as routing addresses; the *behaviour* behind each alias within a `(class, domain)` is the same. Sender-side routing logic that needs to pick between interchangeable aliases (e.g., for load balancing) can compare queue depth or any other observable signal. Note: different L3 domains of the *same* L2 class are NOT interchangeable — an FE-worker and a BE-worker have separate L4 files (`fe-worker.md` and `be-worker.md`) and different specialty rules. The simple `worker.md` case applies only to installs without L3 domain specialization.
 - Specialty/skill (FE vs BE vs iOS, etc.) lives in **L3 (the domain layer)** and is shared across all agents of the same domain. Two FE-worker agents share L1 + L2 (worker class) + L3 (FE domain); two BE-worker agents share L1 + L2 + L3 (BE domain). The same layering applies to verifier-class agents — FE verifiers share an FE L3 with other FE verifiers, BE verifiers with other BE verifiers. Per-agent identity (personality, situational tone) lives in `SOUL.md`; install/operator-specific overrides live in L4.
-- Each agent knows the other aliases on the team and their declared specialties (visible from each agent's composed CLAUDE.md and from the install's `config.md` `## Aliases` registry); mis-routed work is re-assigned via `/work/assign` to the correct alias (see §7.3 mis-route recovery).
+- Each agent knows the other aliases on the team and their declared specialties (visible from each agent's composed CLAUDE.md and from the install's `.squidsquad/config.md` `## Aliases` registry); mis-routed work is re-assigned via `/work/assign` to the correct alias (see §7.3 mis-route recovery).
 
 **Routing rule**: `/work/assign` always names a **target alias**. The harness validates the alias is registered (returns 404 if unknown) but does NOT enforce class-from-class permissions — process discipline lives in each agent's L2/L3/L4, not in a harness gate (see §7.3).
 
@@ -54,7 +54,7 @@ Out of scope:
 
 ## 2. Two triggering modes
 
-Every agent in an install runs in the same mode — there is one global mode for the project, selected at install via `config.md`'s `event-driven:` field:
+Every agent in an install runs in the same mode — there is one global mode for the project, selected at install via `.squidsquad/config.md`'s `event-driven:` field:
 
 | Mode | What wakes the agent | Event-bus relationship | When to use |
 |---|---|---|---|
@@ -194,7 +194,7 @@ flowchart TB
 
 `thin_launcher` (Python) and `event_poll.py` (Python) are cross-platform — they run identically on all three OSes. Singleton enforcement via `.claude-pid` and the Monitor stdin contract behave the same regardless of host OS.
 
-**The composed `CLAUDE.md`** that `claude` reads at boot is the agent's full instruction artifact — produced by `compose.py` from L1 (base) + L2 (role class) + L3 (domain) + L4 (install overrides) + per-agent `SOUL.md`, selected per the agent's alias from `config.md`. AGENT-RUNTIME is intentionally silent on the format itself — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) for the layering model, slot order, frontmatter spec, and how the L1-L4 + SOUL.md inputs become one composed file. **Compose is the agent compiler**; every runtime behavior described in this doc is downstream of what compose produced.
+**The composed `CLAUDE.md`** that `claude` reads at boot is the agent's full instruction artifact — produced by `compose.py` from L1 (base) + L2 (role class) + L3 (domain) + L4 (install overrides) + per-agent `SOUL.md`, selected per the agent's alias from `.squidsquad/config.md`. AGENT-RUNTIME is intentionally silent on the format itself — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) for the layering model, slot order, frontmatter spec, and how the L1-L4 + SOUL.md inputs become one composed file. **Compose is the agent compiler**; every runtime behavior described in this doc is downstream of what compose produced.
 
 `thin_launcher` and `event_poll` are intentionally separate processes (decided 2026-05-22):
 
@@ -451,7 +451,7 @@ Two-tier backoff: 10s → 30s → 60s. A quiet period stabilizes at 60s after �
 | Steady-state active | ~360 | ~360–720 | 7–14% |
 | Worst-case burst (10 changes/poll, sustained) | ~360 | ~3600 | 72% |
 
-Per-install cadence overrides via `config.md` (`EAD Cadence Active`, `EAD Cadence Quiet`) are NOT v1 scope — defaults are hardcoded. Add as config fields only if a real install hits a quota issue.
+Per-install cadence overrides via `.squidsquad/config.md` (`EAD Cadence Active`, `EAD Cadence Quiet`) are NOT v1 scope — defaults are hardcoded. Add as config fields only if a real install hits a quota issue.
 
 **Recovery & restart semantics:**
 
@@ -618,7 +618,7 @@ The agent only writes the creative phase. Mechanical phases are deterministic sc
 
 `thin_launcher` runs `claude` with `/loop 30m execute one Ralph Loop cycle` as the initial command. The `/loop` slash command schedules a recurring cron entry; when it fires, the agent runs one cycle and waits for the next fire.
 
-The 30-minute interval is read from `config.md`'s `Iteration Interval > Minutes` field at compose time and inlined into the composed CLAUDE.md's boot section (alongside the loop-mode procedural fragment — see §8.1). Recovery from an interrupted `/loop` re-invokes the same literal command.
+The 30-minute interval is read from `.squidsquad/config.md`'s `Iteration Interval > Minutes` field at compose time and inlined into the composed CLAUDE.md's boot section (alongside the loop-mode procedural fragment — see §8.1). Recovery from an interrupted `/loop` re-invokes the same literal command.
 
 ### 6.3 Loop-mode mechanical reactions
 
@@ -654,7 +654,7 @@ Vault sub-skills participate in the creative phase at four touchpoints. They spl
 | Touchpoint | Sub-skill | Lane | When |
 |---|---|---|---|
 | Continuous reads/writes during work | `vault-protocol` | **inline** | Throughout Phase 2; the agent IS doing the read/write the protocol governs |
-| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) *— target lane; see §6.6 Implementation gap* | Step 4b, gated by the non-quiet-cycle check only (always-on; no feature toggle). Default write budget 2/cycle (configurable via `config.md` `Vault Remember > Writes Per Cycle`; surplus deferred by priority decisions > learnings > patterns — see [VAULT-ARCH §7.2](VAULT-ARCH.md#72-vault-remember) for full reflection rules). Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
+| End-of-Phase-2 reflection | `vault-remember` | **background subagent** (`sonnet`) *— target lane; see §6.6 Implementation gap* | Step 4b, gated by the non-quiet-cycle check only (always-on; no feature toggle). Default write budget 2/cycle (configurable via `.squidsquad/config.md` `Vault Remember > Writes Per Cycle`; surplus deferred by priority decisions > learnings > patterns — see [VAULT-ARCH §7.2](VAULT-ARCH.md#72-vault-remember) for full reflection rules). Returns `{action, path, type, body, reason}` per candidate; consuming agent applies the write list deterministically |
 | Quiet-cycle housekeeping | `vault-optimize` | **inline** | Quiet cycle, after improvement-scan check (skips if the scan would fire this cycle); gated by 20+ note count. Wrapper around `vault_optimize.py run` — no reasoning to offload |
 | Every-5-quiet cross-agent synthesis | `vault-synthesis` | **background subagent** (`sonnet`) *— target lane; see §6.6 Implementation gap* | PM only; fires after 5 consecutive quiet cycles **and** vault has 10+ galaxy notes. Counter resets on real work or completed synthesis. Returns ≤1 posture descriptor; consuming agent writes it via `vault-create` + files the pending-review task |
 
@@ -707,7 +707,17 @@ Agents may delegate work to subagents via the Agent tool. This subsection descri
 
 ## 7. Event-driven mode in detail
 
-Event mode is the **exclusive home** for event-bus consumption and cursor logic (per §2 mutual exclusivity). Everything in this section — `event_poll` sidecar, nudge contract, per-event cycle wrapping, cursor advancement, cascade protection via cursor dedup — applies only when the install is in event mode. Loop mode does not touch any of this.
+**This chapter describes the wake-nudge mechanism, not a communication channel.** The single inter-agent communication channel in SquidSquad is the **forge** — the tracker (GitHub Issues/PRs and their comments). Every cross-agent message is written to forge: append-only, durable, role-tagged via `tracker.py`, queryable across cycles. Agents read forge state at the start of each cycle and act on what they observe. The forge-as-channel principle is canonical and lives at [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) §5.1.1 (with the full send-pattern sequence diagram); this chapter does not duplicate it.
+
+Events carry **no semantic payload**. An event is a nudge that tells a target "something changed for you on the forge; consider waking now instead of at your next polling tick." If the target is mid-cycle, the nudge is ignored (no preemption); the target picks up the forge change on its next natural cycle. If the target is idle, the nudge wakes it early via its Monitor subscription. A lost or missed nudge is harmless — the next polling cycle still picks up the forge change.
+
+Concretely, sending another agent a message follows the three-step pattern (canonical sequence in COMPOSE §5.1.1):
+
+1. **Write to forge** — append a tracker comment via the `discussion` sub-skill.
+2. **Route to target** — update issue state (assignee, labels) so the message lands in the target's normal pipeline queries.
+3. **Nudge** — fire a nudge event with `target_alias=<alias>` so an idle target wakes early.
+
+Event mode is the **exclusive home** for event-bus consumption and cursor logic (per §2 mutual exclusivity). Everything in this section — `event_poll` sidecar, nudge contract, per-event cycle wrapping, cursor advancement, cascade protection via cursor dedup — applies only when the install is in event mode. Loop mode does not touch any of this. Both modes use forge as the comm channel; they differ only in *how* the target finds out a forge change is pending for it (nudge vs. polling tick).
 
 ### 7.0 The `event_poll` sidecar
 
@@ -884,7 +894,7 @@ sequenceDiagram
     F-->>TR: 200 OK
     Note over F: Forge label updated<br/>(source of truth)
     TR->>H: POST /work/assign<br/>{issue_number:9926, target_alias:verifier,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
-    H->>H: validate target_alias exists<br/>in config.md registry
+    H->>H: validate target_alias exists<br/>in .squidsquad/config.md registry
     H->>H: emit assigned-to(target_alias=verifier,...)<br/>append to deque
     H-->>TR: 200 OK + event_id
     TR-->>W: transition successful<br/>(+ assignment event_id)
@@ -937,7 +947,7 @@ Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forge
 
 The sender comments on the issue with a one-line routing rationale when the lane isn't obvious from the status transition alone.
 
-**Harness validation**. The harness performs **one** validation on `/work/assign`: does `target_alias` resolve to a registered agent in this install (per `config.md` `## Aliases`)?
+**Harness validation**. The harness performs **one** validation on `/work/assign`: does `target_alias` resolve to a registered agent in this install (per `.squidsquad/config.md` `## Aliases`)?
 
 - **Unknown alias** → `HTTP 404 Not Found` with body `{"error": "unknown alias", "target_alias": "<value>", "known_aliases": [...]}`. Prevents typos and misconfigurations from reaching the deque.
 - **Self-assign** → forbidden by built-in invariant (the harness rejects any `assigned-to` where `target_alias == emitter_alias`). Structural anti-loop, not a permission table.
@@ -1055,7 +1065,7 @@ Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and ro
 
 ### 8.1 Global config
 
-`config.md` has one `event-driven:` field that controls mode for the entire install:
+`.squidsquad/config.md` has one `event-driven:` field that controls mode for the entire install:
 
 ```
 event-driven: no    # global — applies to all agents
@@ -1078,7 +1088,7 @@ The agent therefore receives exactly **one** composed CLAUDE.md, already shaped 
 
 A mode flip is install-wide and requires a recompose + restart of each agent. Because mode is baked into each composed CLAUDE.md at compose time (§8.1), restarting alone is not sufficient — the composed bodies on disk must be regenerated first. Steps:
 
-1. Edit `config.md` `event-driven:` value.
+1. Edit `.squidsquad/config.md` `event-driven:` value.
 2. Run `compose.py deploy-all` to regenerate every composed CLAUDE.md with the new mode's manifest + procedural fragments inlined.
 3. Restart every agent (`python references/scripts/squidsquad_cli.py restart-all` or equivalent).
 4. New sessions boot into the new mode.
@@ -1128,7 +1138,7 @@ The v2 build ships as 5 grouped PRs. The **letters** (A–F) are logical-groupin
 |---|---|---|---|
 | 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher + event_poll; health poller watches both; cold start order; wizard writes the global `event-driven:` flag | medium |
 | 2 | **C — EAD + restart safety** | Last-seen-id recovery, in-flight cleanup, harness restart catch-up | low |
-| 3 | **D — alias-existence validation** | Harness validates `target_alias` against the install's registered aliases (per `config.md` `## Aliases`); 404 on unknown. No class-from-class permissions. | low |
+| 3 | **D — alias-existence validation** | Harness validates `target_alias` against the install's registered aliases (per `.squidsquad/config.md` `## Aliases`); 404 on unknown. No class-from-class permissions. | low |
 | 4 | **B — Cursor + delivery wire** | Nudge format = literal `NUDGE\n`; forward-only ack; `HTTP 410 Gone` for cursor-evicted | low |
 | 5 | **F — Observability** | TUI polls `/status`, `/agents`, `/events/recent`; lifecycle/git logs stay in iter-NNNN.md | very low |
 | 6 | **E — Migration** (3 sub-phases) | E1: stop emitting deprecated types · E2: collapse `Event Reactions` to `assigned-to` only · E3: trim catalog + rewrite event_poll | highest |
@@ -1169,7 +1179,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 | Q7 | Queue-while-busy | Context-only; no `working-state.md` flag |
 | Q8 | `#9845` (noop) fate | Retired; absorbed into `assigned-to(event_context=probe)` |
 | Q9 | `compose.py` changes for v2 | Trim catalog, retire emit calls, add `compose-needed` translator |
-| Q10 | Migration plan | Feature flag `event-driven: yes/no` in `config.md` |
+| Q10 | Migration plan | Feature flag `event-driven: yes/no` in `.squidsquad/config.md` |
 
 > Net-new open questions surfaced during the loop+event merge (this doc): NONE so far. Add below as they surface.
 
@@ -1210,7 +1220,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 - **2026-05-23 (rev 4) — review-loop pass 3.** Third DeepSeek pass surfaced 2 new findings (1 MED, 1 LOW). MED fix: EAD and event_poll cadence blocks now describe a two-tier backoff (10s → 30s → 60s and 5s → 30s → 60s) — the prior single-step backoff couldn't actually reach the documented 60s ceiling. LOW fix: `ack_only=true` for the probe `event_context` is now correctly notated as a `payload` extension, not a top-level `assigned-to` field. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-3.md`.
 - **2026-05-23 (rev 5) — review-loop pass 4.** Fourth DeepSeek pass returned 1 LOW finding only and explicitly assessed the doc as "converged well; no HIGH or MED issues remain." Applied: §8.5 PM-inbox `event_context` disambiguation rewritten from an incomplete-and-partially-fictional list (`route-handoff` wasn't defined anywhere) to an exhaustive enumeration sourced from the routing table, catalog-trim translators, EAD, and direct `/work/assign` callers. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-4.md`.
 - **2026-05-23 (rev 6) — terminology unification + global-only mode flag.** Two related cleanups.
-  - **Terminology**: removed all current-repo concrete-instance references (no `skill`, no `dev`, no "concrete-install snapshot" framing). The doc uses only the four L2 categorical role names: `pm`, `verifier`, `worker`, `dm` — sourced from the L2 capability layer (`agent-boundaries`), which is the canonical name source. Terminology table simplified to 4 rows with no concrete-instance column; role-filtering diagram drops the per-install qualifier and uses categorical names directly; stack-specific specialization is noted as `worker`/`verifier` variants rather than as alternative role names.
+  - **Terminology**: removed all current-repo concrete-instance references (no `skill`, no `dev`, no "concrete-install snapshot" framing). The doc uses only the four L2 categorical role names: `pm`, `verifier`, `worker`, `dm` — sourced from the L2 capability layer (`agent-boundaries`), which is the canonical name source. *(Per later revisions: L2 is **Role** in the L1-L4 compose model and `agent-boundaries` was retired — see PR #10359. This entry preserves the then-current framing as historical context.)* Terminology table simplified to 4 rows with no concrete-instance column; role-filtering diagram drops the per-install qualifier and uses categorical names directly; stack-specific specialization is noted as `worker`/`verifier` variants rather than as alternative role names.
   - **Mode flag**: dropped per-role event-driven config (`event-driven-pm: yes` etc.). `event-driven:` is now a single global flag for the install — the whole squad runs in loop mode together or event-driven mode together. §8.1 rewritten; §8.2 mode-flip steps now install-wide; §8.3 boot decision tree simplified to one ConfigGate before the harness probe. Rationale: keeps the harness contract uniform (load-bearing for everyone, or observational for everyone), avoids the cross-role coordination puzzle of mixed modes.
 - **2026-05-23 (rev 7) — post-rev-6 DS verification + §7.6 diagram fix.** DS round-7 verification found 2 actionable findings (1 MED, 1 LOW); both applied: §8.1 clarified that mixed modes are not *configurable* but degraded fallback can produce a transient mixed-mode state per-agent (the previous wording falsely implied install-wide uniformity even under fallback); §8.4 reworded to distinguish the configured `event-driven: no` path (loop mode by design) from the `event-driven: yes` + probe-fail fallback path (the prior "regardless of config" wording collapsed the two). Also: §7.6 subloop diagram nodes now use quoted-label form ({"…"}, ["…"]) so unquoted parentheses can't break Mermaid rendering. The "sub-skill" terminology is retained as the canonical compose-fragment term and is distinct from the "skill" agent-role term that was removed in rev 6 (DS flagged as info, accepted as intentional). DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-7.md`.
 - **2026-05-23 (rev 8) — final convergence + cadence-math fixes.** DS round-8 confirmed all R7 fixes correct and returned 2 LOW math errors: EAD cadence "≈3 minutes" → "≈2 minutes" (correct: 6 polls × 10/20/30/60/90/120s = 120s = 2 min); event_poll cadence "≈2.5 minutes idle" → "≈1.75 minutes idle" (correct: 6 polls × 5/10/15/45/75/105s = 105s ≈ 1.75 min). Both fixed. The doc is now mathematically and architecturally converged. DS artifact: `.squidsquad/pm/planning/REVIEW-AGENT-RUNTIME-DEEPSEEK-8.md`.
