@@ -402,33 +402,34 @@ The choice is recorded in `.squidsquad/config.md` under `Tracker Backend`. Agent
 
 When the installer detects an existing `.squidsquad/` at Phase 0b, it routes here instead of the fresh-install path.
 
-The upgrade model is intentionally simple:
+The upgrade model is **upgrade = sequential migration**: every release that breaks the L4 file schema or the `.squidsquad/config.md` schema ships a per-version migration file at `references/migrations/v<N-1>-to-v<N>.md`. The upgrade flow walks them in version order against the operator's current L4 + config, recomposes, and restarts.
 
 ```mermaid
 flowchart LR
     Existing(["Existing .squidsquad/"])
-    Detect["Read installed version<br/>+ latest upstream version"]
-    Confirm{"User confirms<br/>upgrade?"}
-    Pull["Pull latest SquidSquad sources<br/>from upstream repo"]
+    Pull["Pull source updates<br/>into references/"]
+    ReadV["Read installed version<br/>from config.md squidsquad_version:"]
+    Walk["Walk migrations in order<br/>v_installed → v_current<br/>(three-gate per step)"]
     Recompose["Run compose.py deploy-all<br/>regenerate all CLAUDE.md"]
     Restart["Stop + restart all agents<br/>via harness HTTP API"]
     Done(["Upgrade complete"])
-    Abort(["Abort — no changes"])
 
-    Existing --> Detect --> Confirm
-    Confirm -->|"yes"| Pull --> Recompose --> Restart --> Done
-    Confirm -->|"no"| Abort
+    Existing --> Pull --> ReadV --> Walk --> Recompose --> Restart --> Done
     style Done fill:#dfd
-    style Abort fill:#fdd
 ```
 
 **Steps:**
 
-1. **Detect**: read the installed version from `.squidsquad/config.md`'s `squidsquad_version:` field (written at install time per §3.2 + §4.8), and the latest upstream version from the SquidSquad source release metadata. Compute the changeset summary at the L1-L3 source level (what sub-skills changed, what new ones exist, what's renamed/removed). If the `squidsquad_version:` field is absent — possible on installs predating the version-stamp convention — the installer treats it as version `0` and runs a full upgrade.
-2. **Confirm**: present the changeset summary in plain language ("This upgrade will update 14 sub-skills, add 2 new ones, and rename `verifier-rejected` → `qa-rejected`. Your L4 customizations are unaffected."). The human approves, edits (e.g. "skip the rename for now"), or aborts. Abort = no changes.
-3. **Pull**: the latest SquidSquad sources from upstream into `references/` (this includes the latest L1-L3 sub-skills, role files, manifests, and helper scripts).
-4. **Recompose**: every role's CLAUDE.md by running `compose.py deploy-all`. The composed outputs reflect the new sub-skill versions.
-5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer is an ephemeral Claude Code session but has full Bash tooling — it makes these HTTP calls via `curl` (or equivalent) against the harness's localhost port (read from `.squidsquad/.harness-port` per HARNESS-ARCH §6). "Ephemeral" refers to lifetime, not capability: the installer can do anything its Claude Code tooling permits before it exits at Phase 9. The installer calls the harness's per-agent lifecycle endpoints in sequence:
+1. **Pull**: latest SquidSquad sources into `references/` (L1-L3 sub-skills, role files, manifests, helper scripts, and any new `migrations/v*-to-v*.md` files shipped with this release).
+2. **Read installed version**: one-line read of `.squidsquad/config.md`'s `squidsquad_version:` field (written at install time per §3.2 + §4.8). The installer's own version comes from `references/VERSION` (a semver string shipped in source). If the operator's `squidsquad_version:` field is absent — possible on installs predating the version-stamp convention — treat as `pre-1.0` and walk all migration files in order. If installer-version ≤ installed-version, there's nothing to upgrade; print "already current" and exit.
+3. **Walk migrations**: for each version step between installed → current (e.g. `1.2→1.3`, `1.3→1.4`, `1.4→1.5`), find the matching `references/migrations/v<N-1>-to-v<N>.md` file. If a version step has no migration file, **skip it** — that release shipped no schema break, so there's nothing for the operator to migrate. For each found migration file, apply its instructions to the current L4 + config under the **three-gate model** (same gating as `l4-curation`, per [COMPOSE-ARCHITECTURE.md §7.4](COMPOSE-ARCHITECTURE.md)):
+   1. **DeepSeek audit**: a deepseek-class model reviews the proposed L4 / config edit against the migration prose
+   2. **Mini-CQ**: one-line plain-language confirmation to the human ("Migration v1.4 → v1.5 wants to rename `event_driven:` to `event-driven:` in your config — OK?"); rejection aborts that step with no file change
+   3. **Compose dry-run**: `compose.py deploy-all --check` validates the migrated content composes cleanly before any write
+   
+   Migrations are stepped through one at a time — failure at any gate aborts that step (and the rest of the walk) cleanly; nothing partial is written.
+4. **Recompose**: `compose.py deploy-all` regenerates every role's CLAUDE.md from the now-current source + migrated L4. The composed outputs reflect both the new sub-skill versions and the migrated L4 customizations.
+5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer is an ephemeral Claude Code session but has full Bash tooling — it makes these HTTP calls via `curl` (or equivalent) against the harness's localhost port (read from `.squidsquad/.harness-port` per [HARNESS-ARCH.md §6](HARNESS-ARCH.md)). "Ephemeral" refers to lifetime, not capability: the installer can do anything its Claude Code tooling permits before it exits at Phase 9. The installer calls the harness's per-agent lifecycle endpoints in sequence:
    ```
    POST /agents/{role}/stop    # graceful stop; harness handles ack-stop / timeout
    POST /agents/{role}/start   # boot with new composed CLAUDE.md
@@ -437,19 +438,56 @@ flowchart LR
 
    **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (i.e., it is in the creative phase between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `.squidsquad/<alias>/working-state.md` + any in-flight changes), and then exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent reads `.squidsquad/<alias>/working-state.md` to recover from the checkpoint (see AGENT-RUNTIME §5 state-persistence map + §6.5 context-pressure exit-42 model). No in-flight state is lost because `.squidsquad/<alias>/working-state.md` is the durable checkpoint that survives restarts.
 
-**What stays untouched during upgrade:**
+### 10.1 Migration file format
 
-- `.squidsquad/project/` — L4 project-local customizations
-- `.squidsquad/vault/` — shared memory layer
+Migration files are **prose for the installer's LLM to consume**, not structured rules. One file per version step that breaks schema, at `references/migrations/v<N-1>-to-v<N>.md`. Example:
+
+```markdown
+# Migration: v1.4 → v1.5
+
+## config.md changes
+
+- The `event_driven:` field was renamed to `event-driven:` (underscore → hyphen).
+  If the operator's config has the underscore form, change the key to hyphen,
+  value untouched. Mechanical; apply deterministically.
+
+## L4 changes
+
+- The `## Vault` slot is now L1-exclusive (per #10372). If any L4 file has a
+  `## Vault` H2, surface to the operator: "this rule no longer maps to anything
+  in the new framework. Options: convert to `## Project Context` append, file
+  as upstream feature request, or delete." Judgment call; await operator choice.
+```
+
+Migrations describe both **mechanical** changes (deterministic renames, additive defaults — the LLM applies them straight through) and **judgment-call** changes (slot retirements, rule re-routing — the LLM surfaces options to the operator and waits for a choice). The same migration file can mix both.
+
+If the release does NOT break L4 or config schema, **no migration file is needed** — the version walk simply skips that step.
+
+### 10.2 What stays untouched during upgrade
+
+- `.squidsquad/project/` — L4 project-local customizations (migrations may *modify* L4 contents, but only through the three-gate model in step 3; never bulk-overwritten)
+- `.squidsquad/vault/` — shared memory layer (never touched by upgrade)
 - `.squidsquad/<alias>/working-state.md`, `iterations/`, `planning/` — agent state
-- `.squidsquad/config.md` — project configuration (the installer may *add* new fields with defaults if the new version requires them, but it never overwrites existing fields)
+- `.squidsquad/config.md` — project configuration (migrations may modify specific fields under the three-gate model; the installer never blindly overwrites)
 - GitHub Issue labels — already present from prior install
 
-**What's regenerated:**
+### 10.3 What's regenerated
 
 - `.squidsquad/<alias>/CLAUDE.md` — composed orchestration. The Soul section (§3) is recomposed from the latest `references/roles/<role-class>/SOUL.md` source plus any L4 `## Soul` append, per [COMPOSE-ARCHITECTURE.md §3.2 + §5.3](COMPOSE-ARCHITECTURE.md). No separate per-alias SOUL.md file exists (sidecar retired).
+- `.squidsquad/config.md` `squidsquad_version:` field — updated to the current installer version after a successful walk (the only field the installer writes unconditionally; everything else moves through migrations).
 
-**Migration steps** when an upgrade requires structural changes (e.g. a new sub-skill that needs a config field, or a renamed L4 file): the upgrade flow may invoke a one-off migration helper before recompose. Each such migration is filed as a separate helper script with idempotent semantics. As of this doc no such migrations exist.
+### 10.4 Edge cases
+
+- **Missing version stamp** (operator on a pre-version-stamp install): treat as `pre-1.0` and walk all available migrations in order. The first migration that runs writes `squidsquad_version:` to the current version on completion.
+- **Missing migration file for a version step**: that release shipped no schema break — skip it silently. No error.
+- **Operator aborts mid-walk** (mini-CQ rejection at step k): the walk aborts at step k; no further steps run; no recompose; no restart. The L4 / config changes from steps 1..k-1 (which were already gated through and written) persist; the version stamp is *not* advanced to current. Next upgrade run picks up at step k. This makes partial-upgrade safe.
+- **DeepSeek audit rejects a step** (LLM judgment misalignment): same as operator abort — clean stop at step k. Operator can investigate, edit the migration file or their L4 manually, then re-run upgrade.
+- **Compose dry-run failure at step k**: the migration produced L4 / config that doesn't compose. Same clean-stop semantics. Bug-level: this should not happen if migration files and L4 are well-formed; treat as a release-quality regression and file upstream.
+- **Skipped versions** (operator on v1.0 jumping to v1.5): same flow — walk v1.0→1.1, 1.1→1.2, …, 1.4→1.5 in order. Each step is independently gated; the operator approves each. No "diff two versions of the source tree" computation is needed.
+
+### 10.5 Migration files are framework-shipped, not operator-written
+
+Operators on consuming installs never write migration files — they consume them as part of the source `pull` in step 1. The responsibility for writing migration files belongs to whoever **ships SquidSquad releases**. For SquidSquad's own self-development repo, that responsibility lives in L4 DM (tracked separately).
 
 ---
 
