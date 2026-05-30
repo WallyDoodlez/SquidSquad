@@ -259,7 +259,7 @@ Git coordination latency is one cycle interval. Event bus coordination is near-i
 | If you want to... | Change at layer | Example |
 |---|---|---|
 | Add a new git operation | L1 Transport | Add `npm publish` to `git_ops.py` |
-| Change cycle timing | L2 Orchestration | Edit `Iteration Interval` in `config.md` |
+| Change cycle timing | L2 Orchestration | Edit `Iteration Interval` in `.squidsquad/config.md` |
 | Add a new agent capability | L3 Behavior (via L4) | Write a new sub-skill, add to manifest |
 | Change how an agent prioritizes work | L3 Behavior | Edit the Ralph Loop step order |
 | Make an agent more cautious | L5 Soul | Edit SOUL.md quality bar section |

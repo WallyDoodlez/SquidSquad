@@ -111,16 +111,16 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** (prose references in this doc always use the full path; code identifiers like `config.get_wake_mode()` are not subject to this rule) — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
+- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
 
 The two axes interact at compose time. Examples:
 
-| Compose-time concern | Driven by L1-L4 content | Driven by `config.md` |
+| Compose-time concern | Driven by L1-L4 content | Driven by `.squidsquad/config.md` |
 |---|---|---|
 | Section text in the output | ✅ source file body content | — |
 | Slot ordering inside output | ✅ frontmatter `(slot, ordinal)` | — |
 | Polling vs event manifest selection | — | ✅ `event-driven:` flag |
-| Placeholder substitution (e.g. `{{role-roster}}`) | ✅ template lives in L1-L3 | ✅ values come from `config.md` (e.g. `Workers:` list) |
+| Placeholder substitution (e.g. `{{role-roster}}`) | ✅ template lives in L1-L3 | ✅ values come from `.squidsquad/config.md` (e.g. `Workers:` list) |
 | Iteration interval baked into boot's `/loop` invocation | — | ✅ `Iteration Interval > Minutes` |
 | Whether vault-remember / improvement-scan runs | ✅ sub-skill self-gates on flag | ✅ flag value lives in `.squidsquad/config.md` |
 
@@ -131,7 +131,7 @@ Per-install customization paths therefore split:
 - **Project-local content changes** (new instructions, role-boundary additions, soul tweaks, project facts) → L4 file (`.squidsquad/project/<role-class>.md` with H2 slot sections)
 - **Install configuration changes** (different Workers roster, different cycle interval, mode flip, feature toggle) → `.squidsquad/config.md`
 
-A project that wants to *describe* its team differently in agent prompts adds an L4 `## Identity` `### append` block. A project that wants to *change the install's actual roster* (e.g. add an `fe-worker` class) edits `config.md`'s Workers list and re-runs `compose.py deploy-all`. Both can coexist.
+A project that wants to *describe* its team differently in agent prompts adds an L4 `## Identity` `### append` block. A project that wants to *change the install's actual roster* (e.g. add an `fe-worker` class) edits `.squidsquad/config.md`'s Workers list and re-runs `compose.py deploy-all`. Both can coexist.
 
 ### 3.1 DRY across layers + sub-skill catalog (single authoring location)
 
@@ -526,7 +526,7 @@ Events are **not** a communication channel — they carry no semantic payload. A
 
 1. **Write to forge** — append a tracker comment via the `discussion` sub-skill (durable, role-tagged, visible to humans and future agents).
 2. **Route to target** — update issue state (assignee, labels) so the message lands in the target's normal pipeline queries.
-3. **Nudge** — fire a nudge event with `target=<role>` so an idle target wakes early. Lost or missed nudges are harmless: the next natural polling cycle still picks up the forge change.
+3. **Nudge** — fire a nudge event with `target_alias=<alias>` so an idle target wakes early. Lost or missed nudges are harmless: the next natural polling cycle still picks up the forge change.
 
 ```mermaid
 sequenceDiagram
@@ -974,7 +974,7 @@ Migration from today's mixed numbering is mechanical (one-time renumber as part 
 
 ### 6.5 Wake-mode handling — two parallel manifests, compose-time selection
 
-SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `event_poll.py` polls the harness with adaptive backoff and writes one `NUDGE\n` line to stdout per batch; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
+SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `event_poll.py` polls the harness with adaptive backoff and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
 
 **Architectural rule** (matches today's `compose.py` implementation per #8697): the two modes are **two parallel manifests selected at compose time**, not a runtime branch.
 
@@ -1019,11 +1019,11 @@ Mode flip = recompose + agent restart, never mid-session. The two outputs differ
 - Polling has proven stable across harness outages — it does not depend on a live harness HTTP endpoint.
 - The polling manifest is the documented compose-time fallback when `includes-events.yml` is absent for a role (e.g. a new role not yet ported to event mode).
 - Polling stays available as the **manual recovery target** when event-mode is failing for any reason (harness wedged, event-bus regression, etc.). Recovery is an explicit operator action — flip `event-driven: no` in `.squidsquad/config.md`, recompose, restart. There is no automatic runtime fallback (see AGENT-RUNTIME §8.4).
-- Operators may explicitly select polling via `config.md` (`event-driven: no`) while debugging the event bus, or until event mode reaches GA in their install.
+- Operators may explicitly select polling via `.squidsquad/config.md` (`event-driven: no`) while debugging the event bus, or until event mode reaches GA in their install.
 
 **Authoring discipline**: both manifests must stay in sync on what an agent *does* — same status transitions, same comment etiquette, same vault behaviors. Only the *how* differs (event stream vs `/loop` tick). The two `5.7.x` worked examples should diff only on §4.2; if a non-§4.2 section diverges between modes, that is a bug, not a feature.
 
-**Current development convention** (as of this doc — pre-event-GA): every role's `includes.yml` and `includes-events.yml` are both maintained, but most installs ship with `config.md` `event-driven: no` so the polling manifest is what gets composed in production. The event manifest is exercised in CI and on opt-in installs; it becomes the default once event mode reaches GA. This lets us iterate the event-mode authoring (and lets reviewers diff the two flavored outputs) without forcing production fleets onto event mode before it is proven.
+**Current development convention** (as of this doc — pre-event-GA): every role's `includes.yml` and `includes-events.yml` are both maintained, but most installs ship with `.squidsquad/config.md` `event-driven: no` so the polling manifest is what gets composed in production. The event manifest is exercised in CI and on opt-in installs; it becomes the default once event mode reaches GA. This lets us iterate the event-mode authoring (and lets reviewers diff the two flavored outputs) without forcing production fleets onto event mode before it is proven.
 
 ### 6.6 Subagent invocation rules — moved to AGENT-RUNTIME §6.7
 

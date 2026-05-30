@@ -18,7 +18,7 @@ In scope:
 - ExternalActivityDetector (EAD) — the forge → bus bridge
 - Agent lifecycle: spawn, monitor, intent state machine, stop, restart
 - Port discovery and clone-isolation
-- State persistence (`.harness-state.json`, `.event-state.json`, `.harness-port`)
+- State persistence (`.squidsquad/.harness-state.json`, `.squidsquad/.event-state.json`, `.squidsquad/.harness-port`)
 - Restart safety
 - Failure modes
 
@@ -37,8 +37,8 @@ The harness is **one process per SquidSquad install**, started by the operator (
 
 Three properties define it:
 
-1. **Singleton per install** — only one harness process per project directory. Verified via the `.harness-port` file (see §6) and process listing.
-2. **Stateful but recoverable** — persists to `.harness-state.json` and `.event-state.json`. On restart, reads both files, verifies live agent PIDs, and resumes monitoring without dropping intent.
+1. **Singleton per install** — only one harness process per project directory. Verified via the `.squidsquad/.harness-port` file (see §6) and process listing.
+2. **Stateful but recoverable** — persists to `.squidsquad/.harness-state.json` and `.squidsquad/.event-state.json`. On restart, reads both files, verifies live agent PIDs, and resumes monitoring without dropping intent.
 3. **Localhost-only** — HTTP API binds to `127.0.0.1`; no authentication; no network exposure. Multi-host installs are not supported.
 
 The harness is **distinct from**:
@@ -113,8 +113,8 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
 | Piece | Type | Persisted | Purpose |
 |---|---|---|---|
 | `_deque` | `collections.deque(maxlen=1000)` | No (in-memory only) | Event store, FIFO with bounded retention |
-| `_cursors` | `dict[alias, event_id]` | Yes (`.event-state.json`) | Per-alias progress through the deque |
-| `_in_flight` | `dict[event_id, {alias, delivered_at}]` | Yes (`.event-state.json`) | Events delivered but not yet acked |
+| `_cursors` | `dict[alias, event_id]` | Yes (`.squidsquad/.event-state.json`) | Per-alias progress through the deque |
+| `_in_flight` | `dict[event_id, {alias, delivered_at}]` | Yes (`.squidsquad/.event-state.json`) | Events delivered but not yet acked |
 
 ### 5.1 Event store (deque)
 
@@ -125,12 +125,12 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
 
 ### 5.2 Cursor model
 
-- Per-alias, owned by harness (was per-agent in `working-state.md` pre-#9873-A; migrated to harness).
+- Per-alias, owned by harness (was per-agent in `.squidsquad/<alias>/working-state.md` pre-#9873-A; migrated to harness).
 - `null` on first boot → agent reads from the head of the deque.
 - Advances via `ack-cursor` consumed by the ack consumer task (asyncio).
 - Cursor-regression attempts are rejected (CONTEXT-9873-A D15).
 - `GET /events/cursor/{role}` returns `{cursor: <event_id> | null, role}`, HTTP 200 always.
-- Persisted to `.event-state.json`; harness reads on boot to resume.
+- Persisted to `.squidsquad/.event-state.json`; harness reads on boot to resume.
 
 ### 5.3 Event IDs
 
@@ -150,7 +150,7 @@ event_id = sha256(timestamp + alias + event_type + payload + nonce)[:16]
 
 | Task | Cadence | Purpose |
 |---|---|---|
-| `ack-cursor consumer` | event-driven | Drains the ack-cursor queue, advances cursors, persists to `.event-state.json` |
+| `ack-cursor consumer` | event-driven | Drains the ack-cursor queue, advances cursors, persists to `.squidsquad/.event-state.json` |
 | `timeout_scan` | every 30s | Re-delivers in-flight events that have been pending past their TTL |
 | `health_poll` | every 5s | Per-agent PID liveness check (`OpenProcess` on Windows, `kill -0` on POSIX) |
 | `EAD poller` | adaptive (10s active / 30s idle, 60s ceiling) | Polls forge for state changes; see §6 |
@@ -164,7 +164,7 @@ EAD is the bridge from forge state → event bus. It runs as an asyncio task ins
 ### 6.1 What it does
 
 1. Polls GitHub via REST API: `gh api repos/<owner>/<repo>/issues?since=<last_seen_iso>&state=all&per_page=100`.
-2. Diffs against last-seen timestamp on disk (`.event-state.json` `ead_last_seen` field).
+2. Diffs against last-seen timestamp on disk (`.squidsquad/.event-state.json` `ead_last_seen` field).
 3. Translates eligible state changes into `assigned-to` events (per the routing map in AGENT-RUNTIME §7.3).
 4. Emits one `assigned-to` per (forge change, target_alias) pair into the deque.
 5. Persists the new last-seen timestamp.
@@ -197,7 +197,7 @@ The harness owns agent lifecycle. Agents do not start, stop, or restart themselv
 
 ### 7.1 Intent state machine
 
-Per-agent, persisted in `.harness-state.json`:
+Per-agent, persisted in `.squidsquad/.harness-state.json`:
 
 | Intent | Meaning | Auto-respawn on death? |
 |---|---|---|
@@ -214,7 +214,7 @@ Transitions are HTTP-API-driven (`POST /agents/{role}/start|stop|restart`). The 
 2. Spawn platform-appropriate launcher → `thin_launcher.py` → `claude`.
 3. Spawn sibling `event_poll.py --wait --role <role> --target stdout` process.
 4. Wait for `booted` event from agent (cursor-clean handshake).
-5. Update `.harness-state.json` with the new PID + boot time.
+5. Update `.squidsquad/.harness-state.json` with the new PID + boot time.
 
 ### 7.3 Health poll
 
@@ -259,7 +259,7 @@ One file per install (at the install root). Persisted across harness restarts. S
 }
 ```
 
-Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PIDs still alive?); intents are preserved. Note: the outer agent key is the **alias** (e.g. `skill`, `verifier`); each agent's *categorical* role is not currently persisted in this file — it's derived from `config.md` at boot. Source of truth: `HarnessState.save_state()` in `references/scripts/harness.py`.
+Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PIDs still alive?); intents are preserved. Note: the outer agent key is the **alias** (e.g. `skill`, `verifier`); each agent's *categorical* role is not currently persisted in this file — it's derived from `.squidsquad/config.md` at boot. Source of truth: `HarnessState.save_state()` in `references/scripts/harness.py`.
 
 ---
 
@@ -283,7 +283,7 @@ When the port file is missing, the harness is treated as not running. Event-bus 
 
 ## 9. State files (summary)
 
-Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2 categorical role (which can have multiple aliases per install — e.g. the `worker` role aliased as `skill` here, `frontend`/`backend` elsewhere). The alias is the install-time name the operator assigned to an agent instance, and is what shows up as a directory on disk. The harness-owned files in the top-level `.squidsquad/` directory hold per-alias state internally (e.g. `.harness-state.json` keys agents by alias).
+Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2 categorical role (which can have multiple aliases per install — e.g. the `worker` role aliased as `skill` here, `frontend`/`backend` elsewhere). The alias is the install-time name the operator assigned to an agent instance, and is what shows up as a directory on disk. The harness-owned files in the top-level `.squidsquad/` directory hold per-alias state internally (e.g. `.squidsquad/.harness-state.json` keys agents by alias).
 
 | File | Owner | Persisted | Purpose |
 |---|---|---|---|
@@ -306,11 +306,11 @@ All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across re
 
 When the harness restarts (operator-driven or after a crash):
 
-1. **Read `.harness-state.json`** — recover per-agent intent + PID + clone path.
+1. **Read `.squidsquad/.harness-state.json`** — recover per-agent intent + PID + clone path.
 2. **Verify live PIDs** — for each agent with intent=`running`, check if the recorded PID is still alive.
    - Alive: resume monitoring.
    - Dead: respawn (since intent=`running`).
-3. **Read `.event-state.json`** — recover cursors and in-flight events.
+3. **Read `.squidsquad/.event-state.json`** — recover cursors and in-flight events.
 4. **Rebuild empty deque** — past events are lost; new events accumulate from the restart point forward.
 5. **Resume EAD** — read `ead_last_seen`; forge poll resumes from that timestamp (5-minute fallback if file missing/corrupt).
 6. **Honor intent** — agents marked `stopping` or `stopped` are NOT respawned; agents marked `restarting` are respawned per state-machine.
@@ -326,11 +326,11 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 | **Harness unreachable** (port-file missing or HTTP probe fails) | Agents silently no-op event-bus operations; fall through to loop-mode behavior per AGENT-RUNTIME §6 + §8.4. No cascade failure. |
 | **EAD task crashes** | Harness logs the exception and restarts the task. While EAD is down, forge changes don't reach the bus; agents continue consuming the in-memory deque. |
 | **Deque overflow** | Oldest events evicted; agents at evicted cursors get HTTP 410 Gone and follow the §5.1 recovery protocol. |
-| **`.harness-state.json` corrupt** | Harness logs the error, treats the file as missing, starts fresh state. Operator may need to re-issue `start` commands. |
-| **`.event-state.json` corrupt** | Cursors reset to `null`; agents re-consume from deque head on next read. No crash. |
-| **`.harness-port` file missing** | Operator's start command writes a new file; if not run, agents treat harness as unreachable (silent no-op). |
+| **`.squidsquad/.harness-state.json` corrupt** | Harness logs the error, treats the file as missing, starts fresh state. Operator may need to re-issue `start` commands. |
+| **`.squidsquad/.event-state.json` corrupt** | Cursors reset to `null`; agents re-consume from deque head on next read. No crash. |
+| **`.squidsquad/.harness-port` file missing** | Operator's start command writes a new file; if not run, agents treat harness as unreachable (silent no-op). |
 | **Agent PID dies unexpectedly** | Health poller catches it within 5s; auto-respawn if intent=`running`. |
-| **Port collision at startup** | Harness logs warning, picks next free port (probes upward from 7373). Updates `.harness-port`. |
+| **Port collision at startup** | Harness logs warning, picks next free port (probes upward from 7373). Updates `.squidsquad/.harness-port`. |
 | **uvicorn / FastAPI exception** | Logged; the affected endpoint returns 500; other endpoints continue to serve. |
 
 ---
@@ -401,7 +401,7 @@ Two processes per agent, down from five. TTY still provided by `wt.exe`, so subs
 
 | Today: `thin_launcher.py` | Direct path: where it lives |
 |---|---|
-| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.harness-state.json` with per-alias PIDs; pre-spawn check against existing in-memory state |
+| Singleton check (`.claude-pid` + descendant walk) | **Harness** — already maintains `.squidsquad/.harness-state.json` with per-alias PIDs; pre-spawn check against existing in-memory state |
 | Env var `SQUIDSQUAD_ROLE=<alias>` | **Harness** — `Popen(env=...)` propagates through `wt.exe → WindowsTerminal.exe` to the tab child (validated, see §14.4). (Env var name is `SQUIDSQUAD_ROLE` for code-compat; value is the alias.) |
 | Claude arg-list construction (`--append-system-prompt`, `--name`, `--effort`, bootstrap `/loop` prompt) | **Harness / `boot_remote`** — same arg list, emitted as `wt new-tab … claude.exe <flags>` |
 | Write `.claude-pid` after resolving descendant | **Harness** — post-spawn, snapshot processes once, filter `name='claude.exe' AND parent_pid==WindowsTerminal.exe_pid AND pid NOT IN pre_spawn_set`. Shallow tree, no toolhelp32 ctypes machinery needed. |

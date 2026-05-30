@@ -98,7 +98,7 @@ Galaxy is the **compounding** layer: every decision the squad makes and every le
 Note movement is rare and almost always one-directional:
 
 - **`projects/` → `archives/`** — when a project completes or is abandoned, the note's `status:` flips to `archived` and either an agent or `vault_optimize.py prune-scan` moves the file. Project notes are not deleted; the historical context matters.
-- **`galaxy/` → `archives/`** — `vault_optimize.py prune-scan` auto-archives galaxy notes that are (a) `status: superseded`, or (b) stale **and** orphaned (no inbound wikilinks for longer than the staleness threshold in `config.md`). Archived galaxy notes get a `<!-- archived: [[name]] moved to archives/ -->` breadcrumb appended to every note that linked to them, so the link graph degrades gracefully.
+- **`galaxy/` → `archives/`** — `vault_optimize.py prune-scan` auto-archives galaxy notes that are (a) `status: superseded`, or (b) stale **and** orphaned (no inbound wikilinks for longer than the staleness threshold in `.squidsquad/config.md`). Archived galaxy notes get a `<!-- archived: [[name]] moved to archives/ -->` breadcrumb appended to every note that linked to them, so the link graph degrades gracefully.
 - **`areas/` and `resources/`** — generally stay put. Areas are stable by definition; resources stay as long as someone might look them up. Both can be manually archived if the squad decides they're dead weight, but `vault_optimize.py` does not touch them automatically.
 
 There is no automatic *promotion* path (e.g., a `learning-*` note that turns out to be a fundamental pattern is rewritten or split manually; the script doesn't second-guess). The trim-or-graduate rule in §5 covers the **BRIEFING → galaxy** edge case, where lines trimmed from BRIEFING.md become new galaxy notes rather than being deleted.
@@ -192,7 +192,7 @@ A changelog entry is appended to the note body on each decay step, so the decay 
 
 **Opt-out**: notes tagged `evergreen` are exempt from decay entirely. Use for content where staleness is meaningless — enduring style preferences, fundamental architectural commitments.
 
-**Configuration drift** (current snapshot): `config.md` exposes a `Confidence Decay Days` field (default 60), and `config.py` maps the slug, but `vault_optimize.py` hardcodes the threshold at `STALE_DAYS = 60` and does NOT read the config field. The field exists but is not consumed today. Wiring tracked in #10099.
+**Configuration drift** (current snapshot): `.squidsquad/config.md` exposes a `Confidence Decay Days` field (default 60), and `config.py` maps the slug, but `vault_optimize.py` hardcodes the threshold at `STALE_DAYS = 60` and does NOT read the config field. The field exists but is not consumed today. Wiring tracked in #10099.
 
 ### 4.5 Wikilinks
 
@@ -223,7 +223,7 @@ Bare wikilink syntax in the body: `[[note-name]]`. No aliases (e.g., `[[note-nam
 |---|---|---|
 | Target length | ~50 lines | 80+ lines (today's snapshot) |
 | Update trigger | Every cycle (staleness check, not gated by quiet) | Implemented by `vault-remember.md` Step 4b |
-| Token budget for new content | 2000 (per `config.md` `BRIEFING Token Budget`) | Trim-or-graduate rule: trimmed content moves to a galaxy note, never deleted |
+| Token budget for new content | 2000 (per `.squidsquad/config.md` `BRIEFING Token Budget`) | Trim-or-graduate rule: trimmed content moves to a galaxy note, never deleted |
 | Sections | Active Priorities, Recently Shipped, Core Architecture, Recent Decisions, Human Preferences (via `[[human-profile]]`), Blockers | Today's BRIEFING has Active Priorities, Recently Shipped, Core Architecture, Recent Decisions; no explicit Blockers section |
 
 The staleness check is special — it runs every cycle including quiet cycles, and fixing stale fields (version mismatch, agent list mismatch, priority list mismatch with tracker) does **not** consume the vault-remember write budget.
@@ -271,8 +271,8 @@ Each sub-skill's **Cycle integration** line below names its lane.
 
 **Behavior**: End-of-cycle reflection. Runs two responsibilities in order:
 
-1. **BRIEFING.md staleness check** — runs every cycle, including quiet cycles. Compares `BRIEFING.md` key fields (version, active agents, current priorities) against `config.md` and the tracker; updates any stale field. Staleness fixes do NOT consume the write budget.
-2. **Reflection** — gated by a quiet-cycle check (skipped if the cycle did no real work). Evaluates this cycle's iteration log for vault-worthy candidates in four categories: DECISIONS, PATTERNS, LEARNINGS, PROJECT CONTEXT. Each candidate runs through four deterministic gates IN ORDER: (1) write budget remaining (default 2 per cycle, per `config.md` `Vault Remember > Writes Per Cycle`), (2) dedup-check against existing notes by title + tags, (3) reusability beyond this cycle, (4) would a fresh agent benefit? Only candidates passing all four are written. When more than 2 pass, priority is decisions > learnings > patterns; surplus is deferred to iteration-log notes as `Vault-worthy but deferred (budget): <description>`. Behavioral or personality directives are explicitly out of scope — those go to soul-shepherd (observed signals) or L4 (explicit directives), not the vault.
+1. **BRIEFING.md staleness check** — runs every cycle, including quiet cycles. Compares `BRIEFING.md` key fields (version, active agents, current priorities) against `.squidsquad/config.md` and the tracker; updates any stale field. Staleness fixes do NOT consume the write budget.
+2. **Reflection** — gated by a quiet-cycle check (skipped if the cycle did no real work). Evaluates this cycle's iteration log for vault-worthy candidates in four categories: DECISIONS, PATTERNS, LEARNINGS, PROJECT CONTEXT. Each candidate runs through four deterministic gates IN ORDER: (1) write budget remaining (default 2 per cycle, per `.squidsquad/config.md` `Vault Remember > Writes Per Cycle`), (2) dedup-check against existing notes by title + tags, (3) reusability beyond this cycle, (4) would a fresh agent benefit? Only candidates passing all four are written. When more than 2 pass, priority is decisions > learnings > patterns; surplus is deferred to iteration-log notes as `Vault-worthy but deferred (budget): <description>`. Behavioral or personality directives are explicitly out of scope — those go to soul-shepherd (observed signals) or L4 (explicit directives), not the vault.
 
 **Cycle integration**: Post-cycle Step 4b. Gated by the per-cycle quiet check only — always-on, no feature toggle (the 4-gate filter already provides sufficient noise control; a blunt on/off flag on top earns no use case). **Lane**: background subagent (`sonnet`). The consuming agent hands the iteration log + write-budget + dedup-tool access to the subagent; the subagent runs the 4-gate evaluation and returns a structured list of `{action: write|update|skip, path, type, body, reason}` decisions plus the resulting note paths. The reflection transcript stays out of the consuming agent's context.
 
