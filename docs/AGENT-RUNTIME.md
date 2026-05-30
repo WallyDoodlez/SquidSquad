@@ -1028,7 +1028,12 @@ There is no per-role override and no runtime mode-detection — mode is settled 
 
 **How mode selection actually works** (compose-time only):
 
-`compose.py` reads `event-driven:` and produces a *mode-specific* composed CLAUDE.md for each role — both the manifest choice (`includes.yml` vs `includes-events.yml`) and the procedural fragments (`roles/<role>/ralph-loop-overview.md` for loop mode; the `common-events/*.md` fragments for event mode) are inlined at compose time. See [COMPOSE-ARCHITECTURE §6.5](COMPOSE-ARCHITECTURE.md#65-wake-mode-handling--two-parallel-manifests-compose-time-selection) for the manifest + fragment composition mechanics.
+`compose.py` reads `event-driven:` and produces a *mode-specific* composed CLAUDE.md for each role. The manifest choice (`includes.yml` vs `includes-events.yml`) is made at compose time. The procedural fragments split by mode:
+
+- **Loop mode** — `roles/<role>/ralph-loop-overview.md` is inlined into the composed CLAUDE.md at compose time.
+- **Event mode** — uses a **two-tier mechanism**. `boot-bootstrap` (one of the sub-skills the event manifest declares) IS inlined at compose time. But `boot-bootstrap` contains Read-tool instructions that **load the `common-events/*.md` fragments** (`l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling`) **at agent session start**, not at compose time. The `common-events/*` files are therefore not in the composed CLAUDE.md body — they enter the agent's context on boot via `boot-bootstrap`'s Read calls.
+
+See [COMPOSE-ARCHITECTURE §6.5](COMPOSE-ARCHITECTURE.md#65-wake-mode-handling--two-parallel-manifests-compose-time-selection) for the full two-tier mechanism + manifest selection mechanics.
 
 The agent therefore receives exactly **one** composed CLAUDE.md, already shaped for its install's configured mode. There is no runtime mode-detection layer and no in-CLAUDE branch on mode. Mode flips require a recompose and restart (§8.2).
 
