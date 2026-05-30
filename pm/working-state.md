@@ -1,17 +1,20 @@
 # Working State
 
-- **Task**: PR #10379 architecture spec — compose link+assemble + conflict resolution
-- **Status**: idle (awaiting human direction)
+- **Task**: docs/root-cause-fixes branch — 3 root-cause fixes for recurring DS audit churn
+- **Status**: verification-audit-pending (analysis incomplete)
 
-## Open Question
+## Findings so far (post-fix)
 
-Failure-mode table extension proposed (2 new rows for conflict-related failures). Awaiting confirmation on whether to extend.
+- Internal COMPOSE: 8 (2H/3M/3L) — was 7
+- COMPOSE × VAULT: 4 (2H/1M/1L) — was 3
+- COMPOSE × HARNESS: 4 (2H/1M/1L) — was 2
+- COMPOSE × INSTALLER: 5 (2H/2M/1L) — was 5
+- AGENT × HARNESS: 3 (1H/1M/1L) — was 3
 
-## Pipeline Health
+## Pipeline
 
-- pm 🦑 / dm 🦑 / skill 👻 (pre-existing) / verifier ❓
-- PR #10378: 13 commits, MERGEABLE, 0 reviews
-- PR #10379: 11 commits, MERGEABLE, 0 reviews
+- PR #10380 (3 small post-merge audit fixes) — open
+- New branch docs/root-cause-fixes — committed locally, pushed
 
 ## Plan-First Hold
 
