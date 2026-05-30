@@ -54,16 +54,18 @@ Out of scope:
 
 ## 2. Two triggering modes
 
-Every agent in an install runs in the same mode — there is one global mode for the project, selected at install via `.squidsquad/config.md`'s `event-driven:` field:
+Event mode is the unconditional architecture. The wake mechanism is selected **at boot only** by probing the harness — there is no `event-driven:` config field in `.squidsquad/config.md`, no compose-time manifest gate, and no operator-flipped mode flag.
 
-| Mode | What wakes the agent | Event-bus relationship | When to use |
+| Wake mode | What wakes the agent | Selected when | Event-bus relationship |
 |---|---|---|---|
-| **Loop (polling)** | Cron timer (e.g. `/loop 30m execute one Ralph Loop cycle` — interval per-install, see §6.2) | **Emit-only** — agents may publish transient events for observability, but do NOT consume from the bus and do NOT maintain a cursor. Work queue + mechanical reactions both derive from tracker state. | Battle-tested fallback; works without the harness; current default |
-| **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | **Emit + consume** — agents subscribe with a cursor; nudges + per-event reactions both originate from the bus. | Target steady-state; lower latency; no idle token burn |
+| **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | Boot-time harness probe succeeds (HTTP `GET /status` returns 200 within 5s) | **Emit + consume** — agents subscribe with a cursor; nudges + per-event reactions originate from the bus. |
+| **Loop (polling) fallback** | Cron timer (e.g. `/loop 30m execute one Ralph Loop cycle` — interval per-install, see §6.2) | Boot-time harness probe fails (port file missing, port unreachable, timeout, or non-200 response) | **Best-effort emit; tracker-derived reactions** — agents try the bus and silently no-op on connection error; reactions fall through to tracker state diffs. No cursor maintained while in fallback. |
 
-The cycle wrapper (pre → creative → post) is the same in both modes — only *what initiates the wrapper* and *where reactions derive from* differs. In loop mode the wrapper fires once per `/loop` timer tick. In event mode it fires once **per cared event** during a nudge-walk; a single nudge can produce multiple cycle wrappers (one per cared event) or zero (if every event in the batch is filtered out by the care filter). See §7.1 for the per-event sequence.
+The cycle wrapper (pre → creative → post) is the same regardless. Only *what initiates the wrapper* differs (`/loop` cron vs. nudge), plus *where reactions come from* when the bus is unreachable (tracker-state diff instead of bus reads). In event mode the wrapper fires once **per cared event** during a nudge-walk; a single nudge can produce multiple cycle wrappers (one per cared event) or zero (if every event in the batch is filtered out by the care filter). See §7.1 for the per-event sequence.
 
-**Mutual exclusivity** is intentional: loop mode and event mode are exclusive on both the wake-mechanism axis (cron vs nudge) AND the event-bus axis (emit-only vs emit+consume). A loop-mode agent that consumed events would re-introduce the harness dependency loop mode exists to avoid; an event-mode agent that polled the tracker as its work queue would re-introduce the latency floor event mode exists to fix.
+**Mode selection is per-session.** Once a boot probe resolves, the agent stays in the selected mode for its entire session — no per-cycle re-detection, no mid-session flip. On the next session restart (operator restart, harness restart, exit-42 respawn), the probe re-runs and the new session picks again.
+
+**Bus-fallback granularity at runtime.** Even within a successful event-mode session, an individual `GET /events/for/<alias>` that fails (transient harness blip) silently degrades that cycle's reactions to tracker reads. The cursor is not advanced past a failed read; the next successful poll resumes from the unchanged cursor. The harness staying unreachable past one cycle is not a mode flip — the agent stays event-mode and keeps probing.
 
 ### 2.1 Why both exist
 
@@ -75,7 +77,7 @@ Loop mode has three persistent problems v2's event-driven mode fixes:
 
 Event-driven mode replaces the cron with on-demand wakeups. Claude's Monitor tool sees a stdin line and wakes the session immediately. Agents stay asleep when there's nothing to do; cycles fire because work arrived.
 
-The trade-off: the harness becomes load-bearing infrastructure. If it's down, event-mode agents sit idle until it recovers; loop mode is the **manual** recovery target (operator/doctor-agent flips `event-driven: no` and recomposes — see §8.4). There is no automatic runtime fall-back (#9580 / #9588 history).
+The trade-off: the harness becomes load-bearing infrastructure for event mode. If it's down **at boot**, the agent automatically falls back to loop mode for that session (§8.4). If it goes down **mid-session**, the agent stays in event mode and per-call bus failures degrade to tracker reads for that cycle (§2 above). The historical `#9580` / `#9588` "no automatic runtime fall-back" decision applied specifically to *mid-session* mode-flipping; boot-time fall-back is automatic and canonical.
 
 ### 2.2 Before vs after at a glance
 
@@ -219,8 +221,8 @@ In loop mode, `event_poll` is not spawned — only `cmd → thin_launcher → cl
 
 The event bus is the harness HTTP API at port `7373` (default). Both modes use it:
 
-- **In loop mode**: emit-only observability layer (per §2 mutual exclusivity). Agents may emit events for diagnostics, but they do NOT consume from the bus and do NOT maintain a cursor. Pre-cycle mechanical reactions (e.g., PR merge → status transition) derive from tracker state changes since last cycle (§6.3) — never from event reads. When the harness is down, emits silently no-op.
-- **In event-driven mode**: load-bearing. The bus is how the harness wakes the agent in the first place. When the harness is down, event-mode agents sit idle until it recovers (see §8.4); falling back to loop mode is a manual operator action (recompose + restart), not an automatic runtime path.
+- **In an event-mode session** (harness was reachable at boot): load-bearing. The bus is how the harness wakes the agent. Mid-session bus failures degrade individual cycles to tracker reads (§4.5) without flipping the wake mechanism. If the harness goes down for an extended period, the agent stays in event-mode wake (no nudges arrive; idle indefinitely) — recovery is automatic when the next nudge arrives, no operator action needed.
+- **In a loop-mode-fallback session** (harness was unreachable at boot): emit-only observability layer. The agent may publish transient events for diagnostics, but it does NOT consume from the bus and does NOT maintain a cursor for the session. Pre-cycle mechanical reactions (e.g., PR merge → status transition) derive from tracker state changes since last cycle (§6.3). When the harness later comes back up, the *current* session stays in loop-mode wake; the next session restart picks event mode automatically.
 
 ### 4.1 Architectural commitments (locked principles)
 
@@ -1036,74 +1038,51 @@ Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and ro
 
 ---
 
-## 8. Mode selection & migration
+## 8. Wake-mode selection & migration
 
-### 8.1 Global config
+### 8.1 No global config; compose is mode-agnostic
 
-`.squidsquad/config.md` has one `event-driven:` field that controls mode for the entire install:
+There is **no `event-driven:` field** in `.squidsquad/config.md`, no per-role-class override, and no compose-time mode gate. The composed CLAUDE.md is the same regardless of which wake mode the agent will end up in — `compose.py` always emits the event-shaped body for every role-class. There is one manifest per role-class (`references/roles/<role>/includes.yml`); the historical loop-only `includes.yml` vs `includes-events.yml` split is retired (the loop-only procedural fragments are folded into the unified manifest as fallback paths the cycle body invokes when the bus is unreachable).
 
-```
-event-driven: no    # global — applies to all agents
-```
+The composed CLAUDE.md's boot section probes the harness once and binds the wake mechanism for the session (§8.3). The cycle body uses bus reads when available and falls through to tracker reads on bus failure (§4.5).
 
-There is no per-role-class override and no runtime mode-detection — mode is settled at compose time for every agent in the install. An install is either entirely event-driven or entirely loop-mode at any given moment; mixed states only exist transiently during a recompose roll-out (some agents restarted, others not yet — §8.2). The installer writes `event-driven: no` as the default at install time (per INSTALLER-ARCH §4.8 Phase 5 step 1). The operator subsequently edits this field to flip modes per §8.2.
+### 8.2 No mode-flip procedure
 
-**How mode selection actually works** (compose-time only):
+A separate operator step to "flip modes" does not exist — mode is not a flag the operator sets. To force loop mode for an install, stop the harness before restarting the squad; the agents' boot probes will fail and bind to loop mode for those sessions. To return to event mode, start the harness and restart the agents.
 
-`compose.py` reads `event-driven:` and produces a *mode-specific* composed CLAUDE.md for each role-class. The manifest choice (`includes.yml` vs `includes-events.yml`) is made at compose time. The procedural fragments split by mode:
-
-- **Loop mode** — `roles/<role>/ralph-loop-overview.md` is inlined into the composed CLAUDE.md at compose time.
-- **Event mode** — uses a **two-tier mechanism**. `boot-bootstrap` (one of the sub-skills the event manifest declares) IS inlined at compose time. But `boot-bootstrap` contains Read-tool instructions that **load the `common-events/*.md` fragments** (`l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling`) **at agent session start**, not at compose time. The `common-events/*` files are therefore not in the composed CLAUDE.md body — they enter the agent's context on boot via `boot-bootstrap`'s Read calls.
-
-See [COMPOSE-ARCHITECTURE §6.5](COMPOSE-ARCHITECTURE.md#65-wake-mode-handling--two-parallel-manifests-compose-time-selection) for the full two-tier mechanism + manifest selection mechanics.
-
-The agent therefore receives exactly **one** composed CLAUDE.md, already shaped for its install's configured mode. There is no runtime mode-detection layer and no in-CLAUDE branch on mode. Mode flips require a recompose and restart (§8.2).
-
-### 8.2 Flipping the install's mode
-
-A mode flip is install-wide and requires a recompose + restart of each agent. Because mode is baked into each composed CLAUDE.md at compose time (§8.1), restarting alone is not sufficient — the composed bodies on disk must be regenerated first. Steps:
-
-1. Edit `.squidsquad/config.md` `event-driven:` value.
-2. Run `compose.py deploy-all` to regenerate every composed CLAUDE.md with the new mode's manifest + procedural fragments inlined.
-3. Restart every agent (`python references/scripts/squidsquad_cli.py restart-all` or equivalent).
-4. New sessions boot into the new mode.
-
-> **Manual fall-back to loop mode** (operator, user, or doctor-agent). If event-mode is failing for any reason (harness wedged, event-bus regression, etc.) and you want to bring the squad back up on the loop-mode contract, follow the same 4 steps above with `event-driven: no` at step 1. There is no automatic runtime fallback — the doctor's job is to flip the flag and recompose.
+There is no `recompose + restart` ceremony tied to mode change; mode is decided per agent process at its own boot, not at the install level. Mixed-mode installs (one agent event, another loop) are possible — and harmless — during the brief window between starting the harness and an agent's next restart.
 
 ### 8.3 Boot decision tree
 
 ```mermaid
 flowchart TD
     Start([agent process starts])
-    ReadComposed["read composed CLAUDE.md<br/>(mode already baked in<br/>per §8.1)"]
-    BootSteps["execute the boot section<br/>of the composed CLAUDE.md"]
-    EventPath["EVENT-MODE composed body:<br/>emit booted → read cursor →<br/>idle wait for nudge"]
-    PollPath["LOOP-MODE composed body:<br/>schedule /loop 30m →<br/>run first cycle now"]
-    HarnessDown["harness unreachable?<br/>(event-mode only)"]
-    IdleStable["sit idle until harness recovers,<br/>OR operator flips to loop (§8.2)"]
-    OpRestart["mode flip requires<br/>operator recompose + restart"]
+    ReadComposed["read composed CLAUDE.md<br/>(mode-agnostic event-shaped body)"]
+    Probe["HTTP probe: GET /status<br/>against .squidsquad/.harness-port<br/>(5s timeout)"]
+    EventPath["EVENT MODE:<br/>emit booted → read cursor →<br/>idle wait for nudge via Monitor"]
+    LoopPath["LOOP MODE:<br/>schedule /loop 30m →<br/>run first cycle now"]
+    Cycle["cycle wrapper fires<br/>(same in both modes)"]
+    Reactions["cycle body:<br/>try bus reads → on error<br/>fall through to tracker reads"]
 
-    Start --> ReadComposed --> BootSteps
-    BootSteps -->|composed for event mode| EventPath
-    BootSteps -->|composed for loop mode| PollPath
-    EventPath --> HarnessDown
-    HarnessDown -->|"no (normal)"| EventPath
-    HarnessDown -->|"yes"| IdleStable
-    PollPath -.->|every 30 min| PollPath
-    EventPath -.-> OpRestart
-    PollPath -.-> OpRestart
-    IdleStable -.-> OpRestart
+    Start --> ReadComposed --> Probe
+    Probe -->|200 OK| EventPath
+    Probe -->|"port missing / unreachable / timeout / non-200"| LoopPath
+    EventPath --> Cycle
+    LoopPath --> Cycle
+    Cycle --> Reactions
+    LoopPath -.->|every 30 min| LoopPath
+    EventPath -.->|nudge arrives| Cycle
 ```
 
-Mode is decided once at compose time and locked into the composed CLAUDE.md. The agent does not re-detect mode at boot or mid-session. The operator is the only mode-flipping authority; recompose + restart is the only path between modes (§8.2).
+The probe runs **once per session** at boot, not per cycle. Once the wake mechanism binds, it stays for the lifetime of the session. Mid-session bus failures degrade individual cycles (§2 above), they do not flip the wake mechanism.
 
 ### 8.4 When the harness is unreachable
 
-In **event mode**, if the harness is down at or during boot the agent simply sits idle — there are no events to consume and no `/loop` to fire. The composed CLAUDE.md contains only event-mode procedural content, so the agent has nothing else to do; it waits. When the harness comes back up the next nudge resumes normal flow without operator action.
+**At boot**: the probe fails and the agent binds to loop-mode wake. `/loop` is scheduled; the cycle body runs against tracker state for reactions. The agent will continue in loop mode for this entire session even if the harness comes back up; the next session restart picks up event mode automatically.
 
-If event mode is failing for reasons that won't resolve on their own (harness regression, wedged event-bus, persistent routing loops, etc.) the operator, user, or a doctor-agent can manually flip the install back to loop mode via the §8.2 recompose-and-restart procedure with `event-driven: no`. There is no automatic runtime fall-back; falling back is an explicit operator action.
+**Mid-session, intermittent bus failures**: individual `GET /events/for/<alias>` calls return errors. The cycle body falls through to tracker reads for that cycle. The cursor is not advanced. The next successful poll resumes from the unchanged cursor. The wake mechanism (Monitor + nudge) is unaffected — nudges that the harness queued during downtime arrive when reachability returns, and `event_poll` picks them up.
 
-In **loop mode**, the harness's reachability is not a boot gate at all — loop-mode agents run `/loop` and write/read tracker state directly through `gh`; the harness is irrelevant to their cycle. Loop mode is the safe-mode target for the manual fall-back above.
+**Mid-session, harness gone for an extended period**: the agent stays in event-mode wake (no `/loop` is scheduled); cycle wrappers fire only when a nudge arrives. With no nudges, the agent goes idle indefinitely. Recovery happens automatically when the harness returns and emits a nudge. Operators who suspect the harness will be down for a long time can force loop-mode for the next session by stopping the agent and restarting after confirming the harness is unreachable.
 
 ### 8.5 Migration from loop → event mode (v2 closure plan)
 
@@ -1111,14 +1090,14 @@ The v2 build ships as 6 grouped PRs. The **letters** (A–F) are logical-groupin
 
 | # | Group | What it does | Risk |
 |---|---|---|---|
-| 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher + event_poll; health poller watches both; cold start order; wizard writes the global `event-driven:` flag | medium |
+| 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher + event_poll; health poller watches both; cold start order; thin_launcher implements the boot-time harness probe + wake-mode bind (§8.3) | medium |
 | 2 | **C — EAD + restart safety** | Last-seen-id recovery, in-flight cleanup, harness restart catch-up | low |
 | 3 | **D — alias-existence validation** | Harness validates `target_alias` against the install's registered aliases (per `.squidsquad/config.md` `## Aliases`); 404 on unknown. No class-from-class permissions. | low |
 | 4 | **B — Cursor + delivery wire** | Nudge format = literal `NUDGE\n`; forward-only ack; `HTTP 410 Gone` for cursor-evicted | low |
 | 5 | **F — Observability** | TUI polls `/status`, `/agents`, `/events/recent`; lifecycle/git logs stay in iter-NNNN.md | very low |
 | 6 | **E — Migration** (3 sub-phases) | E1: stop emitting deprecated types · E2: collapse `Event Reactions` to `assigned-to` only · E3: trim catalog + rewrite event_poll | highest |
 
-After all 6 land: v2 ships under `event-driven: no` default; operators flip per install. Loop mode stays available indefinitely.
+After all 6 land: v2 ships with event-mode as the unconditional wake-mode architecture; loop mode is the boot-time fall-back when the harness is unreachable (§8.4). No operator configuration step is required for either mode.
 
 **Catalog-trim replacements** (Group E translates retired event types into `assigned-to` with a specific `event_context`):
 
@@ -1154,7 +1133,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 | Q7 | Queue-while-busy | Context-only; no `working-state.md` flag |
 | Q8 | `#9845` (noop) fate | Retired; absorbed into `assigned-to(event_context=probe)` |
 | Q9 | `compose.py` changes for v2 | Trim catalog, retire emit calls, add `compose-needed` translator |
-| Q10 | Migration plan | Feature flag `event-driven: yes/no` in `.squidsquad/config.md` |
+| Q10 | Migration plan | No feature flag. Event mode is unconditional; loop is automatic boot-time fall-back when the harness is unreachable (§8.3/§8.4). Earlier rev-log entries referencing `event-driven: yes/no` are historical — superseded 2026-05-30. |
 
 > Net-new open questions surfaced during the loop+event merge (this doc): listed below.
 
@@ -1181,7 +1160,7 @@ PM agents recognize this set as their care-filter; new values added in future re
 ### 10.2 Related docs
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — the 6-layer system stack; process tree, `.claude-pid` semantics, three claude.exe populations.
-- [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) — the L1-L4 composition model; how `event-driven:` flips compose-time manifest selection.
+- [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) — the L1-L4 composition model. Compose is mode-agnostic; the procedural fragments produced are event-shaped with bus-failure fallback baked in.
 - [`sub-skill-catalog.md`](sub-skill-catalog.md) — the catalog of sub-skills; `common-events/` runtime-loaded in event mode, polling fragments in loop mode.
 - [`sub-skill-guide.md`](sub-skill-guide.md) — how to author and wire sub-skills.
 
@@ -1217,3 +1196,4 @@ PM agents recognize this set as their care-filter; new values added in future re
   - **Permission table retired**: the harness no longer maintains a class-from-class `accepts assigned-to from:` permission table. Rationale: it duplicated discipline that already lives in each agent's L2/L3/L4 + SOUL.md; it conflicted with §4.1's "harness is a transport bus, not an orchestrator" principle; and the human-team analogy (mis-routed tickets get pushed back, no security guard at the assignment desk) applies. Replaced with two minimal harness checks: (1) target-alias existence (404 if unknown) and (2) self-assign invariant (rejected by structure, not by permission). Mis-route recovery happens at the agent layer: receiving agent recognizes out-of-domain work and re-assigns via the same `/work/assign` call to the correct alias; if recipient is unknown, routes to `pm` with `event_context="route-help"`.
   - §7.3 `/work/assign permission model` subsection replaced with `/work/assign validation + mis-route recovery`. §7.4 care filter section drops the L2-derived permission-table mention. §8.5 Group D row repurposed from "L2-derived permissions" to "alias-existence validation". §9 Q2 and Q6 updated to match.
   - Code task to skill (deferred per plan-first rule): drop `responsibility.md` files + compose pipeline reads, drop the harness permission-table build at boot, replace with the simpler alias-existence check, replace `target_role` field with `target_alias` in all wire-format emitters, rename `tracker.py work-assign --target` flag to `--target-alias`.
+- **2026-05-30 (rev 11) — `event-driven:` config flag retired; event mode unconditional + boot-time fall-back.** Architectural simplification: there is no `event-driven:` field in `.squidsquad/config.md`, no compose-time manifest gate, no operator mode-flip ceremony. Event mode is the unconditional design; loop mode is the automatic fall-back when the boot-time harness probe fails (§8.3). Mid-session bus failures degrade individual cycles to tracker reads (§2 / §8.4) but do not flip the wake mechanism. Per-session binding: once a probe resolves, the agent stays in that wake mode for the session; the next restart re-probes. **Doc impact**: §2 rewritten around boot-probe selection; §8.1 retitled "No global config; compose is mode-agnostic"; §8.2 retitled "No mode-flip procedure" (operator-flip ceremony removed); §8.3 boot decision tree simplified to one probe + bind; §8.4 split into boot-time/mid-session/extended-outage paths; §8.5 Group A description updated to reflect probe-bind responsibility moving into thin_launcher; §9 Q10 lock supersedes the historical feature-flag answer. **Historical-but-superseded entries**: rev 6 ("global-only mode flag"), rev 7 ("install-wide uniformity even under fallback"), and the `#9580` / `#9588` "no automatic runtime fall-back" framing — all describe a *config-flag-driven* model that no longer applies; boot-time fall-back is automatic. The `#9580` / `#9588` rejection applies specifically to *mid-session* mode-flipping, which is still rejected. **Companion doc updates**: COMPOSE-ARCH §6.5 / §10 (drop the two-manifest split), INSTALLER-ARCH §3.2 / §4.8 (drop `event-driven:` from config.md outputs), sub-skill-catalog (drop polling-vs-event manifest gate).

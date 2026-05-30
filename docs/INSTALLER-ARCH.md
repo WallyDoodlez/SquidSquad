@@ -94,7 +94,7 @@ Three commitments:
 
 | Destination | What the installer writes |
 |---|---|
-| `.squidsquad/config.md` | Project config — iter interval, ship threshold, `event-driven:` mode flag (global; selects polling vs event-driven manifest per [AGENT-RUNTIME.md §2](AGENT-RUNTIME.md) + [COMPOSE-ARCHITECTURE.md §6.5](COMPOSE-ARCHITECTURE.md)); the installer writes `event-driven: no` as the default — the operator can flip it later per AGENT-RUNTIME §8.2. Also includes model routing, tracker backend, git workflow, the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from `references/VERSION` (shipped with the pulled SquidSquad sources); read by the upgrade flow §10 step 1) and the **`## Aliases` registry section** mapping each install-time alias to its role-class + L3 domain (used by the harness for `/work/assign` alias-existence validation — see [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)). |
+| `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow, the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from `references/VERSION` (shipped with the pulled SquidSquad sources); read by the upgrade flow §10 step 1) and the **`## Aliases` registry section** mapping each install-time alias to its role-class + L3 domain (used by the harness for `/work/assign` alias-existence validation — see [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)). **No `event-driven:` field** — wake-mode selection happens at agent boot via harness probe (AGENT-RUNTIME §8.3), not via config. |
 | `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM. *Note: no separate `SOUL.md` per alias — `SOUL.md` is a filename shorthand for the soul-slot source at `references/roles/<role-class>/SOUL.md`; its content is composed into `CLAUDE.md §3 Soul`. The v1 per-alias sidecar is retired per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md).* |
 | `.squidsquad/project/` | L4 project-local files — one unified `<role-class>.md` per role-class (pm.md, `<worker-class>.md`, `<verifier-class>.md`, dm.md) with H2 slot sections. Initial `## Project Context` block in each is seeded from Phase 1 conversational answers (per §4.8 step 4); other slots start empty and accumulate at runtime via `l4-curation` (see [COMPOSE-ARCHITECTURE.md §5.5 + §7](COMPOSE-ARCHITECTURE.md)). |
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
@@ -198,7 +198,6 @@ workers: [<worker-role>, …]    # concrete worker names from the preset
 verifiers: [<verifier-role>, …] # concrete verifier names from the preset
 domain: "developer tooling"
 loop_interval: 30
-event-driven: no
 tracker_backend: github
 model_routing: { ... }
 git_workflow: { ... }
@@ -345,7 +344,7 @@ The installer agent never invents behavior the helpers already implement. Every 
 | `references/scripts/tracker.py` | The tracker abstraction layer — agents use this at runtime; the installer uses its label-creation paths at Phase 5 |
 | `start.sh` | Post-install boot script — ensures Python deps, syncs all clones, runs the harness |
 
-> **Runtime-shipped components (not installer-invoked):** the SquidSquad source tree also ships `references/scripts/event_poll.py` (per-agent event-bus sidecar; harness-spawned in event-driven mode — see [AGENT-RUNTIME.md §7.0](AGENT-RUNTIME.md) + [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md)) and `references/scripts/harness.py` itself. The installer does NOT invoke these — they're part of the runtime. They're mentioned here because they live alongside the installer's helper scripts under `references/scripts/` and operators inspecting that directory will see them.
+> **Runtime-shipped components (not installer-invoked):** the SquidSquad source tree also ships `references/scripts/event_poll.py` (per-agent event-bus sidecar; harness-spawned when the agent boots into event-mode wake — see [AGENT-RUNTIME.md §7.0](AGENT-RUNTIME.md) + [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md)) and `references/scripts/harness.py` itself. The installer does NOT invoke these — they're part of the runtime. They're mentioned here because they live alongside the installer's helper scripts under `references/scripts/` and operators inspecting that directory will see them.
 
 ---
 
@@ -446,7 +445,7 @@ flowchart LR
    If `installer-version ≤ installed-version`, there's nothing to migrate; print 'already current' and exit. (The pulled-but-not-migrated `references/` source is still updated on disk — operators who pulled accidentally can `git checkout HEAD references/` to revert.)
 3. **Walk migrations**: for each version step between installed → current (e.g. `1.2→1.3`, `1.3→1.4`, `1.4→1.5`), find the matching `references/migrations/v<N-1>-to-v<N>.md` file. If a version step has no migration file, **skip it** — that release shipped no schema break, so there's nothing for the operator to migrate. For each found migration file, apply its instructions to the current L4 + config under the **three-gate model** (same gating as `l4-curation`, per [COMPOSE-ARCHITECTURE.md §7.4](COMPOSE-ARCHITECTURE.md)):
    1. **DeepSeek audit**: a deepseek-class model reviews the proposed L4 / config edit against the migration prose
-   2. **Mini-CQ**: one-line plain-language confirmation to the human ("Migration v1.4 → v1.5 wants to rename `event_driven:` to `event-driven:` in your config — OK?"); rejection aborts that step with no file change
+   2. **Mini-CQ**: one-line plain-language confirmation to the human ("Migration v1.4 → v1.5 wants to rename `Iteration_Interval` to `Iteration Interval` in your config — OK?"); rejection aborts that step with no file change
    3. **Compose dry-run**: `compose.py deploy-all --check` validates the migrated content composes cleanly before any write
    
    Migrations are stepped through one at a time — failure at any gate aborts that step (and the rest of the walk) cleanly; nothing partial is written.
@@ -462,7 +461,7 @@ flowchart LR
    POST /agents/<alias>/stop    # graceful stop; harness handles ack-stop / timeout
    POST /agents/<alias>/start   # boot with new composed CLAUDE.md
    ```
-   for each agent (e.g. `pm`, `frontend-1`, `verifier`). The URL-template token is named `{role}` in the source code for legacy compatibility, but the value is always the alias; the token-name rename to `{alias}` is tracked in HARNESS-ARCH §4.1 + #10358 (value semantics are stable and won't change with the rename). If the harness is not running, the installer instead invokes `start.sh` from the repo root (which reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots the agents). `start.sh` is a thin shell wrapper that invokes `squidsquad_cli.py start` with the right environment — see HARNESS-ARCH §2 for the underlying entry point. The installer uses `start.sh` for parity with how operators boot the harness manually. Either way, the next session each agent starts is reading the new composed CLAUDE.md. In event-driven mode the harness also respawns each agent's `event_poll.py` sidecar on agent restart (per [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md) `boot_agent`); the installer doesn't need to manage `event_poll` directly.
+   for each agent (e.g. `pm`, `frontend-1`, `verifier`). The URL-template token is named `{role}` in the source code for legacy compatibility, but the value is always the alias; the token-name rename to `{alias}` is tracked in HARNESS-ARCH §4.1 + #10358 (value semantics are stable and won't change with the rename). If the harness is not running, the installer instead invokes `start.sh` from the repo root (which reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots the agents). `start.sh` is a thin shell wrapper that invokes `squidsquad_cli.py start` with the right environment — see HARNESS-ARCH §2 for the underlying entry point. The installer uses `start.sh` for parity with how operators boot the harness manually. Either way, the next session each agent starts is reading the new composed CLAUDE.md. If the restarted agent's boot probe succeeds, the harness also spawns its `event_poll.py` sidecar (per [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md) `boot_agent`); the installer doesn't need to manage `event_poll` directly.
 
    **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (i.e., it is in the creative phase between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `.squidsquad/<alias>/working-state.md` + any in-flight changes), and then exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent reads `.squidsquad/<alias>/working-state.md` to recover from the checkpoint (see AGENT-RUNTIME §5 state-persistence map + §6.5 context-pressure exit-42 model). No in-flight state is lost because `.squidsquad/<alias>/working-state.md` is the durable checkpoint that survives restarts.
 
@@ -475,8 +474,8 @@ Migration files are **prose for the installer's LLM to consume**, not structured
 
 ## config.md changes
 
-- The `event_driven:` field was renamed to `event-driven:` (underscore → hyphen).
-  If the operator's config has the underscore form, change the key to hyphen,
+- The `Iteration_Interval` field was renamed to `Iteration Interval` (underscore → space).
+  If the operator's config has the underscore form, change the key spelling,
   value untouched. Mechanical; apply deterministically.
 
 ## L4 changes

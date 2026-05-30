@@ -85,7 +85,7 @@ Sub-skills live in five source directories under `references/sub-skills/`:
 | Directory | Audience | Composition behavior |
 |---|---|---|
 | `common/` | reusable across roles | inlined at compose time into each consuming role's CLAUDE.md |
-| `common-events/` | roles in event-driven mode | **runtime-loaded** by `boot-bootstrap` on session start (not inlined) |
+| `common-events/` | all roles (event-shaped procedural fragments) | **runtime-loaded** by `boot-bootstrap` on session start (not inlined); fall-back paths inside these fragments handle the boot-time loop-mode-fallback case (per AGENT-RUNTIME §8.3-§8.4) |
 | `roles/<role>/` | one role | inlined at compose time |
 | `project/` | seed templates for L4 | copied to `.squidsquad/project/` at install (not consumed by compose) |
 | ~~`capabilities/<tool>/`~~ | _removed 2026-05-27_ | _was: tool integrations; superseded by per-agent post-install tool setup, see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)_ |
@@ -157,9 +157,9 @@ The three chat sub-skills below are **intentionally unwired** today. They're sca
 
 ---
 
-## `common-events/` — Event-mode sub-skills
+## `common-events/` — Event-shaped procedural fragments (all roles)
 
-Selected at compose time when `.squidsquad/config.md` says `event-driven: yes` (per [COMPOSE-ARCHITECTURE.md §6.5](COMPOSE-ARCHITECTURE.md#65-wake-mode-handling--two-parallel-manifests-compose-time-selection) — the `includes-events.yml` manifest is the gate). The fragments themselves are **loaded by `boot-bootstrap` at agent boot** (Read tool calls per AGENT-RUNTIME), not inlined into the composed CLAUDE.md body. An `event-driven:` flip in `.squidsquad/config.md` therefore takes effect on **next compose + agent restart** (mid-session flips don't exist).
+Referenced by the single mode-agnostic `references/roles/<role>/includes.yml` manifest (per [COMPOSE-ARCHITECTURE.md §6.5](COMPOSE-ARCHITECTURE.md#65-wake-mode-handling--one-manifest-boot-time-selection-at-runtime)). The fragments themselves are **loaded by `boot-bootstrap` at agent boot** (Read tool calls per AGENT-RUNTIME), not inlined into the composed CLAUDE.md body. The fragments are written event-shaped (event mode is the unconditional architecture) with fall-back paths the cycle body invokes when the boot probe binds to loop-mode wake or when a mid-cycle bus read fails — see AGENT-RUNTIME §4.5 / §8.3.
 
 | Sub-skill | One-liner |
 |---|---|

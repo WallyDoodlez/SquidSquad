@@ -134,7 +134,7 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role-class → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory). It is a sibling of `.squidsquad/project/` and `.squidsquad/<alias>/`, NOT under `project/` — distinct from L4 files. **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by an optional `## Aliases` H2 section listing each install-time alias → role-class + L3 domain mapping (used by `compose.py` for alias-existence validation and by `tracker.py` for routing). It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, top-level `event-driven:` mode flag, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
+- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory). It is a sibling of `.squidsquad/project/` and `.squidsquad/<alias>/`, NOT under `project/` — distinct from L4 files. **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by an optional `## Aliases` H2 section listing each install-time alias → role-class + L3 domain mapping (used by `compose.py` for alias-existence validation and by `tracker.py` for routing). It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc. **Wake mode is NOT a config.md field**: compose is mode-agnostic; event mode is the unconditional composed-output shape; the boot-time harness probe selects the wake mechanism at runtime (see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
 
 The two axes interact at compose time. Examples:
 
@@ -142,7 +142,7 @@ The two axes interact at compose time. Examples:
 |---|---|---|
 | Section text in the output | ✅ source file body content | — |
 | Slot ordering inside output | ✅ frontmatter `(slot, ordinal)` | — |
-| Polling vs event manifest selection | — | ✅ `event-driven:` flag |
+| Wake-mode selection | — | — *(decided at agent boot via harness probe; not a compose-time concern; see AGENT-RUNTIME §8.3)* |
 | Placeholder substitution (e.g. `{{role-roster}}`) | ✅ template lives in L1-L3 | ✅ values come from `.squidsquad/config.md` (e.g. `Workers:` list) |
 | Iteration interval baked into boot's `/loop` invocation | — | ✅ `Iteration Interval > Minutes` |
 | Whether vault-remember / improvement-scan runs | ✅ sub-skill self-gates on flag | ✅ flag value lives in `.squidsquad/config.md` |
@@ -152,7 +152,7 @@ The two axes interact at compose time. Examples:
 Per-install customization paths therefore split:
 
 - **Project-local content changes** (new instructions, role-boundary additions, soul tweaks, project facts) → L4 file (`.squidsquad/project/<role-class>.md` with H2 slot sections)
-- **Install configuration changes** (different Workers roster, different cycle interval, mode flip, feature toggle) → `.squidsquad/config.md`
+- **Install configuration changes** (different Workers roster, different cycle interval, feature toggle) → `.squidsquad/config.md`
 
 A project that wants to *describe* its team differently in agent prompts adds an L4 `## Identity` `### append` block. A project that wants to *change the install's actual roster* (e.g. add an `fe-worker` class) edits `.squidsquad/config.md`'s Workers list and re-runs `compose.py deploy-all`. Both can coexist.
 
@@ -257,7 +257,7 @@ step-ids: [step:cycle/<name>, step:boot/<name>, ...]  # for instructions slot on
 
 Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10, 20, 30) so future inserts don't require renumbering.
 
-> **Important** — The `instructions/cycle` sub-slot has **two parallel manifests** (#8697): `includes.yml` (polling/`/loop`) and `includes-events.yml` (event-driven). `compose.py` selects one at compose time via `config.get_wake_mode()` (global flag; see AGENT-RUNTIME §8.1); the chosen manifest is rendered in full into composed CLAUDE.md. The two manifests produce structurally distinct cycle sub-trees — they are *not* runtime branches inside a single composed output. See §6.5.
+> **Important** — The `instructions/cycle` sub-slot uses **one mode-agnostic manifest** per role-class (`references/roles/<role>/includes.yml`). Compose is wake-mode-blind; the composed cycle sub-tree is event-shaped and carries bus-failure fallback paths the cycle body invokes at runtime. The boot-time harness probe binds the wake mechanism per session; see §6.5 + AGENT-RUNTIME §8.3.
 
 ### 3.3 L4 operations (creative overlay)
 
@@ -456,11 +456,8 @@ flowchart TB
   Start([compose.py deploy &lt;role&gt;]) --> Walk[Walk references/sub-skills/<br/>+ references/roles/&lt;role&gt;/]
   Walk --> Parse[Read frontmatter from each file:<br/>slot, ordinal, roles, step-ids]
   Parse --> Filter[Filter to files where<br/>role applies]
-  Filter --> WakeMode{Wake mode<br/>per §6.5}
-  WakeMode -->|polling| MP[Load includes.yml<br/>polling manifest]
-  WakeMode -->|event| ME[Load includes-events.yml<br/>event manifest]
-  MP --> Sort
-  ME --> Sort[Stable sort by<br/>slot_index, ordinal]
+  Filter --> LoadM[Load includes.yml<br/>single mode-agnostic manifest<br/>per role-class — per §6.5]
+  LoadM --> Sort[Stable sort by<br/>slot_index, ordinal]
   Sort --> Base[L1-L3 base composition<br/>built in memory]
   Base --> L4Walk["Read .squidsquad/project/&lt;role-class&gt;.md<br/>(one file per role-class — per §3.3;<br/>H2 slot sections + H3 op blocks)"]
   L4Walk --> L4Group[Group L4 ops by slot]
@@ -702,7 +699,7 @@ No other H2 may appear at the document top level. (Sub-sections at H3+ are unres
 
 - What this agent's primary function is (role-class-specific: "pm coordinates the squad", "verifier verifies worker output", etc.).
 - Team membership ("You are a SquidSquad agent on a four-role team: pm, verifier, worker, dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology section.").
-- Lifecycle governance ("Your wake mechanism — polling or event-driven — is determined by the harness. The harness owns all start/stop/restart authority.").
+- Lifecycle governance ("Your wake mechanism is event-driven when the harness is reachable at boot, and falls back to `/loop` polling when it isn't — bound per session. The harness owns all start/stop/restart authority.").
 - Team-awareness: who the other roles are and what they do (one short paragraph each).
 - **Inter-agent communication** (L1 universal): "All communication between agents flows through the **forge** (the tracker — Issues/PRs and their comments). Forge is the source of truth; events are nudges, not a channel. To message another agent: write a tracker comment via the `discussion` sub-skill, assign/route to the target, then fire a nudge event so the target wakes if idle. See §5.1.1 for the full sequence and [AGENT-RUNTIME.md](AGENT-RUNTIME.md) §7 for the event bus mechanics."
 
@@ -912,13 +909,13 @@ L4 op grammar for this slot is **`append`-only** per §3.3 — no targeted ops, 
 
 This section is intentionally short — most vault detail belongs in `references/sub-skills/common/vault-protocol.md` (per-cycle usage contract) and [`VAULT-ARCH.md`](VAULT-ARCH.md) (vault store architecture: PARAG model, entity types, sub-skills, scripts, cycle integration).
 
-### 5.7 Worked example: pm composed CLAUDE.md TOC (both modes)
+### 5.7 Worked example: pm composed CLAUDE.md TOC
 
-`.squidsquad/pm/CLAUDE.md` looks **structurally different** depending on which manifest `compose.py` selects (per §3.2 callout and §6.5). Below are the two flavored outputs after L1-L4 + flat renumbering — §1, §2, §3, §5, §6 are identical; §4.1 differs by exactly one step; §4.3 is identical; §4.2 (`instructions/cycle`) is fully divergent.
+`.squidsquad/pm/CLAUDE.md` looks the same regardless of how the agent eventually wakes (event-mode nudge vs `/loop` fallback) — compose is mode-agnostic (§6.5). The composed output below is event-shaped; the cycle body's bus-failure fallback paths (try bus, fall through to tracker) are part of the same instruction set, not a separate compose variant.
 
 **Each step is a reference**, not an inlined sub-skill body. The right-column `step:cycle/<name>` is the step ID; the implementation lives in the sub-skill named after it (or referenced from it), catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md).
 
-#### 5.7.1 pm — polling mode (`includes.yml` selected)
+#### 5.7.1 pm — composed CLAUDE.md TOC
 
 ```
 # pm Agent
@@ -926,7 +923,8 @@ This section is intentionally short — most vault detail belongs in `references
 ## 1. Identity
    1.1 Function — coordinates the squad
    1.2 Team membership (4-role: pm, verifier, worker, dm)
-   1.3 Lifecycle governance (harness owns start/stop/restart)
+   1.3 Lifecycle governance (harness owns start/stop/restart;
+       wake bound at boot per AGENT-RUNTIME §8.3)
    1.4 Team-awareness (one paragraph each: dm, verifier, worker)
    1.5 Boundaries (folded "never do" — broad prohibitions)
 
@@ -943,86 +941,36 @@ This section is intentionally short — most vault detail belongs in `references
 ## 4. Instructions
    4.1 On boot
        1. Permission check          (step:boot/permission-check)
-       2. Mode detect               (step:boot/mode-detect)
-       3. Schedule /loop            (step:boot/schedule-loop)
+       2. Harness probe + wake bind (step:boot/wake-bind)
+                                    — GET /status: 200 → event-mode wake;
+                                      fail → /loop fallback; bound for session
+       3. Bootup-complete handshake (step:boot/bootup-complete; event-mode only)
        4. Read role fragments       (step:boot/load-fragments)
-   4.2 Each cycle (Ralph Loop — fires every config.iter-interval)
-       1. Pre-cycle script          (step:cycle/pre-cycle)
-       2. Context pressure check    (step:cycle/context-pressure)
-       3. Resume working state      (step:cycle/resume-state)
-       4. Check in with human       (step:cycle/check-in)
-       5. Pipeline sentinel         (step:cycle/pipeline-sentinel)
-       6. External-issue triage     (step:cycle/triage-external)
-       7. Agent health check        (step:cycle/health-check)
-       8. Vault remember/optimize   (step:cycle/vault)
-       9. Own-domain auto-fix       (step:cycle/own-domain-fix)
-      10. Post-cycle script         (step:cycle/post-cycle)
-   4.3 On shutdown
-       1. Graceful stop             (step:shutdown/graceful-stop)
-
-## 5. Project Context
-   5.1 Domain / audience
-   5.2 Repositories of record
-
-## 6. Vault
-   6.1 Description
-   6.2 Wikilink + entity model
-```
-
-#### 5.7.2 pm — event-driven mode (`includes-events.yml` selected)
-
-```
-# pm Agent
-
-## 1. Identity
-   1.1 Function — coordinates the squad
-   1.2 Team membership (4-role: pm, verifier, worker, dm)
-   1.3 Lifecycle governance (harness owns start/stop/restart)
-   1.4 Team-awareness (one paragraph each: dm, verifier, worker)
-   1.5 Boundaries (folded "never do" — broad prohibitions)
-
-## 2. Responsibility
-   2.1 What pm does (coordinates, intakes, routes, triages, vault stewardship)
-   2.2 What pm does NOT do (verify, RCA in filings, write code, modify worker branches)
-   2.3 Why this matters (the seam discipline)
-
-## 3. Soul
-   3.1 L1 voice baseline           (slot: soul, ord: 10)
-   3.2 L2 role-class persona       (slot: soul, ord: 20 — sourced from SOUL.md shorthand per §5.3)
-   3.3 L4 append (optional)        (composed only when L4's ## Soul has ### append blocks)
-
-## 4. Instructions
-   4.1 On boot
-       1. Permission check          (step:boot/permission-check)
-       2. Mode detect               (step:boot/mode-detect)
-       3. Bootup-complete handshake (step:boot/bootup-complete)
-       4. Read role fragments       (step:boot/load-fragments)
-   4.2 Per nudge (idle → walk → idle — see AGENT-RUNTIME §7.1 for the canonical contract)
-       1. Wake on nudge             (step:cycle/wake)
-                                    — Monitor receives `NUDGE\n` from the
-                                      harness-managed `event_poll.py --wait --role <role>
-                                      --target stdout` sidecar process
-       2. Read cursor + events      (step:cycle/read-cursor)
-                                    — GET /events/cursor/{role},
-                                      GET /events/for/{role}?since=cursor
-       3. Walk events with care     (step:cycle/walk)
-                                    filter (target_role match)
-       4. Per cared event           (step:cycle/process-event)
+   4.2 Per cycle (event-mode: per nudge — see AGENT-RUNTIME §7.1; loop-mode: per /loop tick)
+       1. Wake                       (step:cycle/wake)
+                                    — event-mode: Monitor receives `NUDGE\n`
+                                      from `event_poll.py` sidecar; loop-mode:
+                                      `/loop` cron fires
+       2. Read cursor + events       (step:cycle/read-cursor)
+                                    — event-mode: GET /events/for/{alias}?since=cursor;
+                                      on bus error (or loop-mode wake) fall through to
+                                      tracker-state diff per AGENT-RUNTIME §4.5
+       3. Walk events with care      (step:cycle/walk)
+                                    filter (target_alias match)
+       4. Per cared event            (step:cycle/process-event)
                                     — pre-cycle → do work → post-cycle,
                                       one wrapper per cared event
-       5. Batched cursor ack        (step:cycle/cursor-ack)
-                                    — POST /events {type:ack-cursor,
-                                      event_id:last_tended, role}; cursor
-                                      lives in .event-state.json (harness-owned)
-       6. Return to idle            (step:cycle/return-idle)
-                                    — no /loop sleep; next nudge resumes
-       Improvement subloop          handled separately when the work queue
-                                    drains — see AGENT-RUNTIME §7.6
-       Shutdown / stop intent       arrives as an `assigned-to` event with
-                                    event_context="stop-intent" and is
+       5. Batched cursor ack         (step:cycle/cursor-ack; event-mode only)
+                                    — POST /events {type:ack-cursor, event_id:last_tended, role}
+       6. Return to idle             (step:cycle/return-idle)
+                                    — event-mode: no /loop sleep; next nudge resumes
+                                    — loop-mode: /loop sleeps until next tick
+       Improvement subloop           handled separately when the work queue drains —
+                                    see AGENT-RUNTIME §7.6
+       Shutdown / stop intent        arrives as an `assigned-to` event and is
                                     handled by step 4 like any other event
    4.3 On shutdown
-       1. Graceful stop             (step:shutdown/graceful-stop)
+       1. Graceful stop              (step:shutdown/graceful-stop)
 
 ## 5. Project Context
    5.1 Domain / audience
@@ -1033,29 +981,22 @@ This section is intentionally short — most vault detail belongs in `references
    6.2 Wikilink + entity model
 ```
 
-#### 5.7.3 Diff between the two modes (where they actually differ)
+#### 5.7.2 Runtime fallback within one composed body
 
-The two TOCs are identical at §1, §2, §3, §5, §6 — and §4.1 differs by exactly one step, §4.3 is identical, §4.2 is fully divergent.
+The composed output above is event-shaped — the steps describe the event-driven flow as the primary path. Two runtime concerns invoke the fallback paths described in the step bodies, **without changing the composed CLAUDE.md**:
 
-| Section | Polling (5.7.1) | Event (5.7.2) | Differs? |
-|---|---|---|---|
-| §1 Identity | 1.1-1.5 | 1.1-1.5 | No |
-| §2 Responsibility | 2.1-2.3 | 2.1-2.3 | No |
-| §3 Soul | SOUL.md inlined | SOUL.md inlined | No |
-| §4.1 On boot — step 3 | `step:boot/schedule-loop` (`/loop` scheduling) | `step:boot/bootup-complete` (handshake to harness) | **Yes — 1 step** |
-| §4.1 On boot — other steps | permission-check, mode-detect, load-fragments | permission-check, mode-detect, load-fragments | No |
-| §4.2 cycle structure | 10 numbered Ralph Loop steps | 8 numbered per-event steps | **Yes — whole sub-slot** |
-| §4.3 On shutdown | graceful-stop | graceful-stop | No |
-| §5 Project Context | 5.1-5.2 | 5.1-5.2 | No |
-| §6 Vault | 6.1-6.2 | 6.1-6.2 | No |
+| Trigger | Fallback path used | Effect |
+|---|---|---|
+| Boot probe fails (harness unreachable at agent boot) | `step:boot/wake-bind` binds to loop-mode wake | `/loop 30m` is scheduled; `step:boot/bootup-complete` and `step:cycle/cursor-ack` no-op for the session |
+| Mid-session bus call fails (`GET /events/for/{alias}` non-200) | `step:cycle/read-cursor` falls through to tracker-state diff | Cycle uses tracker reads for reactions this cycle; cursor not advanced; next successful poll resumes |
 
-So the **only** mode-driven divergence is `step:boot/schedule-loop` ↔ `step:boot/bootup-complete` plus the whole §4.2 sub-slot. Everything else composes bit-identically across the two manifests. Any unintentional divergence in §1, §2, §3, §4.3, §5, §6 between the two flavored outputs is a bug per §6.5 "authoring discipline".
+Both fallbacks are described inside the same step bodies that the event-mode flow uses; there is no second manifest, no compose-time mode gate, and no operator-flippable config.
 
-Notes that apply to both:
+Notes:
 
 - All standalone H2s from today's output ("Issue Filing Protocol", "Task Lifecycle", "What You Must Never Do", "Status Line", "File Conventions") are absorbed per §6.2 / §6.3.
 - Step numbering inside each sub-slot is flat (per §6.4); no `Step 6f` / `Step Nb` / `Phase N`.
-- §4.2 is the only sub-slot whose authoring source differs by mode (polling reads `roles/pm/ralph-loop-overview.md` and friends; event reads `common-events/*` fragments). Per #8697 there are NO mode-conditional directives inside fragments — the manifest IS the gate.
+- §4.2's authoring source is the unified `references/roles/<role>/includes.yml` manifest. Loop-only procedural fragments (the former `ralph-loop-overview.md` pattern) are retired — their tracker-state-derived reaction logic is folded into `step:cycle/read-cursor`'s fallback path.
 
 ---
 
@@ -1180,58 +1121,50 @@ Steps inside Instructions are numbered **flat within each sub-slot** (boot / cyc
 
 Migration from today's mixed numbering is mechanical (one-time renumber as part of the §10 cleanup).
 
-### 6.5 Wake-mode handling — two parallel manifests, compose-time selection
+### 6.5 Wake-mode handling — one manifest; boot-time selection at runtime
 
-SquidSquad agents support two wake mechanisms: **event-driven** (a harness-managed `event_poll.py` sidecar polls the harness with adaptive backoff and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
+SquidSquad agents support two wake mechanisms: **event-driven** (a harness-managed `event_poll.py` sidecar polls the harness with adaptive backoff and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes*; only the trigger differs.
 
-**Architectural rule** (matches today's `compose.py` implementation per #8697): the two modes are **two parallel manifests selected at compose time**, not a runtime branch.
+**Architectural rule**: compose is **mode-agnostic**. Every role-class has exactly one manifest (`references/roles/<role>/includes.yml`) that produces one event-shaped composed CLAUDE.md. There is no `includes.yml` vs `includes-events.yml` split (the historical polling-only manifest is retired; loop-only procedural content is folded into the unified manifest as bus-failure fallback paths the cycle body invokes). The composed body is **the same regardless of whether the agent eventually wakes via nudge or via `/loop`** — wake-mode selection is a runtime concern handled by the boot probe, not a compose-time concern.
 
-- `references/roles/<role>/includes.yml`        — polling manifest (default)
-- `references/roles/<role>/includes-events.yml` — event-driven manifest. If the role-class hasn't been ported to event mode yet and this file is absent while `event-driven: yes` is set globally, compose silently uses the polling manifest for that role-class; this is a **per-role-class compose-time** fallback distinct from the operator-level mode flip in AGENT-RUNTIME §8.2.
+The agent's boot section probes the harness once (`GET /status`, 5s timeout) and binds the wake mechanism for the session — Monitor + nudge if the probe succeeds, `/loop` if it fails. See [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md) for the boot decision tree.
 
-`compose.py:_load_manifest` reads `config.get_wake_mode()` (a global flag — there is no per-role wake mode; see AGENT-RUNTIME §8.1) and chooses the manifest; `_resolve_includes_with_manifest` then renders the chosen manifest in full. There are **no mode-conditional directives inside fragments** — the manifest is the gate. The agent receives one fully-resolved CLAUDE.md whose §4.2 is shaped for exactly one mode. Mid-session mode flips do not exist; an operator flipping `.squidsquad/config.md` from `polling` to `event-driven` (or vice versa) takes effect on the next compose+restart.
-
-> **Compose-time reference vs runtime Read — two-tier mechanism for `common-events/`.** The `includes-events.yml` manifest's sub-skills (`boot-bootstrap`, the event-mode cycle-runner sibling, etc.) appear as `→ run sub-skill: <name>` **references** in the composed CLAUDE.md at compose time — bodies are NEVER inlined (per §4.1 step 4 + §6.2.1; the catalog is the resolution gate). What's compose-time-selected is *which sub-skills get referenced* (the manifest decides). One of those referenced sub-skills — `boot-bootstrap` — contains Read-tool instructions that pull the `common-events/*` fragments (`l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling`) into the agent's context **at agent session start**, not at compose time. So the two-tier shape is: (1) the manifest selection at compose time chooses which sub-skill references emit into CLAUDE.md; (2) the `common-events/*` fragments those sub-skills Read are loaded at runtime (they sit on disk, never in any composed CLAUDE.md body). The thin-orchestration invariant holds for both modes: composed CLAUDE.md is references-only.
+> **Compose-time reference vs runtime Read — two-tier mechanism for `common-events/`.** The manifest's sub-skills (`boot-bootstrap`, the cycle-runner, etc.) appear as `→ run sub-skill: <name>` **references** in the composed CLAUDE.md at compose time — bodies are NEVER inlined (per §4.1 step 4 + §6.2.1; the catalog is the resolution gate). `boot-bootstrap` contains Read-tool instructions that pull the `common-events/*` fragments (`l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling`) into the agent's context **at agent session start**, not at compose time. The thin-orchestration invariant holds: composed CLAUDE.md is references-only.
 
 ```mermaid
 flowchart LR
-  Cfg[".squidsquad/config.md<br/>event-driven: yes | no<br/>(global flag)"] --> Reader["compose.py<br/>config.get_wake_mode()"]
-  Reader -->|polling| MP["includes.yml<br/>(polling manifest)<br/>+ ralph-loop-overview.md"]
-  Reader -->|event| ME["includes-events.yml<br/>(event manifest)<br/>+ common-events/*.md"]
-  MP --> RP["Composed CLAUDE.md<br/>(loop-mode body inlined,<br/>§4.2 = Ralph Loop — see §5.7.1)"]
-  ME --> RE["Composed CLAUDE.md<br/>(event-mode body inlined,<br/>§4.2 = nudge-walk — see §5.7.2)"]
-  RP -.->|"agent sees ONE flavored output<br/>never both"| Agent[("agent session")]
-  RE -.->|"agent sees ONE flavored output<br/>never both"| Agent
-  style RP fill:#dfe7fd
-  style RE fill:#fde7d3
+  M["references/roles/<role>/includes.yml<br/>(single, mode-agnostic manifest)"] --> Compose["compose.py"]
+  Compose --> R["Composed CLAUDE.md<br/>(event-shaped body; bus-failure<br/>fallback paths included)"]
+  R --> Agent[("agent session")]
+  Agent --> Probe["boot probe:<br/>GET /status"]
+  Probe -->|200 OK| EM["EVENT-MODE wake:<br/>Monitor + nudge"]
+  Probe -->|fail| LM["LOOP-MODE wake:<br/>/loop 30m"]
+  style R fill:#dfe7fd
+  style EM fill:#fde7d3
+  style LM fill:#fde7d3
 ```
 
-Mode flip = recompose + agent restart, never mid-session. The two outputs differ at §4.2 (procedural body) plus one step of §4.1 (mode-detect handshake; see §5.7.3).
+The cycle body uses bus reads when available and falls through to tracker reads on bus failure (per AGENT-RUNTIME §4.5). The same composed CLAUDE.md drives both behaviors; the divergence is in the cycle's runtime decisions, not in the composed source.
 
-**Why two parallel manifests instead of one branchy file**:
+**Why one mode-agnostic manifest instead of two**:
 
-- Keeps fragment bodies clean — no `{% if event %}…{% else %}…{% endif %}` ladders in human-authored prose.
-- Lets each mode evolve its sub-skill set independently (event mode pulls in `common-events/*`; polling pulls in `roles/<role>/ralph-loop-overview` + sentinel + check-in).
-- Composes deterministically — given (role-class, wake-mode), the output is bit-stable; reviewable in PRs without runtime context.
-- Matches harness reality — the harness decides mode at agent-spawn time; trying to defer that decision into the agent process adds complexity for no gain.
+- The boot probe is a more reliable selector than an operator-edited config flag — no "I forgot to flip the flag and recompose" failure mode.
+- Mixed-mode installs (one agent event, another loop, during a brief harness-outage window) become harmless instead of forbidden.
+- Compose stays simpler — no manifest-selection branch, no `config.get_wake_mode()` call, no parallel-output diffing in PRs.
+- Authoring discipline is automatic — there is only one body to keep correct; loop-mode is a runtime degradation of the same instruction set.
 
-**Why event is treated as the canonical/primary track** (even though both manifests are first-class):
+**Why event is the unconditional composed shape**:
 
-- Lower latency between work-becoming-available and work-being-done — no fixed scheduler tick.
+- Lower latency between work-becoming-available and work-being-done when the harness is reachable — no fixed scheduler tick.
 - No cron-stacking risk — re-invoking `/loop` from inside a cycle silently stacks entries; event mode has no equivalent footgun.
-- Tightly coupled to the harness, which is already the lifecycle authority.
+- Tightly coupled to the harness, which is the lifecycle authority.
 - Cleaner step bodies — no scheduler-pacing boilerplate woven into the work.
 
-**Why polling is kept as a fully maintained parallel manifest, not deleted**:
+**Why loop is a fallback path inside the unified manifest**:
 
-- Polling has proven stable across harness outages — it does not depend on a live harness HTTP endpoint.
-- The polling manifest is the documented compose-time fallback when `includes-events.yml` is absent for a role-class (e.g. a new role-class not yet ported to event mode).
-- Polling stays available as the **manual recovery target** when event-mode is failing for any reason (harness wedged, event-bus regression, etc.). Recovery is an explicit operator action — flip `event-driven: no` in `.squidsquad/config.md`, recompose, restart. There is no automatic runtime fallback (see AGENT-RUNTIME §8.4).
-- Operators may explicitly select polling via `.squidsquad/config.md` (`event-driven: no`) while debugging the event bus, or until event mode reaches GA in their install.
-
-**Authoring discipline**: both manifests must stay in sync on what an agent *does* — same status transitions, same comment etiquette, same vault store behaviors. Only the *how* differs (event stream vs `/loop` tick). The two `5.7.x` worked examples should diff only on §4.2; if a non-§4.2 section diverges between modes, that is a bug, not a feature.
-
-**Current development convention** (as of this doc — pre-event-GA): every role's `includes.yml` and `includes-events.yml` are both maintained, but most installs ship with `.squidsquad/config.md` `event-driven: no` so the polling manifest is what gets composed in production. The event manifest is exercised in CI and on opt-in installs; it becomes the default once event mode reaches GA. This lets us iterate the event-mode authoring (and lets reviewers diff the two flavored outputs) without forcing production fleets onto event mode before it is proven.
+- Loop-mode wake (`/loop`) has proven stable across harness outages — it does not depend on a live harness HTTP endpoint.
+- A boot probe that fails is the natural signal to bind to loop — operator intervention is not required.
+- Mid-cycle bus failures are degraded gracefully (cycle body reads tracker instead of bus) without re-binding the wake mechanism.
 
 ### 6.6 Subagent invocation rules — moved to AGENT-RUNTIME §6.7
 
