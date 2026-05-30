@@ -69,11 +69,11 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 
 | Method | Path | Purpose | Returns |
 |---|---|---|---|
-| GET | `/status` | Harness liveness + code version + intent summary | `{version, code_version, agents: [...], harness_state}` |
+| GET | `/status` | Harness liveness + code version + intent summary | `{version, code_version, agents: [...], harness_state}` — `version` is the harness wire-protocol version (integer); `code_version` is the harness build identifier (git short-SHA or package version string) |
 | GET | `/` | Root — alias for `/status` (legacy convenience) | Same as `/status` |
-| GET | `/agents` | List all known agents + their current state | `[{role, alias, intent, pid, clone_path, boot_time, ...}]` |
-| GET | `/agents/{role}` | Single agent state | `{role, alias, intent, pid, clone_path, boot_time, last_seen}` |
-| GET | `/agents/{role}/health` | PID-based liveness probe for one agent | `{role, alias, alive, pid, last_seen}` |
+| GET | `/agents` | List all known agents + their current state | `[{role, alias, intent, status, pid, clone_path, boot_time, ...}]` |
+| GET | `/agents/{role}` | Single agent state | `{role, alias, intent, status, pid, clone_path, boot_time, last_seen}` |
+| GET | `/agents/{role}/health` | PID-based liveness probe for one agent | `{role, alias, alive, intent, status, pid, last_seen}` |
 | GET | `/agents/{role}/config` | Per-agent install config (clone path, etc.) | `{clone_path, ...}` |
 | POST | `/agents/{role}/start` | Set intent=running, spawn if not alive | `{ok, role, alias, action}` |
 | POST | `/agents/{role}/stop` | Set intent=stopping; cooperative shutdown | `{ok, role, alias}` |
@@ -195,11 +195,12 @@ default state: active (10s between polls)
   3 consecutive empty polls at 10s? → step up to 30s
   3 more consecutive empty polls at 30s? → step up to 60s (ceiling)
   changes return after any backoff? → reset to 10s
-  hard floor: 5s   (avoid forge rate-limit)
   hard ceiling: 60s
 ```
 
-Two-tier backoff: 10s → 30s → 60s. A drained queue stabilizes at 60s after ≥6 consecutive empty polls (~2 minutes idle).
+The cadence floor is 10s — the documented backoff never reduces below the default active interval. A hard 5s floor is reserved at the implementation level as a rate-limit safety guard for any future burst-on-event refinement, but no rule today drives the cadence below 10s.
+
+Three-stage cadence: 10s → 30s → 60s (two backoff transitions). A drained queue stabilizes at 60s after ≥6 consecutive empty polls (~2 minutes idle).
 
 ### 6.3 Restart safety
 
@@ -280,10 +281,12 @@ sequenceDiagram
 
 Every 5 seconds, for each agent with intent=`running`:
 
-1. Read `.claude-pid` from agent's `.squidsquad/<alias>/.claude-pid`.
-2. Check process liveness (`OpenProcess` on Windows, `kill -0` on POSIX).
+1. Read `claude_pid` (and `terminal_pid` for diagnostics) from in-memory `AgentState` — loaded at boot from `.harness-state.json`'s per-alias record (§7.5). The on-disk `.squidsquad/<alias>/.claude-pid` file is the singleton handle written by `thin_launcher` (contents = `cmd.exe` / shell PID, per §9); it is NOT what health-poll reads.
+2. Check process liveness of `claude_pid` (`OpenProcess` on Windows, `kill -0` on POSIX). The §5.5 "per-agent `claude` PID" check refers to this in-memory `claude_pid` value, not the `.claude-pid` file.
 3. If dead AND intent=`running`: re-spawn (auto-respawn).
 4. If dead AND intent=`stopping` or `restarting`: handle per intent.
+
+> **PID-source disambiguation** (recap): three distinct PID locations exist today — (a) `.squidsquad/<alias>/.claude-pid` on disk = `cmd.exe`/shell wrapper PID, written by `thin_launcher`, used by `thin_launcher`'s own singleton check; (b) `.harness-state.json` → per-alias `claude_pid` = the `claude.exe` PID resolved via descendant walk; (c) `.harness-state.json` → per-alias `terminal_pid` = wrapper PID, kept for diagnostics. Health-poll uses (b). Under the §14 proposal, (a) goes away — `thin_launcher` is deleted and the harness owns `claude_pid` resolution directly.
 
 ### 7.4 Cooperative exit (exit-42)
 
@@ -308,7 +311,7 @@ One file per install (at the install root). Persisted across harness restarts. S
     "<alias>": {
       "intent": "running",
       "intent_set_at": "2026-05-25T18:30:00Z",
-      "status": "running",
+      "status": "ready",
       "boot_time": "2026-05-25T18:00:00Z",
       "clone_path": "D:/Dev/Dev/SquidSquad-2",
       "claude_pid": 23456,
@@ -367,6 +370,8 @@ Per-agent directories under `.squidsquad/` are keyed by **alias**, not by the L2
 
 All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across restarts. The deque is the one piece of harness state that is NOT persisted.
 
+> **Reserved alias — `human`:** the alias `human` is a virtual queue target — it never corresponds to a spawned agent process. Only `GET /queue/human` (and the human work-queue filter in §4.4) reference it; the harness does not run lifecycle, health-poll, or PID tracking for it.
+
 > **Vocabulary note — `role` vs `alias`:** the codebase (FastAPI routes, `AgentState.role`, event-poll `--role` flag, `SQUIDSQUAD_ROLE` env var) uses the identifier `role` everywhere; the §4 HTTP API path-parameter `{role}` reflects that. **In every one of those places, the value is actually the alias** (e.g. `skill`, `verifier`, `human`) — not the L2 categorical role (`pm`/`qa`/`worker`/`dm`). The naming predates the alias concept and is misleading. The doc keeps the literal `{role}` token in §4 only where it faithfully tracks the code; everywhere else (on-disk paths, state-file shapes, cursor maps) it uses `<alias>` because that's the only thing actually keyed in those structures. A code-level rename `role` → `alias` would close the mismatch; it's filed as #10358 (sibling to the bundled #10182 architectural-decisions task) and is on hold pending PR #10357 merging and #10182 progressing.
 
 ---
@@ -379,7 +384,7 @@ When the harness restarts (operator-driven or after a crash):
 2. **Verify live PIDs** — for each agent with intent=`running`, check if the recorded PID is still alive.
    - Alive: resume monitoring.
    - Dead: respawn (since intent=`running`).
-   After this initial PID verification pass populates the in-memory `AgentState` with liveness flags, subsequent per-spawn singleton checks (see §14.2) consult the loaded in-memory state, not the state file directly.
+   Today, per-spawn singleton checks live inside `thin_launcher.py` and consult the on-disk `.claude-pid` + descendant walk (§9, §14.2 "Today" column). Under the §14 proposal those checks move into the harness and consult the loaded in-memory `AgentState` directly — see §14.2.
 3. **Read `.squidsquad/.event-state.json`** — recover cursors and in-flight events.
 4. **Rebuild empty deque** — past events are lost; new events accumulate from the restart point forward.
 5. **Resume EAD** — read `ead_last_seen`; forge poll resumes from that timestamp (5-minute fallback if file missing/corrupt).
@@ -481,7 +486,7 @@ harness
 >
 > **`event_poll.py` does not live inside the `wt.exe` chain.** It is a **separate sibling subtree** spawned by `boot_agent` directly (see §7.2 step 3): `harness → python.exe (event_poll.py)`. The `wt.exe` ancestry shown is the launcher-and-claude chain only; `event_poll` runs in parallel under the harness process, not under `wt.exe`.
 
-Two processes per agent, down from five. TTY still provided by `wt.exe`, so subscription billing is preserved.
+Two processes per agent in the launcher chain (`wt.exe` + `claude.exe`), down from five (`wt → bash → python(thin_launcher) → cmd → claude`). The sibling `event_poll.py` subtree under the harness exists in both pictures and is excluded from this count. TTY still provided by `wt.exe`, so subscription billing is preserved.
 
 ### 14.2 What `thin_launcher.py` does today, and where each piece moves
 
@@ -544,7 +549,7 @@ In landing order:
 1. Productize `references/experiments/resolve_claude.py` into `references/scripts/resolve_claude.py`. Add tests for each shim variant (real or fixture).
 2. Add helper to `boot_remote.py` (Windows) that constructs the `wt new-tab … claude.exe …` argv. POSIX equivalents follow.
 3. Move the singleton check into `harness.py:start_agent` (uses existing `AgentState`).
-4. Move post-spawn PID resolution into `boot_remote.boot_agent` (process snapshot + filter).
+4. Move post-spawn PID resolution into `boot_remote.boot_agent` (process snapshot + filter). The parameter rename `role` → `alias` per the §3 caveat / #10358 lands in the same change.
 5. Cut the spawn path over to direct-claude. Validate live on `skill` agent first.
 6. Once stable: delete `thin_launcher.py`, `tests/test_thin_launcher_10101.py`, and dead references in `boot_remote.py`.
 
