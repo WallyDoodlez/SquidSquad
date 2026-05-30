@@ -94,7 +94,7 @@ Three commitments:
 
 | Destination | What the installer writes |
 |---|---|
-| `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow |
+| `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow, plus the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from the installer's source release tag; read by the upgrade flow §10 step 1 to detect drift between installed and upstream versions) |
 | `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, SOUL.md, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM |
 | `.squidsquad/project/` | L4 project-local files — one unified `<role-class>.md` per role-class (pm.md, `<worker-class>.md`, `<verifier-class>.md`, dm.md) with H2 slot sections. Initial `## Project Context` block in each is seeded from Phase 1 conversational answers (per §4.8 step 4); other slots start empty and accumulate at runtime via `l4-curation` (see [COMPOSE-ARCHITECTURE.md §5.5 + §7](COMPOSE-ARCHITECTURE.md)). |
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
@@ -225,7 +225,7 @@ Once approved, the installer:
 
 1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts).
 2. **Serializes the install spec** to a temporary location for the scaffold step.
-3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs, vault skeleton, project-local L4 directory, config.md, and per-alias SOUL.md files. No tool/MCP wiring (per §8).
+3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs, vault skeleton, project-local L4 directory, `config.md`, and per-alias `SOUL.md` files. `config.md` includes the **`squidsquad_version:` field** stamped with the SquidSquad source release this installer ships with (read at upgrade time per §10 step 1). No tool/MCP wiring (per §8).
 4. **Seeds L4 Project Context** — for each role-class in the chosen preset, writes the Phase 1 project-intake answers (domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes) into `.squidsquad/project/<role-class>.md` under the `## Project Context` H2 section. This is the single unified L4 file per role-class (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md) and the "two complementary sources" callout in [§5.5](COMPOSE-ARCHITECTURE.md)). Other L4 slots (Identity / Soul / Instructions / etc.) start empty at install time and are populated at runtime by the `l4-curation` sub-skill (per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md)).
 
    > **Historical context (no installer code needed):** earlier installs used a multi-file L4 seed pattern (`references/sub-skills/project/<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-*.md`, `setup-upgrade-gate.md`). That pattern is retired and replaced by the unified `<role-class>.md` model above. The installer does **not** carry migration code for the legacy pattern — fresh installs never see it, and existing installs are migrated by a separate one-time tool (out of scope for this doc). This callout exists only to disambiguate the docs; an implementer reading §4.8 should write the unified-file path and not the legacy multi-file path.
@@ -422,7 +422,7 @@ flowchart LR
 
 **Steps:**
 
-1. **Detect**: read the installed version (from `config.md` or a version stamp) and the latest upstream version. Compute the changeset summary at the L1-L3 source level (what sub-skills changed, what new ones exist, what's renamed/removed).
+1. **Detect**: read the installed version from `.squidsquad/config.md`'s `squidsquad_version:` field (written at install time per §3.2 + §4.8), and the latest upstream version from the SquidSquad source release metadata. Compute the changeset summary at the L1-L3 source level (what sub-skills changed, what new ones exist, what's renamed/removed). If the `squidsquad_version:` field is absent — possible on installs predating the version-stamp convention — the installer treats it as version `0` and runs a full upgrade.
 2. **Confirm**: present the changeset summary in plain language ("This upgrade will update 14 sub-skills, add 2 new ones, and rename `verifier-rejected` → `qa-rejected`. Your L4 customizations are unaffected."). The human approves, edits (e.g. "skip the rename for now"), or aborts. Abort = no changes.
 3. **Pull**: the latest SquidSquad sources from upstream into `references/` (this includes the latest L1-L3 sub-skills, role files, manifests, and helper scripts).
 4. **Recompose**: every role's CLAUDE.md by running `compose.py deploy-all`. The composed outputs reflect the new sub-skill versions.
