@@ -194,6 +194,8 @@ flowchart TB
 
 `thin_launcher` (Python) and `event_poll.py` (Python) are cross-platform — they run identically on all three OSes. Singleton enforcement via `.claude-pid` and the Monitor stdin contract behave the same regardless of host OS.
 
+> **Future-state note**: the process tree described in this section is current. [`HARNESS-ARCH.md §14`](HARNESS-ARCH.md) documents a proposed simplification that deletes `thin_launcher.py` entirely and has `wt.exe` invoke `claude.exe` directly. That section is **proposal**, not implemented; if it ever lands, this §3.2 ships an updated tree in the same change.
+
 **The composed `CLAUDE.md`** that `claude` reads at boot is the agent's full instruction artifact — produced by `compose.py` from L1 (base) + L2 (role class) + L3 (domain) + L4 (install overrides) + per-agent `SOUL.md`, selected per the agent's alias from `.squidsquad/config.md`. AGENT-RUNTIME is intentionally silent on the format itself — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) for the layering model, slot order, frontmatter spec, and how the L1-L4 + SOUL.md inputs become one composed file. **Compose is the agent compiler**; every runtime behavior described in this doc is downstream of what compose produced.
 
 `thin_launcher` and `event_poll` are intentionally separate processes (decided 2026-05-22):
