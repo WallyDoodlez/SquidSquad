@@ -125,12 +125,12 @@ flowchart TB
     P7["Phase 7<br/>Tracker setup<br/>(initial issues)"]
     P8["Phase 8<br/>Commit + push"]
     P9(["Print 'SquidSquad ready' + exit"])
-    Upgrade["Upgrade flow §10"]
+    Migrate["Migration walk §10<br/>(existing-install step)"]
     Abort(["Abort — no repo changes"])
 
     Start --> P0 --> P0a --> P0b
     P0b -->|"no — fresh install"| P1
-    P0b -->|"yes — existing"| Upgrade
+    P0b -->|"yes — existing install"| Migrate --> P1
     P1 --> P2 --> P3 --> P4
     P4 -->|"yes"| P5 --> P6 --> P7 --> P8 --> P9
     P4 -->|"no"| Abort
@@ -141,7 +141,7 @@ flowchart TB
     style P8 fill:#fff3b0
     style P9 fill:#dfd
     style Abort fill:#fdd
-    style Upgrade fill:#dff
+    style Migrate fill:#dff
 ```
 
 ### 4.1 Phase 0 — Prerequisite check
@@ -453,7 +453,7 @@ flowchart LR
 
    Migrations are stepped through one at a time — failure at any gate aborts that step (and the rest of the walk) cleanly; nothing partial is written.
 4. **Stamp**: after a successful walk, the installer writes the now-current version to `.squidsquad/config.md`'s `squidsquad_version:` field. This is the only field the installer writes outside the three-gate model during the walk. Partial walks (failed at some step k) leave the stamp unchanged so the next run resumes at k. Migration files MUST NOT modify the `squidsquad_version:` field directly.
-5. **Continue with Phase 1+**: the installer proceeds with the standard phases exactly as in the fresh case. Phase 5 scaffolding writes only fresh-scaffold paths and never overwrites existing files; Phase 6 recompose regenerates every `.squidsquad/<alias>/CLAUDE.md` from the now-current source + migrated L4; Phase 8 commits + pushes; Phase 9 restarts via the harness HTTP API (or `start.sh` cold-start when the harness is unreachable).
+5. **Continue with Phase 1+**: the installer proceeds with the standard phases exactly as in the fresh case. Phase 5 scaffolding writes only fresh-scaffold paths and never overwrites existing files; Phase 6 recompose regenerates every `.squidsquad/<alias>/CLAUDE.md` from the now-current source + migrated L4; Phase 8 commits + pushes AND issues the harness lifecycle calls below to restart each agent with the new composed CLAUDE.md; Phase 9 prints the ready message and exits (per §4.12).
 
    The harness remains the sole lifecycle authority. The installer's restarts go through the harness's public HTTP API:
 

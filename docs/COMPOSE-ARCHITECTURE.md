@@ -996,7 +996,7 @@ Notes:
 
 - All standalone H2s from today's output ("Issue Filing Protocol", "Task Lifecycle", "What You Must Never Do", "Status Line", "File Conventions") are absorbed per §6.2 / §6.3.
 - Step numbering inside each sub-slot is flat (per §6.4); no `Step 6f` / `Step Nb` / `Phase N`.
-- §4.2's authoring source is the unified `references/roles/<role>/includes.yml` manifest. Loop-only procedural fragments (the former `ralph-loop-overview.md` pattern) are retired — their tracker-state-derived reaction logic is folded into `step:cycle/read-cursor`'s fallback path.
+- §4.2's authoring source is the unified `references/roles/<role>/includes.yml` manifest. Tracker-state-derived reaction logic (used when the cycle body's bus read fails or in loop-mode-fallback sessions) is folded into `step:cycle/read-cursor`'s fallback path.
 
 ---
 

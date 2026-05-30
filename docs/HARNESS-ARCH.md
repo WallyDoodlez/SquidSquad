@@ -47,7 +47,7 @@ The harness is **distinct from**:
 
 - **Agent processes** — agents are separate processes (`claude` + `event_poll.py`) spawned by the harness; they communicate with it over HTTP and live in their own clone directories.
 - **EAD** — EAD is a component *inside* the harness (an asyncio task), not a sibling process.
-- **The forge (GitHub)** — the harness reads from GitHub via EAD but does not write to it; tracker writes go through agents calling `gh` directly via `tracker.py`.
+- **The forge (GitHub)** — the harness reads from GitHub via EAD. It performs **one specific forge write**: rewriting the `role:<target_alias>` label on the issue named in every `POST /work/assign` call (and on EAD-emitted `assigned-to` events). This is the routing-source-of-truth update; see [AGENT-RUNTIME §7.3](AGENT-RUNTIME.md). All other tracker writes (status transitions, comments, label changes other than `role:*`) go through agents calling `gh` directly via `tracker.py`.
 
 ---
 
