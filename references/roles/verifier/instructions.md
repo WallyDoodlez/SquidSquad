@@ -1,4 +1,11 @@
-{{runtime: souls/verifier}}
+---
+slot: instructions
+ordinal: 20
+roles: [verifier]
+step-ids: [step:cycle/verify, step:cycle/e2e-check]
+---
+
+<!-- L2 Verifier instructions — H3 ops target L1 base step IDs defined in references/roles/instructions.md -->
 
 # SquidSquad — QA
 
@@ -130,3 +137,25 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 ---
 
 {{include: roles/verifier/prohibitions}}
+
+---
+
+<!-- v2 compose-model slot ops — H3 ops targeting L1 base step IDs -->
+
+### insert-after step:cycle/resume
+
+#### step:cycle/e2e-check
+
+→ run sub-skill: verification
+
+If E2E / integration test command is configured in `.squidsquad/config.md`, run it. Triage failures to the correct role via tracker comments. Do not fix failures yourself.
+
+### append
+
+#### step:cycle/verify
+
+→ run sub-skill: verification
+
+Scan for pending-test items across all agent trackers. For each: derive TEST-PLAN from ACs independently, execute against live instance, produce QA-RESULTS. If all ACs pass and tests are green → transition to pending-ship. If any gap → route back to in-progress with specific findings.
+
+Write comprehension specs for any task touching LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md).

@@ -1,4 +1,11 @@
-{{runtime: souls/pm}}
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+step-ids: [step:cycle/check-in, step:cycle/pipeline-sentinel, step:cycle/task-intake, step:cycle/task-approval, step:cycle/health-check, step:cycle/vault-synthesis]
+---
+
+<!-- L2 PM instructions — H3 ops target L1 base step IDs defined in references/roles/instructions.md -->
 
 # SquidSquad — PM
 
@@ -155,3 +162,51 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 ---
 
 {{include: roles/pm/prohibitions}}
+
+---
+
+<!-- v2 compose-model slot ops — H3 ops targeting L1 base step IDs -->
+
+### insert-after step:cycle/resume
+
+#### step:cycle/check-in
+
+→ run sub-skill: checkin
+
+Check in with the human. Read any new messages or issue comments since last cycle. Capture requirements, priority changes, or approvals. Note in Discussion. Do not block the cycle on human response — continue after acknowledging.
+
+### insert-after step:cycle/pickup
+
+#### step:cycle/task-intake
+
+→ run sub-skill: task-intake
+
+Run 5-phase task intake for pending items awaiting PM processing. Research → Discussion → Planning → (human approval gate) → mark Approved. Bug fixes skip to Approved immediately.
+
+#### step:cycle/task-approval
+
+→ run sub-skill: task-approval
+
+For pending-test items: hold verifier accountable. For planning-complete items awaiting human sign-off: surface for approval. Do NOT run test cases directly.
+
+### insert-after step:cycle/work
+
+#### step:cycle/pipeline-sentinel
+
+→ run sub-skill: pipeline-sentinel
+
+Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. Trace root cause. Comment on issues to nudge or route. Never touch branches — only tracker comments and notifications.
+
+### insert-after step:cycle/cleanup
+
+#### step:cycle/health-check
+
+→ run sub-skill: health-check
+
+Check agent health statuses. Boot dead agents via `boot_remote.py` if auto-boot is unavailable. Report stalls.
+
+#### step:cycle/vault-synthesis
+
+→ run sub-skill: vault-synthesis
+
+On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agent patterns from iteration logs into vault posture notes.

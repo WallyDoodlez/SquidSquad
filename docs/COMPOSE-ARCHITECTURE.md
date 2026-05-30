@@ -20,7 +20,7 @@ Establish a single source of truth for how SquidSquad **composes** the per-agent
 > | `.squidsquad/project/<role-class>.md` | **role-class** (categorical: pm/verifier/worker/dm or sub-classes like fe-worker) | The L4 source — one per role-class. Both `frontend-1` and `backend-1` *share* the same L4 file if they belong to the same role-class. |
 > | `references/roles/<role>/...` and `references/sub-skills/roles/<role>/...` | **role-class** | The L1-L3 authoring source paths. The literal `<role>` segment in these paths is role-class-typed; the directory name predates the class/alias distinction. |
 >
-> CLI flag names in this codebase (`--role`, `SQUIDSQUAD_ROLE`, `cycle.py status-bar <role>`) accept **alias** values for code-compat reasons. See [AGENT-RUNTIME §4.3 Vocabulary note](AGENT-RUNTIME.md) and [HARNESS-ARCH §9](HARNESS-ARCH.md).
+> CLI flag names in this codebase (`--role`, `SQUIDSQUAD_ROLE`, `cycle.py status-bar <role>`, `compose.py deploy <role>`) accept **alias** values, not role-class names — the `<role>` parameter name predates the alias/role-class distinction and is preserved for code-compat. Callers (including the installer's Phase 6 invocation, see INSTALLER-ARCH §4.9) pass the install-time alias (e.g. `pm`, `frontend-1`, `verifier`) as the argument. Compose internally resolves the alias → role-class via `.squidsquad/config.md`'s `## Aliases` registry to find the right L4 file. See [AGENT-RUNTIME §4.3 Vocabulary note](AGENT-RUNTIME.md) and [HARNESS-ARCH §9](HARNESS-ARCH.md).
 
 The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault description. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their authored sources under `references/sub-skills/` (plain markdown fragments). A **project-scoped Claude-skills installer** that materializes each sub-skill into the project's local `.claude/skills/<name>/SKILL.md` is target-state but not yet shipped — see §4.5.1 Gap.
 
@@ -41,21 +41,33 @@ flowchart LR
         L4["L4 — Project<br/>(per-install overlay)"]
     end
 
-    Compose["compose.py<br/>(stacks L1→L4)"]
-    OUT["<b>.squidsquad/&lt;role&gt;/CLAUDE.md</b><br/>thin orchestration<br/>step references only"]
+    subgraph COMPOSE["compose.py — two-stage compiler"]
+        direction TB
+        Link["<b>Link</b> (§4.1–§4.5)<br/>gather → group by slot → sort by ordinal<br/>→ apply L4 ops → validate sub-skill refs<br/><i>deterministic</i>"]
+        Assemble["<b>Assemble</b> (§4.6)<br/>per-slot agent rewrite into coherent voice<br/>higher L wins on conflict<br/><i>stochastic, cached</i>"]
+        Link --> Assemble
+    end
+
+    OUT["<b>.squidsquad/&lt;alias&gt;/CLAUDE.md</b><br/>assembled — what the agent reads"]
+    LINKED["<b>CLAUDE.linked.md</b><br/>linked output (audit/debug only)"]
+    CONFLICTS["<b>CLAUDE.conflicts.md</b><br/>conflict report"]
 
     Catalog[("sub-skill-catalog.md<br/>catalog of sub-skills")]
     SubSkills[("Sub-skills<br/>(today: markdown fragments<br/>target: Claude skills)")]
 
-    L1 --> Compose
-    L2 --> Compose
-    L3 --> Compose
-    L4 --> Compose
-    Compose --> OUT
+    L1 --> Link
+    L2 --> Link
+    L3 --> Link
+    L4 --> Link
+    Assemble --> OUT
+    Assemble --> LINKED
+    Assemble --> CONFLICTS
     OUT -.->|"references by name"| Catalog
     Catalog -.->|"points at"| SubSkills
 
     style OUT fill:#dfd
+    style LINKED fill:#eef
+    style CONFLICTS fill:#fef
     style Catalog fill:#dff
     style SubSkills fill:#dff
 ```
@@ -80,11 +92,22 @@ Four layers, in shipping/precedence order:
 | **L1** — Base | What ANY SquidSquad agent is. Universal baseline: identity foundation, core principles, tracker protocol, cycle runner transport, inter-agent communication via forge (§5.1.1). Every role on every install starts from here. | `references/sub-skills/common/` (sub-skills L1 references) and the L1 portion of role source files | SquidSquad maintainers (shipped) |
 | **L2** — Role | Role-specific behaviours: `pm` coordinates, `verifier` verifies, `dm` packages, `worker` implements. The role-defining contract (responsibility, role-specific instructions, role-specific tone). | `references/roles/<role>/instructions.md` + `references/roles/<role>/SOUL.md` + `references/sub-skills/roles/<role>/` | SquidSquad maintainers (shipped) |
 | **L3** — Variant (role + domain) | Per-stack or per-domain specialization of a role: a `worker` for the android stack, a `verifier` for the web stack, etc. Same role contract narrowed to a domain. | `references/roles/<role>/<domain>/` (e.g. `roles/worker/android/`, `roles/verifier/web/`) | SquidSquad maintainers (shipped) |
-| **L4** — Project (per-install + role-class) | Project-local customizations of one role-class for this install. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context, identity overlays. (Does NOT include `vault` — L1-exclusive per §3.3.) | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
+| **L4** — Project (per-install + role-class) | **Long-living** project-local customizations of one role-class for this install. Permanent or load-bearing facts about THIS project that diverge from default SquidSquad behaviour — not short-term cycle state. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context (durable facts), identity overlays. (Does NOT include `vault` — L1-exclusive per §3.3.) | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
 
 **Each layer is *more specific* than the previous**: L1 = every agent → L2 = this role → L3 = this role + this domain → L4 = this role + this domain + this install. Cross-cutting sub-skills like `vault-protocol`, `improvement-scan`, `git-commit`, `agent-lifecycle` live in `references/sub-skills/common/` and are **referenced from** the appropriate layer (usually L1) — they aren't a layer themselves; they're shared procedures that layered instructions invoke.
 
-**Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **memory of how this project diverges from default SquidSquad behaviour**.
+**Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **long-living memory of how this project diverges from default SquidSquad behaviour** — permanent project traits, standing human preferences, and load-bearing facts. Short-term state (current phase, in-flight PRs, today's blockers, cycle counters) is **NOT** L4 — it belongs in `.squidsquad/vault/BRIEFING.md` (the working short-term summary) or the tracker itself.
+
+**L4 vs BRIEFING.md vs tracker — what goes where:**
+
+| Lifetime | Example | Where it belongs |
+|---|---|---|
+| Permanent (multi-month / project-lifetime) | "PM is documentation-only on this team"; "self-hosted: framework builds itself"; "prose-heavy work product, drift is the primary risk"; tech stack; repo URL; architecture decisions that won't change | **L4** (`.squidsquad/project/<role-class>.md`) |
+| Medium-term (weeks / project-phase) | active priorities list, recent decisions, current blockers, "we're mid-TRD-polish, not yet PRDs" | **BRIEFING.md** (`.squidsquad/vault/BRIEFING.md`) — staleness-checked every cycle |
+| Session (crash-to-crash) | the agent's own current-work checkpoint — current task, partial progress, key decisions made this session | **working-state.md** (`.squidsquad/<alias>/working-state.md`) — agent-owned crash-recovery file (see AGENT-RUNTIME §5) |
+| Short-term (cycle / task) | current cycle number, in-flight PR numbers, today's work-queue, last activity per agent | **tracker** (GitHub Issues, `.harness-state.json`) |
+
+A symptom that content is in the wrong layer: if you'd want to delete or rewrite it within a few cycles, it doesn't belong in L4.
 
 ```mermaid
 flowchart TB
@@ -111,7 +134,7 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
+- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory). It is a sibling of `.squidsquad/project/` and `.squidsquad/<alias>/`, NOT under `project/` — distinct from L4 files. **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by an optional `## Aliases` H2 section listing each install-time alias → role-class + L3 domain mapping (used by `compose.py` for alias-existence validation and by `tracker.py` for routing). It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, top-level `event-driven:` mode flag, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
 
 The two axes interact at compose time. Examples:
 
@@ -175,14 +198,18 @@ flowchart LR
         L4A["one file, multiple<br/>H2 sections — each<br/>declares an op against<br/>one slot (§3.3)"]
     end
 
-    Gather{{"compose.py deploy &lt;role&gt;<br/><br/>1. Gather all L1-L4 files for target role<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Emit each slot into its composed §"}}
+    Gather{{"<b>Link</b> (§4.1–§4.5)<br/><br/>1. Gather all L1-L4 files for target role<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Validate sub-skill refs"}}
 
     L1A & L1B & L1C --> Gather
     L2A & L2B & L2C --> Gather
     L3A --> Gather
     L4A --> Gather
 
-    Gather --> OUT[["composed<br/>CLAUDE.md"]]
+    Gather --> Linked[["linked composite<br/>per slot (in memory)"]]
+    Linked --> Asm{{"<b>Assemble</b> (§4.6)<br/><br/>per-slot agent rewrite<br/>higher L wins on conflict<br/>preserve sub-skill refs + step IDs"}}
+    Asm --> OUT[["composed CLAUDE.md<br/>(assembled — agent reads this)"]]
+    Asm -.-> CR[["CLAUDE.conflicts.md<br/>(audit)"]]
+    Linked -.-> LinkedFile[["CLAUDE.linked.md<br/>(audit/debug only)"]]
 
     subgraph Sections["Six composed sections (§5)"]
         direction TB
@@ -300,11 +327,11 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 | Slot | Legal ops | Notes |
 |---|---|---|
 | `identity` | append only | the slot is short prose; project additions go at the end. **Universal prohibitions** (the "Boundaries" sub-section per §5.1 + §6.3) are part of this slot — L4 may `append` new universal prohibitions ("in this project, no agent ever X") but cannot remove or modify the shipped L1-L3 Boundaries content. See `l4-curation` for the curation dialog. **Boundaries sub-section is L1-only and immutable from L4** — its content (universal prohibitions shipped with the framework) cannot be removed, reordered, or replaced by L4 ops. Project-specific universal prohibitions are added via L4 `append` to Identity, which appends content *after* the Boundaries sub-section. L4 cannot insert between Identity prose and the Boundaries list. |
-| `responsibility` | append + replace (whole-slot) | role-boundary prose has no step IDs, so step-targeted ops do not apply; `replace` swaps the entire L1-L3 responsibility block for the L4 body |
+| `responsibility` | append OR replace (whole-slot) — mutually exclusive in a single L4 file | role-boundary prose has no step IDs, so step-targeted ops do not apply. **Whole-slot `replace` is terminal**: if `### replace` appears under `## Responsibility`, no other ops are permitted in that slot for the same L4 file. Multiple `### replace` blocks or mixing `### append` with a whole-slot `### replace` is a validation error (see §4.2 step 2.i). `append`-only is the default; `replace` swaps the entire L1-L3 responsibility block for the L4 body. |
 | `soul` | **append only** | no targeted ops; see §3.4 for semantic-merge precedence |
 | `instructions` | append + insert-before + insert-after + replace (step-targeted only) | the primary surface for behaviour customization; whole-slot `replace` is forbidden (the slot has step IDs and must target one) |
-| `project-context` | append only | L1-L3 do NOT author this slot (L4-exclusive). Compose rejects any L1-L3 source file with `slot: project-context` frontmatter. L4 entries seeded by installer Phase 1 + accumulated at runtime by `l4-curation`. (No cross-install layer can know about a specific project — see §5.5.) |
-| `vault` | N/A (L1-exclusive — L4 cannot contain a `## Vault` section at all) | L2 and L3 also do NOT contribute `slot: vault` fragments. (L1 fragments still compose via the normal `(slot, ordinal)` ordering — that's fragment combination, not an op.) The vault contract is framework-owned (PARAG model, entity types, wikilink grammar, confidence levels) — see [`VAULT-ARCH.md`](VAULT-ARCH.md). Compose rejects any L2/L3/L4 source file with `slot: vault` frontmatter. Guardrail (2026-05-29): per-role / per-domain / per-project customization is currently disallowed to keep the vault contract stable; revisit if a concrete customization pattern emerges. See G4. |
+| `project-context` | append only | **L4-only slot** — L1-L3 cannot author this slot (no cross-install layer can know about a specific project — see §5.5). Compose rejects any L1-L3 source file with `slot: project-context` frontmatter. L4 entries seeded by installer Phase 1 + accumulated at runtime by `l4-curation`. |
+| `vault` | N/A (L1-exclusive — L4 cannot contain a `## Vault` section at all) | **Scope of "L1-exclusive"**: refers to *the composed `## Vault` section text in CLAUDE.md* — the short framework-shipped slot describing the vault contract (PARAG model, entity types, wikilink grammar, confidence levels). It does NOT refer to the on-disk vault knowledge store at `.squidsquad/vault/`, which is read/written at runtime by agents via vault sub-skills (see `references/sub-skills/common/vault-protocol.md` and VAULT-ARCH). The "Legal ops" column reflects what L4 H3 blocks may target; for vault specifically, this differs from other "no legal ops" rows — vault sections in L4 are *structurally forbidden*, not just op-restricted. Compose rejects any L2/L3/L4 source file with `slot: vault` frontmatter. (L1 fragments still compose via the normal `(slot, ordinal)` ordering — that's fragment combination, not an op.) Guardrail (2026-05-29): per-role / per-domain / per-project customization is currently disallowed to keep the vault contract stable; revisit if a concrete customization pattern emerges. See G4. |
 
 Compose **must reject** any L4 file whose section structure violates these constraints. Examples of rejections: a `### replace` (any form) H3 under `## Soul`; a bare `### replace` (no target) under any slot except `## Responsibility`; a step-targeted `### replace step:cycle/<step-id>` under `## Responsibility` (no step IDs to target there); any `## Vault` section in an L4 file (vault is L1-exclusive — see §5.6 + G4). Compose **also rejects** any L1-L3 source file that declares `slot: project-context` (Project Context is L4-exclusive — see §5.5), and any L2/L3/L4 source file that declares `slot: vault` (Vault is L1-exclusive — see §5.6).
 
@@ -362,7 +389,18 @@ flowchart TB
 
 ## 4. Compose pipeline behaviour
 
-### 4.1 Literal L1-L3 merge
+Compose is a **two-stage compiler**: **link** then **assemble**.
+
+| Stage | What it does | Determinism |
+|---|---|---|
+| **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. |
+| **Assemble** (§4.6) | Each linked slot body is rewritten by an agent into a single coherent voice — eliminates contradictions, conditional negations, awkward insertions left over from op layering. Produces the final agent-consumable **assembled** prose. | Stochastic on first run; cached by `(linked-body, slot-purpose, model-id)` hash, so deterministic from the caller's POV across re-deploys with unchanged inputs. |
+
+Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). The **linked** output is preserved as a sibling artifact (`.squidsquad/<alias>/CLAUDE.linked.md`) for audit, debugging, and fallback when the assemble pass fails. Both are git-tracked.
+
+**Why two stages**: the slot+ops model is expressive at authoring time but composes a body that can carry contradictions, conditional negations of prior content, and inserts in awkward positions. A runtime agent reading the linked output would have to mentally reconcile all of that on every cycle — wasting context and creating ambiguity. The assemble pass collapses the layered linked output into a single coherent voice once at deploy time, so the runtime cost is zero.
+
+### 4.1 Link: Literal L1-L3 merge
 
 Compose processes L1-L3 deterministically:
 
@@ -375,16 +413,16 @@ The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad
 
 **Why references and not inlining**: today's behavior inlined sub-skill bodies via `{{include}}` directives, producing 50KB+ composed CLAUDE.md files where most content was duplicated sub-skill text. Under v2, composed CLAUDE.md is the thin orchestration (5–10KB) and the model invokes sub-skills via the Skill tool when their description matches the situation. The transition is staged — see §10 migration plan.
 
-### 4.2 Creative L4 application
+### 4.2 Link: Creative L4 application
 
 After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role-class>.md` (the role-class being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
 
 1. Parse the L4 file. Top-level H2 sections name the slot: `## Identity` / `## Responsibility` / `## Soul` / `## Instructions` / `## Project Context` / `## Vault`. Sections may appear in any order; missing sections are skipped.
 2. For each slot section present, apply ops in this order to the L1-L3 base for that slot:
    1. **Whole-slot replace (responsibility only).** If the slot is `responsibility` and the section contains a bare `### replace` (no `step:` target), apply it first — the L4 H3 block body replaces the entire L1-L3 responsibility base. Whole-slot replace is **terminal**: no other ops are applied to that slot in this L4 file (multiple `### replace` blocks under `## Responsibility` is a validation error; mixing whole-slot replace with `### append` under the same `## Responsibility` is a validation error). If the slot has no bare `### replace`, skip this sub-step and proceed.
-   2. All `### replace step:cycle/<step-id>` H3 blocks. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose. A replaced step retains its position in the sequence — its step ID remains a valid anchor for subsequent insert-before/insert-after ops, even if the replacement body is empty (an empty replace turns the step into a no-op anchor).
-   3. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** base (i.e., after step 2.ii completes).
-   4. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). No ordinal field; the author controls ordering by reordering H3 blocks within the source file. **Constraint for the `instructions` slot**: L4 `append` content under `## Instructions` must follow the sub-skill reference grammar (§6.2) — every appended block must contain at least one `→ run sub-skill: <name>` reference resolvable against the catalog (§4.5). Arbitrary prose without a sub-skill reference is a validation error. This preserves the thin-orchestration invariant: the composed CLAUDE.md never contains inlined sub-skill bodies, even from L4.
+   2. All `### replace step:cycle/<step-id>` H3 blocks. Each H3 targets at most one L1-L3 step; duplicate replace targets abort compose. **Semantics**: `replace` swaps the *body* of the targeted step; the **step ID and its ordinal position are preserved** as ordering anchors in the linked sequence. Subsequent `insert-before` / `insert-after` ops can still target the replaced step ID and will resolve correctly. A `### replace step:cycle/<id>` with an empty body produces a no-op anchor — the step ID remains in the sequence (and can still be targeted by later inserts) but contributes no content to the linked output.
+   3. All `### insert-before step:cycle/<step-id>` and `### insert-after step:cycle/<step-id>` H3 blocks. Positions are evaluated against the **post-replace** ordering — the step IDs from step 2.ii are still present (only their bodies changed), so inserts targeting replaced steps resolve normally. New steps introduced by `insert-before` / `insert-after` are assigned ordinals between the anchor step's ordinal and its neighbor's (using fractional ordinals internally; never exposed to the L4 author).
+   4. All `### append` H3 blocks last, in file order (the order they appear in the L4 file). `append` blocks are placed at the **end of the slot's content**, after the L1-L3 base AND after all step 2.ii / 2.iii ops have been applied. Multiple `### append` blocks land in their L4-file order. There is no mechanism to place `append` content before other L4 ops; if the author needs that, they should use `insert-before` targeting the first step in the slot. No ordinal field on `append` — the author controls ordering by reordering H3 blocks within the source file. **Constraint for the `instructions` slot**: L4 `append` content under `## Instructions` must follow the sub-skill reference grammar (§6.2) — every appended block must contain at least one `→ run sub-skill: <name>` reference resolvable against the catalog (§4.5). Arbitrary prose without a sub-skill reference is a validation error. This preserves the thin-orchestration invariant: the composed CLAUDE.md never contains inlined sub-skill bodies, even from L4.
 3. Validate:
    - every `step:` reference resolves to a real L1-L3 step ID;
    - no two `replace` H3 blocks target the same ID;
@@ -393,7 +431,7 @@ After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsqu
 
 If validation fails, compose **aborts with a diagnostic** naming the offending H3 block. No partial output is written.
 
-### 4.3 Multi-domain L4
+### 4.3 Link: Multi-domain L4
 
 L4 is not instructions-only. Project customization spans every slot:
 
@@ -409,7 +447,7 @@ L4 is not instructions-only. Project customization spans every slot:
 
 Op grammar varies per slot (see §3.3 "Per-slot op constraints"): `instructions` accepts all four ops (`append` / `insert-before` / `insert-after` / `replace`); `responsibility` accepts `append` plus a whole-slot `replace` (no step targeting); `identity` and `soul` are append-only; `project-context` is L4-exclusive append-only (L1-L3 reject); `vault` is L1-exclusive append-only (L2-L4 reject). This makes L4 the **single project-level customization mechanism** — there is no other place where deployed projects add or override behaviour — *except* the vault slot, which is framework-owned for now (see §5.6 + G4).
 
-### 4.4 End-to-end pipeline
+### 4.4 End-to-end pipeline (link + assemble)
 
 The full compose run, source-walk to output-write:
 
@@ -429,15 +467,29 @@ flowchart TB
   L4Group --> L4Apply[Within each slot, apply ops:<br/>1. all replace<br/>2. all insert-before / insert-after<br/>3. all append]
   L4Apply --> Validate{Validate:<br/>L4 targets resolve?<br/>DRY ok? no orphans?}
   Validate -->|fail| Abort([Abort with diagnostic<br/>no output written])
-  Validate -->|pass| Emit[Emit composed CLAUDE.md]
-  Emit --> Write([Write .squidsquad/&lt;role&gt;/CLAUDE.md])
+  Validate -->|pass| EmitLinked["Emit linked composite<br/>(per-slot bodies in memory only)"]
+  EmitLinked --> Assemble{{"§4.6 — Assemble pass<br/>(per slot)"}}
+  Assemble --> Cache{Cache hit on<br/>hash(linked, slot, model)?}
+  Cache -->|hit| FromCache[Reuse cached<br/>assembled body]
+  Cache -->|miss| LLM[Agent rewrites linked body<br/>into coherent voice]
+  LLM -->|LLM error| AbortAsm([Abort with diagnostic<br/>no output written])
+  LLM --> AsmValidate{Preservation check:<br/>sub-skill refs +<br/>step IDs preserved?<br/>length ≥ floor?<br/>code-block parity?}
+  AsmValidate -->|fail| AbortAsm
+  AsmValidate -->|pass| StoreCache[Store in cache]
+  FromCache --> WriteAtomic
+  StoreCache --> WriteAtomic
+  WriteAtomic{{"Atomic write:<br/>CLAUDE.md + CLAUDE.linked.md +<br/>CLAUDE.conflicts.md"}}
+  WriteAtomic --> Done([Done — agents read CLAUDE.md])
   style Abort fill:#fdd
-  style Write fill:#dfd
+  style AbortAsm fill:#fdd
+  style Done fill:#dfd
 ```
 
-The pipeline is fully deterministic: given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the composed output is bit-stable.
+`CLAUDE.linked.md` is written **only on full success**, alongside `CLAUDE.md` and `CLAUDE.conflicts.md`, in a single atomic write. There is no scenario where `CLAUDE.linked.md` exists without a successful `CLAUDE.md`.
 
-### 4.5 Sub-skill reference resolution
+**Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role, wake-mode, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose.
+
+### 4.5 Link: Sub-skill reference resolution
 
 Because composed CLAUDE.md emits sub-skill *references* (not bodies) in the `instructions` slot, compose must validate that every reference resolves to a real sub-skill. The validation runs after L4 overlay and before output emission:
 
@@ -446,7 +498,7 @@ Because composed CLAUDE.md emits sub-skill *references* (not bodies) in the `ins
    - Every reference must have a matching catalog entry. Sub-skills not indexed in the catalog are *not* valid references, even if a same-named file exists on disk.
    - The catalog's recorded **source path** for that entry must point at an existing file. Today that path is `references/sub-skills/<...>/<name>.md` (plain markdown fragments). Once the project-scoped Claude-skills installer ships (see §4.5.1 Gap callout below), the installer is responsible for materializing each catalog entry as a real Claude skill under the project's local `.claude/skills/` — at that point the catalog's source path stays the same (the `references/` source is authored once, then installed per-project).
 3. **Reject** if any reference fails either check above (no catalog entry OR catalog entry's source path missing on disk): abort with a diagnostic naming the offending step ID and unresolved sub-skill name. No partial output is written.
-4. **Catalog drift check**: every catalog entry must resolve to a real source file on disk, AND every sub-skill source file under `references/sub-skills/` must have a catalog entry. If either side is out of sync, compose aborts with a diagnostic (same failure mode as an unresolved reference above) — this is an in-pipeline check, distinct from the §8 source-output sync gates which guard the orthogonal "composed CLAUDE.md is stale relative to its L1-L3 sources" failure mode.
+4. **Catalog drift check**: every catalog entry must resolve to a real source file on disk, AND every sub-skill source file under `references/sub-skills/` must have a catalog entry. If either side is out of sync, compose emits a warning listing the drifted entries (catalog rows without a source file and/or source files without a catalog row), then aborts with a diagnostic. The warning before abort is intentional — it gives the operator a complete drift report rather than just the first unresolved name. This is an in-pipeline check, distinct from the §8 source-output sync gates which guard the orthogonal "composed CLAUDE.md is stale relative to its L1-L3 sources" failure mode.
 
 ```mermaid
 flowchart TB
@@ -494,6 +546,138 @@ The composed CLAUDE.md emits `→ run sub-skill: <name>` references in the `inst
 - Re-install / version-bump semantics, frontmatter generation, and skill-tool argument grammar all need to be specified in INSTALLER-ARCH before implementation.
 
 Tracker reference: [#10362](https://github.com/WallyDoodlez/SquidSquad/issues/10362) — installer spec follow-up filed against this PR (depends on #10359 merge).
+
+### 4.6 Assemble: coherence rewrite
+
+After the link stage produces a per-slot linked composite, each non-skipped slot's linked body passes through the **assemble pass** — an agent-driven rewrite that collapses the layered linked output into a single coherent voice the runtime agent can consume without on-the-fly reconciliation.
+
+**Motivation.** The slot+ops model in §4.2 is expressive: an L4 author can `replace` a step, `insert-before` to add a precondition, `insert-after` to add a follow-up, and `append` to extend the slot. After all ops land, the linked composite for a slot can look like: original step → "but first check Y (insert-before)" → original body → "and afterward Z (insert-after)" → "but only when W (append)". A runtime agent reading this has to mentally resolve "what does this slot actually tell me to do?" on every cycle. The assemble pass does that reconciliation **once at deploy time** and writes the resolved prose to disk.
+
+**When it runs.** Compose-time only, after all ops are applied and after sub-skill reference resolution (§4.5) validates the linked composite. The assemble pass never runs at agent runtime — the runtime artifact (`CLAUDE.md`) is the assembled output.
+
+**Per-slot scope.**
+
+| Slot | Assemble pass | Why |
+|---|---|---|
+| `identity` | ✅ runs | L4 appends can layer onto Boundaries; rewriting unifies tone |
+| `responsibility` | ✅ runs | L4 may replace whole-slot or append; rewrite reconciles |
+| `soul` | ✅ runs | L1 + L2 + L3 + L4 appends produce stacked dispositions; rewrite collapses to coherent voice |
+| `instructions` | ✅ runs | Op stack here is the highest-volume; rewrite is most impactful |
+| `project-context` | ❌ skipped | Append-only chronological facts; rewriting would lose timeline + supersession semantics (per §5.5 monotonic append) |
+| `vault` | ❌ skipped | L1-only short prose describing the vault contract; nothing layered to reconcile |
+
+**Skipped-slot behaviour.** For a slot whose `Assemble pass` is ❌, the assembled output contains the linked body **verbatim** — the assemble pass emits the linked content for that slot unchanged into the final `CLAUDE.md`. No LLM call, no preservation check, no conflict detection for that slot. This preserves the monotonic-append semantics of Project Context (chronological order + supersession) and the L1-only stability of Vault. Skipped slots do not contribute entries to `CLAUDE.conflicts.md`.
+
+**Hard preservation guarantees.** The assemble pass MUST preserve, verbatim, in the assembled output:
+
+- Every `→ run sub-skill: <name>` reference from the linked input (catalog-bound — see §4.5; dropping one would break runtime sub-skill resolution)
+- Every `step:cycle/<step-id>` reference (step IDs are stable contracts across layers per §6.1)
+- All literal code blocks, command invocations, and file paths (these are not paraphraseable)
+
+The pass MUST NOT:
+
+- Inline sub-skill bodies (would re-introduce v1's bloat; the catalog gate in §4.5 makes sub-skill bodies live elsewhere)
+- Add new sub-skill references not present in the linked input (would bypass catalog validation)
+- Add or rewrite step IDs (would break L4 ops in subsequent deploys)
+- Drop content silently (governed by length floor below)
+
+**Conflict resolution — higher L wins.** When the assemble pass encounters two pieces of linked prose that materially contradict each other (e.g., L2 says "verify pending-test items each cycle" and L4 appends "verifier handles all verification — PM does not"), the **higher layer's prose prevails** in the assembled output. Layer precedence (highest to lowest): **L4 > L3 > L2 > L1**. This matches the natural reading of the layered model: later/more-specific layers refine earlier/more-general ones, and L4 is the project's standing override. The link stage already places higher-layer content later in the linked body via `(slot_index, ordinal)` sort; the assemble pass collapses the resulting "do X / actually don't do X" into a single coherent statement aligned with the higher-layer position. The lower-layer prose is not silently erased — see the conflict report below.
+
+```mermaid
+flowchart TB
+    Start([Per-slot linked body]) --> Scan[Assembler scans for<br/>materially contradicting prose<br/>between layers]
+    Scan --> Found{Conflict<br/>detected?}
+    Found -->|No| Coherent[Rewrite into<br/>coherent voice]
+    Found -->|Yes| Compare["Compare layer of conflicting prose<br/>(L1 / L2 / L3 / L4)"]
+    Compare --> PrecRule{"Higher L wins<br/>(L4 &gt; L3 &gt; L2 &gt; L1)"}
+    PrecRule --> AlignHi["Align assembled output with<br/>higher-L prose (lower-L dropped)"]
+    AlignHi --> Record["Record in CLAUDE.conflicts.md:<br/>slot, layers, both quotes, why, resolution"]
+    Record --> Coherent
+    Coherent --> Validate{Preservation<br/>checks pass?<br/>(sub-skill refs, step IDs,<br/>length floor, code-blocks)}
+    Validate -->|No| AbortPath([Abort with diagnostic<br/>no artifacts written])
+    Validate -->|Yes| Emit([Atomic emit:<br/>CLAUDE.md + CLAUDE.linked.md +<br/>CLAUDE.conflicts.md])
+    style AbortPath fill:#fdd
+    style Emit fill:#dfd
+    style Record fill:#fef
+```
+
+**Conflict report.** After the assemble pass completes for a role-class, compose emits a conflict report at `.squidsquad/<alias>/CLAUDE.conflicts.md` enumerating every conflict the assembler resolved. The report is the operator's audit surface for verifying that higher-L overrides did what the project intended.
+
+Conflict report format (markdown):
+
+```markdown
+# Compose Conflict Report — <role-class>
+Generated: <ISO-8601 timestamp>
+Compose run: <commit SHA of the source tree>
+Assemble model: <model-id>
+Total conflicts resolved: <N>
+
+## CONFLICT-001 — slot: <slot> — precedence: L<winner> > L<loser>
+- **L<loser> source**: `<path>` (ordinal <N>)
+  > <verbatim quote from L<loser>, max 200 chars + ellipsis>
+- **L<winner> source**: `<path>` (ordinal <N>[ + op: <op-type>])
+  > <verbatim quote from L<winner>, max 200 chars + ellipsis>
+- **Why this is a conflict**: <one-sentence assembler explanation>
+- **Resolution in assembled output**: <one-sentence description of what the assembled prose says>
+
+## CONFLICT-002 — slot: ...
+...
+```
+
+If zero conflicts were detected during the run, the report file is still emitted with `Total conflicts resolved: 0` and no CONFLICT sections — its presence confirms the assembler ran cleanly. The report is git-tracked alongside `CLAUDE.md` and `CLAUDE.linked.md`; PR review against an L4 change inspects this file to confirm overrides land as intended.
+
+**L4-curation should pre-empt conflicts at authoring time.** The `l4-curation` sub-skill (§7.1, §7.7) authors L4 entries from human conversation. Before writing a new L4 op, it MUST read the linked composite for the target slot and check whether the new entry would conflict with existing L1-L3 prose. If a conflict is detected:
+
+- **Reframe** the L4 entry to refine rather than contradict (preferred) — e.g., instead of "PM does not verify pending-test items" appended at L4, the curation step recognizes this contradicts L2's "verify pending-test items" and either rewords as `### replace step:cycle/pickup` swapping the body cleanly, OR escalates to the human for explicit confirmation that an override is intended.
+- **Convert to `### replace`** if the human confirms the override is intentional — replace is more honest than `append` for "we don't do this anymore" semantics, and the link stage handles it deterministically (no LLM interpretation needed at runtime).
+- **Surface to the human** if the curation step cannot determine whether the contradiction is intentional.
+
+In other words: the assembler's conflict-resolution rule is the **compose-time enforcement**; `l4-curation` is the **authoring-time discipline**. They share the same precedence rule (higher L wins) so authoring intent matches compose-time resolution. A conflict report with many entries on a compose run is a signal that L4 curation is letting too many ambiguous overrides through and should be tightened — curation's job is to make conflicts rare, not to rely on the assembler to clean them up.
+
+**Post-pass validation.** Before accepting the assembled output, the pipeline checks:
+
+1. **Sub-skill ref set equality** — extract all `→ run sub-skill: <name>` references from both linked and assembled bodies; the multisets must be identical.
+2. **Step ID set equality** — same check for `step:cycle/<id>` references.
+3. **Length floor** — `len(assembled) >= 0.8 * len(linked)` (configurable in `config.md` as `Assemble Length Floor`; default 0.8). Catches silent content drop.
+4. **Code-block parity** — count of fenced code blocks and inline backticks should match within ±10% (catches accidental stripping of literal blocks).
+
+If any check fails, **compose aborts with a diagnostic**. There is no fallback to the linked body for runtime: shipping inconsistent prose to the agent on every cycle would be worse than failing the deploy. The operator fixes the source of the failure (e.g., re-tries the LLM call, removes a malformed L4 op, adjusts the length floor) and re-runs compose. The previously-written `CLAUDE.md` (from the prior successful compose run, if any) is left untouched, so any running agents continue with the last good output until compose succeeds again.
+
+**Caching.**
+
+- Cache key: `SHA256(linked_body || slot_name || slot_purpose || model_id || prompt_version)`.
+- Cache store: `.squidsquad/<alias>/.assemble-cache/` (git-tracked alongside the assembled output, so re-deploys on the same commit are free).
+- Cache invalidation is automatic via the hash — any change to the linked body, the slot's purpose statement (from this spec), the model, or the prompt produces a new key.
+
+**Model.** Default `sonnet` (cost/quality balance for prose rewriting). Configurable per install in `config.md` as `Assemble Model:` (`sonnet`, `opus`, `haiku`). Always temperature ≤ 0.3 to reduce first-run drift.
+
+**Audit artifacts.** Compose emits three outputs to `.squidsquad/<alias>/`:
+
+- `CLAUDE.md` — the **assembled** output. This is what the runtime agent reads. Always present.
+- `CLAUDE.linked.md` — the **linked** output. **Audit / debug only — NOT a runtime fallback.** Runtime always reads `CLAUDE.md`. Always present on success.
+- `CLAUDE.conflicts.md` — the **conflict report** from the assemble pass (see format above). Always present, even when zero conflicts (proof the pass ran). PR review against an L4 change inspects this file to confirm overrides resolved as intended.
+
+PR review compares the two when an L4 op lands; if the assembled output drops or distorts an op's intent, the reviewer catches it before merge. The assemble pass is not a black box.
+
+**Failure mode summary.** Any failure during compose aborts — there is no degraded-output path. The assembler runs inside the agent session that started compose; if the agent's LLM is unavailable, compose itself doesn't start, so there is no "agent partially works" state to fall back from. If the assembler runs but its output fails a preservation check, the linked body is **not** silently published as the runtime artifact — that would ship inconsistent prose to the agent on every cycle. Better to fail loud and have the operator re-run.
+
+| Failure | Result | Compose succeeds? |
+|---|---|---|
+| LLM call errors (timeout, rate limit, network) during the assemble pass | Abort with diagnostic; no `CLAUDE.md` written | **No** |
+| Sub-skill ref set inequality (assembled ≠ linked) | Abort with diagnostic | **No** |
+| Step ID set inequality (assembled ≠ linked) | Abort with diagnostic | **No** |
+| Length below floor | Abort with diagnostic | **No** |
+| Code-block parity check fails | Abort with diagnostic | **No** |
+| Cache corruption | Re-run LLM call once; if that also fails, abort | **No** |
+| Conflict report write fails (disk full, permission) | Abort with diagnostic | **No** |
+| Conflict resolution violates precedence (assembler picks lower L) | Abort with diagnostic — this is a hard contract bug | **No** |
+| Link stage (§4.1–§4.5) fails | Abort with diagnostic; no assemble pass attempted | **No** |
+
+When compose aborts on an assemble-side failure, the previously-written `CLAUDE.md` (from the prior successful compose run, if any) is **left untouched** on disk — the operator's running agents continue reading the last good output until compose succeeds. The current compose run produces no partial artifacts: no half-written `CLAUDE.md`, no `CLAUDE.linked.md` orphan, no `CLAUDE.conflicts.md` from the aborted run. The audit-artifact triple (`CLAUDE.md` + `CLAUDE.linked.md` + `CLAUDE.conflicts.md`) is emitted **atomically** on success or not at all.
+
+The link stage and the assemble stage are both load-bearing under this contract. `CLAUDE.linked.md` is an audit/debug artifact, NOT a runtime fallback — runtime always reads the assembled `CLAUDE.md`. If an operator needs to bypass the assemble pass for a specific install (e.g., during initial bring-up before the LLM gateway is configured), set `Assemble: no` in `config.md` — compose then skips the assemble stage entirely and emits the linked body as `CLAUDE.md` (with no `CLAUDE.linked.md` sibling, since they'd be identical, and no `CLAUDE.conflicts.md`, since no conflict-detection ran). This is an explicit opt-out, not a degradation.
+
+**First-run determinism trade-off.** The first deploy of unchanged inputs is stochastic — two operators deploying at the same commit may get prose that differs in wording. After the first deploy, the cached output is committed to git and subsequent deploys reuse it; the system is deterministic from that point forward for those inputs. This is the irreducible trade-off for collapsing layered linked output into a single coherent voice. Operators who want bit-stable assembled output across fresh deploys can disable the assemble pass via `Assemble: no` in `config.md` (compose then emits the linked body as `CLAUDE.md` directly, with no `CLAUDE.linked.md` sibling since the two would be identical).
 
 ---
 
@@ -686,13 +870,15 @@ Project-shaped descriptive facts — *what is true about this project / role*, n
 - **Domain / audience** — what this project is, who uses it, what kind of project it is.
 - **Repositories of record, external systems, sensitive constraints, project-specific tone-or-language notes** — anything that's a project-level fact the agent needs to know but isn't an instruction.
 
+**Long-living, not short-term memory.** Project Context (and L4 as a whole) is for **permanent or load-bearing facts** about this project — facts whose lifetime is measured in months or the project lifetime, not days or cycles. Short-term state (current phase, in-flight PR numbers, today's blockers, cycle counters, last-shipped-version) is **not L4**: it belongs in `.squidsquad/vault/BRIEFING.md` (the working short-term summary) or the tracker. See [§2](#2-the-l1-l4-model-recap-from-9925) for the lifetime-to-storage mapping. A simple test: if you'd want to rewrite or delete an L4 line within a few cycles, it doesn't belong in L4.
+
 **Authoring — L4-exclusive.** Project Context is the only slot that L1-L3 do NOT author. The reason is structural: L1 ships universal-across-all-installs, L2 ships role-across-all-installs, L3 ships variant-across-all-installs — none of those layers knows about any specific project, so none of them can author "what is true about *this* project." Anything that *seems* like cross-install project-context content (e.g., "PMs typically work in markdown") is actually role-identity content (Identity slot) or role-contract content (Responsibility) or tooling guidance (Instructions via a sub-skill) — not Project Context.
 
 A compose-pipeline validation rule (per [§3.3](#33-l4-operations-creative-overlay) per-slot constraints) rejects any L1-L3 source file that declares `slot: project-context` in its frontmatter. The slot identifier remains valid; it just has no authoring location above L4.
 
 **Where Project Context comes from** — two complementary sources, both at L4:
 
-1. **Installer-seeded at install time** — the installer's Phase 1 project-intake conversation collects domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes (per [INSTALLER-ARCH §4.4 Phase 1](INSTALLER-ARCH.md)). At Phase 5 the installer writes those answers into the `## Project Context` block of each role-class L4 file (`.squidsquad/project/<role-class>.md`). Every fresh install starts with a non-empty Project Context derived from the human's intake answers.
+1. **Installer-seeded at install time** — the installer's Phase 1 project-intake conversation collects domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes (per [INSTALLER-ARCH §4.4 Phase 1](INSTALLER-ARCH.md)). At Phase 5 the installer writes those answers into the `## Project Context` block of each role-class L4 file (`.squidsquad/project/<role-class>.md`) as the slot's first `### append` H3 block — the seed write follows the same append-only grammar that subsequent runtime curation uses, so there is no special-case exemption from the append-only constraint. Every fresh install starts with a non-empty Project Context derived from the human's intake answers; that initial content is structurally the slot's append-entry #1, and `l4-curation` appends entry #2, #3, etc. over the install's lifetime.
 2. **Agent-curated at runtime** — during cycles, the `l4-curation` sub-skill (§7) detects when the human says something project-context-shaped ("we deploy through Buildkite, not GH Actions"), elicits scope + rationale, and appends to the appropriate role-class L4 file's `## Project Context` block. This is the durable accumulation path for facts that surface organically after install.
 
 L4 op grammar for this slot is **`append`-only** per §3.3 — no targeted ops, no whole-slot replace. Project Context grows monotonically: every new fact is appended in chronological order. The slot has no built-in supersede mechanism — older facts remain in the composed output. If a project fact changes (e.g., the team migrates from GH Actions to Buildkite), the agent appends the new fact; the older entry stays as historical context. At runtime, the agent reads the slot top-to-bottom and treats later-appearing facts as more current — recency in the composed file order is the only ordering signal. If a project needs to retract a fact entirely (rare), that is a curation request the human files against the source `## Project Context` block directly, not via `l4-curation`.
@@ -1057,6 +1243,14 @@ These are project-specific instruction changes. They don't belong in L1-L3 (whic
 
 The `l4-curation` sub-skill defines the detection patterns (durable vs one-off, customization vs feature request) and the elicitation dialog (role + bucket + why + edge cases + draft + approval). By the time §7.2's decision tree fires, the curation sub-skill has already produced a well-scoped request with an identified bucket; §7.2 just classifies the structural op.
 
+**Conflict pre-emption (paired with §4.6 assemble-pass conflict resolution).** Before drafting any new L4 op, `l4-curation` MUST read the linked composite for the target slot and check whether the new entry would materially contradict existing L1-L3 prose. The assemble pass (§4.6) WILL detect such conflicts at compose time and prefer the higher layer, but a clean L4 author avoids creating them in the first place. When `l4-curation` detects a likely conflict, it must:
+
+- **Prefer reframing** as `### replace step:cycle/<id>` (or whole-slot `### replace` for Responsibility) — replace is the honest op for "we don't do this anymore" semantics; the link stage resolves it deterministically with no LLM interpretation needed at runtime.
+- **Reword to refine, not contradict**, when the human's intent is genuinely additive ("we deploy through Buildkite, not GH Actions" → frame as project-context fact rather than instructions-slot negation).
+- **Surface the conflict to the human** when intent is ambiguous, with the linked prose quoted on both sides and the proposed reframings as choices.
+
+A conflict report (`.squidsquad/<alias>/CLAUDE.conflicts.md`) with many entries on the next compose run is a signal that `l4-curation` is letting too many ambiguous overrides through and should be tightened. The two systems are paired: curation pre-empts at write time; assemble resolves at compose time. Both name the same precedence rule (higher L wins) so the agent's authoring-time decision matches the assembler's runtime resolution.
+
 ### 7.2 Agent decision tree
 
 When the agent receives a new instruction, it walks this decision tree:
@@ -1117,7 +1311,7 @@ Specialized presets like `software-dev/fe-be-split` instead install `pm`, `fe-wo
 - `.squidsquad/project/verifier.md`
 - `.squidsquad/project/dm.md`
 
-Each class is independent — no fallback or inheritance from a generic `worker.md`. The filename IS the role-class. `compose.py deploy <role-class>` reads exactly one L4 file when composing that class. The file is created on the first project customization for that class and grows over time as more customizations are added.
+Each class is independent — no fallback or inheritance from a generic `worker.md`. The filename IS the role-class. `compose.py deploy <role-class>` reads exactly one L4 file when composing that class. The file is **created at install time by the installer** (see [§5.5](#55-project-context) and INSTALLER-ARCH §4.8 Phase 5 step 4 — the installer seeds the `## Project Context` block from Phase 1 intake answers; other slots start empty). The file then **grows over time** as more customizations are added via the runtime L4 write flow (`l4-curation`, §7).
 
 Internal structure mirrors the composed-output grammar (§5): top-level H2 sections name the slot; under `## Instructions`, H3 blocks name the op + target:
 
@@ -1154,7 +1348,7 @@ Once a week, run the security smoke tests as part of the cycle.
 ...project-specific facts...
 ```
 
-> **Note**: this example does not include a `## Vault` H2 — vault is L1-exclusive and cannot appear in L4 (see §3.3 and §5.6). Compose rejects any L4 source file that declares `## Vault` content.
+> **No `## Vault` section in L4** — the example deliberately omits one. `## Vault` is L1-exclusive per §3.3 / §5.6; a `## Vault` H2 in any L4 source file is a compose-time validation error. The example shows the four slots that L4 *may* author: Identity, Soul, Instructions, Project Context.
 
 Each H3 op-block carries an optional HTML-comment metadata trailer (`authored-by`, `authored-at`, `source-conversation`) for the audit trail. The trailer is invisible to compose's parser but preserved in the file for human review and `git blame` traceability. Compose does not require or validate the metadata; only the section structure (H2 slot, H3 op + target) is load-bearing.
 
@@ -1164,7 +1358,7 @@ Before any L4 write commits:
 
 1. **Decision-tree audit**: a deepseek-class model reviews the agent's classification (replace vs insert vs append) and rejects if the call is wrong.
 2. **Mini-CQ**: the agent confirms the L4 write back to the human in conversation ("I'm adding an `insert-before step:cycle/file-bug` step for the incidents-directory check. OK?"). Confirmation triggers the commit; rejection aborts.
-3. **Compose dry-run**: compose runs in `--check` mode to validate that the new L4 file resolves cleanly (no orphan target, no DRY violation). Failure aborts before commit.
+3. **Compose dry-run**: compose runs in `--check` mode to validate that the new L4 file resolves cleanly (no orphan target, no DRY violation). Failure aborts before commit. The dry-run validates against the **to-be-committed** tree (staged L4 file + current L1-L3 on `HEAD`), so the post-commit recompose in §7.5 sees the same inputs the dry-run saw — assuming L1-L3 sources don't change between dry-run and commit. **Failure recovery for that narrow race**: if the post-commit recompose fails (e.g., another agent merged a concurrent PR that renamed a target step ID), the writing agent reverts the L4 commit with `git revert`, alerts the human via tracker comment with the compose diagnostic, and aborts the cycle. The agent never leaves a broken composed CLAUDE.md on `main`.
 
 Aligns with the existing approval-gate philosophy for autonomous writes (#8997 — L4 autonomous-write design).
 

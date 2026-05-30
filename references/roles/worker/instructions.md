@@ -1,4 +1,11 @@
-{{runtime: souls/worker}}
+---
+slot: instructions
+ordinal: 20
+roles: [worker]
+step-ids: [step:cycle/triage-issues, step:cycle/implement]
+---
+
+<!-- L2 Worker instructions — H3 ops target L1 base step IDs defined in references/roles/instructions.md -->
 
 # SquidSquad — [ROLE] Lead
 
@@ -101,3 +108,27 @@ You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate conti
 ---
 
 {{include: common/prohibitions}}
+
+---
+
+<!-- v2 compose-model slot ops — H3 ops targeting L1 base step IDs -->
+
+### insert-after step:cycle/resume
+
+#### step:cycle/triage-issues
+
+→ run sub-skill: triage-issues
+
+Scan this role's open issues for bug reports. For each: investigate root cause, determine if it's in this domain, file cross-domain if not. Bugs are auto-approved; pick up immediately.
+
+### append
+
+#### step:cycle/implement
+
+→ run sub-skill: implement-tasks
+
+Implement the current approved task or bug fix. Write code, write unit tests, run full test suite. Confirm all ACs are observable. Transition to pending-test only when tests are green and every AC has evidence.
+
+→ run sub-skill: git-commit
+
+Commit with descriptive message referencing the issue number and short description.
