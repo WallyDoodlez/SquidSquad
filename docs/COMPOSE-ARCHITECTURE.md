@@ -110,7 +110,7 @@ flowchart TB
 
 Compose has **two distinct input axes**, easy to conflate:
 
-- **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role>.md` (the per-role-class L4 file).
+- **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
 - **`.squidsquad/config.md`** (prose references in this doc always use the full path; code identifiers like `config.get_wake_mode()` are not subject to this rule) — the install's **configuration**, not a content layer. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, `event-driven:` (mode flag), `Improvement Scanning:`, feature toggles. Compose reads it to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
 
 The two axes interact at compose time. Examples:
@@ -128,7 +128,7 @@ The two axes interact at compose time. Examples:
 
 Per-install customization paths therefore split:
 
-- **Project-local content changes** (new instructions, role-boundary additions, soul tweaks, project facts) → L4 file (`.squidsquad/project/<role>.md` with H2 slot sections)
+- **Project-local content changes** (new instructions, role-boundary additions, soul tweaks, project facts) → L4 file (`.squidsquad/project/<role-class>.md` with H2 slot sections)
 - **Install configuration changes** (different Workers roster, different cycle interval, mode flip, feature toggle) → `.squidsquad/config.md`
 
 A project that wants to *describe* its team differently in agent prompts adds an L4 `## Identity` `### append` block. A project that wants to *change the install's actual roster* (e.g. add an `fe-worker` class) edits `config.md`'s Workers list and re-runs `compose.py deploy-all`. Both can coexist.
@@ -299,7 +299,7 @@ Not every op is legal on every slot. The soul slot is identity, not instruction,
 
 | Slot | Legal ops | Notes |
 |---|---|---|
-| `identity` | append only | the slot is short prose; project additions go at the end |
+| `identity` | append only | the slot is short prose; project additions go at the end. **Universal prohibitions** (the "Boundaries" sub-section per §5.1 + §6.3) are part of this slot — L4 may `append` new universal prohibitions ("in this project, no agent ever X") but cannot remove or modify the shipped L1-L3 Boundaries content. See `l4-curation` for the curation dialog. |
 | `responsibility` | append + replace (whole-slot) | role-boundary prose has no step IDs, so step-targeted ops do not apply; `replace` swaps the entire L1-L3 responsibility block for the L4 body |
 | `soul` | **append only** | no targeted ops; see §3.4 for semantic-merge precedence |
 | `instructions` | append + insert-before + insert-after + replace (step-targeted only) | the primary surface for behaviour customization; whole-slot `replace` is forbidden (the slot has step IDs and must target one) |
@@ -375,7 +375,7 @@ The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad
 
 ### 4.2 Creative L4 application
 
-After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role>.md` (the role being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
+After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role-class>.md` (the role-class being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
 
 1. Parse the L4 file. Top-level H2 sections name the slot: `## Identity` / `## Responsibility` / `## Soul` / `## Instructions` / `## Project Context` / `## Vault`. Sections may appear in any order; missing sections are skipped.
 2. For each slot section present, apply ops in this order to the L1-L3 base for that slot:
@@ -590,7 +590,7 @@ The composed section stacks all L1-L3 responsibility content in `(slot, ordinal)
 
 > **Whole-slot `replace` on responsibility is an escape hatch, not a default tool.** Unlike `soul` (which is append-only with §3.4 semantic-merge precedence so shipped persona stays on disk), an L4 `### replace` on `## Responsibility` **silently discards the entire L1-L3 responsibility block** for that role — including L1's universal team-discipline base ("decline by routing to the correct role") and L2's role-specific does/does-NOT/why contract. The `l4-curation` elicitation dialog must surface this consequence to the human before persisting any whole-slot replace on responsibility, and route most "I want to change PM's boundaries" requests toward `append` instead. Whole-slot replace is intended for genuinely unusual installs where the shipped role contract doesn't apply (e.g. a single-human project that has no DM at all), not for incremental tweaks.
 
-Cross-reference: [`common/agent-boundaries`](../references/sub-skills/common/agent-boundaries.md) (being retired into this slot per §5.5) names the role roster every agent sees — the *team-awareness* counterpart to this slot's *self-awareness* content.
+The team-awareness baseline (role roster — who else is on the team) lives in §5.1 Identity, *not* in this slot. Responsibility is the *self*-awareness content (what THIS role does and does NOT do); Identity carries the *team*-awareness content (who other roles are). The decline-and-route discipline that formerly lived in the retired `agent-boundaries` sub-skill is folded into this slot's "does NOT do" sub-section as the rule "decline out-of-scope work by routing to the role that owns it, never by leaving it stalled."
 
 ### 5.3 Soul
 
@@ -601,7 +601,7 @@ The agent's professional identity, voice, perspective. **A regular L1-L4 slot, n
 - **L1** — universal voice baseline (e.g. "speak in first person; never invent claims you cannot verify").
 - **L2** — role-specific persona. The conventional authoring filename is `references/roles/<role>/SOUL.md`, which compose treats as **shorthand for a file with `slot: soul, ordinal: 1` frontmatter**. No magic — just a documented filename convention so the source file is easy to find. A regular `.md` with explicit `slot: soul` frontmatter under `references/sub-skills/` or `references/roles/<role>/` works identically.
 - **L3** — variant-specific persona adjustments (e.g. a frontend-specialized worker's voice). Same frontmatter mechanism.
-- **L4** — optional. Lives inside the per-role-class L4 file (`.squidsquad/project/<role>.md`) under a `## Soul` H2 section per §3.3. The legacy `*-soul-directives.md` multi-file L4 pattern is deprecated (see §7.3).
+- **L4** — optional. Lives inside the per-role-class L4 file (`.squidsquad/project/<role-class>.md`) under a `## Soul` H2 section per §3.3. The legacy `*-soul-directives.md` multi-file L4 pattern is deprecated (see §7.3).
 
 **Op constraints (per §3.3):** L4 Soul is **`append` only**. No `### insert-before` / `### insert-after` (Soul has no step IDs); no `### replace` (semantic-merge precedence — see §3.4 — handles override without rewriting the shipped content).
 
@@ -687,7 +687,7 @@ A compose-pipeline validation rule (per [§3.3](#33-l4-operations-creative-overl
 1. **Installer-seeded at install time** — the installer's Phase 1 project-intake conversation collects domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes (per [INSTALLER-ARCH §4.4 Phase 1](INSTALLER-ARCH.md)). At Phase 5 the installer writes those answers into the `## Project Context` block of each role-class L4 file (`.squidsquad/project/<role-class>.md`). Every fresh install starts with a non-empty Project Context derived from the human's intake answers.
 2. **Agent-curated at runtime** — during cycles, the `l4-curation` sub-skill (§7) detects when the human says something project-context-shaped ("we deploy through Buildkite, not GH Actions"), elicits scope + rationale, and appends to the appropriate role-class L4 file's `## Project Context` block. This is the durable accumulation path for facts that surface organically after install.
 
-L4 op grammar for this slot is **`append`-only** per §3.3 — no targeted ops, no whole-slot replace. Project context grows monotonically; corrections are written as new facts that supersede earlier ones.
+L4 op grammar for this slot is **`append`-only** per §3.3 — no targeted ops, no whole-slot replace. Project Context grows monotonically: every new fact is appended in chronological order. The slot has no built-in supersede mechanism — older facts remain in the composed output. If a project fact changes (e.g., the team migrates from GH Actions to Buildkite), the agent appends the new fact; the older entry stays as historical context. At runtime, the agent reads the slot top-to-bottom and treats later-appearing facts as more current — recency in the composed file order is the only ordering signal. If a project needs to retract a fact entirely (rare), that is a curation request the human files against the source `## Project Context` block directly, not via `l4-curation`.
 
 > **`status-line` is being retired entirely (corrected twice)** — First draft moved it to Project Context (wrong: it's not descriptive). Second draft kept it as a common/ sub-skill (wrong: it's not a single procedure the agent invokes). Final classification: **statusline updates are inlined into the cycle itself**, same pattern as `file-conventions`. The bookend writes (pre-cycle "idle", post-cycle "idle") live in the `cycle-runner` sub-skill. Mid-cycle progress updates ("verifying", "scanning", "discussing FEAT-PM-XXX...") are inlined in each step that wants to surface state via `python references/scripts/cycle.py status-bar <role> <state> <message>`. No standalone `status-line` sub-skill is needed; the `cycle.py status-bar` invocation is a one-line tool call wherever it's used. Resolution: delete all 4 `status-line.md` files (`common/` + per-role `pm/`/`verifier/`/`dm/`); cycle-runner handles bookend writes; other sub-skills inline status-bar calls at their own discretion. Tracked in #10360.
 
@@ -1358,7 +1358,7 @@ A future automation could check catalog/source drift in CI (per §8.1's PR-check
 The `pm` auto-memory directory (`C:\Users\...\memory\`) contains 30+ feedback files that today represent project-local customization stored *outside* L4. As part of this migration:
 
 - Each memory file is reviewed against the new L4 model.
-- Memory entries that are durable behaviour overrides become L4 H3 blocks in the relevant `.squidsquad/project/<role>.md` file (under the appropriate `## Slot` H2, with op + target step ID as needed).
+- Memory entries that are durable behaviour overrides become L4 H3 blocks in the relevant `.squidsquad/project/<role-class>.md` file (under the appropriate `## Slot` H2, with op + target step ID as needed).
 - Memory entries that are session-context or user-profile facts stay in the memory system.
 - A one-time migration tool (`migrate_memory_to_l4.py`) does the conversion; `pm` reviews each output before commit.
 
