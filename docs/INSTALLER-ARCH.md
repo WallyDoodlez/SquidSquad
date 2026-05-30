@@ -120,7 +120,7 @@ flowchart TB
     P2["Phase 2<br/>Configuration synthesis"]
     P3["Phase 3<br/>Review screen"]
     P4{"Phase 4<br/>User approves?"}
-    P5["Phase 5<br/>Atomic write<br/>(scaffold + L4 + labels)"]
+    P5["Phase 5<br/>Local scaffold + forge labels<br/>(scaffold + L4 + labels)"]
     P6["Phase 6<br/>Compose CLAUDE.md per role"]
     P7["Phase 7<br/>Tracker setup<br/>(initial issues)"]
     P8["Phase 8<br/>Commit + push"]
@@ -220,7 +220,7 @@ The installer presents the spec from §4.6 and waits for one of three responses:
 
 The accepted-response set is parsed case-insensitively. Ambiguous input prompts a re-ask rather than guessing. This is the **last clean abort point** — beyond Phase 4 the installer has written to the local filesystem, and abort requires the §11.2 cleanup path.
 
-### 4.8 Phase 5 — Atomic local write
+### 4.8 Phase 5 — Local scaffold + forge labels
 
 Once approved, the installer:
 
@@ -322,7 +322,7 @@ The installer agent never invents behavior the helpers already implement. Every 
 |---|---|
 | `references/scripts/wizard.py` | Main wizard helper with sub-commands per install step (`check-gh`, `detect-stack`, `scaffold`, `enrich-l4`, `ensure-labels`, `serialize-spec`, etc.) |
 | `references/scripts/shared_fs.py` | Initializes and manages `~/.squidsquad/` (secrets, clones registry, cross-install config). Sub-commands: `init` (idempotent shared-filesystem bootstrap, invoked Phase 0a). |
-| `references/scripts/compose.py` | Generates `.squidsquad/<alias>/CLAUDE.md` from L1-L4 sources — output path is **alias-keyed**, not role-class-keyed (e.g. `compose.py deploy fe-1` writes `.squidsquad/fe-1/CLAUDE.md`). See [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md). |
+| `references/scripts/compose.py` | Generates `.squidsquad/<alias>/CLAUDE.md` from L1-L4 sources — output path is **alias-keyed**, not role-class-keyed (e.g. `compose.py deploy fe-1` writes `.squidsquad/fe-1/CLAUDE.md`). The CLI positional parameter is named `<role>` in the current codebase but is alias-valued (e.g. `dev`, `frontend-1`); the rename to `<alias>` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358). See §4.9 and [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md). |
 | `references/scripts/forgejo_setup.py` | Forgejo backend init (alternate tracker; see §9) |
 | `references/scripts/tracker.py` | The tracker abstraction layer — agents use this at runtime; the installer uses its label-creation paths at Phase 5 |
 | `start.sh` | Post-install boot script — ensures Python deps, syncs all clones, runs the harness |
@@ -500,14 +500,14 @@ Operators on consuming installs never write migration files — they consume the
 The installer is designed to be safe to re-run:
 
 - **Phases 0–4** make no changes the user can see in the target repo. (Phase 0a `shared_fs.py init` writes to `~/.squidsquad/` but is idempotent — creates dirs only if absent — and is shared across all installs, not specific to this one.)
-- **Phase 5 atomic write** is the first phase that writes to the target repo. It uses a "scaffold then write" pattern — failures partway leave the filesystem in a state the next re-run can clean up via WIZARD's Step 7.1 ("Full rebuild cleanup if applicable") cleanup path.
+- **Phase 5 (local scaffold + forge labels)** is the first phase that writes to the target repo. It uses a "scaffold then write" pattern — failures partway leave the filesystem in a state the next re-run can clean up via WIZARD's Step 7.1 ("Full rebuild cleanup if applicable") cleanup path.
 - **Phase 5 label creation on the forge** is per-label idempotent (`gh label create` skips existing labels).
 - **Phase 6 compose** is deterministic *for a given set of inputs* — the same L1-L3 sources + L4 file always produce the same composed CLAUDE.md. During an upgrade (§10), the L1-L3 sources change because the installer pulls newer SquidSquad releases, so the composed output legitimately changes; that is not a determinism violation, just a reflection of the input change. Re-running Phase 6 against an unchanged source set is safely idempotent.
 - **Phases 5–7** are pre-commit local + forge writes. A `git status` after Phase 5 shows untracked `.squidsquad/` files; forge labels created in Phase 5 / initial issues in Phase 7 are visible on GitHub immediately. The atomic git commit + push happens at Phase 8.
 
 ### 11.2 Interrupted install recovery
 
-If the installer is interrupted mid-Phase-5 (filesystem partially scaffolded), re-running detects the partial state and offers a "clean rebuild" option that wipes `.squidsquad/` (preserving `vault/` and `project/`) and starts Phase 5 fresh.
+If the installer is interrupted mid-Phase-5 (filesystem partially scaffolded), re-running detects the partial state and offers a "clean rebuild" option that wipes `.squidsquad/` (preserving the full set documented in §11.3 (`vault/`, `project/`, per-alias `working-state.md`, `iterations/`, `planning/`)) and starts Phase 5 fresh.
 
 If the installer is interrupted between Phase 7 and Phase 8 (forge labels created, no commit yet), re-running detects the no-commit state and offers to commit the existing scaffold rather than redoing it.
 
