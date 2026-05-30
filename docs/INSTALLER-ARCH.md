@@ -428,7 +428,7 @@ flowchart LR
 2. **Confirm**: present the changeset summary in plain language ("This upgrade will update 14 sub-skills, add 2 new ones, and rename `verifier-rejected` → `qa-rejected`. Your L4 customizations are unaffected."). The human approves, edits (e.g. "skip the rename for now"), or aborts. Abort = no changes.
 3. **Pull**: the latest SquidSquad sources from upstream into `references/` (this includes the latest L1-L3 sub-skills, role files, manifests, and helper scripts).
 4. **Recompose**: every role's CLAUDE.md by running `compose.py deploy-all`. The composed outputs reflect the new sub-skill versions.
-5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer calls the harness's per-agent lifecycle endpoints in sequence:
+5. **Restart**: each affected agent so they pick up the new CLAUDE.md. The installer is an ephemeral Claude Code session but has full Bash tooling — it makes these HTTP calls via `curl` (or equivalent) against the harness's localhost port (read from `.squidsquad/.harness-port` per HARNESS-ARCH §6). "Ephemeral" refers to lifetime, not capability: the installer can do anything its Claude Code tooling permits before it exits at Phase 9. The installer calls the harness's per-agent lifecycle endpoints in sequence:
    ```
    POST /agents/{role}/stop    # graceful stop; harness handles ack-stop / timeout
    POST /agents/{role}/start   # boot with new composed CLAUDE.md
