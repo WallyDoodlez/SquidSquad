@@ -453,19 +453,7 @@ flowchart LR
 
    Migrations are stepped through one at a time — failure at any gate aborts that step (and the rest of the walk) cleanly; nothing partial is written.
 4. **Stamp**: after a successful walk, the installer writes the now-current version to `.squidsquad/config.md`'s `squidsquad_version:` field. This is the only field the installer writes outside the three-gate model during the walk. Partial walks (failed at some step k) leave the stamp unchanged so the next run resumes at k. Migration files MUST NOT modify the `squidsquad_version:` field directly.
-5. **Continue with Phase 1+**: the installer proceeds with the standard phases exactly as in the fresh case. Phase 5 scaffolding writes only fresh-scaffold paths and never overwrites existing files; Phase 6 recompose regenerates every `.squidsquad/<alias>/CLAUDE.md` from the now-current source + migrated L4; Phase 8 commits + pushes AND issues the harness lifecycle calls below to restart each agent with the new composed CLAUDE.md; Phase 9 prints the ready message and exits (per §4.12).
-
-   The harness remains the sole lifecycle authority. The installer's restarts go through the harness's public HTTP API:
-
-   Detection logic: the installer issues a `GET http://localhost:<port>/status` (port read from `.squidsquad/.harness-port`) with a 5-second timeout. If the harness responds 200, proceed with per-agent lifecycle calls. If the file is missing, the port is unreachable, or the request times out, the installer invokes `start.sh` from the repo root as the cold-start path.
-
-   ```
-   POST /agents/<alias>/stop    # graceful stop; harness handles ack-stop / timeout
-   POST /agents/<alias>/start   # boot with new composed CLAUDE.md
-   ```
-   for each agent. The URL-template token is named `{role}` in the source code for legacy compatibility, but the value is always the alias; rename to `{alias}` tracked in HARNESS-ARCH §4.1 + #10358. If the harness is not running, `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots the agents. If the restarted agent's boot probe succeeds, the harness also spawns its `event_poll.py` sidecar.
-
-   **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent recovers from `working-state.md` (see AGENT-RUNTIME §5 + §6.5).
+5. **Continue with Phase 1+**: the installer proceeds with the standard phases exactly as in the fresh case. Phase 5 scaffolding writes only fresh-scaffold paths and never overwrites existing files; Phase 6 recompose regenerates every `.squidsquad/<alias>/CLAUDE.md` from the now-current source + migrated L4; Phase 8 commits + pushes the resulting tree; Phase 9 prints the ready message and exits (per §4.12). Harness restart calls happen separately — see §10.3.
 
 ### 10.1 Migration file format
 
@@ -492,6 +480,16 @@ Migrations describe both **mechanical** changes (deterministic renames, additive
 
 If the release does NOT break L4 or config schema, **no migration file is needed** — the version walk simply skips that step.
 
+**Three-gate granularity** (per migration file, not per individual change within a file):
+
+| Gate | Granularity | What it evaluates |
+|---|---|---|
+| **DeepSeek audit** | runs once per migration file | reviews the entire file's proposed changes as a batch, comparing the LLM's planned writes against the migration prose's stated intent (mechanical changes flagged if not deterministic; judgment-call changes flagged if the option-surfacing dialog is missing) |
+| **Mini-CQ** | one prompt per migration file | one human-readable summary of all changes that file would make (e.g., "Migration v1.4 → v1.5 wants to rename `Iteration_Interval` and retire the `## Vault` L4 slot — OK?"); rejection aborts that step before any write |
+| **Compose dry-run** | runs once per migration file, after both prior gates pass | `compose.py deploy-all --check` validates the post-migration tree composes cleanly; for config.md-only changes, the dry-run still runs (composed CLAUDE.md depends on config.md values) |
+
+Mid-file partial writes are not allowed: a migration file's changes apply atomically (all or none). Failure at any gate aborts the walk cleanly with no partial write from that file.
+
 ### 10.2 What gets touched, what doesn't
 
 The installer never wipes existing-install content as a flow-level rule. The split is mechanical:
@@ -502,6 +500,22 @@ The installer never wipes existing-install content as a flow-level rule. The spl
 - **Never touched by the installer**: `.squidsquad/vault/` store, per-alias `working-state.md` / `iterations/` / `planning/`, GitHub Issue labels (already present from prior install).
 
 The previous "preserved during upgrade" framing is retired — there is no separate upgrade flow whose preservation rules differ from fresh install. Existing-state preservation is automatic because the installer's other phases write only to fresh-scaffold paths and never to existing content.
+
+### 10.3 Post-installer harness restart
+
+After Phase 8 commits the new tree, the installer triggers a per-agent restart so running agents pick up the new composed CLAUDE.md. This is **separate from Phase 8** (which is just commit+push per §4.11) and **separate from the migration walk** (which completes before Phase 1). Restart happens after Phase 8's atomic commit and before Phase 9's exit message.
+
+Detection: the installer issues `GET http://localhost:<port>/status` (port read from `.squidsquad/.harness-port`) with a 5-second timeout. Two paths:
+
+- **Harness reachable (200 response)** — proceed with per-agent lifecycle calls via HTTP:
+  ```
+  POST /agents/<alias>/stop    # graceful stop; harness handles ack-stop / timeout
+  POST /agents/<alias>/start   # boot with new composed CLAUDE.md
+  ```
+  For each agent in the install's `## Aliases` registry. The URL-template token is named `{role}` in the source code for legacy compatibility; the value is always the alias (rename to `{alias}` tracked in HARNESS-ARCH §4.1 + #10358).
+- **Harness unreachable** (port file missing / port unreachable / timeout) — the installer invokes `start.sh` from the repo root as the cold-start path. `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots all configured agents. If each restarted agent's boot probe succeeds, the harness spawns its paired `event_poll.py` per HARNESS-ARCH §7.2.
+
+**In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent recovers from `working-state.md` (see AGENT-RUNTIME §5 + §6.5).
 
 ### 10.4 Edge cases
 
