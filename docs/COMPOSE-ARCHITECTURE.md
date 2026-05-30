@@ -41,21 +41,33 @@ flowchart LR
         L4["L4 — Project<br/>(per-install overlay)"]
     end
 
-    Compose["compose.py<br/>(stacks L1→L4)"]
-    OUT["<b>.squidsquad/&lt;role&gt;/CLAUDE.md</b><br/>thin orchestration<br/>step references only"]
+    subgraph COMPOSE["compose.py — two-stage compiler"]
+        direction TB
+        Link["<b>Link</b> (§4.1–§4.5)<br/>gather → group by slot → sort by ordinal<br/>→ apply L4 ops → validate sub-skill refs<br/><i>deterministic</i>"]
+        Assemble["<b>Assemble</b> (§4.6)<br/>per-slot agent rewrite into coherent voice<br/>higher L wins on conflict<br/><i>stochastic, cached</i>"]
+        Link --> Assemble
+    end
+
+    OUT["<b>.squidsquad/&lt;alias&gt;/CLAUDE.md</b><br/>assembled — what the agent reads"]
+    LINKED["<b>CLAUDE.linked.md</b><br/>linked output (audit/debug only)"]
+    CONFLICTS["<b>CLAUDE.conflicts.md</b><br/>conflict report"]
 
     Catalog[("sub-skill-catalog.md<br/>catalog of sub-skills")]
     SubSkills[("Sub-skills<br/>(today: markdown fragments<br/>target: Claude skills)")]
 
-    L1 --> Compose
-    L2 --> Compose
-    L3 --> Compose
-    L4 --> Compose
-    Compose --> OUT
+    L1 --> Link
+    L2 --> Link
+    L3 --> Link
+    L4 --> Link
+    Assemble --> OUT
+    Assemble --> LINKED
+    Assemble --> CONFLICTS
     OUT -.->|"references by name"| Catalog
     Catalog -.->|"points at"| SubSkills
 
     style OUT fill:#dfd
+    style LINKED fill:#eef
+    style CONFLICTS fill:#fef
     style Catalog fill:#dff
     style SubSkills fill:#dff
 ```
@@ -186,14 +198,18 @@ flowchart LR
         L4A["one file, multiple<br/>H2 sections — each<br/>declares an op against<br/>one slot (§3.3)"]
     end
 
-    Gather{{"compose.py deploy &lt;role&gt;<br/><br/>1. Gather all L1-L4 files for target role<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Emit each slot into its composed §"}}
+    Gather{{"<b>Link</b> (§4.1–§4.5)<br/><br/>1. Gather all L1-L4 files for target role<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Validate sub-skill refs"}}
 
     L1A & L1B & L1C --> Gather
     L2A & L2B & L2C --> Gather
     L3A --> Gather
     L4A --> Gather
 
-    Gather --> OUT[["composed<br/>CLAUDE.md"]]
+    Gather --> Linked[["linked composite<br/>per slot (in memory)"]]
+    Linked --> Asm{{"<b>Assemble</b> (§4.6)<br/><br/>per-slot agent rewrite<br/>higher L wins on conflict<br/>preserve sub-skill refs + step IDs"}}
+    Asm --> OUT[["composed CLAUDE.md<br/>(assembled — agent reads this)"]]
+    Asm -.-> CR[["CLAUDE.conflicts.md<br/>(audit)"]]
+    Linked -.-> LinkedFile[["CLAUDE.linked.md<br/>(audit/debug only)"]]
 
     subgraph Sections["Six composed sections (§5)"]
         direction TB
@@ -556,6 +572,24 @@ The pass MUST NOT:
 - Drop content silently (governed by length floor below)
 
 **Conflict resolution — higher L wins.** When the assemble pass encounters two pieces of linked prose that materially contradict each other (e.g., L2 says "verify pending-test items each cycle" and L4 appends "verifier handles all verification — PM does not"), the **higher layer's prose prevails** in the assembled output. Layer precedence (highest to lowest): **L4 > L3 > L2 > L1**. This matches the natural reading of the layered model: later/more-specific layers refine earlier/more-general ones, and L4 is the project's standing override. The link stage already places higher-layer content later in the linked body via `(slot_index, ordinal)` sort; the assemble pass collapses the resulting "do X / actually don't do X" into a single coherent statement aligned with the higher-layer position. The lower-layer prose is not silently erased — see the conflict report below.
+
+```mermaid
+flowchart TB
+    Start([Per-slot linked body]) --> Scan[Assembler scans for<br/>materially contradicting prose<br/>between layers]
+    Scan --> Found{Conflict<br/>detected?}
+    Found -->|No| Coherent[Rewrite into<br/>coherent voice]
+    Found -->|Yes| Compare["Compare layer of conflicting prose<br/>(L1 / L2 / L3 / L4)"]
+    Compare --> PrecRule{"Higher L wins<br/>(L4 &gt; L3 &gt; L2 &gt; L1)"}
+    PrecRule --> AlignHi["Align assembled output with<br/>higher-L prose (lower-L dropped)"]
+    AlignHi --> Record["Record in CLAUDE.conflicts.md:<br/>slot, layers, both quotes, why, resolution"]
+    Record --> Coherent
+    Coherent --> Validate{Preservation<br/>checks pass?<br/>(sub-skill refs, step IDs,<br/>length floor, code-blocks)}
+    Validate -->|No| AbortPath([Abort with diagnostic<br/>no artifacts written])
+    Validate -->|Yes| Emit([Atomic emit:<br/>CLAUDE.md + CLAUDE.linked.md +<br/>CLAUDE.conflicts.md])
+    style AbortPath fill:#fdd
+    style Emit fill:#dfd
+    style Record fill:#fef
+```
 
 **Conflict report.** After the assemble pass completes for a role-class, compose emits a conflict report at `.squidsquad/<alias>/CLAUDE.conflicts.md` enumerating every conflict the assembler resolved. The report is the operator's audit surface for verifying that higher-L overrides did what the project intended.
 
