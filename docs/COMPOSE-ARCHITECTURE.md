@@ -792,8 +792,8 @@ This section is intentionally short — most vault detail belongs in `references
    4.2 Per nudge (idle → walk → idle — see AGENT-RUNTIME §7.1 for the canonical contract)
        1. Wake on nudge             (step:cycle/wake)
                                     — Monitor receives `NUDGE\n` from the
-                                      sibling `event_poll.py --wait --role <role>
-                                      --target stdout` process
+                                      harness-managed `event_poll.py --wait --role <role>
+                                      --target stdout` sidecar process
        2. Read cursor + events      (step:cycle/read-cursor)
                                     — GET /events/cursor/{role},
                                       GET /events/for/{role}?since=cursor
@@ -974,7 +974,7 @@ Migration from today's mixed numbering is mechanical (one-time renumber as part 
 
 ### 6.5 Wake-mode handling — two parallel manifests, compose-time selection
 
-SquidSquad agents support two wake mechanisms: **event-driven** (a sibling `event_poll.py` polls the harness with adaptive backoff and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
+SquidSquad agents support two wake mechanisms: **event-driven** (a harness-managed `event_poll.py` sidecar polls the harness with adaptive backoff and writes a literal `NUDGE\n` line to stdout whenever new events arrive past the agent's cursor; Monitor wakes the agent, which then walks all events past its cursor and acks once at the end — see AGENT-RUNTIME §7.0 / §7.1) and **polling** (the agent reschedules itself via `/loop` at a fixed interval and runs a full Ralph Loop cycle on each fire). They produce identical *outcomes* but very different `instructions/cycle` shapes.
 
 **Architectural rule** (matches today's `compose.py` implementation per #8697): the two modes are **two parallel manifests selected at compose time**, not a runtime branch.
 

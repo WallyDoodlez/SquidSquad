@@ -80,19 +80,24 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 | POST | `/agents/all/stop` | Stop all running agents | `{ok, stopped: [...]}` |
 | POST | `/shutdown` | Graceful harness shutdown (status 202) | Async; harness exits after returning |
 
-> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). Today `AgentState.to_dict()` returns a `role` field (whose value is the alias) but no separate `alias` field. `pid` is shorthand for `claude_pid` + `terminal_pid`, which the code returns as separate fields. Existing clients that read these endpoints should treat the alias as the value of `role` and read `claude_pid` directly until #10358 ships.
+> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). **Today's actual return shape**: `AgentState.to_dict()` returns a `role` field (whose value is the alias; no separate `alias` field), plus `claude_pid` and `terminal_pid` as separate fields (no shorthand `pid` field). Existing clients should treat the alias as the value of `role` and read `claude_pid` + `terminal_pid` separately until #10358 ships. The "target shape" framing also applies to §9 (Vocabulary note) — both sections describe the post-rename state.
+>
+> **Path-parameter vocabulary on lifecycle endpoints:** `{role}` on `POST /agents/{role}/start|stop|restart` and `GET /agents/{role}/*` accepts the **alias** value (same convention as event-bus endpoints §4.2). The naming predates the alias concept; the rename to `{alias}` is in #10358. There is no class-level lifecycle endpoint — every lifecycle call targets one specific alias.
 
 ### 4.2 Event bus endpoints
 
 | Method | Path | Purpose | Returns |
 |---|---|---|---|
-| POST | `/events` | Emit an event (booted, ack-cursor, assigned-to, etc.) | `{ok, event_id}` or 4xx |
-| GET | `/events` | List recent events (debugging) | `[event, ...]` |
+| POST | `/events` | Emit an event (booted, ack-cursor, assigned-to, etc.) — see [AGENT-RUNTIME.md §4.2](AGENT-RUNTIME.md) for payload shapes per event type | `{ok, event_id}` or 4xx |
+| GET | `/events` | List recent events (**debug-only**; not part of agent-facing contract) | `[event, ...]` |
 | GET | `/events/for/{role}` | Read events past the role's cursor | `[event, ...]` or HTTP 410 Gone if cursor evicted |
-| GET | `/events/cursor/{role}` | Current cursor position for a role | `{cursor, role}` (cursor may be `null` on first boot) |
-| POST | `/events/{event_id}/complete` | Mark in-flight event as complete | `{ok}` |
-| GET | `/events/in-flight/{role}` | List events delivered to role but not yet acked | `[event, ...]` |
+| GET | `/events/cursor/{role}` | Current cursor position for a role | `{cursor, role}` (cursor may be `null` on first boot); **HTTP 200 always** (no 404 if cursor null) |
+| GET | `/events/in-flight/{role}` | List events delivered to role but not yet acked (**debug-only**; agents do not consume this in normal operation) | `[event, ...]` |
 | GET | `/events/lifecycle` | Recent lifecycle events for TUI display | `[event, ...]` |
+
+> **Path-parameter vocabulary** (per §9): the `{role}` path parameter on `/events/for/{role}`, `/events/cursor/{role}`, `/events/in-flight/{role}` accepts the **alias** value, not the L2 categorical role. The naming predates the alias concept; rename to `{alias}` ships with [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358).
+>
+> **No completion endpoint** (locked, per AGENT-RUNTIME §4.1 principle #4): there is no `POST /events/{event_id}/complete`. The bus uses events, not RPC, for state transitions. Receipt confirmation flows through `ack-cursor` (cursor advance) and `ack-stop` (graceful-shutdown acknowledgement) only — both emitted via `POST /events`. Any design that proposes a completion endpoint is rejected at architecture review.
 
 ### 4.3 Work-queue endpoint
 
@@ -102,6 +107,8 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 
 The endpoint wraps the deterministic work-queue logic in `tracker.py work-queue` so TUIs / web UIs can poll over HTTP without spawning a subprocess per refresh. `{alias}` is the install-time agent name; for the human, the alias is `human` (filter is `status:pending-human-*`); for other aliases, the filter is the same one `tracker.py work-queue` produces (priority-sorted approved + in-progress items for that alias).
 
+> **Scope:** `/queue/{alias}` is a **UI-facing convenience endpoint** for TUIs / web UIs / human dashboards — it is NOT part of the agent runtime contract. Agents receive work via the event bus (`assigned-to` events emitted by EAD per [AGENT-RUNTIME.md §6.1](AGENT-RUNTIME.md) and `POST /work/assign` per [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)), not by polling this endpoint. AGENT-RUNTIME deliberately omits this endpoint because agents do not consume it.
+>
 > **Current implementation gap:** the harness today exposes only `/human/queue` (special-cased to human). The generic `/queue/{alias}` shape above is the principled form; the migration is tracked in §13.6.
 
 ---
@@ -150,7 +157,7 @@ event_id = sha256(timestamp + alias + event_type + payload + nonce)[:16]
 
 | Task | Cadence | Purpose |
 |---|---|---|
-| `ack-cursor consumer` | event-driven | Drains the ack-cursor queue, advances cursors, persists to `.squidsquad/.event-state.json` |
+| `ack-cursor consumer` | event-driven | Drains the ack-cursor queue, advances cursors, persists cursor positions to `.squidsquad/.event-state.json` (the deque itself remains in-memory only, per §5.1) |
 | `timeout_scan` | every 30s | Re-delivers in-flight events that have been pending past their TTL |
 | `health_poll` | every 5s | Per-agent PID liveness check (`OpenProcess` on Windows, `kill -0` on POSIX) |
 | `EAD poller` | adaptive (10s active / 30s idle, 60s ceiling) | Polls forge for state changes; see §6 |
@@ -258,6 +265,13 @@ One file per install (at the install root). Persisted across harness restarts. S
   }
 }
 ```
+
+**Two distinct fields per agent** (per [AGENT-RUNTIME.md §7.2](AGENT-RUNTIME.md)):
+
+- **`intent`** — what the operator wants. Values: `running` | `stopping` | `restarting` | `stopped`. Transitions are HTTP-API-driven (per §7.1); the harness writes the new intent immediately on `POST /agents/{role}/{start|stop|restart}`.
+- **`status`** — what the agent is actually doing. Values: `booting` | `ready` | `stopping` | `stopped` | `crashed`. Driven by the health poller's observations of process state and by lifecycle events emitted from the agent (`booted`, `ack-stop`). Moves independently of intent.
+
+Two fields, not one, so recovery semantics are explicit: after a host reboot the harness reads this file, sees `intent=running` but no live PID → respawn. If `intent` and `status` were collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed". Full state machine documented in [AGENT-RUNTIME.md §7.2](AGENT-RUNTIME.md).
 
 Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PIDs still alive?); intents are preserved. Note: the outer agent key is the **alias** (e.g. `skill`, `verifier`); each agent's *categorical* role is not currently persisted in this file — it's derived from `.squidsquad/config.md` at boot. Source of truth: `HarnessState.save_state()` in `references/scripts/harness.py`.
 
@@ -368,9 +382,13 @@ Harness is one-process-per-install on one host. Agents in different clones on th
 
 EAD's polling loop hard-codes the GitHub `gh api` shape. Non-GitHub backends (Forgejo, Gitea, etc.) would need an adapter layer in `forge_adapter.py` and EAD refactoring. Tracker abstraction (`tracker.py`) exists; EAD does not yet use it.
 
-### 13.5 Permission table reads `responsibility.md` (deprecated)
+### 13.5 Permission table reads `responsibility.md` (legacy code being removed)
 
-Per [`decision-class-vs-alias-routing-model`](../.squidsquad/vault/galaxy/decision-class-vs-alias-routing-model.md) (locked 2026-05-25), the harness permission table is being retired in favor of a simpler alias-existence check. Current code still reads `responsibility.md` `## Bus contract` sections at boot and enforces a class-from-class permission table on `POST /work/assign`. Code change tracked in #10182 (bundled task, on hold pending PR #10004 merge).
+**Target architecture** (locked 2026-05-25 per [`decision-class-vs-alias-routing-model`](../.squidsquad/vault/galaxy/decision-class-vs-alias-routing-model.md), and reflected in [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)): the harness performs **one** validation on `/work/assign` — does `target_alias` resolve to a registered agent? Class-from-class permissions are not enforced at the bus layer; process discipline lives in each agent's L2/L3/L4, not in a harness gate.
+
+**Current code** (legacy, removal in progress): still reads `responsibility.md` `## Bus contract` sections at boot and builds a class-from-class permission table that `POST /work/assign` consults. This duplicated discipline that already lives in each agent's composed CLAUDE.md and conflicted with §4.1's "harness is a transport bus, not an orchestrator" principle. The `responsibility.md` files themselves are also being retired (the file's prose narrative was ~90% redundant with L2/L3, and PR #10359 promoted Responsibility to a dedicated compose slot — not a sub-skill).
+
+**Removal task**: #10182 (bundled, on hold pending PR #10004 merge). When that lands the harness's boot sequence drops the permission-table build entirely; `/work/assign` falls back to the alias-existence-only check that this doc already documents as the target.
 
 ### 13.6 Work-queue endpoint is special-cased to human only
 
@@ -379,6 +397,8 @@ Per [`decision-class-vs-alias-routing-model`](../.squidsquad/vault/galaxy/decisi
 ---
 
 ## 14. Proposed simplification: `wt → claude` direct spawn
+
+> **Scope reminder:** §§1–13 describe the harness as it exists in code today. §14 is a **proposed simplification — not implemented**. The current process tree (with `thin_launcher.py` as a load-bearing intermediate) is documented in [AGENT-RUNTIME.md §3.2](AGENT-RUNTIME.md) and remains authoritative for the current runtime. AGENT-RUNTIME describes the current state; this section describes a target. If §14 lands, AGENT-RUNTIME §3.2 ships an updated process tree in the same change.
 
 The current per-agent spawn chain on Windows is `wt.exe → bash → thin_launcher.py → cmd.exe → claude.exe` (five processes). Most of the layering exists for historical reasons; the only structurally load-bearing piece is `wt.exe` itself, which provides the TTY that keeps claude on the interactive Claude subscription billing model. Piping stdin/stdout to `claude.exe` auto-demotes it to the Agent SDK billing pool, which is separately metered — so any "harness owns claude's I/O over pipes" redesign is closed under the current Anthropic billing model.
 
