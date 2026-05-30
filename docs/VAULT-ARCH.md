@@ -21,6 +21,8 @@ This doc describes:
 
 It does NOT describe per-agent-role access (read/write); that lives in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) where the per-role `includes.yml` mapping is composed.
 
+**Vault slot authorship is L1-exclusive** (guardrail dated 2026-05-29). The composed `## Vault` section in every agent's CLAUDE.md is authored entirely by L1 fragments shipped from this repo — L2 / L3 / L4 cannot contribute `slot: vault` content. The contract documented here (PARAG model, entity types, wikilink grammar, confidence levels) is framework-owned and is not customizable per-role, per-domain, or per-install. Projects that need bespoke vault behaviour file a framework feature request — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) §3.3, §5.6, and §11.2 G4 for the policy and revisit conditions.
+
 It does NOT describe:
 
 - Proposed fixes for the gaps in §11 (out of scope; planned for follow-up under #5855)
@@ -635,7 +637,7 @@ Filed as #10180. Until that lands, the §7 description is the architectural targ
 | Doc | What it says about vault | Lines / sections | Depth |
 |---|---|---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | "L6 Memory" appears in the 7-layer stack (L17) and gets a **full section** at §L6 Memory Layer (L150-167) — file list, "what changes here," cycle interplay, PARAG explanation. Also referenced in the "Where to make changes" table (L264). | L17, L150-167, L264 | Substantial — second only to this doc |
-| [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) | Vault is one of the 5 composed-output slots (`identity / soul / instructions / project-context / vault`, see L119, L137, L199, L1002). §5.5 ("Vault") is intentionally short (L378-380) and points to `vault-protocol.md` for detail. §G4 (L956) explicitly flags "Vault slot is the most underspecified — a future revision should expand it." | L119, L137, L199, L230, L378-380, L417, L538, L956, L1002, L1009 | Slot-machinery + acknowledged gap |
+| [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) | Vault is one of the 6 composed-output slots (`identity / responsibility / soul / instructions / project-context / vault`). §5.6 ("Vault") is intentionally short and points to `vault-protocol.md` for the per-cycle usage contract and to this doc for the architecture. §3.3 + §5.6 + §11.2 G4 lock the slot to **L1-exclusive** authoring (no L2/L3/L4 fragments) — see §1 of this doc for the policy summary. | §3.3, §5.6, §11.2 G4 | Slot-machinery + L1-exclusive policy |
 | [AGENT-RUNTIME.md](AGENT-RUNTIME.md) | State-persistence table row (L507) — "Decisions / institutional memory" lives in `.squidsquad/vault/`. References an in-vault decision note for the event-bus architecture (L195, L1044). | L195, L507, L1044 | One row + two citations |
 | [INSTALLER-ARCH.md](INSTALLER-ARCH.md) | Vault skeleton is part of the install scaffold (L100 §3.2 outputs row, L228 Phase 5 scaffold step, L292-293 file layout tree). Vault is explicitly preserved across clean-rebuild and upgrade (L436, L464, L472). | L100, L228, L292-293, L436, L464, L472 | Install-time scaffolding + preservation rules |
 | [sub-skill-catalog.md](sub-skill-catalog.md) | Lists all 5 vault sub-skills (`vault-protocol`, `vault-protocol-slim`, `vault-remember`, `vault-optimize`, `vault-synthesis`) with one-line descriptions under the "Vault (institutional memory)" subheading. | "common/" → "Vault (institutional memory)" subsection | Catalog entries only |
@@ -647,7 +649,7 @@ This doc (`VAULT-ARCH.md`) is the first **dedicated** architecture treatment of 
 The cross-references above are **accurate but not yet two-way**. Reconciliation work that should happen alongside this doc landing:
 
 - **ARCHITECTURE.md §L6 Memory Layer**: Should add a single line pointing to `VAULT-ARCH.md` as the canonical deep-dive. Today's L150-167 content is overview-correct but doesn't reference this doc (it can't — this doc didn't exist before).
-- **COMPOSE-ARCHITECTURE.md §5.5 and §G4**: §5.5 currently says "most vault detail belongs in `references/sub-skills/common/vault-protocol.md`." Should also reference `VAULT-ARCH.md` for the architecture (vs `vault-protocol.md` for the per-cycle usage contract). §G4 ("Vault slot is the most underspecified") can be partially closed by pointing to VAULT-ARCH §3 entity model + §5 BRIEFING + §4 frontmatter spec.
+- **COMPOSE-ARCHITECTURE.md §5.6 and §11.2 G4**: §5.6 now references `VAULT-ARCH.md` for the architecture (vs `vault-protocol.md` for the per-cycle usage contract) and declares the slot **L1-exclusive** (no L2/L3/L4 authoring). §11.2 G4 is **CLOSED** as of 2026-05-29 — the "slot contract" gap is settled by the L1-exclusive guardrail (the slot contract is the L1 short-descriptor pattern; nothing else is authorable). Revisit when a concrete customization pattern surfaces.
 - **AGENT-RUNTIME.md §5 state-persistence row**: Should link to `VAULT-ARCH.md` for the "what" (vs the row's "where" + "owner" + "why" data).
 - **INSTALLER-ARCH.md §3.2 + §5 + §11**: All vault mentions are factual scaffolding/preservation notes. Should cross-reference `VAULT-ARCH.md` once in the file-layout section so a reader knows where to learn what they just installed.
 - **sub-skill-catalog.md "Vault (institutional memory)" subsection**: Should add a header line linking to `VAULT-ARCH.md` for architecture context.

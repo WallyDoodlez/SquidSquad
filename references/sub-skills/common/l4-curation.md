@@ -79,7 +79,7 @@ When a customization request is detected, walk this dialog before writing L4. St
 
    **Step-specific prohibitions** ("during step X, do not do Y") do NOT belong in L4. Per `COMPOSE-ARCHITECTURE.md` §6.3, those live in the relevant L1–L3 sub-skill source — they are built into SquidSquad's shipped behaviour and cannot be overridden per-project. If the human asks for one, explain that this kind of rule is part of SquidSquad's core (in plain language, never naming the layer) and offer to file an upstream feature request against the SquidSquad repo if the change would be broadly useful.
 
-   **Vault customizations** stay out of scope here per the "Does NOT cross into vault territory" rule below — l4-curation handles agent-instruction customization, not knowledge customization.
+   **Vault customizations** are not L4-authorable at all. The `## Vault` slot is **L1-exclusive** (framework-owned) per `COMPOSE-ARCHITECTURE.md` §3.3 + §5.6 + §11.2 G4 — compose rejects any L4 file containing a `## Vault` H2. If the human asks for vault-shaped behaviour (e.g., "always create a vault note named X for Y"), explain in plain language that vault structure is part of SquidSquad's framework and offer to file an upstream feature request. See also the "Does NOT cross into vault territory" rule below.
 
 3. **Surface the why** (user-facing). Soul customizations especially need the WHY captured. Ask: "Is there a past incident or strong preference behind this? Capturing it helps future judgement on edge cases."
 
@@ -87,7 +87,8 @@ When a customization request is detected, walk this dialog before writing L4. St
 
 5. **Pick the op + target** (agent-internal). The op set is `append`, `insert-before <step-id>`, `insert-after <step-id>`, `replace <step-id>`, plus whole-slot `replace` (for Responsibility only) per `COMPOSE-ARCHITECTURE.md` §3.3. The op surface is **per-slot**:
 
-   - `## Identity`, `## Soul`, `## Project Context`, `## Vault` slots are **append-only** — no targeted ops are legal. Skip the rest of this step and go to step 6.
+   - `## Identity`, `## Soul`, `## Project Context` slots are **append-only** — no targeted ops are legal. Skip the rest of this step and go to step 6.
+   - `## Vault` slot is **not authorable in L4 at all** — compose rejects any L4 file containing a `## Vault` H2 (per `COMPOSE-ARCHITECTURE.md` §3.3 + §5.6). If the dialog led here, abort and route as a feature request per step 2's vault-customization callout.
    - `## Responsibility` slot accepts `append` plus whole-slot `replace`. **Default to `append`** — adds a "does NOT do" bullet to the role's contract. Use whole-slot `replace` only for the genuinely unusual install case where the entire L1-L3 role contract doesn't apply (e.g., a single-human project with no DM at all); the dialog must surface that whole-slot replace silently discards the entire L1-L3 responsibility block including universal team-discipline. Route most boundary tweaks toward `append`.
    - `## Instructions` slot accepts all four step-targeted ops. Pick by intent:
      - `append` — new rule that doesn't relate to a specific existing step. Safest default.
@@ -127,11 +128,11 @@ Example, in user-facing voice:
 - Does NOT modify L1–L3. Project-pioneered rules that should be promoted upstream get filed as a normal tracker task, not handled here.
 - Does NOT author step-specific prohibitions as L4. Those are built into SquidSquad's shipped L1–L3 sources (`COMPOSE-ARCHITECTURE.md` §6.3) and cannot be overridden per-project. Route such requests upstream as feature requests against the SquidSquad repo, not into L4.
 - Does NOT prune L4 unilaterally. Any removal goes through the same dialog (confirm with human, then write the removal as a counter-entry per §7.5).
-- Does NOT cross into vault territory. L4 is *agent-instruction* customization; the vault is *knowledge* customization. Soul customizations live in L4; rationale notes about why a soul customization exists live in vault.
+- Does NOT cross into vault territory. L4 is *agent-instruction* customization; the vault is *knowledge* customization. Soul customizations live in L4; rationale notes about why a soul customization exists live in vault. The vault *slot* in composed CLAUDE.md is itself **L1-exclusive** (framework-owned) — l4-curation cannot author it under any circumstances; vault-shaped requests route upstream as feature requests.
 
 #### Cross-references
 
-- `COMPOSE-ARCHITECTURE.md` §3.3 — L4 file structure (one file per role-class, H2 slot sections, H3 op blocks), op grammar, per-slot op constraints (Instructions accepts all four targeted ops; Responsibility accepts append + whole-slot replace; Identity/Soul/Project Context/Vault are append-only)
+- `COMPOSE-ARCHITECTURE.md` §3.3 — L4 file structure (one file per role-class, H2 slot sections, H3 op blocks), op grammar, per-slot op constraints (Instructions accepts all four targeted ops; Responsibility accepts append + whole-slot replace; Identity/Soul are append-only; Project Context is L4-exclusive append-only; Vault is L1-exclusive — rejected in L4)
 - `COMPOSE-ARCHITECTURE.md` §3.4 — soul slot semantic-merge precedence (L4 wins on conflict at the agent's reading layer)
 - `COMPOSE-ARCHITECTURE.md` §5.1 — Identity slot, including Boundaries sub-section for universal prohibitions
 - `COMPOSE-ARCHITECTURE.md` §5.2 — Responsibility slot, including "does NOT do" sub-section and the whole-slot replace safety callout
