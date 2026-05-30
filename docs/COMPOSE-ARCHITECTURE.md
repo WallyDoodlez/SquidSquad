@@ -122,7 +122,7 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at the install root (`.squidsquad/config.md`), NOT under `.squidsquad/project/` — distinct from L4 files. It declares install-level parameters like `Workers:` (the roster), `Iteration Interval`, top-level `event-driven:` mode flag, `Improvement Scanning:`, feature toggles. It also carries two install-identity fields written by the installer: `squidsquad_version:` (SquidSquad version stamp, read at upgrade time per INSTALLER-ARCH §10 step 2) and the `## Aliases` registry section (mapping each install-time alias to its role-class + L3 domain — used by `compose.py` for alias-existence validation and by `tracker.py` for routing). Compose reads `config.md` to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
+- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory). It is a sibling of `.squidsquad/project/` and `.squidsquad/<alias>/`, NOT under `project/` — distinct from L4 files. **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by an optional `## Aliases` H2 section listing each install-time alias → role-class + L3 domain mapping (used by `compose.py` for alias-existence validation and by `tracker.py` for routing). It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, top-level `event-driven:` mode flag, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — which manifest to load (polling vs event per §6.5), what placeholder values to substitute, which roles exist for `compose.py deploy-all`, etc.
 
 The two axes interact at compose time. Examples:
 
@@ -1154,10 +1154,9 @@ Once a week, run the security smoke tests as part of the cycle.
 
 ## Project Context
 ...project-specific facts...
-
-## Vault
-...project-specific vault customization...
 ```
+
+> **No `## Vault` section in L4** — the example deliberately omits one. `## Vault` is L1-exclusive per §3.3 / §5.6; a `## Vault` H2 in any L4 source file is a compose-time validation error. The example shows the four slots that L4 *may* author: Identity, Soul, Instructions, Project Context.
 
 Each H3 op-block carries an optional HTML-comment metadata trailer (`authored-by`, `authored-at`, `source-conversation`) for the audit trail. The trailer is invisible to compose's parser but preserved in the file for human review and `git blame` traceability. Compose does not require or validate the metadata; only the section structure (H2 slot, H3 op + target) is load-bearing.
 
@@ -1167,7 +1166,7 @@ Before any L4 write commits:
 
 1. **Decision-tree audit**: a deepseek-class model reviews the agent's classification (replace vs insert vs append) and rejects if the call is wrong.
 2. **Mini-CQ**: the agent confirms the L4 write back to the human in conversation ("I'm adding an `insert-before step:cycle/file-bug` step for the incidents-directory check. OK?"). Confirmation triggers the commit; rejection aborts.
-3. **Compose dry-run**: compose runs in `--check` mode to validate that the new L4 file resolves cleanly (no orphan target, no DRY violation). Failure aborts before commit.
+3. **Compose dry-run**: compose runs in `--check` mode to validate that the new L4 file resolves cleanly (no orphan target, no DRY violation). Failure aborts before commit. The dry-run validates against the **to-be-committed** tree (staged L4 file + current L1-L3 on `HEAD`), so the post-commit recompose in §7.5 sees the same inputs the dry-run saw — assuming L1-L3 sources don't change between dry-run and commit. **Failure recovery for that narrow race**: if the post-commit recompose fails (e.g., another agent merged a concurrent PR that renamed a target step ID), the writing agent reverts the L4 commit with `git revert`, alerts the human via tracker comment with the compose diagnostic, and aborts the cycle. The agent never leaves a broken composed CLAUDE.md on `main`.
 
 Aligns with the existing approval-gate philosophy for autonomous writes (#8997 — L4 autonomous-write design).
 
