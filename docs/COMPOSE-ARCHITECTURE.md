@@ -80,11 +80,21 @@ Four layers, in shipping/precedence order:
 | **L1** — Base | What ANY SquidSquad agent is. Universal baseline: identity foundation, core principles, tracker protocol, cycle runner transport, inter-agent communication via forge (§5.1.1). Every role on every install starts from here. | `references/sub-skills/common/` (sub-skills L1 references) and the L1 portion of role source files | SquidSquad maintainers (shipped) |
 | **L2** — Role | Role-specific behaviours: `pm` coordinates, `verifier` verifies, `dm` packages, `worker` implements. The role-defining contract (responsibility, role-specific instructions, role-specific tone). | `references/roles/<role>/instructions.md` + `references/roles/<role>/SOUL.md` + `references/sub-skills/roles/<role>/` | SquidSquad maintainers (shipped) |
 | **L3** — Variant (role + domain) | Per-stack or per-domain specialization of a role: a `worker` for the android stack, a `verifier` for the web stack, etc. Same role contract narrowed to a domain. | `references/roles/<role>/<domain>/` (e.g. `roles/worker/android/`, `roles/verifier/web/`) | SquidSquad maintainers (shipped) |
-| **L4** — Project (per-install + role-class) | Project-local customizations of one role-class for this install. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context, identity overlays. (Does NOT include `vault` — L1-exclusive per §3.3.) | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
+| **L4** — Project (per-install + role-class) | **Long-living** project-local customizations of one role-class for this install. Permanent or load-bearing facts about THIS project that diverge from default SquidSquad behaviour — not short-term cycle state. Sourced from human conversation in the deployed project. Includes project-specific instructions, project context (durable facts), identity overlays. (Does NOT include `vault` — L1-exclusive per §3.3.) | `.squidsquad/project/<role-class>.md` (project-local, not distributed) | Agent (via human conversation), persisted by `compose.py` |
 
 **Each layer is *more specific* than the previous**: L1 = every agent → L2 = this role → L3 = this role + this domain → L4 = this role + this domain + this install. Cross-cutting sub-skills like `vault-protocol`, `improvement-scan`, `git-commit`, `agent-lifecycle` live in `references/sub-skills/common/` and are **referenced from** the appropriate layer (usually L1) — they aren't a layer themselves; they're shared procedures that layered instructions invoke.
 
-**Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **memory of how this project diverges from default SquidSquad behaviour**.
+**Key invariant** — L1-L3 are part of the SquidSquad repo and ship globally. L4 is *generated and maintained per-install* by the agent in response to human instruction in the deployed project. L4 is the **long-living memory of how this project diverges from default SquidSquad behaviour** — permanent project traits, standing human preferences, and load-bearing facts. Short-term state (current phase, in-flight PRs, today's blockers, cycle counters) is **NOT** L4 — it belongs in `.squidsquad/vault/BRIEFING.md` (the working short-term summary) or the tracker itself.
+
+**L4 vs BRIEFING.md vs tracker — what goes where:**
+
+| Lifetime | Example | Where it belongs |
+|---|---|---|
+| Permanent (multi-month / project-lifetime) | "PM is documentation-only on this team"; "self-hosted: framework builds itself"; "prose-heavy work product, drift is the primary risk"; tech stack; repo URL; architecture decisions that won't change | **L4** (`.squidsquad/project/<role-class>.md`) |
+| Medium-term (weeks / project-phase) | active priorities list, recent decisions, current blockers, "we're mid-TRD-polish, not yet PRDs" | **BRIEFING.md** (`.squidsquad/vault/BRIEFING.md`) — staleness-checked every cycle |
+| Short-term (cycle / task) | current cycle number, in-flight PR numbers, today's work-queue, last activity per agent | **tracker** (GitHub Issues + `working-state.md`) |
+
+A symptom that content is in the wrong layer: if you'd want to delete or rewrite it within a few cycles, it doesn't belong in L4.
 
 ```mermaid
 flowchart TB
@@ -677,6 +687,8 @@ Project-shaped descriptive facts — *what is true about this project / role*, n
 
 - **Domain / audience** — what this project is, who uses it, what kind of project it is.
 - **Repositories of record, external systems, sensitive constraints, project-specific tone-or-language notes** — anything that's a project-level fact the agent needs to know but isn't an instruction.
+
+**Long-living, not short-term memory.** Project Context (and L4 as a whole) is for **permanent or load-bearing facts** about this project — facts whose lifetime is measured in months or the project lifetime, not days or cycles. Short-term state (current phase, in-flight PR numbers, today's blockers, cycle counters, last-shipped-version) is **not L4**: it belongs in `.squidsquad/vault/BRIEFING.md` (the working short-term summary) or the tracker. See [§2](#2-the-l1-l4-model-recap-from-9925) for the lifetime-to-storage mapping. A simple test: if you'd want to rewrite or delete an L4 line within a few cycles, it doesn't belong in L4.
 
 **Authoring — L4-exclusive.** Project Context is the only slot that L1-L3 do NOT author. The reason is structural: L1 ships universal-across-all-installs, L2 ships role-across-all-installs, L3 ships variant-across-all-installs — none of those layers knows about any specific project, so none of them can author "what is true about *this* project." Anything that *seems* like cross-install project-context content (e.g., "PMs typically work in markdown") is actually role-identity content (Identity slot) or role-contract content (Responsibility) or tooling guidance (Instructions via a sub-skill) — not Project Context.
 
