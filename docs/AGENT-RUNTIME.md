@@ -624,7 +624,7 @@ The 30-minute interval is read from `.squidsquad/config.md`'s `Iteration Interva
 
 The pre-cycle script applies the high-confidence reactions from §4.5 before the agent's creative phase runs. Reactions land as `mechanical_reactions` in `cycle-input.json` so the agent can see what was done.
 
-In loop mode, reactions are **derived from tracker state**, not from the event bus (per §2 mutual exclusivity). Dedup is by the last-cycle timestamp persisted in working-state.md; state changes older than that are ignored.
+In loop mode, reactions are **derived from tracker state**, not from the event bus (per §2 mutual exclusivity). Dedup is by the last-cycle timestamp persisted in `.squidsquad/<alias>/working-state.md`; state changes older than that are ignored.
 
 Today's reactions:
 - `pr-merge-detected` (PM): `gh pr list` finds PRs that newly transitioned to merged since last cycle's timestamp; for each, look up the linked issue and verify its status.
@@ -640,7 +640,7 @@ See §7.6 for the substantive scan rules; this section's purpose is to anchor th
 
 ### 6.5 Context-pressure exit-42 and respawn
 
-When the cycle's context usage exceeds the configured threshold (default 70%), the agent checkpoints `working-state.md`, commits and pushes, and `cycle_post.py` exits with code 42. What respawns the agent depends on whether the harness is up:
+When the cycle's context usage exceeds the configured threshold (default 70%), the agent checkpoints `.squidsquad/<alias>/working-state.md`, commits and pushes, and `cycle_post.py` exits with code 42. What respawns the agent depends on whether the harness is up:
 
 - **With harness running** (#4966): the harness watches the agent's `.claude-pid`, sees the non-zero exit, and re-runs the boot flow (which in loop mode immediately re-schedules `/loop`).
 - **Harness-less loop mode**: `thin_launcher` is the parent process and exits when `claude.exe` exits — there is no automatic respawn. The agent stops after exit-42 until an operator restarts it. Context pressure is therefore a soft terminal state in harness-less mode; operators are expected to use a process supervisor (systemd, launchd, NSSM) or to restart agents periodically.
@@ -801,7 +801,7 @@ sequenceDiagram
 
 ### 7.2 Boot sequence
 
-The harness tracks each agent with two distinct fields in `.harness-state.json`:
+The harness tracks each agent with two distinct fields in `.squidsquad/.harness-state.json`:
 - **`intent`** = what the operator wants (`running` | `stopping` | `stopped`)
 - **`status`** = what the agent is actually doing (`booting` | `ready` | `stopping` | `stopped` | `crashed`)
 
@@ -872,7 +872,7 @@ State semantics:
 - **`stopped`** — process is dead AND `intent=stopped`. Terminal until operator restarts.
 - **`crashed`** — process death detected by health poller but `intent=running`. Harness auto-respawns; status flips back to `booting`.
 
-Two fields, not one, so recovery semantics are explicit. After a host reboot, the harness reads `.harness-state.json`, sees `intent=running` but no live PID → respawn. If collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed."
+Two fields, not one, so recovery semantics are explicit. After a host reboot, the harness reads `.squidsquad/.harness-state.json`, sees `intent=running` but no live PID → respawn. If collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed."
 
 ### 7.3 Work handoff: explicit `/work/assign`
 
@@ -1021,7 +1021,7 @@ If a nudge arrives while the agent is mid-cycle:
 
 | Crash point | Recovery |
 |---|---|
-| Mid-current-event | Restart reads `working-state.md`, resumes. Post-completion walk catches up. |
+| Mid-current-event | Restart reads `.squidsquad/<alias>/working-state.md`, resumes. Post-completion walk catches up. |
 | Between ack and walk | Restart sees no current work, enters idle. Original mid-cycle nudge is "lost" from context, but `event_poll`'s next poll re-detects past-cursor events and re-nudges. |
 | Multiple nudges arrived; agent crashed pre-walk | Any single fresh post-restart nudge triggers the walk that processes all queued events in order. |
 
