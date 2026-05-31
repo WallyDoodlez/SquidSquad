@@ -121,6 +121,21 @@ For clarity, these items belong to other PRDs and should NOT slip into PRD B:
 - Boot-time freshness check, L4-write trigger, operator `squidsquad_cli.py check` (PRD E / TRD §8)
 - An `Assemble:` config field of any kind (per [[project_assemble_unconditional]])
 
+## 9a. Coexistence with v1 — no broken installs during the transition
+
+**Family-wide constraint** (applies to all PRDs A–E): the existing v1 `.squidsquad/<alias>/CLAUDE.md` MUST remain the runtime contract until the family-wide **v2 switch PR** ships at the end of the slice family. No PRD-B PR is allowed to:
+
+1. Modify the v1 output path or its bytes
+2. Break the v1 compose pipeline (`compose.py deploy <role>` must keep producing byte-identical v1 output)
+3. Land assemble-pass code on the default path — v2 is opt-in (`--v2` flag or equivalent) until the switch
+
+**PRD-B-specific application**:
+- B1–B7 implement the assemble pipeline against the v2 link-stage output (PRD-A's output paths). Output goes to a v2 path (e.g. `.squidsquad/<alias>/CLAUDE.v2.md` + sibling `CLAUDE.linked.v2.md` + `CLAUDE.conflicts.v2.md`) — NOT to the v1 `CLAUDE.md`.
+- B8 golden-file tests assert (a) v2 outputs match expected goldens AND (b) a parallel run of v1 compose continues to produce byte-identical v1 `CLAUDE.md` content.
+- Loop-mode fallback during the switch is automatic per [[AGENT-RUNTIME]] §8.3 boot probe — no new mechanism needed.
+
+The switch PR (ships after A/B/C/D/E story-PRs all land) renames v2 paths to canonical v1 paths, removes v1 compose code, and drops the `--v2` opt-in flag in one atomic change.
+
 ## 10. Acceptance
 
 This PRD is "done" when:
