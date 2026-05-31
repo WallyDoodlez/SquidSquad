@@ -1,3 +1,3 @@
 # Working State
 
-DM queue 9. Context 83%.
+Harness down. DM queue 9. Patch ready in harness.py (#10538). Context 84%.
