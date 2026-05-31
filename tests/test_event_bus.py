@@ -145,6 +145,36 @@ class TestDiscoverPort:
         result = event_bus._discover_port()
         assert result is None
 
+    def test_runtime_squidsquad_dir_env_change_honored_10516(self, tmp_path, monkeypatch):
+        """#10516: a SQUIDSQUAD_DIR change set AFTER event_bus was imported
+        must be picked up by _discover_port() without a module reload.
+
+        The module-level SQUID_DIR captures the import-time env; this test
+        asserts that the runtime env wins, so test harnesses + future
+        dynamic-dispatch callers don't have to importlib-reload.
+        """
+        # Distinct dirs so we can prove which one was consulted.
+        env_squid = tmp_path / "env-squid" / ".squidsquad"
+        env_squid.mkdir(parents=True)
+        (env_squid / ".harness-port").write_text("18080", encoding="utf-8")
+
+        module_squid = tmp_path / "module-squid" / ".squidsquad"
+        module_squid.mkdir(parents=True)
+        (module_squid / ".harness-port").write_text("19090", encoding="utf-8")
+
+        monkeypatch.setattr(event_bus, "SQUID_DIR", module_squid)
+        # SQUIDSQUAD_DIR is the squid dir itself (the function does not
+        # append .squidsquad to the env value).
+        monkeypatch.setenv("SQUIDSQUAD_DIR", str(env_squid))
+
+        # Env wins.
+        assert event_bus._discover_port() == 18080
+
+        # When the env var is cleared mid-process, fall back to the
+        # module-level SQUID_DIR (preserves the pre-#10516 test surface).
+        monkeypatch.delenv("SQUIDSQUAD_DIR")
+        assert event_bus._discover_port() == 19090
+
 
 class TestGenerateId:
     """Tests for _generate_id() function. Widened to 16 hex + nonce per #9415."""
