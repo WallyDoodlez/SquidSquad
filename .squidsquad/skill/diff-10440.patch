@@ -1,0 +1,319 @@
+diff --git a/references/scripts/process_utils.py b/references/scripts/process_utils.py
+index 5c893aa1..34f278bd 100644
+--- a/references/scripts/process_utils.py
++++ b/references/scripts/process_utils.py
+@@ -7,6 +7,7 @@ the comment there. If you change the semantics here, mirror the change
+ in thin_launcher.py:_is_process_alive.
+ """
+ 
++import ctypes
+ import os
+ import sys
+ 
+@@ -15,6 +16,9 @@ import sys
+ _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+ _STILL_ACTIVE = 259
+ 
++# Cached typed kernel32 binding. See ``_win32_kernel32`` for the why.
++_CACHED_KERNEL32 = None
++
+ 
+ def is_process_alive(pid):
+     """Return True if a process with this PID is currently running.
+@@ -52,16 +56,25 @@ def is_process_alive(pid):
+ 
+ 
+ def _is_alive_win32(pid):
+-    """Win32 OpenProcess-based liveness check. Returns False on any error."""
+-    import ctypes
+-    kernel32 = ctypes.windll.kernel32
++    """Win32 OpenProcess-based liveness check. Returns False on any error.
++
++    Uses ``WinDLL(..., use_last_error=True)`` so the per-thread last-error
++    slot is captured by ctypes immediately after each Win32 call (#10440):
++    the default ``windll.kernel32`` doesn't, and any Python operation
++    between the call and a follow-up ``GetLastError`` can reset the
++    slot — making the ACCESS_DENIED-vs-INVALID_PARAMETER branch
++    unreliable. Explicit ``argtypes``/``restype`` on the three Win32
++    functions force the HANDLE to a full 64-bit pointer instead of the
++    ``c_int`` default (32-bit signed) — ABI-correct on x64 and a no-op
++    on x86.
++    """
++    kernel32 = _win32_kernel32()
+     handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+     if not handle:
+         # ERROR_INVALID_PARAMETER (87) means the PID is unknown to the OS
+         # (process never existed or was reaped). ERROR_ACCESS_DENIED (5)
+         # means the process exists but we can't open it — still alive.
+-        err = kernel32.GetLastError()
+-        return err == 5
++        return ctypes.get_last_error() == 5
+     try:
+         exit_code = ctypes.c_ulong()
+         if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+@@ -69,3 +82,27 @@ def _is_alive_win32(pid):
+         return True
+     finally:
+         kernel32.CloseHandle(handle)
++
++
++def _win32_kernel32():
++    """Return a ``WinDLL('kernel32', use_last_error=True)`` with the
++    three Win32 functions used by ``_is_alive_win32`` typed explicitly.
++
++    Lazily constructed so the import + signature setup don't fire on
++    POSIX. Cached on the module to avoid re-typing on every call (the
++    ``WinDLL`` handle and the ``argtypes`` assignments are idempotent
++    but allocating fresh objects every call is wasteful).
++    """
++    global _CACHED_KERNEL32
++    if _CACHED_KERNEL32 is not None:
++        return _CACHED_KERNEL32
++    from ctypes import wintypes
++    k = ctypes.WinDLL("kernel32", use_last_error=True)
++    k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
++    k.OpenProcess.restype = wintypes.HANDLE
++    k.CloseHandle.argtypes = [wintypes.HANDLE]
++    k.CloseHandle.restype = wintypes.BOOL
++    k.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
++    k.GetExitCodeProcess.restype = wintypes.BOOL
++    _CACHED_KERNEL32 = k
++    return k
+diff --git a/references/scripts/thin_launcher.py b/references/scripts/thin_launcher.py
+index 91b1cd53..9122c868 100644
+--- a/references/scripts/thin_launcher.py
++++ b/references/scripts/thin_launcher.py
+@@ -34,6 +34,10 @@ VALID_EFFORT_LEVELS = {"low", "medium", "high", "max"}
+ _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+ _STILL_ACTIVE = 259
+ 
++# Cached typed kernel32 binding for the Windows liveness probe (#10440).
++# Mirrored from process_utils — see the note above _is_process_alive.
++_CACHED_KERNEL32 = None
++
+ # #10101: poll budget for resolving the actual claude.exe descendant
+ # of the cmd.exe wrapper spawned by the npm shim on Windows.
+ _CLAUDE_EXE_RESOLVE_TIMEOUT_S = 5.0
+@@ -87,15 +91,21 @@ def _is_process_alive(pid):
+     ``tasklist`` — on some Windows systems it takes 20+ s and wedges
+     the harness (#9904). Uses ``sys.platform`` not ``platform.system()``
+     to dodge the Python 3.12 Windows WMI hang (#9903).
++
++    Built on ``WinDLL(..., use_last_error=True)`` + explicit
++    ``argtypes``/``restype`` (#10440). The default ``windll.kernel32``
++    lets an interleaved Python operation reset the per-thread last-error
++    slot before ``GetLastError`` is read, making the ACCESS_DENIED-vs-
++    INVALID_PARAMETER branch unreliable.
+     """
+     if pid is None or pid <= 0:
+         return False
+     if sys.platform == "win32":
+-        import ctypes
+-        kernel32 = ctypes.windll.kernel32
++        import ctypes  # noqa: F401  — kept in the win32 branch per #8891
++        kernel32 = _win32_kernel32()
+         handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+         if not handle:
+-            return kernel32.GetLastError() == 5  # ACCESS_DENIED → exists
++            return ctypes.get_last_error() == 5  # ACCESS_DENIED → exists
+         try:
+             exit_code = ctypes.c_ulong()
+             if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+@@ -110,6 +120,29 @@ def _is_process_alive(pid):
+         return False
+ 
+ 
++def _win32_kernel32():
++    """Return a typed ``WinDLL('kernel32', use_last_error=True)`` (#10440).
++
++    Sibling of ``process_utils._win32_kernel32`` — kept local here to
++    avoid importing process_utils at launcher startup (#8891). If you
++    change the semantics there, mirror the change here.
++    """
++    global _CACHED_KERNEL32
++    if _CACHED_KERNEL32 is not None:
++        return _CACHED_KERNEL32
++    import ctypes
++    from ctypes import wintypes
++    k = ctypes.WinDLL("kernel32", use_last_error=True)
++    k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
++    k.OpenProcess.restype = wintypes.HANDLE
++    k.CloseHandle.argtypes = [wintypes.HANDLE]
++    k.CloseHandle.restype = wintypes.BOOL
++    k.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
++    k.GetExitCodeProcess.restype = wintypes.BOOL
++    _CACHED_KERNEL32 = k
++    return k
++
++
+ def _check_singleton(clone_path, role):
+     """Return a live PID if another agent of this role is already running here.
+ 
+diff --git a/tests/run_tests.py b/tests/run_tests.py
+index b89f75cd..c5abc380 100644
+--- a/tests/run_tests.py
++++ b/tests/run_tests.py
+@@ -113,6 +113,7 @@ STATIC_TEST_MODULES = [
+     "test_9398_tracker_gh_resolution",
+     "test_pickup_comment_fidelity_9946",
+     "test_terminology_dual_aware_6274",
++    "test_process_utils",
+ ]
+ 
+ 
+diff --git a/tests/test_process_utils.py b/tests/test_process_utils.py
+index ff733e9b..f7ecabb0 100644
+--- a/tests/test_process_utils.py
++++ b/tests/test_process_utils.py
+@@ -53,65 +53,111 @@ class TestIsProcessAlive:
+             assert process_utils.is_process_alive(12345) is True
+             kill.assert_called_once_with(12345, 0)
+ 
+-    def test_windows_uses_openprocess_not_tasklist(self):
++    # ---- Win32 branch (#10440 reshape: monkey-patch _win32_kernel32 +
++    # ctypes.get_last_error directly; the old sys.modules['ctypes'] patch
++    # no longer works because ctypes is imported at module level). ----
++
++    def _fake_kernel32_for_win_tests(self, monkeypatch):
++        fake = MagicMock(name="kernel32")
++        monkeypatch.setattr(process_utils, "_win32_kernel32", lambda: fake)
++        monkeypatch.setattr(process_utils.sys, "platform", "win32")
++        return fake
++
++    def test_windows_uses_openprocess_not_tasklist(self, monkeypatch):
+         """#9904: Windows path must use OpenProcess via ctypes, never
+         shell out to tasklist (which takes 20+ s on some systems and
+         wedges the harness)."""
+-        fake_kernel32 = MagicMock()
++        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
+         fake_kernel32.OpenProcess.return_value = 12345  # nonzero handle
+-        # GetExitCodeProcess writes STILL_ACTIVE (259) via byref
++
+         def get_exit(handle, exit_ptr):
+             exit_ptr._obj.value = 259
+             return 1
++
+         fake_kernel32.GetExitCodeProcess.side_effect = get_exit
+-        fake_ctypes = MagicMock()
+-        fake_ctypes.windll.kernel32 = fake_kernel32
+-        fake_ctypes.c_ulong = __import__("ctypes").c_ulong
+-        fake_ctypes.byref = __import__("ctypes").byref
+-        with patch("process_utils.sys.platform", "win32"), \
+-             patch.dict(sys.modules, {"ctypes": fake_ctypes}):
+-            assert process_utils.is_process_alive(12345) is True
+-            fake_kernel32.OpenProcess.assert_called_once()
+-            fake_kernel32.CloseHandle.assert_called_once()
++        assert process_utils.is_process_alive(12345) is True
++        fake_kernel32.OpenProcess.assert_called_once()
++        fake_kernel32.CloseHandle.assert_called_once()
+ 
+-    def test_windows_dead_process_returns_false(self):
++    def test_windows_dead_process_returns_false(self, monkeypatch):
+         """OpenProcess succeeds but GetExitCodeProcess returns non-STILL_ACTIVE."""
+-        fake_kernel32 = MagicMock()
++        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
+         fake_kernel32.OpenProcess.return_value = 12345
++
+         def get_exit(handle, exit_ptr):
+             exit_ptr._obj.value = 0  # process exited with 0
+             return 1
++
+         fake_kernel32.GetExitCodeProcess.side_effect = get_exit
+-        fake_ctypes = MagicMock()
+-        fake_ctypes.windll.kernel32 = fake_kernel32
+-        fake_ctypes.c_ulong = __import__("ctypes").c_ulong
+-        fake_ctypes.byref = __import__("ctypes").byref
+-        with patch("process_utils.sys.platform", "win32"), \
+-             patch.dict(sys.modules, {"ctypes": fake_ctypes}):
+-            assert process_utils.is_process_alive(12345) is False
+-            fake_kernel32.CloseHandle.assert_called_once()
++        assert process_utils.is_process_alive(12345) is False
++        fake_kernel32.CloseHandle.assert_called_once()
+ 
+-    def test_windows_openprocess_failure_returns_false(self):
+-        """OpenProcess returns 0 + ERROR_INVALID_PARAMETER → process unknown."""
+-        fake_kernel32 = MagicMock()
++    def test_windows_openprocess_failure_invalid_param_returns_false(self, monkeypatch):
++        """OpenProcess returns 0 + ERROR_INVALID_PARAMETER → process unknown.
++
++        #10440: read via ctypes.get_last_error (use_last_error pattern),
++        not kernel32.GetLastError — the per-thread last-error slot must
++        be captured by ctypes immediately after the call.
++        """
++        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
+         fake_kernel32.OpenProcess.return_value = 0
+-        fake_kernel32.GetLastError.return_value = 87  # ERROR_INVALID_PARAMETER
+-        fake_ctypes = MagicMock()
+-        fake_ctypes.windll.kernel32 = fake_kernel32
+-        with patch("process_utils.sys.platform", "win32"), \
+-             patch.dict(sys.modules, {"ctypes": fake_ctypes}):
+-            assert process_utils.is_process_alive(99999999) is False
+-
+-    def test_windows_access_denied_means_alive(self):
++        monkeypatch.setattr(process_utils.ctypes, "get_last_error", lambda: 87)
++        assert process_utils.is_process_alive(99999999) is False
++
++    def test_windows_access_denied_means_alive(self, monkeypatch):
+         """ERROR_ACCESS_DENIED (5) means process exists, we just can't open it."""
+-        fake_kernel32 = MagicMock()
++        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
+         fake_kernel32.OpenProcess.return_value = 0
+-        fake_kernel32.GetLastError.return_value = 5  # ERROR_ACCESS_DENIED
+-        fake_ctypes = MagicMock()
+-        fake_ctypes.windll.kernel32 = fake_kernel32
+-        with patch("process_utils.sys.platform", "win32"), \
+-             patch.dict(sys.modules, {"ctypes": fake_ctypes}):
+-            assert process_utils.is_process_alive(4) is True  # System PID
++        monkeypatch.setattr(process_utils.ctypes, "get_last_error", lambda: 5)
++        assert process_utils.is_process_alive(4) is True  # System PID
++
++    def test_windows_get_exit_code_failure_treated_as_alive(self, monkeypatch):
++        """If GetExitCodeProcess returns 0 (call failed) but OpenProcess
++        succeeded, the process existed when we held the handle —
++        conservative: still alive. Lock the existing semantics."""
++        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
++        fake_kernel32.OpenProcess.return_value = 1
++        fake_kernel32.GetExitCodeProcess.return_value = 0
++        assert process_utils.is_process_alive(1234) is True
++        fake_kernel32.CloseHandle.assert_called_once()
++
++    def test_windows_close_handle_runs_on_exception(self, monkeypatch):
++        """try/finally MUST close the handle even when GetExitCodeProcess
++        raises — otherwise every error path leaks a kernel handle."""
++        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
++        fake_kernel32.OpenProcess.return_value = 7
++        fake_kernel32.GetExitCodeProcess.side_effect = RuntimeError("boom")
++        import pytest as _pt
++        with _pt.raises(RuntimeError):
++            process_utils.is_process_alive(1234)
++        fake_kernel32.CloseHandle.assert_called_once_with(7)
++
++
++class TestWin32KernelBinding:
++    """#10440: the typed kernel32 binding caches + sets explicit argtypes."""
++
++    def test_cache_returns_same_object(self, monkeypatch):
++        monkeypatch.setattr(process_utils, "_CACHED_KERNEL32", None)
++        if process_utils.sys.platform != "win32":
++            import pytest as _pt
++            _pt.skip("WinDLL is Windows-only; cache test runs only on win32")
++        first = process_utils._win32_kernel32()
++        second = process_utils._win32_kernel32()
++        assert first is second
++
++    def test_argtypes_set_for_64bit_handle_correctness(self, monkeypatch):
++        monkeypatch.setattr(process_utils, "_CACHED_KERNEL32", None)
++        if process_utils.sys.platform != "win32":
++            import pytest as _pt
++            _pt.skip("WinDLL is Windows-only")
++        from ctypes import wintypes
++        k = process_utils._win32_kernel32()
++        # restype on OpenProcess must be HANDLE (full pointer width)
++        # instead of the ctypes default c_int (32-bit signed). That's
++        # the ABI-correctness half of #10440.
++        assert k.OpenProcess.restype is wintypes.HANDLE
++        assert k.GetExitCodeProcess.restype is wintypes.BOOL
++        assert k.CloseHandle.restype is wintypes.BOOL
+ 
+     def test_no_platform_module_imported(self):
+         """#9903 regression: platform.system() hangs on Python 3.12 Windows
