@@ -1010,3 +1010,5 @@
 {"timestamp": 1780202859.843011, "task_type": "code-review", "task_id": "prd-b-draft-audit", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 2466, "elapsed_seconds": 186.8}
 {"timestamp": 1780204739.384722, "task_type": "code-review", "task_id": "prd-c-draft-audit", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 5192, "elapsed_seconds": 205.1}
 {"timestamp": 1780205563.5826867, "task_type": "code-review", "task_id": "prd-c-audit-r2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 1030, "elapsed_seconds": 776.1}
+{"timestamp": 1780207461.790849, "task_type": "code-review", "task_id": "prd-de-coexistence-audit", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 1718, "elapsed_seconds": 782.4}
+{"timestamp": 1780207746.505225, "task_type": "code-review", "task_id": "prd-de-coexistence-r2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 8225, "elapsed_seconds": 251.2}
