@@ -1,0 +1,79 @@
+diff --git a/references/scripts/event_bus.py b/references/scripts/event_bus.py
+index cef1cd2f..be47319f 100644
+--- a/references/scripts/event_bus.py
++++ b/references/scripts/event_bus.py
+@@ -37,6 +37,12 @@ def _resolve_squid_dir() -> Path:
+     return Path(raw).expanduser()
+ 
+ 
++# Module-level capture is kept for backwards compatibility with callers
++# that grep this attribute (e.g. ``test_9398_squidsquad_dir_env_var.py``
++# expects ``event_bus.SQUID_DIR`` to be the value resolved when the
++# module loads). Internal call sites use ``_resolve_squid_dir()`` directly
++# so a runtime ``SQUIDSQUAD_DIR`` change is honored without requiring an
++# ``importlib`` reload (#10516).
+ SQUID_DIR = _resolve_squid_dir()
+ 
+ # Timeout: 500ms — never blocks agent cycle
+@@ -50,9 +56,19 @@ def _discover_port():
+     distributes the port file to all clone directories at boot
+     (harness.py lifespan), so parent-dir walk is unnecessary.
+ 
++    Resolution order (#10516):
++
++    1. ``SQUIDSQUAD_DIR`` env var if set at call time — honors a runtime
++       override without requiring an ``importlib`` reload.
++    2. Module-level ``SQUID_DIR`` — the value captured when the module
++       loaded; what tests that ``patch.object(event_bus, 'SQUID_DIR', …)``
++       expect to control.
++
+     Returns port number or None if not discoverable.
+     """
+-    port_file = SQUID_DIR / ".harness-port"
++    raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
++    squid_dir = Path(raw).expanduser() if raw else SQUID_DIR
++    port_file = squid_dir / ".harness-port"
+     if port_file.exists():
+         try:
+             return int(port_file.read_text(encoding="utf-8").strip())
+diff --git a/tests/test_event_bus.py b/tests/test_event_bus.py
+index 723cafab..aa6d20b7 100644
+--- a/tests/test_event_bus.py
++++ b/tests/test_event_bus.py
+@@ -145,6 +145,36 @@ class TestDiscoverPort:
+         result = event_bus._discover_port()
+         assert result is None
+ 
++    def test_runtime_squidsquad_dir_env_change_honored_10516(self, tmp_path, monkeypatch):
++        """#10516: a SQUIDSQUAD_DIR change set AFTER event_bus was imported
++        must be picked up by _discover_port() without a module reload.
++
++        The module-level SQUID_DIR captures the import-time env; this test
++        asserts that the runtime env wins, so test harnesses + future
++        dynamic-dispatch callers don't have to importlib-reload.
++        """
++        # Distinct dirs so we can prove which one was consulted.
++        env_squid = tmp_path / "env-squid" / ".squidsquad"
++        env_squid.mkdir(parents=True)
++        (env_squid / ".harness-port").write_text("18080", encoding="utf-8")
++
++        module_squid = tmp_path / "module-squid" / ".squidsquad"
++        module_squid.mkdir(parents=True)
++        (module_squid / ".harness-port").write_text("19090", encoding="utf-8")
++
++        monkeypatch.setattr(event_bus, "SQUID_DIR", module_squid)
++        # SQUIDSQUAD_DIR is the squid dir itself (the function does not
++        # append .squidsquad to the env value).
++        monkeypatch.setenv("SQUIDSQUAD_DIR", str(env_squid))
++
++        # Env wins.
++        assert event_bus._discover_port() == 18080
++
++        # When the env var is cleared mid-process, fall back to the
++        # module-level SQUID_DIR (preserves the pre-#10516 test surface).
++        monkeypatch.delenv("SQUIDSQUAD_DIR")
++        assert event_bus._discover_port() == 19090
++
+ 
+ class TestGenerateId:
+     """Tests for _generate_id() function. Widened to 16 hex + nonce per #9415."""
