@@ -198,7 +198,12 @@ default state: active (10s between polls)
   hard ceiling: 60s
 ```
 
-The cadence floor is 10s — the documented backoff never reduces below the default active interval. A hard 5s floor is reserved at the implementation level as a rate-limit safety guard for any future burst-on-event refinement, but no rule today drives the cadence below 10s.
+**Two distinct floors** (reconciled with [AGENT-RUNTIME §4.4](AGENT-RUNTIME.md)):
+
+- **Contractual hard floor: 5s** — GitHub REST rate-limit safety guard. EAD MUST NEVER poll faster than 5s regardless of which heuristic is active. This is the absolute floor enforced at the implementation level and is what AGENT-RUNTIME §4.4 + §9 Q3 lock as the rate-limit-safety floor.
+- **Active-cadence effective floor: 10s** — the default active interval and the current backoff algorithm's minimum (no heuristic today drives below 10s). A future burst-on-event refinement could legitimately push between 10s and the 5s contractual floor.
+
+The two are different things called "floor": the 5s value is the rate-limit safety guard (a runtime invariant); the 10s value is today's backoff-algorithm minimum (an implementation detail of the current heuristic).
 
 Three-stage cadence: 10s → 30s → 60s (two backoff transitions). A drained queue stabilizes at 60s after ≥6 consecutive empty polls (~2 minutes idle).
 
