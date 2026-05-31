@@ -269,7 +269,7 @@ step-ids: [step:cycle/<name>, step:boot/<name>, ...]  # for instructions slot on
 >
 > May be replaced by a regular `.md` with explicit frontmatter; the shorthand is equivalent, not load-bearing.
 >
-> (Responsibility-slot content used to have a parallel shorthand at `references/sub-skills/roles/<role>/responsibility.md`. That file is retired per §5.5; responsibility content now lives in the role-class's L2 source via explicit `slot: responsibility` frontmatter, not via filename convention. The shorthand is gone.)
+> (Responsibility-slot content used to have a parallel shorthand at `references/sub-skills/roles/<role>/responsibility.md`. That file is retired per §5.2; responsibility content now lives in the role-class's L2 source via explicit `slot: responsibility` frontmatter, not via filename convention. The shorthand is gone.)
 
 Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10, 20, 30) so future inserts don't require renumbering.
 

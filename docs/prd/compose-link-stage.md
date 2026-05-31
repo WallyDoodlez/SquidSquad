@@ -35,7 +35,8 @@ The link stage is "done" for PRD-A purposes when ALL of the following hold:
    - L1-L3 source file with `slot: project-context` frontmatter → abort
    - L4 `### append` block under `## Instructions` with no `→ run sub-skill: <name>` reference → abort
    - L4 op references a non-existent step ID → abort
-   - Whole-slot `replace` mixed with other ops in same L4 file → abort
+   - Whole-slot `replace` mixed with other ops in the **same slot** → abort (per-slot scope, NOT per-file; a whole-slot `replace` on `## Responsibility` does NOT forbid `### append` blocks under `## Instructions` in the same file)
+   - Two `### replace step:cycle/<id>` H3 blocks targeting the same step ID → abort (per TRD §4.2 step 3)
 7. The composed output is byte-stable across re-runs given unchanged inputs (no timestamps, no random ordering, no in-memory pointer-derived strings).
 8. The composed output preserves sub-skill references as `→ run sub-skill: <name>` text — sub-skill bodies are NOT inlined (the catalog-gate piece of this is PRD D's scope; this PRD only requires that references survive verbatim).
 
@@ -106,6 +107,37 @@ For clarity, the following items belong to other PRDs and should NOT slip into P
 - Boot-time freshness check (PRD E / TRD §8.1)
 - L4-write trigger for auto-recompose (PRD E / TRD §8.2)
 - Operator `squidsquad_cli.py check` (PRD E / TRD §8.3)
+
+## 9a. Coexistence with v1 — no broken installs during the transition
+
+**Family-wide constraint** (applies to all PRDs A–E): the existing v1 `.squidsquad/<alias>/CLAUDE.md` MUST remain the runtime contract until the family-wide **v2 switch PR** ships at the end of the slice family. No PRD-A story-PR is allowed to:
+
+1. Modify the v1 output path (`.squidsquad/<alias>/CLAUDE.md`) or its bytes
+2. Break the v1 compose pipeline — existing `compose.py deploy <role>` must keep producing byte-identical v1 output as code lands
+3. Land v2 link-stage code on the **default** path. v2 is opt-in (`compose.py deploy --v2 <alias>` or equivalent flag) until the switch PR
+
+**Mechanism (family-wide)**:
+- **v2 code lives side-by-side with v1.** New functions or a new module (e.g. `compose_v2.py`) sit next to `compose.py`. The switch is done by changing one default.
+- **v2 outputs write to v2 paths.** PRD-A writes `.squidsquad/<alias>/CLAUDE.linked.v2.md` (the bare linked composite, since assemble is PRD-B). The final assembled CLAUDE.md lives at `.squidsquad/<alias>/CLAUDE.v2.md` once PRD-B B7 lands. The exact path convention is locked in PRD-A story A5 / A6 ahead of any v2-output writes.
+- **CI regression on v1.** Every PR that touches `compose.py` must regenerate the v1 outputs and confirm byte-identical to pre-PR (a git-diff check against this repo's `.squidsquad/*/CLAUDE.md`). Catches accidental v1 regressions inside refactors.
+- **Loop mode is the natural fallback during the switch.** Per [[AGENT-RUNTIME]] §8.3 the agent's boot probe selects wake mode per session; if event-mode integration goes intermittent during the switch window, agents naturally degrade to loop mode without operator action. No new mechanism needed.
+
+**PRD-A-specific application**:
+- A1 (audit) — read-only; no v1 risk.
+- A2 (validation rules) — when implemented against v2 link stage; v2 path only.
+- A3 (byte-stability tests) — runs against v2 outputs (`CLAUDE.linked.v2.md`) AND continues to verify v1 outputs unchanged (the dual-track regression check above).
+- A4 (`deploy-all --check`) — operates on v1 paths initially (PRD-E's freshness consumer); a v2 sibling `--check --v2` lands as A4.5 per Q-C5 surfaced in [[compose-l4-customization]].
+- A5 (`## Aliases` parser) — additive new module; no v1 path touched. Existing v1 `Workers:` reading stays in place until the switch.
+- A6 (CLI accepts alias) — adds `--v2` flag to opt into the new alias-keyed entrypoint; v1 `<role>`-keyed path remains the default.
+
+**The v2 switch PR** (last in the family, after A/B/C/D/E story-PRs all land):
+
+1. Renames v2 output paths to v1's canonical paths (`CLAUDE.v2.md` → `CLAUDE.md`).
+2. Removes v1 compose code paths (`_assemble_claude`, the old `_resolve_includes`, multi-file L4 routing, manifest split).
+3. Removes the `--v2` opt-in flag from CLI.
+4. Updates this family's "Status" headers to `shipped`.
+
+Operators with running installs see no behavior change until they pull the switch PR. Loop-mode fallback during the switch is automatic via the existing boot probe.
 
 ## 10. Acceptance
 
