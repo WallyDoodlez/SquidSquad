@@ -113,6 +113,26 @@ class TestReadInterval:
         with patch("config.get_field", return_value=""):
             assert health_check._read_interval() == 30
 
+    def test_system_exit_returns_default(self):
+        """#10348 regression: config.get_field calls sys.exit(1) when the
+        field is absent. SystemExit is a BaseException, not an Exception,
+        so the previous narrow `except (ImportError, ValueError, TypeError)`
+        let the exit propagate and aborted the script. The widened catch
+        must now fall through to the 30-minute default.
+        """
+        with patch("config.get_field", side_effect=SystemExit(1)):
+            assert health_check._read_interval() == 30
+
+    def test_keyboard_interrupt_propagates(self):
+        """#10348: KeyboardInterrupt must NOT be swallowed — Ctrl+C should
+        abort, not silently fall through to the default. Locks in the
+        narrow `(SystemExit, Exception)` catch against future drift toward
+        `BaseException`, which would also swallow KeyboardInterrupt.
+        """
+        with patch("config.get_field", side_effect=KeyboardInterrupt):
+            with pytest.raises(KeyboardInterrupt):
+                health_check._read_interval()
+
 
 class TestParseCurrentState:
     def test_valid_state(self):
