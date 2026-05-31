@@ -210,7 +210,7 @@ flowchart TB
 - Monitor needs a long-lived stdin source — `event_poll`'s exact job.
 - `thin_launcher` exits when Claude exits — wrong shape for Monitor's contract.
 - Failure isolation: an `event_poll` crash doesn't take Claude down.
-- Restart semantics: harness can restart `thin_launcher` to respawn Claude without losing polling state.
+- Restart semantics: harness can restart `thin_launcher` to respawn Claude without losing polling state. This applies to the `cmd → thin_launcher → claude` chain — `event_poll` is a separate harness-owned child (per §7.0) and is NOT auto-respawned independently; if `event_poll` dies, agent restart is the recovery path.
 
 Conceptually they form "the agent's launcher subprocess tree." Implementation-wise they're two processes.
 
