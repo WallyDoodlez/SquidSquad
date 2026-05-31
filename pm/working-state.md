@@ -1,18 +1,22 @@
 # Working State
 
-- **Task**: PRDs A-E all drafted with §9a coexistence; awaiting human review on PR #10390 (B) + PR #10391 (C) + main commit 4a3da667 (A retrofit + D + E)
+- **Task**: PRD slice family A-E drafted; awaiting human review + direction on open questions
 - **Status**: idle
 - **Last Processed Event ID**: null
 
-## PRD slice family — final shape
+## PRD slice family (complete)
 
 | | TRD anchor | Status |
 |---|---|---|
-| A — Link stage | §3 + §4.1–§4.5 + §5 + §6.1–§6.4 | merged (#10383); §9a coexistence retrofit on main (4a3da667) |
-| B — Assemble stage | §4.6 | PR #10390 + §9a coexistence on branch |
-| C — L4 customization | §3.3 + §4.2 + §7 | PR #10391 + §9a coexistence on branch |
+| A — Link stage | §3 + §4.1–§4.5 + §5 + §6.1–§6.4 | merged (#10383); §9a coexistence on main (4a3da667) |
+| B — Assemble stage | §4.6 | PR #10390 |
+| C — L4 customization | §3.3 + §4.2 + §7 | PR #10391 |
 | D — Catalog + wake-mode | §4.5 + §6.5 | on main (4a3da667) |
 | E — Compose freshness + v2 cutover | §8 | on main (4a3da667) |
+
+## This cycle's pipeline-sentinel actions
+
+- Closed PR #10380 (stale: built on architectural assumptions later dropped this session)
 
 ## Open questions awaiting human direction
 
@@ -25,15 +29,21 @@ From A1 audit:
 From PRD-C:
 - **Q-C5**: PRD-A A4.5 (staged-content --check) — file new story?
 
-From this cycle:
-- **Q (operational)**: PRDs D + E + A coexistence landed on main directly via branch-switching issue. Revert + open PR, or accept and review the merged state?
+Operational:
+- **Q (revert)**: PRDs D + E + A coexistence landed on main directly via branch-switching issue. Revert + PR, or accept and review the merged state?
+
+## Memory rules saved this session
+
+- project_compose_freshness_harness_owned (harness owns freshness, no target-repo CI)
+- project_assemble_unconditional (no Assemble: opt-out; assemble runs every compose)
+- feedback_v1_coexistence_pattern (large refactors keep v1 as runtime contract; v2 side-by-side; single atomic switch PR)
 
 ## Context
 
-~70% — at threshold. cycle_post may exit-42 next cycle.
+38% — well under threshold.
 
 ## Tracker
 
 - 5 PRD-A implementation tasks (#10385–10389) at pending
-- 2 open PRs (#10390 PRD-B, #10391 PRD-C)
-- Memory rules this session: project_compose_freshness_harness_owned, project_assemble_unconditional
+- 2 open PRs (#10390 B, #10391 C); #10380 closed this cycle
+- Memory layer: 47 rules indexed
