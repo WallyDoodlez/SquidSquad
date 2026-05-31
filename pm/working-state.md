@@ -1,16 +1,24 @@
 # Working State
 
-- **Task**: Overnight watch — verifier just booted, awaiting A5 pickup
-- **Status**: idle (watching)
+- **Task**: Overnight watch — A5 verified, awaiting DM ship
+- **Status**: idle (watching DM)
 - **Last Processed Event ID**: null
 
 ## Watch progress
 
-- Verifier 🦑 healthy (0m post-boot)
-- A5 #10385 still pending-test — verifier hasn't picked up yet (normal — just spawned)
-- PR #10401 mergeable, awaiting verifier pass
+- **A5 #10385 / PR #10401**: pending-ship; verifier passed at 03:44 (verification artifact + comment posted)
+- **DM** 🦑 healthy, idle — should ship A5 next
+- **All 4 agents** healthy at this cycle
 - 0 stalls
+
+## Pipeline
+
+| Item | State |
+|---|---|
+| A5 #10385 / PR #10401 | pending-ship (verified, mergeable=unknown) |
+| Other PRD-A | pending (held) |
+| PRD-B/C/D+E PRs | awaiting human review |
 
 ## Context
 
-47% — healthy.
+48% — healthy.
