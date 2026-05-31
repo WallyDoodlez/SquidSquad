@@ -126,6 +126,23 @@ For traceability, these belong to other PRDs:
 - L4 multi-file → single-file migration of this repo's existing content (companion task A2.5)
 - Vault writes (separate sub-skills)
 
+## 9a. Coexistence with v1 — no broken installs during the transition
+
+**Family-wide constraint** (applies to all PRDs A–E): the existing v1 `.squidsquad/<alias>/CLAUDE.md` MUST remain the runtime contract until the family-wide **v2 switch PR** ships. No PRD-C PR is allowed to:
+
+1. Modify the v1 output path or its bytes
+2. Break the v1 compose pipeline (existing `compose.py deploy <role>` must keep producing byte-identical v1 output)
+3. Land `l4-curation` writes on the default code path against the v1 L4 file shape — until the switch, `l4-curation` writes target the v2 single-file `<role-class>.md` location, NOT the legacy multi-file pattern
+
+**PRD-C-specific application**:
+- C1's authored `l4-curation.md` sub-skill is composed-in only by the v2 compose path. Until v2 is the default (post-switch PR), the live install's L1-L3 instructions do NOT yet teach agents to invoke `l4-curation`, so the runtime L4 write flow is dormant — by design. Operators get the new behavior only when v2 outputs land at the v1 path during the switch.
+- C5 dry-run gate invokes v2 `compose.py deploy <alias> --check --v2` (or the equivalent opt-in flag) against the staged v2 L4 file. Failure aborts before commit. v1 outputs are NOT touched by C5's path.
+- C6 atomic write targets `.squidsquad/project/<role-class>.md` — but a write here only takes effect on the runtime when v2 compose reads it. Until the switch, writes accumulate harmlessly in the v2 source tree.
+- The v2 switch PR (last in the family) flips the default so v1 multi-file L4 routing is removed and `<role-class>.md` becomes the only L4 source.
+- Loop-mode fallback during the switch is automatic per [[AGENT-RUNTIME]] §8.3 boot probe — no new mechanism needed.
+
+This means **PRD-C can ship its sub-skill (C1) and gate code (C3–C7) without disrupting any running install**. Behavior changes only at the switch.
+
 ## 10. Acceptance
 
 This PRD is "done" when:
