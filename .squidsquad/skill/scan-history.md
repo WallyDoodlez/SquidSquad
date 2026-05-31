@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-31 13:16
+
+- **Files scanned**: references/scripts/event_bus.py (full 190 lines; focus on the SQUIDSQUAD_DIR foot-gun introduced by #9398 + the silent-no-op timeout contract).
+- **Findings**: #10516 (low — `SQUID_DIR = _resolve_squid_dir()` is captured once at module-import time, so any code path that sets `SQUIDSQUAD_DIR` AFTER `event_bus` is first imported sees zero effect. The existing test fixture in `test_9398_squidsquad_dir_env_var.py` worked around it by doing a full `importlib` reload, which is the only way to verify the env-var path fires today. Production launcher sets the env before Python starts so it doesn't bite today, but it's a foot-gun for any future dynamic-dispatch or integration test caller. Fix: inline the resolution inside `_discover_port()`).
+- **Items rejected by human**: none yet
+- **Notes**: `_TIMEOUT = 0.5` combined with the silent-no-op contract means a stale `.harness-port` file (harness crashed but file wasn't cleaned) burns 500ms per emit with no fast-failure feedback — worth a separate issue if it ever shows up in profiles, called out as out-of-scope in #10516. `_generate_id` uses sha256 with `os.urandom(2)` nonce (#9415 fix); 16-char width + 4-hex nonce is solid. The broad `except Exception: pass` in `emit()` is the documented fire-and-forget contract; not a defect. `urllib.request.urlopen` doesn't enter a context manager, but on the success path Python's GC closes the socket promptly enough; not worth flipping.
+
 ## Scan — 2026-05-31 09:45
 
 - **Files scanned**: references/scripts/process_utils.py (full 71 lines; focus on the Win32 ctypes liveness probe at L54-71), references/scripts/thin_launcher.py (L78-105 — deliberate sibling copy of same routine per #8891).
