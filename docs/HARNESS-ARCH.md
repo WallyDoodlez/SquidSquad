@@ -33,7 +33,7 @@ Out of scope:
 
 ## 2. What the harness is
 
-The harness is **one process per SquidSquad install**, started by the operator via `start.sh` at the repo root (a thin shell wrapper that invokes `squidsquad_cli.py start` with the appropriate environment). `start_team.py` is a deprecated alias retained for compatibility. The installer's upgrade flow (INSTALLER-ARCH §10) invokes `start.sh` when the harness is unreachable (port file missing or HTTP probe fails); running-and-reachable upgrades use the harness's per-agent lifecycle endpoints directly (see INSTALLER-ARCH §10 step 5). The harness runs in the foreground in a terminal window — there is no daemonization. Operator owns the lifetime; closing the terminal stops the harness.
+The harness is **one process per SquidSquad install**, started by the operator via `start.sh` at the repo root (a thin shell wrapper that invokes `squidsquad_cli.py start` with the appropriate environment). `start_team.py` is a deprecated alias retained for compatibility. The installer's post-migration restart path ([INSTALLER-ARCH §10.3](INSTALLER-ARCH.md)) invokes `start.sh` when the harness is unreachable (port file missing or HTTP probe fails); running-and-reachable upgrades use the harness's per-agent lifecycle endpoints directly (see [INSTALLER-ARCH §10.3](INSTALLER-ARCH.md)). The harness runs in the foreground in a terminal window — there is no daemonization. Operator owns the lifetime; closing the terminal stops the harness.
 
 **Lifecycle authority** sits with the harness's HTTP API: any localhost caller (operator CLIs, the installer during upgrade, automation) issues lifecycle changes by calling the harness API. The constraint is that *nothing else* spawns agents directly — start/stop/restart are exclusively the harness's domain via its API surface. The harness owns the implementation; the API is the only public surface.
 
@@ -56,7 +56,7 @@ The harness is **distinct from**:
 - **Runtime**: Python 3.12+, FastAPI + uvicorn for HTTP server, asyncio for event handling.
 - **Threading**: predominantly single asyncio event loop. A small number of background tasks (`ack-cursor consumer`, `timeout_scan`, `health_poll`, `EAD poller`) run as asyncio coroutines on the same loop; no thread pool.
 - **HTTP server**: uvicorn binds `127.0.0.1:<port>` (default `7373`; alternate port if occupied — see §6). FastAPI routes are coroutine handlers.
-- **Subprocess spawning**: `boot_agent(role)` shells out to platform-appropriate launcher (cmd.exe on Windows, AppleScript on macOS, terminal-emulator on Linux) which in turn spawns `thin_launcher.py` + `event_poll.py` per agent. See `boot_remote.py` for platform details. *(The signature `boot_agent(role)` accepts an alias value — legacy parameter name; rename tracked in #10358 along with the wire-format change.)*
+- **Subprocess spawning**: `boot_agent(role)` shells out to a platform-appropriate launcher (cmd.exe on Windows, AppleScript on macOS, terminal-emulator on Linux) which spawns `thin_launcher.py` per agent. **Separately**, `boot_agent(role)` also spawns `event_poll.py` as a **direct child of the harness process** (per §7.2 step 4) — `event_poll` is NOT inside the launcher chain. See `boot_remote.py` for platform details. *(The signature `boot_agent(role)` accepts an alias value — legacy parameter name; rename tracked in #10358 along with the wire-format change.)*
 - **Shutdown**: Ctrl+C triggers graceful shutdown — sets all agent intents to `stopping`, waits up to 60s for cooperative exits, then exits. `POST /shutdown` accepts an HTTP shutdown request with same semantics.
 
 ---
@@ -117,7 +117,7 @@ Request body: `{issue_number: int, target_alias: str, event_context: str}`. The 
 
 The endpoint wraps the deterministic work-queue logic in `tracker.py work-queue` so TUIs / web UIs can poll over HTTP without spawning a subprocess per refresh. `{alias}` is the install-time agent name; for the human, the alias is `human` (filter is `status:pending-human-*`); for other aliases, the filter is the same one `tracker.py work-queue` produces (priority-sorted approved + in-progress items for that alias).
 
-> **Scope:** `/queue/{alias}` is a **UI-facing convenience endpoint** for TUIs / web UIs / human dashboards — it is NOT part of the agent runtime contract. Agents receive work via the event bus (`assigned-to` events emitted by EAD per [AGENT-RUNTIME.md §6.1](AGENT-RUNTIME.md) and `POST /work/assign` per [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)), not by polling this endpoint. AGENT-RUNTIME deliberately omits this endpoint because agents do not consume it.
+> **Scope:** `/queue/{alias}` is a **UI-facing convenience endpoint** for TUIs / web UIs / human dashboards — it is NOT part of the agent runtime contract. Agents receive work via the event bus (`assigned-to` events emitted by EAD per [AGENT-RUNTIME.md §4.4](AGENT-RUNTIME.md) and `POST /work/assign` per [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)), not by polling this endpoint. AGENT-RUNTIME deliberately omits this endpoint because agents do not consume it.
 >
 > **Current implementation gap:** the harness today exposes only `/human/queue` (special-cased to human). The generic `/queue/{alias}` shape above is the principled form; the migration is tracked in §13.6.
 
@@ -198,7 +198,12 @@ default state: active (10s between polls)
   hard ceiling: 60s
 ```
 
-The cadence floor is 10s — the documented backoff never reduces below the default active interval. A hard 5s floor is reserved at the implementation level as a rate-limit safety guard for any future burst-on-event refinement, but no rule today drives the cadence below 10s.
+**Two distinct floors** (reconciled with [AGENT-RUNTIME §4.4](AGENT-RUNTIME.md)):
+
+- **Contractual hard floor: 5s** — GitHub REST rate-limit safety guard. EAD MUST NEVER poll faster than 5s regardless of which heuristic is active. This is the absolute floor enforced at the implementation level and is what AGENT-RUNTIME §4.4 + §9 Q3 lock as the rate-limit-safety floor.
+- **Active-cadence effective floor: 10s** — the default active interval and the current backoff algorithm's minimum (no heuristic today drives below 10s). A future burst-on-event refinement could legitimately push between 10s and the 5s contractual floor.
+
+The two are different things called "floor": the 5s value is the rate-limit safety guard (a runtime invariant); the 10s value is today's backoff-algorithm minimum (an implementation detail of the current heuristic).
 
 Three-stage cadence: 10s → 30s → 60s (two backoff transitions). A drained queue stabilizes at 60s after ≥6 consecutive empty polls (~2 minutes idle).
 
@@ -309,6 +314,7 @@ One file per install (at the install root). Persisted across harness restarts. S
   "harness_pid": 12345,
   "start_time": 1748371200.0,
   "port": 7373,
+  "last_compose_checksum": "sha256:9f4c…",
   "agents": {
     "<alias>": {
       "intent": "running",
@@ -324,6 +330,8 @@ One file per install (at the install root). Persisted across harness restarts. S
   }
 }
 ```
+
+**`last_compose_checksum`** (top-level, install-scoped) — sha256 hex of the compose source tree (`.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`) at the last successful `compose.py deploy-all` run. The harness boot-time freshness check reads this, recomputes the current checksum, and runs `compose.py deploy-all` BEFORE spawning agents if they differ or the field is absent (first boot, post-`git pull`, etc.). See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md) for the three-layer harness-owned freshness model.
 
 **Two distinct fields per agent** (per [AGENT-RUNTIME.md §7.2](AGENT-RUNTIME.md)):
 
@@ -375,7 +383,7 @@ All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across re
 
 > **Reserved alias — `human`:** the alias `human` is a virtual queue target — it never corresponds to a spawned agent process. Only `GET /queue/human` (and the human work-queue filter in §4.4) reference it; the harness does not run lifecycle, health-poll, or PID tracking for it.
 
-> **Vocabulary note — `role` vs `alias`:** the codebase (FastAPI routes, `AgentState.role`, event-poll `--role` flag, `SQUIDSQUAD_ROLE` env var) uses the identifier `role` everywhere; the §4 HTTP API path-parameter `{role}` reflects that. **In every one of those places, the value is actually the alias** (e.g. `skill`, `verifier`, `human`) — not the L2 categorical role (`pm`/`qa`/`worker`/`dm`). The naming predates the alias concept and is misleading. The doc keeps the literal `{role}` token in §4 only where it faithfully tracks the code; everywhere else (on-disk paths, state-file shapes, cursor maps) it uses `<alias>` because that's the only thing actually keyed in those structures. A code-level rename `role` → `alias` would close the mismatch; it's filed as #10358 (sibling to the bundled #10182 architectural-decisions task) and is on hold pending PR #10357 merging and #10182 progressing.
+> **Vocabulary note — `role` vs `alias`:** the codebase (FastAPI routes, `AgentState.role`, event-poll `--role` flag, `SQUIDSQUAD_ROLE` env var) uses the identifier `role` everywhere; the §4 HTTP API path-parameter `{role}` reflects that. **In every one of those places, the value is actually the alias** (e.g. `skill`, `verifier`, `human`) — not the L2 categorical role (`pm`/`verifier`/`worker`/`dm`). The naming predates the alias concept and is misleading. The doc keeps the literal `{role}` token in §4 only where it faithfully tracks the code; everywhere else (on-disk paths, state-file shapes, cursor maps) it uses `<alias>` because that's the only thing actually keyed in those structures. A code-level rename `role` → `alias` would close the mismatch; it's filed as #10358 (sibling to the bundled #10182 architectural-decisions task) and is on hold pending PR #10357 merging and #10182 progressing.
 
 ---
 
@@ -383,7 +391,8 @@ All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across re
 
 When the harness restarts (operator-driven or after a crash):
 
-1. **Read `.squidsquad/.harness-state.json`** — recover per-agent intent + PID + clone path.
+1. **Read `.squidsquad/.harness-state.json`** — recover per-agent intent + PID + clone path + `last_compose_checksum`.
+1b. **Compose freshness check** — recompute the checksum over `.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`; compare against `last_compose_checksum`. If they differ or the field is absent (first boot, post-`git pull`, post-installer migration walk), run `compose.py deploy-all` BEFORE proceeding to step 2 and write the new checksum back to state. See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md).
 2. **Verify live PIDs** — for each agent with intent=`running`, check if the recorded PID is still alive.
    - Alive: resume monitoring.
    - Dead: respawn (since intent=`running`).
@@ -487,7 +496,7 @@ harness
 
 > **Scope note:** this is the full launcher-and-runtime chain on Windows. The per-agent runtime subtree (zoomed: `cmd → thin_launcher → claude` plus sibling `event_poll`) is documented in [AGENT-RUNTIME.md §3.2](AGENT-RUNTIME.md). Both views describe the same current code from different zoom levels.
 >
-> **`event_poll.py` does not live inside the `wt.exe` chain.** It is a **separate sibling subtree** spawned by `boot_agent` directly (see §7.2 step 3): `harness → python.exe (event_poll.py)`. The `wt.exe` ancestry shown is the launcher-and-claude chain only; `event_poll` runs in parallel under the harness process, not under `wt.exe`.
+> **`event_poll.py` does not live inside the `wt.exe` chain.** It is a **separate sibling subtree** spawned by `boot_agent` directly (see §7.2 step 4): `harness → python.exe (event_poll.py)`. The `wt.exe` ancestry shown is the launcher-and-claude chain only; `event_poll` runs in parallel under the harness process, not under `wt.exe`.
 
 Two processes per agent in the launcher chain (`wt.exe` + `claude.exe`), down from five (`wt → bash → python(thin_launcher) → cmd → claude`). The sibling `event_poll.py` subtree under the harness exists in both pictures and is excluded from this count. TTY still provided by `wt.exe`, so subscription billing is preserved.
 

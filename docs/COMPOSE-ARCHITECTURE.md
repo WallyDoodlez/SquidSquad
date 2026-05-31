@@ -134,7 +134,7 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role-class → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory) — directly inside `.squidsquad/` alongside the `project/` and `<alias>/` subdirectories, NOT under `project/` (so it is not an L4 file). **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by the required `## Aliases` H2 section in the exact schema below. It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — what placeholder values to substitute, which aliases exist for `compose.py deploy-all`, etc. **Wake mode is NOT a config.md field**: compose is mode-agnostic; event mode is the unconditional composed-output shape; the boot-time harness probe selects the wake mechanism at runtime (see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
+- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory) — directly inside `.squidsquad/` alongside the `project/` and `<alias>/` subdirectories, NOT under `project/` (so it is not an L4 file). **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by the required `## Aliases` H2 section in the exact schema below. It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, `Improvement Scanning:`, other feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). **The §4.6 assemble pass is unconditional** — it has no `config.md` opt-out; model and length-floor are compose-time constants (see §4.6). Compose reads `config.md` to make compose-time *decisions* — what placeholder values to substitute, which aliases exist for `compose.py deploy-all`, etc. **Wake mode is NOT a config.md field**: compose is mode-agnostic; event mode is the unconditional composed-output shape; the boot-time harness probe selects the wake mechanism at runtime (see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
 
   **`## Aliases` schema** (canonical):
 
@@ -321,8 +321,7 @@ Inside the L4 file, content is organized by slot using H2 headings that mirror t
 ## Project Context
 ...
 
-## Vault
-...
+# (## Vault is L1-exclusive — L4 files MUST NOT contain a `## Vault` H2; per the rule below and the per-slot constraint table)
 ```
 
 Each `## <Slot>` section holds the project's customizations for that slot. Within `## Instructions`, individual operations are H3 headings using the form `### <op> [step-id]`:
@@ -413,7 +412,7 @@ Compose is a **two-stage compiler**: **link** then **assemble**.
 
 | Stage | What it does | Determinism |
 |---|---|---|
-| **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role-class, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role-class, wake-mode, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. |
+| **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role-class, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role-class, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. Compose is wake-mode-blind (per §3.0 and §6.5), so wake-mode is not a determinism input. |
 | **Assemble** (§4.6) | Each linked slot body is rewritten by an agent into a single coherent voice — eliminates contradictions, conditional negations, awkward insertions left over from op layering. Produces the final agent-consumable **assembled** prose. | Stochastic on first run; cached by `(linked-body, slot-purpose, model-id)` hash, so deterministic from the caller's POV across re-deploys with unchanged inputs. |
 
 Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). The **linked** output is preserved as a sibling artifact (`.squidsquad/<alias>/CLAUDE.linked.md`) for audit, debugging, and fallback when the assemble pass fails. Both are git-tracked.
@@ -504,9 +503,7 @@ flowchart TB
 
 **Linked-body write timing**: the linked composite is held in memory throughout the assemble pass; `CLAUDE.linked.md` is only written to disk as part of the final atomic write after assemble succeeds (alongside `CLAUDE.md` and `CLAUDE.conflicts.md`). There is no scenario where `CLAUDE.linked.md` exists without a corresponding successful `CLAUDE.md`, and there is no scenario where a partial or pre-assemble linked file appears on disk. On assemble failure or any earlier-stage abort, none of the three files are written; the prior successful triple (if any) remains untouched.
 
-**`Assemble: no` exception**: when an install sets `Assemble: no` in `config.md` (see §4.6), the pipeline skips the assemble pass entirely and writes only `CLAUDE.md` (the linked body promoted to the final path). No `CLAUDE.linked.md` and no `CLAUDE.conflicts.md` are written — they'd be redundant (linked body == assembled body) or empty (no conflict detection ran). The pipeline diagram above is the assemble-enabled path; in the `Assemble: no` path the `Assemble` / `Cache` / `LLM` boxes are skipped and `EmitLinked` flows directly to `WriteAtomic` with a single-file output.
-
-**Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role-class, wake-mode, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose.
+**Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role-class, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. Wake-mode is NOT a determinism input — compose is wake-mode-blind (§3.0, §6.5). **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose; it is accepted by design — compose runs because inputs changed, so the new prose is the new contract.
 
 ### 4.5 Link: Sub-skill reference resolution
 
@@ -657,7 +654,7 @@ In other words: the assembler's conflict-resolution rule is the **compose-time e
 
 1. **Sub-skill ref set equality** — extract all `→ run sub-skill: <name>` references from both linked and assembled bodies; the multisets must be identical.
 2. **Step ID set equality** — same check for `step:cycle/<id>` references.
-3. **Length floor** — `len(assembled) >= 0.8 * len(linked)` (configurable in `config.md` as `Assemble Length Floor`; default 0.8). Catches silent content drop.
+3. **Length floor** — `len(assembled) >= 0.8 * len(linked)` (compose-time constant; 0.8). Catches silent content drop.
 4. **Code-block parity** — count of fenced code blocks and inline backticks should match within ±10% (catches accidental stripping of literal blocks).
 
 If any check fails, **compose aborts with a diagnostic**. There is no fallback to the linked body for runtime: shipping inconsistent prose to the agent on every cycle would be worse than failing the deploy. The operator fixes the source of the failure (e.g., re-tries the LLM call, removes a malformed L4 op, adjusts the length floor) and re-runs compose. The previously-written `CLAUDE.md` (from the prior successful compose run, if any) is left untouched, so any running agents continue with the last good output until compose succeeds again.
@@ -668,12 +665,12 @@ If any check fails, **compose aborts with a diagnostic**. There is no fallback t
 - Cache store: `.squidsquad/<alias>/.assemble-cache/` (git-tracked alongside the assembled output, so re-deploys on the same commit are free).
 - Cache invalidation is automatic via the hash — any change to the linked body, the slot's purpose statement (from this spec), the model, or the prompt produces a new key.
 
-**Model.** Default `sonnet` (cost/quality balance for prose rewriting). Configurable per install in `config.md` as `Assemble Model:` (`sonnet`, `opus`, `haiku`). Always temperature ≤ 0.3 to reduce first-run drift.
+**Model.** `sonnet` (cost/quality balance for prose rewriting; compose-time constant — operators do not configure this per install. If a different tier is ever justified, the constant changes in source, not in `config.md`). Always temperature ≤ 0.3 to reduce first-run drift.
 
 **Audit artifacts.** Compose emits three outputs to `.squidsquad/<alias>/`:
 
 - `CLAUDE.md` — the **assembled** output. This is what the runtime agent reads. Always present.
-- `CLAUDE.linked.md` — the **linked** output. **Audit / debug only — NOT a runtime fallback.** Runtime always reads `CLAUDE.md`. Always present on success.
+- `CLAUDE.linked.md` — the **linked** output. **Audit / debug only — NOT a runtime fallback.** Runtime always reads `CLAUDE.md`. Always present on a successful compose run (assemble pass is unconditional).
 - `CLAUDE.conflicts.md` — the **conflict report** from the assemble pass (see format above). Always present, even when zero conflicts (proof the pass ran). PR review against an L4 change inspects this file to confirm overrides resolved as intended.
 
 PR review compares the two when an L4 op lands; if the assembled output drops or distorts an op's intent, the reviewer catches it before merge. The assemble pass is not a black box.
@@ -694,9 +691,11 @@ PR review compares the two when an L4 op lands; if the assembled output drops or
 
 When compose aborts on an assemble-side failure, the previously-written `CLAUDE.md` (from the prior successful compose run, if any) is **left untouched** on disk — the operator's running agents continue reading the last good output until compose succeeds. The current compose run produces no partial artifacts: no half-written `CLAUDE.md`, no `CLAUDE.linked.md` orphan, no `CLAUDE.conflicts.md` from the aborted run. The audit-artifact triple (`CLAUDE.md` + `CLAUDE.linked.md` + `CLAUDE.conflicts.md`) is emitted **atomically** on success or not at all.
 
-The link stage and the assemble stage are both load-bearing under this contract. `CLAUDE.linked.md` is an audit/debug artifact, NOT a runtime fallback — runtime always reads the assembled `CLAUDE.md`. If an operator needs to bypass the assemble pass for a specific install (e.g., during initial bring-up before the LLM gateway is configured), set `Assemble: no` in `config.md` — compose then skips the assemble stage entirely and emits the linked body as `CLAUDE.md` (with no `CLAUDE.linked.md` sibling, since they'd be identical, and no `CLAUDE.conflicts.md`, since no conflict-detection ran). This is an explicit opt-out, not a degradation.
+The link stage and the assemble stage are both load-bearing under this contract; **the assemble pass is unconditional** (no `config.md` opt-out). `CLAUDE.linked.md` is an audit/debug artifact, NOT a runtime fallback — runtime always reads the assembled `CLAUDE.md`.
 
-**First-run determinism trade-off.** The first deploy of unchanged inputs is stochastic — two operators deploying at the same commit may get prose that differs in wording. After the first deploy, the cached output is committed to git and subsequent deploys reuse it; the system is deterministic from that point forward for those inputs. This is the irreducible trade-off for collapsing layered linked output into a single coherent voice. Operators who want bit-stable assembled output across fresh deploys can disable the assemble pass via `Assemble: no` in `config.md` (compose then emits the linked body as `CLAUDE.md` directly, with no `CLAUDE.linked.md` sibling since the two would be identical).
+**LLM dependency is not a new constraint.** The assemble pass calls the LLM gateway. SquidSquad's agents are themselves LLM sessions; if the gateway is unreachable, the agents cannot run, so adding assemble's gateway dependency at compose time does not introduce a new failure surface — installs that cannot reach the gateway were already non-functional.
+
+**First-run determinism note.** The first uncached assemble run for a given linked-body hash is stochastic — two operators composing the same source tree from scratch may get prose that differs in wording. After the first run, the cache (§above) is committed to git and subsequent deploys reuse it; the system is deterministic from that point forward for those inputs. This is the irreducible trade-off for collapsing layered linked output into a single coherent voice. It is accepted by design: compose runs because inputs changed, so the new prose is the new contract; bit-stability across same-input re-deploys is provided by the cache, not by skipping assemble.
 
 ---
 
@@ -1338,10 +1337,10 @@ Aligns with the existing approval-gate philosophy for autonomous writes (#8997 �
 
 Every L4 write is:
 
-- A separate file in `.squidsquad/project/`.
+- An H3 block appended (or replacing an existing H3 block under the same slot's H2) inside the existing `.squidsquad/project/<role-class>.md` file. One file per role-class per §3.3; new ops accumulate as H3 sub-sections, they do not create new files.
 - Committed as its own git commit on main with message `<role>: L4 write — <slot>/<op>/<target>` and a body quoting the human directive verbatim.
 - Logged in the alias's iteration file for the cycle that performed the write.
-- Reversible: a human can `git revert` the L4 commit, or the agent can produce a counter-L4 file (`replace` with empty body, or matching `insert-before` removal).
+- Reversible: a human can `git revert` the L4 commit, or the agent can produce a counter-L4 block (`replace` with empty body, or matching `insert-before` removal) committed the same way.
 
 The composed `.squidsquad/<alias>/CLAUDE.md` for **every alias** of the affected role-class regenerates on each L4 write (compose runs as a post-commit hook for files in `.squidsquad/project/`). Two `worker`-class instances sharing one L4 file produce two regenerated CLAUDE.md files at their respective alias paths.
 
@@ -1397,56 +1396,66 @@ Drift between L4 and L1–L3 (e.g., upstream renamed an anchor an L4 entry point
 
 ---
 
-## 8. Source-output sync (response to #9970)
+## 8. Source-output sync — harness-owned freshness (response to #9970)
 
-Three reinforcing mechanisms to prevent the drift class observed in #9970 (sub-skill sources changed without composed outputs being regenerated):
+Three reinforcing mechanisms to prevent the drift class observed in #9970 (sub-skill sources changed without composed outputs being regenerated). All three layers are **owned by the harness or operator**; SquidSquad deployment does NOT add CI infrastructure (GitHub Actions, pre-commit hooks, or similar) to the target repo.
 
-### 8.1 PR check
+### 8.1 Boot-time check + auto-compose (primary)
 
-A GitHub Actions check (or local pre-commit hook) inspects every PR:
+On every harness boot — before spawning any agent — the harness verifies composed-output freshness:
 
-- If any file in `references/sub-skills/`, `references/roles/`, or `references/sub-skills/manifest.md` is changed, the PR **must** also include the regenerated `.squidsquad/<alias>/CLAUDE.md` outputs for every alias whose composition is affected.
-- The check runs `compose.py deploy-all --check` against the PR's tree and compares output to the committed `.squidsquad/<alias>/CLAUDE.md` files. Diff = check fails.
-- Failure message links to the offending source/output mismatch and suggests `compose.py deploy-all` to fix.
+1. Checksum the source tree: `.squidsquad/config.md` + `.squidsquad/project/*.md` (L4) + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`.
+2. Compare the checksum against the one stored at last successful compose (kept in `.squidsquad/.harness-state.json` under `last_compose_checksum`).
+3. If drift is detected (or the checksum is missing — first boot, post-pull, etc.), the harness runs `compose.py deploy-all` BEFORE spawning agents. The new checksum is stored on success.
+4. Spawn agents per the normal [HARNESS-ARCH §7.2](HARNESS-ARCH.md) spawn sequence — agents always boot with up-to-date `CLAUDE.md`.
 
-### 8.2 Auto-recompose on merge
+Agents are not allowed to discover stale CLAUDE.md mid-session because the harness has already gated their boot on freshness.
 
-`compose.py deploy-all` reads the alias roster from `.squidsquad/config.md`'s `## Aliases` registry and runs `compose.py deploy <alias>` for each entry. It is the canonical way to regenerate all composed outputs after an L1-L3 source change.
+### 8.2 L4-write trigger (mid-session)
 
-`dm`'s delivery flow runs `compose.py deploy-all` immediately after merging any PR that touched L1-L3 sources. If the post-recompose diff is non-empty (composer found drift the PR didn't catch), `dm`:
+When `l4-curation` writes to L4 mid-session (the runtime customization flow per §7), the harness detects the write (file-watch on `.squidsquad/project/` or post-write hook the sub-skill invokes) and re-runs `compose.py deploy` for every alias whose role-class L4 changed. The affected agents then receive `assigned-to(target_alias=<that-alias>, event_context="restart-required", payload={reason:"l4-recompose"})` so they pick up the regenerated CLAUDE.md on their next cycle. This is a distinct context from PM's `compose-needed` (AGENT-RUNTIME §8.5): in `restart-required` the harness has *already* run compose and the agent only needs to restart; in `compose-needed` PM is being asked to run compose and orchestrate restart for legacy paths the file-watch does not cover (e.g., a mid-session merge to `references/` that lands without harness restart).
 
-- Commits the diff to main as a follow-up commit: `dm: post-merge recompose for #<PR>`.
-- Comments on the original PR with the diff for traceability.
-- Files a `severity:low` bug against the alias that owned the PR — they should have run compose before pushing.
+This is the only mid-session compose trigger; nothing else mutates the source tree under a running install.
 
-### 8.3 Pre-ship gate
+### 8.3 Operator check (optional)
 
-`verifier`'s pending-test → pending-ship transition includes a compose-sync check:
+`squidsquad_cli.py check` is the operator-driven equivalent of the boot-time check. Runs the same checksum + dry-run path the harness uses internally. Useful for:
 
-- Before passing verification, `verifier` runs `compose.py deploy-all --check`.
-- If drift is detected, `verifier` does not pass the task — it routes back to `worker` with a "compose out of sync" note.
+- "Is this install consistent?" without spawning agents
+- Pre-flight before declaring an install ready to ship
+- Diagnostic when an operator suspects drift
 
-The three mechanisms are deliberately redundant. PR-check is the primary; auto-recompose catches anything that slipped through (e.g. emergency direct-to-main hotfixes); pre-ship gate catches anything that slipped through *both* prior layers. Defence in depth for a class of bug that is otherwise invisible to humans (composed outputs are marked `DO NOT EDIT` and rarely read).
+No automatic enforcement; output is informational unless the operator chooses to act.
+
+The three mechanisms are deliberately redundant. Layer 1 is the primary gate (catches drift from any source change — local edits, `git pull`, installer migration walk). Layer 2 catches mid-session L4 writes specifically. Layer 3 is the operator-visible diagnostic. Defence in depth for a class of bug that is otherwise invisible to humans (composed outputs are marked `DO NOT EDIT` and rarely read).
 
 ```mermaid
 flowchart TB
-  Change([L1-L3 source change])
-  Change --> L1c{"Layer 1: PR check<br/>(GitHub Actions + pre-commit)"}
-  L1c -->|"catches:<br/>most drift"| L1Block[/"PR blocked until composed<br/>outputs included in PR"/]
-  L1c -->|"misses:<br/>direct-to-main hotfix"| L2c
-  L2c{"Layer 2: auto-recompose on merge<br/>(dm workflow)"}
-  L2c -->|"catches:<br/>post-merge drift"| L2Block[/"dm commits follow-up<br/>recompose + files bug"/]
-  L2c -->|"misses:<br/>edge cases"| L3c
-  L3c{"Layer 3: pre-ship gate<br/>(verifier workflow)"}
-  L3c -->|"catches:<br/>last-mile drift"| L3Block[/"verifier routes back to worker:<br/>'compose out of sync'"/]
-  L3c -->|"all clean"| Ship([Task ships])
-  style L1Block fill:#fff3b0
-  style L2Block fill:#fff3b0
-  style L3Block fill:#fff3b0
-  style Ship fill:#dfd
+  Source([Source-tree change<br/>L1-L3 / L4 / config.md])
+  Source --> Boot{"Layer 1: harness boot<br/>(every start)"}
+  Boot -->|"checksum mismatch"| L1Fix[/"harness runs<br/>compose.py deploy-all<br/>before spawning agents"/]
+  L1Fix --> Spawn([Agents boot with<br/>fresh CLAUDE.md])
+  Boot -->|"checksum match"| Spawn
+
+  L4Write([Mid-session L4 write<br/>via l4-curation])
+  L4Write --> L2c{"Layer 2: L4-write trigger<br/>(harness file-watch)"}
+  L2c -->|"detects write"| L2Fix[/"harness re-runs compose<br/>for affected role-class +<br/>emits restart-required to agent"/]
+  L2Fix --> Restart([Affected agents restart<br/>pick up new CLAUDE.md])
+
+  Op([Operator wants<br/>consistency check])
+  Op --> L3c{"Layer 3: squidsquad_cli.py check<br/>(operator-triggered)"}
+  L3c -->|"reports drift"| L3Info[/"Operator decides:<br/>run compose-all or<br/>investigate"/]
+  L3c -->|"all clean"| L3OK([Install is consistent])
+
+  style L1Fix fill:#fff3b0
+  style L2Fix fill:#fff3b0
+  style L3Info fill:#dfe7fd
+  style Spawn fill:#dfd
+  style Restart fill:#dfd
+  style L3OK fill:#dfd
 ```
 
-Each layer is sized to its blast radius: PR-check is the cheap-and-frequent gate, auto-recompose handles emergency direct-to-main paths, pre-ship is the safety net before delivery.
+**No target-repo CI dependency**: SquidSquad's adoption into a project does not require adding GitHub Actions, pre-commit hooks, or any other CI infrastructure to the target repo. The harness — which already owns lifecycle — owns compose freshness as a natural extension. Single trust boundary; fewer moving parts.
 
 ---
 
@@ -1549,9 +1558,9 @@ Once this doc is merged, the implementation epic spawns these sub-PRs in order. 
 | **E** | Renumber Instructions slot to flat grammar; preserve step IDs | skill | A, B |
 | **F** | Fold today's protocol H2 sections into Instructions sub-procedures | skill | E |
 | **G** | Fold today's constraints/conventions H2 sections into Identity + Project Context | skill | E |
-| **H** | Source-output sync: PR-check (GitHub Actions + pre-commit hook) | skill | C, D |
-| **I** | Source-output sync: auto-recompose on merge (`dm` workflow) | worker (with `dm` test) | H |
-| **J** | Source-output sync: pre-ship gate (`verifier` workflow) | worker (with `verifier` test) | H |
+| **H** | Source-output sync: harness boot-time checksum + auto `compose.py deploy-all` before agent spawn (§8.1) | skill (harness) | C, D |
+| **I** | Source-output sync: L4-write trigger — harness file-watch on `.squidsquad/project/` re-runs compose for affected role-class + emits `restart-required` direct to affected agent (§8.2) | skill (harness) | H |
+| **J** | Source-output sync: `squidsquad_cli.py check` operator-driven diagnostic (§8.3) | skill | H |
 | **K** | Runtime L4 writes: agent decision-tree sub-skill | skill | C |
 | **L** | Runtime L4 writes: deepseek audit + mini-CQ wiring | skill | K |
 | **M** | Code-review checklist sub-skill (deliverable b) | skill | F, G |
@@ -1560,7 +1569,7 @@ Once this doc is merged, the implementation epic spawns these sub-PRs in order. 
 Sequencing notes:
 
 - A is the entry point; nothing else proceeds without frontmatter on every file.
-- B-D are the core compose changes; H-J are the sync mechanisms (defence in depth); K-L are the runtime-L4 mechanism.
+- B-D are the core compose changes; H-J are the harness-owned freshness layers (defence in depth, per §8); K-L are the runtime-L4 mechanism.
 - F-G are mechanical cleanups; M is the protocol output of F+G.
 - N is the migration; runs last.
 
