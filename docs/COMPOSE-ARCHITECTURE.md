@@ -134,7 +134,7 @@ flowchart TB
 Compose has **two distinct input axes**, easy to conflate:
 
 - **L1-L4 content layers** (this section's main subject) — *what* the agent reads in its composed CLAUDE.md. Layered by specificity (universal → role-class → variant → project-local). Files: `references/sub-skills/`, `references/roles/<role>/`, and `.squidsquad/project/<role-class>.md` (the per-role-class L4 file).
-- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory) — directly inside `.squidsquad/` alongside the `project/` and `<alias>/` subdirectories, NOT under `project/` (so it is not an L4 file). **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by the required `## Aliases` H2 section in the exact schema below. It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, `Improvement Scanning:`, feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — what placeholder values to substitute, which aliases exist for `compose.py deploy-all`, etc. **Wake mode is NOT a config.md field**: compose is mode-agnostic; event mode is the unconditional composed-output shape; the boot-time harness probe selects the wake mechanism at runtime (see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
+- **`.squidsquad/config.md`** — the install's **configuration**, not a content layer. Lives at `<project-root>/.squidsquad/config.md` (the **install root** = the project root directory that contains the `.squidsquad/` directory) — directly inside `.squidsquad/` alongside the `project/` and `<alias>/` subdirectories, NOT under `project/` (so it is not an L4 file). **Format**: markdown body with structured fields as `- **Field**: value` bullets at the top (parsed by `config.py`), followed by the required `## Aliases` H2 section in the exact schema below. It declares install-level parameters: `Workers:` (the roster), `Iteration Interval`, `Improvement Scanning:`, the assemble-pass triplet `Assemble:` (boolean, default `yes`) / `Assemble Model:` (string, default `sonnet`) / `Assemble Length Floor` (float, default `0.8`) — all governing §4.6's coherence rewrite — other feature toggles, and the `squidsquad_version:` install-time stamp (read at upgrade time per INSTALLER-ARCH §10 step 2). Compose reads `config.md` to make compose-time *decisions* — what placeholder values to substitute, which aliases exist for `compose.py deploy-all`, etc. **Wake mode is NOT a config.md field**: compose is mode-agnostic; event mode is the unconditional composed-output shape; the boot-time harness probe selects the wake mechanism at runtime (see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
 
   **`## Aliases` schema** (canonical):
 
@@ -1559,9 +1559,9 @@ Once this doc is merged, the implementation epic spawns these sub-PRs in order. 
 | **E** | Renumber Instructions slot to flat grammar; preserve step IDs | skill | A, B |
 | **F** | Fold today's protocol H2 sections into Instructions sub-procedures | skill | E |
 | **G** | Fold today's constraints/conventions H2 sections into Identity + Project Context | skill | E |
-| **H** | Source-output sync: PR-check (GitHub Actions + pre-commit hook) | skill | C, D |
-| **I** | Source-output sync: auto-recompose on merge (`dm` workflow) | worker (with `dm` test) | H |
-| **J** | Source-output sync: pre-ship gate (`verifier` workflow) | worker (with `verifier` test) | H |
+| **H** | Source-output sync: harness boot-time checksum + auto `compose.py deploy-all` before agent spawn (§8.1) | skill (harness) | C, D |
+| **I** | Source-output sync: L4-write trigger — harness file-watch on `.squidsquad/project/` re-runs compose for affected role-class + emits `compose-needed` (§8.2) | skill (harness) | H |
+| **J** | Source-output sync: `squidsquad_cli.py check` operator-driven diagnostic (§8.3) | skill | H |
 | **K** | Runtime L4 writes: agent decision-tree sub-skill | skill | C |
 | **L** | Runtime L4 writes: deepseek audit + mini-CQ wiring | skill | K |
 | **M** | Code-review checklist sub-skill (deliverable b) | skill | F, G |
@@ -1570,7 +1570,7 @@ Once this doc is merged, the implementation epic spawns these sub-PRs in order. 
 Sequencing notes:
 
 - A is the entry point; nothing else proceeds without frontmatter on every file.
-- B-D are the core compose changes; H-J are the sync mechanisms (defence in depth); K-L are the runtime-L4 mechanism.
+- B-D are the core compose changes; H-J are the harness-owned freshness layers (defence in depth, per §8); K-L are the runtime-L4 mechanism.
 - F-G are mechanical cleanups; M is the protocol output of F+G.
 - N is the migration; runs last.
 
