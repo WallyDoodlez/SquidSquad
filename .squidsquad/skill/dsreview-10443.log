@@ -1,0 +1,5 @@
+usage: model_router.py route [-h]
+                             [--task-type {research,discussion-prep,test-plan,improvement-scan,qa-execution,comprehension,code-review}]
+                             --task-id TASK_ID [--input-files INPUT_FILES]
+                             --output-file OUTPUT_FILE [--context CONTEXT]
+model_router.py route: error: the following arguments are required: --task-id, --output-file
