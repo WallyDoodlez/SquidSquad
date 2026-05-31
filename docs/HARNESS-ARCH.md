@@ -298,6 +298,8 @@ When `cycle_post.py` detects context-pressure exceeded OR harness intent has fli
 
 A **60-second force-kill safety net** fires if the agent doesn't exit within the cooperative window (intent set time + 60s).
 
+**`event_poll` lifetime across claude respawn**: when the harness respawns a `claude` process (intent=running + exit 42, or intent=restarting + exit 42), the paired `event_poll.py` is **NOT** killed and re-spawned — it keeps running across the agent respawn. `event_poll` lives for the lifetime of the alias's registration with the harness (spawned at first `boot_agent`, killed only on agent stop or harness exit). The new `claude` process inherits the existing `event_poll`'s stdout pipe via Monitor; the cursor state is harness-side and unaffected by claude respawn; the new claude's boot step 4 drain (AGENT-RUNTIME §7.0 / §7.2) catches up to the cursor. This avoids unnecessary process churn during high-frequency context-pressure respawns.
+
 ### 7.5 State file: `.harness-state.json`
 
 One file per install (at the install root). Persisted across harness restarts. Shape:
