@@ -113,6 +113,7 @@ STATIC_TEST_MODULES = [
     "test_9398_tracker_gh_resolution",
     "test_pickup_comment_fidelity_9946",
     "test_terminology_dual_aware_6274",
+    "test_source_frontmatter",
 ]
 
 
