@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-31 14:15
+
+- **Files scanned**: references/scripts/diagnostics.py (full 290 lines; focus on the auto-rotate check-then-write window + the per-entry append model + redaction surface).
+- **Findings**: #10523 (low — `log_entry` does stat-then-rotate-then-open-append, which races under concurrent multi-agent writers: two writers can both observe size > 1MB, both call rotate(), and the second `atomic_write_text` truncates an already-truncated file using a stale view of the last 500 entries. Recommended fix: move rotation off the write path (CLI-only) OR add a file lock around the whole stat+rotate+append block OR collapse rotate + append into a single read-modify-write under lock. Bounding per-entry size at the boundary keeps single appends atomic on POSIX without lock).
+- **Items rejected by human**: none yet
+- **Notes**: `_redact_entry` recursive walk looks correct (lists pass through element-by-element, dict keys checked via `_is_sensitive_key` substring match, non-mutating). `_sanitize_config`'s per-line redaction at L156-162 is heuristic — uses substring match against the whole line including the value, so `## Repository URL` is flagged as sensitive (good) but the redaction itself only strips the value, fine. `is_public_repo` shells out to `gh repo view` with no caching but only called from `report`, not hot path. Module-level `LOG_FILE = DIAGNOSTICS_DIR / 'diagnostic.jsonl'` (L85) is captured at import-time; if `state_bus.state_path('diagnostics')` ever changes its resolution semantics, this becomes a similar SQUID_DIR-style foot-gun to #10516, but state_path is static today. Out-of-scope side-finding called out in #10523: `log_entry` has no exception guard, so a permission error or disk-full would propagate to callers (cycle_post.py) and crash the cycle — `event_bus.emit` swallows by design, this doesn't; worth its own issue if it fires.
+
 ## Scan — 2026-05-31 13:16
 
 - **Files scanned**: references/scripts/event_bus.py (full 190 lines; focus on the SQUIDSQUAD_DIR foot-gun introduced by #9398 + the silent-no-op timeout contract).
