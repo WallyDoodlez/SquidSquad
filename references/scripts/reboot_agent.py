@@ -53,22 +53,36 @@ def _kill_process(pid):
     correct semantic match for ``taskkill /F`` and the only signal POSIX
     guarantees cannot be ignored. (CONTEXT-4792.md §3.3 Q7.)
 
+    Rejects ``None``, non-int, and any non-positive PID (#10530). On POSIX,
+    ``os.kill(0, SIGKILL)`` sends to the whole process group (including
+    the harness itself) and ``os.kill(-1, SIGKILL)`` sweeps every process
+    the calling user can signal — defense-in-depth, mirrors the symmetric
+    guard ``process_utils.is_process_alive`` already carries from #10440.
+
     Best-effort: swallows the case where the process is already dead.
     Callers that need to confirm termination should poll
     ``_is_process_alive(pid)`` after.
     """
+    if pid is None or not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return
     if sys.platform == "win32":
-        subprocess.run(
-            ["taskkill", "/F", "/PID", str(pid)],
-            check=False, capture_output=True,
-        )
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/PID", str(pid)],
+                check=False, capture_output=True,
+            )
+        except (OSError, FileNotFoundError):
+            # taskkill absent (Windows Server Core, broken PATH) — same
+            # best-effort posture as the POSIX branch below.
+            pass
     else:
         try:
             os.kill(pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            # Already dead (PLE) or owned by a different UID (Permission).
-            # Both are best-effort no-ops here — the force-kill safety net
-            # in update_health will re-check on the next poll, and the
+        except (ProcessLookupError, PermissionError, TypeError):
+            # Already dead (PLE), owned by a different UID (Permission),
+            # or a bad-type slipped past the guard (TypeError). All
+            # best-effort no-ops — the force-kill safety net in
+            # update_health will re-check on the next poll, and the
             # operator can fall back to the harness API for diagnostics.
             pass
 
