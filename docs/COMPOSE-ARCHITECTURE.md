@@ -1397,56 +1397,66 @@ Drift between L4 and L1–L3 (e.g., upstream renamed an anchor an L4 entry point
 
 ---
 
-## 8. Source-output sync (response to #9970)
+## 8. Source-output sync — harness-owned freshness (response to #9970)
 
-Three reinforcing mechanisms to prevent the drift class observed in #9970 (sub-skill sources changed without composed outputs being regenerated):
+Three reinforcing mechanisms to prevent the drift class observed in #9970 (sub-skill sources changed without composed outputs being regenerated). All three layers are **owned by the harness or operator**; SquidSquad deployment does NOT add CI infrastructure (GitHub Actions, pre-commit hooks, or similar) to the target repo.
 
-### 8.1 PR check
+### 8.1 Boot-time check + auto-compose (primary)
 
-A GitHub Actions check (or local pre-commit hook) inspects every PR:
+On every harness boot — before spawning any agent — the harness verifies composed-output freshness:
 
-- If any file in `references/sub-skills/`, `references/roles/`, or `references/sub-skills/manifest.md` is changed, the PR **must** also include the regenerated `.squidsquad/<alias>/CLAUDE.md` outputs for every alias whose composition is affected.
-- The check runs `compose.py deploy-all --check` against the PR's tree and compares output to the committed `.squidsquad/<alias>/CLAUDE.md` files. Diff = check fails.
-- Failure message links to the offending source/output mismatch and suggests `compose.py deploy-all` to fix.
+1. Checksum the source tree: `.squidsquad/config.md` + `.squidsquad/project/*.md` (L4) + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`.
+2. Compare the checksum against the one stored at last successful compose (kept in `.squidsquad/.harness-state.json` under `last_compose_checksum`).
+3. If drift is detected (or the checksum is missing — first boot, post-pull, etc.), the harness runs `compose.py deploy-all` BEFORE spawning agents. The new checksum is stored on success.
+4. Spawn agents per the normal §7.2 boot sequence — agents always boot with up-to-date `CLAUDE.md`.
 
-### 8.2 Auto-recompose on merge
+Agents are not allowed to discover stale CLAUDE.md mid-session because the harness has already gated their boot on freshness.
 
-`compose.py deploy-all` reads the alias roster from `.squidsquad/config.md`'s `## Aliases` registry and runs `compose.py deploy <alias>` for each entry. It is the canonical way to regenerate all composed outputs after an L1-L3 source change.
+### 8.2 L4-write trigger (mid-session)
 
-`dm`'s delivery flow runs `compose.py deploy-all` immediately after merging any PR that touched L1-L3 sources. If the post-recompose diff is non-empty (composer found drift the PR didn't catch), `dm`:
+When `l4-curation` writes to L4 mid-session (the runtime customization flow per §7), the harness detects the write (file-watch on `.squidsquad/project/` or post-write hook the sub-skill invokes) and re-runs `compose.py deploy` for every alias whose role-class L4 changed. The affected agents then receive `assigned-to(event_context="compose-needed")` (or equivalent restart-required signal) so they pick up the regenerated CLAUDE.md on their next cycle — see AGENT-RUNTIME §8.5 catalog-trim translators.
 
-- Commits the diff to main as a follow-up commit: `dm: post-merge recompose for #<PR>`.
-- Comments on the original PR with the diff for traceability.
-- Files a `severity:low` bug against the alias that owned the PR — they should have run compose before pushing.
+This is the only mid-session compose trigger; nothing else mutates the source tree under a running install.
 
-### 8.3 Pre-ship gate
+### 8.3 Operator check (optional)
 
-`verifier`'s pending-test → pending-ship transition includes a compose-sync check:
+`squidsquad_cli.py check` is the operator-driven equivalent of the boot-time check. Runs the same checksum + dry-run path the harness uses internally. Useful for:
 
-- Before passing verification, `verifier` runs `compose.py deploy-all --check`.
-- If drift is detected, `verifier` does not pass the task — it routes back to `worker` with a "compose out of sync" note.
+- "Is this install consistent?" without spawning agents
+- Pre-flight before declaring an install ready to ship
+- Diagnostic when an operator suspects drift
 
-The three mechanisms are deliberately redundant. PR-check is the primary; auto-recompose catches anything that slipped through (e.g. emergency direct-to-main hotfixes); pre-ship gate catches anything that slipped through *both* prior layers. Defence in depth for a class of bug that is otherwise invisible to humans (composed outputs are marked `DO NOT EDIT` and rarely read).
+No automatic enforcement; output is informational unless the operator chooses to act.
+
+The three mechanisms are deliberately redundant. Layer 1 is the primary gate (catches drift from any source change — local edits, `git pull`, installer migration walk). Layer 2 catches mid-session L4 writes specifically. Layer 3 is the operator-visible diagnostic. Defence in depth for a class of bug that is otherwise invisible to humans (composed outputs are marked `DO NOT EDIT` and rarely read).
 
 ```mermaid
 flowchart TB
-  Change([L1-L3 source change])
-  Change --> L1c{"Layer 1: PR check<br/>(GitHub Actions + pre-commit)"}
-  L1c -->|"catches:<br/>most drift"| L1Block[/"PR blocked until composed<br/>outputs included in PR"/]
-  L1c -->|"misses:<br/>direct-to-main hotfix"| L2c
-  L2c{"Layer 2: auto-recompose on merge<br/>(dm workflow)"}
-  L2c -->|"catches:<br/>post-merge drift"| L2Block[/"dm commits follow-up<br/>recompose + files bug"/]
-  L2c -->|"misses:<br/>edge cases"| L3c
-  L3c{"Layer 3: pre-ship gate<br/>(verifier workflow)"}
-  L3c -->|"catches:<br/>last-mile drift"| L3Block[/"verifier routes back to worker:<br/>'compose out of sync'"/]
-  L3c -->|"all clean"| Ship([Task ships])
-  style L1Block fill:#fff3b0
-  style L2Block fill:#fff3b0
-  style L3Block fill:#fff3b0
-  style Ship fill:#dfd
+  Source([Source-tree change<br/>L1-L3 / L4 / config.md])
+  Source --> Boot{"Layer 1: harness boot<br/>(every start)"}
+  Boot -->|"checksum mismatch"| L1Fix[/"harness runs<br/>compose.py deploy-all<br/>before spawning agents"/]
+  L1Fix --> Spawn([Agents boot with<br/>fresh CLAUDE.md])
+  Boot -->|"checksum match"| Spawn
+
+  L4Write([Mid-session L4 write<br/>via l4-curation])
+  L4Write --> L2c{"Layer 2: L4-write trigger<br/>(harness file-watch)"}
+  L2c -->|"detects write"| L2Fix[/"harness re-runs compose<br/>for affected role-class +<br/>emits compose-needed event"/]
+  L2Fix --> Restart([Affected agents restart<br/>pick up new CLAUDE.md])
+
+  Op([Operator wants<br/>consistency check])
+  Op --> L3c{"Layer 3: squidsquad_cli.py check<br/>(operator-triggered)"}
+  L3c -->|"reports drift"| L3Info[/"Operator decides:<br/>run compose-all or<br/>investigate"/]
+  L3c -->|"all clean"| L3OK([Install is consistent])
+
+  style L1Fix fill:#fff3b0
+  style L2Fix fill:#fff3b0
+  style L3Info fill:#dfe7fd
+  style Spawn fill:#dfd
+  style Restart fill:#dfd
+  style L3OK fill:#dfd
 ```
 
-Each layer is sized to its blast radius: PR-check is the cheap-and-frequent gate, auto-recompose handles emergency direct-to-main paths, pre-ship is the safety net before delivery.
+**No target-repo CI dependency**: SquidSquad's adoption into a project does not require adding GitHub Actions, pre-commit hooks, or any other CI infrastructure to the target repo. The harness — which already owns lifecycle — owns compose freshness as a natural extension. Single trust boundary; fewer moving parts.
 
 ---
 
