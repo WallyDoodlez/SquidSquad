@@ -1,20 +1,11 @@
 # Working State
 
-- **Task**: B6 in verification; A6/B2/B3 awaiting skill pickup
-- **Status**: idle (watching)
+- **Task**: Watching B6 ship + skill next pickup
+- **Status**: idle
 
-## Active items
+## Active
 
-| # | Story | Status |
-|---|---|---|
-| B6 #10443 | Cache layer | pending-test (PR #10454) |
-| A6 #10386 | CLI accepts alias | approved |
-| B2 #10441 | Preservation verifier | approved |
-| B3 #10442 | Floor + parity | approved |
+- B6 #10443 (PR #10454) — pending-ship
+- A6 #10386, B2 #10441, B3 #10442 — approved (awaiting skill)
 
-## Watched issues
-
-- Verifier 👻 stalled twice now — may need investigation later (file issue?)
-- Skill 17m idle on #6274 (stale working state)
-
-Context 64%.
+Context 65%.
