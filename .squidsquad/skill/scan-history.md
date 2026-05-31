@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-31 15:15
+
+- **Files scanned**: references/scripts/reboot_agent.py (full 110 lines; focus on the post-#4792 surface — _kill_process + _read_claude_pid + the deprecated CLI).
+- **Findings**: #10530 (low — `_kill_process(pid)` passes pid straight to `os.kill(pid, SIGKILL)` on POSIX with no validation: pid=0 sends SIGKILL to the whole process group (incl. the harness itself), pid=-1 sweeps every process the calling user can signal, pid=None raises TypeError which propagates past the `(ProcessLookupError, PermissionError)` catch and breaks the caller. process_utils.is_process_alive already has the symmetric guard from #10440; the destructive sibling lacks it. Defense-in-depth: reject pid is None / not int / <= 0 before any kill call; add TypeError to the POSIX catch).
+- **Items rejected by human**: none yet
+- **Notes**: `_read_claude_pid` correctly delegates the alive bit to `process_utils.is_process_alive` (uses the #10440-hardened path). Windows `taskkill /F /PID 0` targets System Idle Process and the kernel refuses it; `check=False` swallows the non-zero exit, so the Windows risk is less catastrophic than POSIX. Module-level `from process_utils import ...` follows the sibling-import-via-sys.path pattern; consistent with other scripts. `main()` deprecation message points operators at the harness API; Phase 3 of #8979 removes it entirely so not worth more attention now. The file rename to `process_ops.py` (per docstring) is also a separate Phase 6+ task — flagged as out-of-scope in #10530.
+
 ## Scan — 2026-05-31 14:15
 
 - **Files scanned**: references/scripts/diagnostics.py (full 290 lines; focus on the auto-rotate check-then-write window + the per-entry append model + redaction surface).
