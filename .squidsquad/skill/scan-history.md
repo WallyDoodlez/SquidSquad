@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-31 16:15
+
+- **Files scanned**: references/scripts/event_validator.py (full 261 lines; focus on the 4 validation checks, the CLI surface, and the Finding shape). Briefly compared with statusline_data.py (138 lines, deferred because the SQUIDSQUAD_DIR foot-gun there is the same family as already-filed #10516 — no fresh finding).
+- **Findings**: #10537 (low — `check_reaction_cycles` walks pairs of roles with a nested loop, so it only catches **2-cycles** (A↔B). 3-role cycles (A→B→C→A) and longer rings pass silently even though the docstring promises "circular reaction chains" plural. Recommendation: replace the pairwise loop with a strongly-connected-components walk (Tarjan/Kosaraju) over the role-reaction graph; report each SCC of size ≥ 2 once. Out-of-scope side-findings noted: `--config <path>` CLI flag silently does nothing when the path is missing from argv; `Path(...).read_text()` doesn't catch FileNotFoundError; orphaned-emit warning text doesn't acknowledge infrastructure consumers).
+- **Items rejected by human**: none yet
+- **Notes**: statusline_data.py module-level `SQUID_DIR = REPO_ROOT / '.squidsquad'` is the same SQUIDSQUAD_DIR-captured-at-import-time pattern as #10516 in event_bus.py. Less impactful here because statusline.sh invokes the script as a fresh subprocess each refresh (no in-process callers), but flagged in scan notes for the consolidation when #10516 lands and we sweep for siblings. event_validator's `check_hallucinated_events` correctly uses `event_type not in known` against the catalog; `check_missing_consumers` correctly includes `EMITTED.keys()` so infrastructure emits count as available producers; `check_orphaned_emits` does NOT include infrastructure consumers and may produce false positives on events that infrastructure silently consumes — minor UX gap, called out as out-of-scope in #10537. Finding's `__slots__` is fine. `_describe` falls back to raw event-name on unknown types; intentional for the hallucinated branch.
+
 ## Scan — 2026-05-31 15:15
 
 - **Files scanned**: references/scripts/reboot_agent.py (full 110 lines; focus on the post-#4792 surface — _kill_process + _read_claude_pid + the deprecated CLI).
