@@ -321,8 +321,7 @@ Inside the L4 file, content is organized by slot using H2 headings that mirror t
 ## Project Context
 ...
 
-## Vault
-...
+# (## Vault is L1-exclusive — L4 files MUST NOT contain a `## Vault` H2; per the rule below and the per-slot constraint table)
 ```
 
 Each `## <Slot>` section holds the project's customizations for that slot. Within `## Instructions`, individual operations are H3 headings using the form `### <op> [step-id]`:
@@ -413,7 +412,7 @@ Compose is a **two-stage compiler**: **link** then **assemble**.
 
 | Stage | What it does | Determinism |
 |---|---|---|
-| **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role-class, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role-class, wake-mode, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. |
+| **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role-class, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role-class, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. Compose is wake-mode-blind (per §3.0 and §6.5), so wake-mode is not a determinism input. |
 | **Assemble** (§4.6) | Each linked slot body is rewritten by an agent into a single coherent voice — eliminates contradictions, conditional negations, awkward insertions left over from op layering. Produces the final agent-consumable **assembled** prose. | Stochastic on first run; cached by `(linked-body, slot-purpose, model-id)` hash, so deterministic from the caller's POV across re-deploys with unchanged inputs. |
 
 Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). The **linked** output is preserved as a sibling artifact (`.squidsquad/<alias>/CLAUDE.linked.md`) for audit, debugging, and fallback when the assemble pass fails. Both are git-tracked.
@@ -506,7 +505,7 @@ flowchart TB
 
 **`Assemble: no` exception**: when an install sets `Assemble: no` in `config.md` (see §4.6), the pipeline skips the assemble pass entirely and writes only `CLAUDE.md` (the linked body promoted to the final path). No `CLAUDE.linked.md` and no `CLAUDE.conflicts.md` are written — they'd be redundant (linked body == assembled body) or empty (no conflict detection ran). The pipeline diagram above is the assemble-enabled path; in the `Assemble: no` path the `Assemble` / `Cache` / `LLM` boxes are skipped and `EmitLinked` flows directly to `WriteAtomic` with a single-file output.
 
-**Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role-class, wake-mode, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose.
+**Link stage determinism**: through `EmitLinked`, the pipeline is fully deterministic — given `(role-class, source-tree-hash, L4-tree-hash)`, the linked composite is bit-stable. Wake-mode is NOT a determinism input — compose is wake-mode-blind (§3.0, §6.5). **Assemble stage determinism**: the first uncached run is stochastic (LLM rewrite), but the result is cached by `hash(linked-body, slot-purpose, model-id)`; subsequent re-deploys with unchanged inputs reuse the cached assembled body and produce bit-stable output. First-run drift between equivalent rewrites is the irreducible trade-off for collapsing the layered linked output into coherent prose.
 
 ### 4.5 Link: Sub-skill reference resolution
 
