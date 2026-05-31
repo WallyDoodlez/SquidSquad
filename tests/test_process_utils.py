@@ -53,65 +53,111 @@ class TestIsProcessAlive:
             assert process_utils.is_process_alive(12345) is True
             kill.assert_called_once_with(12345, 0)
 
-    def test_windows_uses_openprocess_not_tasklist(self):
+    # ---- Win32 branch (#10440 reshape: monkey-patch _win32_kernel32 +
+    # ctypes.get_last_error directly; the old sys.modules['ctypes'] patch
+    # no longer works because ctypes is imported at module level). ----
+
+    def _fake_kernel32_for_win_tests(self, monkeypatch):
+        fake = MagicMock(name="kernel32")
+        monkeypatch.setattr(process_utils, "_win32_kernel32", lambda: fake)
+        monkeypatch.setattr(process_utils.sys, "platform", "win32")
+        return fake
+
+    def test_windows_uses_openprocess_not_tasklist(self, monkeypatch):
         """#9904: Windows path must use OpenProcess via ctypes, never
         shell out to tasklist (which takes 20+ s on some systems and
         wedges the harness)."""
-        fake_kernel32 = MagicMock()
+        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
         fake_kernel32.OpenProcess.return_value = 12345  # nonzero handle
-        # GetExitCodeProcess writes STILL_ACTIVE (259) via byref
+
         def get_exit(handle, exit_ptr):
             exit_ptr._obj.value = 259
             return 1
-        fake_kernel32.GetExitCodeProcess.side_effect = get_exit
-        fake_ctypes = MagicMock()
-        fake_ctypes.windll.kernel32 = fake_kernel32
-        fake_ctypes.c_ulong = __import__("ctypes").c_ulong
-        fake_ctypes.byref = __import__("ctypes").byref
-        with patch("process_utils.sys.platform", "win32"), \
-             patch.dict(sys.modules, {"ctypes": fake_ctypes}):
-            assert process_utils.is_process_alive(12345) is True
-            fake_kernel32.OpenProcess.assert_called_once()
-            fake_kernel32.CloseHandle.assert_called_once()
 
-    def test_windows_dead_process_returns_false(self):
+        fake_kernel32.GetExitCodeProcess.side_effect = get_exit
+        assert process_utils.is_process_alive(12345) is True
+        fake_kernel32.OpenProcess.assert_called_once()
+        fake_kernel32.CloseHandle.assert_called_once()
+
+    def test_windows_dead_process_returns_false(self, monkeypatch):
         """OpenProcess succeeds but GetExitCodeProcess returns non-STILL_ACTIVE."""
-        fake_kernel32 = MagicMock()
+        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
         fake_kernel32.OpenProcess.return_value = 12345
+
         def get_exit(handle, exit_ptr):
             exit_ptr._obj.value = 0  # process exited with 0
             return 1
+
         fake_kernel32.GetExitCodeProcess.side_effect = get_exit
-        fake_ctypes = MagicMock()
-        fake_ctypes.windll.kernel32 = fake_kernel32
-        fake_ctypes.c_ulong = __import__("ctypes").c_ulong
-        fake_ctypes.byref = __import__("ctypes").byref
-        with patch("process_utils.sys.platform", "win32"), \
-             patch.dict(sys.modules, {"ctypes": fake_ctypes}):
-            assert process_utils.is_process_alive(12345) is False
-            fake_kernel32.CloseHandle.assert_called_once()
+        assert process_utils.is_process_alive(12345) is False
+        fake_kernel32.CloseHandle.assert_called_once()
 
-    def test_windows_openprocess_failure_returns_false(self):
-        """OpenProcess returns 0 + ERROR_INVALID_PARAMETER → process unknown."""
-        fake_kernel32 = MagicMock()
+    def test_windows_openprocess_failure_invalid_param_returns_false(self, monkeypatch):
+        """OpenProcess returns 0 + ERROR_INVALID_PARAMETER → process unknown.
+
+        #10440: read via ctypes.get_last_error (use_last_error pattern),
+        not kernel32.GetLastError — the per-thread last-error slot must
+        be captured by ctypes immediately after the call.
+        """
+        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
         fake_kernel32.OpenProcess.return_value = 0
-        fake_kernel32.GetLastError.return_value = 87  # ERROR_INVALID_PARAMETER
-        fake_ctypes = MagicMock()
-        fake_ctypes.windll.kernel32 = fake_kernel32
-        with patch("process_utils.sys.platform", "win32"), \
-             patch.dict(sys.modules, {"ctypes": fake_ctypes}):
-            assert process_utils.is_process_alive(99999999) is False
+        monkeypatch.setattr(process_utils.ctypes, "get_last_error", lambda: 87)
+        assert process_utils.is_process_alive(99999999) is False
 
-    def test_windows_access_denied_means_alive(self):
+    def test_windows_access_denied_means_alive(self, monkeypatch):
         """ERROR_ACCESS_DENIED (5) means process exists, we just can't open it."""
-        fake_kernel32 = MagicMock()
+        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
         fake_kernel32.OpenProcess.return_value = 0
-        fake_kernel32.GetLastError.return_value = 5  # ERROR_ACCESS_DENIED
-        fake_ctypes = MagicMock()
-        fake_ctypes.windll.kernel32 = fake_kernel32
-        with patch("process_utils.sys.platform", "win32"), \
-             patch.dict(sys.modules, {"ctypes": fake_ctypes}):
-            assert process_utils.is_process_alive(4) is True  # System PID
+        monkeypatch.setattr(process_utils.ctypes, "get_last_error", lambda: 5)
+        assert process_utils.is_process_alive(4) is True  # System PID
+
+    def test_windows_get_exit_code_failure_treated_as_alive(self, monkeypatch):
+        """If GetExitCodeProcess returns 0 (call failed) but OpenProcess
+        succeeded, the process existed when we held the handle —
+        conservative: still alive. Lock the existing semantics."""
+        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
+        fake_kernel32.OpenProcess.return_value = 1
+        fake_kernel32.GetExitCodeProcess.return_value = 0
+        assert process_utils.is_process_alive(1234) is True
+        fake_kernel32.CloseHandle.assert_called_once()
+
+    def test_windows_close_handle_runs_on_exception(self, monkeypatch):
+        """try/finally MUST close the handle even when GetExitCodeProcess
+        raises — otherwise every error path leaks a kernel handle."""
+        fake_kernel32 = self._fake_kernel32_for_win_tests(monkeypatch)
+        fake_kernel32.OpenProcess.return_value = 7
+        fake_kernel32.GetExitCodeProcess.side_effect = RuntimeError("boom")
+        import pytest as _pt
+        with _pt.raises(RuntimeError):
+            process_utils.is_process_alive(1234)
+        fake_kernel32.CloseHandle.assert_called_once_with(7)
+
+
+class TestWin32KernelBinding:
+    """#10440: the typed kernel32 binding caches + sets explicit argtypes."""
+
+    def test_cache_returns_same_object(self, monkeypatch):
+        monkeypatch.setattr(process_utils, "_CACHED_KERNEL32", None)
+        if process_utils.sys.platform != "win32":
+            import pytest as _pt
+            _pt.skip("WinDLL is Windows-only; cache test runs only on win32")
+        first = process_utils._win32_kernel32()
+        second = process_utils._win32_kernel32()
+        assert first is second
+
+    def test_argtypes_set_for_64bit_handle_correctness(self, monkeypatch):
+        monkeypatch.setattr(process_utils, "_CACHED_KERNEL32", None)
+        if process_utils.sys.platform != "win32":
+            import pytest as _pt
+            _pt.skip("WinDLL is Windows-only")
+        from ctypes import wintypes
+        k = process_utils._win32_kernel32()
+        # restype on OpenProcess must be HANDLE (full pointer width)
+        # instead of the ctypes default c_int (32-bit signed). That's
+        # the ABI-correctness half of #10440.
+        assert k.OpenProcess.restype is wintypes.HANDLE
+        assert k.GetExitCodeProcess.restype is wintypes.BOOL
+        assert k.CloseHandle.restype is wintypes.BOOL
 
     def test_no_platform_module_imported(self):
         """#9903 regression: platform.system() hangs on Python 3.12 Windows

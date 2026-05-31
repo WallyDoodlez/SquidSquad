@@ -270,6 +270,44 @@ class TestIsProcessAlive:
         assert thin_launcher._is_process_alive(2_147_483_646) is False
 
 
+class TestWin32KernelBinding10440:
+    """#10440: typed kernel32 binding with use_last_error + explicit argtypes."""
+
+    def test_win32_branch_uses_get_last_error_not_kernel32_getlasterror(self, monkeypatch):
+        # When OpenProcess returns 0, the failure-branch read MUST go
+        # through ``ctypes.get_last_error`` (per-thread, captured by
+        # ctypes immediately) not ``kernel32.GetLastError`` (racy).
+        fake_kernel32 = MagicMock(name="kernel32")
+        fake_kernel32.OpenProcess.return_value = 0
+        # If the code ever reaches back into kernel32.GetLastError() we'd
+        # see this AttributeError-like miss; configure to raise loudly.
+        fake_kernel32.GetLastError.side_effect = AssertionError(
+            "GetLastError must NOT be read off the WinDLL — use ctypes.get_last_error"
+        )
+        monkeypatch.setattr(thin_launcher, "_win32_kernel32", lambda: fake_kernel32)
+        monkeypatch.setattr(thin_launcher.sys, "platform", "win32")
+        # Stage 1: ACCESS_DENIED → alive
+        import ctypes as _c
+        monkeypatch.setattr(_c, "get_last_error", lambda: 5)
+        assert thin_launcher._is_process_alive(1234) is True
+        # Stage 2: INVALID_PARAMETER → dead
+        monkeypatch.setattr(_c, "get_last_error", lambda: 87)
+        assert thin_launcher._is_process_alive(1234) is False
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="WinDLL is Windows-only")
+    def test_typed_binding_includes_toolhelp32(self, monkeypatch):
+        # DS finding 1 follow-up: _win32_list_descendants used to read
+        # ctypes.windll.kernel32 directly, leaving CreateToolhelp32Snapshot
+        # / Process32First / Process32Next without argtypes — HANDLE
+        # truncation to c_int + INVALID_HANDLE_VALUE comparison broken.
+        monkeypatch.setattr(thin_launcher, "_CACHED_KERNEL32", None)
+        from ctypes import wintypes
+        k = thin_launcher._win32_kernel32()
+        assert k.CreateToolhelp32Snapshot.restype is wintypes.HANDLE
+        assert k.Process32First.restype is wintypes.BOOL
+        assert k.Process32Next.restype is wintypes.BOOL
+
+
 class TestCheckSingleton:
     """Read .claude-pid and report whether another agent is alive."""
 
