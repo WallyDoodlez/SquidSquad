@@ -386,7 +386,8 @@ All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across re
 
 When the harness restarts (operator-driven or after a crash):
 
-1. **Read `.squidsquad/.harness-state.json`** — recover per-agent intent + PID + clone path.
+1. **Read `.squidsquad/.harness-state.json`** — recover per-agent intent + PID + clone path + `last_compose_checksum`.
+1b. **Compose freshness check** — recompute the checksum over `.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`; compare against `last_compose_checksum`. If they differ or the field is absent (first boot, post-`git pull`, post-installer migration walk), run `compose.py deploy-all` BEFORE proceeding to step 2 and write the new checksum back to state. See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md).
 2. **Verify live PIDs** — for each agent with intent=`running`, check if the recorded PID is still alive.
    - Alive: resume monitoring.
    - Dead: respawn (since intent=`running`).

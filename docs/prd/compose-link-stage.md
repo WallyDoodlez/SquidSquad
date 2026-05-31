@@ -1,6 +1,6 @@
 # PRD A — Compose Link Stage
 
-> **Status**: PRD draft, 2026-05-30. Derived from TRD [COMPOSE-ARCHITECTURE.md](../COMPOSE-ARCHITECTURE.md) §1–§6 (link stage). Part of the COMPOSE-ARCH PRD slice family: A (this) / B (assemble) / C (L4 + l4-curation) / D (catalog + wake-mode) / E (harness-owned freshness).
+> **Status**: PRD draft, 2026-05-30. Derived from TRD [[COMPOSE-ARCHITECTURE]] §1–§6 (link stage). Part of the COMPOSE-ARCH PRD slice family: A (this) / B (assemble) / C (L4 + l4-curation) / D (catalog + wake-mode) / E (harness-owned freshness).
 >
 > **Scope:** the deterministic linking of L1–L4 source fragments into a single `.squidsquad/<alias>/CLAUDE.md` per agent instance. Excludes the LLM-driven assemble pass (PRD B), runtime L4 writes (PRD C), sub-skill catalog enforcement (PRD D), and harness-owned freshness (PRD E).
 
@@ -63,9 +63,9 @@ These are the TRD sections this PRD draws on; no architectural decisions in this
 
 | Dependency | From | Why |
 |---|---|---|
-| `.squidsquad/config.md` `## Aliases` registry | TRD §3.0 + INSTALLER §4.8 step 3 (already shipped via installer) | Compose resolves alias → role-class via this registry. Required for `deploy <alias>`. |
-| L1-L3 source tree under `references/sub-skills/` + `references/roles/` | TRD §3.1 (already shipped) | The content compose reads. |
-| L4 source tree at `.squidsquad/project/<role-class>.md` (optional per role-class) | TRD §3.3 + INSTALLER §4.8 step 4 (already shipped via installer) | If absent, L4 step is a no-op; if present, ops apply per §3.3. |
+| `.squidsquad/config.md` `## Aliases` registry | [[COMPOSE-ARCHITECTURE]] §3.0 + [[INSTALLER-ARCH]] §4.8 step 3 (already shipped via installer) | Compose resolves alias → role-class via this registry. Required for `deploy <alias>`. |
+| L1-L3 source tree under `references/sub-skills/` + `references/roles/` | [[COMPOSE-ARCHITECTURE]] §3.1 (already shipped) | The content compose reads. |
+| L4 source tree at `.squidsquad/project/<role-class>.md` (optional per role-class) | [[COMPOSE-ARCHITECTURE]] §3.3 + [[INSTALLER-ARCH]] §4.8 step 4 (already shipped via installer) | If absent, L4 step is a no-op; if present, ops apply per §3.3. |
 | Python 3.12+ + PyYAML | runtime environment | Frontmatter parsing. |
 
 No new dependencies introduced by PRD A — the link stage already exists in `references/scripts/compose.py`.
@@ -117,6 +117,7 @@ This PRD is "done" when:
 
 ## 11. References
 
-- TRD: [COMPOSE-ARCHITECTURE.md](../COMPOSE-ARCHITECTURE.md) (canonical spec)
-- Companion PRDs (forthcoming): `compose-assemble-stage.md` (B), `compose-l4-customization.md` (C), `compose-catalog-and-wake-mode.md` (D), `compose-freshness.md` (E)
-- Memory rules: `project_trd_prd_delivery_model`, `project_compose_freshness_harness_owned`
+- TRD: [[COMPOSE-ARCHITECTURE]] (canonical spec)
+- Sibling architecture: [[AGENT-RUNTIME]], [[HARNESS-ARCH]], [[INSTALLER-ARCH]], [[VAULT-ARCH]]
+- Companion PRDs (forthcoming): [[compose-assemble-stage]] (B), [[compose-l4-customization]] (C), [[compose-catalog-and-wake-mode]] (D), [[compose-freshness]] (E)
+- Memory rules: [[project_trd_prd_delivery_model]], [[project_compose_freshness_harness_owned]]
