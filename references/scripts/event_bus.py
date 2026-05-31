@@ -37,6 +37,19 @@ def _resolve_squid_dir() -> Path:
     return Path(raw).expanduser()
 
 
+# Module-level capture is kept for backwards compatibility with callers
+# that grep this attribute (e.g. ``test_9398_squidsquad_dir_env_var.py``
+# expects ``event_bus.SQUID_DIR`` to be the value resolved when the
+# module loads, and ``patch.object(event_bus, 'SQUID_DIR', …)`` is used
+# by ``test_event_bus.py`` to redirect emits to a tmp dir). Internal
+# call sites that need a runtime ``SQUIDSQUAD_DIR`` read the env var at
+# call time and fall back to this ``SQUID_DIR`` — see ``_discover_port``
+# for the pattern. ``_resolve_squid_dir()`` itself is only used to
+# initialise ``SQUID_DIR`` here at import time; it is intentionally NOT
+# re-called from ``_discover_port`` because its fallback is
+# ``REPO_ROOT / ".squidsquad"`` rather than the patchable
+# ``SQUID_DIR``, which would silently break the existing test fixtures
+# (#10516).
 SQUID_DIR = _resolve_squid_dir()
 
 # Timeout: 500ms — never blocks agent cycle
@@ -50,9 +63,19 @@ def _discover_port():
     distributes the port file to all clone directories at boot
     (harness.py lifespan), so parent-dir walk is unnecessary.
 
+    Resolution order (#10516):
+
+    1. ``SQUIDSQUAD_DIR`` env var if set at call time — honors a runtime
+       override without requiring an ``importlib`` reload.
+    2. Module-level ``SQUID_DIR`` — the value captured when the module
+       loaded; what tests that ``patch.object(event_bus, 'SQUID_DIR', …)``
+       expect to control.
+
     Returns port number or None if not discoverable.
     """
-    port_file = SQUID_DIR / ".harness-port"
+    raw = (os.environ.get("SQUIDSQUAD_DIR") or "").strip()
+    squid_dir = Path(raw).expanduser() if raw else SQUID_DIR
+    port_file = squid_dir / ".harness-port"
     if port_file.exists():
         try:
             return int(port_file.read_text(encoding="utf-8").strip())
