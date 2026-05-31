@@ -672,7 +672,7 @@ If any check fails, **compose aborts with a diagnostic**. There is no fallback t
 **Audit artifacts.** Compose emits three outputs to `.squidsquad/<alias>/`:
 
 - `CLAUDE.md` — the **assembled** output. This is what the runtime agent reads. Always present.
-- `CLAUDE.linked.md` — the **linked** output. **Audit / debug only — NOT a runtime fallback.** Runtime always reads `CLAUDE.md`. Always present on success.
+- `CLAUDE.linked.md` — the **linked** output. **Audit / debug only — NOT a runtime fallback.** Runtime always reads `CLAUDE.md`. Present on success **except** when `Assemble: no` is set in `config.md` — in that path the linked body is promoted directly to `CLAUDE.md` and no sibling `CLAUDE.linked.md` is written (would be byte-identical). See the `Assemble: no` exception above.
 - `CLAUDE.conflicts.md` — the **conflict report** from the assemble pass (see format above). Always present, even when zero conflicts (proof the pass ran). PR review against an L4 change inspects this file to confirm overrides resolved as intended.
 
 PR review compares the two when an L4 op lands; if the assembled output drops or distorts an op's intent, the reviewer catches it before merge. The assemble pass is not a black box.
