@@ -1,34 +1,20 @@
 # Working State
 
-- **Task**: Overnight watch — A5 fully shipped; #10348 awaiting DM ship
-- **Status**: idle (watching)
+- **Task**: Overnight watch — quiet; only #10348 still pending-ship
+- **Status**: idle (watching DM)
 - **Last Processed Event ID**: null
 
-## Watch progress — A5 timeline (full cycle)
+## Pipeline
 
-| Time (local) | Event | Lag |
+| Item | State | Lag |
 |---|---|---|
-| 03:00:53 | PM approved | — |
-| 03:02:30 | Skill picked up | 1:37 |
-| 03:15:41 | Skill opened PR #10401 | 13:11 |
-| 03:43:07 | PM booted verifier | (verifier was ❓) |
-| 03:44:44 | Verifier passed → pending-ship | 1:37 |
-| 04:13:02 | DM merged PR + shipped | 28:18 |
-| **Total** | **approved → shipped** | **1h 12m** |
+| A5 #10385 / PR #10401 | SHIPPED ✓ | — |
+| #10348 (health_check fix) | pending-ship | 30min (under 90min threshold) |
+| Other PRD-A | pending (held) | — |
+| PRD-B/C/D+E PRs | awaiting human | — |
 
-## Other activity overnight
-
-- **#10348** (health_check `_read_interval` SystemExit fix, severity:low, improvement-scan): skill shipped, qa verified, currently pending-ship awaiting DM
-
-## Pipeline now
-
-| Item | State |
-|---|---|
-| A5 #10385 / PR #10401 | **SHIPPED ✓** |
-| #10348 | pending-ship (DM) |
-| Other PRD-A | pending (held — awaiting A2 re-scope direction) |
-| PRD-B/C/D+E PRs | awaiting human review |
+All agents 🦑 healthy. No stalls past threshold. No nudges issued.
 
 ## Context
 
-51% — healthy.
+52% — healthy.
