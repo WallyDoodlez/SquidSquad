@@ -1,16 +1,16 @@
 # Working State
 
-- **Task**: Overnight watch — quiet (A5 in-progress, no other changes)
+- **Task**: Overnight watch — quiet
 - **Status**: idle (watching)
 - **Last Processed Event ID**: null
 
 ## Watch progress
 
-- Cycle 1927 (1st autonomous post-handover): quiet — no changes
-- A5 #10385: in-progress 12min, no PR yet
-- 0 stalls, 0 events, 0 reactions
-- Verifier ❓ unknown — not booting (no pending-test surfaced)
+- Cycle 1928 — quiet (2nd in a row)
+- A5 #10385: in-progress 13min total, no PR yet, no new comments
+- 0 stalls, 0 events, 0 reactions, 0 pending-test/ship work
+- Verifier ❓ — not booting (no work surfaced)
 
 ## Context
 
-41% — well under threshold.
+42% — healthy.
