@@ -1,0 +1,91 @@
+diff --git a/references/scripts/reboot_agent.py b/references/scripts/reboot_agent.py
+index 73e76246..1b010c92 100644
+--- a/references/scripts/reboot_agent.py
++++ b/references/scripts/reboot_agent.py
+@@ -53,10 +53,18 @@ def _kill_process(pid):
+     correct semantic match for ``taskkill /F`` and the only signal POSIX
+     guarantees cannot be ignored. (CONTEXT-4792.md §3.3 Q7.)
+ 
++    Rejects ``None``, non-int, and any non-positive PID (#10530). On POSIX,
++    ``os.kill(0, SIGKILL)`` sends to the whole process group (including
++    the harness itself) and ``os.kill(-1, SIGKILL)`` sweeps every process
++    the calling user can signal — defense-in-depth, mirrors the symmetric
++    guard ``process_utils.is_process_alive`` already carries from #10440.
++
+     Best-effort: swallows the case where the process is already dead.
+     Callers that need to confirm termination should poll
+     ``_is_process_alive(pid)`` after.
+     """
++    if pid is None or not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
++        return
+     if sys.platform == "win32":
+         subprocess.run(
+             ["taskkill", "/F", "/PID", str(pid)],
+@@ -65,10 +73,11 @@ def _kill_process(pid):
+     else:
+         try:
+             os.kill(pid, signal.SIGKILL)
+-        except (ProcessLookupError, PermissionError):
+-            # Already dead (PLE) or owned by a different UID (Permission).
+-            # Both are best-effort no-ops here — the force-kill safety net
+-            # in update_health will re-check on the next poll, and the
++        except (ProcessLookupError, PermissionError, TypeError):
++            # Already dead (PLE), owned by a different UID (Permission),
++            # or a bad-type slipped past the guard (TypeError). All
++            # best-effort no-ops — the force-kill safety net in
++            # update_health will re-check on the next poll, and the
+             # operator can fall back to the harness API for diagnostics.
+             pass
+ 
+diff --git a/tests/test_reboot_agent.py b/tests/test_reboot_agent.py
+index ea392118..0689b54f 100644
+--- a/tests/test_reboot_agent.py
++++ b/tests/test_reboot_agent.py
+@@ -108,6 +108,47 @@ class TestKillProcess:
+             reboot_agent._kill_process(12345)  # must not raise
+ 
+ 
++class TestKillProcessPidValidation10530:
++    """#10530: _kill_process must reject None / non-int / <= 0 PIDs before
++    calling os.kill or taskkill. ``os.kill(0, SIGKILL)`` would send to the
++    whole process group (incl. the harness itself); ``os.kill(-1, SIGKILL)``
++    would sweep every process the calling user can signal.
++    """
++
++    @pytest.mark.parametrize("bad_pid", [None, 0, -1, -12345, True, False])
++    def test_invalid_pid_does_not_call_kill_posix(self, bad_pid):
++        if sys.platform == "win32":
++            with patch("reboot_agent.subprocess.run") as run:
++                reboot_agent._kill_process(bad_pid)
++            run.assert_not_called()
++        else:
++            with patch("reboot_agent.os.kill") as kill:
++                reboot_agent._kill_process(bad_pid)
++            kill.assert_not_called()
++
++    @pytest.mark.parametrize("bad_pid", ["1234", "not-a-pid", 1.5, [12345], None])
++    def test_non_int_pid_does_not_call_kill(self, bad_pid):
++        if sys.platform == "win32":
++            with patch("reboot_agent.subprocess.run") as run:
++                reboot_agent._kill_process(bad_pid)
++            run.assert_not_called()
++        else:
++            with patch("reboot_agent.os.kill") as kill:
++                reboot_agent._kill_process(bad_pid)
++            kill.assert_not_called()
++
++    @pytest.mark.skipif(sys.platform == "win32",
++                        reason="POSIX-only — TypeError path on os.kill")
++    def test_kill_type_error_swallowed(self):
++        """If a bad-type PID slips past the guard (e.g. a Mock object),
++        os.kill raises TypeError. Mirror the ProcessLookupError /
++        PermissionError swallow behavior so the harness doesn't crash."""
++        with patch("reboot_agent.os.kill", side_effect=TypeError("bad pid")):
++            # Pass a valid-shape int so the guard doesn't catch it before
++            # the stub gets to raise.
++            reboot_agent._kill_process(12345)  # must not raise
++
++
+ # ---------------------------------------------------------------------------
+ # Negative guards — removed orchestrators
+ # ---------------------------------------------------------------------------
