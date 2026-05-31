@@ -1,0 +1,505 @@
+diff --git a/references/scripts/l4_parser.py b/references/scripts/l4_parser.py
+new file mode 100644
+index 00000000..938c957a
+--- /dev/null
++++ b/references/scripts/l4_parser.py
+@@ -0,0 +1,195 @@
++"""L4 single-file H2-slot + H3-op grammar parser (#10488, PRD-A Story A2b).
++
++Pure-Python parser for ``.squidsquad/project/<role-class>.md``. Returns
++a structured ``L4Document`` exposing per-slot lists of ``L4Op`` records
++(op_type, target_step_id, body_text, parsed metadata trailer).
++
++Grammar (TRD §3.3 + §7.3):
++- ``## <Slot>``       — slot section (one of the six legal slot names).
++- ``### append``      — append op (no target).
++- ``### replace``     — whole-slot replace (no target).
++- ``### replace step:cycle/<id>``       — step-targeted replace.
++- ``### insert-before step:cycle/<id>`` — step-targeted insert-before.
++- ``### insert-after  step:cycle/<id>`` — step-targeted insert-after.
++
++Each H3 op may end with an HTML-comment metadata trailer carrying
++``authored-by`` / ``authored-at`` / ``source-conversation`` lines. The
++trailer is parsed into ``L4Op.metadata`` and stripped from
++``body_text``.
++
++A2b only owns the grammar. Per-slot constraint validation (vault
++rejection, append-must-cite-sub-skill, mixed-op rejection, step-id
++resolution against L1-L3) is A2's job; this parser does NOT enforce
++those rules. It does reject H3 lines that don't match the op grammar
++above — that's the "malformed H3 op" AC bullet.
++
++Pure additive. v1 compose.py read sites are untouched.
++"""
++
++import re
++from dataclasses import dataclass, field
++from pathlib import Path
++
++
++LEGAL_SLOTS = frozenset(
++    {"identity", "responsibility", "soul", "instructions", "project-context", "vault"}
++)
++
++# ``## Slot Name`` — captures the slot text. The closing ``#`` count
++# variant ``## Slot Name ##`` is also legal markdown; tolerate it.
++_H2_RE = re.compile(r"^##\s+(.+?)\s*#*\s*$")
++# ``### op [step:cycle/<id>]`` — the legal op grammar.
++_H3_RE = re.compile(r"^###\s+(.+?)\s*#*\s*$")
++# H3 op heading body. Strict: the heading text after ``### `` must match
++# one of the five legal shapes verbatim.
++_OP_RE = re.compile(
++    r"^(append|replace)$"
++    r"|^(replace|insert-before|insert-after)\s+step:cycle/([A-Za-z0-9_-]+)$"
++)
++# HTML-comment metadata trailer: ``<!-- key: value\n... -->`` at the end
++# of an H3 body. Multiple key:value lines allowed. Both ``<!--`` and
++# ``-->`` must be on their own lines for the trailer to count; comments
++# elsewhere in the body are ignored.
++_TRAILER_RE = re.compile(
++    r"\n<!--\s*\n([\s\S]*?)\n\s*-->\s*$",
++    re.MULTILINE,
++)
++_METADATA_KEY_RE = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(.*)$")
++
++
++class L4ParseError(ValueError):
++    """Raised when the file violates the H2/H3 grammar."""
++
++
++@dataclass
++class L4Op:
++    op_type: str  # "append" | "replace" | "insert-before" | "insert-after"
++    target_step_id: str | None  # None for `append` or whole-slot `replace`
++    body_text: str
++    metadata: dict = field(default_factory=dict)
++
++
++@dataclass
++class L4Document:
++    slots: dict = field(default_factory=dict)  # slot_name -> list[L4Op]
++
++    @classmethod
++    def empty(cls):
++        return cls(slots={})
++
++
++def parse_l4_file(path):
++    """Parse ``path`` into an ``L4Document``. Missing file → empty doc.
++
++    Raises ``L4ParseError`` on:
++    - Unknown slot name in an ``## <Slot>`` heading.
++    - H3 heading text that doesn't match the legal op grammar.
++    - H3 op appearing outside any slot.
++    """
++    path = Path(path)
++    if not path.is_file():
++        return L4Document.empty()
++    text = path.read_text(encoding="utf-8")
++    return _parse_text(text, source=str(path))
++
++
++def parse_l4_text(text, source="<text>"):
++    """Parse raw text. Used by tests; same semantics as ``parse_l4_file``."""
++    return _parse_text(text, source=source)
++
++
++def _parse_text(text, source):
++    slots = {}
++    current_slot = None
++    current_op = None
++    current_body = []  # lines accumulating for the current H3 op
++
++    def _commit_current_op():
++        if current_op is None:
++            return
++        body = "\n".join(current_body).strip("\n")
++        metadata, body = _extract_metadata(body)
++        current_op.body_text = body
++        current_op.metadata = metadata
++        slots.setdefault(current_slot, []).append(current_op)
++
++    lines = text.splitlines()
++    for lineno, raw in enumerate(lines, start=1):
++        h2 = _H2_RE.match(raw) if raw.startswith("## ") else None
++        h3 = _H3_RE.match(raw) if raw.startswith("### ") else None
++
++        if h2 is not None:
++            _commit_current_op()
++            current_op = None
++            current_body = []
++            slot_name = _normalize_slot(h2.group(1))
++            if slot_name not in LEGAL_SLOTS:
++                raise L4ParseError(
++                    f"{source}:{lineno}: unknown L4 slot heading "
++                    f"`## {h2.group(1)}` — must be one of "
++                    f"{sorted(LEGAL_SLOTS)}."
++                )
++            current_slot = slot_name
++            slots.setdefault(current_slot, [])
++            continue
++
++        if h3 is not None:
++            _commit_current_op()
++            current_body = []
++            heading = h3.group(1).strip()
++            op_type, target = _parse_h3_op(heading, source, lineno)
++            if current_slot is None:
++                raise L4ParseError(
++                    f"{source}:{lineno}: H3 op `### {heading}` appears "
++                    f"outside any slot — H3 ops MUST follow a `## <Slot>` "
++                    f"heading."
++                )
++            current_op = L4Op(op_type=op_type, target_step_id=target, body_text="")
++            continue
++
++        if current_op is not None:
++            current_body.append(raw)
++
++    _commit_current_op()
++    return L4Document(slots=slots)
++
++
++def _parse_h3_op(heading, source, lineno):
++    m = _OP_RE.match(heading)
++    if m is None:
++        raise L4ParseError(
++            f"{source}:{lineno}: malformed H3 op heading `### {heading}`. "
++            f"Expected one of: `### append`, `### replace`, "
++            f"`### replace step:cycle/<id>`, `### insert-before step:cycle/<id>`, "
++            f"`### insert-after step:cycle/<id>`."
++        )
++    if m.group(1) is not None:
++        # ``append`` or whole-slot ``replace``.
++        return m.group(1), None
++    return m.group(2), m.group(3)
++
++
++def _normalize_slot(raw):
++    """Lowercase + hyphenate the slot label. ``Project Context`` -> ``project-context``."""
++    return re.sub(r"\s+", "-", raw.strip().lower())
++
++
++def _extract_metadata(body):
++    """Split off the HTML-comment metadata trailer, returning ``(metadata, body)``.
++
++    If no trailer is present, returns ``({}, body)`` unchanged.
++    """
++    m = _TRAILER_RE.search(body)
++    if m is None:
++        return {}, body
++    metadata = {}
++    for raw in m.group(1).splitlines():
++        line = raw.strip()
++        if not line:
++            continue
++        km = _METADATA_KEY_RE.match(line)
++        if km is None:
++            continue  # unparseable line — ignore per "compose does not require or validate" (TRD §7.3)
++        metadata[km.group(1)] = km.group(2).strip()
++    body = body[: m.start()].rstrip("\n")
++    return metadata, body
+diff --git a/tests/run_tests.py b/tests/run_tests.py
+index b89f75cd..92914014 100644
+--- a/tests/run_tests.py
++++ b/tests/run_tests.py
+@@ -113,6 +113,7 @@ STATIC_TEST_MODULES = [
+     "test_9398_tracker_gh_resolution",
+     "test_pickup_comment_fidelity_9946",
+     "test_terminology_dual_aware_6274",
++    "test_l4_parser",
+ ]
+ 
+ 
+diff --git a/tests/test_l4_parser.py b/tests/test_l4_parser.py
+new file mode 100644
+index 00000000..337b4832
+--- /dev/null
++++ b/tests/test_l4_parser.py
+@@ -0,0 +1,286 @@
++"""Tests for references/scripts/l4_parser.py (#10488, PRD-A Story A2b)."""
++
++import sys
++from pathlib import Path
++
++import pytest
++
++SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
++sys.path.insert(0, str(SCRIPTS))
++
++import l4_parser as l4  # noqa: E402
++
++
++# ---------------------------------------------------------------------------
++# Empty / missing file
++# ---------------------------------------------------------------------------
++
++def test_missing_file_returns_empty_document(tmp_path):
++    doc = l4.parse_l4_file(tmp_path / "does_not_exist.md")
++    assert isinstance(doc, l4.L4Document)
++    assert doc.slots == {}
++
++
++def test_empty_file_returns_empty_document(tmp_path):
++    f = tmp_path / "worker.md"
++    f.write_text("", encoding="utf-8")
++    doc = l4.parse_l4_file(f)
++    assert doc.slots == {}
++
++
++# ---------------------------------------------------------------------------
++# Six legal slot H2 sections
++# ---------------------------------------------------------------------------
++
++@pytest.mark.parametrize(
++    "h2,slot_key",
++    [
++        ("## Identity", "identity"),
++        ("## Responsibility", "responsibility"),
++        ("## Soul", "soul"),
++        ("## Instructions", "instructions"),
++        ("## Project Context", "project-context"),
++        ("## Vault", "vault"),
++    ],
++)
++def test_each_legal_slot_recognized(h2, slot_key):
++    doc = l4.parse_l4_text(f"{h2}\n\n### append\n\nbody\n")
++    assert slot_key in doc.slots
++    assert len(doc.slots[slot_key]) == 1
++
++
++def test_unknown_slot_rejected_with_diagnostic():
++    with pytest.raises(l4.L4ParseError) as exc:
++        l4.parse_l4_text("## Bogus Slot\n\n### append\n\nbody\n")
++    msg = str(exc.value)
++    assert "unknown L4 slot" in msg
++    assert "Bogus Slot" in msg
++
++
++def test_slot_h2_with_closing_hashes_tolerated():
++    # Markdown allows `## Identity ##`; the parser should still pick up the slot.
++    doc = l4.parse_l4_text("## Identity ##\n\n### append\n\nbody\n")
++    assert "identity" in doc.slots
++
++
++# ---------------------------------------------------------------------------
++# All five legal H3 op shapes
++# ---------------------------------------------------------------------------
++
++def test_append_no_target():
++    doc = l4.parse_l4_text("## Identity\n\n### append\n\nproject prose\n")
++    op = doc.slots["identity"][0]
++    assert op.op_type == "append"
++    assert op.target_step_id is None
++    assert op.body_text == "project prose"
++
++
++def test_whole_slot_replace_no_target():
++    doc = l4.parse_l4_text("## Responsibility\n\n### replace\n\nnew body\n")
++    op = doc.slots["responsibility"][0]
++    assert op.op_type == "replace"
++    assert op.target_step_id is None
++
++
++def test_replace_step_targeted():
++    doc = l4.parse_l4_text(
++        "## Instructions\n\n### replace step:cycle/triage\n\nnew body\n"
++    )
++    op = doc.slots["instructions"][0]
++    assert op.op_type == "replace"
++    assert op.target_step_id == "triage"
++
++
++def test_insert_before_step_targeted():
++    doc = l4.parse_l4_text(
++        "## Instructions\n\n### insert-before step:cycle/file-bug\n\nnew step\n"
++    )
++    op = doc.slots["instructions"][0]
++    assert op.op_type == "insert-before"
++    assert op.target_step_id == "file-bug"
++
++
++def test_insert_after_step_targeted_with_hyphenated_id():
++    doc = l4.parse_l4_text(
++        "## Instructions\n\n### insert-after step:cycle/pipeline-sentinel\n\nbody\n"
++    )
++    op = doc.slots["instructions"][0]
++    assert op.op_type == "insert-after"
++    assert op.target_step_id == "pipeline-sentinel"
++
++
++# ---------------------------------------------------------------------------
++# Multiple ops in one slot (file order)
++# ---------------------------------------------------------------------------
++
++def test_multiple_ops_in_one_slot_preserved_in_file_order():
++    text = (
++        "## Instructions\n\n"
++        "### append\n\nfirst block\n\n"
++        "### insert-before step:cycle/X\n\nsecond block\n\n"
++        "### append\n\nthird block\n"
++    )
++    ops = l4.parse_l4_text(text).slots["instructions"]
++    assert [o.op_type for o in ops] == ["append", "insert-before", "append"]
++    assert [o.target_step_id for o in ops] == [None, "X", None]
++    assert ops[0].body_text == "first block"
++    assert ops[1].body_text == "second block"
++    assert ops[2].body_text == "third block"
++
++
++def test_ops_across_multiple_slots():
++    text = (
++        "## Identity\n\n### append\n\nidentity prose\n\n"
++        "## Instructions\n\n### append\n\ninstructions prose\n"
++    )
++    doc = l4.parse_l4_text(text)
++    assert set(doc.slots) == {"identity", "instructions"}
++    assert doc.slots["identity"][0].body_text == "identity prose"
++    assert doc.slots["instructions"][0].body_text == "instructions prose"
++
++
++# ---------------------------------------------------------------------------
++# Malformed H3 ops — rejected with diagnostic
++# ---------------------------------------------------------------------------
++
++@pytest.mark.parametrize(
++    "bad_h3",
++    [
++        "### Boot & Queue",  # arbitrary prose H3
++        "### replace step:cycle/",  # missing step id
++        "### replace step:wrong/foo",  # wrong step prefix
++        "### insert-around step:cycle/foo",  # unknown op
++        "### appendix",  # near-miss op name
++        "### insert-before",  # missing target on a targeted op
++        "### replace step:cycle/foo extra",  # trailing garbage
++    ],
++)
++def test_malformed_h3_rejected(bad_h3):
++    text = f"## Instructions\n\n{bad_h3}\n\nbody\n"
++    with pytest.raises(l4.L4ParseError) as exc:
++        l4.parse_l4_text(text)
++    assert "malformed H3 op" in str(exc.value)
++
++
++def test_h3_outside_any_slot_rejected():
++    with pytest.raises(l4.L4ParseError) as exc:
++        l4.parse_l4_text("### append\n\nbody\n")
++    assert "outside any slot" in str(exc.value)
++
++
++# ---------------------------------------------------------------------------
++# HTML-comment metadata trailer
++# ---------------------------------------------------------------------------
++
++def test_metadata_trailer_extracted_and_stripped():
++    text = (
++        "## Instructions\n\n"
++        "### append\n\n"
++        "body line one\n"
++        "body line two\n\n"
++        "<!--\n"
++        "authored-by: skill-lead\n"
++        "authored-at: 2026-05-31\n"
++        "source-conversation: cycle 1443\n"
++        "-->\n"
++    )
++    op = l4.parse_l4_text(text).slots["instructions"][0]
++    assert op.metadata == {
++        "authored-by": "skill-lead",
++        "authored-at": "2026-05-31",
++        "source-conversation": "cycle 1443",
++    }
++    # Trailer must be stripped from the body.
++    assert "<!--" not in op.body_text
++    assert "authored-by" not in op.body_text
++    assert op.body_text.endswith("body line two")
++
++
++def test_metadata_optional_op_with_no_trailer():
++    text = "## Identity\n\n### append\n\nbody\n"
++    op = l4.parse_l4_text(text).slots["identity"][0]
++    assert op.metadata == {}
++    assert op.body_text == "body"
++
++
++def test_metadata_only_terminal_comment_counts_as_trailer():
++    # An HTML comment in the middle of the body is NOT a trailer — only
++    # the one at the end. Locks the regex's "end of body" anchor.
++    text = (
++        "## Instructions\n\n"
++        "### append\n\n"
++        "<!-- not metadata -->\n\n"
++        "real body\n\n"
++        "<!--\nauthored-by: x\n-->\n"
++    )
++    op = l4.parse_l4_text(text).slots["instructions"][0]
++    assert op.metadata == {"authored-by": "x"}
++    assert "<!-- not metadata -->" in op.body_text
++
++
++def test_metadata_unparseable_lines_ignored_per_trd_7_3():
++    # TRD §7.3: "Compose does not require or validate the metadata; only
++    # the section structure (H2 slot, H3 op + target) is load-bearing."
++    text = (
++        "## Identity\n\n### append\n\nbody\n\n"
++        "<!--\n"
++        "authored-by: skill-lead\n"
++        "this line has no colon\n"
++        "another: ok\n"
++        "-->\n"
++    )
++    op = l4.parse_l4_text(text).slots["identity"][0]
++    assert op.metadata == {"authored-by": "skill-lead", "another": "ok"}
++
++
++# ---------------------------------------------------------------------------
++# parse_l4_file: real I/O path
++# ---------------------------------------------------------------------------
++
++def test_parse_l4_file_round_trip(tmp_path):
++    text = (
++        "## Identity\n\n### append\n\nidentity body\n\n"
++        "## Instructions\n\n"
++        "### append\n\nappend body\n\n"
++        "### replace step:cycle/foo\n\nreplace body\n"
++    )
++    f = tmp_path / "worker.md"
++    f.write_text(text, encoding="utf-8")
++    doc = l4.parse_l4_file(f)
++    assert set(doc.slots) == {"identity", "instructions"}
++    assert len(doc.slots["instructions"]) == 2
++    assert doc.slots["instructions"][1].target_step_id == "foo"
++
++
++# ---------------------------------------------------------------------------
++# Coexistence: parser does not modify v1 read sites
++# ---------------------------------------------------------------------------
++
++def test_v1_compose_untouched():
++    # A2b is pure additive. compose.py must not import l4_parser yet.
++    import compose
++    source = compose.__file__
++    with open(source, encoding="utf-8") as f:
++        text = f.read()
++    assert "l4_parser" not in text, (
++        "A2b is parse-only; A2 will wire l4_parser into compose.py later."
++    )
++
++
++# ---------------------------------------------------------------------------
++# Result shape
++# ---------------------------------------------------------------------------
++
++def test_l4op_metadata_default_factory_is_independent():
++    # Defensive against the dataclass mutable-default trap.
++    a = l4.L4Op(op_type="append", target_step_id=None, body_text="x")
++    b = l4.L4Op(op_type="append", target_step_id=None, body_text="y")
++    a.metadata["x"] = 1
++    assert b.metadata == {}
++
++
++def test_l4document_empty_factory_returns_isolated_slots():
++    a = l4.L4Document.empty()
++    b = l4.L4Document.empty()
++    a.slots["x"] = []
++    assert b.slots == {}
