@@ -15,6 +15,8 @@ Usage:
 import json
 import subprocess
 import sys
+import threading
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -85,8 +87,55 @@ except ImportError:
 LOG_FILE = DIAGNOSTICS_DIR / "diagnostic.jsonl"
 
 
+# Per-process thread lock. msvcrt.locking on Windows is per-PROCESS, so two
+# threads in the same process that try to lock the same byte range raise
+# EDEADLK ("Resource deadlock avoided"). The threading lock handles
+# intra-process serialization; the file lock below handles inter-process.
+_LOG_THREAD_LOCK = threading.Lock()
+
+
+@contextmanager
+def _log_lock():
+    """Hold an exclusive advisory lock around the log-write critical section
+    (#10523). Cross-platform two-tier:
+
+    1. ``_LOG_THREAD_LOCK`` serializes threads within the same process.
+    2. ``fcntl.flock`` (POSIX) / ``msvcrt.locking`` (Windows) serializes
+       writers across processes via a sibling ``.lock`` file.
+
+    Both tiers are required: file locks alone race between threads in the
+    same process; thread locks alone race between agents in different
+    processes.
+    """
+    DIAGNOSTICS_DIR.mkdir(parents=True, exist_ok=True)
+    lock_path = LOG_FILE.with_suffix(".lock")
+    with _LOG_THREAD_LOCK:
+        # ``a`` mode creates the file if missing and never truncates it.
+        f = open(lock_path, "a", encoding="utf-8")
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+                try:
+                    yield
+                finally:
+                    # LK_LOCK/LK_UNLCK are position-based on Windows; seek
+                    # back to the locked range before releasing.
+                    f.seek(0, 2)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        finally:
+            f.close()
+
+
 def log_entry(severity, source, message, context=None):
-    """Append a diagnostic entry to the log file."""
+    """Append a diagnostic entry to the log file. Thread- and process-safe."""
     DIAGNOSTICS_DIR.mkdir(parents=True, exist_ok=True)
 
     entry = {
@@ -101,12 +150,17 @@ def log_entry(severity, source, message, context=None):
         except json.JSONDecodeError:
             entry["context"] = {"raw": context}
 
-    # Auto-rotate before write if over cap (#5385)
-    if LOG_FILE.exists() and LOG_FILE.stat().st_size > MAX_LOG_BYTES:
-        rotate()
+    # Hold an exclusive lock around the rotate-if-needed + append (#10523).
+    # Without it, two writers can both observe size > MAX_LOG_BYTES, both
+    # call ``rotate``, and the second ``atomic_write_text`` swaps in a stale
+    # last-500 snapshot, silently losing the first writer's truncated tail.
+    with _log_lock():
+        # Auto-rotate before write if over cap (#5385)
+        if LOG_FILE.exists() and LOG_FILE.stat().st_size > MAX_LOG_BYTES:
+            rotate()
 
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
 
     return entry
 
