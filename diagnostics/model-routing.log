@@ -1012,3 +1012,6 @@
 {"timestamp": 1780205563.5826867, "task_type": "code-review", "task_id": "prd-c-audit-r2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 1030, "elapsed_seconds": 776.1}
 {"timestamp": 1780207461.790849, "task_type": "code-review", "task_id": "prd-de-coexistence-audit", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 1718, "elapsed_seconds": 782.4}
 {"timestamp": 1780207746.505225, "task_type": "code-review", "task_id": "prd-de-coexistence-r2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 8225, "elapsed_seconds": 251.2}
+{"timestamp": 1780208129.319945, "task_type": "code-review", "task_id": "prd-de-r3", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 3802, "elapsed_seconds": 313.5}
+{"timestamp": 1780208364.2977304, "task_type": "code-review", "task_id": "prd-de-r4", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 2319, "elapsed_seconds": 189.7}
+{"timestamp": 1780208629.4604385, "task_type": "code-review", "task_id": "prd-de-r5", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 2041, "elapsed_seconds": 250.6}
