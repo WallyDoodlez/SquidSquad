@@ -1,13 +1,7 @@
 # Working State
 
 - **Task**: Overnight watch — quiet
-- **Status**: idle (watching)
-- **Quiet Cycle Counter**: 1 (post-synthesis-sentinel-reset)
+- **Status**: idle
+- **Quiet Cycle Counter**: 2
 
-## Pipeline
-
-0 active. 7 PRD-A held. 3 PRDs awaiting human. All agents 🦑.
-
-## Context
-
-60%.
+0 active. All agents 🦑. Context 61%.
