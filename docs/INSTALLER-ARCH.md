@@ -230,7 +230,7 @@ The accepted-response set is parsed case-insensitively. Ambiguous input prompts 
 
 Once approved, the installer:
 
-1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts) under §11.2's interrupted-install recovery rules — the cleanup preserves the items listed in §11.3 (`vault/`, `project/`, per-alias `working-state.md`, `iterations/`, `planning/`) and only deletes scaffold debris from the failed run.
+1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts) under §11.2's interrupted-install recovery rules — the cleanup preserves the items in §11.3 (`vault/`, `project/`, per-alias `working-state.md`, `iterations/`, `planning/`); `.squidsquad/config.md` from the partial run is **wiped and re-synthesized** from Phase 1+2 outputs (it's a broken artifact of the interrupted Phase 5, not a preserved item) per §11.2; everything else under `.squidsquad/` is scaffold debris and is deleted.
 2. **Serializes the install spec** to a temporary location for the scaffold step.
 3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs (CLAUDE.md placeholders, working-state.md skeletons, planning/, iterations/), vault skeleton, project-local L4 directory, `.squidsquad/config.md` (including the **`## Aliases` H2 section** mapping each chosen alias to its role-class and L3 domain), and the **`squidsquad_version:` field** read from `references/VERSION` already present in the installer source tree (fresh install runs from within the pulled SquidSquad sources; upgrade re-reads this same file per §10 step 1). No per-alias `SOUL.md` files (the v1 sidecar is retired; SOUL.md content is composed into `CLAUDE.md §3 Soul` per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md)). No tool/MCP wiring (per §8).
 
@@ -481,6 +481,8 @@ Migration files are **prose for the installer's LLM to consume**, not structured
 Migrations describe both **mechanical** changes (deterministic renames, additive defaults — the LLM applies them straight through) and **judgment-call** changes (slot retirements, rule re-routing — the LLM surfaces options to the operator and waits for a choice). The same migration file can mix both.
 
 If the release does NOT break L4 or config schema, **no migration file is needed** — the version walk simply skips that step.
+
+> **Pre-1.0 / no migrations exist yet**: as of this draft, `references/migrations/` is empty — no migration files have shipped because no schema breaks have happened. The `pre-1.0` fallback in §10 step 2 walks "all available migration files in order" and finds zero files, so the walk is a no-op for current operators. Once the first schema-break release ships its `v<N-1>-to-v<N>.md` file, the walk has something to iterate on. Until then, re-installs that find no stamp simply stamp the current version and continue with Phase 1+.
 
 **Three-gate granularity** (per migration file, not per individual change within a file):
 
