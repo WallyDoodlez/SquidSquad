@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-05-31 09:45
+
+- **Files scanned**: references/scripts/process_utils.py (full 71 lines; focus on the Win32 ctypes liveness probe at L54-71), references/scripts/thin_launcher.py (L78-105 — deliberate sibling copy of same routine per #8891).
+- **Findings**: #10440 (low — both copies use `ctypes.windll.kernel32` without `use_last_error=True` and rely on `kernel32.GetLastError()`; documented-incorrect ctypes pattern, the per-thread last-error slot can be reset by any intervening Python Win32 call before the check fires. Also no `argtypes`/`restype` set on OpenProcess/CloseHandle/GetExitCodeProcess, so HANDLE is treated as 32-bit signed instead of 64-bit pointer — ABI-wrong, rarely visible in practice because Windows process handles are small. Fix mirrors both files and adds a unit test that monkey-patches the kernel32 stub.)
+- **Items rejected by human**: none yet
+- **Notes**: process_utils.is_process_alive currently has no direct unit test — exercised only through health_check; recommended adding a focused test alongside the fix (worker SOUL bug-fix rule: lock the fix at the source level). PID validation (`pid <= 0` rejection) at L43 is correct and important — `os.kill(0, 0)` would target the process group. `_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000` is the right access right for liveness-only probes (no PROCESS_QUERY_INFORMATION needed). The two copies' divergence risk (#8891 deliberately keeps the sibling) means the fix must be applied to both atomically — recommend a single-commit PR touching both files.
+
 ## Scan — 2026-05-26 08:09
 
 - **Files scanned**: references/scripts/health_check.py (full 424 lines; focus on config-read robustness, dead imports, TOCTOU on state-file mtime+content reads).
