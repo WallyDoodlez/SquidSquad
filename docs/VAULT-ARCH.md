@@ -4,7 +4,7 @@
 >
 > **Companion docs**: [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system; vault appears as "L6 Memory"), [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration), [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (vault slot in composed CLAUDE.md), [`sub-skill-catalog.md`](sub-skill-catalog.md) (vault sub-skill entries).
 >
-> **Known live gap**: [#5855 — Vault is static decision log, not living institutional memory](https://github.com/WallyDoodlez/SquidSquad/issues/5855) (status:pending, high, role:skill). Documented in §11; not addressed by this doc.
+> **Known live gaps**: [#5855 — Vault is static decision log, not living institutional memory](https://github.com/WallyDoodlez/SquidSquad/issues/5855) (status:pending, high, role:skill); [#10100 — vault: CI/CD enforce knowledge-tree integrity on note renames](https://github.com/WallyDoodlez/SquidSquad/issues/10100) (low). Documented in §11; not addressed by this doc.
 
 ---
 
@@ -14,27 +14,40 @@ This doc describes:
 
 - What the vault *is* — its purpose, the storage model, the entity types it holds
 - Where it lives on disk
-- Who reads and who writes (per agent role)
-- The five sub-skills and four scripts that operate on it
+- The sub-skills and scripts that operate on it
 - How it integrates into the cycle (boot, pre-cycle, creative phase, post-cycle, quiet ticks)
 - What is actually present in this repo's vault as of the snapshot date
 - Known gaps between the spec and the live behavior
 
+It does NOT describe per-role-class access (read/write); that lives in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) where the per-role-class `includes.yml` mapping is composed.
+
+**Vault slot authorship is L1-exclusive** (guardrail dated 2026-05-29). The composed `## Vault` section in every agent's CLAUDE.md is authored entirely by L1 fragments shipped from this repo — L2 / L3 / L4 cannot contribute `slot: vault` content. The contract documented here (PARAG model, entity types, wikilink grammar, confidence levels) is framework-owned and is not customizable per-role-class, per-domain, or per-install. Projects that need bespoke vault behaviour file a framework feature request — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) §3.3, §5.6, and §11.2 G4 for the policy and revisit conditions.
+
 It does NOT describe:
 
 - Proposed fixes for the gaps in §11 (out of scope; planned for follow-up under #5855)
-- How vault content gets into composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §5.5)
+- How vault slot content gets into composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §5.5)
 - The L4 project-local layer in `.squidsquad/project/` (different system; see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §3)
 
 ---
 
 ## 2. What the vault is
 
-The vault is a **shared, git-tracked, per-install knowledge store** at `.squidsquad/vault/`. It holds institutional knowledge that outlives any single cycle, task, or session — decisions, learnings, patterns, project context, ongoing concerns, and human preferences as the agents have observed them.
+> **Vault terminology** — this doc and COMPOSE-ARCHITECTURE use three distinct terms; conflating them is the source of long-running audit confusion:
+>
+> | Term | What it is | Authored by | Read by |
+> |---|---|---|---|
+> | **vault slot** | The `## Vault` H2 section in composed CLAUDE.md — short framework-shipped prose describing the vault contract | L1 only (this slot is L1-exclusive per COMPOSE-ARCHITECTURE §3.3) | Runtime agents at boot |
+> | **vault store** | The on-disk knowledge store at `.squidsquad/vault/` (markdown notes organized via PARAG) | All agents at runtime via vault sub-skills (vault-remember, etc.) | All agents at runtime |
+> | **vault contract** | The framework-owned design spec — PARAG taxonomy, entity types, wikilink grammar, confidence levels | SquidSquad framework (`references/sub-skills/common/vault-protocol.md` + this doc) | Vault sub-skills + agents that read the slot |
+>
+> When this doc says "vault" without a qualifier, assume the most specific applicable term from context. When the meaning is structurally significant (e.g., "L1-exclusive"), the qualifier is mandatory.
+
+The vault store is a **shared, git-tracked, per-install knowledge store** at `.squidsquad/vault/`. It holds institutional knowledge that outlives any single cycle, task, or session — decisions, learnings, patterns, project context, ongoing concerns, and human preferences as the agents have observed them.
 
 Three properties define it:
 
-1. **Shared across roles** — all four canonical agent roles (pm / qa / worker / dm) reach into the same vault. Read access is universal; write access is partial (see §6).
+1. **Shared across roles** — all agents in the install read the vault, and so does the human. Write access is restricted; specifics on which agents write live in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (sub-skill composition).
 2. **Git-tracked** — every note has a commit; every change has authorship and timestamp. There is no separate database, indexer, or memory service.
 3. **Per-install** — `.squidsquad/vault/` lives inside the project repo's `.squidsquad/` tree. A separate SquidSquad install has its own vault; there is no cross-install vault today.
 
@@ -48,7 +61,7 @@ The vault is **distinct from**:
 
 ## 3. On-disk layout — PARAG
 
-The vault uses a PARAG taxonomy (Projects, Areas, Resources, Archives, Galaxy):
+The vault uses a **PARAG** taxonomy: **P**rojects, **A**reas, **R**esources, **A**rchives, **G**alaxy. The first four letters come from Tiago Forte's PARA system in *Building a Second Brain*; the fifth letter (G — Galaxy) is a SquidSquad addition for Zettelkasten-style atomic notes.
 
 ```
 .squidsquad/vault/
@@ -64,7 +77,51 @@ The vault uses a PARAG taxonomy (Projects, Areas, Resources, Archives, Galaxy):
 └── .obsidian/          # optional Obsidian app config (gitignored)
 ```
 
-P/A/R/A is the Tiago Forte taxonomy for personal knowledge management. The "G" (Galaxy) is an added Zettelkasten-style atomic-note layer specific to SquidSquad — one idea per note, heavy cross-linking via wikilinks, intended for long-tail compounding knowledge.
+### 3.1 The PARA buckets — what goes where
+
+PARA sorts notes by **actionability** rather than topic. The original framing (paraphrased): "How soon will I need to act on this?" Buckets are ordered by decreasing actionability.
+
+| Bucket | What it holds | Test for placement |
+|---|---|---|
+| `projects/` | Bounded, scoped work with a definition-of-done | "Does this end?" If yes → project. One note per project. |
+| `areas/` | Ongoing responsibilities and standing context with no end date | "Will I always care about this?" If yes → area. Stable, slow-changing, few notes. |
+| `resources/` | Reference material — research, external docs, third-party patterns | "Would I look this up later?" Prefer linking to externals over copy-paste. |
+| `archives/` | Anything from the three above that is no longer active | "Has this shipped / been superseded / become irrelevant?" |
+
+The placement test is **"actionable now vs. someday vs. never"**, not topic similarity. The same subject can validly live in `projects/` (active work), `areas/` (the ongoing concern behind that work), and `archives/` (a closed past project on it) simultaneously — each captures a different lifecycle slice.
+
+### 3.2 Galaxy — the Zettelkasten layer
+
+PARA covers *contextual* knowledge (what's active, what's standing, what's reference). It does not cover **atomic, durable, cross-cutting knowledge**: a single architectural decision, a reusable pattern observed across many projects, a lesson from a single incident. Those are too small to be a project, too pointed to be an area, and too internal to be a resource — but too valuable to lose.
+
+The `galaxy/` folder fills that gap with Zettelkasten-style notes:
+
+- **Atomic** — one idea per note; if a note grows past ~500 lines or covers more than one idea, split it (per §4.1).
+- **Typed by filename prefix** — `decision-*`, `pattern-*`, `learning-*`, `style-*` (full taxonomy in §4.2).
+- **Heavily cross-linked** — body text uses bare `[[wikilinks]]` to connect related notes; the `links:` frontmatter field is auto-maintained from those wikilinks by `vault_check.py` (§4.5).
+- **Append-only in practice** — galaxy notes are rarely deleted; superseded ones get `status: superseded` and are auto-archived by `vault_optimize.py prune-scan` (§3.3).
+
+Galaxy is the **compounding** layer: every decision the squad makes and every learning it captures adds one more linkable node. PARA tells you *what's hot right now*; Galaxy tells you *what we have learned over time*.
+
+### 3.3 How notes move between buckets
+
+Note movement is rare and almost always one-directional:
+
+- **`projects/` → `archives/`** — when a project completes or is abandoned, the note's `status:` flips to `archived` and either an agent or `vault_optimize.py prune-scan` moves the file. Project notes are not deleted; the historical context matters.
+- **`galaxy/` → `archives/`** — `vault_optimize.py prune-scan` auto-archives galaxy notes that are (a) `status: superseded`, or (b) stale **and** orphaned (no inbound wikilinks for longer than the staleness threshold in `.squidsquad/config.md`). Wikilinks pointing at the archived note continue to resolve by filename match (per §4.5 — the resolver scans `.squidsquad/vault/**`, not a specific folder), so the link graph remains valid across the move. `vault_optimize.py _rewrite_wikilinks_after_archive` appends an optional `<!-- archived: [[name]] moved to archives/ -->` breadcrumb to each linking note for human-reader hygiene (Obsidian path display, etc.); the breadcrumb is cosmetic, not load-bearing for resolution.
+- **`areas/` and `resources/`** — generally stay put. Areas are stable by definition; resources stay as long as someone might look them up. Both can be manually archived if the squad decides they're dead weight, but `vault_optimize.py` does not touch them automatically.
+
+There is no automatic *promotion* path (e.g., a `learning-*` note that turns out to be a fundamental pattern is rewritten or split manually; the script doesn't second-guess). The trim-or-graduate rule in §5 covers the **BRIEFING → galaxy** edge case, where lines trimmed from BRIEFING.md become new galaxy notes rather than being deleted.
+
+### 3.4 Why this layout
+
+The PARAG split serves three jobs that a single flat folder couldn't:
+
+1. **Boot-time signal** — `BRIEFING.md` + `projects/` + `areas/` are the small, hot set agents read at every cycle start. Keeping them as separate top-level folders means an agent can read "current context" without scanning the (much larger) `galaxy/` or `archives/`.
+2. **Long-tail without dilution** — `galaxy/` can grow to thousands of notes without dragging on every read, because nothing reads the whole folder during a cycle — only `vault_optimize.py reindex` and `vault-synthesis` traverse it, and both are quiet-cycle work.
+3. **Lossless decay** — `archives/` is the dumping ground that keeps prune scans honest. Nothing is deleted; if a hot note turns cold, it moves to `archives/` and the link graph rewrites itself.
+
+Concrete operational consequences appear in §8 (which script touches which folder) and §10 (what the buckets actually contain in this repo today). Which-agent-touches-which lives in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) / [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md).
 
 ---
 
@@ -91,39 +148,83 @@ P/A/R/A is the Tiago Forte taxonomy for personal knowledge management. The "G" (
 
 Subtypes layered on top via tags:
 
-- `pattern` + tag `posture` = synthesis-derived cross-agent principle (written only by `vault-synthesis`, see §6.3).
+- `pattern` + tag `posture` = synthesis-derived cross-agent principle (written only by the `vault-synthesis` sub-skill, see §7.4).
+
+### 4.2a Consistency rules (folder + prefix + type)
+
+Three fields must agree:
+
+1. **Folder ↔ type**: a note in `projects/` must have `type: project`; same for `areas/`, `resources/`. `galaxy/` accepts the four prefixed types (`decision`, `pattern`, `learning`, `style`); `archives/` accepts any type with `status: archived`.
+2. **Galaxy prefix ↔ type**: `decision-X.md` → `type: decision`; `pattern-X.md` → `type: pattern`; `learning-X.md` → `type: learning`; `style-X.md` → `type: style`.
+3. **Validation**: checked manually today; planned to be enforced by a future `vault_check.py check-consistency` subcommand (tracked in #10098).
 
 ### 4.3 Required frontmatter (all notes)
 
 ```yaml
 ---
 type: decision | pattern | learning | style | area | project | resource
-tags: [list]
+tags: [list]                          # see Tag convention below
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-owner: pm | skill | qa | dm | shared
 status: active | archived | superseded
-confidence: high | medium | low   # see §4.4
-source: conversation | code | review | observation | research
-links: [bare-note-names]          # auto-maintained from body wikilinks
+confidence: high | medium | low       # see §4.4
+source: conversation | review | observation | research
+owner: pm | worker | verifier | dm | shared   # primary author role-class (see Ownership note below)
 ---
 ```
 
-The `links` field is **auto-maintained** by `vault_check.py` from `[[bare-wikilinks]]` in the body — agents do not curate it manually.
+**Ownership note** (`owner:` field): authored role-class of the note's content. Used today by the §10.3 ownership-distribution inventory and the §11.1 #5855 audit verdicts that depend on it. The `vault-protocol` source file still lists pre-#6274 values (`qa`, `skill`) — a sync pass to the post-#6274 names (`verifier`, `worker`) is tracked in #10098. Notes that observably benefit multiple role-classes use `owner: shared`.
+
+**Tag convention** (for searchability):
+
+- **Required**: at least one **domain tag** identifying the subsystem, feature, or area the note is about. Domain tags are **project-specific** — they reflect the vocabulary of the codebase the vault serves (e.g., a billing app might use `payments`, `subscription`, `invoicing`; a content platform might use `editor`, `publishing`, `cdn`). Use whatever a teammate searching for related notes would naturally type.
+- **Recommended**: one **category tag** identifying the kind of insight. Categories are **universal** across projects: `architecture`, `process`, `testing`, `convention`, `migration`, `incident`, `lifecycle`.
+- **Optional, role-relevance**: `role:<name>` prefix when the note is most useful to one role (e.g., `role:pm`, `role:skill`, `role:qa`, `role:dm`). Used by future cross-role broadcast features.
+- **Reserved subtype tags**: `posture` (see §4.2 — `pattern + posture` is the synthesis-derived cross-agent principle subtype). Other reserved tags will be added here as the system grows.
+- **Free-form**: any additional keywords for searchability.
+
+**Empty values**: `tags: []` is not allowed (the required domain tag rule means at least one tag is always present).
 
 ### 4.4 Confidence levels
 
 | Level | Meaning |
 |---|---|
 | `high` | Human explicitly stated or confirmed this |
-| `medium` | Agent observed this directly (e.g., from code review, conversation pattern) |
+| `medium` | Agent observed this directly (e.g., during review or examination of material, observable pattern in conversation or behavior) |
 | `low` | Agent inferred this (e.g., from indirect signals, extrapolation) |
 
-Confidence decays automatically via `vault_optimize.py decay-apply`: `high → medium` after 60 days, `medium → low` after 120 days (defaults; configurable as "Confidence Decay Days" in `config.md`).
+**Decay**: `vault_optimize.py decay-apply` walks all notes and decays staleness:
+
+| Transition | Threshold |
+|---|---|
+| `high → medium` | 60 days since last `updated:` |
+| `medium → low` | 120 days since last `updated:` |
+| `low → ?` | **Terminal — no further decay.** Note stays at `low` and still contributes to relevance scoring at reduced weight (`high`=10, `medium`=6, `low`=3 in `vault_optimize.py compute-relevance`). The note remains in its current folder *unless* prune-scan archives it for being stale + orphaned (§7.3 step 1 / §3.3) — decay terminality only blocks further `confidence:` transitions, not folder moves driven by orphan-pruning. |
+
+A changelog entry is appended to the note body on each decay step, so the decay history is visible without `git blame`. **Decay steps do NOT modify `updated:`** — the decay clock keys off the last *human or agent semantic edit*, not the decay event itself. So `medium → low` at 120 days means 120 days since the last semantic `updated:` value, not 60 days after a prior `high → medium` decay step.
+
+**Opt-out**: notes tagged `evergreen` are exempt from decay entirely. Use for content where staleness is meaningless — enduring style preferences, fundamental architectural commitments.
+
+**Configuration drift** (current snapshot): `.squidsquad/config.md` exposes a `Confidence Decay Days` field (default 60), and `config.py` maps the slug, but `vault_optimize.py` hardcodes the threshold at `STALE_DAYS = 60` and does NOT read the config field. The field exists but is not consumed today. Wiring tracked in #10099.
 
 ### 4.5 Wikilinks
 
-Bare wikilink syntax in the body: `[[note-name]]`. No aliases (e.g., `[[note-name|display]]` is not used). Cross-note references resolve via filename match anywhere under `.squidsquad/vault/`. Broken wikilinks are flagged by `vault_check.py check-wikilinks`.
+Bare wikilink syntax in the body: `[[note-name]]`. No aliases (e.g., `[[note-name|display]]` is not used). Cross-note references resolve via filename match anywhere under `.squidsquad/vault/`.
+
+**Operating assumption**: only SquidSquad agents write to the vault. Agent-driven note modifications go through `vault_*` sub-skills (see §7) which trigger the link-rewrite-on-archive logic in `vault_optimize.py _rewrite_wikilinks_after_archive`. Under this assumption, broken wikilinks are rare in practice.
+
+**Broken-link validation**: `vault_check.py check-wikilinks` walks all notes, extracts every `[[bare-wikilink]]`, and flags any whose target filename does not exist in the vault.
+
+| Behavior | Detail |
+|---|---|
+| Per-broken-link output | `WARN: <path>: broken link [[<name>]]` to stdout |
+| Clean output | `OK: All wikilinks resolve` |
+| Exit code | `1` if any broken link found; `0` if all clean |
+| Automated invocation | None today; on-demand only. Acceptable risk under the SquidSquad-only-write assumption. |
+
+**Semantic note**: a wikilink to a previously-existing note that has gone dead is itself information — it signals that the referenced concept was removed or superseded. Broken links are not automatically a defect; they should be investigated case-by-case (could be a typo, deletion signal, intentional forward-reference, or rename without rewrite).
+
+**Note renames**: renaming a vault note in the filesystem without rewriting incoming wikilinks breaks references. Today this is mitigated by the operating assumption (SquidSquad-only writes go through the sub-skills). Hard enforcement is tracked in §11.2 (#10100).
 
 ---
 
@@ -135,66 +236,119 @@ Bare wikilink syntax in the body: `[[note-name]]`. No aliases (e.g., `[[note-nam
 |---|---|---|
 | Target length | ~50 lines | 80+ lines (today's snapshot) |
 | Update trigger | Every cycle (staleness check, not gated by quiet) | Implemented by `vault-remember.md` Step 4b |
-| Token budget for new content | 2000 (per `config.md` `BRIEFING Token Budget`) | Trim-or-graduate rule: trimmed content moves to a galaxy note, never deleted |
+| Token budget for new content | 2000 (per `.squidsquad/config.md` `BRIEFING Token Budget`) | Trim-or-graduate rule: trimmed content moves to a galaxy note, never deleted |
 | Sections | Active Priorities, Recently Shipped, Core Architecture, Recent Decisions, Human Preferences (via `[[human-profile]]`), Blockers | Today's BRIEFING has Active Priorities, Recently Shipped, Core Architecture, Recent Decisions; no explicit Blockers section |
 
 The staleness check is special — it runs every cycle including quiet cycles, and fixing stale fields (version mismatch, agent list mismatch, priority list mismatch with tracker) does **not** consume the vault-remember write budget.
 
 ---
 
-## 6. Who reads, who writes
+## 6. Templates
 
-### 6.1 Read access — universal
+Vault templates live at `references/vault-templates/` and are the seed content for new notes. One template per entity folder plus `BRIEFING.md`:
 
-All four roles (pm, qa, worker, dm) include either `common/vault-protocol` or `common/vault-protocol-slim` in their composed CLAUDE.md. Both grant read access.
-
-### 6.2 Write access — pm and worker only
-
-| Role | Write access | Composed sub-skill |
+| Template | Used by | Purpose |
 |---|---|---|
-| `pm` | full R/W | `common/vault-protocol` |
-| worker (`dev` variant in this install) | full R/W | `common/vault-protocol` |
-| `qa` | read-only | `common/vault-protocol-slim` |
-| `dm` | read-only | `common/vault-protocol-slim` |
+| `briefing.md` | `vault-init` (§7.1), `vault-remember` BRIEFING staleness check (§7.2) | Initial `BRIEFING.md` skeleton + section order |
+| `projects/<entity>.md` | `vault-create` for `type: project` | Frontmatter + body skeleton for project notes |
+| `areas/<entity>.md` | `vault-create` for `type: area` | Area-note skeleton (e.g., `human-profile.md` bootstrap) |
+| `resources/<entity>.md` | `vault-create` for `type: resource` | Resource-note skeleton |
+| `galaxy/decision.md` / `pattern.md` / `learning.md` / `style.md` | `vault-create` for galaxy types | Per-prefix skeletons; copied verbatim then frontmatter-filled and body-edited |
 
-Source: per-role `includes.yml` files at `references/roles/<role>/includes.yml`.
-
-This split is by design: vault writes happen at end-of-cycle reflection (`vault-remember`) and on quiet cycles (`vault-optimize`, `vault-synthesis`); QA and DM consume vault knowledge but do not generate it. (See §11 for the known consequence — QA + DM write zero notes ever.)
-
-### 6.3 Write protocols
-
-Three write paths exist; each is gated, deterministic, and triggered from inside a cycle:
-
-| Sub-skill | Trigger | Who | What it writes |
-|---|---|---|---|
-| `vault-remember` | End-of-cycle reflection (Step 4b), if not a quiet cycle | pm, worker | Up to 2 galaxy notes per cycle: `decision-*`, `pattern-*`, `learning-*` |
-| `vault-optimize` | Quiet cycle, vault has 20+ notes | pm, worker | Archives stale+orphan notes; rebuilds `links`; computes relevance scores; logs pending human questions |
-| `vault-synthesis` | Every 5th consecutive quiet cycle, vault has 10+ galaxy notes | pm only | Max 1 `pattern-posture-*` note per synthesis; files a pending PM task for human review |
-
-`vault-remember` applies four deterministic gates IN ORDER for each write candidate:
-
-1. **Write budget** — `vault_remember.py write-budget` must return >0 (default 2 per cycle, per `config.md` `Vault Remember > Writes Per Cycle`).
-2. **Dedup check** — `vault_check.py dedup-check` against existing notes by title + tags.
-3. **Reusability** — is this specific to only this cycle with no future value? Skip if yes.
-4. **Fresh-context test** — would a fresh agent in a new context benefit? Write if yes.
-
-The priority when more than 2 candidates pass: decisions > learnings > patterns. Surplus candidates are logged in the iteration log as `Vault-worthy but deferred (budget)` and dropped.
+Templates are framework-shipped (not operator-written) and are only consulted by `vault-protocol` sub-skill operations — never read at runtime. `vault_entity.py` (§8.4) is the script that materializes a template into a new note. Templates are not subject to the §4 frontmatter spec themselves; their job is to produce notes that conform.
 
 ---
 
-## 7. The five sub-skills
+## 7. The sub-skills
 
-All vault behavior is encoded in five markdown fragments under `references/sub-skills/`:
+All vault behavior is encoded as markdown fragments under `references/sub-skills/`. Each fragment is inlined into the consuming agent's composed `CLAUDE.md` by `compose.py`. Four distinct sub-skills are described below; `vault-protocol` ships with a read-only variant (`vault-protocol-slim`) — see §7.1.
 
-| Sub-skill | Path | Used by |
-|---|---|---|
-| `vault-protocol` | `common/vault-protocol.md` | pm, worker |
-| `vault-protocol-slim` | `common/vault-protocol-slim.md` | qa, dm |
-| `vault-remember` | `common/vault-remember.md` | pm, worker |
-| `vault-optimize` | `common/vault-optimize.md` | pm, worker |
-| `vault-synthesis` | `roles/pm/vault-synthesis.md` | pm only |
+**Execution model**: vault sub-skills split into two execution lanes by weight. The principle: keep the consuming agent's context lean — anything that requires meaningful reasoning over vault content runs out of process.
 
-Each is inlined into the consuming role's composed CLAUDE.md by `compose.py`. The split between `vault-protocol` and `vault-protocol-slim` is the standard "full vs read-only" pair used elsewhere in SquidSquad — `compose.py` knows to map base name → slim variant for read-only roles (per the comment at `references/scripts/compose.py:311`).
+- **Inline (runs in the consuming agent's context)**: `vault-protocol` (continuous read/write rules; the agent is doing real work the vault must record) and `vault-optimize` (thin wrapper around `vault_optimize.py run` — almost entirely mechanical, no reasoning to offload).
+- **Background subagent (Agent tool, fresh context, `sonnet`)**: `vault-remember` (end-of-cycle reflection: 4-category candidate evaluation, dedup near-match decision, write/skip/update judgment per candidate) and `vault-synthesis` (cross-agent theme detection, convergence detection, posture drafting). Only the structured write decisions (and any new note paths) return to the main agent — never the reflection transcript.
+
+Model choice rationale: vault reflection is pattern-matching + dedup judgment + small write decisions, not multi-step planning. Sonnet is the same tier already used for skill and DM subagent spawns (see `feedback_skill_sonnet_subagents`, `feedback_dm_sonnet_subagents`); Opus is overkill, Haiku underpowered for the dedup near-match call. The pin is by tier (`sonnet`), not a specific version — version selection follows the Agent-tool model alias, which tracks the latest in the tier.
+
+Each sub-skill's **Cycle integration** line below names its lane.
+
+### 7.1 `vault-protocol`
+
+**Path**: `references/sub-skills/common/vault-protocol.md`
+
+**Behavior**: Provides the full read/write protocol for vault interaction. Defines five operations the consuming agent performs as part of normal work:
+
+- `vault-init` — if `.squidsquad/vault/` does not exist, create the PARAG structure (`projects/`, `areas/`, `resources/`, `archives/`, `galaxy/`), bootstrap `BRIEFING.md`, `areas/human-profile.md`, and `projects/<project-name>.md` from `references/vault-templates/`, plus `.obsidian/` for the Obsidian app. Idempotent.
+- `vault-create` — pick the correct folder by entity type (per §4.1), name with kebab-case (galaxy notes use the `decision-`/`pattern-`/`learning-`/`style-` prefix per §4.2), copy the folder's template, fill frontmatter per §4.3 and body per template, use bare `[[wikilinks]]` per §4.5. Creation threshold: only create if the content is reusable beyond this cycle — transient observations belong in the iteration log.
+- `vault-update` — read the full note first, surgical edits only, never delete existing content (mark superseded via `status` frontmatter instead), update the `updated:` date, append a Changelog body entry, then run `vault-check` Level 1.
+- `vault-search` — four modes: by tag, by type, by keyword, by wikilink traversal (1-hop outbound + inbound, max 2-hop). Max 10 results sorted by recency; cache within a cycle.
+- `vault-check` Level 1 — runs automatically after every `vault-create` or `vault-update`; validates the written note plus all notes within 2 wikilink hops against the §4 spec.
+
+**Cycle integration**: Composed into the consuming agent's CLAUDE.md at session start; rules apply continuously during agent work, not at a single step. **Lane**: inline (the agent itself is doing the read/write the protocol governs).
+
+**Scripts used** (from §8): `vault_check.py dedup-check` (before any create), `vault_check.py` Level 1 (after every write), `vault_entity.py` (template-backed note creation/update).
+
+**Outputs**: New or updated `.squidsquad/vault/**/*.md` notes; never deletes.
+
+**Source-vs-spec drift**: source file still references the dropped `links` frontmatter field, the dropped `source: code` value, the unimplemented "auto-maintain `links` frontmatter" behavior, and the pre-#6274 `owner:` enum values (`qa`, `skill` instead of `verifier`, `worker`). Sync tracked in #10098.
+
+**Read-only variant** (`references/sub-skills/common/vault-protocol-slim.md`): the same protocol with all write operations removed — just session-start `BRIEFING.md` reading and the four `vault-search` modes. Composed by `compose.py` for roles where vault writes are not appropriate; the base-name-to-slim-variant mapping is a composition concern (see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md)).
+
+### 7.2 `vault-remember`
+
+**Path**: `references/sub-skills/common/vault-remember.md`
+
+**Behavior**: End-of-cycle reflection. Runs two responsibilities in order:
+
+1. **BRIEFING.md staleness check** — runs every cycle, including quiet cycles. Compares `BRIEFING.md` key fields (version, active agents, current priorities) against `.squidsquad/config.md` and the tracker; updates any stale field. Staleness fixes do NOT consume the write budget.
+2. **Reflection** — gated by a quiet-cycle check (skipped if the cycle did no real work). Evaluates this cycle's iteration log for vault-worthy candidates in five galaxy categories: DECISIONS, PATTERNS, LEARNINGS, STYLES, plus PROJECT CONTEXT (which targets `projects/` updates, not a galaxy prefix). Each candidate runs through four deterministic gates IN ORDER: (1) write budget remaining (default 2 per cycle, per `.squidsquad/config.md` `Vault Remember > Writes Per Cycle`), (2) dedup-check against existing notes by title + tags, (3) reusability beyond this cycle, (4) would a fresh agent benefit? Only candidates passing all four are written. When more than 2 pass, priority is decisions > learnings > patterns; surplus is deferred to iteration-log notes as `Vault-worthy but deferred (budget): <description>`. Behavioral or personality directives are explicitly out of scope — those go to soul-shepherd (observed signals) or L4 (explicit directives), not the vault.
+
+**Cycle integration**: Post-cycle Step 4b. Gated by the per-cycle quiet check only — always-on, no feature toggle (the 4-gate filter already provides sufficient noise control; a blunt on/off flag on top earns no use case). **Lane**: background subagent (`sonnet`). The consuming agent hands the iteration log + write-budget + dedup-tool access to the subagent; the subagent runs the 4-gate evaluation and returns a structured list of `{action: write|update|skip, path, type, body, reason}` decisions plus the resulting note paths. The reflection transcript stays out of the consuming agent's context.
+
+**Scripts used** (from §8): `vault_remember.py is-quiet`/`reset-writes`/`write-budget`/`inc-writes`/`briefing-budget` (gating and accounting), `vault_check.py dedup-check` (gate 2). (The legacy `config.py get vault-remember` enabled-flag read has been retired — the sub-skill is always-on and self-gates per its own per-cycle conditions.)
+
+**Outputs**: Up to 2 new `.squidsquad/vault/galaxy/*.md` notes per cycle (`decision-*` / `pattern-*` / `learning-*` / `style-*`), optional `projects/*.md` updates from the PROJECT CONTEXT category, optional `BRIEFING.md` staleness updates, iteration-log notes for deferred candidates.
+
+### 7.3 `vault-optimize`
+
+**Path**: `references/sub-skills/common/vault-optimize.md`
+
+**Behavior**: Quiet-cycle housekeeping. Runs after the improvement-scan check (if the scan ran this cycle, optimize skips). Activates only when the vault has 20+ notes. Invokes `vault_optimize.py run`, which performs four bundled operations:
+
+1. **Prune** — auto-archive galaxy notes that are both stale (60+ days since `updated:`) and orphaned (no inbound wikilinks). Notes created today are never pruned.
+2. **Confidence decay** — apply the §4.4 decay rules (high → medium at 60 days, medium → low at 120 days, terminal at `low`). Notes tagged `evergreen` are exempt.
+3. **Reindex** — walk all notes, rebuild the wikilink graph (inbound/outbound adjacency) used by prune-orphan-detection and relevance scoring.
+4. **Relevance scoring** — compute link-count + recency + confidence scores, write to `.squidsquad/vault/.relevance-index.json` (gitignored).
+
+The sub-skill also exposes a pending-questions queue: optimization-surfaced questions that need human input (e.g., "should these similar notes be merged?") are added via `vault_optimize.py add-question`, surfaced in the status bar, and mentioned in the next agent check-in.
+
+**Cycle integration**: Quiet cycle only, after the improvement-scan check. Gated by the 20+ note count — always-on, no feature toggle (the quiet-cycle + note-count gates already provide sufficient activation control). **Lane**: inline (thin wrapper around `vault_optimize.py run` — no reasoning happens in the agent's context).
+
+**Scripts used** (from §8): `vault_optimize.py run` (the all-in-one orchestrator), `vault_optimize.py add-question` (pending-question queue).
+
+**Outputs**: Archived notes (moved from `galaxy/` to `archives/`); in-place confidence-decay frontmatter edits plus body changelog entries; `.relevance-index.json`; pending-question queue entries.
+
+### 7.4 `vault-synthesis`
+
+**Path**: `references/sub-skills/roles/pm/vault-synthesis.md`
+
+**Behavior**: Cross-agent pattern detection. Maintains a synthesis cycle counter (separate from the improvement-scan counter); fires after 5 consecutive quiet cycles. Counter resets on real work or on a completed synthesis. Activation also requires the vault to have 10+ galaxy notes.
+
+When triggered, the synthesis runs in five steps:
+
+1. Gather galaxy notes modified since the last synthesis or in the last 7 days (whichever is shorter).
+2. Detect recurring themes — same tags across notes from different agents, similar topics across owners, wikilink clusters that span agent boundaries.
+3. Detect convergent decisions — separate decisions that imply a shared principle (e.g., "Hard error over silent fallback" + "never ship with gaps" → "explicit failure over silent degradation"). Convergences must be supported by 2+ distinct notes from different agents or contexts.
+4. For each detected posture (max 1 per synthesis cycle), create a `pattern-posture-<name>.md` galaxy note with `type: pattern`, `posture` tag, `confidence: medium`, and body citing the source notes via wikilinks. Then file a pending agent task requesting human review.
+5. Touch the `.last-synthesis` sentinel file and log to iteration summary.
+
+Postures need explicit human approval before becoming active scan criteria for other agents — they are never auto-approved. Single-agent patterns are not postures; convergence across agents is the defining property.
+
+**Cycle integration**: Quiet cycle, sub-skill composed only for PM (the designated synthesizer role; pluggability across role-classes is not implemented today). Gated by the 5-consecutive-quiet-cycle counter and the 10+ galaxy-note threshold. **Lane**: background subagent (`sonnet`). The synthesizer agent hands the recent-notes set to the subagent; the subagent runs theme/convergence detection and returns at most one posture descriptor `{name, principle, source-notes, body}` for the consuming agent to write via `vault-create` (plus the pending-review task body). Cross-note reasoning transcript stays out of the consuming agent's context.
+
+**Scripts used** (from §8): `vault_check.py` Level 1 (after creating the posture note), `tracker.py create-task` (file the pending-review task).
+
+**Outputs**: At most 1 new `pattern-posture-*.md` note per cycle; one pending agent task per posture; `.last-synthesis` sentinel file.
 
 ---
 
@@ -255,7 +409,7 @@ Deterministic gates for vault-remember reflection. Subcommands:
 
 ## 9. Cycle integration
 
-The vault is touched at four points in a cycle:
+The vault is touched at three points in a cycle (boot, creative, post-cycle); pre-cycle is intentionally not a touch — see §9.2. §9.5 covers how vault writes ride the cycle's git commit, which is a packaging concern rather than a separate touch.
 
 ### 9.1 Session start (boot)
 
@@ -263,8 +417,7 @@ The vault is touched at four points in a cycle:
 
 ### 9.2 Pre-cycle (mechanical)
 
-- `cycle_pre.py` reads the `vault-remember` and `vault-optimize` config flags (`cycle_pre.py:539-540`) and includes them in `cycle-input.json` so the creative phase knows which sub-skills are active.
-- No vault read or write.
+- No vault read or write. (Earlier revisions had `cycle_pre.py` read `vault-remember` and `vault-optimize` enabled-flags into `cycle-input.json`; those flags have been retired — both sub-skills are always-on and self-gate via their per-cycle conditions.)
 
 ### 9.3 Creative phase (agent)
 
@@ -273,17 +426,19 @@ The vault is touched at four points in a cycle:
 
 ### 9.4 Post-cycle (mechanical wrap)
 
+> Step labels (Step 4a, 4b, …) in this section reference the post-cycle sequence enumerated in [AGENT-RUNTIME.md §6.1](AGENT-RUNTIME.md). This doc only describes the vault-touching steps; non-vault post-cycle steps (status transitions, tracker comments, iteration logs, commits) live there.
+
 In order:
 
 1. **vault-remember Step 4b** (every cycle, gated):
    - Staleness check on BRIEFING.md (always runs, ignores quiet gate, doesn't consume budget).
    - Quiet-cycle gate via `vault_remember.py is-quiet`.
-   - If active: reflection across 4 categories (DECISIONS / PATTERNS / LEARNINGS / PROJECT CONTEXT), four gates per candidate, up to 2 writes.
+   - If active: reflection across 5 categories (DECISIONS / PATTERNS / LEARNINGS / STYLES / PROJECT CONTEXT), four gates per candidate, up to 2 writes.
 
 2. **vault-optimize** (quiet cycles, vault ≥20 notes, after improvement scan):
    - Prune + decay + reindex + relevance scoring via `vault_optimize.py run`.
 
-3. **vault-synthesis** (PM only, every 5th quiet cycle, vault ≥10 galaxy notes):
+3. **vault-synthesis** (PM only, after 5 consecutive quiet cycles — counter resets on real work — vault ≥10 galaxy notes):
    - Cross-agent pattern detection; writes at most 1 `pattern-posture-*` note; files pending human-review task.
 
 The agent's working-state holds two relevant counters: the synthesis counter (per `vault-synthesis.md`) and the write counter (per `vault_remember.py`).
@@ -311,7 +466,7 @@ The vault is designed to be **non-blocking and degradation-tolerant** — no vau
 | **BRIEFING.md token budget exhausted** | `vault_remember.py briefing-budget` returns 0. New content cannot be added without trimming; trimmed content moves to a galaxy note (per `vault-remember.md` "trim-or-graduate" rule). No hard failure. |
 | **vault-init re-run on already-initialized vault** | Idempotent per `vault-protocol.md` §Vault Initialization. Creates only what's missing; never overwrites existing notes or `BRIEFING.md`. |
 | **`cycle_post.py` crashes after vault write but before commit** | Uncommitted vault files remain in the working tree. Next `cycle_pre.py` `git pull` would surface them; if no conflict they get committed in the next successful cycle_post. |
-| **vault-optimize prunes a note an agent still references** | Pruned notes move to `archives/`, not deleted. Wikilinks to archived notes resolve (still in vault tree) but `vault_check.py check-wikilinks` doesn't track folder moves — broken-link warnings may appear until the agent updates the link. |
+| **vault-optimize prunes a note an agent still references** | Pruned notes move to `archives/`, not deleted. Wikilinks to archived notes continue to resolve by filename match anywhere under `.squidsquad/vault/` (§4.5), and `vault_check.py check-wikilinks` is filename-only so no broken-link warning fires. The optional breadcrumb appended by `_rewrite_wikilinks_after_archive` (§3.3) lets a human reader see that the target moved; resolution does not depend on it. |
 | **`vault-synthesis` produces a posture an agent later disagrees with** | Posture notes are written with `confidence: medium` and require a pending PM task → human approval before becoming "active scan criteria." Until approved, they're informational notes only. |
 
 ### 9.7 What the vault does NOT do today
@@ -320,9 +475,9 @@ For completeness, behaviors that some readers might expect but that are not impl
 
 - **No automatic propagation across SquidSquad installs.** Each install has its own vault; there is no shared/federated layer. (See `project_memory_layer_vision` in PM auto-memory for an aspirational note on cross-install sharing; not implemented.)
 - **No queryable index or embedded search.** All search is `grep` over the markdown files (per the 4 search modes in `vault-protocol.md` §vault-search).
-- **No machine-learning on vault content.** No embedding store, no semantic search, no RAG. Confidence levels and tags are agent-assigned, not computed.
+- **No machine-learning on vault store content.** No embedding store, no semantic search, no RAG. Confidence levels and tags are agent-assigned, not computed.
 - **No write-ahead log or transactional guarantees.** Writes are file overwrites + git commits.
-- **No per-note access control.** Read/write is at the role level (full vs slim variant), not the note level.
+- **No per-note access control.** Read/write is at the role-class level (full vs slim variant), not the note level.
 
 ---
 
@@ -334,7 +489,7 @@ What is actually in `.squidsquad/vault/` right now in this repo:
 
 | Location | Count | Notes |
 |---|---|---|
-| `BRIEFING.md` | 1 (88 lines) | Active context, last updated cycle ~1499 per content |
+| `BRIEFING.md` | 1 (88 lines) | Active context, last updated cycle ~1499 per content; carries `status: active` in its header so it is counted in the §10.5 status distribution |
 | `projects/` | 2 | `agent-communication-layer.md`, `squidsquad.md` |
 | `areas/` | 2 | `human-profile.md`, `code-conventions.md` |
 | `resources/` | 1 | `cli-anything-research.md` |
@@ -353,14 +508,16 @@ What is actually in `.squidsquad/vault/` right now in this repo:
 
 ### 10.3 Ownership distribution (across whole vault, 33 notes total)
 
-| `owner:` value | Count |
-|---|---|
-| `pm` | 13 |
-| `skill` | 12 |
-| `skill-lead` | 6 |
-| `pm-lead` | 2 |
+| `owner:` value | Whole-vault count | Galaxy-only count (of 28) |
+|---|---|---|
+| `pm` | 13 | 9 |
+| `skill` | 12 | 11 |
+| `skill-lead` | 6 | 6 |
+| `pm-lead` | 2 | 2 |
 
-**Two owner-label conventions are in use** (`skill` vs `skill-lead`; `pm` vs `pm-lead`). The spec in `vault-protocol.md` says `owner: pm | skill | qa | dm | shared`, so the `-lead` suffix variant is non-spec and looks like organic drift — agents have been writing `<role>-lead` (their tracker-comment role tag) instead of the spec'd bare role name. Not flagged in any open issue today; recorded here for traceability.
+The galaxy-only column is what §11.1 row 1 references; whole-vault includes the `projects/`, `areas/`, `resources/` notes that also carry `owner:`.
+
+**Two owner-label conventions are in use** (`skill` vs `skill-lead`; `pm` vs `pm-lead`). The spec in `vault-protocol.md` says `owner: pm | skill | qa | dm | shared`, so the `-lead` suffix variant is non-spec and looks like organic drift — agents have been writing `<role>-lead` (their tracker-comment role tag) instead of the spec'd bare role-class name. Not flagged in any open issue today; recorded here for traceability.
 
 ### 10.4 Confidence distribution (galaxy notes, 28 total)
 
@@ -388,7 +545,7 @@ No notes are `archived` or `superseded` — consistent with the empty `archives/
 | `decision-phase-4-event-ack-lifecycle-deferred.md` | 2026-05-21 |
 | `learning-broadcast-deque-cannot-have-in-stream-gaps.md` | 2026-05-19 |
 
-Oldest galaxy notes are dated 2026-04-25 (vault initialization), e.g. `decision-deterministic-testing.md`, `decision-comprehension-test-pipeline.md`, `decision-branch-per-feature-workflow.md`.
+Oldest galaxy notes are dated 2026-04-25 (vault store initialization), e.g. `decision-deterministic-testing.md`, `decision-comprehension-test-pipeline.md`, `decision-branch-per-feature-workflow.md`.
 
 ### 10.7 Vault templates
 
@@ -400,7 +557,9 @@ These are seeds used by `vault-init` (per `vault-protocol.md` §Vault Initializa
 
 ---
 
-## 11. Known gap — #5855
+## 11. Known gaps
+
+### 11.1 #5855 — Vault is static decision log
 
 [Issue #5855 — Vault is static decision log, not living institutional memory](https://github.com/WallyDoodlez/SquidSquad/issues/5855) (status:pending, priority:high, role:skill).
 
@@ -430,6 +589,79 @@ Additional drift surfaced by this audit (not yet in #5855):
 
 This doc does not propose fixes — those belong to whoever picks up #5855.
 
+### 11.2 Future gap — vault knowledge-tree integrity enforcement (#10100)
+
+The §4.5 operating assumption (SquidSquad-only writes; sub-skills mediate all modifications) is a convention, not a hard guarantee. A future CI/CD workflow should formally enforce knowledge-tree integrity on note renames:
+
+- **Detect**: git diff between PR head and base reveals any vault note that was renamed (filesystem path change) or moved
+- **Enforce**: one of two policies
+  - **Reconcile**: auto-rewrite all incoming `[[wikilinks]]` to point at the new name; fail the CI check if the rewrite is ambiguous (e.g., name collision)
+  - **Prohibit**: fail the CI check outright on any direct rename; force the rename to go through a vault sub-skill (e.g., `vault_optimize rename-note`) that triggers the existing rewrite logic
+- **Policy choice**: prohibit-outright is simpler and matches the SquidSquad-only-write assumption (humans never rename vault notes directly); reconcile-automatically is more permissive but adds CI complexity. The recommendation in #10100 is to start with prohibit.
+
+Tracked in #10100.
+
+### 11.3 Future gap — usage-aware decay (impression-based / hybrid)
+
+The current decay model (§4.4) is purely time-based: every note decays by `updated:` age regardless of how much it is actually being used. This is blunt — evergreen content that is heavily read still decays unless manually tagged `evergreen` at creation time, which requires foresight and is brittle to miscategorization.
+
+A more accurate model would treat **usage as the primary signal**:
+
+- **Impression-based**: decay based on impressions-since-last-event (read, search hit, wikilink traversal, BRIEFING reference). Heavily used notes never decay.
+- **Hybrid (recommended direction)**: time decays as today, BUT every impression resets the timer. Captures both failure modes — old + unused → decays; old + used → stays.
+
+Open design questions for whoever picks this up:
+
+- What counts as an impression? Just file reads? Search hits? Wikilink traversal? BRIEFING-loads? All four with weights?
+- Where do impression counters live? `.relevance-index.json` (already gitignored, already updated by `vault_optimize`) is the natural home. Frontmatter would be too noisy — counter increments every cycle.
+- Cold-start: how do new notes accumulate enough impressions to defend themselves before the timer fires?
+- Backfill for existing notes: assume average impression count, or start cold?
+
+Falls under the broader vault-living-memory umbrella (#5855).
+
+### 11.4 Future gap — event bus integration (vault emits/consumes zero events today)
+
+[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4 documents the event bus and §4.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
+
+Consequences for current behavior:
+
+- No way for one agent to react to another agent's vault write before the next cycle boundary
+- The §11.3 impression-tracking model has no natural event source today (every vault read would have to be observed in-process by the reader's own sub-skill rather than via a bus subscription)
+- `vault-synthesis` cross-agent broadcast (notifying other agents when a posture lands) has to be done manually via `tracker.py create-task` instead of as an event subscription
+- Sub-skills like `vault-remember` and `vault-optimize` cannot be triggered by external signals — they only fire on cycle steps
+
+A future integration would add vault-related signal types to the catalog, e.g.:
+
+- `vault.note-written` (payload: `path`, `type`, `owner`, `tags`) — emitted by `vault-create`
+- `vault.note-updated` (payload: `path`, `fields-changed`) — emitted by `vault-update`
+- `vault.note-archived` (payload: `from-path`, `to-path`, `reason`) — emitted by `vault_optimize.py prune-scan`
+- `vault.posture-detected` (payload: `posture-name`, `source-notes`) — emitted by `vault-synthesis`
+- `vault.note-read` (payload: `path`, `reader-role`) — would source the §11.3 impression model
+
+Falls under the broader vault-living-memory umbrella (#5855) and overlaps with the event-driven mode work in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §7.
+
+### 11.5 Implementation gap — heavy sub-skills currently run inline (target: background subagent)
+
+§7's Execution model paragraph specifies that `vault-remember` and `vault-synthesis` must run as background subagents (`sonnet`) so the reflection / cross-note reasoning transcript stays out of the consuming agent's context. The current implementation runs both inline:
+
+- `references/sub-skills/common/vault-remember.md` is composed directly into the consuming agent's `CLAUDE.md` and the agent itself performs the 4-gate evaluation, dedup decisions, and write reasoning every cycle.
+- `references/sub-skills/roles/pm/vault-synthesis.md` is composed into PM's `CLAUDE.md` and PM itself performs theme/convergence detection across recent notes.
+
+Consequences today:
+
+- Every quiet cycle that triggers vault-remember consumes main-context tokens for candidate enumeration + per-candidate dedup-check output + write/skip reasoning. Each reflection is a meaningful slice of the cycle context, on top of whatever creative work happened.
+- Every 5th quiet cycle vault-synthesis adds another bulk read of recent galaxy notes + cross-agent comparison reasoning into PM's context.
+- Context-pressure thresholds get reached faster than they would with the offload — meaning more restarts at the agent layer, more cache invalidation, more wall-clock latency.
+
+Closing this gap requires:
+
+1. **Sub-skill source split** — the `references/sub-skills/common/vault-remember.md` body becomes two parts: a short stub composed into the consuming agent (defines the "spawn subagent at Step 4b with these inputs and apply the returned write list" contract) and a longer subagent prompt template stored separately (the actual 4-gate reflection instructions, loaded only by the subagent). Same split for `vault-synthesis.md`.
+2. **Compose-time awareness** — `compose.py` must know to compose the stub into the role-class's CLAUDE.md but leave the subagent prompt at its source path for the spawned subagent to read.
+3. **Subagent contract** — defined by the structured return shape on each sub-skill's §7 entry (vault-remember returns `{action, path, type, body, reason}` per candidate; vault-synthesis returns at most one posture descriptor).
+4. **Model pin** — `sonnet` per §7's rationale; honor `feedback_skill_sonnet_subagents` / `feedback_dm_sonnet_subagents` consistency.
+
+Filed as #10180. Until that lands, the §7 description is the architectural target and the current code is the documented departure from it.
+
 ---
 
 ## 12. Cross-references to other docs
@@ -439,7 +671,7 @@ This doc does not propose fixes — those belong to whoever picks up #5855.
 | Doc | What it says about vault | Lines / sections | Depth |
 |---|---|---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | "L6 Memory" appears in the 7-layer stack (L17) and gets a **full section** at §L6 Memory Layer (L150-167) — file list, "what changes here," cycle interplay, PARAG explanation. Also referenced in the "Where to make changes" table (L264). | L17, L150-167, L264 | Substantial — second only to this doc |
-| [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) | Vault is one of the 5 composed-output slots (`identity / soul / instructions / project-context / vault`, see L119, L137, L199, L1002). §5.5 ("Vault") is intentionally short (L378-380) and points to `vault-protocol.md` for detail. §G4 (L956) explicitly flags "Vault slot is the most underspecified — a future revision should expand it." | L119, L137, L199, L230, L378-380, L417, L538, L956, L1002, L1009 | Slot-machinery + acknowledged gap |
+| [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) | Vault is one of the 6 composed-output slots (`identity / responsibility / soul / instructions / project-context / vault`). §5.6 ("Vault") is intentionally short and points to `vault-protocol.md` for the per-cycle usage contract and to this doc for the architecture. §3.3 + §5.6 + §11.2 G4 lock the slot to **L1-exclusive** authoring (no L2/L3/L4 fragments) — see §1 of this doc for the policy summary. | §3.3, §5.6, §11.2 G4 | Slot-machinery + L1-exclusive policy |
 | [AGENT-RUNTIME.md](AGENT-RUNTIME.md) | State-persistence table row (L507) — "Decisions / institutional memory" lives in `.squidsquad/vault/`. References an in-vault decision note for the event-bus architecture (L195, L1044). | L195, L507, L1044 | One row + two citations |
 | [INSTALLER-ARCH.md](INSTALLER-ARCH.md) | Vault skeleton is part of the install scaffold (L100 §3.2 outputs row, L228 Phase 5 scaffold step, L292-293 file layout tree). Vault is explicitly preserved across clean-rebuild and upgrade (L436, L464, L472). | L100, L228, L292-293, L436, L464, L472 | Install-time scaffolding + preservation rules |
 | [sub-skill-catalog.md](sub-skill-catalog.md) | Lists all 5 vault sub-skills (`vault-protocol`, `vault-protocol-slim`, `vault-remember`, `vault-optimize`, `vault-synthesis`) with one-line descriptions under the "Vault (institutional memory)" subheading. | "common/" → "Vault (institutional memory)" subsection | Catalog entries only |
@@ -451,31 +683,31 @@ This doc (`VAULT-ARCH.md`) is the first **dedicated** architecture treatment of 
 The cross-references above are **accurate but not yet two-way**. Reconciliation work that should happen alongside this doc landing:
 
 - **ARCHITECTURE.md §L6 Memory Layer**: Should add a single line pointing to `VAULT-ARCH.md` as the canonical deep-dive. Today's L150-167 content is overview-correct but doesn't reference this doc (it can't — this doc didn't exist before).
-- **COMPOSE-ARCHITECTURE.md §5.5 and §G4**: §5.5 currently says "most vault detail belongs in `references/sub-skills/common/vault-protocol.md`." Should also reference `VAULT-ARCH.md` for the architecture (vs `vault-protocol.md` for the per-cycle usage contract). §G4 ("Vault slot is the most underspecified") can be partially closed by pointing to VAULT-ARCH §3 entity model + §5 BRIEFING + §4 frontmatter spec.
+- **COMPOSE-ARCHITECTURE.md §5.6 and §11.2 G4**: §5.6 now references `VAULT-ARCH.md` for the architecture (vs `vault-protocol.md` for the per-cycle usage contract) and declares the slot **L1-exclusive** (no L2/L3/L4 authoring). §11.2 G4 is **CLOSED** as of 2026-05-29 — the "slot contract" gap is settled by the L1-exclusive guardrail (the slot contract is the L1 short-descriptor pattern; nothing else is authorable). Revisit when a concrete customization pattern surfaces.
 - **AGENT-RUNTIME.md §5 state-persistence row**: Should link to `VAULT-ARCH.md` for the "what" (vs the row's "where" + "owner" + "why" data).
 - **INSTALLER-ARCH.md §3.2 + §5 + §11**: All vault mentions are factual scaffolding/preservation notes. Should cross-reference `VAULT-ARCH.md` once in the file-layout section so a reader knows where to learn what they just installed.
 - **sub-skill-catalog.md "Vault (institutional memory)" subsection**: Should add a header line linking to `VAULT-ARCH.md` for architecture context.
 
 These are noted here; the actual edits land in a separate commit or as part of this PR depending on review preference.
 
-### 12.2 Vault sub-skill source files (canonical specs)
+### 12.3 Vault sub-skill source files (canonical specs)
 
-- [`references/sub-skills/common/vault-protocol.md`](../references/sub-skills/common/vault-protocol.md) — full R/W contract
-- [`references/sub-skills/common/vault-protocol-slim.md`](../references/sub-skills/common/vault-protocol-slim.md) — read-only variant
+- [`references/sub-skills/common/vault-protocol.md`](../references/sub-skills/common/vault-protocol.md) — full R/W contract (the `vault-protocol-slim.md` file in the same directory is the read-only variant; see §7.1)
 - [`references/sub-skills/common/vault-remember.md`](../references/sub-skills/common/vault-remember.md) — reflection
 - [`references/sub-skills/common/vault-optimize.md`](../references/sub-skills/common/vault-optimize.md) — quiet-cycle maintenance
 - [`references/sub-skills/roles/pm/vault-synthesis.md`](../references/sub-skills/roles/pm/vault-synthesis.md) — PM cross-agent synthesis
 
-### 12.3 Vault scripts (canonical implementations)
+### 12.4 Vault scripts (canonical implementations)
 
 - [`references/scripts/vault_check.py`](../references/scripts/vault_check.py)
 - [`references/scripts/vault_entity.py`](../references/scripts/vault_entity.py)
 - [`references/scripts/vault_optimize.py`](../references/scripts/vault_optimize.py)
 - [`references/scripts/vault_remember.py`](../references/scripts/vault_remember.py)
 
-### 12.4 Related vault decisions in the vault itself
+### 12.5 Related vault decisions in the vault itself
 
-- [`galaxy/decision-vault-remember-source-agnostic.md`](../.squidsquad/vault/galaxy/decision-vault-remember-source-agnostic.md) — the only `decision-vault-*` note today
+- [`galaxy/decision-vault-remember-source-agnostic.md`](../.squidsquad/vault/galaxy/decision-vault-remember-source-agnostic.md) — vault-remember treats QA-rejection learnings as equal in value to human-directive learnings (source-agnostic reflection)
+- [`galaxy/decision-vault-subagent-model-sonnet.md`](../.squidsquad/vault/galaxy/decision-vault-subagent-model-sonnet.md) — heavy vault sub-skills (`vault-remember`, `vault-synthesis`) execute as background subagents on the `sonnet` tier; light ones stay inline (see §7 Execution model + §11.5)
 
 ---
 

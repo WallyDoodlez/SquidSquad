@@ -1403,6 +1403,81 @@ class TestIntentLifecycle(unittest.TestCase):
             mock_boot.assert_called_once_with("skill")
             self.assertEqual(hs.get_agent("skill").status, "starting")
 
+    def test_no_auto_reboot_when_flag_set_10538(self):
+        """#10538: when _NO_AUTO_REBOOT is True, agent death is observed
+        but boot_agent is NOT called. State must still update (claude_pid
+        cleared, bootup_complete reset) so the next operator-driven
+        /agents/{role}/start behaves like a fresh spawn."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        import harness
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / ".claude-pid").write_text("99999999", encoding="utf-8")
+
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "running"
+            agent.intent = AgentState.INTENT_RUNNING
+            agent.claude_pid = 99999999
+            agent.bootup_complete = True
+            hs.set_agent("skill", agent)
+
+            with patch.object(harness, "_NO_AUTO_REBOOT", True), \
+                 patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.boot_remote.boot_agent") as mock_boot, \
+                 patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            # AC: boot_agent is NOT invoked when the gate is set.
+            mock_boot.assert_not_called()
+            # AC: state still updates to honest values.
+            self.assertIsNone(hs.get_agent("skill").claude_pid)
+            self.assertFalse(hs.get_agent("skill").bootup_complete)
+            # `status = "starting"` is the auto-reboot path's marker —
+            # the suppressed-reboot branch MUST NOT set it, otherwise
+            # HTTP/TUI consumers reading `/status` would see a
+            # spuriously "starting" agent that never starts.
+            self.assertNotEqual(hs.get_agent("skill").status, "starting")
+
+    def test_auto_reboot_default_unchanged_when_flag_unset_10538(self):
+        """#10538 coexistence: when _NO_AUTO_REBOOT is False (default),
+        v1 behavior is byte-identical — boot_agent IS called."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        import harness
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            role_dir = Path(tmpdir) / ".squidsquad" / "skill"
+            role_dir.mkdir(parents=True)
+            (role_dir / ".claude-pid").write_text("99999999", encoding="utf-8")
+
+            hs = HarnessState()
+            agent = AgentState("skill", tmpdir)
+            agent.status = "running"
+            agent.intent = AgentState.INTENT_RUNNING
+            agent.claude_pid = 99999999
+            # Lock that the v1 reboot path resets bootup_complete the same
+            # way the suppressed path does — coexistence symmetry.
+            agent.bootup_complete = True
+            hs.set_agent("skill", agent)
+
+            with patch.object(harness, "_NO_AUTO_REBOOT", False), \
+                 patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+                 patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.boot_remote.boot_agent") as mock_boot, \
+                 patch("harness.health_check.check_agent_health", return_value={"health": "unknown"}), \
+                 patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
+                hs.update_health()
+
+            mock_boot.assert_called_once_with("skill")
+            self.assertEqual(hs.get_agent("skill").status, "starting")
+            self.assertFalse(hs.get_agent("skill").bootup_complete)
+
     def test_no_reboot_when_intent_stopping(self):
         """Agent was running, dies, intent=stopping → do NOT reboot (#4966)."""
         import tempfile

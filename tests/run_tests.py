@@ -98,6 +98,7 @@ STATIC_TEST_MODULES = [
     "test_start_team",
     "test_tc_coverage",
     "test_thin_launcher",
+    "test_thin_launcher_10101",
     "test_triage",
     "test_vault_check_unit",
     "test_vault_optimize",
@@ -112,6 +113,7 @@ STATIC_TEST_MODULES = [
     "test_9398_tracker_gh_resolution",
     "test_pickup_comment_fidelity_9946",
     "test_terminology_dual_aware_6274",
+    "test_source_frontmatter",
 ]
 
 

@@ -20,6 +20,7 @@ Exit codes:
 """
 
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -205,9 +206,13 @@ def _enforce_branch(role, working_state):
     status = working_state.get("status", "none")
 
     if task != "none" and status == "in-progress":
-        # Extract issue number from task field (e.g. "#4942" -> "4942")
-        number = task.lstrip("#").strip()
-        if number.isdigit():
+        # Extract issue number from task field (#10072). Anchored to match
+        # bare ("#9965", "9965"), verbose ("#9965 — description"), and
+        # whitespace-tolerant ("# 9965") forms. Trailing anchor rejects
+        # glued suffixes like "9965-fix" that old `.isdigit()` also rejected.
+        m = re.match(r"#*\s*(\d+)(?:\s|—|$)", task.lstrip())
+        if m:
+            number = m.group(1)
             result = _run_script("git_ops.py", "task-begin", role, number)
             if result.returncode != 0:
                 # Non-fatal — log and continue on current branch
@@ -601,7 +606,12 @@ def _get_verifiable_roles():
 
 
 def _fetch_latest_comment(number):
-    """Fetch the latest comment on an issue. Returns dict or None."""
+    """Fetch the latest comment on an issue. Returns dict or None.
+
+    Legacy path retained for callers outside _build_*_input. The hot paths
+    (PM/QA/DM cycle builders) use the bulk-fetch helpers below which embed
+    `comments` inline and skip the per-issue subprocess.
+    """
     result = _run(
         ["gh", "issue", "view", str(number), "--json", "comments",
          "--jq", ".comments[-1] | {author: .author.login, body: .body, createdAt: .createdAt}"],
@@ -616,13 +626,142 @@ def _fetch_latest_comment(number):
 
 
 def _enrich_with_comments(items):
-    """Add latest_comment to each item in a list. Modifies items in place."""
+    """Add latest_comment to each item in a list. Modifies items in place.
+
+    Legacy path. The bulk-fetch helpers below set latest_comment from inline
+    `comments` without spawning a subprocess per item.
+    """
     for item in items:
         num = item.get("number")
         if num:
             comment = _fetch_latest_comment(num)
             if comment:
                 item["latest_comment"] = comment
+
+
+# ---------------------------------------------------------------------------
+# Bulk gh fetch — perf consolidation
+# ---------------------------------------------------------------------------
+# Each `python.exe` -> `gh.exe` spawn costs ~0.6s on Windows. The PM builder
+# was doing ~14 tracker.py calls + 2 direct gh calls + 1 enrich-per-item; on
+# 4 agents booting simultaneously this thrashed disk/AV. These helpers do at
+# most 3 gh calls per cycle and derive every subset via Python filters.
+
+# #6274 dual-aware role-label aliases. Mirrors `_DUAL_LABEL_PAIRS_6274` in
+# tracker.py — cycle_pre needs the same lookup to attribute items to the
+# verifiable_roles canonical name. When 6274.3 cutover lands, this table
+# and the corresponding entry in tracker.py both get deleted.
+_DUAL_LABEL_PAIRS_6274 = {
+    "dev": "worker",
+    "qa": "verifier",
+    "worker": "dev",
+    "verifier": "qa",
+}
+
+_GH_FETCH_CACHE = {}
+
+
+def _gh_fetch(label_filter, state, with_comments=False, with_body=False, limit=200):
+    """Single `gh issue list` call, cached for the life of this process.
+
+    label_filter: comma-separated label string passed to `gh --label`, or None
+                  for no label filter (only used for the cross-repo external
+                  triage fetch).
+    state:        "open" | "closed" | "all".
+    Returns parsed JSON list, or [] on any failure.
+    """
+    cache_key = (label_filter, state, with_comments, with_body, limit)
+    if cache_key in _GH_FETCH_CACHE:
+        return _GH_FETCH_CACHE[cache_key]
+
+    fields = ["number", "title", "labels", "updatedAt"]
+    if with_comments:
+        fields.append("comments")
+    if with_body:
+        fields.append("body")
+    cmd = ["gh", "issue", "list", "--state", state,
+           "--json", ",".join(fields), "--limit", str(limit)]
+    if label_filter:
+        cmd.extend(["--label", label_filter])
+    result = _run(cmd, check=False)
+    items = []
+    if result.returncode == 0 and result.stdout.strip():
+        try:
+            parsed = json.loads(result.stdout)
+            if isinstance(parsed, list):
+                items = parsed
+        except (json.JSONDecodeError, ValueError):
+            pass
+    _GH_FETCH_CACHE[cache_key] = items
+    return items
+
+
+def _item_label_names(item):
+    return {l.get("name") for l in item.get("labels", [])}
+
+
+def _item_has_label(item, name):
+    return name in _item_label_names(item)
+
+
+def _item_has_role(item, role):
+    """True if the item carries role:<role> or its #6274 dual-aware alias."""
+    names = _item_label_names(item)
+    if f"role:{role}" in names:
+        return True
+    alias = _DUAL_LABEL_PAIRS_6274.get(role)
+    return bool(alias and f"role:{alias}" in names)
+
+
+def _item_canonical_role(item, prefer_order):
+    """Pick a source_role for an item using prefer_order.
+
+    Walks prefer_order (typically the verifiable_roles list) and returns the
+    first role whose canonical or alias label is on the item. Mirrors the
+    attribution behavior of the old per-role tracker.py loops.
+    """
+    names = _item_label_names(item)
+    for r in prefer_order:
+        if f"role:{r}" in names:
+            return r
+        alias = _DUAL_LABEL_PAIRS_6274.get(r)
+        if alias and f"role:{alias}" in names:
+            return r
+    return None
+
+
+def _item_latest_comment(item):
+    """Extract latest comment from the inline `comments` field.
+
+    Output shape matches what _fetch_latest_comment used to return so
+    downstream consumers (agent prompts reading cycle-input.json) don't
+    break: `{author, body, createdAt}` or None.
+    """
+    comments = item.get("comments") or []
+    if not comments:
+        return None
+    last = comments[-1]
+    author = last.get("author") or {}
+    return {
+        "author": author.get("login", ""),
+        "body": last.get("body", ""),
+        "createdAt": last.get("createdAt", ""),
+    }
+
+
+def _enrich_inline(items, drop_comments=True):
+    """Attach `latest_comment` from inline comments; optionally drop the
+    full `comments` array to keep cycle-input.json compact.
+
+    drop_comments=False is used by callers that need to scan comment bodies
+    later in the same cycle (e.g. DM's `delivery:skip` detection).
+    """
+    for item in items:
+        c = _item_latest_comment(item)
+        if c:
+            item["latest_comment"] = c
+        if drop_comments and "comments" in item:
+            del item["comments"]
 
 
 # ---------------------------------------------------------------------------
@@ -704,67 +843,99 @@ def _build_skill_input(role):
 
 
 def _build_pm_input(role):
-    """Build cycle-input.json fields specific to the PM agent."""
-    # Tracker queries
+    """Build cycle-input.json fields specific to the PM agent.
+
+    Previously this fanned out ~14 tracker.py + gh subprocess calls (one per
+    {role × pending-test-issue/task}, plus separate calls per blocked label).
+    Now derives every subset from 2 cached `gh issue list` calls:
+      - `squidsquad,state=open` (with inline comments) — covers pending-test,
+        approved, human-blocked, recently-commented
+      - `state=open, no label filter` (with body) — for external triage
+      - `squidsquad,status:pending-ship,state=all` — pending-ship may be
+        closed because the linked PR auto-closes the issue
+    """
+    verifiable_roles = _get_verifiable_roles()
+
+    # Single fetch of open squidsquad items with comments inline. Backs the
+    # pending-test, approved, human-blocked, and recently-commented derivations.
+    squid_open = _gh_fetch("squidsquad", "open", with_comments=True, limit=200)
+    # Pending-ship may be closed (PR auto-close while pending-ship label
+    # survives), so query state=all on that label combo specifically.
+    # #6262: pending-ship MUST be state=open. state=all surfaces ~50 closed
+    # items whose `status:pending-ship` label was never cleared after PR
+    # auto-close; the old tracker.list_by_labels path explicitly defaults to
+    # state=open for exactly this reason.
+    pending_ship_open = _gh_fetch(
+        "squidsquad,status:pending-ship", "open", with_comments=True, limit=50
+    )
+
+    pending_test_issues = []
+    pending_test_tasks = []
+    approved_items = []
+    human_blocked = []
+    recently_commented = []
+    interval_min = _config_get_int("interval", 30)
+
+    blocked_labels = {"blocked:human-action", "status:pending-human-setup",
+                       "status:pending-human-review"}
+
+    for item in squid_open:
+        names = _item_label_names(item)
+        # Source role attribution — first matching role label from verifiable order
+        canonical = _item_canonical_role(item, verifiable_roles)
+
+        if "status:pending-test" in names:
+            tagged = dict(item)
+            if canonical:
+                tagged["source_role"] = canonical
+            if "type:task" in names:
+                pending_test_tasks.append(tagged)
+            elif "type:issue" in names or "type:bug" in names:
+                pending_test_issues.append(tagged)
+
+        if "status:approved" in names:
+            approved_items.append(item)
+
+        if blocked_labels & names:
+            human_blocked.append(item)
+
+        # Recently commented: updated within 2× interval
+        updated = item.get("updatedAt", "")
+        if updated:
+            try:
+                updated_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+                ref_now = datetime.now(updated_dt.tzinfo) if updated_dt.tzinfo else datetime.now()
+                delta = (ref_now - updated_dt).total_seconds()
+                if delta <= interval_min * 2 * 60:
+                    recently_commented.append(item)
+            except (ValueError, TypeError):
+                pass
+
+    pending_ship_tasks = list(pending_ship_open)
+
+    # External (non-squidsquad) issues — single broad query, then filter.
+    all_open = _gh_fetch(None, "open", with_body=True, limit=50)
+    external_issues = [
+        i for i in all_open if "squidsquad" not in _item_label_names(i)
+    ]
+
+    # Enrich from inline comments (no extra subprocesses)
+    _enrich_inline(pending_test_issues)
+    _enrich_inline(pending_test_tasks)
+    _enrich_inline(pending_ship_tasks)
+    _enrich_inline(approved_items)
+    _enrich_inline(human_blocked)
+    _enrich_inline(recently_commented)
+
     tracker_data = {
-        "pending_test_issues": [],
-        "pending_test_tasks": [],
-        "pending_ship_tasks": [],
-        "external_issues": [],
+        "pending_test_issues": pending_test_issues,
+        "pending_test_tasks": pending_test_tasks,
+        "pending_ship_tasks": pending_ship_tasks,
+        "external_issues": external_issues,
         "open_prs": [],
     }
 
-    # Pending test issues — query ALL verifiable roles (#4803)
-    verifiable_roles = _get_verifiable_roles()
-    for query_role in verifiable_roles:
-        result = _run_script("tracker.py", "list-issues", query_role, "--status", "pending-test")
-        try:
-            if result.returncode == 0 and result.stdout.strip():
-                items = json.loads(result.stdout)
-                for item in (items if isinstance(items, list) else []):
-                    item["source_role"] = query_role
-                tracker_data["pending_test_issues"].extend(
-                    items if isinstance(items, list) else []
-                )
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Pending test tasks — query ALL verifiable roles (#4803)
-    for query_role in verifiable_roles:
-        result = _run_script("tracker.py", "list-tasks", query_role, "--status", "pending-test")
-        try:
-            if result.returncode == 0 and result.stdout.strip():
-                items = json.loads(result.stdout)
-                for item in (items if isinstance(items, list) else []):
-                    item["source_role"] = query_role
-                tracker_data["pending_test_tasks"].extend(
-                    items if isinstance(items, list) else []
-                )
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Pending ship — reverted to --state open (#6262: --state all included stale closed items)
-    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            items = json.loads(result.stdout)
-            tracker_data["pending_ship_tasks"] = items if isinstance(items, list) else []
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    # External issues (unlabeled)
-    result = _run_script("tracker.py", "list-all-open")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            items = json.loads(result.stdout)
-            tracker_data["external_issues"] = [
-                i for i in (items if isinstance(items, list) else [])
-                if "squidsquad" not in [l.get("name", "") for l in i.get("labels", [])]
-            ]
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    # Open PRs
+    # Open PRs — branch-scoped query (different from issue listings)
     pr_result = _run(["gh", "pr", "list", "--search", "squidsquad/", "--state", "open",
                        "--json", "number,title,state,url,headRefName", "--limit", "20"])
     try:
@@ -804,68 +975,6 @@ def _build_pm_input(role):
     # backward compat with composed CLAUDE.md files that still read it.
     boot_results = []
 
-    # Approved items — dev pushback visibility (#2494)
-    approved_items = []
-    result = _run_script("tracker.py", "list-by-labels", "squidsquad,status:approved")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            items = json.loads(result.stdout)
-            approved_items = items if isinstance(items, list) else []
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    # Human-blocked items — waiting-on-human visibility (#2494)
-    human_blocked = []
-    for blocked_label in ["blocked:human-action", "status:pending-human-setup", "status:pending-human-review"]:
-        result = _run_script("tracker.py", "list-by-labels", f"squidsquad,{blocked_label}")
-        try:
-            if result.returncode == 0 and result.stdout.strip():
-                items = json.loads(result.stdout)
-                if isinstance(items, list):
-                    seen = {i["number"] for i in human_blocked}
-                    for item in items:
-                        if item.get("number") not in seen:
-                            human_blocked.append(item)
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    # Recently commented items — human input visibility (#2494)
-    # Find items with comments in the last cycle interval, regardless of status
-    recently_commented = []
-    result = _run(
-        ["gh", "issue", "list", "--label", "squidsquad", "--state", "open",
-         "--json", "number,title,labels,updatedAt", "--limit", "50"],
-        check=False,
-    )
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            all_open = json.loads(result.stdout)
-            if isinstance(all_open, list):
-                for item in all_open:
-                    updated = item.get("updatedAt", "")
-                    if not updated:
-                        continue
-                    try:
-                        updated_dt = datetime.fromisoformat(updated.replace("Z", "+00:00"))
-                        now = datetime.now(updated_dt.tzinfo) if updated_dt.tzinfo else datetime.now()
-                        delta = (now - updated_dt).total_seconds()
-                        # Items updated within 2x iteration interval (default 60 min)
-                        interval = _config_get_int("interval", 30)
-                        if delta <= interval * 2 * 60:
-                            recently_commented.append(item)
-                    except (ValueError, TypeError):
-                        pass
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    # Enrich tracker items with latest comments (#2272)
-    _enrich_with_comments(tracker_data["pending_test_issues"])
-    _enrich_with_comments(tracker_data["pending_test_tasks"])
-    _enrich_with_comments(tracker_data["pending_ship_tasks"])
-    _enrich_with_comments(approved_items)
-    _enrich_with_comments(human_blocked)
-    _enrich_with_comments(recently_commented)
-
     return {
         "tracker": tracker_data,
         "approved_items": approved_items,
@@ -884,74 +993,45 @@ def _build_pm_input(role):
 
 
 def _build_qa_input(role):
-    """Build cycle-input.json fields specific to the QA agent."""
-    # Verification queue — pending test issues with branch info
+    """Build cycle-input.json fields specific to the QA agent.
+
+    Previously fanned out 8 tracker.py calls (4 verifiable roles × 2 for
+    issues/tasks). Now derives both buckets from the same cached squidsquad
+    fetch used by PM.
+    """
     verification_queue = {
         "pending_test_issues": [],
         "pending_test_tasks": [],
     }
 
-    # Pending test issues — query ALL verifiable roles (#4803)
     verifiable_roles = _get_verifiable_roles()
-    for query_role in verifiable_roles:
-        result = _run_script("tracker.py", "list-issues", query_role, "--status", "pending-test")
-        try:
-            if result.returncode == 0 and result.stdout.strip():
-                items = json.loads(result.stdout)
-                for item in (items if isinstance(items, list) else []):
-                    num = item.get("number", "")
-                    branch = _get_branch_name(query_role, num) if num else ""
-                    item["branch"] = branch
-                    item["source_role"] = query_role
-                    # Check for test plan
-                    test_plan_path = ""
-                    # #6274 D5: qa/planning → verifier/planning at wizard
-                    # D4. Parameterized by the function's role argument so
-                    # the path tracks the SQUIDSQUAD_ROLE dispatched via
-                    # ROLE_BUILDERS — pre-D4 role="qa" reads qa/planning;
-                    # post-D4 role="verifier" reads verifier/planning. The
-                    # rename and SQUIDSQUAD_ROLE flip happen atomically in
-                    # wizard so `role` matches the existing dir at all
-                    # times.
-                    for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / role / "planning"]:
-                        if planning_dir.exists():
-                            for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
-                                test_plan_path = str(f.relative_to(REPO_ROOT))
-                                break
-                    item["test_plan_path"] = test_plan_path
-                    verification_queue["pending_test_issues"].append(item)
-        except (json.JSONDecodeError, ValueError):
-            pass
+    squid_open = _gh_fetch("squidsquad", "open", with_comments=True, limit=200)
 
-    # Pending test tasks — query ALL verifiable roles (#4803)
-    for query_role in verifiable_roles:
-        result = _run_script("tracker.py", "list-tasks", query_role, "--status", "pending-test")
-        try:
-            if result.returncode == 0 and result.stdout.strip():
-                items = json.loads(result.stdout)
-                for item in (items if isinstance(items, list) else []):
-                    num = item.get("number", "")
-                    branch = _get_branch_name(query_role, num) if num else ""
-                    item["branch"] = branch
-                    item["source_role"] = query_role
-                    test_plan_path = ""
-                    # #6274 D5: qa/planning → verifier/planning at wizard
-                    # D4. Parameterized by the function's role argument so
-                    # the path tracks the SQUIDSQUAD_ROLE dispatched via
-                    # ROLE_BUILDERS — pre-D4 role="qa" reads qa/planning;
-                    # post-D4 role="verifier" reads verifier/planning. The
-                    # rename and SQUIDSQUAD_ROLE flip happen atomically in
-                    # wizard so `role` matches the existing dir at all
-                    # times.
-                    for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / role / "planning"]:
-                        if planning_dir.exists():
-                            for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
-                                test_plan_path = str(f.relative_to(REPO_ROOT))
-                                break
-                    item["test_plan_path"] = test_plan_path
-                    verification_queue["pending_test_tasks"].append(item)
-        except (json.JSONDecodeError, ValueError):
-            pass
+    for item in squid_open:
+        names = _item_label_names(item)
+        if "status:pending-test" not in names:
+            continue
+        tagged = dict(item)
+        num = tagged.get("number", "")
+        canonical = _item_canonical_role(tagged, verifiable_roles)
+        tagged["source_role"] = canonical or ""
+        tagged["branch"] = _get_branch_name(canonical, num) if (canonical and num) else ""
+
+        # #6274 D5: qa/planning → verifier/planning at wizard D4. The lookup
+        # is parameterized by the function's role argument so the path tracks
+        # SQUIDSQUAD_ROLE dispatched via ROLE_BUILDERS.
+        test_plan_path = ""
+        for planning_dir in [SQUID_DIR / "pm" / "planning", SQUID_DIR / role / "planning"]:
+            if planning_dir.exists():
+                for f in planning_dir.glob(f"*{num}*TEST-PLAN*"):
+                    test_plan_path = str(f.relative_to(REPO_ROOT))
+                    break
+        tagged["test_plan_path"] = test_plan_path
+
+        if "type:task" in names:
+            verification_queue["pending_test_tasks"].append(tagged)
+        elif "type:issue" in names or "type:bug" in names:
+            verification_queue["pending_test_issues"].append(tagged)
 
     # Open PRs
     open_prs = []
@@ -963,9 +1043,9 @@ def _build_qa_input(role):
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # Enrich verification items with latest comments (#2272)
-    _enrich_with_comments(verification_queue["pending_test_issues"])
-    _enrich_with_comments(verification_queue["pending_test_tasks"])
+    # Enrich verification items from inline comments
+    _enrich_inline(verification_queue["pending_test_issues"])
+    _enrich_inline(verification_queue["pending_test_tasks"])
 
     # Agent health
     health_result = _run_script("health_check.py", "--json")
@@ -1019,71 +1099,65 @@ def _build_qa_input(role):
 
 
 def _build_dm_input(role):
-    """Build cycle-input.json fields specific to the DM agent."""
-    # Bugs assigned to DM
-    bugs = []
-    result = _run_script("tracker.py", "list-issues", "dm")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            bugs = json.loads(result.stdout)
-            if not isinstance(bugs, list):
-                bugs = []
-    except (json.JSONDecodeError, ValueError):
-        pass
+    """Build cycle-input.json fields specific to the DM agent.
 
-    # Pending ship items — reverted to --state open (#6262: --state all included stale closed items)
+    Previously fanned out 1 (bugs) + 1 (pending-ship) + N (per-ship-item
+    `gh issue view` for delivery:skip) + 4 (per-role open count) calls.
+    Now: 2 cached gh fetches cover the same ground; delivery:skip is read
+    from the inline `comments` field that pending_ship_open already carries.
+    """
+    squid_open = _gh_fetch("squidsquad", "open", with_comments=True, limit=200)
+    # #6262: pending-ship MUST be state=open. state=all surfaces ~50 closed
+    # items whose `status:pending-ship` label was never cleared after PR
+    # auto-close; the old tracker.list_by_labels path explicitly defaults to
+    # state=open for exactly this reason.
+    pending_ship_open = _gh_fetch(
+        "squidsquad,status:pending-ship", "open", with_comments=True, limit=50
+    )
+
+    # Bugs assigned to DM — type:issue (or legacy type:bug) + role:dm
+    bugs = [
+        i for i in squid_open
+        if _item_has_role(i, "dm") and ("type:issue" in _item_label_names(i)
+                                          or "type:bug" in _item_label_names(i))
+    ]
+
     pending_ship = []
-    result = _run_script("tracker.py", "list-by-labels", "status:pending-ship")
-    try:
-        if result.returncode == 0 and result.stdout.strip():
-            items = json.loads(result.stdout)
-            for item in (items if isinstance(items, list) else []):
-                # Check for delivery:skip in comments
-                num = item.get("number", "")
-                delivery_skip = False
-                if num:
-                    comment_result = _run(
-                        ["gh", "issue", "view", str(num), "--json", "comments"],
-                        check=False,
-                    )
-                    try:
-                        if comment_result.returncode == 0:
-                            comment_data = json.loads(comment_result.stdout)
-                            for comment in comment_data.get("comments", []):
-                                if "delivery: skip" in comment.get("body", "").lower() or \
-                                   "delivery:skip" in comment.get("body", "").lower():
-                                    delivery_skip = True
-                                    break
-                    except (json.JSONDecodeError, ValueError):
-                        pass
-                item["delivery_skip"] = delivery_skip
-                pending_ship.append(item)
-    except (json.JSONDecodeError, ValueError):
-        pass
+    for item in pending_ship_open:
+        tagged = dict(item)
+        delivery_skip = False
+        for comment in tagged.get("comments") or []:
+            body = (comment.get("body") or "").lower()
+            if "delivery: skip" in body or "delivery:skip" in body:
+                delivery_skip = True
+                break
+        tagged["delivery_skip"] = delivery_skip
+        pending_ship.append(tagged)
 
-    # Enrich pending-ship items with latest comments (#2272)
-    _enrich_with_comments(pending_ship)
-    _enrich_with_comments(bugs)
+    _enrich_inline(pending_ship)
+    _enrich_inline(bugs)
 
     # Version bump info
     ship_threshold = _config_get_int("ship-threshold", 10)
     shipped_since_bump = _config_get_int("shipped-since-bump", 0)
     current_version = _config_get("version") or "0.0.0"
 
-    # Count open issues across all roles
-    # #6274 D5: qa→verifier canonical post-rename. The tracker queries the
-    # role:<name> label, which migrate_labels_6274.py dual-tags during the
-    # window — both role:qa and role:verifier labels resolve to the same
-    # issue set, so this flip is safe for the dual-aware period.
+    # Open-issue count across the four canonical roles. Old behavior:
+    # `tracker.py list-issues <role> --status open` returns items with
+    # `type:issue + role:<role> + status:open`. Per-role counts are summed
+    # (an item dual-tagged with multiple role labels was counted once per
+    # matching role; #6274 dual aliases (role:qa↔role:verifier) collapse
+    # because _item_has_role treats them as the same role).
     open_count = 0
-    for check_role in ["skill", "pm", "verifier", "dm"]:
-        result = _run_script("tracker.py", "list-issues", check_role, "--status", "open")
-        try:
-            if result.returncode == 0 and result.stdout.strip():
-                items = json.loads(result.stdout)
-                open_count += len(items) if isinstance(items, list) else 0
-        except (json.JSONDecodeError, ValueError):
-            pass
+    for check_role in ("skill", "pm", "verifier", "dm"):
+        for item in squid_open:
+            names = _item_label_names(item)
+            if "status:open" not in names:
+                continue
+            if "type:issue" not in names and "type:bug" not in names:
+                continue
+            if _item_has_role(item, check_role):
+                open_count += 1
 
     version_bump = {
         "ship_threshold": ship_threshold,

@@ -46,6 +46,8 @@ except ImportError:
     def _worktree_exists():
         return False
 
+from shared_fs import atomic_write_text  # #10007
+
 # Required top-level fields in cycle-output.json. Mode-gated (#8918): event
 # mode replaces `cycle_number` with `task` — the task IS the cycle in event
 # mode (DECISIONS-4792.md Q7 + CONTEXT.md §5.5 + TEST-PLAN-8701 §3.2 UT-10).
@@ -562,6 +564,52 @@ def _do_commit_push(data, role):
         _state_commit(state_msg, role)
 
 
+def _recover_orphaned_tag(new_version):
+    """Self-heal a half-completed prior bump (#10241).
+
+    When the diff guard fires (config.md is already at ``new_version``,
+    nothing fresh to stage), check whether a local tag ``v{new_version}``
+    exists while origin's refs/tags/ does not. If so, push the tag and
+    return True so the caller can reset shipped-since-bump and exit. Any
+    other configuration (no local tag, both have it, or push fails)
+    returns False so the caller falls through to its normal skip message.
+
+    Designed to be cheap on the happy path: two read-only git calls
+    (``tag -l``, ``ls-remote``) and only when those agree on the
+    asymmetric state does it run ``git push origin v{new_version}``.
+    Failure modes (any non-zero rc, any unexpected stderr shape) leave
+    state untouched — recovery is opportunistic, never destructive."""
+    local_check = _run(["git", "tag", "-l", f"v{new_version}"])
+    if local_check.returncode != 0:
+        return False
+    if not local_check.stdout.strip():
+        return False  # no local tag → nothing to recover
+
+    remote_check = _run(
+        ["git", "ls-remote", "--tags", "origin", f"refs/tags/v{new_version}"]
+    )
+    if remote_check.returncode != 0:
+        return False  # network/auth failure — leave state untouched
+    if remote_check.stdout.strip():
+        return False  # remote already has the tag → not orphaned
+
+    push_result = _run(["git", "push", "origin", f"v{new_version}"])
+    if push_result.returncode != 0:
+        print(
+            f"  ERROR: orphaned-tag recovery push failed (rc={push_result.returncode}): "
+            f"{push_result.stderr.strip() or '(no stderr)'} — "
+            f"local tag v{new_version} still not on origin; shipped-since-bump NOT reset",
+            file=sys.stderr,
+        )
+        return False
+
+    print(
+        f"  Recovered orphaned tag v{new_version}: pushed to origin "
+        f"(prior bump cycle landed locally but did not reach origin)"
+    )
+    return True
+
+
 def _do_version_bump(data, role):
     """Execute version bump sequence (DM only)."""
     bump = data.get("version_bump")
@@ -581,7 +629,7 @@ def _do_version_bump(data, role):
     if skill_md.exists():
         content = skill_md.read_text(encoding="utf-8")
         content = re.sub(r'version:\s*[\d.]+', f'version: {new_version}', content, count=1)
-        skill_md.write_text(content, encoding="utf-8")
+        atomic_write_text(skill_md, content)
 
     # DM always handles CHANGELOG entries (#6261). No PM fallback.
 
@@ -591,23 +639,71 @@ def _do_version_bump(data, role):
         bump_files.append("SKILL.md")
     _run(["git", "add", "--"] + bump_files)
 
-    # Guard: skip commit/tag/push if nothing was staged (#5126)
+    # Guard: skip commit/tag/push if nothing was staged (#5126). Before
+    # returning, attempt orphaned-tag recovery (#10241): if config.md is
+    # already at the target version but the local tag exists while origin
+    # does not, push the tag so a prior half-completed bump self-heals.
     diff_check = _run(["git", "diff", "--cached", "--quiet"])
     if diff_check.returncode == 0:
+        if _recover_orphaned_tag(new_version):
+            _run_script("config.py", "set", "shipped-since-bump", "0")
+            return
         print(f"  Version bump v{new_version}: no staged changes — skipping commit/tag/push")
         return
 
-    _run(["git", "commit", "-m", f"chore: bump version to v{new_version}"])
+    commit_result = _run(["git", "commit", "-m", f"chore: bump version to v{new_version}"])
+    if commit_result.returncode != 0:
+        print(
+            f"  ERROR: version bump commit failed (rc={commit_result.returncode}): "
+            f"{commit_result.stderr.strip() or '(no stderr)'} — "
+            f"shipped-since-bump NOT reset; v{new_version} NOT pushed",
+            file=sys.stderr,
+        )
+        return
 
     # Check if tag exists
     tag_check = _run(["git", "tag", "-l", f"v{new_version}"])
+    if tag_check.returncode != 0:
+        print(
+            f"  ERROR: git tag -l failed (rc={tag_check.returncode}): "
+            f"{tag_check.stderr.strip() or '(no stderr)'} — "
+            f"cannot determine if tag v{new_version} exists; aborting bump",
+            file=sys.stderr,
+        )
+        return
     if not tag_check.stdout.strip():
-        _run(["git", "tag", f"v{new_version}"])
+        tag_result = _run(["git", "tag", f"v{new_version}"])
+        if tag_result.returncode != 0:
+            print(
+                f"  ERROR: git tag v{new_version} failed (rc={tag_result.returncode}): "
+                f"{tag_result.stderr.strip() or '(no stderr)'} — "
+                f"shipped-since-bump NOT reset; tag/push NOT completed",
+                file=sys.stderr,
+            )
+            return
 
-    _run(["git", "push"])
-    _run(["git", "push", "--tags"])
+    push_result = _run(["git", "push"])
+    if push_result.returncode != 0:
+        print(
+            f"  ERROR: git push failed (rc={push_result.returncode}): "
+            f"{push_result.stderr.strip() or '(no stderr)'} — "
+            f"local commit + tag v{new_version} exist but did NOT reach origin; "
+            f"shipped-since-bump NOT reset",
+            file=sys.stderr,
+        )
+        return
 
-    # Reset counter
+    push_tags_result = _run(["git", "push", "--tags"])
+    if push_tags_result.returncode != 0:
+        print(
+            f"  ERROR: git push --tags failed (rc={push_tags_result.returncode}): "
+            f"{push_tags_result.stderr.strip() or '(no stderr)'} — "
+            f"commit pushed but tag v{new_version} did NOT reach origin; "
+            f"shipped-since-bump NOT reset",
+            file=sys.stderr,
+        )
+        return
+
     _run_script("config.py", "set", "shipped-since-bump", "0")
 
     print(f"  Version v{new_version} tagged and pushed")
@@ -766,7 +862,7 @@ def _do_working_state_update(data, role):
 
     ws_path = _state_path(f"{role}/working-state.md")
     ws_path.parent.mkdir(parents=True, exist_ok=True)
-    ws_path.write_text(update, encoding="utf-8")
+    atomic_write_text(ws_path, update)
 
 
 # ---------------------------------------------------------------------------

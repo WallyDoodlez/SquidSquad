@@ -1,0 +1,62 @@
+diff --git a/.squidsquad/skill/planning/REVIEW-ROLE-ALIAS-AUDIT.md b/.squidsquad/skill/planning/REVIEW-ROLE-ALIAS-AUDIT.md
+index af71faa0..06cf0c7b 100644
+--- a/.squidsquad/skill/planning/REVIEW-ROLE-ALIAS-AUDIT.md
++++ b/.squidsquad/skill/planning/REVIEW-ROLE-ALIAS-AUDIT.md
+@@ -22,7 +22,17 @@ DS surfaced 10 findings; 7 were clear in-scope mechanical fixes and were applied
+ - AGENT-RUNTIME.md L1138 glossary — Cursor defined per-alias
+ - INSTALLER-ARCH.md — 4 prose spots (L27, 165, 228, 309) + 4 path spots (L242, 322, 437, 443-444, 474) cleaned up
+ 
+-**STILL OPEN — DS findings 6 + 10 (§4 response-shape inconsistency):**
++**RESOLVED — DS findings 6 + 10 (§4 response-shape inconsistency, 2026-05-27):**
++
++User chose **option (b) aspirational**. §4.1 response shapes now consistently include `alias` across all per-agent endpoints; an explicit status note clarifies they're aspirational (lands with #10358) and tells current clients to read `claude_pid` + treat `role`-field value as alias.
++
++**RESOLVED — Q7 follow-up (`role:*` label rename, 2026-05-27):**
++
++User chose **doc-only convention update**. AGENT-RUNTIME.md §L885 updated to clarify the `role:` label *key* is legacy and the *value* is alias-typed, and to note a key-rename to `alias:` is in #10358's family but currently out of scope to limit blast radius. No `gh label edit` operations performed.
++
++---
++
++(Historical context for the resolved items above:)
+ 
+ DS observed that `docs/HARNESS-ARCH.md` §4.1 documents response shapes containing fields that don't actually exist in `AgentState.to_dict()`:
+ - Doc claims `[{role, alias, intent, pid, clone_path, boot_time, ...}]` (line 72) — but code returns no `alias` field, and `pid` doesn't exist (code returns `claude_pid` + `terminal_pid` as separate fields)
+diff --git a/docs/AGENT-RUNTIME.md b/docs/AGENT-RUNTIME.md
+index ea2f4e0e..48701f31 100644
+--- a/docs/AGENT-RUNTIME.md
++++ b/docs/AGENT-RUNTIME.md
+@@ -882,7 +882,7 @@ In practice agents never call `/work/assign` directly for transition-driven hand
+ | `* → pending-human-review` | `pm` | `"human-needed"` |
+ | `* → pending-human-setup` | `pm` | `"human-needed"` |
+ 
+-The issue's `role:*` label IS the target alias (aliases and label values use the same namespace). In a single-instance install, alias = class name; in a multi-instance install, the label is the specific agent's alias (e.g., `role:frontend-1`, not `role:worker`).
++The issue's `role:*` label IS the target alias (aliases and label values use the same namespace). The label *key* is `role:` for legacy code-compat reasons, but the label *value* is always alias-typed — in a single-instance install, alias = class name; in a multi-instance install, the label is the specific agent's alias (e.g., `role:frontend-1`, not `role:worker`). A rename of the label key from `role:` to `alias:` is in the same family as #10358 (`role` → `alias` identifier rename) but is currently out of scope on that task to limit blast radius — every existing issue label would need editing in lockstep with `tracker.py`, every care-filter caller, and every composed agent file that mentions `role:<name>`. Revisit once #10358 has phased through code-side first.
+ 
+ Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forget to call `/work/assign` because `tracker.py` does it. Replaces the deprecated `status-transition` emit.
+ 
+diff --git a/docs/HARNESS-ARCH.md b/docs/HARNESS-ARCH.md
+index a7fb7911..a6ad68da 100644
+--- a/docs/HARNESS-ARCH.md
++++ b/docs/HARNESS-ARCH.md
+@@ -71,15 +71,17 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
+ | GET | `/` | Root — alias for `/status` (legacy convenience) | Same as `/status` |
+ | GET | `/agents` | List all known agents + their current state | `[{role, alias, intent, pid, clone_path, boot_time, ...}]` |
+ | GET | `/agents/{role}` | Single agent state | `{role, alias, intent, pid, clone_path, boot_time, last_seen}` |
+-| GET | `/agents/{role}/health` | PID-based liveness probe for one agent | `{role, alive, pid, last_seen}` |
++| GET | `/agents/{role}/health` | PID-based liveness probe for one agent | `{role, alias, alive, pid, last_seen}` |
+ | GET | `/agents/{role}/config` | Per-agent install config (clone path, etc.) | `{clone_path, ...}` |
+-| POST | `/agents/{role}/start` | Set intent=running, spawn if not alive | `{ok, role, action}` |
+-| POST | `/agents/{role}/stop` | Set intent=stopping; cooperative shutdown | `{ok, role}` |
+-| POST | `/agents/{role}/restart` | Set intent=restarting; respawn after death | `{ok, role}` |
++| POST | `/agents/{role}/start` | Set intent=running, spawn if not alive | `{ok, role, alias, action}` |
++| POST | `/agents/{role}/stop` | Set intent=stopping; cooperative shutdown | `{ok, role, alias}` |
++| POST | `/agents/{role}/restart` | Set intent=restarting; respawn after death | `{ok, role, alias}` |
+ | POST | `/agents/all/start` | Start all configured agents | `{ok, started: [...]}` |
+ | POST | `/agents/all/stop` | Stop all running agents | `{ok, stopped: [...]}` |
+ | POST | `/shutdown` | Graceful harness shutdown (status 202) | Async; harness exits after returning |
+ 
++> **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). Today `AgentState.to_dict()` returns a `role` field only (whose value is the alias) and no separate `alias` field. `pid` is shorthand for `claude_pid` + `terminal_pid`, which the code returns as separate fields. Existing clients that read these endpoints should treat the alias as the value of `role` and read `claude_pid` directly until #10358 ships.
++
+ ### 4.2 Event bus endpoints
+ 
+ | Method | Path | Purpose | Returns |

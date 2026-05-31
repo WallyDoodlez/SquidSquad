@@ -85,10 +85,10 @@ Sub-skills live in five source directories under `references/sub-skills/`:
 | Directory | Audience | Composition behavior |
 |---|---|---|
 | `common/` | reusable across roles | inlined at compose time into each consuming role's CLAUDE.md |
-| `common-events/` | roles in event-driven mode | **runtime-loaded** by `boot-bootstrap` on session start (not inlined) |
+| `common-events/` | all roles (event-shaped procedural fragments) | **runtime-loaded** by `boot-bootstrap` on session start (not inlined); fall-back paths inside these fragments handle the boot-time loop-mode-fallback case (per AGENT-RUNTIME §8.3-§8.4) |
 | `roles/<role>/` | one role | inlined at compose time |
 | `project/` | seed templates for L4 | copied to `.squidsquad/project/` at install (not consumed by compose) |
-| `capabilities/<tool>/` | _deprecated — slated for removal_ | _was: tool integrations; superseded by per-agent post-install tool setup, see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)_ |
+| ~~`capabilities/<tool>/`~~ | _removed 2026-05-27_ | _was: tool integrations; superseded by per-agent post-install tool setup, see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)_ |
 
 ---
 
@@ -104,7 +104,7 @@ Reusable across multiple roles.
 | `cycle-runner` | 3-phase cycle (pre/creative/post) wired to `cycle_pre.py` and `cycle_post.py` | PM, QA, DM, dev |
 | `context-pressure` | Read `.squidsquad/<role>/context-pressure`; checkpoint and signal exit-42 above threshold | PM, QA, DM, dev |
 | `task-pickup` | Pick up next approved task from the role's tracker query | PM, QA, dev (DM uses role variant) |
-| `resume-working-state` | Resume in-flight work from `working-state.md` on cycle entry | dev |
+| `resume-working-state` | Resume in-flight work from `.squidsquad/<alias>/working-state.md` on cycle entry | dev |
 | `interval-sync` | Honor the configured cycle interval | dev |
 | `self-restart` | Detect context-pressure exit and let the harness respawn | PM, QA, DM, dev |
 | `agent-lifecycle` | Heartbeat, singleton enforcement, reboot signaling | PM, QA, DM, dev |
@@ -114,14 +114,12 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `agent-boundaries` | "Know your teammates" — declines route to the right role, not generic "not mine" | PM, QA, DM, dev |
-| `discussion-protocol` | Append-only tracker comment format | dev (roles override) |
-| `issue-filing` | Self-file and cross-file bug templates | dev (roles override) |
-| `working-state` | Working-state file format and update rules | dev |
-| `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | dev |
-| `prohibitions` | "Never do" rules (no force push, no skip hooks, etc.) | dev (roles override) |
-| `file-conventions` | Where things go on disk — overridable per role | dev (roles override) |
-| `status-line` | What the statusline shows during a cycle — overridable per role | dev (roles override) |
+| `discussion` | Append-only tracker comment format — the inter-agent communication channel named in [COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity) (renamed from `discussion-protocol` at #10360) | all roles (per-role overrides retire at #10360) |
+| `issue-filing` | Self-file and cross-file bug templates | all roles (per-role overrides retire at #10360) |
+| `working-state` | Working-state file format and update rules | worker |
+| `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | worker |
+
+> Rows removed: `agent-boundaries`, `file-conventions`, `status-line`, `prohibitions` — these are no longer classified as sub-skills. Migration targets (see retirement notes above for full detail): `agent-boundaries` → Identity + Responsibility slots; `file-conventions` → inline in instructions; `status-line` → cycle-inlined (no slot); `prohibitions` → Identity Boundaries + Responsibility "does NOT do". Source files remain on disk under `references/sub-skills/common/` and per-role overrides until #10360 deletes them; this catalog reflects target architecture, not v1 disk state.
 
 ### Vault (institutional memory)
 
@@ -141,22 +139,27 @@ Reusable across multiple roles.
 | `git-commit` | Commit/push protocol with PR flow | dev (DM has its own variant) |
 | `improvement-scan` | Full proactive scan for process/template gaps | PM, dev |
 | `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | QA |
-| `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; manifest removal pending — see [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md)) |
+| `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; removal paired with the broader capability-framework retirement per [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md), not this PR) |
+| `l4-curation` | **Pending creation** — source file at `references/sub-skills/common/l4-curation.md` is referenced from COMPOSE §7 + INSTALLER §4.8 but not yet authored. Target behavior: elicitation dialog for runtime L4 writes — detect customization request, scope bucket + rationale, draft + three-gate (DeepSeek audit / mini-CQ / compose dry-run) / approve. Implements the same three-gate model used by the installer migration walk. Authoring tracked as code-task. | dev (runtime-invoked from §7 of [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md); not yet wired into any role's `includes.yml`) |
+| `compose-output-review` | Sub-procedure for reviewing composed CLAUDE.md output for source-output drift — invoked during code review | dev (planned per COMPOSE-ARCHITECTURE.md §9; implementation pending) |
 
-### Chat & coordination (optional, not on by default)
+### Chat & coordination (deferred — chat-integration roadmap)
 
-| Sub-skill | One-liner | Used by |
+The three chat sub-skills below are **intentionally unwired** today. They're scaffolding for the harness chat-room roadmap (see [HARNESS-ARCH.md](HARNESS-ARCH.md) — chat-room is part of the supervisor + event-bus + web-terminal harness vision). When chat lands, these become the behavioral contracts every role agent loads.
+
+**Do not delete these as "dead sub-skills" in future improvement scans** — they're parked, not abandoned. Defer any wiring/usage work until chat integration is on the active roadmap.
+
+| Sub-skill | One-liner | Status |
 |---|---|---|
-| `chat-etiquette` | Behavior rules for the team chat room | (none yet) |
-| `mention-protocol` | @mention escalation tiers and noise budget | (none yet) |
-| `consensus-protocol` | Multi-party decision flow for chat-driven decisions | (none yet) |
-| `iteration-log` | Per-cycle iteration log format | (legacy; roles use their own variant) |
+| `chat-etiquette` | Behavior rules for the team chat room | deferred — chat roadmap |
+| `mention-protocol` | @mention escalation tiers and noise budget | deferred — chat roadmap |
+| `consensus-protocol` | Multi-party decision flow for chat-driven decisions | deferred — chat roadmap |
 
 ---
 
-## `common-events/` — Event-mode sub-skills
+## `common-events/` — Event-shaped procedural fragments (all roles)
 
-Loaded at runtime by `boot-bootstrap` when the role's `config.md` says `event-driven: yes`. **Not inlined at compose time** — read fresh on every session start so an `event-driven:` flip takes effect on next agent restart without a recompose.
+Referenced by the single mode-agnostic `references/roles/<role>/includes.yml` manifest (per [COMPOSE-ARCHITECTURE.md §6.5](COMPOSE-ARCHITECTURE.md#65-wake-mode-handling--one-manifest-boot-time-selection-at-runtime)). The fragments themselves are **loaded by `boot-bootstrap` at agent boot** (Read tool calls per AGENT-RUNTIME), not inlined into the composed CLAUDE.md body. The fragments are written event-shaped (event mode is the unconditional architecture) with fall-back paths the cycle body invokes when the boot probe binds to loop-mode wake or when a mid-cycle bus read fails — see AGENT-RUNTIME §4.5 / §8.3.
 
 | Sub-skill | One-liner |
 |---|---|
@@ -177,11 +180,22 @@ Role-specific event extras:
 
 ## `roles/<role>/` — Role-specific sub-skills
 
+> **Note on `responsibility`** — The `responsibility` content (what each role does / does NOT do / why it matters) is **no longer a sub-skill**. It is the L2-and-up authoring of the dedicated **Responsibility slot** in the composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md §5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)) — authored directly in the role's L2 source with explicit `slot: responsibility` frontmatter. The legacy per-role `responsibility.md` files remain on disk until #10360 deletes them; this catalog reflects target architecture, not v1 disk state.
+
+> **Note on `status-line` — retired entirely (corrected twice, 2026-05-27)** — First draft of this PR moved status-line to Project Context (wrong: not descriptive). Second draft kept it as a `common/` sub-skill (wrong: not a single procedure the agent invokes). Final: same pattern as `file-conventions` — statusline updates are inlined wherever a cycle step needs to surface progress. The bookend writes (pre-cycle "idle", post-cycle "idle") live in the `cycle-runner` sub-skill. Mid-cycle progress updates use a one-line `cycle.py status-bar` invocation directly in the step that's running. No standalone `status-line` sub-skill is needed. All 4 `status-line.md` files delete at #10360 implementation time.
+
+> **Note on `file-conventions` — retired entirely (not moved to a slot)** — Today's `file-conventions.md` per-role sub-skill is a centralized path manifest, but every path in it is already used by exactly one specific instruction sub-skill (PM's task-intake names where `RESEARCH.md` goes; verifier's `verification` names where `TEST-PLAN-<N>.md` goes; etc.). The centralized map duplicates facts that already live in the instruction that touches them. Resolution: drop `file-conventions.md` entirely; paths stay inline in the instruction sub-skills that use them. L4 path overrides use `### replace step:<step-id>` on the specific instruction. Tracked in #10360.
+
+> **Note on `agent-boundaries` — retired entirely (inlined into L1/L2)** — Today's `common/agent-boundaries.md` (5 lines) is two pieces of foundational content: a team-awareness baseline (`{{role-roster}}` + "know your teammates") and a decline-and-route discipline rule. Both are L1/L2 foundational content, not focused how-to. Resolution: inline the team-roster + awareness sentence into each role's Identity slot ([§5.1](COMPOSE-ARCHITECTURE.md#51-identity)); inline the decline-and-route rule into each role's Responsibility slot ([§5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)). The `agent-boundaries` row below stays as the historical authoring location until #10360 ships, then the sub-skill file is deleted.
+
+> **Note on `prohibitions` — retired entirely (inlined into L1/L2)** — 4 files today (`common/prohibitions.md` + per-role overrides in `pm/`, `verifier/`, `dm/`, ~63 lines total). Content is role-boundary content, not focused how-to. Splits cleanly: universal "never do" rules ("never push without pulling", "never edit composed CLAUDE.md", etc.) go to **L1 Identity Boundaries** ([§5.1](COMPOSE-ARCHITECTURE.md#51-identity)); role-specific rules ("PM never verifies", "QA never ships with failed tests") go to **L2 Responsibility "does NOT do"** ([§5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)) — substantially duplicates what's already in each role's responsibility content. The 4 files are deleted at #10360 implementation time.
+
+> **Note on `discussion` and `issue-filing` — keep `common/` only, collapse per-role overrides; `discussion-protocol` renames to `discussion`** — Both ARE legitimate sub-skills (focused how-to procedures for tracker comments and bug filing). `discussion` is the procedure for the **inter-agent communication channel** named at L1 Identity ([COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity)). The per-role overrides in `pm/`, `verifier/`, `dm/` exist only to bake the role name into the bash example instead of using the `[ROLE]` placeholder — pure DRY violations with no functional difference. Resolution: keep `common/discussion.md` (renamed from `discussion-protocol.md` — the "protocol" suffix added no information; L1 Identity references the short name) and `common/issue-filing.md` as the single authoring location, with `[ROLE]` placeholder substitution per the manifest's Placeholder Substitution rules; delete the 6 per-role overrides at #10360.
+
 ### PM (`roles/pm/`)
 
 | Sub-skill | One-liner |
 |---|---|
-| `responsibility` | What PM does and (importantly) does NOT do |
 | `checkin` | Step 2 — non-blocking human check-in; issue/task/approval intake |
 | `task-intake` | 5-phase feature lifecycle (Research → Discussion → Planning → human-approve → Execution) |
 | `task-approval` | Feature-approval gate; planned → approved transition |
@@ -194,24 +208,18 @@ Role-specific event extras:
 | `soul-shepherd` | Detect character signals in new tasks; update SOUL adaptations |
 | `improvement-scan` | PM variant — process-focused, never code |
 | `issue-filing` | PM's bug-filing protocol (behavior-only, no RCA) |
-| `discussion-protocol` | PM's comment format |
-| `file-conventions` | PM's on-disk file layout |
-| `status-line` | PM's statusline content |
-| `prohibitions` | PM "never do" rules |
+| `discussion-protocol` | PM's comment format (→ retires; common/`discussion` is the canonical) |
 | `vault-synthesis` | Cross-agent pattern detection (PM-only) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
+| Domain context | Per-stack PM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
 ### QA (`roles/qa/`)
 
 | Sub-skill | One-liner |
 |---|---|
-| `responsibility` | QA scope: verify against ACs, file results, don't ship |
 | `verification` | Steps 2–6 — E2E tests, AC verification, health check |
 | `issue-filing` | QA's bug template (with reproduction + AC reference) |
-| `discussion-protocol` | QA's comment format |
-| `file-conventions` | QA's planning-artifact layout (`TEST-PLAN-<n>.md`, `QA-RESULTS-<n>.md`) |
-| `status-line` | QA's statusline content |
-| `prohibitions` | QA "never do" rules (e.g. no shipping with failed tests) |
+| `discussion-protocol` | QA's comment format (→ retires; common/`discussion` is the canonical) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack QA notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 | `skill/finding-categories` | Skill-domain finding taxonomy for QA reports |
@@ -220,19 +228,13 @@ Role-specific event extras:
 
 | Sub-skill | One-liner |
 |---|---|
-| `responsibility` | DM scope: package, ship, version-bump; never write features |
 | `task-pickup` | DM's queue: pending-ship items |
 | `issue-triage` | Triage DM-owned bug reports |
 | `delivery-packaging` | The packaging step: docs, CHANGELOG, release notes |
 | `version-bumps` | Bump rules (uses `shipped_since_bump` counter) |
 | `doc-improvement-loop` | DM's scan: drift between source docs and shipped state |
 | `issue-filing` | DM's bug template |
-| `discussion-protocol` | DM's comment format |
-| `file-conventions` | DM's on-disk layout |
-| `status-line` | DM's statusline content |
-| `prohibitions` | DM "never do" rules |
-| `git-commit` | DM's commit/push protocol (state-only, no feature code) |
-| `iteration-log` | DM's per-cycle log |
+| `discussion-protocol` | DM's comment format (→ retires; common/`discussion` is the canonical) |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack DM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
@@ -240,11 +242,12 @@ Role-specific event extras:
 
 | Sub-skill | One-liner |
 |---|---|
-| `responsibility` | Dev scope: implement, run own unit tests, hand to QA |
 | `triage-issues` | Step 2 — deterministic work-queue triage |
 | `implement-tasks` | Step 2b — pick up approved tasks; commit on feature branch; open PR |
 | `ralph-loop-overview` | Runtime-loaded polling-mode cycle contract |
 | Domain context | Per-stack dev notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
+
+> Removed from all per-role tables: `responsibility`, `file-conventions`, `status-line`. These are no longer sub-skills (see the migration notes earlier in this section). Source files remain on disk under `references/sub-skills/roles/<role>/` until #10360 implements the migration; this catalog reflects target architecture, not v1 disk state.
 
 ---
 
@@ -252,30 +255,38 @@ Role-specific event extras:
 
 These are **seed templates** copied to `.squidsquad/project/` at install time. The runtime versions in `.squidsquad/project/` are auto-included by `compose.py` as the L4 layer of the composed CLAUDE.md. The seeds in this directory are NOT consumed at compose time — they're the starting point a fresh install begins from.
 
+**Target state — one seed per role-class** (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay)):
+
 | Seed | Purpose |
 |---|---|
-| `shared-instructions.md` | Cross-role L4 baseline (every agent sees this) |
-| `shared-responsibility.md` | Cross-role L4 boundaries |
-| `shared-soul-directives.md` | Cross-role L4 SOUL prepend |
-| `pm-instructions.md`, `pm-responsibility.md`, `pm-soul-directives.md` | PM-only L4 overrides |
-| `qa-instructions.md`, `qa-responsibility.md`, `qa-soul-directives.md` | QA-only L4 overrides |
-| `dm-instructions.md`, `dm-responsibility.md`, `dm-soul-directives.md` | DM-only L4 overrides |
-| `dev-instructions.md`, `dev-responsibility.md`, `dev-soul-directives.md` | dev-only L4 overrides |
-| `setup-upgrade-gate.md` | Setup/upgrade gate L4 hook |
+| `pm.md` | PM L4 — H2 sections for Identity / Responsibility / Soul / Instructions / Project Context / Vault as needed |
+| `verifier.md` | Verifier L4 — same H2 grammar |
+| `dm.md` | DM L4 — same H2 grammar |
+| `worker.md` | Worker L4 — exactly one file, shared by ALL worker-class agents regardless of L3 specialization (FE/BE/iOS/etc.). Same H2 grammar as the other role-class seeds. |
+
+Per [COMPOSE-ARCHITECTURE.md §3.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay): the four L4 filenames are fixed (`pm.md` / `worker.md` / `verifier.md` / `dm.md`) — one per L2 role-class. L3 specialization does NOT differentiate L4 files. `compose.py deploy <alias>` resolves alias → role-class via the `## Aliases` registry, then reads the corresponding L4 file. Multi-instance installs of the same role-class share that one L4 file.
+
+**Legacy multi-file L4 seeds (deprecated)** — earlier installs scattered L4 content across per-slot files. These remain on disk under `references/sub-skills/project/` until the unified model is implemented (see #10359 doc spec; implementation tracked separately), at which point they collapse into the per-role-class files above:
+
+- ~~`shared-instructions.md`~~, ~~`shared-responsibility.md`~~, ~~`shared-soul-directives.md`~~ — cross-role baselines fold into each role's `<role>.md` as appropriate H2 sections, or remain as a project-level shared baseline if a clean "shared" precedent emerges
+- ~~`<role>-instructions.md`~~, ~~`<role>-responsibility.md`~~, ~~`<role>-soul-directives.md`~~ (per role pm/verifier/dm/worker) — fold into `<role>.md` under their slot's H2
+- ~~`setup-upgrade-gate.md`~~ — folds into each role's L4 file as a sub-section of the appropriate slot, or is retired if its content is no longer load-bearing
 
 ---
 
-## ~~`capabilities/<tool>/` — Tool-binding sub-skills (DEPRECATED)~~
+## ~~`capabilities/<tool>/` — Tool-binding sub-skills (REMOVED)~~
 
-**This category is being removed.** The original model bound a role to a specific external tool via a `capabilities/<tool>/` sub-skill plus a `setup.md` walked at install time. That model is superseded — tool/MCP/CLI configuration is now a **per-agent, post-install runtime concern**. See [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md) for the replacement model: the human tells each agent what tools to use, and the agent persists via L4 writes per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md).
+**Removed 2026-05-27.** The original model bound a role to a specific external tool via a `capabilities/<tool>/` sub-skill plus a `setup.md` walked at install time. Superseded — tool/MCP/CLI configuration is now a **per-agent, post-install runtime concern**. See [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md) for the replacement model: the human tells each agent what tools to use, and the agent persists via L4 writes per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md).
 
-Currently-deployed installs may still have `figma/`, `google_stitch/`, `local_html/`, `local_delivery/` under `references/sub-skills/capabilities/`. These will be deleted in a follow-up task against `worker` (skill) — no replacement sub-skill is needed because tool-specific instructions become L4 content in each install.
+The `figma/`, `google_stitch/`, `local_html/`, and `local_delivery/` directories under `references/sub-skills/capabilities/` were deleted along with the parent directory; tool-specific instructions belong in each install's L4 content.
 
 ---
 
 ## How to navigate this catalog
 
 - Adding a new sub-skill? See [`sub-skill-guide.md`](sub-skill-guide.md) and update both `references/sub-skills/manifest.md` and this catalog.
-- Wiring a sub-skill into a role? Edit that role's `references/roles/<role>/includes.yml`, then `compose.py deploy <role>` and `reboot_agent.py --role <role>`.
+- Wiring a sub-skill into a role?
+  - **v2 (target — [COMPOSE-ARCHITECTURE.md §3.2](COMPOSE-ARCHITECTURE.md#32-slot--ordinal-contract-l1-l3))**: add `slot:` and `ordinal:` frontmatter to the sub-skill source file. Compose discovers it automatically; no per-role manifest edit needed.
+  - **v1 (current implementation)**: edit that role's `references/roles/<role>/includes.yml`, then `compose.py deploy <role>` and `reboot_agent.py --role <role>`. The v1 includes.yml mechanism is retired at implementation time (#10360).
 - Looking for the upgrade path to real Claude skills? See #9968 (EPIC: L1-L4 review + compose-architecture doc).
 - Looking for the L1-L4 composition layer model? See `RESEARCH-9968.md` and the forthcoming `COMPOSE-ARCHITECTURE.md`.

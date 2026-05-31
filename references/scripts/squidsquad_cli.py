@@ -209,11 +209,19 @@ def cmd_stop(role: str | None = None):
     except HarnessAPIError:
         return 1
     results = result.get("results", [])
+    if not results:
+        # #10006: nothing to stop is a no-op success, matching cmd_status's
+        # treatment of the empty-agents case. Same wording as cmd_status
+        # so operators grepping logs / writing shell predicates see one
+        # string for "no agents are registered with the harness." Without
+        # this, defensive teardown scripts (`squidsquad stop && next-step`)
+        # saw exit 1 when the squad was already idle.
+        print("No agents detected.")
+        return 0
     for r in results:
         status = "OK" if r.get("success") else "FAIL"
         print(f"  [{r.get('role', '?')}] {status}")
-    all_ok = bool(results) and all(r.get("success", False) for r in results)
-    return 0 if all_ok else 1
+    return 0 if all(r.get("success", False) for r in results) else 1
 
 
 def cmd_restart(role: str):

@@ -1,0 +1,248 @@
+diff --git a/references/scripts/assemble_cache.py b/references/scripts/assemble_cache.py
+new file mode 100644
+index 00000000..9ec26c8b
+--- /dev/null
++++ b/references/scripts/assemble_cache.py
+@@ -0,0 +1,79 @@
++"""Assemble-pass cache layer — pure I/O (#10443, PRD-B Story B6).
++
++Stores and retrieves assembled outputs keyed on a SHA256 of the inputs
++that uniquely determine an assemble call: linked body, slot name, slot
++purpose, model id, and prompt template version.
++
++Per PRD-B success criterion 8 + TRD §4.6, the cache lives at
++``.squidsquad/<alias>/.assemble-cache/`` and is git-tracked. The first
++uncached run is stochastic (LLM rewrite); committing the cache makes
++subsequent re-runs with unchanged inputs deterministic.
++
++No LLM dependency. No eviction (cache grows monotonically with git).
++"""
++
++import hashlib
++import os
++import sys
++from pathlib import Path
++
++
++_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
++_CACHE_DIRNAME = ".assemble-cache"
++# ASCII Unit Separator (0x1F) — boundary byte so that ("ab","c") and
++# ("a","bc") hash to different keys. SHA256 itself is length-extensible
++# only across full blocks; the unambiguous separator makes the input
++# tokenization injective.
++_SEPARATOR = b"\x1f"
++
++
++def cache_key(linked_body, slot_name, slot_purpose, model_id, prompt_version):
++    """Return the SHA256 hex digest of the five inputs joined by 0x1F.
++
++    Each part is UTF-8 encoded if it's a ``str``; bytes are used as-is.
++    Order matters — callers must always pass the parts in the same
++    order or the key will differ.
++    """
++    h = hashlib.sha256()
++    for part in (linked_body, slot_name, slot_purpose, model_id, prompt_version):
++        if isinstance(part, str):
++            part = part.encode("utf-8")
++        h.update(part)
++        h.update(_SEPARATOR)
++    return h.hexdigest()
++
++
++def _cache_dir(alias):
++    return _REPO_ROOT / ".squidsquad" / alias / _CACHE_DIRNAME
++
++
++def cache_lookup(alias, key, *, slot_name=None):
++    """Return the cached assembled body for ``(alias, key)`` or ``None``.
++
++    On hit, emits ``[cache hit] alias=<a> slot=<s>`` to stderr per
++    PRD-B success criterion 8. ``slot_name`` is an optional kwarg used
++    only for the log line; when omitted the slot field renders as ``?``.
++    The literal positional signature ``(alias, key)`` matches the AC.
++    """
++    path = _cache_dir(alias) / f"{key}.md"
++    if not path.is_file():
++        return None
++    body = path.read_text(encoding="utf-8")
++    slot_repr = slot_name if slot_name is not None else "?"
++    print(f"[cache hit] alias={alias} slot={slot_repr}", file=sys.stderr)
++    return body
++
++
++def cache_store(alias, key, assembled_body):
++    """Atomically write ``assembled_body`` to the alias's cache dir.
++
++    Creates ``.squidsquad/<alias>/.assemble-cache/`` if needed, then
++    writes to ``<key>.md.tmp`` and ``os.replace`` swaps it into the
++    final ``<key>.md`` so a concurrent reader never sees a partial file.
++    """
++    cache_dir = _cache_dir(alias)
++    cache_dir.mkdir(parents=True, exist_ok=True)
++    final = cache_dir / f"{key}.md"
++    tmp = cache_dir / f"{key}.md.tmp"
++    tmp.write_text(assembled_body, encoding="utf-8")
++    os.replace(tmp, final)
+diff --git a/tests/test_assemble_cache.py b/tests/test_assemble_cache.py
+new file mode 100644
+index 00000000..c15c02c9
+--- /dev/null
++++ b/tests/test_assemble_cache.py
+@@ -0,0 +1,157 @@
++"""Tests for references/scripts/assemble_cache.py (#10443, PRD-B Story B6)."""
++
++import sys
++from pathlib import Path
++
++import pytest
++
++SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
++sys.path.insert(0, str(SCRIPTS))
++
++import assemble_cache  # noqa: E402
++
++
++# ---------------------------------------------------------------------------
++# Fixtures
++# ---------------------------------------------------------------------------
++
++@pytest.fixture
++def tmp_repo(tmp_path, monkeypatch):
++    """Point the cache module at a tmp_path repo root so writes are sandboxed."""
++    monkeypatch.setattr(assemble_cache, "_REPO_ROOT", tmp_path)
++    return tmp_path
++
++
++_INPUTS = ("linked body text", "identity", "what this role is", "sonnet", "v1")
++
++
++# ---------------------------------------------------------------------------
++# cache_key
++# ---------------------------------------------------------------------------
++
++def test_cache_key_is_sha256_hex():
++    key = assemble_cache.cache_key(*_INPUTS)
++    assert isinstance(key, str)
++    assert len(key) == 64
++    assert all(c in "0123456789abcdef" for c in key)
++
++
++def test_cache_key_identical_inputs_identical_keys():
++    a = assemble_cache.cache_key(*_INPUTS)
++    b = assemble_cache.cache_key(*_INPUTS)
++    assert a == b
++
++
++@pytest.mark.parametrize("index", range(5))
++def test_cache_key_each_input_invalidates(index):
++    base = list(_INPUTS)
++    mutated = list(_INPUTS)
++    mutated[index] = mutated[index] + "_X"
++    assert assemble_cache.cache_key(*base) != assemble_cache.cache_key(*mutated)
++
++
++def test_cache_key_separator_prevents_boundary_collision():
++    # ("ab","c","x","y","z") must not collide with ("a","bc","x","y","z").
++    k1 = assemble_cache.cache_key("ab", "c", "x", "y", "z")
++    k2 = assemble_cache.cache_key("a", "bc", "x", "y", "z")
++    assert k1 != k2
++
++
++def test_cache_key_accepts_bytes_inputs():
++    # Bytes are passed through; equivalent UTF-8 str must hash identically.
++    str_key = assemble_cache.cache_key("body", "slot", "purpose", "model", "v1")
++    bytes_key = assemble_cache.cache_key(b"body", b"slot", b"purpose", b"model", b"v1")
++    assert str_key == bytes_key
++
++
++# ---------------------------------------------------------------------------
++# cache_lookup
++# ---------------------------------------------------------------------------
++
++def test_cache_lookup_miss_returns_none(tmp_repo):
++    assert assemble_cache.cache_lookup("pm", "deadbeef" * 8) is None
++
++
++def test_cache_lookup_miss_when_dir_absent(tmp_repo):
++    # Even the alias dir doesn't exist — must not raise.
++    assert assemble_cache.cache_lookup("never-existed", "abc123") is None
++
++
++def test_cache_lookup_hit_returns_body_and_logs_to_stderr(tmp_repo, capsys):
++    key = assemble_cache.cache_key(*_INPUTS)
++    assemble_cache.cache_store("pm", key, "ASSEMBLED BODY\n")
++
++    body = assemble_cache.cache_lookup("pm", key, slot_name="identity")
++
++    assert body == "ASSEMBLED BODY\n"
++    captured = capsys.readouterr()
++    assert captured.err.strip() == "[cache hit] alias=pm slot=identity"
++
++
++def test_cache_lookup_log_uses_question_mark_when_slot_omitted(tmp_repo, capsys):
++    key = assemble_cache.cache_key(*_INPUTS)
++    assemble_cache.cache_store("dm", key, "BODY")
++
++    assemble_cache.cache_lookup("dm", key)
++
++    assert capsys.readouterr().err.strip() == "[cache hit] alias=dm slot=?"
++
++
++def test_cache_lookup_no_log_on_miss(tmp_repo, capsys):
++    assemble_cache.cache_lookup("pm", "0" * 64, slot_name="identity")
++    assert capsys.readouterr().err == ""
++
++
++# ---------------------------------------------------------------------------
++# cache_store + round-trip
++# ---------------------------------------------------------------------------
++
++def test_cache_store_creates_directory_and_file(tmp_repo):
++    key = assemble_cache.cache_key(*_INPUTS)
++    assemble_cache.cache_store("pm", key, "body")
++
++    path = tmp_repo / ".squidsquad" / "pm" / ".assemble-cache" / f"{key}.md"
++    assert path.is_file()
++
++
++def test_cache_store_no_tmp_left_behind(tmp_repo):
++    key = assemble_cache.cache_key(*_INPUTS)
++    assemble_cache.cache_store("pm", key, "body")
++
++    cache_dir = tmp_repo / ".squidsquad" / "pm" / ".assemble-cache"
++    tmp_files = list(cache_dir.glob("*.tmp"))
++    assert tmp_files == []
++
++
++def test_cache_round_trip_preserves_bytes(tmp_repo):
++    key = assemble_cache.cache_key(*_INPUTS)
++    body = "Line 1\nLine 2\n\n```python\nprint('x')\n```\n← unicode arrow\n"
++    assemble_cache.cache_store("pm", key, body)
++    assert assemble_cache.cache_lookup("pm", key) == body
++
++
++def test_cache_store_overwrites_existing(tmp_repo):
++    key = assemble_cache.cache_key(*_INPUTS)
++    assemble_cache.cache_store("pm", key, "first")
++    assemble_cache.cache_store("pm", key, "second")
++    assert assemble_cache.cache_lookup("pm", key) == "second"
++
++
++def test_cache_isolated_per_alias(tmp_repo):
++    key = assemble_cache.cache_key(*_INPUTS)
++    assemble_cache.cache_store("pm", key, "pm-body")
++    assemble_cache.cache_store("dm", key, "dm-body")
++    assert assemble_cache.cache_lookup("pm", key) == "pm-body"
++    assert assemble_cache.cache_lookup("dm", key) == "dm-body"
++
++
++# ---------------------------------------------------------------------------
++# Coexistence guard (PRD-B §9a): .gitignore must NOT exclude .assemble-cache/
++# ---------------------------------------------------------------------------
++
++def test_gitignore_does_not_exclude_assemble_cache():
++    repo_root = Path(__file__).resolve().parent.parent
++    gitignore = repo_root / ".gitignore"
++    content = gitignore.read_text(encoding="utf-8")
++    # No literal pattern targeting the cache directory; AC requires git-tracked.
++    assert ".assemble-cache" not in content

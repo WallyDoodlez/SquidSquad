@@ -461,3 +461,17 @@
 - **Findings**: git_ops.py:90 still has `role = "unknown"` fallback — upstream source of the harness state corruption. #5782 was supposed to fix it but shipped incomplete. Added as evidence to #9242 fix-proposal item #3.
 - **Auto-fixed**: none (skill domain; touches event emission semantics)
 - **Items rejected by human**: none
+
+## Scan — 2026-05-25 11:13
+
+- **Files scanned**: repo-wide grep for dated model-version strings (claude-{sonnet,opus,haiku}-{3,4}-*) across references/, docs/, .squidsquad/
+- **Findings**: none — zero violations of `feedback_model_tier_not_version` in spec/process files. Two hits in historical planning artifacts (`.squidsquad/qa/planning/FEAT-QA-5040-QA-RESULTS.md` line 3, `.squidsquad/pm/planning/FEAT-PM-4083-TEST-PLAN.md` line 116) are frozen test-result/test-case records — version-pinned by intent, acceptable per the memory rule's historical-record exception
+- **Auto-fixed**: none
+- **Items rejected by human**: none
+
+## Scan — 2026-05-25 13:13
+
+- **Files scanned**: full vault wikilink integrity check via `vault_check.py check-wikilinks`
+- **Findings**: none — all wikilinks resolve, including the two notes added this session ([[decision-vault-subagent-model-sonnet]] referencing [[VAULT-ARCH]], [[shipped-pre-2026-05-19]] linked from BRIEFING)
+- **Auto-fixed**: none
+- **Items rejected by human**: none

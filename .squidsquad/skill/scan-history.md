@@ -1,5 +1,253 @@
 # Scan History
 
+## Scan — 2026-05-31 16:15
+
+- **Files scanned**: references/scripts/event_validator.py (full 261 lines; focus on the 4 validation checks, the CLI surface, and the Finding shape). Briefly compared with statusline_data.py (138 lines, deferred because the SQUIDSQUAD_DIR foot-gun there is the same family as already-filed #10516 — no fresh finding).
+- **Findings**: #10537 (low — `check_reaction_cycles` walks pairs of roles with a nested loop, so it only catches **2-cycles** (A↔B). 3-role cycles (A→B→C→A) and longer rings pass silently even though the docstring promises "circular reaction chains" plural. Recommendation: replace the pairwise loop with a strongly-connected-components walk (Tarjan/Kosaraju) over the role-reaction graph; report each SCC of size ≥ 2 once. Out-of-scope side-findings noted: `--config <path>` CLI flag silently does nothing when the path is missing from argv; `Path(...).read_text()` doesn't catch FileNotFoundError; orphaned-emit warning text doesn't acknowledge infrastructure consumers).
+- **Items rejected by human**: none yet
+- **Notes**: statusline_data.py module-level `SQUID_DIR = REPO_ROOT / '.squidsquad'` is the same SQUIDSQUAD_DIR-captured-at-import-time pattern as #10516 in event_bus.py. Less impactful here because statusline.sh invokes the script as a fresh subprocess each refresh (no in-process callers), but flagged in scan notes for the consolidation when #10516 lands and we sweep for siblings. event_validator's `check_hallucinated_events` correctly uses `event_type not in known` against the catalog; `check_missing_consumers` correctly includes `EMITTED.keys()` so infrastructure emits count as available producers; `check_orphaned_emits` does NOT include infrastructure consumers and may produce false positives on events that infrastructure silently consumes — minor UX gap, called out as out-of-scope in #10537. Finding's `__slots__` is fine. `_describe` falls back to raw event-name on unknown types; intentional for the hallucinated branch.
+
+## Scan — 2026-05-31 15:15
+
+- **Files scanned**: references/scripts/reboot_agent.py (full 110 lines; focus on the post-#4792 surface — _kill_process + _read_claude_pid + the deprecated CLI).
+- **Findings**: #10530 (low — `_kill_process(pid)` passes pid straight to `os.kill(pid, SIGKILL)` on POSIX with no validation: pid=0 sends SIGKILL to the whole process group (incl. the harness itself), pid=-1 sweeps every process the calling user can signal, pid=None raises TypeError which propagates past the `(ProcessLookupError, PermissionError)` catch and breaks the caller. process_utils.is_process_alive already has the symmetric guard from #10440; the destructive sibling lacks it. Defense-in-depth: reject pid is None / not int / <= 0 before any kill call; add TypeError to the POSIX catch).
+- **Items rejected by human**: none yet
+- **Notes**: `_read_claude_pid` correctly delegates the alive bit to `process_utils.is_process_alive` (uses the #10440-hardened path). Windows `taskkill /F /PID 0` targets System Idle Process and the kernel refuses it; `check=False` swallows the non-zero exit, so the Windows risk is less catastrophic than POSIX. Module-level `from process_utils import ...` follows the sibling-import-via-sys.path pattern; consistent with other scripts. `main()` deprecation message points operators at the harness API; Phase 3 of #8979 removes it entirely so not worth more attention now. The file rename to `process_ops.py` (per docstring) is also a separate Phase 6+ task — flagged as out-of-scope in #10530.
+
+## Scan — 2026-05-31 14:15
+
+- **Files scanned**: references/scripts/diagnostics.py (full 290 lines; focus on the auto-rotate check-then-write window + the per-entry append model + redaction surface).
+- **Findings**: #10523 (low — `log_entry` does stat-then-rotate-then-open-append, which races under concurrent multi-agent writers: two writers can both observe size > 1MB, both call rotate(), and the second `atomic_write_text` truncates an already-truncated file using a stale view of the last 500 entries. Recommended fix: move rotation off the write path (CLI-only) OR add a file lock around the whole stat+rotate+append block OR collapse rotate + append into a single read-modify-write under lock. Bounding per-entry size at the boundary keeps single appends atomic on POSIX without lock).
+- **Items rejected by human**: none yet
+- **Notes**: `_redact_entry` recursive walk looks correct (lists pass through element-by-element, dict keys checked via `_is_sensitive_key` substring match, non-mutating). `_sanitize_config`'s per-line redaction at L156-162 is heuristic — uses substring match against the whole line including the value, so `## Repository URL` is flagged as sensitive (good) but the redaction itself only strips the value, fine. `is_public_repo` shells out to `gh repo view` with no caching but only called from `report`, not hot path. Module-level `LOG_FILE = DIAGNOSTICS_DIR / 'diagnostic.jsonl'` (L85) is captured at import-time; if `state_bus.state_path('diagnostics')` ever changes its resolution semantics, this becomes a similar SQUID_DIR-style foot-gun to #10516, but state_path is static today. Out-of-scope side-finding called out in #10523: `log_entry` has no exception guard, so a permission error or disk-full would propagate to callers (cycle_post.py) and crash the cycle — `event_bus.emit` swallows by design, this doesn't; worth its own issue if it fires.
+
+## Scan — 2026-05-31 13:16
+
+- **Files scanned**: references/scripts/event_bus.py (full 190 lines; focus on the SQUIDSQUAD_DIR foot-gun introduced by #9398 + the silent-no-op timeout contract).
+- **Findings**: #10516 (low — `SQUID_DIR = _resolve_squid_dir()` is captured once at module-import time, so any code path that sets `SQUIDSQUAD_DIR` AFTER `event_bus` is first imported sees zero effect. The existing test fixture in `test_9398_squidsquad_dir_env_var.py` worked around it by doing a full `importlib` reload, which is the only way to verify the env-var path fires today. Production launcher sets the env before Python starts so it doesn't bite today, but it's a foot-gun for any future dynamic-dispatch or integration test caller. Fix: inline the resolution inside `_discover_port()`).
+- **Items rejected by human**: none yet
+- **Notes**: `_TIMEOUT = 0.5` combined with the silent-no-op contract means a stale `.harness-port` file (harness crashed but file wasn't cleaned) burns 500ms per emit with no fast-failure feedback — worth a separate issue if it ever shows up in profiles, called out as out-of-scope in #10516. `_generate_id` uses sha256 with `os.urandom(2)` nonce (#9415 fix); 16-char width + 4-hex nonce is solid. The broad `except Exception: pass` in `emit()` is the documented fire-and-forget contract; not a defect. `urllib.request.urlopen` doesn't enter a context manager, but on the success path Python's GC closes the socket promptly enough; not worth flipping.
+
+## Scan — 2026-05-31 09:45
+
+- **Files scanned**: references/scripts/process_utils.py (full 71 lines; focus on the Win32 ctypes liveness probe at L54-71), references/scripts/thin_launcher.py (L78-105 — deliberate sibling copy of same routine per #8891).
+- **Findings**: #10440 (low — both copies use `ctypes.windll.kernel32` without `use_last_error=True` and rely on `kernel32.GetLastError()`; documented-incorrect ctypes pattern, the per-thread last-error slot can be reset by any intervening Python Win32 call before the check fires. Also no `argtypes`/`restype` set on OpenProcess/CloseHandle/GetExitCodeProcess, so HANDLE is treated as 32-bit signed instead of 64-bit pointer — ABI-wrong, rarely visible in practice because Windows process handles are small. Fix mirrors both files and adds a unit test that monkey-patches the kernel32 stub.)
+- **Items rejected by human**: none yet
+- **Notes**: process_utils.is_process_alive currently has no direct unit test — exercised only through health_check; recommended adding a focused test alongside the fix (worker SOUL bug-fix rule: lock the fix at the source level). PID validation (`pid <= 0` rejection) at L43 is correct and important — `os.kill(0, 0)` would target the process group. `_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000` is the right access right for liveness-only probes (no PROCESS_QUERY_INFORMATION needed). The two copies' divergence risk (#8891 deliberately keeps the sibling) means the fix must be applied to both atomically — recommend a single-commit PR touching both files.
+
+## Scan — 2026-05-26 08:09
+
+- **Files scanned**: references/scripts/health_check.py (full 424 lines; focus on config-read robustness, dead imports, TOCTOU on state-file mtime+content reads).
+- **Findings**: #10348 (low — `_read_interval` catches `(ImportError, ValueError, TypeError)` but `config.get_field` raises `SystemExit` on missing field; documented 30-min default never fires; misleading exit-1 instead. Same family as cycle_post._config_get's `except BaseException:` fix).
+- **Items rejected by human**: none yet
+- **Notes**: dead imports at L26-29 (`os`, `platform`, `subprocess`) — cosmetic, called out as out-of-scope in #10348. `_read_file_head` reads whole file then slices — fine for current-state-sized files. `_get_file_mtime` and `_read_file_head` are separate stat+read calls on the same file (mild TOCTOU), but the staleness check tolerates the gap. `check_agent_health` correctly handles missing `.claude-pid` (mtime fallback) and missing both files (UNKNOWN); the harness is the authoritative liveness source per #4966 so this offline-fallback script's role is bounded.
+
+## Scan — 2026-05-25 18:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1424.
+
+## Scan — 2026-05-25 17:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1423.
+
+## Scan — 2026-05-25 17:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1422.
+
+## Scan — 2026-05-25 16:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1421.
+
+## Scan — 2026-05-25 16:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1420.
+
+## Scan — 2026-05-25 15:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1419.
+
+## Scan — 2026-05-25 15:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1418.
+
+## Scan — 2026-05-25 14:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1417.
+
+## Scan — 2026-05-25 14:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1416.
+
+## Scan — 2026-05-25 13:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1415.
+
+## Scan — 2026-05-25 13:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1414.
+
+## Scan — 2026-05-25 12:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1413.
+
+## Scan — 2026-05-25 12:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1412.
+
+## Scan — 2026-05-25 11:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1411.
+
+## Scan — 2026-05-25 11:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1410.
+
+## Scan — 2026-05-25 10:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1409.
+
+## Scan — 2026-05-25 10:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1408.
+
+## Scan — 2026-05-25 09:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1407.
+
+## Scan — 2026-05-25 09:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1406.
+
+## Scan — 2026-05-25 08:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1405.
+
+## Scan — 2026-05-25 08:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1404.
+
+## Scan — 2026-05-25 07:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1403.
+
+## Scan — 2026-05-25 07:09
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1402.
+
+## Scan — 2026-05-25 06:39
+
+- **Files scanned**: none.
+- **Findings**: none. Cycle 1401. #10007 PASSED QA (commit 3e066a92, PR #10162 — duplicate session's atomic_write_text + 10 call sites). My cycle-1400 scan-history edit was overwritten — confirmed dual-session git race on `.squidsquad/skill/` state files. Lower-priority race than the queue-pickup race; just causes log-entry drops.
+
+## Scan — 2026-05-25 05:39
+
+- **Files scanned**: none.
+- **Findings**: none. #10007 shipped to pending-test by duplicate session. Queue at 4 open items.
+- **Notes**: cycle 1398. Continuing race avoidance.
+
+## Scan — 2026-05-25 05:09
+
+- **Files scanned**: none — minimal cycle (queue coordination).
+- **Findings**: none.
+- **Notes**: cycle 1396. #10007 is now in-progress (duplicate skill session picked it up). #10156 newly filed by QA (8 hardcoded {dev, qa} test residuals — another AC2.6 sweep gap, same pattern as #10133). Deliberately staying quiet this cycle to avoid dual-pickup race with the duplicate session — even though queue protocol says "pick first", that protocol assumes single-agent operation. The right adaptation for the dual-agent situation is to NOT race on in-progress items, and to NOT speculatively grab open items the other session may be about to.
+
+## Scan — 2026-05-25 04:39
+
+- **Files scanned**: none.
+- **Findings**: none. Observation: #10072 picked up + fixed by *another* skill session (PR #10150). Confirms the duplicate agent (pid 2937296) is still alive and producing real work — racing with this session. Until #10101 ships and operator restarts, both sessions will keep cycling.
+- **Notes**: cycle 1394.
+
+## Scan — 2026-05-25 04:09
+
+- **Files scanned**: none — minimal no-op.
+- **Findings**: none.
+- **Notes**: cycle 1392, state similar to 1390.
+
+## Scan — 2026-05-25 03:39
+
+- **Files scanned**: none — minimal no-op cycle (3 PRs in pending-test, no new work).
+- **Findings**: none.
+- **Notes**: cycle 1390, state similar to 1389. Context 61%.
+
+## Scan — 2026-05-25 02:10
+
+- **Files scanned**: references/scripts/thin_launcher.py (focused: `_write_pid` L122-128 + `_check_singleton` L102-119 + npm shim resolution path)
+- **Findings**: #10101 (high — singleton check fails because `_write_pid` records `proc.pid` which on Windows-via-npm is the cmd.exe shim wrapper, not the actual claude.exe; wrapper exits in seconds, `.claude-pid` becomes stale, next thin_launcher invocation spawns a duplicate claude.exe; root cause of memory rule `project_skill_agent_running` observations). Investigation triggered by human report at cycle 1385. Live evidence: 2 skill claude.exe processes (pids 2738704 and 2937296) in this clone; parent of older = dead, parent of newer = the cmd.exe currently recorded in `.claude-pid`.
+- **Items rejected by human**: none yet
+- **Notes**: investigation cycle, not routine rotation. `shutil.which('claude')` returns `claude.CMD` on the affected system — confirms the npm shim hypothesis. Recommended fix path is surgical: prefer `shutil.which('claude.exe')` on Windows before falling back to `.CMD`. Files awaiting human decision on (a) killing the duplicate process pid 2937296, (b) any other remediation.
+
+## Scan — 2026-05-25 01:39
+
+- **Files scanned**: none — minimal no-op cycle.
+- **Findings**: none.
+- **Notes**: cycle 1385, state identical to 1384.
+
+## Scan — 2026-05-25 01:09
+
+- **Files scanned**: none — minimal no-op cycle.
+- **Findings**: none.
+- **Notes**: cycle 1384, state identical to 1383.
+
+## Scan — 2026-05-25 00:39
+
+- **Files scanned**: none — minimal no-op cycle.
+- **Findings**: none.
+- **Notes**: cycle 1383, state identical to 1382.
+
+## Scan — 2026-05-25 00:09
+
+- **Files scanned**: none — minimal no-op cycle.
+- **Findings**: none.
+- **Notes**: cycle 1382, state identical to 1381.
+
+## Scan — 2026-05-24 23:39
+
+- **Files scanned**: none — minimal no-op cycle.
+- **Findings**: none.
+- **Notes**: cycle 1381, state identical to 1380.
+
+## Scan — 2026-05-24 23:09
+
+- **Files scanned**: none — minimal no-op cycle.
+- **Findings**: none.
+- **Notes**: cycle 1380, state identical to 1379.
+
+## Scan — 2026-05-24 22:39
+
+- **Files scanned**: none — minimal no-op cycle (state unchanged).
+- **Findings**: none.
+- **Notes**: cycle 1379, state identical to 1378.
+
+## Scan — 2026-05-24 22:09
+
+- **Files scanned**: references/scripts/scan_index.py (re-check, no read this cycle)
+- **Findings**: none. Minimal cycle. cycle_pre auto-fixed a config.md version regression (0.29.0 → 0.43.0) per #5136.
+- **Items rejected by human**: none yet
+- **Notes**: same state as cycle 1377. QA hasn't re-picked #9965. 5 open scan findings.
+
 ## Scan — 2026-05-24 21:39
 
 - **Files scanned**: references/scripts/health_check.py (re-check; previously scanned with no new findings)

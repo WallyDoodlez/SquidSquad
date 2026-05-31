@@ -11,11 +11,12 @@
 
 schema_version: 2
 id: software-dev
-display_name: Software Development
+display_name: Agent Skill Dev Team
 description: >
-  A team for building, verifying, and shipping software.
-  Includes an engineering specialist in one or more variants
-  (backend, frontend, fullstack), and a verifier.
+  A team for building Claude agent skills end-to-end — PM (product/process),
+  Worker (dev), Verifier (QA), DM (delivery). All four role classes default
+  to the `skill` domain variant. This is the preset SquidSquad uses to
+  develop itself.
 
 # Default L3 domain variants per role. The wizard reads this to assign
 # variants during setup. "custom" presets omit this field (L1+L2 only).

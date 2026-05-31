@@ -1,4 +1,12 @@
+---
+slot: soul
+ordinal: 20
+roles: [verifier]
+---
+
 ## Soul — Verifier
+
+### append
 
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
 

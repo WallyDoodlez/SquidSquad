@@ -26,11 +26,14 @@ import compose  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("role", ["pm", "qa", "dm", "skill"])
+# #10156: post-#6274.2 rename — qa→verifier, dev→worker. "skill" remains
+# as the variant name (config.md's `Workers: skill`); the role behind it
+# is now `worker` after composition.
+@pytest.mark.parametrize("role", ["pm", "verifier", "dm", "skill"])
 def test_ac4_composed_contains_l1_awareness_and_l2(role):
-    """For each of pm/qa/dm/dev (skill is the dev variant), the composed
-    output must contain the L1 awareness instruction, the roster header,
-    and the role's own L2 'What this role does' header (#9925 AC4).
+    """For each of pm/verifier/dm/worker (skill is the worker variant), the
+    composed output must contain the L1 awareness instruction, the roster
+    header, and the role's own L2 'What this role does' header (#9925 AC4).
     """
     composed = compose.compose_role(role)
     assert "Know each other's responsibilities" in composed, (
@@ -48,11 +51,10 @@ def test_ac4_composed_contains_l1_awareness_and_l2(role):
 
 
 def test_ac4_roster_has_exactly_active_roles():
-    """AC4: for the current install (`Dev Agents: skill` + mandatory
-    PM/QA/DM), the roster MUST contain exactly 4 entries — one per
-    pm/qa/dm/dev. Roles whose manifest exists but are NOT active in
-    config.md must NOT appear (F4 lock).
-    """
+    """AC4: for the current install (`Workers: skill` + mandatory
+    PM/Verifier/DM), the roster MUST contain exactly 4 entries — one per
+    pm/verifier/dm/worker. Roles whose manifest exists but are NOT active
+    in config.md must NOT appear (F4 lock). #10156: post-#6274.2 rename."""
     composed = compose.compose_role("pm")
     # Each rendered entry uses a `### <DisplayName>` header inside the
     # 'Your Teammates' Responsibilities' block. Slice the roster section
@@ -68,7 +70,7 @@ def test_ac4_roster_has_exactly_active_roles():
     roster_block = composed[start:end]
     h3_count = roster_block.count("\n### ")
     assert h3_count == 4, (
-        f"AC4: expected exactly 4 roster entries (one per pm/qa/dm/dev), "
+        f"AC4: expected exactly 4 roster entries (one per pm/verifier/dm/worker), "
         f"saw {h3_count}. Roster block:\n{roster_block}"
     )
 
@@ -84,18 +86,18 @@ def test_ac4_roster_has_exactly_active_roles():
     ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
     ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
     ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
-    # QA L2 absorptions
-    ("feedback_no_ship_failed_tc", "references/sub-skills/roles/qa/responsibility.md"),
-    ("feedback_no_ship_with_gaps", "references/sub-skills/roles/qa/responsibility.md"),
+    # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+    ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+    ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
     # DM L2 absorptions
     ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
     ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
     ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
     # Cross-role test_workflow_separation
     ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
-    ("feedback_test_workflow_separation", "references/sub-skills/roles/qa/responsibility.md"),
+    ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
     ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
-    ("feedback_test_workflow_separation", "references/sub-skills/roles/dev/responsibility.md"),
+    ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
 ])
 def test_ac6_memory_absorption_lineage_tag(source, filename):
     """AC6: each memory entry from D5 is absorbed into the indicated L2
@@ -114,7 +116,8 @@ def test_ac6_memory_absorption_lineage_tag(source, filename):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("role", ["dev", "dm", "pm", "qa"])
+# #10156: post-#6274.2 rename — dev→worker, qa→verifier.
+@pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
 @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
 def test_ac7_l3_stub_exists_and_matches_template(role, variant):
     """AC7: all 20 L3 stub files exist and match the D6a template
@@ -134,7 +137,8 @@ def test_ac7_l3_stub_exists_and_matches_template(role, variant):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("prefix", ["pm", "qa", "dm", "dev", "shared"])
+# #10156: post-#6274.2 rename — dev→worker, qa→verifier prefix.
+@pytest.mark.parametrize("prefix", ["pm", "verifier", "dm", "worker", "shared"])
 def test_ac8_l4_seed_stub_exists(prefix):
     """AC8 (seed half): seed templates at references/sub-skills/project/."""
     seed = REPO / "references" / "sub-skills" / "project" / f"{prefix}-responsibility.md"
@@ -143,7 +147,8 @@ def test_ac8_l4_seed_stub_exists(prefix):
     assert "Install-specific responsibility additions" in content
 
 
-@pytest.mark.parametrize("prefix", ["pm", "qa", "dm", "dev", "shared"])
+# #10156: post-#6274.2 rename — dev→worker, qa→verifier prefix.
+@pytest.mark.parametrize("prefix", ["pm", "verifier", "dm", "worker", "shared"])
 def test_ac8_l4_live_stub_exists(prefix):
     """AC8 (live half): live stubs at .squidsquad/project/."""
     live = REPO / ".squidsquad" / "project" / f"{prefix}-responsibility.md"

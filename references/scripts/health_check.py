@@ -23,10 +23,7 @@ Exit codes:
 
 import io
 import json
-import os
-import platform
 import re
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -61,8 +58,12 @@ HEALTH_EMOJI = {
 def _read_interval():
     """Read the iteration interval from config.md. Default 30.
 
-    Uses config.py get_field (section-aware via FIELD_MAP) to avoid
-    matching unrelated 'Minutes' occurrences in other config sections.
+    Catches `SystemExit` because `config.get_field` calls `sys.exit(1)`
+    when the field is absent and not in `_FIELD_DEFAULTS`, same for
+    `_read_config()` on missing config.md. SystemExit is a BaseException,
+    not an Exception, so a narrow `except Exception` would miss it (#10348).
+    KeyboardInterrupt deliberately propagates — Ctrl+C must abort, not
+    silently fall through to the default.
     """
     try:
         sys.path.insert(0, str(SCRIPT_DIR))
@@ -70,7 +71,7 @@ def _read_interval():
         val = get_field("interval")
         if val:
             return int(val)
-    except (ImportError, ValueError, TypeError):
+    except (SystemExit, Exception):
         pass
     return 30
 

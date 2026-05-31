@@ -35,6 +35,8 @@ except ImportError:
     def get_field(field):
         return None
 
+from shared_fs import atomic_write_text  # #10007
+
 
 def _read_working_state(role):
     """Read working-state.md for a role."""
@@ -52,7 +54,7 @@ def _write_working_state_field(role, field_pattern, new_value):
     try:
         text = ws_path.read_text(encoding="utf-8")
         new_text = re.sub(field_pattern, new_value, text)
-        ws_path.write_text(new_text, encoding="utf-8")
+        atomic_write_text(ws_path, new_text)
         return True
     except OSError as e:
         print(f"WARNING: Failed to update {ws_path}: {e}", file=sys.stderr)
@@ -148,7 +150,7 @@ def _upsert_vault_writes(role, new_value):
         if ws_path.exists():
             text = ws_path.read_text(encoding="utf-8")
             text += f"\n- **Vault Writes This Cycle**: {new_value}\n"
-            ws_path.write_text(text, encoding="utf-8")
+            atomic_write_text(ws_path, text)
     return new_value
 
 

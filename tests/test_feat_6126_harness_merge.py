@@ -330,6 +330,116 @@ class TestTemplateUpdates:
         content = path.read_text(encoding="utf-8")
         assert "POST" in content and "/merge" in content
 
+    def test_dm_delivery_has_stacked_pr_base_check(self):
+        """#10287: DM Step 2c.0b must check baseRefName before requesting
+        harness merge — stacked PRs auto-close when their parent squash-merges
+        and cannot be re-targeted in place. Without this gate the trap recurs
+        on every multi-issue ship sequence with one PR stacked on another."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
+        content = path.read_text(encoding="utf-8")
+        assert "baseRefName" in content, (
+            "delivery-packaging.md must read the PR's baseRefName before "
+            "requesting merge (#10287 stacked-PR auto-close trap)"
+        )
+        assert "PR_BASE" in content, (
+            "delivery-packaging.md must compare PR_BASE against the configured "
+            "working-branch (#10287)"
+        )
+        assert "10287" in content, (
+            "the stacked-PR check should cite #10287 so future readers can "
+            "find the incident context"
+        )
+
+    def test_dm_delivery_routes_back_on_stacked_pr(self):
+        """#10287: when base != working-branch, DM must route the issue back to
+        in-progress rather than requesting the harness merge. The route-back
+        comment must explain BOTH rebase AND the PR-retarget step — git
+        rebase alone does NOT change a GitHub PR's baseRefName, so without
+        the explicit retarget step DM detects the same stacked state next
+        cycle and loops indefinitely."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
+        content = path.read_text(encoding="utf-8")
+        # The route-back transition must appear in the base-check block, before
+        # the citation gate or merge POST.
+        base_check_idx = content.find("baseRefName")
+        citation_idx = content.find("Gate #4")
+        assert base_check_idx >= 0 and citation_idx >= 0
+        assert base_check_idx < citation_idx, (
+            "the baseRefName check must come BEFORE the citation gate — if a "
+            "PR is stacked, no other gate matters because the merge will trap"
+        )
+        block = content[base_check_idx:citation_idx]
+        assert "pending-ship in-progress" in block, (
+            "stacked-PR detection must route the issue back to in-progress"
+        )
+        assert "rebase" in block.lower(), (
+            "the route-back comment must mention rebase as the local-history "
+            "remediation"
+        )
+        assert "gh pr edit" in block and "--base" in block, (
+            "the route-back comment must also instruct the worker to retarget "
+            "the PR on GitHub — git rebase alone does not change baseRefName"
+        )
+        assert "Skip this item" in block or "move to the next" in block, (
+            "the stacked-PR route-back must include a skip instruction so DM "
+            "does not fall through to the citation gate on the same item"
+        )
+
+    def test_dm_delivery_compares_base_against_working_branch(self):
+        """#10287 Finding 4: the comparison must be an inequality between
+        PR_BASE and WORKING_BRANCH. Static presence tests can pass even if
+        someone inverts the operator (== instead of !=) and breaks the
+        gate semantically; assert the inequality is in the block."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
+        content = path.read_text(encoding="utf-8")
+        base_check_idx = content.find("baseRefName")
+        citation_idx = content.find("Gate #4")
+        block = content[base_check_idx:citation_idx]
+        assert "$PR_BASE" in block and "$WORKING_BRANCH" in block, (
+            "the base check must use the named shell variables PR_BASE and "
+            "WORKING_BRANCH, not literal strings"
+        )
+        # The route-back fires on inequality (`!=`); the pass case on equality.
+        # Either bash form is acceptable (POSIX `-ne` is for ints — strings use !=).
+        assert "!=" in block, (
+            "the base check must use string inequality (!=); an inverted "
+            "operator would route back on the happy path and merge stacks"
+        )
+
+    def test_dm_delivery_base_check_has_distinct_pass_branch(self):
+        """#10287 Finding 5: the protocol must mark the happy path as a
+        distinct branch ('If the base check passes...') AFTER the route-back
+        block. Without a labeled pass branch, the protocol could be edited
+        to always route back and the other structural tests would still pass."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
+        content = path.read_text(encoding="utf-8")
+        pass_idx = content.find("If the base check passes")
+        route_back_idx = content.find("pending-ship in-progress")
+        assert pass_idx > 0, (
+            "the protocol must explicitly label the happy path as 'If the "
+            "base check passes' so future readers see the branch structure"
+        )
+        assert pass_idx > route_back_idx, (
+            "the pass branch must appear AFTER the route-back so it reads as "
+            "the alternative path, not unconditional fall-through"
+        )
+
+    def test_dm_delivery_handles_empty_pr_base_defensively(self):
+        """#10287 Finding 1: the protocol must handle an empty PR_BASE
+        without false-positive route-back. A transient gh failure should not
+        block ship — treat empty PR_BASE as 'skip the check, fall through to
+        citation gate'."""
+        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "delivery-packaging.md"
+        content = path.read_text(encoding="utf-8")
+        base_check_idx = content.find("baseRefName")
+        citation_idx = content.find("Gate #4")
+        block = content[base_check_idx:citation_idx]
+        assert "empty" in block.lower(), (
+            "the protocol must explicitly describe the empty PR_BASE case "
+            "(transient gh failure or degraded payload); without this guard "
+            "the inequality fires on '' != 'main' and traps ship on gh blips"
+        )
+
     def test_pm_post_merge_recompose_deleted(self):
         """PM post-merge-recompose.md should be deleted (#6126 AC-6)."""
         path = REPO_ROOT / "references" / "sub-skills" / "roles" / "pm" / "post-merge-recompose.md"

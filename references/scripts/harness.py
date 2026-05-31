@@ -84,6 +84,16 @@ HARNESS_STATE_FILE = SQUIDSQUAD_DIR / ".harness-state.json"
 # agents manually via `POST /agents/{role}/start`.
 _NO_AUTO_START = False
 
+# #10538: Sibling escape hatch for the HEALTH-POLLER auto-reboot path
+# (lines ~341). When True (set by `main()` from `--no-auto-reboot` or
+# `SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT=1`), the poller still observes
+# agent death and updates state, but does NOT call `boot_agent(role)`
+# to spawn a replacement. Use when the operator wants the harness to
+# coordinate already-running agents without second-guessing context-
+# pressure restarts or fighting the three-claude-populations problem
+# (HARNESS-ARCH §14) during a harness restart.
+_NO_AUTO_REBOOT = False
+
 import boot_remote
 import health_check
 import reboot_agent
@@ -339,13 +349,27 @@ class HarnessState:
                     AgentState.INTENT_RESTARTING,
                 )
                 if is_dead and was_alive and should_reboot:
-                    reboot_roles.append(role)
-                    agent.status = "starting"
-                    agent.claude_pid = None  # Clear stale PID
-                    # #8695: the replacement process needs to re-emit
-                    # bootup-complete before we'll dispatch events to it.
-                    agent.bootup_complete = False
-                    state_changed = True
+                    if _NO_AUTO_REBOOT:
+                        # #10538: observe-but-don't-respawn. State stays
+                        # honest (PID cleared, bootup gate reset) so the
+                        # next operator-driven `POST /agents/{role}/start`
+                        # behaves the same as a normal fresh spawn.
+                        _log(
+                            f"[no-auto-reboot] {role} died; "
+                            f"intent={agent.intent}; not respawning per "
+                            f"SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT"
+                        )
+                        agent.claude_pid = None
+                        agent.bootup_complete = False
+                        state_changed = True
+                    else:
+                        reboot_roles.append(role)
+                        agent.status = "starting"
+                        agent.claude_pid = None  # Clear stale PID
+                        # #8695: the replacement process needs to re-emit
+                        # bootup-complete before we'll dispatch events to it.
+                        agent.bootup_complete = False
+                        state_changed = True
 
                 # Stopping intent fulfilled — agent died as requested (#4966)
                 if is_dead and agent.intent == AgentState.INTENT_STOPPING:
@@ -2880,6 +2904,19 @@ def main():
             "during diagnosis."
         ),
     )
+    parser.add_argument(
+        "--no-auto-reboot",
+        action="store_true",
+        help=(
+            "Do not auto-respawn agents on observed death (#10538). The "
+            "health poller still detects death and updates state, but "
+            "`boot_agent(role)` is NOT invoked. Use when the operator "
+            "wants manual control over context-pressure restarts or "
+            "needs to coordinate already-running agents during a harness "
+            "restart (three-claude-populations problem, HARNESS-ARCH §14). "
+            "Honors `SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT=1` too."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -2887,9 +2924,11 @@ def main():
     # honors the `SQUIDSQUAD_HARNESS_NO_AUTO_START=1` env var so callers
     # that don't go through argparse (e.g. test harnesses, restart
     # scripts) can opt in too.
-    global _NO_AUTO_START
+    global _NO_AUTO_START, _NO_AUTO_REBOOT
     env_flag = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_START", "")
     _NO_AUTO_START = args.no_auto_start or env_flag.lower() in ("1", "true", "yes")
+    env_reboot = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT", "")
+    _NO_AUTO_REBOOT = args.no_auto_reboot or env_reboot.lower() in ("1", "true", "yes")
 
     # Determine port
     desired_port = args.port or _read_config_port()
