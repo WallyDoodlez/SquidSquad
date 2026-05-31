@@ -289,6 +289,150 @@ def set_field(field, value):
     return value
 
 
+# `## Aliases` registry parser — PRD-A Story A5 (#10385).
+# Spec lives in docs/COMPOSE-ARCHITECTURE.md §3.0; do not re-document here.
+# Greenfield: legacy bullet-form `- **alias**: value` still read by
+# `_parse_field_in_text` for `get_alias` etc., untouched by this function.
+
+ALIASES_ROLE_CLASSES = frozenset({"pm", "worker", "verifier", "dm"})
+
+# U+2014 EM DASH only. Hyphen-minus and en-dash are rejected by the strict
+# cell comparison below, giving the operator a crisper diagnostic than
+# silent acceptance of three lookalike characters.
+ALIASES_L3_NONE_SENTINEL = "—"
+
+_ALIASES_HEADING = "Aliases"
+_ALIASES_HEADER_COLUMNS = ("alias", "role-class", "L3 domain")
+
+
+class AliasesRegistryError(ValueError):
+    """Raised when `.squidsquad/config.md`'s `## Aliases` table is malformed.
+
+    Subclass of `ValueError` so callers that already catch `ValueError` for
+    config-parsing errors keep working; tests assert against the more
+    specific type when they care about the diagnostic source.
+    """
+
+
+def _split_table_row(line):
+    """Split a markdown table row into stripped cells, or None if not a row."""
+    if "|" not in line:
+        return None
+    inner = line.strip()
+    if inner.startswith("|"):
+        inner = inner[1:]
+    if inner.endswith("|"):
+        inner = inner[:-1]
+    return [cell.strip() for cell in inner.split("|")]
+
+
+def _is_table_separator(cells):
+    """Recognize a markdown table separator row like `|---|---|---|`."""
+    if not cells:
+        return False
+    sep_re = re.compile(r"^\s*:?-+:?\s*$")
+    return all(sep_re.match(cell) for cell in cells)
+
+
+def parse_aliases_registry(text=None):
+    """Parse the `## Aliases` table per COMPOSE-ARCHITECTURE §3.0.
+
+    Returns `{alias: (role_class, l3_domain)}`; `l3_domain` is `None` when
+    the cell carries the em-dash sentinel, otherwise the trimmed cell value.
+    Reads `.squidsquad/config.md` from disk when `text` is None. Raises
+    `AliasesRegistryError` on any structural malformation (see tests for
+    the exhaustive list of rejected shapes).
+
+    L3 domain values are NOT allow-list-validated — the taxonomy lives in
+    the role-class L3 fan-out and is the caller's concern, not the
+    registry's.
+    """
+    if text is None:
+        text = _read_config()
+
+    sections = _parse_sections(text)
+    if _ALIASES_HEADING not in sections:
+        raise AliasesRegistryError(
+            "config.md is missing the required `## Aliases` section "
+            "(see docs/COMPOSE-ARCHITECTURE.md §3.0 for the canonical schema)."
+        )
+
+    section_text = sections[_ALIASES_HEADING]
+
+    rows = []
+    for raw_line in section_text.splitlines():
+        cells = _split_table_row(raw_line)
+        if cells is None:
+            continue
+        rows.append(cells)
+
+    if not rows:
+        raise AliasesRegistryError(
+            "`## Aliases` section is present but contains no table — expected "
+            "a 3-column markdown table with header `| alias | role-class | "
+            "L3 domain |` (see COMPOSE-ARCHITECTURE §3.0)."
+        )
+
+    header = rows[0]
+    if len(header) != 3 or tuple(h.lower() for h in header) != tuple(
+        c.lower() for c in _ALIASES_HEADER_COLUMNS
+    ):
+        raise AliasesRegistryError(
+            f"`## Aliases` header row must be exactly "
+            f"`| {' | '.join(_ALIASES_HEADER_COLUMNS)} |`; got "
+            f"`| {' | '.join(header)} |`."
+        )
+
+    if len(rows) < 2 or not _is_table_separator(rows[1]):
+        raise AliasesRegistryError(
+            "`## Aliases` table is missing the separator row (expected "
+            "`|---|---|---|` immediately after the header)."
+        )
+
+    registry = {}
+    for data_row_index, cells in enumerate(rows[2:], start=1):
+        if len(cells) != 3:
+            raise AliasesRegistryError(
+                f"`## Aliases` data row {data_row_index} has {len(cells)} "
+                f"column(s); expected 3. Row: `| {' | '.join(cells)} |`."
+            )
+
+        alias, role_class, l3_cell = cells
+
+        if not alias:
+            raise AliasesRegistryError(
+                f"`## Aliases` data row {data_row_index} has an empty "
+                f"`alias` cell."
+            )
+        if not role_class:
+            raise AliasesRegistryError(
+                f"`## Aliases` data row {data_row_index} (`{alias}`) has an "
+                f"empty `role-class` cell."
+            )
+        if role_class not in ALIASES_ROLE_CLASSES:
+            raise AliasesRegistryError(
+                f"`## Aliases` data row {data_row_index} (`{alias}`) has "
+                f"unknown role-class `{role_class}` — must be one of "
+                f"{sorted(ALIASES_ROLE_CLASSES)}."
+            )
+        if alias in registry:
+            raise AliasesRegistryError(
+                f"`## Aliases` has duplicate alias `{alias}` "
+                f"(data row {data_row_index})."
+            )
+
+        l3_domain = None if l3_cell == ALIASES_L3_NONE_SENTINEL else (l3_cell or None)
+        registry[alias] = (role_class, l3_domain)
+
+    if not registry:
+        raise AliasesRegistryError(
+            "`## Aliases` table has a header but zero data rows. An install "
+            "must declare at least one alias."
+        )
+
+    return registry
+
+
 def get_alias(role):
     """Get the alias for a role. Falls back to bare role name if not set."""
     text = _read_config()
