@@ -1146,7 +1146,8 @@ After all 6 land: v2 ships with event-mode as the unconditional wake-mode archit
 PM's inbox is disambiguated by `event_context`. The full set in use:
 
 - From the `tracker.py` auto-routing table (§7.3): `"planning-needed"`, `"human-needed"` (for `* → pending-human-review|setup` transitions), `"unowned-rejection"` (fallback for rejected items with no `role:*` label), `"unowned-approval"` (fallback for approved items with no `role:*` label).
-- From the catalog-trim translators (§8.5): `"compose-needed"` (recompose required), `"agent-down"` (health-poller observed an agent stall).
+- From the catalog-trim translators (§8.5): `"compose-needed"` (PM is asked to run `compose.py deploy-all` + restart agents — used for paths the harness file-watch does not cover, e.g. mid-session merges to `references/`), `"agent-down"` (health-poller observed an agent stall).
+- From the harness directly (COMPOSE-ARCHITECTURE §8.2): `"restart-required"` is emitted to affected *agents* (not PM) after the harness has already re-run compose for an L4 write — distinguish from `compose-needed`: `restart-required` says "compose is done, please restart"; `compose-needed` says "PM, please run compose and orchestrate restart". The two are NOT interchangeable.
 - From EAD: `"human-comment"` (forge comment by a human author).
 - From agents calling `/work/assign` directly: `"process-concern"` for ad-hoc routing of cross-role-class process issues to PM; `"route-help"` for mis-route recovery (an agent received work it doesn't own and re-routed to PM for triage — see §7.3).
 

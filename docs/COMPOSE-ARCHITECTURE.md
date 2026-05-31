@@ -1338,10 +1338,10 @@ Aligns with the existing approval-gate philosophy for autonomous writes (#8997 �
 
 Every L4 write is:
 
-- A separate file in `.squidsquad/project/`.
+- An H3 block appended (or replacing an existing H3 block under the same slot's H2) inside the existing `.squidsquad/project/<role-class>.md` file. One file per role-class per §3.3; new ops accumulate as H3 sub-sections, they do not create new files.
 - Committed as its own git commit on main with message `<role>: L4 write — <slot>/<op>/<target>` and a body quoting the human directive verbatim.
 - Logged in the alias's iteration file for the cycle that performed the write.
-- Reversible: a human can `git revert` the L4 commit, or the agent can produce a counter-L4 file (`replace` with empty body, or matching `insert-before` removal).
+- Reversible: a human can `git revert` the L4 commit, or the agent can produce a counter-L4 block (`replace` with empty body, or matching `insert-before` removal) committed the same way.
 
 The composed `.squidsquad/<alias>/CLAUDE.md` for **every alias** of the affected role-class regenerates on each L4 write (compose runs as a post-commit hook for files in `.squidsquad/project/`). Two `worker`-class instances sharing one L4 file produce two regenerated CLAUDE.md files at their respective alias paths.
 
@@ -1408,13 +1408,13 @@ On every harness boot — before spawning any agent — the harness verifies com
 1. Checksum the source tree: `.squidsquad/config.md` + `.squidsquad/project/*.md` (L4) + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`.
 2. Compare the checksum against the one stored at last successful compose (kept in `.squidsquad/.harness-state.json` under `last_compose_checksum`).
 3. If drift is detected (or the checksum is missing — first boot, post-pull, etc.), the harness runs `compose.py deploy-all` BEFORE spawning agents. The new checksum is stored on success.
-4. Spawn agents per the normal §7.2 boot sequence — agents always boot with up-to-date `CLAUDE.md`.
+4. Spawn agents per the normal [HARNESS-ARCH §7.2](HARNESS-ARCH.md) spawn sequence — agents always boot with up-to-date `CLAUDE.md`.
 
 Agents are not allowed to discover stale CLAUDE.md mid-session because the harness has already gated their boot on freshness.
 
 ### 8.2 L4-write trigger (mid-session)
 
-When `l4-curation` writes to L4 mid-session (the runtime customization flow per §7), the harness detects the write (file-watch on `.squidsquad/project/` or post-write hook the sub-skill invokes) and re-runs `compose.py deploy` for every alias whose role-class L4 changed. The affected agents then receive `assigned-to(event_context="compose-needed")` (or equivalent restart-required signal) so they pick up the regenerated CLAUDE.md on their next cycle — see AGENT-RUNTIME §8.5 catalog-trim translators.
+When `l4-curation` writes to L4 mid-session (the runtime customization flow per §7), the harness detects the write (file-watch on `.squidsquad/project/` or post-write hook the sub-skill invokes) and re-runs `compose.py deploy` for every alias whose role-class L4 changed. The affected agents then receive `assigned-to(target_alias=<that-alias>, event_context="restart-required", payload={reason:"l4-recompose"})` so they pick up the regenerated CLAUDE.md on their next cycle. This is a distinct context from PM's `compose-needed` (AGENT-RUNTIME §8.5): in `restart-required` the harness has *already* run compose and the agent only needs to restart; in `compose-needed` PM is being asked to run compose and orchestrate restart for legacy paths the file-watch does not cover (e.g., a mid-session merge to `references/` that lands without harness restart).
 
 This is the only mid-session compose trigger; nothing else mutates the source tree under a running install.
 
@@ -1440,7 +1440,7 @@ flowchart TB
 
   L4Write([Mid-session L4 write<br/>via l4-curation])
   L4Write --> L2c{"Layer 2: L4-write trigger<br/>(harness file-watch)"}
-  L2c -->|"detects write"| L2Fix[/"harness re-runs compose<br/>for affected role-class +<br/>emits compose-needed event"/]
+  L2c -->|"detects write"| L2Fix[/"harness re-runs compose<br/>for affected role-class +<br/>emits restart-required to agent"/]
   L2Fix --> Restart([Affected agents restart<br/>pick up new CLAUDE.md])
 
   Op([Operator wants<br/>consistency check])
@@ -1560,7 +1560,7 @@ Once this doc is merged, the implementation epic spawns these sub-PRs in order. 
 | **F** | Fold today's protocol H2 sections into Instructions sub-procedures | skill | E |
 | **G** | Fold today's constraints/conventions H2 sections into Identity + Project Context | skill | E |
 | **H** | Source-output sync: harness boot-time checksum + auto `compose.py deploy-all` before agent spawn (§8.1) | skill (harness) | C, D |
-| **I** | Source-output sync: L4-write trigger — harness file-watch on `.squidsquad/project/` re-runs compose for affected role-class + emits `compose-needed` (§8.2) | skill (harness) | H |
+| **I** | Source-output sync: L4-write trigger — harness file-watch on `.squidsquad/project/` re-runs compose for affected role-class + emits `restart-required` direct to affected agent (§8.2) | skill (harness) | H |
 | **J** | Source-output sync: `squidsquad_cli.py check` operator-driven diagnostic (§8.3) | skill | H |
 | **K** | Runtime L4 writes: agent decision-tree sub-skill | skill | C |
 | **L** | Runtime L4 writes: deepseek audit + mini-CQ wiring | skill | K |

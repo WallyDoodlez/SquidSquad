@@ -309,6 +309,7 @@ One file per install (at the install root). Persisted across harness restarts. S
   "harness_pid": 12345,
   "start_time": 1748371200.0,
   "port": 7373,
+  "last_compose_checksum": "sha256:9f4c…",
   "agents": {
     "<alias>": {
       "intent": "running",
@@ -324,6 +325,8 @@ One file per install (at the install root). Persisted across harness restarts. S
   }
 }
 ```
+
+**`last_compose_checksum`** (top-level, install-scoped) — sha256 hex of the compose source tree (`.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`) at the last successful `compose.py deploy-all` run. The harness boot-time freshness check reads this, recomputes the current checksum, and runs `compose.py deploy-all` BEFORE spawning agents if they differ or the field is absent (first boot, post-`git pull`, etc.). See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md) for the three-layer harness-owned freshness model.
 
 **Two distinct fields per agent** (per [AGENT-RUNTIME.md §7.2](AGENT-RUNTIME.md)):
 
