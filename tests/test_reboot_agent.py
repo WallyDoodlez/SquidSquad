@@ -108,6 +108,58 @@ class TestKillProcess:
             reboot_agent._kill_process(12345)  # must not raise
 
 
+class TestKillProcessPidValidation10530:
+    """#10530: _kill_process must reject None / non-int / <= 0 PIDs before
+    calling os.kill or taskkill. ``os.kill(0, SIGKILL)`` would send to the
+    whole process group (incl. the harness itself); ``os.kill(-1, SIGKILL)``
+    would sweep every process the calling user can signal.
+    """
+
+    @pytest.mark.parametrize("bad_pid", [None, 0, -1, -12345, True, False])
+    def test_invalid_pid_does_not_call_kill_posix(self, bad_pid):
+        if sys.platform == "win32":
+            with patch("reboot_agent.subprocess.run") as run:
+                reboot_agent._kill_process(bad_pid)
+            run.assert_not_called()
+        else:
+            with patch("reboot_agent.os.kill") as kill:
+                reboot_agent._kill_process(bad_pid)
+            kill.assert_not_called()
+
+    @pytest.mark.parametrize("bad_pid", ["1234", "not-a-pid", 1.5, [12345], object()])
+    def test_non_int_pid_does_not_call_kill(self, bad_pid):
+        if sys.platform == "win32":
+            with patch("reboot_agent.subprocess.run") as run:
+                reboot_agent._kill_process(bad_pid)
+            run.assert_not_called()
+        else:
+            with patch("reboot_agent.os.kill") as kill:
+                reboot_agent._kill_process(bad_pid)
+            kill.assert_not_called()
+
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="POSIX-only — TypeError path on os.kill")
+    def test_kill_type_error_swallowed(self):
+        """If a bad-type PID slips past the guard (e.g. a Mock object),
+        os.kill raises TypeError. Mirror the ProcessLookupError /
+        PermissionError swallow behavior so the harness doesn't crash."""
+        with patch("reboot_agent.os.kill", side_effect=TypeError("bad pid")):
+            # Pass a valid-shape int so the guard doesn't catch it before
+            # the stub gets to raise.
+            reboot_agent._kill_process(12345)  # must not raise
+
+    @pytest.mark.skipif(sys.platform != "win32",
+                        reason="Windows-only — taskkill subprocess path")
+    def test_kill_windows_missing_taskkill_swallowed(self):
+        """If taskkill is absent (Windows Server Core, broken PATH),
+        subprocess.run raises FileNotFoundError before `check=False` can
+        do anything. The helper must swallow it — same best-effort
+        posture as the POSIX branch."""
+        with patch("reboot_agent.subprocess.run",
+                   side_effect=FileNotFoundError("taskkill not found")):
+            reboot_agent._kill_process(12345)  # must not raise
+
+
 # ---------------------------------------------------------------------------
 # Negative guards — removed orchestrators
 # ---------------------------------------------------------------------------
