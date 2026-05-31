@@ -1,13 +1,3 @@
 # Working State
 
-- **Task**: Watching DM ship B6 + B2
-- **Status**: idle
-
-| # | Status | Wait |
-|---|---|---|
-| B6 #10443 (PR #10454) | pending-ship | 59m |
-| B2 #10441 (PR #10465) | pending-ship | 30m |
-| A6 #10386 (PR #10476) | pending-test | 12m |
-| B3 #10442 | approved | — |
-
-Context 69%.
+B6 60m at pending-ship. B2 31m. A6 13m at pending-test. B3 approved. Context 70%.
