@@ -47,7 +47,7 @@ The harness is **distinct from**:
 
 - **Agent processes** — agents are separate processes (`claude` + `event_poll.py`) spawned by the harness; they communicate with it over HTTP and live in their own clone directories.
 - **EAD** — EAD is a component *inside* the harness (an asyncio task), not a sibling process.
-- **The forge (GitHub)** — the harness reads from GitHub via EAD but does not write to it; tracker writes go through agents calling `gh` directly via `tracker.py`.
+- **The forge (GitHub)** — the harness reads from GitHub via EAD. It performs **one specific forge write**: rewriting the `role:<target_alias>` label on the issue named in every `POST /work/assign` call (and on EAD-emitted `assigned-to` events). This is the routing-source-of-truth update; see [AGENT-RUNTIME §7.3](AGENT-RUNTIME.md). All other tracker writes (status transitions, comments, label changes other than `role:*`) go through agents calling `gh` directly via `tracker.py`.
 
 ---
 
@@ -80,7 +80,7 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 | POST | `/agents/{role}/restart` | Set intent=restarting; respawn after death | `{ok, role, alias}` |
 | POST | `/agents/all/start` | Start all configured agents | `{ok, started: [...]}` |
 | POST | `/agents/all/stop` | Stop all running agents | `{ok, stopped: [...]}` |
-| POST | `/shutdown` | Graceful harness shutdown (status 202) | Async; harness exits after returning |
+| POST | `/shutdown` | Graceful harness shutdown — returns `202 Accepted` immediately, then performs graceful shutdown (sets all agent intents to `stopping`, waits up to 60s for cooperative exits, then exits) | Body: `{ok: true, action: "shutdown-initiated"}` returned synchronously with the 202; harness process exits asynchronously after the response is sent |
 
 > **Response-shape status:** the response shapes above are **aspirational** — they document the target shape that lands with **#10358** (the `role` → `alias` code rename). **Today's actual return shape**: `AgentState.to_dict()` returns a `role` field (whose value is the alias; no separate `alias` field), plus `claude_pid` and `terminal_pid` as separate fields (no shorthand `pid` field). Existing clients should treat the alias as the value of `role` and read `claude_pid` + `terminal_pid` separately until #10358 ships. The "target shape" framing also applies to §9 (Vocabulary note) — both sections describe the post-rename state. The shorthand `pid` field in the post-#10358 response is a **derived view** over the two-field state record in §7.5 — the state file always carries both `claude_pid` and `terminal_pid` separately (see §7.5 for the canonical shape and rationale). **Derivation rule:** `pid = claude_pid` (the agent process). `terminal_pid` remains available in `.harness-state.json` for diagnostics but is not exposed via the HTTP API.
 >
@@ -169,7 +169,7 @@ event_id = sha256(timestamp + alias + event_type + payload + nonce)[:16]
 |---|---|---|
 | `ack-cursor consumer` | on-demand (drains asyncio.Queue) | Awaits on an `asyncio.Queue` that receives cursor-advance notifications extracted from `ack-cursor` events submitted via `POST /events` — the handler decodes the event, pushes the advance, and returns; the consumer drains the queue independently. Drains the ack-cursor queue, advances cursors, persists cursor positions to `.squidsquad/.event-state.json` (the deque itself remains in-memory only, per §5.1) |
 | `timeout_scan` | every 30s | Re-delivers in-flight events that have been pending past their TTL |
-| `health_poll` | every 5s | Checks per-agent `claude` PID and the sibling `event_poll` PID; restarts either on death while `intent=running` (see [AGENT-RUNTIME.md §7.0](AGENT-RUNTIME.md)). Liveness probed via `OpenProcess` on Windows, `kill -0` on POSIX. |
+| `health_poll` | every 5s | Checks per-agent `claude` PID and the paired `event_poll` PID. **`claude` death + `intent=running` → respawn** (re-runs `boot_agent` per §7.2). **`event_poll` death is logged but NOT auto-respawned**; recovery path is operator-triggered agent restart, which spawns a fresh `event_poll` as part of the new agent's boot sequence (see [AGENT-RUNTIME.md §7.0](AGENT-RUNTIME.md)). Liveness probed via `OpenProcess` on Windows, `kill -0` on POSIX. |
 | `EAD poller` | adaptive (10s active / 30s idle, 60s ceiling) | Polls forge for state changes; see §6 |
 
 ---
@@ -251,7 +251,7 @@ This is the **canonical step-by-step ordering** for the agent boot sequence. All
 1. Resolve clone path for the alias from in-memory `AgentState` (loaded from `.squidsquad/.harness-state.json` at harness start; on first boot, populated from `.squidsquad/.local-config` per §7.2 "First-boot discovery" below).
 2. Spawn the platform-appropriate launcher (`wt.exe` / Terminal / x-terminal-emulator) → `thin_launcher.py` in the agent's clone dir.
 3. `thin_launcher.py` writes its PID to `.squidsquad/<alias>/.claude-pid` (sentinel: "harness has spawned this alias"), then spawns `claude` (Anthropic CLI) as its child.
-4. **In parallel** with steps 2–3, the harness spawns the sibling `event_poll.py --wait --role <alias> --target stdout` directly (not under the launcher chain). `event_poll` begins polling the harness HTTP API immediately on spawn. **Note**: `event_poll` and `claude` are siblings — neither is the other's parent. The harness owns both.
+4. **Concurrently with steps 2–3** (no causal ordering between them — `event_poll` does not depend on `claude` existing, and `claude` does not depend on `event_poll` existing): the harness spawns `event_poll.py --wait --role <alias>` as a **direct child of the `harness.py` process** (via `subprocess.Popen`), not under the agent's launcher chain. In code this is a `subprocess.Popen` call right after the launcher invocation; both processes are racing for spawn-time, neither blocks on the other. If the sequence diagram below shows step 4 after step 3, that's diagram-rendering order, not causal dependency. `event_poll` begins polling the harness HTTP API immediately on spawn (status-gated empty responses while `status=booting` per AGENT-RUNTIME §7.0). **Note on placement**: `event_poll` lives outside the agent's `wt → cmd → thin_launcher → claude` subprocess tree entirely; its parent is `harness.py`. The harness pairs it with a specific agent via the `--role <alias>` argument and terminates it on agent stop. Before flushing the port file and spawning `event_poll`, the harness ensures `.squidsquad/.harness-port` has been written and flushed to disk so `event_poll`'s discovery read succeeds on its first poll. No automatic respawn if `event_poll` dies mid-session — agent restart is the recovery path. On harness death, `event_poll` is orphaned (silent no-ops once the HTTP target is gone) and full team reboot is required.
 5. The harness awaits the `booted` event from the agent (cursor-clean handshake). Until `booted` arrives, the agent is in `status=booting`; any `assigned-to` events queued for this alias remain in the harness deque and are delivered only after `status=ready`.
 6. On `booted` receipt, agent transitions `status=booting → ready`. Routed work (`POST /work/assign`) is now deliverable. The harness then updates `.squidsquad/.harness-state.json` with the new PID + boot time.
 
@@ -286,7 +286,7 @@ Every 5 seconds, for each agent with intent=`running`:
 3. If dead AND intent=`running`: re-spawn (auto-respawn).
 4. If dead AND intent=`stopping` or `restarting`: handle per intent.
 
-> **PID-source disambiguation** (recap): three distinct PID locations exist today — (a) `.squidsquad/<alias>/.claude-pid` on disk = `cmd.exe`/shell wrapper PID, written by `thin_launcher`, used by `thin_launcher`'s own singleton check; (b) `.harness-state.json` → per-alias `claude_pid` = the `claude.exe` PID resolved via descendant walk; (c) `.harness-state.json` → per-alias `terminal_pid` = wrapper PID, kept for diagnostics. Health-poll uses (b). Under the §14 proposal, (a) goes away — `thin_launcher` is deleted and the harness owns `claude_pid` resolution directly.
+> **PID-source disambiguation** (recap): four distinct PID locations exist today — (a) `.squidsquad/<alias>/.claude-pid` on disk = `cmd.exe`/shell wrapper PID, written by `thin_launcher`, used by `thin_launcher`'s own singleton check; (b) `.harness-state.json` → per-alias `claude_pid` = the `claude.exe` PID resolved via descendant walk; (c) `.harness-state.json` → per-alias `terminal_pid` = wrapper PID, kept for diagnostics; (d) `.harness-state.json` → per-alias `event_poll_pid` = harness-spawned `event_poll.py` PID (the harness has the `subprocess.Popen` handle directly). Health-poll checks (b) for `claude` liveness and (d) for `event_poll` liveness — `claude` death triggers respawn; `event_poll` death is logged only (no auto-respawn; recovery is operator-triggered agent restart per §7.0). Under the §14 proposal, (a) goes away — `thin_launcher` is deleted and the harness owns `claude_pid` resolution directly.
 
 ### 7.4 Cooperative exit (exit-42)
 
@@ -297,6 +297,8 @@ When `cycle_post.py` detects context-pressure exceeded OR harness intent has fli
 - intent=`restarting` + exit 42: respawn.
 
 A **60-second force-kill safety net** fires if the agent doesn't exit within the cooperative window (intent set time + 60s).
+
+**`event_poll` lifetime across claude respawn**: when the harness respawns a `claude` process (intent=running + exit 42, or intent=restarting + exit 42), the paired `event_poll.py` is **NOT** killed and re-spawned — it keeps running across the agent respawn. `event_poll` lives for the lifetime of the alias's registration with the harness (spawned at first `boot_agent`, killed only on agent stop or harness exit). The new `claude` process inherits the existing `event_poll`'s stdout pipe via Monitor; the cursor state is harness-side and unaffected by claude respawn; the new claude's boot step 4 drain (AGENT-RUNTIME §7.0 / §7.2) catches up to the cursor. This avoids unnecessary process churn during high-frequency context-pressure respawns.
 
 ### 7.5 State file: `.harness-state.json`
 
@@ -316,6 +318,7 @@ One file per install (at the install root). Persisted across harness restarts. S
       "clone_path": "D:/Dev/Dev/SquidSquad-2",
       "claude_pid": 23456,
       "terminal_pid": 34567,
+      "event_poll_pid": 45678,
       "bootup_complete": true
     }
   }
@@ -329,7 +332,7 @@ One file per install (at the install root). Persisted across harness restarts. S
 
 Two fields, not one, so recovery semantics are explicit: after a host reboot the harness reads this file, sees `intent=running` but no live PID → respawn. If `intent` and `status` were collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed". Full state machine documented in [AGENT-RUNTIME.md §7.2](AGENT-RUNTIME.md).
 
-**PID fields**: the state file always carries `claude_pid` and `terminal_pid` as separate fields — they are independently useful for diagnostics (which process is Claude vs. which is the terminal wrapper) and for singleton checks (harness checks `claude_pid` liveness directly). The API response's post-#10358 single `pid` field (see §4.1) is a derived view computed from these two state-file fields, not a replacement for them.
+**PID fields**: the state file carries three per-alias PID fields — `claude_pid`, `terminal_pid`, and `event_poll_pid`. `claude_pid` is the agent process and is what `health_poll` uses for liveness checks (respawn on death). `terminal_pid` is the wrapper process, kept for diagnostics only. `event_poll_pid` is the harness-spawned `event_poll.py` paired with this agent (§7.2 step 4) — `health_poll` checks its liveness too, but death is logged only (no auto-respawn; recovery is operator-triggered agent restart per §7.0). The API response's post-#10358 single `pid` field (see §4.1) is a derived view: `pid = claude_pid`; `terminal_pid` and `event_poll_pid` remain in the state file for diagnostics and lifecycle management but are not exposed via HTTP.
 
 Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PIDs still alive?); intents are preserved. Note: the outer agent key is the **alias** (e.g. `skill`, `verifier`); each agent's *categorical* role-class is not currently persisted in this file — it's derived from `.squidsquad/config.md` at boot. Source of truth: `HarnessState.save_state()` in `references/scripts/harness.py`.
 
