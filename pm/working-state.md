@@ -1,42 +1,39 @@
 # Working State
 
-- **Task**: PRD-A (compose link stage) merged + 6 implementation tasks filed; awaiting human approval to release tasks to skill
+- **Task**: PRD-A A1 drift audit complete; awaiting human direction on Q-A1.1–Q-A1.4 + A2 re-scope approval
 - **Status**: idle
 - **Last Processed Event ID**: null
 
 ## Recent ship
 
-- PR #10383 merged at commit `684b5629` — squashed to main
-- 9 audit rounds, 17 findings closed (including Assemble-flag drop)
-- Saved memory rules this session: `project_compose_freshness_harness_owned`, `project_assemble_unconditional`
+- A1 audit (#10384 closed) — drift report at `.squidsquad/pm/planning/COMPOSE-A1-DRIFT.md`
+- 21 spec/code gaps catalogued; 6 validation rules all missing; v1→v2 transition is structural, not incremental
 
-## PRD-A implementation tasks (status:pending — awaiting human approval)
+## PRD-A status post-audit
 
-Recommended pickup order (lowest risk → highest):
+| Task | Story | Status | Note |
+|---|---|---|---|
+| #10384 | A1 audit | **closed (done)** | PM executed; drift report committed |
+| #10385 | A5 Aliases parser | `pending` — **ready to release** | Unaffected by audit; pure new code |
+| #10386 | A6 CLI accepts alias | `pending` — **depends-on-A2** | Hold |
+| #10387 | A3 byte-stability tests | `pending` — **depends-on-A2** | Hold |
+| #10388 | A4 --check mode | `pending` — **depends-on-A2** | Hold |
+| #10389 | A2 validation rules | `pending` — **needs re-scope** | 4-6 sub-stories required |
 
-- #10384 — A1 audit current compose.py vs §4.1–§4.5 (read-only drift report)
-- #10385 — A5 `## Aliases` registry parser
-- #10386 — A6 compose.py CLI accepts alias (depends on A5)
-- #10387 — A3 byte-stability golden-file test suite
-- #10388 — A4 compose.py deploy-all --check mode
-- #10389 — A2 link-stage validation rules (medium-risk; lands last after A3 safety net)
+## Open questions for human
 
-All tagged `role:skill`. Awaiting human → `status:approved` for any/all of them.
+- **Q-A1.1**: Inline→reference sub-skill emission — defer to PRD-D? (recommend yes)
+- **Q-A1.2**: L4 migration (consolidate multi-file → single-file per role-class) — separate task A2.5? (recommend yes)
+- **Q-A1.3**: L1-L3 frontmatter migration (slot+ordinal annotations) — separate task A2.6? (recommend yes)
+- **Q-A1.4**: Mode-agnostic manifest unification — leave to PRD-D? (recommend yes)
 
 ## Context
 
-38% — well under threshold (post round-9 audit cycle).
-
-## Plan-First Hold
-
-Lifted. Next PM-cycle work depends on human direction:
-- Approve A1–A6 → skill picks up
-- Start PRD-B (assemble stage), PRD-C (L4 + l4-curation), PRD-D (catalog + wake-mode), or PRD-E (compose freshness)
-- Other priorities surfaced by human
+44% — well under threshold.
 
 ## Tracker
 
-- #3 (Take SquidSquad public) — dm-owned, comment from 2026-05-24 still awaiting human disposition; no re-nudge this cycle
+- #3 (Take SquidSquad public) — dm-owned; no re-nudge
 - No pending-test / pending-ship items
-- No open PRs after #10383 merge
-- 6 new tasks pending human approval (see above)
+- No open PRs
+- 5 PRD-A tasks (#10385–10389) at pending awaiting human direction on A2 re-scope
