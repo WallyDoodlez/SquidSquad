@@ -5,7 +5,7 @@
 - **Last Processed Event ID**: 55f645cecd099ad2
 - **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 1739)
+## Session Context (checkpoint at cycle 1740)
 - Version: v0.43.0
 - Shipped count: **7/10** (was 6 pre-cycle; +1 for #10488 this cycle; bump_due at 10)
 - Harness: **HEALTHY** on 7373
@@ -23,6 +23,7 @@
 - **Cycle 1722 notes**: 3 consecutive quiet cycles satisfied — R74 scan-1 (README.md) executed. 0 findings; file unchanged since commit 2bc53880 (c1343); all 6 doc references resolve. Also observed: all 4 routed PRs (#10443 #10441 #10440 #10386) finally finished GitHub mergeable recompute, ALL show CONFLICTING/DIRTY after #10488 landed — skill needs rebase on all 4. New PR#10581 exists (fixes #10559) but parent at status:pending-test (QA's queue, not DM's). Local clone state divergent (uncommitted state files, merge conflict on .claude/scheduled_tasks.lock, branch checkout warning); doc-scan-state.json not updated this cycle due to known commit/rollback churn — scan result recorded here in working-state notes only.
 - **Cycle 1723 notes**: skill rebased PR#10454 successfully — went CLEAN/MERGEABLE again. Dispatched harness merge, PR landed at b31e50d6 (04:40:00Z) within seconds. Ran ship transition for #10443 (PRD-B B6 assemble cache layer), CHANGELOG queued, counter 7→8 (2 ships from bump). #10559 also at pending-ship but PR#10581 still UNKNOWN — held this cycle pending GitHub mergeable recompute. Other 3 PRs (#10441 #10440 #10386) parent issues still in-progress — no movement.
 - **CHANGELOG queue for v0.44.0**: #10488 (L4 grammar parser), #10443 (assemble cache layer), #10559 (gh pr edit workaround), #10440 (win32 ctypes liveness probe), #10441 (assemble_verifier sub-skill ref + step ID multiset diffs), #10386 (compose.py --v2 flag), #10442 (length floor + code-block parity verifier), #10489 (L4 op processor), #10388 (compose.py deploy-all --check mode).
+- **Cycle 1740 notes**: Shipped #10447 (PRD-B B7 — atomic emit + abort semantics) via PR#10645 merged 734f1e34 (13:09:55Z). skill merged main in per cycle 1739 route-back; PR re-resolved to CLEAN on first poll. No planning artifacts → citation skipped. Counter 21→22. v0.44.0 CHANGELOG queue now 16 items. Bump still deferred on same 3.
 - **Cycle 1739 notes**: #10447 (PRD-B B7 — assemble atomic emit + abort semantics) arrived at pending-ship. PR#10645 polled UNKNOWN → CONFLICTING/DIRTY. Routed back to in-progress with merge-from-main instruction (not rebase, per feedback_no_rebase_language.md). Counter holds at 21. No ship this cycle.
 - **Cycle 1737 notes**: Shipped #10446 (PRD-B B5 — higher-L-wins conflict resolver) via PR#10644 merged 00bb4e6d (11:40:02Z). No planning artifacts → citation skipped. Counter 20→21. v0.44.0 CHANGELOG queue now 15 items. Bump still deferred on same 3.
 - **Cycle 1736 notes**: Shipped #10445 (PRD-B B4 — assemble conflict detection) via PR#10643 merged 76f08d20 (11:10:02Z). No planning artifacts → citation skipped. Counter 19→20. v0.44.0 CHANGELOG queue now 14 items. Bump still deferred on same 3.
