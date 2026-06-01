@@ -114,6 +114,7 @@ STATIC_TEST_MODULES = [
     "test_pickup_comment_fidelity_9946",
     "test_terminology_dual_aware_6274",
     "test_source_frontmatter",
+    "test_compose_a6_v2",
     "test_assemble_verifier",
     "test_process_utils",
     "test_assemble_cache",
