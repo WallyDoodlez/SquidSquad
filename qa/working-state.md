@@ -1,5 +1,5 @@
 # Working State
 
 - **Task**: none
-- **Status**: none
-- **Quiet Cycle Counter**: 0
+- **Status**: idle — PRD-A+B drained, PM stalled blocks new work
+- **Quiet Cycle Counter**: 1
