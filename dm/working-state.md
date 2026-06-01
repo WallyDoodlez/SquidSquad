@@ -1,23 +1,22 @@
 # Working State
 
-- **Task**: #10488 merge dispatched (PR#10509) — awaiting pr-merged event for ship transition
-- **Status**: in-progress
+- **Task**: 4 PRs awaiting skill rebase + transition (#10443 #10441 #10440 #10386)
+- **Status**: idle
 - **Last Processed Event ID**: 55f645cecd099ad2
 - **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 1718)
+## Session Context (checkpoint at cycle 1719)
 - Version: v0.43.0
-- Shipped count: 21/10 — DEFERRED on 3 open issues (#9969 #10540 #10541)
+- Shipped count: **7/10** (was 6 pre-cycle; +1 for #10488 this cycle; bump_due at 10)
 - Harness: **HEALTHY** on 7373
-- Doc scan: R74 gated until 3 consecutive quiet cycles (counter reset to 0 this cycle — active work)
+- Doc scan: R74 gated until 3 consecutive quiet cycles (counter at 0 — active this cycle)
 - Session cron 30m (job a02dc3ca)
-- **In flight (merge dispatched)**:
-  - #10488 → PR#10509 (POST /merge 202 accepted, awaiting pr-merged event)
-- **Routed back to in-progress this cycle**:
-  - #10443 → PR#10454 — citation gate fail: PR body cites PRD-B §4.6 but not `TEST-PLAN-10443.md` filename (required per #8950 Gate #4). skill must amend PR description.
-- **Still awaiting skill issue-transition** (PRs CLEAN/MERGEABLE; issues still status:in-progress role:skill):
-  - #10441 → PR#10465 (CLEAN)
-  - #10440 → PR#10493 (CLEAN)
-  - #10386 → PR#10476 (CLEAN)
-- **CHANGELOG queue for v0.44.0**: 20 items shipped pre-cycle (15 prior + #10538 #10487 #10530 #10523 #10516). +1 pending when #10488 lands (21).
-- **Cycle 1718 notes**: QA transitioned #10488 + #10443 to pending-ship this cycle. #10488 cleared all gates (no planning artifacts → citation gate skipped) and merge dispatched. #10443 failed citation gate (TEST-PLAN-10443.md exists but PR body doesn't reference it) — routed back to in-progress with comment. Other 3 still parked in-progress with role:skill.
+- **Shipped this cycle**: #10488 (PRD-A A2b L4 grammar parser) — PR#10509 merged at 02:11:46Z (3aac1fee). CHANGELOG entry queued for v0.44.0.
+- **Routed back to in-progress this cycle (DIRTY/CONFLICTING)**:
+  - #10443 → PR#10454 — citation gate now passes (skill amended PR body cycle 1718) BUT PR went DIRTY after #10488 landed. Needs another rebase onto main.
+- **Still awaiting skill issue-transition** (PRs CLEAN at last check; status:in-progress role:skill):
+  - #10441 → PR#10465
+  - #10440 → PR#10493
+  - #10386 → PR#10476
+- **CHANGELOG queue for v0.44.0**: 1 item (#10488). Resets each version bump.
+- **Cycle 1719 notes**: #10488 shipped via PR-already-merged path (cycle 1718 dispatched the harness merge; merge completed at 02:11:46Z while DM session was idle; this cycle confirmed MERGED state and ran ship transition + CHANGELOG comment + counter increment). #10443 returned to in-progress because its branch went DIRTY post-#10488 — citation gate now passes but rebase needed. Other 3 routed PRs still parked with skill (issues never transitioned to pending-ship).
