@@ -120,7 +120,10 @@ When a customization request is detected, walk this dialog before writing L4. St
       - **approve** — proceed to Gate 3 (compose dry-run).
       - **reject** — acknowledge in conversation, **cancel the write** (no file changed), and ask for a refined directive. The negative path is final on the first reject (no retry).
       - **ambiguous** — re-ask the same confirmation question ONCE. If the second reply is also ambiguous, **abandon the write** and surface to the human: "I can't tell whether you want to proceed; we can revisit the change later." (Per C4 AC4's 2-strike rule.) The classifier is intentionally conservative: mixed signals (e.g. "yes but no") are ambiguous, not approve — false approvals would commit an unintended L4 write.
-   3. **Compose dry-run**: `compose.py deploy-all --check` validates the updated L4 file resolves cleanly (step-id targets exist, op type is legal for the enclosing slot, no validation errors).
+   3. **Compose dry-run (Gate 3, C5)**: invoke `references/scripts/l4_compose_dryrun.py:dryrun_l4(staged_l4_text, role_class)`. The helper writes the proposed L4 file to a tempfile under `.squidsquad/tmp/l4-dryrun/` (REPO_ROOT-relative — same sandbox rule as the other gate helpers) and runs A4.5's `compose.check_alias_staged_l4(alias, staged_path)` for EVERY alias of the affected role-class. The result is `DryrunResult(passed, failures)`:
+      - `passed=True` — all aliases cleared all R1-R7 rules. Proceed to C6 atomic commit.
+      - `passed=False` — at least one alias failed. Surface via `format_failure_for_human(result)` ("Dry-run failed for alias `<a>`: [`R5`] orphan step-id `<id>`"). Abort the write and re-prompt for refinement.
+      - Per AC4 the on-disk L4 is NOT replaced by the staged file — A4.5's helper reads the staged path for the specified alias while OTHER aliases of the same role-class continue to see the on-disk file. The cross-alias validation is built in: the dispatch runs one check per alias, so a step ID that exists in one variant's L3 but not another's surfaces as a per-alias failure with the failing alias named in the diagnostic.
 
    Only after all three gates pass does the agent append the H3 block to the L4 file and commit. The gates are agent-side, not part of the compose pipeline itself — the file does not change until all three are green.
 
