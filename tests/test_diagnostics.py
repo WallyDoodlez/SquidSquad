@@ -126,6 +126,89 @@ class TestRotate:
         assert "after rotation" in content
 
 
+class TestConcurrentLogEntry10523:
+    """#10523: concurrent log_entry calls must serialize via the advisory
+    file lock so the rotate-if-needed + append window can't race.
+    """
+
+    def test_no_writes_lost_under_thread_concurrency(self, tmp_path):
+        log_dir = tmp_path / "diagnostics"
+        log_dir.mkdir()
+        log_file = log_dir / "diagnostic.jsonl"
+
+        import threading
+
+        N = 30  # 30 threads × 1 entry each
+        start = threading.Barrier(N)
+
+        def worker(i):
+            start.wait()
+            diagnostics.log_entry("info", "concurrency", f"entry-{i}")
+
+        # Patch ONCE at the test boundary (patch.object is not thread-safe;
+        # per-thread patches race on the module attribute and lose writes).
+        with patch.object(diagnostics, "DIAGNOSTICS_DIR", log_dir), \
+             patch.object(diagnostics, "LOG_FILE", log_file):
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(N)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        lines = log_file.read_text(encoding="utf-8").strip().splitlines()
+        assert len(lines) == N, (
+            f"expected {N} entries, got {len(lines)} — concurrent appends "
+            f"raced (lock didn't serialize)"
+        )
+        # Each line must parse cleanly — no torn JSON from interleaved writes.
+        for line in lines:
+            json.loads(line)
+        # Every worker's entry is present (no silent drops).
+        messages = {json.loads(line)["message"] for line in lines}
+        assert messages == {f"entry-{i}" for i in range(N)}
+
+    def test_rotate_under_concurrency_keeps_consistent_tail(self, tmp_path):
+        # Simulate the rotate-while-writing race: pre-seed a log file just
+        # over the byte cap so every concurrent worker takes the rotate
+        # branch. The lock must serialize them so we never end up with a
+        # double-truncated file.
+        log_dir = tmp_path / "diagnostics"
+        log_dir.mkdir()
+        log_file = log_dir / "diagnostic.jsonl"
+
+        # Pre-seed with 600 entries (> 500, will be rotated to last 500).
+        seed = [json.dumps({"seed": i}) for i in range(600)]
+        log_file.write_text("\n".join(seed) + "\n", encoding="utf-8")
+
+        import threading
+
+        N = 20
+        start = threading.Barrier(N)
+
+        def worker(i):
+            start.wait()
+            diagnostics.log_entry("info", "concurrent-rotate", f"new-{i}")
+
+        with patch.object(diagnostics, "DIAGNOSTICS_DIR", log_dir), \
+             patch.object(diagnostics, "LOG_FILE", log_file), \
+             patch.object(diagnostics, "MAX_LOG_BYTES", 10):  # always rotate
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(N)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        lines = log_file.read_text(encoding="utf-8").strip().splitlines()
+        # Every new entry must be present — no writer lost its append to a
+        # double-truncating peer.
+        new_messages = set()
+        for line in lines:
+            entry = json.loads(line)
+            if entry.get("source") == "concurrent-rotate":
+                new_messages.add(entry["message"])
+        assert new_messages == {f"new-{i}" for i in range(N)}
+
+
 class TestSanitizeConfig:
     def test_redacts_repo_field(self):
         config_text = "- **Repo**: github.com/secret/repo\n- **Name**: MyApp\n"
