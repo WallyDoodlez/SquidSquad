@@ -1,0 +1,13 @@
+# Compose Conflict Report — pm
+Generated: 2026-06-01T12:00:00+00:00
+Compose run: fixture-sha
+Assemble model: stub-llm
+Total conflicts resolved: 1
+
+## CONFLICT-001 — slot: responsibility — precedence: L4 > L2
+- **L2 source**: `references/roles/pm/responsibility.md` (ordinal ?)
+  > PM coordinates the team
+- **L4 source**: `.squidsquad/project/pm.md` (ordinal ?)
+  > Project override: in this project, PM does NOT coordinate the team; verifier coordinates instead.
+- **Why this is a conflict**: L4 transfers team coordination from PM to verifier for this project.
+- **Resolution in assembled output**: Assembled body says verifier coordinates the team; PM still shapes work but does not coordinate.
