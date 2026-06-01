@@ -1,5 +1,5 @@
 # Working State
 
 - **Task**: none
-- **Status**: idle — skill self-directing #10394 multi-cycle migration
-- **Quiet Cycle Counter**: 2
+- **Status**: idle
+- **Quiet Cycle Counter**: 3
