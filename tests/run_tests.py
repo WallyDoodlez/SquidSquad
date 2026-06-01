@@ -128,6 +128,7 @@ STATIC_TEST_MODULES = [
     "test_conflict_detector_b4",
     "test_conflict_resolver_b5",
     "test_atomic_emit_b7",
+    "test_compose_check_a45_10395",
 ]
 
 
