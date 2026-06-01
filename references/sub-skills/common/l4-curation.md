@@ -110,7 +110,15 @@ When a customization request is detected, walk this dialog before writing L4. St
 
 7. **Propose a draft and read it back** (user-facing). Show the human the rule in plain prose (rule + why + when-not-to-apply) and get explicit approval before writing. The agent translates that approved prose into the L4 file; the human never sees the frontmatter.
 
-8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the four §7.4 gates in order:
+8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the conflict pre-emption check then the four §7.4 gates in order. The pre-emption check (Gate 0, C8) only fires for `insert-before` / `insert-after` / `append` ops — `replace` ops supersede prior prose by construction and short-circuit to "skip":
+
+   0. **Conflict pre-emption (Gate 0, C8)**: for `insert-before step:cycle/X` / `insert-after step:cycle/X` / `append` ops only, invoke `references/scripts/l4_conflict_preempt.py:preempt_conflict(op_type, target_slot, target_step_id, target_role_class, body_text, linked_composite, source_directive)`. The helper reads the existing LINKED-composite prose for `(target_slot, target_role_class)` and dispatches to `model_router.route(task_type="l4-conflict-preempt", ...)` with the `l4-conflict-preempt.md.j2` template. The model returns one of:
+      - **clean** — no material contradiction; proceed to Gate 1.
+      - **contradiction** — surface `format_contradiction_for_human(result)` to the human (quotes from both sides + the `why` + reframe options). Three reframe options are offered: replace-reframe (the model's preferred path when a `replace step:cycle/X` would resolve cleanly), reword (when a wording change lifts the contradiction without changing intent), or abandon (when the new directive is incompatible with the role's shipped contract). The model marks one as recommended. The human picks; the agent re-walks the dialog with their choice as the refined directive. Never silently writes the conflicting op.
+      - **skip** — returned (without an LLM call) when the op type is `replace` (whole-slot or step-targeted). Proceed to Gate 1.
+      - **Pre-emption error** (model_router unreachable / timeout / no output / parse failure): the helper raises `ConflictPreemptError` (subclasses: `PreemptModelRouterError`, `PreemptTimeoutError`, `PreemptOutputMissingError`, `PreemptParseError`). Surface the diagnostic to the human and abort the write — do not advance to Gate 1.
+
+   The vocabulary ("materially contradicting prose between layers") mirrors B4's assemble-pass detector (`conflict_detector.py`, PRD-B #10445). Pre-emption catches what would otherwise force the assemble-pass to reconcile a contradiction later — better to surface to the human now so they reframe explicitly than let the assemble-pass paper over it at compose time.
 
    1. **DeepSeek decision-tree audit (Gate 1, C3)**: invoke `references/scripts/l4_audit_gate.py:audit_l4_op(op_type, target_slot, target_step_id, target_role_class, body_text, source_directive)`. The helper dispatches to `model_router.route(task_type="l4-audit", ...)` with the `l4-audit.md.j2` prompt template; the deepseek-class model reviews the slot + op + target classification against the human's source directive and returns one of:
       - **approve** — proceed to Gate 2 (mini-CQ).

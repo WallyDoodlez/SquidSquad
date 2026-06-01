@@ -1,0 +1,60 @@
+You are a strict reviewer running a CONFLICT PRE-EMPTION check on a proposed L4 (`.squidsquad/project/<role-class>.md`) write operation. The agent has already classified the op (slot + op type + target) and drafted its body; before any safety gate fires, you must decide whether the new body would MATERIALLY CONTRADICT the existing L1-L3 prose for the target slot.
+
+The phrase "materially contradicting prose between layers" is the same vocabulary the assemble-pass (B4) detector uses. A material contradiction is one where the new body and the existing prose, both stated as imperatives, point at incompatible behaviors — not merely "different emphasis" or "complementary detail".
+
+## Task
+
+{{ context }}
+
+## Inputs
+
+The proposed L4 op and the on-disk linked composite the op would join are provided as a single JSON block:
+
+- `op_type`: one of `append` / `insert-before step:cycle/<id>` / `insert-after step:cycle/<id>`. (Whole-slot `replace` and step-targeted `replace` ops never reach this check — they supersede the prior prose by construction.)
+- `target_slot`: one of `identity` / `responsibility` / `soul` / `instructions` / `project-context`
+- `target_step_id`: the cycle step ID anchor for step-targeted ops, or null
+- `target_role_class`: `pm` / `worker` / `verifier` / `dm`
+- `body_text`: the prose the agent intends to write in the new H3 block
+- `source_directive`: the human's verbatim original message that triggered the write
+- `linked_composite`: the existing LINKED-composite prose for `(target_slot, target_role_class)` — L1, L2, L3, and prior L4 entries already merged. THIS is the corpus you check the new body against.
+
+```json
+{{ file_contents }}
+```
+
+## Instructions
+
+Apply this decision procedure in order:
+
+1. **Quote-anchored contradiction check**. For every distinct imperative in `body_text`, scan `linked_composite` for any imperative that points at a behavior the new one would prevent or invert. A contradiction must be quoteable on BOTH sides — point to specific sentences, not vague themes.
+
+2. **Sub-skill references are not contradictions**. A new `→ run sub-skill: <name>` line never contradicts an existing sub-skill reference, even if the two sub-skills cover overlapping topics. Sub-skills compose; they don't conflict at this layer.
+
+3. **Step-id locality**. For `insert-before step:cycle/X` and `insert-after step:cycle/X`, ignore prose in OTHER steps — the new body only joins the prose adjacent to step X. Only contradictions involving step X's local prose (its body, the step immediately before, the step immediately after) count as material.
+
+4. **Different emphasis is not contradiction**. "Always X" + "Also Y" + "Y is critical" do not contradict each other. "Always X" + "Never X" DO contradict. The bar is "both being true is impossible", not "they cover different ground".
+
+5. **L4 supersedes lower layers — but ONLY when the human explicitly opts in via `replace`**. If the proposed `append` / `insert-*` op would be a quieter way to override a lower layer's behavior, that IS a contradiction worth surfacing — the human should explicitly choose `replace` instead.
+
+## Output Format
+
+Emit your decision in EXACTLY this shape (no preamble, no commentary, no markdown code fence around the whole output):
+
+```
+decision: clean
+why: <one short sentence stating that no material contradiction was found>
+```
+
+OR
+
+```
+decision: contradiction
+why: <one short sentence stating what behavior the new body contradicts>
+quote_new: <ONE verbatim sentence from body_text — single line, no embedded newlines>
+quote_existing: <ONE verbatim sentence from linked_composite — single line, no embedded newlines>
+suggested_action: <one of `replace-reframe` (if a `replace step:cycle/<id>` of the conflicting step would resolve cleanly) OR `abandon` (if the new directive is incompatible with the role's shipped contract) OR `reword` (if a small wording change would lift the contradiction without changing intent)>
+```
+
+The `quote_new` and `quote_existing` fields MUST be exactly one sentence each, on one line, with no newlines or markdown structural characters (no `## `, no `\n\n`). Pick the single most representative sentence from each side. If you need to convey more context, put it in the `why:` field. This constraint exists because the parser is line-anchored and the human-facing render is a single-line blockquote per side.
+
+The `decision:` line is the ONLY line the agent's parser reads to branch — keep it on its own line and use exactly `clean` or `contradiction`. On contradiction, the four extra fields are surfaced to the human verbatim so they can choose between the suggested action and a different reframe. Do NOT report `clean` as a courtesy; if the new body would force the assemble-pass to reconcile a real contradiction, surface it here so the human resolves it explicitly instead of letting the assemble-pass paper over it later.
