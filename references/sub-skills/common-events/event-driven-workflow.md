@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 12
+---
+
 ## Event-Driven Workflow
 
 You are a persistent agent session driven by events from the harness. You react to one event at a time, consult the forge as the source of truth, and let `event_poll.py` advance your cursor automatically.

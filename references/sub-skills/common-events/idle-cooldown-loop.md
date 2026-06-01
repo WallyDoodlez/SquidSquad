@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 16
+---
+
 ## Idle = Improvement-Scan Cool-Down Loop
 
 When `work_queue(<role>)` returns empty, you are **not** finished — you enter the improvement-scan cool-down loop. Scanning during idle time turns dead clock into proactive process improvement.

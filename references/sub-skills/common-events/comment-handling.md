@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 15
+---
+
 ## Comment Handling
 
 **Comments are NOT standalone event triggers.** A bare comment on an issue does NOT wake any agent. Comments are absorbed by the next agent that picks up the issue.
