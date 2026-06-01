@@ -140,6 +140,27 @@ Example, in user-facing voice:
 
 > "Packaging and shipping completed work is handled separately from writing the implementation — different specialists on this team. If you want X to happen *as part of shipping*, I can lock that into the rules for whoever does the shipping (with a step that asks the implementer to provide X). If you want it *built into the implementation itself*, I can lock it into the rules for whoever does the building. Which fits what you have in mind?"
 
+#### Removal flow — undoing a prior customization (§7.5 / §7.7)
+
+When the human asks to remove an existing L4 customization ("undo the incidents-check thing", "drop that weekly security smoke rule", "forget the pre-bug-filing scan"), the agent walks the SAME elicitation dialog as for a new customization — durability confirmation, role/scope, why, edge cases, draft + read-back, mini-CQ confirmation, compose dry-run, atomic write/commit/push. Silent autonomous deletion is forbidden. The C9 helper `references/scripts/l4_removal.py:plan_removal(directive, l4_text, in_place_delete_confirmed=False, blame_lookup_fn=None)` produces the staged content the dialog hands to gates 1-4; the dialog itself remains the responsibility of this sub-skill's prose.
+
+Two paths are available, in order of preference:
+
+1. **Counter-op (default)** — for step-targeted ops (`replace step:cycle/X` / `insert-before step:cycle/X` / `insert-after step:cycle/X`), the helper emits a new `### replace step:cycle/X` H3 with an empty body. When the compose pipeline replays the L4 ops in order, the no-op replacement wipes the earlier targeted op's effect; the underlying L1-L3 step keeps its shipped behavior because compose falls back to that when the L4 replace body is empty. Additive history: the prior H3 block stays in the file, `git blame` still shows the original directive, and git log shows BOTH the original customization and the explicit counter-op directive. This is the safest path because the audit trail is complete.
+
+2. **In-place delete (requires explicit human confirmation)** — for non-targeted `append` ops (under Identity, Soul, Project Context, or Instructions-append), no clean counter-op shape exists. The C9 helper returns `path_chosen="no-counter-op-possible"` with `requires_explicit_confirmation=True`; the upstream dialog must re-ask the human "this rule can only be removed by deleting the entry from the file — confirm?" and on a clear yes, re-invoke `plan_removal(..., in_place_delete_confirmed=True)`. The helper then excises the targeted H3 block from the L4 file in place. The git commit shows the deletion in the diff (no history rewrite — additive in git terms, even though the file lost content). Per the standard "Talking to the user" rule, the user-facing question never names "in-place delete" or "counter-op" — the agent asks functionally ("the safer option keeps a record of the rule and its undo; the cleaner option drops the rule from the file entirely — which would you like?").
+
+Detection + targeting + preview before the user-facing prompt:
+
+- **Detection** (`is_removal_request`) — sentence-anchored match against removal verbs (undo / remove / drop / delete / forget / cancel / revert / stop doing / no longer / we don't need). Anchoring at clause boundaries avoids false hits on mid-sentence uses ("I would never forget the X rule" is NOT a removal request).
+- **Targeting** (`find_target_entry`) — token-overlap scoring between the directive (with removal stems stripped) and each existing op's body + `source-conversation` metadata. Returns either a single confident match, an ambiguous list (multiple entries within one-token-overlap of each other), or empty. The agent surfaces the matched entry to the human via `format_target_preview` (H3 heading + body excerpt + commit SHA + `authored-by`) BEFORE asking which path to take — the human confirms "yes, that's the rule I meant" before any gate fires.
+- **Failure-mode plumbing** — the helper never raises. `path_chosen` carries the outcome: `counter-op` / `in-place-delete` (happy paths) / `ambiguous` (surface candidates to human) / `not-found` (ask human to name a distinctive phrase) / `no-counter-op-possible` (re-ask for delete confirmation) / `not-a-removal-request` (route through normal customization dialog instead).
+
+After the dialog produces a staged content payload (`counter_op_text` for the counter-op path, or `new_l4_text` for the in-place-delete path), the gates run exactly as for a new customization:
+
+- Gates 1–3 (DS audit → mini-CQ → compose dry-run) on the staged content.
+- Gate 4 (C6 atomic write + commit + push). The commit subject under §7.5 is `<role-class>: L4 write — <slot>/<op-verb>/<target>` and the body quotes the human's removal directive verbatim under a `Source directive:` block — so `git log` on the L4 file shows the WHY of the undo, not just the deletion in the diff.
+
 #### What this sub-skill does NOT do
 
 - Does NOT silently auto-write L4 from any heuristic without human confirmation. The dialog is mandatory; the §7.4 gates run on every write.
