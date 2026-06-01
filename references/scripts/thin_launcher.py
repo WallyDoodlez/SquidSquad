@@ -34,6 +34,10 @@ VALID_EFFORT_LEVELS = {"low", "medium", "high", "max"}
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _STILL_ACTIVE = 259
 
+# Cached typed kernel32 binding for the Windows liveness probe (#10440).
+# Mirrored from process_utils — see the note above _is_process_alive.
+_CACHED_KERNEL32 = None
+
 # #10101: poll budget for resolving the actual claude.exe descendant
 # of the cmd.exe wrapper spawned by the npm shim on Windows.
 _CLAUDE_EXE_RESOLVE_TIMEOUT_S = 5.0
@@ -87,15 +91,21 @@ def _is_process_alive(pid):
     ``tasklist`` — on some Windows systems it takes 20+ s and wedges
     the harness (#9904). Uses ``sys.platform`` not ``platform.system()``
     to dodge the Python 3.12 Windows WMI hang (#9903).
+
+    Built on ``WinDLL(..., use_last_error=True)`` + explicit
+    ``argtypes``/``restype`` (#10440). The default ``windll.kernel32``
+    lets an interleaved Python operation reset the per-thread last-error
+    slot before ``GetLastError`` is read, making the ACCESS_DENIED-vs-
+    INVALID_PARAMETER branch unreliable.
     """
     if pid is None or pid <= 0:
         return False
     if sys.platform == "win32":
-        import ctypes
-        kernel32 = ctypes.windll.kernel32
+        import ctypes  # noqa: F401  — kept in the win32 branch per #8891
+        kernel32 = _win32_kernel32()
         handle = kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if not handle:
-            return kernel32.GetLastError() == 5  # ACCESS_DENIED → exists
+            return ctypes.get_last_error() == 5  # ACCESS_DENIED → exists
         try:
             exit_code = ctypes.c_ulong()
             if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
@@ -108,6 +118,54 @@ def _is_process_alive(pid):
         return True
     except (OSError, ProcessLookupError, PermissionError):
         return False
+
+
+def _win32_kernel32():
+    """Return a typed ``WinDLL('kernel32', use_last_error=True)`` (#10440).
+
+    Sibling of ``process_utils._win32_kernel32`` — kept local here to
+    avoid importing process_utils at launcher startup (#8891). If you
+    change the semantics there, mirror the change here.
+
+    This binding also types the toolhelp32 functions that
+    ``_win32_list_descendants`` uses (CreateToolhelp32Snapshot,
+    Process32First, Process32Next) — same #10440 ABI-correctness fix
+    for HANDLE width, same use_last_error guarantee.
+
+    Thread-safety: the check-then-set pattern below races under the GIL
+    (two threads can both observe None and both write). The race is
+    benign — ``ctypes.WinDLL`` is idempotent for the same DLL name and
+    the ``argtypes``/``restype`` assignments are identical assignments
+    to the same function descriptors. Different cache writers produce
+    equivalent typed bindings; no caller observes a partially-typed
+    descriptor.
+    """
+    global _CACHED_KERNEL32
+    if _CACHED_KERNEL32 is not None:
+        return _CACHED_KERNEL32
+    import ctypes
+    from ctypes import wintypes
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    k.OpenProcess.restype = wintypes.HANDLE
+    k.CloseHandle.argtypes = [wintypes.HANDLE]
+    k.CloseHandle.restype = wintypes.BOOL
+    k.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    k.GetExitCodeProcess.restype = wintypes.BOOL
+    # toolhelp32 (used by _win32_list_descendants). Restype on
+    # CreateToolhelp32Snapshot must be HANDLE so the INVALID_HANDLE_VALUE
+    # comparison works with the full 64-bit pointer width on x64.
+    k.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    k.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    # Process32First/Next take (HANDLE, LPPROCESSENTRY32). The struct
+    # pointer goes through as ``c_void_p`` so we don't need to import
+    # the PROCESSENTRY32 layout here.
+    k.Process32First.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
+    k.Process32First.restype = wintypes.BOOL
+    k.Process32Next.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
+    k.Process32Next.restype = wintypes.BOOL
+    _CACHED_KERNEL32 = k
+    return k
 
 
 def _check_singleton(clone_path, role):
@@ -226,12 +284,20 @@ def _win32_list_descendants(parent_pid):
     Implementation note: builds the full process snapshot then walks the
     tree from `parent_pid`. CreateToolhelp32Snapshot is in-process and
     avoids the WMI / tasklist hangs documented in #9903 / #9904.
+
+    Uses the same ``_win32_kernel32()`` typed binding as
+    ``_is_process_alive`` (#10440) so handle values aren't truncated to
+    ``c_int`` and ``INVALID_HANDLE_VALUE`` compares correctly on x64.
     """
     import ctypes
     from ctypes import wintypes
 
     TH32CS_SNAPPROCESS = 0x00000002
-    INVALID_HANDLE_VALUE = -1
+    # x64: INVALID_HANDLE_VALUE is ``((HANDLE)(LONG_PTR)-1)`` —
+    # ``0xFFFFFFFFFFFFFFFF`` as an unsigned. ``c_void_p(-1).value`` gives
+    # us that on both 32- and 64-bit Python, so the comparison works
+    # regardless of pointer width.
+    INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
     class PROCESSENTRY32(ctypes.Structure):
         _fields_ = [
@@ -247,9 +313,9 @@ def _win32_list_descendants(parent_pid):
             ("szExeFile", ctypes.c_char * 260),
         ]
 
-    kernel32 = ctypes.windll.kernel32
+    kernel32 = _win32_kernel32()
     snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-    if snap == INVALID_HANDLE_VALUE:
+    if snap is None or snap == INVALID_HANDLE_VALUE:
         return []
 
     try:
