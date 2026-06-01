@@ -1,5 +1,5 @@
 # Working State
 
 - **Task**: none
-- **Status**: idle — PRD-A+B drained, PM stalled blocks new work
-- **Quiet Cycle Counter**: 1
+- **Status**: idle — skill self-directing #10394 multi-cycle migration
+- **Quiet Cycle Counter**: 2
