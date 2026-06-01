@@ -1,57 +1,66 @@
 # Working State
 
-- **Task**: pipeline sentinel + system-wide MSYS2 crash investigation
-- **Status**: DM wedged, awaiting operator stop/start
+- **Task**: pipeline sentinel
+- **Status**: monitoring; skill dead, awaiting operator restart
 - **Last Processed Event ID**: c86a384fc7de6737
 - **Quiet cycles**: 0
 
 ## Pipeline
 
 - Harness: reachable
-- DM queue: 1 (#10488 stuck because DM wedged)
-- pending-test: 1 (#10443 awaiting QA mechanical bounce)
-- Open PRs: 5
+- DM queue: 0 (shipped #10488 last cycle)
+- pending-test: 0
+- Open PRs: 4 (down from 5 — #10509 merged)
 - Agents:
-  - PM (me): 1086100, cycle 1993 ✓ (survived 22:00 bash crash)
-  - QA: 263116, cycle 497 ✓
-  - DM: 2199912, WEDGED at idle since 21:35 (bash.exe crashed 21:39)
-  - skill: 2212432, cycling (last activity 21:47 stackdump, recovered)
+  - PM (me): 1086100, cycle 1994 ✓
+  - QA: 263116, cycle 498 ✓
+  - DM: 2199912, cycle 1719 ✓
+  - skill: DEAD (PID null since ~22:35)
 
-## MSYS2 crash inventory (this cycle)
+## Just shipped
 
-All bash.exe.stackdump on host:
-- D:/Dev/Dev/SquidSquad (PM, 22:00 — survived)
-- D:/Dev/Dev/SquidSquad-2 (skill, 21:47 — survived)
-- D:/Dev/Dev/SquidSquad-3 (DM, 21:39 — wedged)
-- D:/Dev/Dev/SquidSquad-qa (old, unused)
-- D:/Dev/Dev/viewfinder, viewfinder-designer, viewfinder-dev, viewfinder-dm, viewfinder-qa (different project, same signature)
+- #10488 (PRD-A/A2b L4 single-file H2-slot + H3-op grammar parser) ✓
 
-All start at msys-2.0.dll+0x1FE8E. Environment-level instability, not SquidSquad-specific.
+## Cascade route-backs (skill must rebase)
+
+- #10443 — PR #10454 dirty after #10509 merge (same #10540 race pattern); DM also flagged citation-gate bounce
+- #10441 — pre-existing route-back
+- #10440 — pre-existing route-back
+- #10386 — real merge conflict (compose --v2)
+
+## Skill's approved queue (just expanded today)
+
+- Phase 1 PRD-A core: #10489 A2c, #10490 A2d, #10491 A2e, #10492 A2f (all approved this session by human)
+- #10395 A4.5 (Q-C5 unblocker)
+- #10442 B3 (length floor verifier)
 
 ## Operator action needed
 
-DM wedge: run the same dance you ran for skill at 21:31:
-  curl -X POST http://127.0.0.1:7373/agents/dm/stop
-  curl -X POST http://127.0.0.1:7373/agents/dm/start
+Skill dead again. Same dance as last time:
+  curl -X POST http://127.0.0.1:7373/agents/skill/stop
+  curl -X POST http://127.0.0.1:7373/agents/skill/start
 
-Or let me boot DM with boot_remote.py if you OK it.
+Or permit PM to boot_remote.py per `feedback_manual_agents` (currently holding per no-auto-reboot operator mode).
 
-## Closed this session
+## Human-blocked
 
-- #10537 — wont-fix (human direction, cycle 1992)
+- #3 — public-launch disposition
+- #10377 — gated on TRD impl
 
-## Recently filed by PM
+## Held PR
 
-- #10540 — DM batch ship dispatch race (sev:medium)
-- #10541 — MSYS2 bash crash (now scoped as environment-level; sev:high)
+- PR #10391 (PRD-C draft) — held by PM comment pending PRD-A/B story queue drain
 
-## Approved / waiting on skill
+## Open PRDs to draft (after COMPOSE-ARCH family lands)
 
-- #10442, #10386 (conflict), #10441, #10440 (route-backs)
+- INSTALLER-ARCH, HARNESS-ARCH, AGENT-RUNTIME, VAULT-ARCH (4 TRDs, no PRDs yet)
 
-## Other human-blocked
+## Recently filed/closed by PM
 
-- #3, #10377 (gated on TRD impl)
+- #10540 — DM batch ship dispatch race (sev:medium, open)
+- #10541 — MSYS2 environment-level crash (sev:high, open, escalated)
+- #10537 — closed wont-fix
+- #10558 — closed dup of #10395
 
 ## Context
 
