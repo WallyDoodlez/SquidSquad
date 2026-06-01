@@ -125,6 +125,7 @@ STATIC_TEST_MODULES = [
     "test_link_stage_validator",
     "test_compose_a2f_10492",
     "test_assemble_pass_b1",
+    "test_conflict_detector_b4",
 ]
 
 
