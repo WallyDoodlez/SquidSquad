@@ -19,8 +19,6 @@ which v1 compose does not read — v1 output stays byte-identical (the
 """
 
 import os
-import re
-import shlex
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -121,6 +119,11 @@ def write_and_commit_l4(
         )
 
     # Phase 2 — git commit. Stage just the L4 file (never -A or .).
+    # Capture pre-commit SHA so the push-fail revert path targets an
+    # explicit commit rather than relying on HEAD~1 — defends against the
+    # case where the working tree was dirty at entry and `git commit`
+    # accidentally included unrelated staged changes.
+    pre_commit_sha = _resolve_head_sha(runner, target_root)
     subject = _commit_subject(role_class, slot, op_type, target)
     body = _commit_body(source_directive)
     relative = target_file.relative_to(target_root).as_posix()
@@ -153,8 +156,11 @@ def write_and_commit_l4(
     )
     if push_result.returncode != 0:
         # AC5: revert local commit, surface diagnostic, do NOT retry.
+        # Reset to the explicit pre-commit SHA when known — safer than
+        # HEAD~1 if anything else landed between phases.
+        revert_target = pre_commit_sha if pre_commit_sha else "HEAD~1"
         runner(
-            ["git", "reset", "--hard", "HEAD~1"],
+            ["git", "reset", "--hard", revert_target],
             cwd=str(target_root), capture_output=True, text=True,
         )
         return WriteResult(
@@ -164,7 +170,8 @@ def write_and_commit_l4(
             failure_stage="push",
             failure_detail=(
                 f"git push failed: {push_result.stderr.strip() or push_result.stdout.strip()}. "
-                f"Local commit {sha[:8] if sha else '?'} reverted via `git reset --hard HEAD~1`. "
+                f"Local commit {sha[:8] if sha else '?'} reverted via "
+                f"`git reset --hard {revert_target[:8] if revert_target != 'HEAD~1' else revert_target}`. "
                 f"Operator decides next step — no automatic retry."
             ),
         )
@@ -190,33 +197,38 @@ def _commit_body(source_directive):
     """Format AC3 commit body: quote the human directive verbatim.
 
     Verbatim means the human's message is reproduced unchanged inside a
-    short quote block so ``git log`` readers and the audit trail see
-    exactly what was said. Multi-line directives are preserved.
+    fenced code block so ``git log`` readers see exactly what was said —
+    including directives that themselves contain ``>`` quote prefixes,
+    backticks, or other markdown that a line-prefix quoter would mangle.
+    Uses a fence length that adapts if the directive embeds backticks of
+    its own (so the fence is always longer than the longest inner run).
     """
-    quoted = "\n".join(f"> {line}" for line in source_directive.splitlines())
-    return f"Source directive:\n\n{quoted}\n"
+    longest_run = 0
+    run = 0
+    for ch in source_directive:
+        if ch == "`":
+            run += 1
+            longest_run = max(longest_run, run)
+        else:
+            run = 0
+    fence = "`" * max(3, longest_run + 1)
+    return f"Source directive:\n\n{fence}\n{source_directive.rstrip()}\n{fence}\n"
 
 
 def _apply_metadata_trailer(staged_text, *, authored_by, generated_at,
                              source_directive):
-    """Inject the §7.5 HTML-comment metadata trailer on the most recent H3 op block.
+    """Append the §7.5 HTML-comment metadata trailer to the staged text.
 
-    The trailer is appended after the last ``### `` H3 block in the
-    staged text so ``git blame`` on the L4 file attributes the op to
-    the writing agent. If the staged text already contains a trailer
-    (e.g. authored upstream), append the new one — the file accumulates
-    one trailer per H3 op over time, mirroring the §7.3 worked example
-    in COMPOSE-ARCHITECTURE.md.
+    The trailer follows the last H3 op block so ``git blame`` on the L4
+    file attributes the op to the writing agent. Files accumulate one
+    trailer per H3 op over time, mirroring the §7.3 worked example in
+    COMPOSE-ARCHITECTURE.md.
     """
     trailer = _format_trailer(
         authored_by=authored_by,
         generated_at=generated_at,
         source_directive=source_directive,
     )
-    if staged_text.rstrip().endswith("-->"):
-        # Already has a trailing trailer (whether ours or the staged
-        # author's); append ours after a blank line.
-        return staged_text.rstrip() + "\n\n" + trailer + "\n"
     return staged_text.rstrip() + "\n\n" + trailer + "\n"
 
 

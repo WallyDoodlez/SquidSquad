@@ -193,16 +193,34 @@ def test_commit_runs_git_add_then_commit(tmp_path):
 def test_commit_body_quotes_directive_verbatim():
     body = l4_write_commit._commit_body(_DIRECTIVE)
     assert "Source directive:" in body
-    # Verbatim quote: every line of the directive present
-    assert f"> {_DIRECTIVE}" in body
+    # Verbatim: the directive appears unchanged inside a code fence
+    assert _DIRECTIVE in body
+    assert "```" in body
 
 
 def test_commit_body_preserves_multiline_directive():
-    multi = "Line one of directive.\nLine two adds context.\nLine three.\n"
+    multi = "Line one of directive.\nLine two adds context.\nLine three."
     body = l4_write_commit._commit_body(multi)
-    assert "> Line one of directive." in body
-    assert "> Line two adds context." in body
-    assert "> Line three." in body
+    # The three lines are reproduced sequentially inside the fence — no
+    # per-line prefix injected between them.
+    assert multi in body
+
+
+def test_commit_body_preserves_directive_with_quote_prefix():
+    """B2: a directive containing `> ` prefixes is not double-quoted."""
+    quoted_input = "> from prior reply: do X\nand also Y"
+    body = l4_write_commit._commit_body(quoted_input)
+    assert "> from prior reply: do X" in body
+    assert "> > from prior reply" not in body
+
+
+def test_commit_body_escalates_fence_when_directive_has_backticks():
+    """Fence length adapts so inner triple-backticks don't terminate the wrapper."""
+    inner = "use ```python\nprint('hi')\n``` in the docs"
+    body = l4_write_commit._commit_body(inner)
+    # Inner has a 3-backtick run, so the outer fence must be 4+
+    assert "````" in body
+    assert inner in body
 
 
 def test_metadata_trailer_has_required_fields():
@@ -300,7 +318,82 @@ def test_push_fail_reverts_local_commit(tmp_path):
     )
     assert result.failure_stage == "push"
     assert result.pushed is False
-    # git reset --hard HEAD~1 invoked exactly once
+    # `git reset --hard` invoked exactly once
+    reset_calls = [c["argv"] for c in calls
+                   if c["argv"][:3] == ["git", "reset", "--hard"]]
+    assert len(reset_calls) == 1
+
+
+def test_push_fail_resets_to_pre_commit_sha_not_head_tilde_1(tmp_path):
+    """B1 hardening: revert uses the pre-commit SHA captured BEFORE phase 2,
+    not the literal `HEAD~1` — safer if the working tree was dirty at entry
+    so the commit accidentally bundled unrelated staged changes.
+    """
+    pre_sha = "1111111111111111111111111111111111111111"
+    post_sha = "2222222222222222222222222222222222222222"
+    rev_parse_counter = {"n": 0}
+    calls = []
+
+    def run(argv, *, cwd=None, capture_output=True, text=True, **kwargs):
+        calls.append({"argv": list(argv)})
+        if argv[:2] == ["git", "rev-parse"]:
+            rev_parse_counter["n"] += 1
+            sha = pre_sha if rev_parse_counter["n"] == 1 else post_sha
+            return SimpleNamespace(returncode=0, stdout=sha + "\n", stderr="")
+        if argv[:2] == ["git", "push"]:
+            return SimpleNamespace(returncode=1, stdout="", stderr="boom")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    result = l4_write_commit.write_and_commit_l4(
+        role_class="pm",
+        staged_l4_text=_STAGED_L4,
+        op_type="append",
+        target="",
+        slot="instructions",
+        source_directive=_DIRECTIVE,
+        authored_by="pm-lead",
+        target_root=tmp_path,
+        generated_at=_GENERATED_AT,
+        runner=run,
+    )
+    assert result.failure_stage == "push"
+    reset_calls = [c["argv"] for c in calls
+                   if c["argv"][:3] == ["git", "reset", "--hard"]]
+    assert reset_calls == [["git", "reset", "--hard", pre_sha]]
+
+
+def test_push_fail_falls_back_to_head_tilde_1_when_pre_sha_unknown(tmp_path):
+    """If pre-commit `git rev-parse HEAD` fails (e.g. fresh repo), the revert
+    still happens — but targets `HEAD~1` as the fallback.
+    """
+    calls = []
+    rev_parse_counter = {"n": 0}
+
+    def run(argv, *, cwd=None, capture_output=True, text=True, **kwargs):
+        calls.append({"argv": list(argv)})
+        if argv[:2] == ["git", "rev-parse"]:
+            rev_parse_counter["n"] += 1
+            # First rev-parse (pre-commit) fails; second (post-commit) succeeds
+            if rev_parse_counter["n"] == 1:
+                return SimpleNamespace(returncode=1, stdout="", stderr="no HEAD")
+            return SimpleNamespace(returncode=0, stdout="postsha\n", stderr="")
+        if argv[:2] == ["git", "push"]:
+            return SimpleNamespace(returncode=1, stdout="", stderr="boom")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    result = l4_write_commit.write_and_commit_l4(
+        role_class="pm",
+        staged_l4_text=_STAGED_L4,
+        op_type="append",
+        target="",
+        slot="instructions",
+        source_directive=_DIRECTIVE,
+        authored_by="pm-lead",
+        target_root=tmp_path,
+        generated_at=_GENERATED_AT,
+        runner=run,
+    )
+    assert result.failure_stage == "push"
     reset_calls = [c["argv"] for c in calls
                    if c["argv"][:3] == ["git", "reset", "--hard"]]
     assert reset_calls == [["git", "reset", "--hard", "HEAD~1"]]
