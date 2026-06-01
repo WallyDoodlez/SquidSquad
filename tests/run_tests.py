@@ -119,6 +119,7 @@ STATIC_TEST_MODULES = [
     "test_process_utils",
     "test_assemble_cache",
     "test_l4_parser",
+    "test_l4_op_processor",
 ]
 
 
