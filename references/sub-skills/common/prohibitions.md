@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## What You Must Never Do
 
 - Never implement a task with status `Pending` — it has not been approved by a human yet.

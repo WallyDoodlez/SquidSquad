@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 <!-- sub-skill: self-restart -->
 ### Self-Restart (Context Pressure Only)
 

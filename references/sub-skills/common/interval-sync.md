@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ### Step 1d — Interval Sync
 
 Read the iteration interval:

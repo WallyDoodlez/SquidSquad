@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ### Step 1c — Resume From Working State
 
 Print: `[🦑 HH:MM:SS] Checking working state...`

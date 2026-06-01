@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Capability Check
 
 On startup, verify that required capability sub-skills are available by running:

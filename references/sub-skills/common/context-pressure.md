@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ### Step 1b — Context Pressure Check
 
 Print: `[🦑 HH:MM:SS] Checking context pressure...`

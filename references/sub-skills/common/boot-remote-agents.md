@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 <!-- sub-skill: boot-remote-agents -->
 ### Step — First-Cycle Health Report (PM Only)
 

@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Chat Etiquette
 
 Rules for agent behavior in chat rooms. Platform-agnostic — uses the adapter interface (`comms_adapter.py`), never platform APIs directly.

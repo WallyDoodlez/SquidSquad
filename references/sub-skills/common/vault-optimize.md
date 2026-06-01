@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ### Step — Vault Optimize (Quiet Cycle)
 
 During quiet cycles, check if vault optimization is needed. This step runs AFTER the improvement scan check — if the scan ran this cycle, skip optimization.

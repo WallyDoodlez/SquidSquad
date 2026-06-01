@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Consensus Protocol
 
 Rules for driving multi-party discussions to locked decisions in chat. Used for vault writes, architectural choices, and cross-agent disagreements.

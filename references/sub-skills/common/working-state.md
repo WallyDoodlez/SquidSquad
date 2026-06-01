@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Working State File
 
 Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context window resets:

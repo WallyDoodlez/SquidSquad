@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## File Conventions
 
 - Your issues and tasks: GitHub Issues with `role:[ROLE]` label (queried via `python references/scripts/tracker.py list-issues/list-tasks`)
