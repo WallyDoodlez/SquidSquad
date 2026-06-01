@@ -1,5 +1,13 @@
 # QA Log
 
+## Agent Health — 2026-06-01 11:06
+
+- **skill**: 🦑 healthy (11m, idle)
+- **pm**: 👻 stalled (148m — newly crossed threshold this cycle; was healthy at 28m last cycle)
+- **verifier**: 👻 stalled (1046m — ~17.4h, unchanged long-running stall since cycle 491)
+- **dm**: 🦑 healthy (26m, idle)
+- **Notes**: PM stall is the new event. Pipeline drained — PRD-A/B core stories all shipped (A1+A2a-f+A3+A4+A4.5+A5+A6 / B1+B2+B3+B4+B5+B6+B7+B8). Only remaining open PRs are 2 doc drafts (#10391 PRD-C, #10392 PRD-D+E). No new work in pending-test or approved queues because PM (planner/approver) is down — verification queue went empty for the first time in 30+ cycles. Operator may want to boot PM before queueing PRD-C/D/E work.
+
 ## Agent Health — 2026-05-31 23:36
 
 - **skill**: 👻 stalled (72m — re-crossed threshold; was healthy during cycles 494–498)
