@@ -1,9 +1,20 @@
 # Working State
 
-- **Task**: pipeline sentinel + skill respawn loop
-- **Status**: monitoring skill 3rd-boot; escalation pending if 4th failure
+- **Task**: ESCALATED — skill bash.exe MSYS2 crash, awaiting human
+- **Status**: halted manual reboot loop; pipeline-sentinel-only until human directs
 - **Last Processed Event ID**: c86a384fc7de6737
 - **Quiet cycles**: 0
+
+## Escalation
+
+Skill clone D:/Dev/Dev/SquidSquad-2 — bash.exe crashes inside msys-2.0.dll on every boot attempt this session. Found stackdump (mtime 20:37, matches last boot_remote spawn). Three boots, three deaths, zero productive cycles.
+
+**PM action required from human (not from PM):**
+- (a) clear+re-clone SquidSquad-2 via installer, or
+- (b) switch thin launcher to cmd.exe, or
+- (c) verify SquidSquad-3 (DM) and main (PM) clones aren't gestating the same issue.
+
+Full details + stack trace on #10541. Will NOT re-boot skill from PM cycles until human OK — re-launching into the same crash burns cycles without information.
 
 ## Pipeline
 
@@ -11,31 +22,24 @@
 - DM queue: 0
 - pending-test: 0
 - Open PRs: 5 (3 awaiting skill: #10476/#10386 conflict, #10454/#10443 retry, #10509/#10488 retry; 2 docs: #10391, #10392)
-- Skill: just re-spawned (3rd this session). Cycle 1455 last ran at 20:08:18 with bootup-test events only, then died.
+- Skill: dead (claude_pid:null, cycle 1455 stale)
 
-## Skill wedge timeline (this session)
+## Approved / waiting on skill
 
-- Cycle 1985 (18:00): skill PID 1280312 alive 1h36m, bootup_complete:false, never cycled
-- Cycle 1988 (19:37): restarted via POST /agents/skill/restart — kill succeeded, no respawn
-- Cycle 1989 (20:07): manual boot via boot_remote → PID 1725520
-- Cycle 1455 (20:08): skill ran bootup-test, emitted 3 self-test events, died before cycle end
-- Cycle 1990 (20:36): boot_remote re-spawned
+- #10442 (skill, B3 verifier) — hard blocked
+- (#10386, #10443, #10488 sitting at in-progress after DM route-back — also hard blocked)
 
-## Approved / waiting
+## Other human-blocked items
 
-- #10442 (skill, B3 verifier) — blocked on skill bootup
-- #3 (dm, public-launch) — paused awaiting human disposition
-
-## Human-blocked
-
+- #3 (dm, public-launch) — paused awaiting disposition since 2026-05-24
 - #10537 — wont-fix vs opt-in INFO-only role-graph cycle audit
 - #10377 — gated on TRD impl
 
-## Recently filed by PM
+## Recently filed/updated by PM
 
 - #10540 — DM batch ship dispatch race (sev:medium)
-- #10541 — skill wedge (sev:high, 3 symptoms documented)
+- #10541 — skill wedge → now identified as MSYS2 bash crash (sev:high, escalated)
 
-## Escalation threshold
+## Context
 
-If cycle 1991 finds skill dead/wedged again, raise to human immediately — 4 boots / 3h / zero useful cycles indicates a deeper config or runtime issue PM cannot fix from within the loop.
+healthy.
