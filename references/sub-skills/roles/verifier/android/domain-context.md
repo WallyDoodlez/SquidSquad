@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [verifier]
+---
+
 <!-- sub-skill: domain-context -->
 ### Android Domain Context
 

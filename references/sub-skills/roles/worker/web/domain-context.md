@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [worker]
+---
+
 <!-- sub-skill: domain-context -->
 ### Web Domain Context
 

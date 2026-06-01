@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [verifier]
+---
+
 ## Status Line
 
 A status line is shown at the bottom of your Claude Code session. It displays:

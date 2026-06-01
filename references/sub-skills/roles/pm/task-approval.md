@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ## Task Approval Gate
 
 Tasks start as `Pending` — **a human must explicitly approve them** before any agent picks them up.

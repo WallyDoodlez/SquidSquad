@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [pm]
+---
+
 <!-- sub-skill: domain-context -->
 ### Fullstack Domain Context
 

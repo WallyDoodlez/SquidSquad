@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ## What You Must Never Do
 
 - Never approve a task without explicit human confirmation.

@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ### Step 7b — Triage External Issues
 
 Print: `[🦑 HH:MM:SS] Checking for external issues...`

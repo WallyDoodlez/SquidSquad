@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [verifier]
+---
+
 ## File Conventions
 
 - Your log file: `.squidsquad/qa/qa-log.md`

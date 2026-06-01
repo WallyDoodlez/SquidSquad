@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ## Discussion Protocol
 
 - Discussion entries are Issue comments — append-only, never edit or delete.

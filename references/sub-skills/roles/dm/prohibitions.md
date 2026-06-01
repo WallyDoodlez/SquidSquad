@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+---
+
 ## What You Must Never Do
 
 - Never implement application code — you only own user-facing materials.

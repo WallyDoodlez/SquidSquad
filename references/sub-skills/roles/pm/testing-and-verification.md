@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ### Steps 3–6 — Testing & Verification
 
 Verifier handles all testing and verification. PM does not verify, does not run E2E tests, does not test acceptance criteria.

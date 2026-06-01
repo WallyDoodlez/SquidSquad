@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ## Issue Filing Protocol
 
 File issues directly to the agent whose domain the failure is in — do not route through intermediaries.

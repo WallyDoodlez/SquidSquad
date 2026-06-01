@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [worker]
+---
+
 ### Step 2b — Implement Task (continued from Step 2)
 
 _This step is reached when Step 2 (deterministic triage) picks a task from the work queue._

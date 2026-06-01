@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [dm]
+---
+
 ## DM — PR-Merge Wait (Event Mode)
 
 DM is the one role whose work routinely spans **waiting on an external system**: a feature PR must merge before DM can transition the corresponding tracker item to `shipped` and run delivery packaging. Event mode makes this wait a single atomic task that DM holds open until the merge resolves (or DM rolls it back).

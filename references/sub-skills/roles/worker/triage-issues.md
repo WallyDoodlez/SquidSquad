@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [worker]
+---
+
 ### Step 2 — Pick Up Work (Deterministic Triage)
 
 Print: `[🦑 HH:MM:SS] Checking work queue...`
