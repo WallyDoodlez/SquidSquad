@@ -1,3 +1,9 @@
+---
+slot: responsibility
+ordinal: 10
+roles: [pm]
+---
+
 # pm — Install-specific responsibility additions (L4)
 
 No install-specific responsibility additions for pm at this time.

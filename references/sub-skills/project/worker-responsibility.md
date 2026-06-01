@@ -1,3 +1,9 @@
+---
+slot: responsibility
+ordinal: 10
+roles: [worker]
+---
+
 # worker — Install-specific responsibility additions (L4)
 
 No install-specific responsibility additions for worker at this time.
