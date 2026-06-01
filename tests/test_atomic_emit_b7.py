@@ -379,3 +379,243 @@ def test_split_linked_handles_closing_hashes_in_heading():
     composite = "## Identity ##\nbody\n"
     out = ae._split_linked_into_slots(composite)
     assert "identity" in out
+
+
+# ---------------------------------------------------------------------------
+# AC: cache corruption — retry LLM once, then abort if retry also fails
+# ---------------------------------------------------------------------------
+
+def test_cache_hit_with_valid_body_skips_llm(tmp_path):
+    """A valid cached body means assemble_slot_fn is NEVER called for that slot."""
+    llm_calls = []
+
+    def assemble_slot_fn(slot, linked_body):
+        llm_calls.append(slot)
+        return "fresh from LLM\n"
+
+    def cache_lookup_fn(slot, linked_body):
+        return "CACHED-BODY for " + slot
+
+    stubs = _stubs()
+    stubs["assemble_slot_fn"] = assemble_slot_fn
+    ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker",
+        cache_lookup_fn=cache_lookup_fn,
+        **stubs,
+    )
+    assert llm_calls == [], f"LLM should not be called on cache hit; got {llm_calls}"
+
+
+def test_cache_corruption_triggers_one_retry_and_succeeds(tmp_path):
+    """Cache hit with corrupt body -> ONE retry per slot; retry succeeds -> use retry body."""
+    llm_call_count = {"n": 0}
+
+    def assemble_slot_fn(slot, linked_body):
+        llm_call_count["n"] += 1
+        return "RETRY-OUTPUT for " + slot
+
+    def cache_lookup_fn(slot, linked_body):
+        return "CACHED-BUT-CORRUPT for " + slot
+
+    def parse_output_fn(llm_output):
+        return llm_output, []
+
+    seq = {"resolve": 0}
+
+    def resolve_fn(body, conflicts, linked_body):
+        seq["resolve"] += 1
+        # Odd resolves = cached-body verify (fail). Even = retry verify (pass).
+        if seq["resolve"] % 2 == 1:
+            return [ResolverIssue(
+                conflict_index=1, slot="instructions",
+                loser_layer="L2", winner_layer="L4",
+                detail="cached body corrupt",
+            )], _all_ok_reverify()
+        return [], _all_ok_reverify()
+
+    stubs = _stubs()
+    stubs["assemble_slot_fn"] = assemble_slot_fn
+    stubs["parse_output_fn"] = parse_output_fn
+    stubs["resolve_fn"] = resolve_fn
+    ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker",
+        cache_lookup_fn=cache_lookup_fn,
+        **stubs,
+    )
+    # 4 non-verbatim slots × 1 retry each = 4. No double retries.
+    assert llm_call_count["n"] == 4
+
+
+def test_cache_corruption_retry_also_fails_raises_cache_corruption(tmp_path):
+    """Both cached body AND retry body fail verification -> CacheCorruption, no partial artifacts."""
+    def assemble_slot_fn(slot, linked_body):
+        return "BAD-RETRY"
+
+    def cache_lookup_fn(slot, linked_body):
+        return "BAD-CACHED"
+
+    def parse_output_fn(llm_output):
+        return llm_output, []
+
+    def resolve_fn(body, conflicts, linked_body):
+        # Always fail — both cached and retry.
+        return [ResolverIssue(
+            conflict_index=1, slot="instructions",
+            loser_layer="L2", winner_layer="L4",
+            detail="loser still present",
+        )], _all_ok_reverify()
+
+    stubs = _stubs()
+    stubs["assemble_slot_fn"] = assemble_slot_fn
+    stubs["parse_output_fn"] = parse_output_fn
+    stubs["resolve_fn"] = resolve_fn
+    with pytest.raises(ae.CacheCorruption) as exc:
+        ae.assemble_and_emit(
+            _LINKED_COMPOSITE, tmp_path, role_class="worker",
+            cache_lookup_fn=cache_lookup_fn,
+            **stubs,
+        )
+    assert exc.value.slot in {"identity", "responsibility", "soul", "instructions"}
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_cache_corruption_retry_succeeds_stores_new_body(tmp_path):
+    """When the retry succeeds, the new body is stored to the cache (write-through)."""
+    store_calls = []
+
+    def assemble_slot_fn(slot, linked_body):
+        return "RETRY-FOR-" + slot
+
+    def cache_lookup_fn(slot, linked_body):
+        return "BAD-CACHED-FOR-" + slot
+
+    def cache_store_fn(slot, linked_body, output):
+        store_calls.append(slot)
+
+    def parse_output_fn(llm_output):
+        return llm_output, []
+
+    seq = {"n": 0}
+
+    def resolve_fn(body, conflicts, linked_body):
+        seq["n"] += 1
+        if seq["n"] % 2 == 1:
+            return [ResolverIssue(
+                conflict_index=1, slot="instructions",
+                loser_layer="L2", winner_layer="L4",
+                detail="cache corrupt",
+            )], _all_ok_reverify()
+        return [], _all_ok_reverify()
+
+    stubs = _stubs()
+    stubs["assemble_slot_fn"] = assemble_slot_fn
+    stubs["parse_output_fn"] = parse_output_fn
+    stubs["resolve_fn"] = resolve_fn
+    ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker",
+        cache_lookup_fn=cache_lookup_fn,
+        cache_store_fn=cache_store_fn,
+        **stubs,
+    )
+    assert set(store_calls) == {"identity", "responsibility", "soul", "instructions"}
+
+
+def test_cache_miss_runs_llm_and_stores_on_success(tmp_path):
+    """Cache miss -> LLM dispatch; success -> body stored via cache_store_fn."""
+    llm_calls = []
+    store_calls = []
+
+    def assemble_slot_fn(slot, linked_body):
+        llm_calls.append(slot)
+        return "FRESH-FOR-" + slot
+
+    def cache_lookup_fn(slot, linked_body):
+        return None
+
+    def cache_store_fn(slot, linked_body, output):
+        store_calls.append(slot)
+
+    stubs = _stubs()
+    stubs["assemble_slot_fn"] = assemble_slot_fn
+    ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker",
+        cache_lookup_fn=cache_lookup_fn,
+        cache_store_fn=cache_store_fn,
+        **stubs,
+    )
+    assert set(llm_calls) == {"identity", "responsibility", "soul", "instructions"}
+    assert set(store_calls) == {"identity", "responsibility", "soul", "instructions"}
+
+
+def test_cache_miss_with_fresh_failure_does_not_retry(tmp_path):
+    """A fresh LLM run that fails verification is NOT cache_corruption — no retry."""
+    llm_calls = []
+
+    def assemble_slot_fn(slot, linked_body):
+        llm_calls.append(slot)
+        return "BAD-FRESH"
+
+    def cache_lookup_fn(slot, linked_body):
+        return None  # miss -> no retry semantics
+
+    def parse_output_fn(llm_output):
+        return llm_output, []
+
+    def resolve_fn(body, conflicts, linked_body):
+        return [ResolverIssue(
+            conflict_index=1, slot="instructions",
+            loser_layer="L2", winner_layer="L4",
+            detail="precedence violation on first try",
+        )], _all_ok_reverify()
+
+    stubs = _stubs()
+    stubs["assemble_slot_fn"] = assemble_slot_fn
+    stubs["parse_output_fn"] = parse_output_fn
+    stubs["resolve_fn"] = resolve_fn
+    with pytest.raises(ae.PrecedenceViolation):
+        ae.assemble_and_emit(
+            _LINKED_COMPOSITE, tmp_path, role_class="worker",
+            cache_lookup_fn=cache_lookup_fn,
+            **stubs,
+        )
+    # Exactly one LLM call for the first non-verbatim slot — no retry on fresh fail.
+    assert len(llm_calls) == 1
+
+
+def test_cache_lookup_exception_is_treated_as_miss(tmp_path):
+    """A flaky cache backend raising on lookup must not break the assemble run."""
+    llm_calls = []
+
+    def assemble_slot_fn(slot, linked_body):
+        llm_calls.append(slot)
+        return "FRESH"
+
+    def cache_lookup_fn(slot, linked_body):
+        raise IOError("cache disk offline")
+
+    stubs = _stubs()
+    stubs["assemble_slot_fn"] = assemble_slot_fn
+    ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker",
+        cache_lookup_fn=cache_lookup_fn,
+        **stubs,
+    )
+    assert len(llm_calls) == 4
+
+
+def test_cache_store_failure_does_not_abort_run(tmp_path):
+    """cache_store_fn raising must not turn a successful assemble into a failure."""
+    def assemble_slot_fn(slot, linked_body):
+        return "FRESH"
+
+    def cache_store_fn(slot, linked_body, output):
+        raise IOError("cache disk offline")
+
+    stubs = _stubs()
+    stubs["assemble_slot_fn"] = assemble_slot_fn
+    paths = ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker",
+        cache_store_fn=cache_store_fn,
+        **stubs,
+    )
+    assert all(p.exists() for p in paths)

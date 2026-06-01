@@ -113,6 +113,8 @@ def assemble_and_emit(
     parse_output_fn=None,
     resolve_fn=None,
     emit_report_fn=None,
+    cache_lookup_fn=None,
+    cache_store_fn=None,
 ):
     """Run the full assemble pass + atomic write of the §4.6 triple.
 
@@ -128,6 +130,18 @@ def assemble_and_emit(
     ``output_dir`` is typically ``.squidsquad/<alias>/`` (the same dir
     A6/A2f's v2 deploy writes to). The three files are written into
     that dir; the dir itself is created lazily.
+
+    ``cache_lookup_fn(slot, linked_slot_body) -> str | None`` and
+    ``cache_store_fn(slot, linked_slot_body, assembled_llm_output)``
+    integrate B6's per-slot cache. A cache hit whose body fails
+    verification is treated as cache-corruption: the LLM is re-run
+    ONCE; if the re-run also fails verification, :class:`CacheCorruption`
+    is raised (per the §4.6 failure-mode table). A cache miss runs the
+    LLM normally; verification failures on a fresh (no-cache) run raise
+    :class:`PreservationFail` / :class:`FloorParityFail` /
+    :class:`PrecedenceViolation` directly — no retry. Both seams default
+    to no-op (cache-disabled mode) so tests and the v2-without-cache
+    path keep working unchanged.
 
     Injection seams take the real modules' callables by default. Tests
     pass stubs to exercise each failure mode without a live LLM.
@@ -170,51 +184,14 @@ def assemble_and_emit(
             conflicts_per_slot[slot] = []
             continue
 
-        # B1: dispatch to the LLM.
-        try:
-            llm_output = assemble_slot_fn(slot, linked_slot_body)
-        except Exception as e:  # noqa: BLE001 — every error is an LLM-error here
-            raise LLMError(
-                f"assemble_slot raised on slot `{slot}`: {e}",
-                slot=slot,
-            ) from e
-
-        # B4: parse out the body and the conflict list.
-        try:
-            body, conflicts = parse_output_fn(llm_output)
-        except Exception as e:  # noqa: BLE001
-            raise LLMError(
-                f"parse_assemble_output failed on slot `{slot}`: {e}",
-                slot=slot,
-            ) from e
-
-        # B5: resolve precedence + re-verify B2 + B3.
-        issues, reverify = resolve_fn(body, conflicts, linked_slot_body)
-        if issues:
-            raise PrecedenceViolation(
-                f"Higher-L-wins violation in slot `{slot}`: "
-                f"CONFLICT-{issues[0].conflict_index:03d} "
-                f"({issues[0].winner_layer}>{issues[0].loser_layer}): "
-                f"{issues[0].detail}",
-                slot=slot,
-            )
-        if not reverify.preservation_ok:
-            raise PreservationFail(
-                f"Preservation check (B2) failed on slot `{slot}`: "
-                f"missing_sub_skills={reverify.preservation.missing_sub_skills}, "
-                f"extra_sub_skills={reverify.preservation.extra_sub_skills}, "
-                f"missing_step_ids={reverify.preservation.missing_step_ids}, "
-                f"extra_step_ids={reverify.preservation.extra_step_ids}",
-                slot=slot,
-            )
-        if not reverify.length_floor_ok or not reverify.code_block_parity_ok:
-            raise FloorParityFail(
-                f"Length-floor/code-block-parity (B3) failed on slot `{slot}`: "
-                f"length_floor_ok={reverify.length_floor_ok}, "
-                f"code_block_parity_ok={reverify.code_block_parity_ok}",
-                slot=slot,
-            )
-
+        body, conflicts = _assemble_one_slot(
+            slot, linked_slot_body,
+            assemble_slot_fn=assemble_slot_fn,
+            parse_output_fn=parse_output_fn,
+            resolve_fn=resolve_fn,
+            cache_lookup_fn=cache_lookup_fn,
+            cache_store_fn=cache_store_fn,
+        )
         assembled_per_slot[slot] = body
         conflicts_per_slot[slot] = conflicts
 
@@ -240,6 +217,127 @@ def assemble_and_emit(
             claude_conflicts_md=claude_conflicts_md,
         ),
     )
+
+
+def _assemble_one_slot(slot, linked_slot_body, *,
+                       assemble_slot_fn, parse_output_fn, resolve_fn,
+                       cache_lookup_fn=None, cache_store_fn=None):
+    """Produce ``(body, conflicts)`` for one non-verbatim slot.
+
+    Implements the §4.6 cache flow: cache hit + valid → return; cache
+    hit + corrupt → re-run LLM once, raise :class:`CacheCorruption` if
+    the retry also fails; cache miss → run LLM, raise the per-mode
+    exception on verification fail (no retry); store on success.
+    """
+    cached_output = None
+    if cache_lookup_fn is not None:
+        try:
+            cached_output = cache_lookup_fn(slot, linked_slot_body)
+        except Exception:  # noqa: BLE001 — a cache backend error is treated as miss
+            cached_output = None
+
+    if cached_output is not None:
+        # Verify the cached output. Verification covers parse + resolve;
+        # a cached body that parses cleanly AND passes B2/B3/B5 is good.
+        if _try_verify(cached_output, linked_slot_body,
+                       parse_output_fn=parse_output_fn,
+                       resolve_fn=resolve_fn) is not None:
+            body, conflicts = parse_output_fn(cached_output)
+            return body, conflicts
+        # Cache corruption: re-run LLM once.
+        try:
+            retry_output = assemble_slot_fn(slot, linked_slot_body)
+        except Exception as e:  # noqa: BLE001
+            raise LLMError(
+                f"assemble_slot raised on slot `{slot}` during cache-corruption retry: {e}",
+                slot=slot,
+            ) from e
+        verify_result = _try_verify(retry_output, linked_slot_body,
+                                    parse_output_fn=parse_output_fn,
+                                    resolve_fn=resolve_fn)
+        if verify_result is None:
+            raise CacheCorruption(
+                f"Cached assembled body failed verification on slot `{slot}` "
+                f"AND the one-shot LLM retry also failed verification. "
+                f"Aborting per §4.6 cache-corruption table entry.",
+                slot=slot,
+            )
+        # Retry passed — persist the new body and use it.
+        if cache_store_fn is not None:
+            try:
+                cache_store_fn(slot, linked_slot_body, retry_output)
+            except Exception:  # noqa: BLE001 — store failure does not invalidate the run
+                pass
+        body, conflicts = verify_result
+        return body, conflicts
+
+    # Cache miss (or cache disabled): run LLM fresh.
+    try:
+        llm_output = assemble_slot_fn(slot, linked_slot_body)
+    except Exception as e:  # noqa: BLE001
+        raise LLMError(
+            f"assemble_slot raised on slot `{slot}`: {e}",
+            slot=slot,
+        ) from e
+    try:
+        body, conflicts = parse_output_fn(llm_output)
+    except Exception as e:  # noqa: BLE001
+        raise LLMError(
+            f"parse_assemble_output failed on slot `{slot}`: {e}",
+            slot=slot,
+        ) from e
+    issues, reverify = resolve_fn(body, conflicts, linked_slot_body)
+    if issues:
+        raise PrecedenceViolation(
+            f"Higher-L-wins violation in slot `{slot}`: "
+            f"CONFLICT-{issues[0].conflict_index:03d} "
+            f"({issues[0].winner_layer}>{issues[0].loser_layer}): "
+            f"{issues[0].detail}",
+            slot=slot,
+        )
+    if not reverify.preservation_ok:
+        raise PreservationFail(
+            f"Preservation check (B2) failed on slot `{slot}`: "
+            f"missing_sub_skills={reverify.preservation.missing_sub_skills}, "
+            f"extra_sub_skills={reverify.preservation.extra_sub_skills}, "
+            f"missing_step_ids={reverify.preservation.missing_step_ids}, "
+            f"extra_step_ids={reverify.preservation.extra_step_ids}",
+            slot=slot,
+        )
+    if not reverify.length_floor_ok or not reverify.code_block_parity_ok:
+        raise FloorParityFail(
+            f"Length-floor/code-block-parity (B3) failed on slot `{slot}`: "
+            f"length_floor_ok={reverify.length_floor_ok}, "
+            f"code_block_parity_ok={reverify.code_block_parity_ok}",
+            slot=slot,
+        )
+    if cache_store_fn is not None:
+        try:
+            cache_store_fn(slot, linked_slot_body, llm_output)
+        except Exception:  # noqa: BLE001
+            pass
+    return body, conflicts
+
+
+def _try_verify(llm_output, linked_slot_body, *, parse_output_fn, resolve_fn):
+    """Internal: verify an LLM output. Returns ``(body, conflicts)`` on
+    success or ``None`` on any failure (parse-error, precedence violation,
+    B2/B3 fail). Used by the cache-corruption path which needs to know
+    whether the body is acceptable WITHOUT raising — the caller decides
+    whether to retry or abort based on the answer.
+    """
+    try:
+        body, conflicts = parse_output_fn(llm_output)
+    except Exception:  # noqa: BLE001
+        return None
+    issues, reverify = resolve_fn(body, conflicts, linked_slot_body)
+    if issues:
+        return None
+    if not reverify.preservation_ok:
+        return None
+    if not reverify.length_floor_ok or not reverify.code_block_parity_ok:
+        return None
+    return body, conflicts
 
 
 def _split_linked_into_slots(linked_composite):
