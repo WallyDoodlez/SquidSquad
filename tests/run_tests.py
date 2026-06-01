@@ -122,6 +122,7 @@ STATIC_TEST_MODULES = [
     "test_l4_op_processor",
     "test_compose_check_a4_10388",
     "test_v2_link_stage",
+    "test_link_stage_validator",
 ]
 
 
