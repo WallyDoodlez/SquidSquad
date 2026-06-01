@@ -376,9 +376,12 @@ class TestTemplateUpdates:
             "the route-back comment must mention rebase as the local-history "
             "remediation"
         )
-        assert "gh pr edit" in block and "--base" in block, (
-            "the route-back comment must also instruct the worker to retarget "
-            "the PR on GitHub — git rebase alone does not change baseRefName"
+        assert "gh api" in block and "base=" in block, (
+            "the route-back comment must instruct the worker to retarget "
+            "the PR on GitHub via `gh api -X PATCH ... -f base=...` — "
+            "`gh pr edit --base` is broken by upstream GitHub projects-classic "
+            "GraphQL deprecation (#10559); a git rebase alone does not change "
+            "baseRefName either"
         )
         assert "Skip this item" in block or "move to the next" in block, (
             "the stacked-PR route-back must include a skip instruction so DM "
