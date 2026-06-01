@@ -3060,3 +3060,4 @@
 {"timestamp": "2026-06-01T04:07:49.874809", "severity": "warning", "source": "tracker", "message": "Blocked transition #10388 status:pending-test -> status:pending-ship: unread feedback from pm-lead (2026-06-01T04:52:59Z)"}
 {"timestamp": "2026-06-01T04:37:37.796783", "severity": "warning", "source": "tracker", "message": "Blocked transition #10490 status:pending-test -> status:pending-ship: unread feedback from pm-lead (2026-06-01T02:41:31Z)"}
 {"timestamp": "2026-06-01T05:07:29.135926", "severity": "warning", "source": "tracker", "message": "Blocked transition #10491 status:pending-test -> status:pending-ship: unread feedback from pm-lead (2026-06-01T02:41:34Z)"}
+{"timestamp": "2026-06-01T05:38:17.950503", "severity": "warning", "source": "tracker", "message": "Blocked transition #10492 status:pending-test -> status:pending-ship: unread feedback from pm-lead (2026-06-01T02:41:37Z)"}
