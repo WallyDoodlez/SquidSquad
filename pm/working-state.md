@@ -1,47 +1,48 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: B7 in route-back loop, otherwise quiet
-- **Last Processed Event ID**: 61095cde1a68f7fc
-- **Quiet cycles**: 5
+- **Status**: queue fully drained; PRD-C newly merged; C1-C10 stories pending filing
+- **Last Processed Event ID**: 63f380e1b90f9973
+- **Quiet cycles**: 0
 
 ## Pipeline
 
 - Harness: reachable
-- pending_ship: 0
-- pending_test: 1 (#10447 B7 — re-verifying after AC2/4 fix)
-- Open PRs: 3 (1 for #10447 + held #10391 + #10392)
-- Approved queue: 4
+- pending_ship: 0 ✓
+- pending_test: 0 ✓
+- in_progress: 1 (#9968 PM EPIC umbrella)
+- Open PRs: 1 (PR #10392 PRD-D+E held)
+- Approved queue: 0 ← fully drained
 - shipped_since_bump: 6
 - Agents:
-  - PM: 1086100, cycle 2016 ✓
-  - QA: 263116, cycle 518 ✓
-  - DM: 2199912, cycle 1738 ✓
-  - skill: 1348408 alive 8 hours
+  - PM: 1086100, cycle 2017 ✓
+  - QA: 263116, cycle 526 ✓
+  - DM: 2199912, cycle 1746 ✓ (jumped from 1738 — multiple ship cycles during the gap)
+  - skill: 1348408 alive 12 hours
 
-## B7 route-back details
+## Session ship tally (20)
 
-- QA gap: AC2 lists 7 failure modes; 6 tested correctly, cache_corruption (#7) deferred
-- Skill fix: cache_lookup_fn + cache_store_fn injection seams (default None preserves existing callers); _assemble_one_slot per-slot extraction; retry-once-on-corruption + tests for retry-succeeds and retry-also-fails
-- Skill self-corrected on the same pattern as B1 (don't defer ACs downstream)
-- ~18min total cycle time (QA fail → skill ack → skill fix → re-bounce)
+PRD-A: A2a-f, A6, A4, A3, A4.5 (10 stories — link stage + drift + staged check + golden tests)
+PRD-B: B1-B8 (all 8 stories — assemble stage complete)
+Bugs: #10440 process_utils, #10559 gh pr edit (2)
 
-## Session ship tally (16)
+Only A2.6 (L1-L3 frontmatter migration) remains in PRD-A.
 
-PRD-A: A2a-f, A6, A4 (8 — link stage complete)
-PRD-B: B1, B2, B3, B4, B5, B6 (6)
-Bugs: #10440, #10559 (2)
+## PRD-C status
 
-## Skill's remaining queue (4)
-
-**PRD-A:** A3, A2.6, A4.5 (3)
-**PRD-B:** B7 (re-verifying), B8 (1 after B7)
+Merged to main this cycle (squash commit 5a2b097e). Stories C1-C10 not yet filed as tracker tasks. With approved queue at 0 and skill idle, this is the natural next gate.
 
 ## Held / awaiting human
 
-- PR #10391 (PRD-C), PR #10392 (PRD-D+E) — case to lift hold extremely strong
-- #10377 (gated)
-- #10541 (operator awareness)
+- PR #10392 (PRDs D+E) — still on hold, but rationale weaker now that PRD-C merged
+- #10377 (gated on TRD impl)
+- #10541 (operator awareness; skill death pattern dormant)
+
+## Next action options
+
+1. PM files C1-C10 stories now (10 tracker tasks, gives skill a queue immediately)
+2. Wait for skill to file C1-C10 itself on its next planning cycle
+3. Skill files them after merging PR #10392 (paired with D+E stories)
 
 ## Open follow-ups
 
