@@ -1,49 +1,47 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: DM stall on #10559; escalation threshold at cycle 2002
+- **Status**: DM stall on #10559 (80min); operator chose wait-one-cycle
 - **Last Processed Event ID**: e0b475d9426bf2ad
 - **Quiet cycles**: 0
 
 ## Pipeline
 
 - Harness: reachable
-- pending_ship: 1 (#10559, stalled 50min)
+- pending_ship: 1 (#10559, stalled 80min)
 - pending_test: 2 (#10440, #10441 — QA's turn)
-- Open PRs: 4
+- Open PRs: 6
 - Approved queue: 14
 - shipped_since_bump: 6
 - Agents:
-  - PM: 1086100, cycle 2001 ✓
-  - QA: 263116, cycle 503 ✓ (just fired)
-  - DM: 2199912, cycle 1723 (idle 27min — escalate next cycle if still no ship)
-  - skill: 1348408 since 00:37 (30+ min — best streak this session)
+  - PM: 1086100, cycle 2002 ✓
+  - QA: 263116, cycle 504 ✓
+  - DM: 2199912, cycle 1724 at 01:09 — alive but skipping #10559 silently
+  - skill: 1348408 alive ~60min ✓ (best streak)
 
-## This cycle
+## Operator decision this cycle
 
-- Tracker comment on #10559 nudging DM — escalation threshold at PM cycle 2002
+- AskUserQuestion: DM stall handling → 'Wait one more cycle and observe'
+- If still no ship at PM cycle 2003, escalate again with stronger framing
 
-## Skill's queue (in priority order, skill picks one per productive window)
+## Open PRs
 
-**Route-back (1 left):** #10386 (real conflict, hardest)
+- #10581 [MERGEABLE] — #10559 fix (stalled at DM)
+- #10493 [MERGEABLE] — #10440 process_utils (waits for QA bounce)
+- #10476 [CONFLICTING] — #10386 A6 real conflict (skill workload)
+- #10465 [CONFLICTING] — #10441 B2; PR re-dirtied after merge cascades; skill will need another merge-main pass
+- #10391 [MERGEABLE] — PRD-C draft (held)
+- #10392 [MERGEABLE] — PRD-D+E (held)
 
-**Approved (14 from operator's batch):**
-- A2c, A2d, A2e, A2f (PRD-A Phase 1 core)
-- A3, A4, A2.6 (PRD-A Phase 2)
-- A4.5
-- B1, B4, B5, B7, B8 (PRD-B Phase 2)
-- B3 (PRD-B Phase 1 leftover)
+## Skill's queue (14 approved + 1 route-back #10386)
+
+Unchanged from cycle 2000/2001 — skill chewing through.
 
 ## Held / awaiting human
 
-- PR #10391 (PRD-C), PR #10392 (PRD-D+E) — held pending PRD-A/B drain (substantial drain now; worth re-evaluating)
-- #10377 (gated)
-- #10541 (operator awareness)
-
-## Open follow-ups
-
-- harness.py stash conflict
-- DM stall on #10559 (escalation threshold next cycle)
+- PR #10391, #10392 — held by my comment pending PRD-A/B drain
+- #10377 — gated
+- #10541 — operator awareness
 
 ## Context
 
