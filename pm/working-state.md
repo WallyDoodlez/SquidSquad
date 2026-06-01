@@ -1,44 +1,44 @@
 # Working State
 
-- **Task**: ESCALATED — skill bash.exe MSYS2 crash, awaiting human
-- **Status**: halted manual reboot loop; pipeline-sentinel-only until human directs
+- **Task**: pipeline sentinel (recovered)
+- **Status**: monitoring; all four roles cycling
 - **Last Processed Event ID**: c86a384fc7de6737
 - **Quiet cycles**: 0
-
-## Escalation
-
-Skill clone D:/Dev/Dev/SquidSquad-2 — bash.exe crashes inside msys-2.0.dll on every boot attempt this session. Found stackdump (mtime 20:37, matches last boot_remote spawn). Three boots, three deaths, zero productive cycles.
-
-**PM action required from human (not from PM):**
-- (a) clear+re-clone SquidSquad-2 via installer, or
-- (b) switch thin launcher to cmd.exe, or
-- (c) verify SquidSquad-3 (DM) and main (PM) clones aren't gestating the same issue.
-
-Full details + stack trace on #10541. Will NOT re-boot skill from PM cycles until human OK — re-launching into the same crash burns cycles without information.
 
 ## Pipeline
 
 - Harness: reachable
-- DM queue: 0
+- DM queue: 1 (#10488 just landed at pending-ship; DM should ship next cycle)
 - pending-test: 0
-- Open PRs: 5 (3 awaiting skill: #10476/#10386 conflict, #10454/#10443 retry, #10509/#10488 retry; 2 docs: #10391, #10392)
-- Skill: dead (claude_pid:null, cycle 1455 stale)
+- Open PRs: 5 (3 skill-owned task PRs + 2 docs PRDs)
+- All four roles alive and cycling:
+  - PM (me): 1086100, cycle 1992
+  - QA: 263116, cycle 495+ (just did mechanical bounce on #10488)
+  - DM: 2199912, cycle 1717+
+  - skill: 2212432, just completed a cycle (rebased #10488, bounced to pending-test)
 
-## Approved / waiting on skill
+## Recent skill activity
 
-- #10442 (skill, B3 verifier) — hard blocked
-- (#10386, #10443, #10488 sitting at in-progress after DM route-back — also hard blocked)
+- Successfully rebased #10488 onto current main (77e50d55)
+- Acknowledged QA PASS at 21:34Z, bounced in-progress → pending-test
+- (per feedback_qa_no_inprogress_claim, QA correctly went pending-test → pending-ship without claiming in-progress)
+
+## Still awaiting skill
+
+- #10386 (PR #10476) — real merge conflict, rebase + push needed
+- #10443 (PR #10454) — batch-race retry, rebase + push needed
+- #10442 — approved, blocked
 
 ## Other human-blocked items
 
-- #3 (dm, public-launch) — paused awaiting disposition since 2026-05-24
-- #10537 — wont-fix vs opt-in INFO-only role-graph cycle audit
+- #3 — public-launch disposition
+- #10537 — wont-fix vs INFO-only role-graph cycle audit
 - #10377 — gated on TRD impl
 
-## Recently filed/updated by PM
+## Filed/updated by PM this session
 
 - #10540 — DM batch ship dispatch race (sev:medium)
-- #10541 — skill wedge → now identified as MSYS2 bash crash (sev:high, escalated)
+- #10541 — skill wedge / MSYS2 bash crash + restart-without-respawn (sev:high). Escalated to human; resolved by operator stop/start.
 
 ## Context
 
