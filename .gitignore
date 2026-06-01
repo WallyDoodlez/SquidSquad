@@ -59,3 +59,7 @@ references/scripts/migrate_*.py.bak
 .[0-9]*-phase*-*review*.md
 .[0-9]*-fixup*.diff
 .[0-9]*-fixup*review*.md
+
+# Per-call tempdirs created by assemble_pass.assemble_slot (#10444 B1).
+# Must live under .squidsquad/ to pass model_router's sandbox check.
+.squidsquad/tmp/

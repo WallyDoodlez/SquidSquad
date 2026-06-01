@@ -541,6 +541,7 @@ def _load_prompt_template(task_type):
         "test-plan": "test-plan.md.j2",
         "improvement-scan": "improvement-scan.md.j2",
         "code-review": "code-review.md.j2",  # #5932
+        "assemble": "assemble.md.j2",  # #10444 PRD-B/B1
     }
     filename = template_map.get(task_type)
     if not filename:
