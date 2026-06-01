@@ -24,6 +24,14 @@ from pathlib import Path
 
 VERBATIM_SLOTS = frozenset({"project-context", "vault"})
 
+# Per-call tempfiles live UNDER the repo root (``.squidsquad/tmp/assemble/``)
+# so they satisfy ``model_router._is_path_in_sandbox``. The router refuses
+# to read input paths resolved outside REPO_ROOT — using the system temp
+# dir (``%TEMP%`` / ``/tmp``) made the linked body invisible to the LLM
+# (#10444 QA route-back).
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_ASSEMBLE_TMP_ROOT = _REPO_ROOT / ".squidsquad" / "tmp" / "assemble"
+
 
 def assemble_slot(slot_name, linked_body, *, task_id=None, model_router=None):
     """Run the assemble pass on one slot. Returns the assembled body as a string.
@@ -54,9 +62,14 @@ def assemble_slot(slot_name, linked_body, *, task_id=None, model_router=None):
         task_id = f"assemble-{slot_name}"
 
     # Router uses file-based I/O; write linked body to a temp input file
-    # and ask it to produce its response in a temp output file. The router
-    # then deletes nothing — we clean both up after read.
-    with tempfile.TemporaryDirectory(prefix=f"assemble-{slot_name}-") as td:
+    # and ask it to produce its response in a temp output file. The temp
+    # directory lives UNDER the repo root so the router's sandbox check
+    # (`_is_path_in_sandbox`) accepts the input path. Using the system
+    # tempdir would resolve outside REPO_ROOT and the router would skip
+    # the input with "Path outside repository boundary" (#10444 QA finding).
+    _ASSEMBLE_TMP_ROOT.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f"assemble-{slot_name}-",
+                                     dir=str(_ASSEMBLE_TMP_ROOT)) as td:
         td_path = Path(td)
         input_path = td_path / f"linked-{slot_name}.md"
         output_path = td_path / f"assembled-{slot_name}.md"

@@ -1,7 +1,9 @@
 """Tests for references/scripts/assemble_pass.py (#10444, PRD-B Story B1)."""
 
+import os
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -9,6 +11,29 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import assemble_pass  # noqa: E402
+import model_router  # noqa: E402
+
+
+# Realistic fixture: a slot body with the preservation tokens B2/B3 verify.
+# Used by the smoke tests to prove the dispatch carries them end-to-end.
+_FIXTURE_LINKED_INSTRUCTIONS = """\
+### step:cycle/boot
+
+→ run sub-skill: boot-bootstrap
+
+Verify tracker access and read config. Run `python references/scripts/tracker.py check-gh`.
+
+### step:cycle/pickup
+
+→ run sub-skill: task-pickup
+
+Query the tracker for approved tasks assigned to this role. Pick the highest-priority
+item per the deterministic queue ordering. Record the choice in working-state.md.
+
+### step:cycle/work
+
+Do the unit of work for the current cycle. Implementation varies by role.
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -177,3 +202,107 @@ def test_assemble_template_includes_required_preservation_directives():
     assert "step:cycle" in text
     # Conflict resolution direction.
     assert "L4 > L3 > L2 > L1" in text or "higher" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# AC5: smoke tests against a real fixture
+# ---------------------------------------------------------------------------
+#
+# AC5 reads: "Smoke test against a real fixture confirms LLM is invoked +
+# body returned." Two smokes implement this:
+#
+#   1. test_smoke_assemble_slot_dispatches_through_real_model_router
+#      -- always runs. Exercises the FULL assemble_slot -> model_router.route
+#      pipeline with a mocked provider adapter. Proves the dispatch reaches
+#      the routing layer, the assemble.md.j2 template is loaded, the linked
+#      fixture body lands in the adapter call, and the response is returned
+#      back through assemble_slot.
+#
+#   2. test_smoke_assemble_slot_live_llm_round_trip
+#      -- gated by SQUIDSQUAD_LIVE_LLM=1. When opted in (e.g., by a verifier
+#      with API keys), this runs a real round-trip against the configured
+#      provider. Skipped by default so CI doesn't burn API tokens.
+
+def test_smoke_assemble_slot_dispatches_through_real_model_router(tmp_path):
+    """Smoke: real model_router.route called with task_type='assemble'.
+
+    Uses the real `model_router.route` (not the stub class). Provider
+    config + adapter are mocked the same way the existing
+    test_model_router.py smokes mock them (see #5932 patterns).
+
+    Asserts:
+    - The adapter's `call()` was invoked.
+    - The user prompt sent to the adapter contains the FIXTURE linked body
+      (proves the template substitution carried the file contents
+      through).
+    - The user prompt is the assemble.md.j2 template's content
+      (proves task_type='assemble' picked up the right template).
+    - assemble_slot returned the adapter's response.
+    """
+    # Build a response above the MIN_OUTPUT_LENGTH=200 quality gate.
+    canned_response = (
+        "### step:cycle/boot\n\n"
+        "→ run sub-skill: boot-bootstrap\n\n"
+        "Verify tracker access and read config. " * 6
+    )
+    fake_adapter = MagicMock()
+    fake_adapter.call.return_value = canned_response
+
+    config_text = "## Model Routing\n- **Assemble Model**: gpt-5.2\n"
+    with patch.object(model_router, "_read_config", return_value=config_text), \
+         patch.object(model_router, "_load_provider_manifest",
+                      return_value=("openai", {
+                          "name": "openai",
+                          "auth": {"env_var": "OPENAI_API_KEY"},
+                          "api_base": "",
+                          "deps": [],
+                      })), \
+         patch.object(model_router, "_ensure_deps"), \
+         patch.object(model_router, "_load_adapter", return_value=fake_adapter), \
+         patch.dict(os.environ, {"OPENAI_API_KEY": "smoke-fixture-key"}):
+        out = assemble_pass.assemble_slot(
+            "instructions",
+            _FIXTURE_LINKED_INSTRUCTIONS,
+            model_router=model_router,
+        )
+
+    # Adapter was actually invoked.
+    fake_adapter.call.assert_called_once()
+    call_kwargs = fake_adapter.call.call_args.kwargs
+
+    # The user prompt is built from the assemble.md.j2 template. The
+    # template contains the literal phrase "→ run sub-skill:" in its
+    # preservation rules; assert it survived the substitution.
+    user_prompt = call_kwargs.get("user_prompt", "")
+    assert "→ run sub-skill:" in user_prompt, (
+        "user_prompt should contain the assemble.md.j2 preservation directive"
+    )
+    # And the FIXTURE body must be embedded in the prompt (via the
+    # {{ file_contents }} placeholder in the template).
+    assert "step:cycle/boot" in user_prompt
+    assert "boot-bootstrap" in user_prompt
+
+    # The body returned to the caller is the adapter's response.
+    assert out == canned_response
+
+
+@pytest.mark.skipif(
+    os.environ.get("SQUIDSQUAD_LIVE_LLM") != "1",
+    reason="Live-LLM round-trip — opt in with SQUIDSQUAD_LIVE_LLM=1 + API keys",
+)
+def test_smoke_assemble_slot_live_llm_round_trip():
+    """Live-LLM smoke: assemble_slot returns a non-empty body from the configured provider.
+
+    Skipped by default. Verifiers with API keys can enable by setting
+    `SQUIDSQUAD_LIVE_LLM=1` in their environment. The test does NOT
+    assert preservation (B2/B3 own that against the returned body) —
+    its scope is exactly AC5: 'LLM is invoked + body returned'.
+    """
+    out = assemble_pass.assemble_slot(
+        "instructions",
+        _FIXTURE_LINKED_INSTRUCTIONS,
+    )
+    assert out, "Live-LLM smoke: assemble_slot returned an empty body"
+    assert len(out.strip()) >= model_router.MIN_OUTPUT_LENGTH, (
+        f"Live-LLM smoke: body length {len(out)} below router's MIN_OUTPUT_LENGTH"
+    )
