@@ -1327,32 +1327,41 @@ _V2_LINKED_FILENAME = "CLAUDE.linked.v2.md"
 _V2_ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
-def deploy_alias_v2(alias, registry=None):
-    """Deploy an alias under the v2 path (#10386 PRD-A/A6, --v2 branch).
+def deploy_alias_v2(alias, registry=None, target_root=None):
+    """Deploy an alias under the v2 path (PRD-A A2f #10492).
 
-    Resolves the alias via the A5 ``parse_aliases_registry`` to a
-    ``(role_class, l3_domain)`` pair, then runs the existing v1 compose
-    pipeline against the role-class and writes the output at
-    ``.squidsquad/<alias>/CLAUDE.linked.v2.md``.
+    A6 (#10386) introduced this entry point with a v1-placeholder body.
+    A2f swaps that body for the real v2 link stage:
 
-    The composed body is the v1 link logic as a deliberate placeholder
-    (per PM's narrowed scope on #10386). When A2 ships the v2 link stage,
-    A2's PR swaps the body inside this function; A6's CLI wiring stays.
+    1. Resolve ``alias`` → ``(role_class, l3_domain)`` via the A5 registry.
+    2. Walk L1-L3 sources via ``v2_link_stage.collect_sources_for_validation``.
+    3. Parse the L4 file at ``.squidsquad/project/<role_class>.md`` via A2b.
+    4. Run all seven R1-R7 rules via A2e's ``validate_link_stage``. A
+       validation error aborts BEFORE any disk write — zero partial
+       artifacts on failure (the AC for A2e + the §4.6 atomic-write
+       contract for A2f).
+    5. Emit the six-slot composite via A2d's ``emit_v2_linked``.
+    6. Write to ``.squidsquad/<alias>/CLAUDE.linked.v2.md``.
 
-    Aborts with ``SystemExit(1)`` if the registry is malformed, the
-    alias contains disallowed characters, or the alias is not present —
-    that is the abort path AC #10386 calls for.
+    v1 ``compose.py deploy <role>`` (no ``--v2``) is untouched per the
+    §9a coexistence rule; v1 ``compose.py deploy <alias> --v2`` lands at
+    the v2 path filename.
+
+    Aborts with ``SystemExit(1)`` on alias/registry errors, a
+    LinkStageValidationError from R1-R7, or any I/O failure.
 
     ``registry`` is an optional pre-parsed registry; ``deploy-all --v2``
     passes the registry it iterated to avoid re-parsing per alias and to
     close the TOCTOU window where ``config.md`` could be rewritten
     between the iterate-list parse and the per-alias resolve.
 
-    Per #10358, the variable name ``role`` is preserved in code
-    signatures (here the public arg is named ``alias`` because the
-    caller passes an alias, but the inner variable that holds the
-    role-class is still called ``role``).
+    ``target_root`` overrides the install root (used by tests to write
+    into a scratch directory). Defaults to ``REPO_ROOT``.
     """
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+
     if not isinstance(alias, str) or not _V2_ALIAS_RE.match(alias):
         print(
             f"ERROR: alias '{alias}' contains disallowed characters "
@@ -1377,13 +1386,72 @@ def deploy_alias_v2(alias, registry=None):
             file=sys.stderr,
         )
         sys.exit(1)
-    role, _l3_domain = registry[alias]
-    return deploy_role(
-        role,
-        output_name=alias,
-        output_filename=_V2_LINKED_FILENAME,
-        regenerate_cmd=f"{alias} --v2",
+    role, l3_domain = registry[alias]
+
+    # Lazy imports — these modules live under references/scripts/ on the
+    # same path compose.py inhabits; importing at module top would force
+    # them to load on every compose.py invocation (e.g. v1 `deploy`).
+    import v2_link_stage as _v2
+    from l4_parser import L4Document as _L4Document
+    from l4_parser import parse_l4_file as _parse_l4_file
+    from link_stage_validator import (
+        LinkStageValidationError as _LinkStageValidationError,
     )
+    from link_stage_validator import validate_link_stage as _validate_link_stage
+
+    l4_path = target_root / ".squidsquad" / "project" / f"{role}.md"
+
+    try:
+        sources = _v2.collect_sources_for_validation(
+            role, l3_domain, repo_root=target_root
+        )
+    except Exception as e:
+        print(
+            f"ERROR: cannot walk L1-L3 sources for alias '{alias}' (v2): {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if l4_path.is_file():
+        try:
+            l4_doc = _parse_l4_file(l4_path)
+        except Exception as e:
+            print(
+                f"ERROR: cannot parse L4 file '{l4_path}' for alias '{alias}': {e}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
+        l4_doc = _L4Document.empty()
+
+    try:
+        _validate_link_stage(l4_doc, sources, l4_path=str(l4_path))
+    except _LinkStageValidationError as e:
+        # Abort path AC: emit zero partial artifacts. The error message
+        # already carries the rule label + offending file/path/step-id
+        # per A2e's LinkStageValidationError formatting.
+        print(f"ERROR: v2 link stage validation failed for alias '{alias}':", file=sys.stderr)
+        print(f"  {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        body = _v2.emit_v2_linked(
+            role, l3_domain, repo_root=target_root, l4_path=l4_path
+        )
+    except Exception as e:
+        print(
+            f"ERROR: emit_v2_linked failed for alias '{alias}': {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    output_path = target_root / ".squidsquad" / alias / _V2_LINKED_FILENAME
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    header = f"# SquidSquad -- {alias} Lead\n\n"
+    header += f"<!-- GENERATED by compose.py deploy {alias} --v2. DO NOT EDIT. -->\n"
+    header += f"<!-- Regenerate: python references/scripts/compose.py deploy {alias} --v2 -->\n\n"
+    output_path.write_text(header + body, encoding="utf-8")
+    return output_path
 
 
 # Layer 1 source files live at the root of ROLES_DIR (no subdirectory)

@@ -32,6 +32,7 @@ from source_frontmatter import (  # noqa: E402
 )
 from l4_parser import L4Document, parse_l4_file  # noqa: E402
 from l4_op_processor import apply_l4_ops  # noqa: E402
+from link_stage_validator import LinkStageSource  # noqa: E402
 
 
 # Canonical slot ordering — TRD §3.3 + AC bullet "exactly six H2 sections
@@ -196,6 +197,88 @@ def _walk_applicable_paths(repo_root, role_class, l3_domain):
         sk_l3_dir = sk_role_dir / l3_domain
         if sk_l3_dir.is_dir():
             yield from sk_l3_dir.rglob("*.md")
+
+
+def _classify_layer(posix_path, role_class):
+    """Map a walked source path to its layer label ``"L1"`` / ``"L2"`` / ``"L3"``.
+
+    - L1: top-level ``references/roles/*.md`` (no subdir) or anywhere
+      under ``references/sub-skills/common`` / ``common-events``.
+    - L2: ``references/roles/<role_class>/*.md`` (direct child) or
+      ``references/sub-skills/roles/<role_class>/*.md`` (direct child).
+    - L3: anything deeper under the role_class subtree
+      (``references/roles/<role_class>/<l3>/...`` or the matching
+      ``sub-skills/roles/<role_class>/<l3>/...``).
+    """
+    parts = posix_path.split("/")
+    # references/sub-skills/common/** or common-events/** -> L1
+    if (
+        len(parts) >= 3
+        and parts[0] == "references"
+        and parts[1] == "sub-skills"
+        and parts[2] in ("common", "common-events")
+    ):
+        return "L1"
+    # references/roles/<file>.md (top-level) -> L1
+    if len(parts) == 3 and parts[0] == "references" and parts[1] == "roles":
+        return "L1"
+    # references/roles/<role_class>/... -> L2 if direct child, else L3
+    if (
+        len(parts) >= 4
+        and parts[0] == "references"
+        and parts[1] == "roles"
+        and parts[2] == role_class
+    ):
+        return "L2" if len(parts) == 4 else "L3"
+    # references/sub-skills/roles/<role_class>/... -> L2 if direct child, else L3
+    if (
+        len(parts) >= 5
+        and parts[0] == "references"
+        and parts[1] == "sub-skills"
+        and parts[2] == "roles"
+        and parts[3] == role_class
+    ):
+        return "L2" if len(parts) == 5 else "L3"
+    # Defensive fallback: treat as L1 (most permissive). The walk filters
+    # already ensure unrelated paths aren't yielded.
+    return "L1"
+
+
+def collect_sources_for_validation(role_class, l3_domain, *, repo_root=None):
+    """Walk the L1-L3 sources and return a list of ``LinkStageSource`` records.
+
+    Used by A2f orchestration: the same record list is passed to
+    ``validate_link_stage`` (A2e) BEFORE the emit step, so validation
+    failures abort without a partial write.
+    """
+    if repo_root is None:
+        repo_root = Path(__file__).resolve().parent.parent.parent
+    repo_root = Path(repo_root)
+    sources = []
+    for path in _walk_applicable_paths(repo_root, role_class, l3_domain):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        try:
+            fm = parse_source_frontmatter_text(text, source=str(path))
+        except Exception:
+            continue
+        if fm is None:
+            continue
+        if fm.slot not in LEGAL_SLOTS:
+            continue
+        if not _is_applicable_by_roles_filter(fm, role_class):
+            continue
+        body = _strip_frontmatter(text)
+        posix_path = path.relative_to(repo_root).as_posix()
+        sources.append(LinkStageSource(
+            layer=_classify_layer(posix_path, role_class),
+            path=posix_path,
+            slot=fm.slot,
+            body=body,
+        ))
+    return sources
 
 
 def _is_applicable_by_roles_filter(fm, role_class):

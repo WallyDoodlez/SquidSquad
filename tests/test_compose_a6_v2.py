@@ -37,11 +37,12 @@ def test_deploy_alias_v2_preserves_role_variable_name_per_10358():
     # PUBLIC argument here is an alias (because the caller passes one),
     # but the INNER variable that holds the resolved role-class must
     # still be called `role`. Read the source and assert the binding
-    # name is `role`.
+    # name is `role`. A2f (#10492) uses both `role` and `l3_domain` —
+    # the underscore guard that A6 relied on is no longer correct.
     src = inspect.getsource(compose.deploy_alias_v2)
-    assert "role, _l3_domain" in src, (
+    assert "role, l3_domain" in src, (
         "deploy_alias_v2 must bind the resolved role-class to a variable "
-        "named `role` per #10358"
+        "named `role` per #10358 (A2f uses l3_domain — no underscore)"
     )
 
 
@@ -56,59 +57,63 @@ _FAKE_REGISTRY = {
 
 
 def test_deploy_alias_v2_resolves_via_parser_and_writes_v2_path(tmp_path, monkeypatch):
+    """A2f (#10492): deploy_alias_v2 walks v2 link stage; output lands at the v2 filename.
+
+    Prior to A2f the body delegated to deploy_role and this test mocked
+    that call. A2f replaces that with collect_sources_for_validation +
+    emit_v2_linked; we mock those instead so the test stays focused on
+    the routing contract (alias resolves to role-class, output filename
+    is CLAUDE.linked.v2.md).
+    """
     monkeypatch.setattr(
         compose._config_module, "parse_aliases_registry",
         lambda: dict(_FAKE_REGISTRY),
     )
+    import v2_link_stage
     captured = {}
 
-    def fake_deploy_role(role_name, target_root=None, output_name=None,
-                         output_filename="CLAUDE.md", regenerate_cmd=None):
-        captured["role_name"] = role_name
-        captured["output_name"] = output_name
-        captured["output_filename"] = output_filename
-        captured["regenerate_cmd"] = regenerate_cmd
-        out = tmp_path / ".squidsquad" / output_name / output_filename
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("placeholder body\n", encoding="utf-8")
-        return out
+    def fake_emit(role_class, l3_domain, *, repo_root=None, l4_path=None):
+        captured["role_class"] = role_class
+        return "v2 body\n"
 
-    monkeypatch.setattr(compose, "deploy_role", fake_deploy_role)
+    monkeypatch.setattr(v2_link_stage, "collect_sources_for_validation",
+                        lambda role_class, l3_domain, repo_root=None: [])
+    monkeypatch.setattr(v2_link_stage, "emit_v2_linked", fake_emit)
 
-    out = compose.deploy_alias_v2("pm")
+    out = compose.deploy_alias_v2("pm", target_root=tmp_path)
 
-    assert captured["role_name"] == "pm"
-    assert captured["output_name"] == "pm"
-    assert captured["output_filename"] == "CLAUDE.linked.v2.md"
+    assert captured["role_class"] == "pm"
     assert out.name == "CLAUDE.linked.v2.md"
     assert out.parent.name == "pm"
+    assert out.exists()
 
 
 def test_deploy_alias_v2_uses_role_class_not_alias_for_compose_source(tmp_path, monkeypatch):
+    """The compose SOURCE is the role-class; the OUTPUT DIR is the alias.
+
+    Path-keying invariant from COMPOSE-ARCHITECTURE §1 + #10386 AC #4.
+    A2f preserves it — collect_sources_for_validation receives the
+    role-class, output lands under the alias.
+    """
     monkeypatch.setattr(
         compose._config_module, "parse_aliases_registry",
         lambda: dict(_FAKE_REGISTRY),
     )
+    import v2_link_stage
     captured = {}
 
-    def fake_deploy_role(role_name, target_root=None, output_name=None,
-                         output_filename="CLAUDE.md", regenerate_cmd=None):
-        captured["role_name"] = role_name
-        captured["output_name"] = output_name
-        out = tmp_path / ".squidsquad" / output_name / output_filename
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("x", encoding="utf-8")
-        return out
+    def fake_collect(role_class, l3_domain, repo_root=None):
+        captured["role_class"] = role_class
+        return []
 
-    monkeypatch.setattr(compose, "deploy_role", fake_deploy_role)
+    monkeypatch.setattr(v2_link_stage, "collect_sources_for_validation", fake_collect)
+    monkeypatch.setattr(v2_link_stage, "emit_v2_linked",
+                        lambda role_class, l3_domain, *, repo_root=None, l4_path=None: "x")
 
-    compose.deploy_alias_v2("frontend-1")
+    out = compose.deploy_alias_v2("frontend-1", target_root=tmp_path)
 
-    # The compose SOURCE is the role-class ('worker'); the OUTPUT DIR is
-    # the alias ('frontend-1') — the path-keying invariant from
-    # COMPOSE-ARCHITECTURE §1 + #10386 AC #4.
-    assert captured["role_name"] == "worker"
-    assert captured["output_name"] == "frontend-1"
+    assert captured["role_class"] == "worker"
+    assert out.parent.name == "frontend-1"
 
 
 def test_deploy_alias_v2_aborts_on_unknown_alias(monkeypatch, capsys):
@@ -148,7 +153,7 @@ def test_deploy_alias_v2_rejects_disallowed_alias_characters(bad_alias, capsys):
     assert "disallowed characters" in capsys.readouterr().err
 
 
-def test_deploy_alias_v2_passes_registry_through(monkeypatch):
+def test_deploy_alias_v2_passes_registry_through(tmp_path, monkeypatch):
     # DS finding 5: deploy_alias_v2 must NOT re-parse when caller provided
     # a registry — that's both wasteful (deploy-all calls N times) and a
     # TOCTOU window (config.md could shift between parses).
@@ -159,34 +164,36 @@ def test_deploy_alias_v2_passes_registry_through(monkeypatch):
         raise RuntimeError("must not be called when registry is provided")
 
     monkeypatch.setattr(compose._config_module, "parse_aliases_registry", boom)
-    monkeypatch.setattr(
-        compose, "deploy_role",
-        lambda *a, **kw: compose.REPO_ROOT / "_fake_pm",
-    )
-    compose.deploy_alias_v2("pm", registry={"pm": ("pm", None)})
+    import v2_link_stage
+    monkeypatch.setattr(v2_link_stage, "collect_sources_for_validation",
+                        lambda role_class, l3_domain, repo_root=None: [])
+    monkeypatch.setattr(v2_link_stage, "emit_v2_linked",
+                        lambda role_class, l3_domain, *, repo_root=None, l4_path=None: "body")
+    compose.deploy_alias_v2("pm", registry={"pm": ("pm", None)}, target_root=tmp_path)
     assert calls["parse"] == 0
 
 
-def test_deploy_alias_v2_passes_v2_regenerate_cmd_to_deploy_role(monkeypatch):
-    # DS finding 3: the regenerate hint embedded in the v2 file header
-    # must say `<alias> --v2`, not the v1 role-class shorthand.
-    captured = {}
+def test_deploy_alias_v2_v2_regenerate_cmd_in_output_header(tmp_path, monkeypatch):
+    """A2f writes its own header; the regenerate hint says `<alias> --v2`.
 
-    def fake_deploy_role(role_name, target_root=None, output_name=None,
-                         output_filename="CLAUDE.md", regenerate_cmd=None):
-        captured["regenerate_cmd"] = regenerate_cmd
-        captured["role_name"] = role_name
-        return compose.REPO_ROOT / "_fake_pm"
-
-    monkeypatch.setattr(compose, "deploy_role", fake_deploy_role)
+    Replaces the A6-era test that asserted regenerate_cmd was forwarded
+    to deploy_role. A2f no longer delegates, so we read the written file
+    and assert the same hint is in the GENERATED comment.
+    """
     monkeypatch.setattr(
         compose._config_module, "parse_aliases_registry",
         lambda: {"pm": ("pm", None), "frontend-1": ("worker", "frontend")},
     )
+    import v2_link_stage
+    monkeypatch.setattr(v2_link_stage, "collect_sources_for_validation",
+                        lambda role_class, l3_domain, repo_root=None: [])
+    monkeypatch.setattr(v2_link_stage, "emit_v2_linked",
+                        lambda role_class, l3_domain, *, repo_root=None, l4_path=None: "body")
 
-    compose.deploy_alias_v2("frontend-1")
-    assert captured["regenerate_cmd"] == "frontend-1 --v2"
-    assert captured["role_name"] == "worker"
+    out = compose.deploy_alias_v2("frontend-1", target_root=tmp_path)
+    header = out.read_text(encoding="utf-8")
+    assert "GENERATED by compose.py deploy frontend-1 --v2" in header
+    assert "Regenerate: python references/scripts/compose.py deploy frontend-1 --v2" in header
 
 
 def test_deploy_role_default_regenerate_cmd_preserves_v1_header(monkeypatch):
