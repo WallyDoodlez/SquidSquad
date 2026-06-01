@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [dm]
+---
+
 {{runtime: souls/dm-android}}
 
 # SquidSquad — [ROLE] Lead (Android Specialization)

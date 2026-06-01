@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 10
+roles: []
+---
+
 # Layered Role Architecture
 
 Role definitions compose from 4 layers. The directory depth IS the layer.

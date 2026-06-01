@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [verifier]
+---
+
 {{runtime: souls/verifier-ios}}
 
 # SquidSquad — [ROLE] Lead (iOS Specialization)

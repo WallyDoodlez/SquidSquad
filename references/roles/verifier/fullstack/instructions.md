@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [verifier]
+---
+
 {{runtime: souls/verifier-fullstack}}
 
 # SquidSquad — [ROLE] Lead (Fullstack Specialization)

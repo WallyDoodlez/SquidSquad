@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [dm]
+---
+
 {{runtime: souls/dm-fullstack}}
 
 # SquidSquad — [ROLE] Lead (Fullstack Specialization)
