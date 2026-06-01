@@ -133,6 +133,7 @@ STATIC_TEST_MODULES = [
     "test_b8_golden_assemble",
     "test_v1_byte_stability_9a",
     "test_compose_strip_frontmatter",
+    "test_l4_audit_gate_c3",
 ]
 
 

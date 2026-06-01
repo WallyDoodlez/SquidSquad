@@ -112,7 +112,10 @@ When a customization request is detected, walk this dialog before writing L4. St
 
 8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the three §7.4 gates in order:
 
-   1. **DeepSeek decision-tree audit**: a deepseek-class model reviews the agent's slot + op + target classification (which H2 the H3 block goes under, which op type, which step-id target if any) and rejects if the call is wrong.
+   1. **DeepSeek decision-tree audit (Gate 1, C3)**: invoke `references/scripts/l4_audit_gate.py:audit_l4_op(op_type, target_slot, target_step_id, target_role_class, body_text, source_directive)`. The helper dispatches to `model_router.route(task_type="l4-audit", ...)` with the `l4-audit.md.j2` prompt template; the deepseek-class model reviews the slot + op + target classification against the human's source directive and returns one of:
+      - **approve** — proceed to Gate 2 (mini-CQ).
+      - **reject** — surface the model's `reason:` field to the human verbatim, ask for a refined directive, and re-walk the decision tree with that refinement as input. **Do not silently retry** the same classification (per C3 AC3); the rejection is informational for the human, not a self-correcting loop. If the model emitted `suggested_op_type:` / `suggested_target_slot:` / `suggested_target_step_id:` fields, surface those to the human as the model's recommendation.
+      - **Audit-gate error** (model_router unreachable / timeout / no output / parse failure): the helper raises `AuditGateError` (subclasses: `AuditModelRouterError`, `AuditTimeoutError`, `AuditOutputMissingError`, `AuditParseError`). Surface the diagnostic to the human and **abort the write — do not advance to Gate 2** (per C3 AC5; failure-modes table in §7.4).
    2. **Mini-CQ**: the agent gives the human a one-sentence confirmation of the change in functional terms (e.g., "Adding a project rule that you want PM to check incidents before filing any bug — OK?") and gets explicit yes/no. The detailed prose draft was already shown in step 7; this is the final go/no-go in one line. Rejection aborts; no file changed.
    3. **Compose dry-run**: `compose.py deploy-all --check` validates the updated L4 file resolves cleanly (step-id targets exist, op type is legal for the enclosing slot, no validation errors).
 
