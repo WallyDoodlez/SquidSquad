@@ -1,44 +1,57 @@
 # Working State
 
-- **Task**: pipeline sentinel (recovered)
-- **Status**: monitoring; all four roles cycling
+- **Task**: pipeline sentinel + system-wide MSYS2 crash investigation
+- **Status**: DM wedged, awaiting operator stop/start
 - **Last Processed Event ID**: c86a384fc7de6737
 - **Quiet cycles**: 0
 
 ## Pipeline
 
 - Harness: reachable
-- DM queue: 1 (#10488 just landed at pending-ship; DM should ship next cycle)
-- pending-test: 0
-- Open PRs: 5 (3 skill-owned task PRs + 2 docs PRDs)
-- All four roles alive and cycling:
-  - PM (me): 1086100, cycle 1992
-  - QA: 263116, cycle 495+ (just did mechanical bounce on #10488)
-  - DM: 2199912, cycle 1717+
-  - skill: 2212432, just completed a cycle (rebased #10488, bounced to pending-test)
+- DM queue: 1 (#10488 stuck because DM wedged)
+- pending-test: 1 (#10443 awaiting QA mechanical bounce)
+- Open PRs: 5
+- Agents:
+  - PM (me): 1086100, cycle 1993 ✓ (survived 22:00 bash crash)
+  - QA: 263116, cycle 497 ✓
+  - DM: 2199912, WEDGED at idle since 21:35 (bash.exe crashed 21:39)
+  - skill: 2212432, cycling (last activity 21:47 stackdump, recovered)
 
-## Recent skill activity
+## MSYS2 crash inventory (this cycle)
 
-- Successfully rebased #10488 onto current main (77e50d55)
-- Acknowledged QA PASS at 21:34Z, bounced in-progress → pending-test
-- (per feedback_qa_no_inprogress_claim, QA correctly went pending-test → pending-ship without claiming in-progress)
+All bash.exe.stackdump on host:
+- D:/Dev/Dev/SquidSquad (PM, 22:00 — survived)
+- D:/Dev/Dev/SquidSquad-2 (skill, 21:47 — survived)
+- D:/Dev/Dev/SquidSquad-3 (DM, 21:39 — wedged)
+- D:/Dev/Dev/SquidSquad-qa (old, unused)
+- D:/Dev/Dev/viewfinder, viewfinder-designer, viewfinder-dev, viewfinder-dm, viewfinder-qa (different project, same signature)
 
-## Still awaiting skill
+All start at msys-2.0.dll+0x1FE8E. Environment-level instability, not SquidSquad-specific.
 
-- #10386 (PR #10476) — real merge conflict, rebase + push needed
-- #10443 (PR #10454) — batch-race retry, rebase + push needed
-- #10442 — approved, blocked
+## Operator action needed
 
-## Other human-blocked items
+DM wedge: run the same dance you ran for skill at 21:31:
+  curl -X POST http://127.0.0.1:7373/agents/dm/stop
+  curl -X POST http://127.0.0.1:7373/agents/dm/start
 
-- #3 — public-launch disposition
-- #10537 — wont-fix vs INFO-only role-graph cycle audit
-- #10377 — gated on TRD impl
+Or let me boot DM with boot_remote.py if you OK it.
 
-## Filed/updated by PM this session
+## Closed this session
+
+- #10537 — wont-fix (human direction, cycle 1992)
+
+## Recently filed by PM
 
 - #10540 — DM batch ship dispatch race (sev:medium)
-- #10541 — skill wedge / MSYS2 bash crash + restart-without-respawn (sev:high). Escalated to human; resolved by operator stop/start.
+- #10541 — MSYS2 bash crash (now scoped as environment-level; sev:high)
+
+## Approved / waiting on skill
+
+- #10442, #10386 (conflict), #10441, #10440 (route-backs)
+
+## Other human-blocked
+
+- #3, #10377 (gated on TRD impl)
 
 ## Context
 
