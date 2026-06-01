@@ -115,6 +115,7 @@ STATIC_TEST_MODULES = [
     "test_terminology_dual_aware_6274",
     "test_source_frontmatter",
     "test_assemble_verifier",
+    "test_l4_parser",
 ]
 
 

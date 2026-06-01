@@ -416,7 +416,10 @@ class ForgejoAdapter(ForgeAdapter):
         }
 
     def merge_pr(self, number, strategy="squash"):
-        merge_map = {"squash": "squash", "merge": "merge", "rebase": "rebase"}
+        # Per operator rule [[feedback_never_rebase_merge_instead]], rebase
+        # is not exposed as a merge strategy here. Squash (default) and
+        # merge-commit are the supported options.
+        merge_map = {"squash": "squash", "merge": "merge"}
         data = self._api("POST", f"{self._repo_path()}/pulls/{number}/merge",
                          {"Do": merge_map.get(strategy, "squash"),
                           "delete_branch_after_merge": True})
