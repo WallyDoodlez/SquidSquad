@@ -55,9 +55,15 @@ def apply_l4_ops(slot_content, l4_ops):
 
     Returns the resulting per-slot LINKED body as a string. Pure and
     deterministic — no I/O, no side effects.
+
+    Pre-processing: C9 counter-op pairs (``replace step:cycle/X`` with
+    the ``<!-- counter-op: ... -->`` sentinel body, paired with the
+    most-recent prior ``replace step:cycle/X`` for the same step_id)
+    are stripped before application so neither op fires. The L1-L3
+    step body is preserved. See :func:`_strip_counter_op_pairs`.
     """
     content = slot_content
-    for op in l4_ops:
+    for op in _strip_counter_op_pairs(l4_ops):
         op_type = op.op_type
         target = op.target_step_id
         body = op.body_text
@@ -125,6 +131,74 @@ def _apply_replace_step(content, step_id, new_body):
     """Replace the targeted step's body, preserving its heading line."""
     _, body_start, body_end = _find_step_region(content, step_id)
     return content[:body_start] + _ensure_trailing_newline(new_body) + content[body_end:]
+
+
+# Matches a body whose only non-whitespace content is one or more
+# ``<!-- counter-op: ... -->`` HTML-comment sentinels. Anchored on the
+# ``counter-op:`` key so unrelated HTML comments do not register.
+_COUNTER_OP_RE = re.compile(
+    r"\A\s*(?:<!--\s*counter-op:[\s\S]*?-->\s*)+\Z"
+)
+
+
+def _is_counter_op_body(body):
+    """True iff ``body`` is the C9 counter-op sentinel and nothing else.
+
+    Used by :func:`_strip_counter_op_pairs` to identify ops that
+    should be removed together with their matching prior op. A
+    ``replace step:cycle/X`` whose body is genuinely empty (no
+    sentinel) is left alone — it represents an operator intentionally
+    blanking the step.
+    """
+    if not body or not body.strip():
+        return False
+    return _COUNTER_OP_RE.match(body) is not None
+
+
+def _strip_counter_op_pairs(l4_ops):
+    """Return ``l4_ops`` with C9 counter-op + prior-op pairs removed.
+
+    A C9 counter-op is a ``replace step:cycle/X`` op whose body is the
+    ``<!-- counter-op: ... -->`` sentinel. When the op processor sees
+    one, it pairs it with the most-recent prior ``replace step:cycle/X``
+    op targeting the same step_id and drops BOTH from the application
+    sequence — the net effect is that neither the original nor the
+    counter-op fires at compose time, so the underlying L1-L3 step
+    body is what survives.
+
+    If a counter-op has no matching prior op (the operator authored
+    a counter-op against a step never customized in L4), the
+    counter-op is silently dropped — it can't cancel something that
+    isn't there, and falling through to the standard replace would
+    blank a real L1-L3 step body via the empty-after-strip behavior.
+    """
+    keep = list(l4_ops)
+    i = 0
+    while i < len(keep):
+        op = keep[i]
+        if (op.op_type == "replace"
+                and op.target_step_id is not None
+                and _is_counter_op_body(op.body_text)):
+            # Find most-recent prior op (in keep[0:i]) with op_type=replace
+            # AND same target_step_id, then drop both.
+            prior_idx = None
+            for j in range(i - 1, -1, -1):
+                prior = keep[j]
+                if (prior.op_type == "replace"
+                        and prior.target_step_id == op.target_step_id):
+                    prior_idx = j
+                    break
+            if prior_idx is not None:
+                del keep[i]
+                del keep[prior_idx]
+                # Continue from the position of the dropped prior op
+                i = prior_idx
+                continue
+            # No prior to pair with — drop just the counter-op.
+            del keep[i]
+            continue
+        i += 1
+    return keep
 
 
 def _apply_insert_before_step(content, step_id, body):
