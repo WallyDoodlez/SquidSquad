@@ -1,47 +1,58 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: DM stall on #10559 (80min); operator chose wait-one-cycle
-- **Last Processed Event ID**: e0b475d9426bf2ad
+- **Status**: pipeline humming; no PM intervention needed
+- **Last Processed Event ID**: b9542d0638d4ca5e
 - **Quiet cycles**: 0
 
 ## Pipeline
 
 - Harness: reachable
-- pending_ship: 1 (#10559, stalled 80min)
-- pending_test: 2 (#10440, #10441 — QA's turn)
-- Open PRs: 6
+- pending_ship: 0 ✓
+- pending_test: 2 (#10441 B2, #10386 A6 — both QA's turn)
+- Open PRs: 4 (down from 6)
+  - #10465 [CONFLICTING] — #10441 B2 (will need new merge-main pass after QA)
+  - #10476 [?] — #10386 A6 (skill just pushed merged version)
+  - #10391, #10392 — held PRD-C/D+E drafts
 - Approved queue: 14
-- shipped_since_bump: 6
+- shipped_since_bump: 6 (steady; will rise as more ship)
 - Agents:
-  - PM: 1086100, cycle 2002 ✓
-  - QA: 263116, cycle 504 ✓
-  - DM: 2199912, cycle 1724 at 01:09 — alive but skipping #10559 silently
-  - skill: 1348408 alive ~60min ✓ (best streak)
+  - PM: 1086100, cycle 2003 ✓
+  - QA: 263116, cycle 505 ✓
+  - DM: 2199912, cycle 1725 at 01:39 ✓ (shipped 2 PRs)
+  - skill: 1348408 alive 90+min ✓ (longest streak)
 
-## Operator decision this cycle
+## This cycle's milestones
 
-- AskUserQuestion: DM stall handling → 'Wait one more cycle and observe'
-- If still no ship at PM cycle 2003, escalate again with stronger framing
+- DM shipped #10559 (gh pr edit GraphQL fix) — the template fix is now live on main
+- DM shipped #10440 (process_utils ctypes Windows liveness fix)
+- Skill cleared #10386 A6 real merge conflict → pending-test
+- Skill survived 90+ min (the death pattern broke this round)
+- DM stall last cycle resolved without operator action (wait-and-see worked)
 
-## Open PRs
+## Skill's remaining queue
 
-- #10581 [MERGEABLE] — #10559 fix (stalled at DM)
-- #10493 [MERGEABLE] — #10440 process_utils (waits for QA bounce)
-- #10476 [CONFLICTING] — #10386 A6 real conflict (skill workload)
-- #10465 [CONFLICTING] — #10441 B2; PR re-dirtied after merge cascades; skill will need another merge-main pass
-- #10391 [MERGEABLE] — PRD-C draft (held)
-- #10392 [MERGEABLE] — PRD-D+E (held)
+**Route-backs:** 0 (all cleared!)
 
-## Skill's queue (14 approved + 1 route-back #10386)
+**Approved (14):**
+- PRD-A Phase 1 core: A2c, A2d, A2e, A2f
+- PRD-A Phase 2: A3, A4, A2.6
+- A4.5
+- PRD-B Phase 2: B1, B4, B5, B7, B8
+- PRD-B Phase 1 leftover: B3
 
-Unchanged from cycle 2000/2001 — skill chewing through.
+Skill picks one at a time per priority. Next pickup likely A2c or B3 depending on priority queue logic.
 
 ## Held / awaiting human
 
-- PR #10391, #10392 — held by my comment pending PRD-A/B drain
+- PR #10391 (PRD-C), PR #10392 (PRD-D+E) — held by PM comment; substantial PRD-A/B drain now
 - #10377 — gated
 - #10541 — operator awareness
+
+## Open follow-ups
+
+- harness.py stash conflict (PM left untouched)
+- tests/test_feat_6126_harness_merge.py stale assertion message (cosmetic)
 
 ## Context
 
