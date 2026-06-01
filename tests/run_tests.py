@@ -138,6 +138,7 @@ STATIC_TEST_MODULES = [
     "test_l4_compose_dryrun_c5",
     "test_l4_write_commit_c6",
     "test_comprehension_10659",
+    "test_l4_removal_c9",
 ]
 
 
