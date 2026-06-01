@@ -1,42 +1,41 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet; sustained 1-story-per-cycle throughput
-- **Last Processed Event ID**: 3f5ce7603a02f355
-- **Quiet cycles**: 5
+- **Status**: quiet; ship cadence stable
+- **Last Processed Event ID**: 6b43a431a14b6c91
+- **Quiet cycles**: 6
 
 ## Pipeline
 
 - Harness: reachable
 - pending_ship: 0 ✓
-- pending_test: 1 (#10490 A2d — QA verifying)
-- Open PRs: 3 (1 for #10490 + #10391 + #10392 held)
-- Approved queue: 10
-- shipped_since_bump: 6
+- pending_test: 1 (#10491 A2e — QA verifying)
+- Open PRs: 3 (1 for #10491 + held #10391 + #10392)
+- Approved queue: 9
+- shipped_since_bump: 6 (steady — DM bumping silently or counter decoupled)
 - Agents:
-  - PM: 1086100, cycle 2008 ✓
-  - QA: 263116, cycle 510 ✓
-  - DM: 2199912, cycle 1730 ✓ (6th consecutive ship)
-  - skill: 1348408 alive 4 hours
+  - PM: 1086100, cycle 2009 ✓
+  - QA: 263116, cycle 511 ✓
+  - DM: 2199912, cycle 1731 ✓ (7th consecutive ship)
+  - skill: 1348408 alive 4.5 hours
 
-## Session ship tally (10 items now)
+## Session ship tally (11)
 
-- A2a #10487, A2b #10488, A2c #10489 — PRD-A link stage core
-- A6 #10386 — compose --v2 flag
-- A4 #10388 ← just shipped — drift detector (foundation for PRD-E)
-- B2 #10441, B3 #10442, B6 #10443 — PRD-B verifiers + cache
-- #10440 process_utils, #10559 gh pr edit fix — bug fixes
+- A2a, A2b, A2c, A2d ← just shipped, A6 (PRD-A core)
+- A4 (PRD-E foundation drift detector)
+- B2, B3, B6 (PRD-B Phase 1)
+- #10440 process_utils, #10559 gh pr edit fix (bug fixes)
 
-## Skill's remaining queue (10)
+## Skill's remaining queue (9)
 
-**PRD-A:** A2d (in flight), A2e, A2f, A3, A2.6, A4.5 (5 after A2d)
+**PRD-A:** A2e (in flight), A2f, A3, A2.6, A4.5 (4 after A2e)
 **PRD-B:** B1, B4, B5, B7, B8 (5)
 
-With current cadence (~1 story/cycle), 10 items at ~30min each = ~5 hours to drain everything currently approved.
+At current cadence (~1/cycle), ~4.5 more hours to drain the queue if pattern holds.
 
 ## Held / awaiting human
 
-- PR #10391 (PRD-C), PR #10392 (PRD-D+E) — PRD-A/B drain at ~50%; case to lift hold strengthening
+- PR #10391 (PRD-C), PR #10392 (PRD-D+E) — case to lift hold solid; PRD-A nearly done, PRD-B halfway
 - #10377 (gated)
 - #10541 (operator awareness)
 
