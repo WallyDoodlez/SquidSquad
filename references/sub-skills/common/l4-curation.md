@@ -9,7 +9,7 @@ ordinal: 10
 
 L4 is `.squidsquad/project/*.md` — the install-local layer that **overrides or supplements** L1–L3 with project-specific rules. This sub-skill defines how an agent recognizes when the human is asking for a project-role customization, dialogs to capture the rule clearly, and produces a well-formed L4 file that the compose pipeline can persist.
 
-L4 *writes* are owned by the compose pipeline. The L4 file structure (one file per agent class, H2 slot sections, H3 op blocks), the op grammar, and the three safety gates (DeepSeek audit → mini-CQ → compose dry-run) are all defined in `COMPOSE-ARCHITECTURE.md` §3.3, §7.3, and §7.4. This sub-skill is the *upstream dialog* that produces an L4 H3 block before those gates run.
+L4 *writes* are owned by the compose pipeline. The L4 file structure (one file per agent class, H2 slot sections, H3 op blocks), the op grammar, and the four safety gates (DeepSeek audit → mini-CQ → compose dry-run → atomic write/commit/push) are all defined in `COMPOSE-ARCHITECTURE.md` §3.3, §7.3, §7.4, and §7.5. This sub-skill is the *upstream dialog* that produces an L4 H3 block before those gates run.
 
 L4 curation is **one-shot and durable** (see `COMPOSE-ARCHITECTURE.md` §7.7): each customization is captured once via the dialog below, written to the right L4 file, and persists across cycles without further intervention. There is no recurring scan over L4 entries; drift between L4 and L1–L3 is caught at recompose time by the existing dry-run gate, not by a separate curation pass.
 
@@ -110,7 +110,7 @@ When a customization request is detected, walk this dialog before writing L4. St
 
 7. **Propose a draft and read it back** (user-facing). Show the human the rule in plain prose (rule + why + when-not-to-apply) and get explicit approval before writing. The agent translates that approved prose into the L4 file; the human never sees the frontmatter.
 
-8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the three §7.4 gates in order:
+8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the four §7.4 gates in order:
 
    1. **DeepSeek decision-tree audit (Gate 1, C3)**: invoke `references/scripts/l4_audit_gate.py:audit_l4_op(op_type, target_slot, target_step_id, target_role_class, body_text, source_directive)`. The helper dispatches to `model_router.route(task_type="l4-audit", ...)` with the `l4-audit.md.j2` prompt template; the deepseek-class model reviews the slot + op + target classification against the human's source directive and returns one of:
       - **approve** — proceed to Gate 2 (mini-CQ).
