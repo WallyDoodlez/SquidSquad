@@ -1,50 +1,40 @@
 # QA-RESULTS-10444 — PRD-B / Story B1: assemble LLM call scaffolding (per-slot)
 
-**Verified**: 2026-06-01 06:08
-**Branch**: `squidsquad/task/10444` @ `7095e1bf`
+**Verified**: 2026-06-01 06:38 (re-verification after cycle 513 route-back)
+**Branch**: `squidsquad/task/10444` @ `37cd3528` (was `7095e1bf` in cycle 513)
 **PR**: #10642
 **Verifier**: qa-lead
-**Result**: **FAIL — AC5 gap; routing back to in-progress**
+**Result**: **PASS**
 
-## Scope Check
+## Context
 
-Single feature commit `7095e1bf`:
-- `references/prompts/assemble.md.j2` (new, +31)
-- `references/scripts/assemble_pass.py` (new, +108)
-- `references/scripts/model_router.py` (+1 — register `assemble` task type)
-- `tests/test_assemble_pass_b1.py` (new, +179)
-- `tests/run_tests.py` (+1)
+Cycle 513 routed to in-progress on AC5 gap. Skill addressed the route-back in commit `37cd3528`:
+1. Added `test_smoke_assemble_slot_dispatches_through_real_model_router` — runs `assemble_slot` through the real `model_router.route()` with a mocked provider adapter. Proves: dispatch reaches the routing layer, `assemble.md.j2` template is loaded, preservation tokens land in the user prompt, adapter response flows back.
+2. Added `test_smoke_assemble_slot_live_llm_round_trip` — gated by `SQUIDSQUAD_LIVE_LLM=1` for opt-in real-API smoke. Skipped when env unset.
+3. **The smoke caught a real defect**: original `assemble_pass.assemble_slot` used the system temp dir (`tempfile.mkdtemp()`), which falls outside model_router's REPO_ROOT sandbox; router was emitting `SKIPPED: Path outside repository boundary.` into the prompt — meaning the LLM never saw the linked body. Fix: route tempdir under `.squidsquad/tmp/assemble/`. Added `.squidsquad/tmp/` to `.gitignore`.
+
+This vindicates AC5 as a real quality gate: a stubbed-only test suite would have shipped this defect.
 
 ## Acceptance Criteria
 
 | # | AC | Evidence | Status |
 |---|---|---|---|
-| 1 | model_router task type `assemble` + prompt template at canonical path | `test_model_router_recognizes_assemble_task_type` + `test_assemble_template_exists_at_canonical_path` + `test_assemble_template_includes_required_preservation_directives` | PASS |
-| 2 | `assemble_slot(slot_name, linked_body)` calls model_router | `test_assemble_slot_dispatches_to_router_for_normal_slots`, `test_assemble_slot_writes_linked_body_to_input_file_for_router`, `test_assemble_slot_passes_slot_name_into_router_context`, `test_assemble_slot_returns_router_output_verbatim`, custom-task-id variants | PASS |
-| 3 | Verbatim pass-through for project-context + vault | `test_assemble_slot_returns_verbatim_for_special_slots` parametrized × 2 + `test_assemble_slot_verbatim_pass_through_with_empty_body` (also asserts router NOT invoked) | PASS |
-| 4 | Unit tests with stubbed model_router (no live LLM in unit tests) | All 14 tests use stubbed `model_router`; test at line 54 explicitly asserts "verbatim slots must not invoke the router" | PASS |
-| 5 | **Smoke test against a real fixture confirms LLM is invoked + body returned** | **MISSING.** Skill comment: "Live-LLM smoke test deferred (belongs in B2 integration / B8 golden-file)." | **FAIL** |
+| 1 | model_router task type `assemble` + prompt template | `test_model_router_recognizes_assemble_task_type` + 2 template tests | PASS |
+| 2 | `assemble_slot` dispatches via model_router | 6 dispatch tests covering args, task_id, body file, slot_name, return | PASS |
+| 3 | Verbatim pass-through for project-context + vault | Parametrized × 2 + empty-body + router-not-invoked assertion | PASS |
+| 4 | Unit tests with stubbed model_router | All applicable tests use stubs; no live calls in default suite | PASS |
+| 5 | Smoke test against real fixture confirms LLM invoked + body returned | **NOW PASSES** via `test_smoke_assemble_slot_dispatches_through_real_model_router` (real router + mocked adapter, exercises full template + prompt + response flow) + `test_smoke_assemble_slot_live_llm_round_trip` (env-gated live-API) | PASS |
 
-## Defense-in-Depth Extras (would be good if AC5 were met)
+## Defense-in-Depth (pre-existing)
 
 - `test_assemble_slot_raises_when_router_returns_nonzero` — error path on router non-zero exit.
 - `test_assemble_slot_raises_when_router_writes_no_output` — error path on missing output.
-
-## Gap Analysis (AC5)
-
-AC5 text: "Smoke test against a real fixture confirms LLM is invoked + body returned." This is distinct from AC4 ("Unit tests with stubbed model_router"). The AC explicitly calls out a fixture-based smoke test, not just dispatch-shape unit coverage. Skill's deferral to "B2 integration / B8 golden-file" is a scope-shift to other not-yet-shipped stories; it does not satisfy this story's AC.
-
-Per [[feedback_no_ship_with_gaps]] (any QA gap = back to dev, not "noted for follow-up") and [[feedback_no_ship_failed_tc]] (any TC failure = back to dev). The fact that AC4 passes does not cover AC5 — they are distinct ACs.
-
-## Suggested Remediation Paths (dev's choice)
-
-1. Add a smoke test that exercises `assemble_slot` against a real model_router with a small fixture body — could be `pytest.mark.live_llm` and gated on an env flag or API-key presence, so it doesn't run in CI by default but exists in the repo and can be manually invoked. Document in test docstring how to run it.
-2. Or, get PM approval to scope-shift AC5 to a downstream story explicitly in this issue's body (not just a skill-side defer comment), then re-route pending-test.
+- New REPO_ROOT-aware tempdir routing (`.squidsquad/tmp/assemble/`) prevents sandbox bypass.
 
 ## Test Execution
 
-`pytest tests/test_assemble_pass_b1.py -q` on `7095e1bf` → **14 passed in 0.11s** (AC1-AC4 confirmed; AC5 has no test).
+`pytest tests/test_assemble_pass_b1.py -v` on `37cd3528` → **15 passed, 1 skipped in 0.16s**. The skip is the env-gated live-LLM round-trip; documented in test docstring.
 
 ## Outcome
 
-AC1-AC4 PASS. AC5 has no implementation in this PR. Routing **#10444: pending-test → in-progress** for AC5 remediation.
+All 5 ACs now met. The route-back surfaced a real shipping defect (REPO_ROOT sandbox bypass) — confirming AC5 was the correct gate. **Transitioning #10444: pending-test → pending-ship.**
