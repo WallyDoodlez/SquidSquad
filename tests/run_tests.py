@@ -136,6 +136,7 @@ STATIC_TEST_MODULES = [
     "test_l4_audit_gate_c3",
     "test_l4_mini_cq_c4",
     "test_l4_compose_dryrun_c5",
+    "test_l4_write_commit_c6",
 ]
 
 
