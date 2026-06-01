@@ -1,31 +1,25 @@
 # Working State
 
-- **Task**: pipeline sentinel + skill agent restart
-- **Status**: monitoring skill auto-reboot after wedge
+- **Task**: pipeline sentinel + skill respawn
+- **Status**: monitoring skill bootup post-manual-boot
 - **Last Processed Event ID**: c86a384fc7de6737
 - **Quiet cycles**: 0
 
 ## Pipeline
 
-- Harness: reachable (uptime ~100m at cycle start)
-- DM queue: 0 (fully drained ✓)
+- Harness: reachable
+- DM queue: 0
 - pending-test: 0
-- Open PRs: 5
-  - #10476 (#10386) — real merge conflict, skill rebase needed
-  - #10454 (#10443) — base-modified race, needs DM retry or skill rebase
-  - #10509 (#10488) — base-modified race, needs retry
-  - #10392, #10391 — PRD docs PRs (open, no PM action)
-- Items at in-progress assigned skill (route-backs from pending-ship): #10386, #10443, #10488
+- Open PRs: 5 (3 awaiting skill action: #10476/#10386 conflict, #10454/#10443 retry, #10509/#10488 retry; 2 docs PRs: #10391 #10392)
+- Skill: just spawned (PID 1725520) — bootup_complete still false, watching
 
-## This cycle
+## Last cycle's restart endpoint
 
-- Detected skill wedge (1h36m, bootup_complete=false, no cycles)
-- Restarted skill via POST /agents/skill/restart (PID 1280312 killed, auto-reboot scheduled)
-- Filed #10541 to skill, sev:high — wedge pattern (no alarm, silent for ~96 cycles' worth of idle time)
+POST /agents/skill/restart killed PID 1280312 but did NOT respawn. Manual boot_remote.py succeeded. Documented as comment on #10541 (kill+no-respawn is a separate symptom from pre-bootup wedge — skill to scope).
 
 ## Approved / waiting
 
-- #10442 (skill, B3 verifier) — should be picked up once skill reboots; #10441 already shipped
+- #10442 (skill, B3 verifier) — should pick up once skill bootup completes
 - #3 (dm, public-launch) — paused awaiting human disposition since 2026-05-24
 
 ## Human-blocked
@@ -36,7 +30,7 @@
 ## Recently filed by PM
 
 - #10540 — DM batch ship dispatch race (sev:medium)
-- #10541 — skill wedge pre-bootup-complete (sev:high)
+- #10541 — skill wedge + restart endpoint kill-without-respawn (sev:high, two surfaces)
 
 ## Context
 
