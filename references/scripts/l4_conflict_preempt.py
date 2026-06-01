@@ -37,6 +37,19 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _PREEMPT_TMP_ROOT = _REPO_ROOT / ".squidsquad" / "tmp" / "l4-conflict-preempt"
 
 
+# Canonical legal op_type values per the L4 grammar (l4_parser._OP_RE).
+# An explicit allowlist for the AC5(c) short-circuit — `replace` ops
+# supersede prior prose by construction, but only ops that actually
+# match the grammar. A malformed shape like ``"replace foo"`` or
+# ``"replace step:not-cycle/x"`` would have failed the audit-gate
+# check anyway, but routing it through Gate 0 as a "skip" silently
+# advances garbage past pre-emption — caught by the reviewer of
+# #10657.
+_REPLACE_OP_RE = re.compile(
+    r"\A(?:replace|replace\s+step:cycle/[A-Za-z0-9_-]+)\Z"
+)
+
+
 @dataclass
 class PreemptResult:
     """Parsed result of one Gate-0 (pre-emption) dispatch.
@@ -135,8 +148,11 @@ def preempt_conflict(
     ``model_router`` module (tests pass a stub). Default lazy-imports
     the real module.
     """
-    if op_type and op_type.split()[0] == "replace":
+    if op_type and _REPLACE_OP_RE.match(op_type):
         # AC5(c): replace ops supersede prior prose; no LLM dispatch.
+        # Allowlist-match against the grammar so malformed shapes like
+        # "replace foo" / "replace step:not-cycle/x" don't silently
+        # short-circuit past Gate 0 (caught in #10657 review).
         return PreemptResult(
             decision="skip",
             why=(
@@ -267,10 +283,10 @@ def format_contradiction_for_human(result):
         "The proposed rule would conflict with how this role is already configured:",
         "",
         f"**What you're asking to add:**",
-        f"> {result.quote_new}" if result.quote_new else "> (no quote provided)",
+        _quote_for_blockquote(result.quote_new),
         "",
         f"**What the role already does:**",
-        f"> {result.quote_existing}" if result.quote_existing else "> (no quote provided)",
+        _quote_for_blockquote(result.quote_existing),
         "",
     ]
     if result.why:
@@ -282,6 +298,23 @@ def format_contradiction_for_human(result):
             + _format_action_options(result.suggested_action)
         )
     return "\n".join(parts)
+
+
+def _quote_for_blockquote(text):
+    """Render ``text`` as a safe markdown blockquote.
+
+    The LLM is constrained to single-line quotes by the prompt
+    template, but defend against multi-line emissions anyway: prefix
+    EVERY line with ``> `` so the blockquote doesn't silently
+    terminate at an embedded newline (which would leave subsequent
+    lines rendering as flow text or, worse, parsed as an `## H2` if
+    the model emitted one). An empty/falsey input renders as the
+    canonical missing-quote marker so the human always sees both
+    sides have SOMETHING.
+    """
+    if not text:
+        return "> (no quote provided)"
+    return "\n".join(f"> {line}" for line in text.splitlines())
 
 
 def _format_action_options(suggested_action):

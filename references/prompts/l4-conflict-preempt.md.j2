@@ -50,9 +50,11 @@ OR
 ```
 decision: contradiction
 why: <one short sentence stating what behavior the new body contradicts>
-quote_new: <verbatim sentence(s) from body_text>
-quote_existing: <verbatim sentence(s) from linked_composite>
+quote_new: <ONE verbatim sentence from body_text — single line, no embedded newlines>
+quote_existing: <ONE verbatim sentence from linked_composite — single line, no embedded newlines>
 suggested_action: <one of `replace-reframe` (if a `replace step:cycle/<id>` of the conflicting step would resolve cleanly) OR `abandon` (if the new directive is incompatible with the role's shipped contract) OR `reword` (if a small wording change would lift the contradiction without changing intent)>
 ```
+
+The `quote_new` and `quote_existing` fields MUST be exactly one sentence each, on one line, with no newlines or markdown structural characters (no `## `, no `\n\n`). Pick the single most representative sentence from each side. If you need to convey more context, put it in the `why:` field. This constraint exists because the parser is line-anchored and the human-facing render is a single-line blockquote per side.
 
 The `decision:` line is the ONLY line the agent's parser reads to branch — keep it on its own line and use exactly `clean` or `contradiction`. On contradiction, the four extra fields are surfaced to the human verbatim so they can choose between the suggested action and a different reframe. Do NOT report `clean` as a courtesy; if the new body would force the assemble-pass to reconcile a real contradiction, surface it here so the human resolves it explicitly instead of letting the assemble-pass paper over it later.

@@ -117,6 +117,41 @@ class TestReplaceOpShortCircuits:
         )
         assert "supersede" in result.why.lower()
 
+    def test_malformed_replace_does_not_short_circuit(self):
+        """B1 fix: ``op_type`` allowlist matches the grammar exactly,
+        so ``"replace foo"`` / ``"replace step:not-cycle/x"`` / ``"replace-typo"``
+        are NOT routed past Gate 0 as skips. The LLM dispatch fires
+        (and will likely raise — that's the right behavior; garbage
+        op_types should be caught loudly).
+        """
+        router, calls = _make_router(output_text=(
+            "decision: clean\nwhy: malformed op_type still ran dispatch\n"
+        ))
+        # "replace foo" — extra-token shape that the old split()[0]
+        # check would have wrongly accepted as a skip
+        cp.preempt_conflict(
+            op_type="replace foo",
+            target_slot="instructions", target_step_id=None,
+            target_role_class="worker", body_text="x",
+            linked_composite=_LINKED_COMPOSITE, source_directive="x",
+            model_router=router,
+        )
+        # The LLM was dispatched (not short-circuited)
+        assert len(calls) == 1
+
+    def test_step_targeted_replace_with_non_cycle_target_does_not_short_circuit(self):
+        router, calls = _make_router(output_text=(
+            "decision: clean\nwhy: non-cycle target still ran dispatch\n"
+        ))
+        cp.preempt_conflict(
+            op_type="replace step:not-cycle/foo",
+            target_slot="instructions", target_step_id="foo",
+            target_role_class="worker", body_text="x",
+            linked_composite=_LINKED_COMPOSITE, source_directive="x",
+            model_router=router,
+        )
+        assert len(calls) == 1
+
 
 # ---------------------------------------------------------------------------
 # AC5(a) — clean insert path
@@ -252,6 +287,34 @@ class TestFormatContradictionForHuman:
         assert "Options" in out
         # The model's recommendation is rendered first + tagged
         assert "(recommended)" in out
+
+    def test_quote_with_embedded_newline_renders_as_multi_line_blockquote(self):
+        """C2 fix: if the LLM ignores the prompt's single-line
+        constraint and emits a multi-line quote, every line gets the
+        ``> `` prefix so the blockquote doesn't silently terminate
+        and the next prose isn't rendered as a stray paragraph.
+        """
+        result = cp.PreemptResult(
+            decision="contradiction",
+            why="x",
+            quote_new="Line one of the quote.\nLine two of the quote.",
+            quote_existing="Existing line one.",
+            suggested_action="reword",
+        )
+        out = cp.format_contradiction_for_human(result)
+        # Both lines of the multi-line quote are blockquoted
+        assert "> Line one of the quote." in out
+        assert "> Line two of the quote." in out
+
+    def test_missing_quotes_render_as_placeholder(self):
+        result = cp.PreemptResult(
+            decision="contradiction",
+            why="x", quote_new="", quote_existing="",
+            suggested_action="reword",
+        )
+        out = cp.format_contradiction_for_human(result)
+        # Both sides get the canonical missing-quote marker
+        assert out.count("(no quote provided)") == 2
 
     def test_contradiction_with_reword_recommends_reword_first(self):
         result = cp.PreemptResult(
