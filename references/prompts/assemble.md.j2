@@ -28,4 +28,39 @@ When layers contradict ("L2 says verify pending-test items each cycle" / "L4 app
 
 ## Output Format
 
-Emit ONLY the rewritten slot body. No preamble, no commentary, no markdown code fence around the whole output. The output is concatenated under the slot's `## <Heading>` directly in the assembled CLAUDE.md, so anything you write that isn't part of the slot body becomes runtime noise the agent reads each cycle.
+Emit your output in TWO parts, separated by the literal delimiter `<!-- ASSEMBLE_CONFLICTS -->` on its own line.
+
+### Part 1 — Rewritten slot body
+
+Above the delimiter: ONLY the rewritten slot body. No preamble, no commentary, no markdown code fence around the whole output. The body is concatenated under the slot's `## <Heading>` directly in the assembled CLAUDE.md, so anything that isn't part of the slot body becomes runtime noise the agent reads each cycle.
+
+### Part 2 — Conflicts reconciled (audit trail)
+
+Below the delimiter: a bullet list of every contradiction you reconciled during the rewrite. Each conflict is one bullet group with the following fields. Field names MUST be lowercase exactly as shown; values are free-form text. Quotes ≤200 chars (longer quotes are auto-truncated by the report emitter).
+
+```
+<!-- ASSEMBLE_CONFLICTS -->
+
+- slot: <slot name, e.g. instructions>
+  winner_layer: <L1 | L2 | L3 | L4>
+  winner_path: <source file path>
+  winner_quote: <verbatim quote from the higher layer>
+  loser_layer: <L1 | L2 | L3 | L4>
+  loser_path: <source file path>
+  loser_quote: <verbatim quote from the lower layer>
+  why: <one sentence explaining the contradiction>
+  resolution: <one sentence describing what the assembled body says>
+
+- slot: ...
+  ...
+```
+
+If you reconciled NO conflicts during this rewrite, emit the delimiter followed by the literal placeholder `(none)`:
+
+```
+<!-- ASSEMBLE_CONFLICTS -->
+
+(none)
+```
+
+The placeholder is mandatory — its presence confirms you considered conflict detection and found none. Skipping the delimiter entirely is reserved for the rare case where the LLM cannot complete the task; the operator-facing tooling treats it as an audit gap.
