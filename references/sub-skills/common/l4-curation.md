@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ### L4 Curation — Project-Role Customization Detection + Authoring
 
 #### Purpose

@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Improvement Scanning (Quiet Cycle Productivity)
 
 During quiet cycles, use your domain expertise to scan the **target project** for improvements. This turns idle time into proactive project improvement. Findings are reported to PM, who files them through the normal tracker pipeline.

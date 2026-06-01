@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 10
+roles: []
+---
+
 # Sub-skill Composition Manifest
 
 > **⚠️ SUPERSEDED — v1 reference only**

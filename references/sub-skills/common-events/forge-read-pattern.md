@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 13
+---
+
 ## Forge-Read Pattern
 
 **The forge is the source of truth. The event stream is a wake-up signal, not state.**

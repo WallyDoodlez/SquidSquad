@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Mention Protocol
 
 Rules for when and how to @mention humans and agents in chat. Controls notification noise.

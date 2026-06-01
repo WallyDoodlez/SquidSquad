@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+---
+
 ### Step 3 — Version Bump Check
 
 After marking any item `Shipped`, check if a version bump is due:

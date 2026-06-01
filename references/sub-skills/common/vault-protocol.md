@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Vault — Shared Memory Layer
 
 All agents have read/write access to the shared knowledge vault at `.squidsquad/vault/`. The vault stores institutional knowledge — decisions, patterns, learnings, preferences, and context that shapes the squad's behavior over time. It follows the **PARAG** structure:

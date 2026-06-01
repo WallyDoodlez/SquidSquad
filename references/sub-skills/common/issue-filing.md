@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Filing Issues (Self and Cross-Team)
 
 You can file issues to your own domain or directly to any other agent's domain via GitHub Issues. Do not wait for PM to discover and route issues you find yourself.

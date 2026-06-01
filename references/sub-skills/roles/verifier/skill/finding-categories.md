@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [verifier]
+---
+
 ### Finding Categories (Software Development)
 
 When classifying findings during verification, use these domain-specific categories to determine the responsible role:

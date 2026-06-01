@@ -1,3 +1,9 @@
+---
+slot: responsibility
+ordinal: 10
+roles: [dm]
+---
+
 # dm — Install-specific responsibility additions (L4)
 
 No install-specific responsibility additions for dm at this time.

@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ## Improvement Scanning (Quiet Cycle Productivity) — PM Override
 
 During quiet cycles, scan for **process and workflow improvements**. PM never scans application source code — PM's domain is the squad's operating system: templates, sub-skills, vault, config, and handoff gates. This turns idle time into proactive process improvement and creative proposals.

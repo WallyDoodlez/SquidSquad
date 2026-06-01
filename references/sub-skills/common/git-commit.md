@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ### Step 5 — Commit and Push (skip on quiet cycles)
 
 Print: `[🦑 HH:MM:SS] Committing and pushing...`

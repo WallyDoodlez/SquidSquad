@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [dm]
+---
+
 <!-- sub-skill: domain-context -->
 ### Skill Domain Context
 

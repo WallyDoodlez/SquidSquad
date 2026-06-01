@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 14
+---
+
 ## Cursor Management
 
 Your event cursor is the last event id you have processed. It lives in `.squidsquad/<role>/working-state.md` under the line:

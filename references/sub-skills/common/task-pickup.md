@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ### Task Pickup (Approved Tasks)
 
 Before role-specific work, check for approved tasks assigned to your role:

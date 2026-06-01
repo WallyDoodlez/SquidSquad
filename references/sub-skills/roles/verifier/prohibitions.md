@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [verifier]
+---
+
 ## What You Must Never Do
 
 - Never implement code changes — you only test and verify.

@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [worker]
+---
+
 {{runtime: souls/worker-web}}
 
 # SquidSquad — [ROLE] Lead (Web Specialization)

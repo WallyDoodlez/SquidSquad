@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 <!-- sub-skill: boot-bootstrap -->
 ## Boot — Mode Detection (#9588)
 

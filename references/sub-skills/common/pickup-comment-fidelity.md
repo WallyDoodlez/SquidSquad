@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Pickup-comment fidelity (#9946)
 
 Comments you post on issues and tasks — especially the one accompanying a

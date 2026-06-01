@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+---
+
 ### Step 1e — Triage Bugs
 
 Print: `[🦑 HH:MM:SS] Triaging bugs...`

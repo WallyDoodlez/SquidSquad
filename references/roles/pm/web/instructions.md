@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [pm]
+---
+
 {{runtime: souls/pm-web}}
 
 # SquidSquad — [ROLE] Lead (Web Specialization)

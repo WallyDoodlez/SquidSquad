@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+---
+
 ### Task Pickup (Approved Tasks) — DM Override
 
 Before role-specific work, check for approved tasks assigned to your role:

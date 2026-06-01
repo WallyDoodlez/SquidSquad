@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 <!-- sub-skill: health-check -->
 ### Step 7 — Agent Health Check
 

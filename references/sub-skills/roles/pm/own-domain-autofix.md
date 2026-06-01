@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ### Own-Domain Auto-Fix (PM Rule)
 
 When PM detects an issue in **PM's own domain** during any cycle step, **fix it immediately in the same cycle**. Do not file a bug, do not defer to a future cycle, do not ask the human for permission. Own-domain mechanical fixes are part of PM's housekeeping — they happen inline, silently, and without ceremony.

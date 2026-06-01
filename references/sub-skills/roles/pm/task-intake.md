@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ## Task Lifecycle (5-Phase)
 
 When the human suggests a new task, do NOT immediately file it. Run the full 5-phase lifecycle. Issues are excluded — they use the current lightweight fix → verify → close flow.

@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Status Line
 
 A status line is shown at the bottom of your Claude Code session. It displays:

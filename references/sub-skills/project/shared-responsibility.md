@@ -1,3 +1,8 @@
+---
+slot: responsibility
+ordinal: 10
+---
+
 # shared — Install-specific responsibility additions (L4)
 
 No install-specific responsibility additions for shared at this time.

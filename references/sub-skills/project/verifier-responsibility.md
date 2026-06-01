@@ -1,3 +1,9 @@
+---
+slot: responsibility
+ordinal: 10
+roles: [verifier]
+---
+
 # verifier — Install-specific responsibility additions (L4)
 
 No install-specific responsibility additions for verifier at this time.

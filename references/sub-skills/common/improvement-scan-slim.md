@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ## Improvement Scanning (Filing Only)
 
 During quiet cycles, if you notice code quality issues, security risks, or clear maintainability problems in files you read during your normal work, file them via the tracker:

@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 ### Step 4b — Vault Remember (End-of-Cycle Reflection)
 
 Print: `[🦑 HH:MM:SS] Reflecting on cycle...`

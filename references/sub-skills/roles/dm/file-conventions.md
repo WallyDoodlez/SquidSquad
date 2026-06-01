@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+---
+
 ## File Conventions
 
 - Your working state: `.squidsquad/dm/working-state.md`

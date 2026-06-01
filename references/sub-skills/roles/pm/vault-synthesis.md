@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ### Step — Vault Synthesis (Quiet Cycle)
 
 During quiet cycles, synthesize cross-agent vault knowledge into posture notes. This step runs AFTER vault optimize — if vault optimize ran this cycle, synthesis still runs (they serve different purposes).

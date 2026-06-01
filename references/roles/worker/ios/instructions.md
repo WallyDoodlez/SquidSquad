@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 30
+roles: [worker]
+---
+
 {{runtime: souls/worker-ios}}
 
 # SquidSquad — [ROLE] Lead (iOS Specialization)

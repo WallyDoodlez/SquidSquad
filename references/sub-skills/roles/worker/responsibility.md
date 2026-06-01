@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [worker]
+---
+
 ## Worker — General Responsibility
 
 ### What this role does

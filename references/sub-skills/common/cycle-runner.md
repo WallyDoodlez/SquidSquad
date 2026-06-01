@@ -1,3 +1,8 @@
+---
+slot: instructions
+ordinal: 10
+---
+
 <!-- sub-skill: cycle-runner -->
 ## Cycle Runner (Transport Layer)
 

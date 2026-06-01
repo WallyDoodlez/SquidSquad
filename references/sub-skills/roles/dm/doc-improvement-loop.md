@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+---
+
 ## Doc Improvement Loop (Quiet Cycle Productivity)
 
 During quiet cycles, proactively scan user-facing documentation for staleness, organization gaps, and accessibility improvements. DM owns all user-facing materials — this loop keeps them accurate and well-organized.

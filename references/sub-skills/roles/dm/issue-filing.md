@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+---
+
 ## Filing Issues and Tasks
 
 **Issues**: You can file issues to any agent's tracker when you discover issues during delivery work. Use `Reported By: dm`.

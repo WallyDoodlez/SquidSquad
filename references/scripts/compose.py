@@ -85,12 +85,41 @@ def _strip_outer_markers(content: str, name: str) -> str:
     return "\n".join(lines)
 
 
+# Leading YAML frontmatter block at the top of a source file (matches the
+# same shape source_frontmatter._FRONTMATTER_RE accepts, kept local so we
+# don't import from a v2 module). Tolerates horizontal whitespace on the
+# delimiter lines per Jekyll convention. Also consumes the conventional
+# blank-line separator after the closing ``---`` so the strip leaves the
+# remaining body flush to the start (preserves v1 byte-equivalent output
+# when frontmatter is added to previously-frontmatter-less files).
+_YAML_FRONTMATTER_RE = re.compile(
+    r"\A---[ \t]*\n[\s\S]*?\n---[ \t]*(?:\n\n?|\Z)"
+)
+
+
+def _strip_yaml_frontmatter(content: str) -> str:
+    """Strip the leading ``---\\n...\\n---`` YAML block from ``content``.
+
+    A2.6 (#10394) migrates L1-L3 source files to carry ``slot:`` + ``ordinal:``
+    YAML frontmatter for the v2 link stage to sort by. v1 ``_resolve_includes``
+    inlines source content verbatim and would otherwise carry the frontmatter
+    block through to its composed output, breaking the §9a byte-equivalent
+    contract. Calling this helper at every source-file read site means v1's
+    composed output is invariant to the migration: source with no frontmatter
+    is a no-op; source with frontmatter has the block stripped before inline.
+
+    The strip is conservative — only matches a frontmatter block at the very
+    top of the file. Mid-file ``---`` horizontal rules are left untouched.
+    """
+    return _YAML_FRONTMATTER_RE.sub("", content, count=1)
+
+
 def _resolve_capability(cap_id: str) -> list[str]:
     """Resolve a {{capability: id}} directive into content lines."""
     full_path = CAPABILITIES_DIR / cap_id / "sub-skill.md"
     if not full_path.exists():
         return [f"<!-- ERROR: Missing capability: {cap_id} -->"]
-    content = full_path.read_text(encoding="utf-8").rstrip()
+    content = _strip_yaml_frontmatter(full_path.read_text(encoding="utf-8")).rstrip()
     content = _strip_outer_markers(content, f"capability-{cap_id}")
     return [
         f"<!-- sub-skill: capability-{cap_id} -->",
@@ -126,7 +155,7 @@ def _resolve_includes(entry_file: Path, wake_mode: str = "polling") -> str:
     """
     # `wake_mode` is intentionally unused; see docstring.
     del wake_mode  # silence "unused" linters; keeps the signature stable
-    text = entry_file.read_text(encoding="utf-8")
+    text = _strip_yaml_frontmatter(entry_file.read_text(encoding="utf-8"))
     lines = text.splitlines()
     result = []
 
@@ -152,7 +181,7 @@ def _resolve_includes(entry_file: Path, wake_mode: str = "polling") -> str:
                 result.append(f"<!-- ERROR: Missing include: {include_path} -->")
                 continue
             sub_skill_name = full_path.stem
-            content = full_path.read_text(encoding="utf-8").rstrip()
+            content = _strip_yaml_frontmatter(full_path.read_text(encoding="utf-8")).rstrip()
             content = _strip_outer_markers(content, sub_skill_name)
             result.append(f"<!-- sub-skill: {sub_skill_name} -->")
             result.append(content)
@@ -310,7 +339,7 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list, wake_mode:
     `wake_mode` is threaded here only so future template-side directives
     (e.g. `{{include: mode-specific/foo}}`) can take advantage of it.
     """
-    text = entry_file.read_text(encoding="utf-8")
+    text = _strip_yaml_frontmatter(entry_file.read_text(encoding="utf-8"))
     lines = text.splitlines()
     result = []
 
@@ -358,7 +387,7 @@ def _resolve_includes_with_manifest(entry_file: Path, manifest: list, wake_mode:
                 result.append(f"<!-- ERROR: Missing include: {resolved_path} -->")
                 continue
             sub_skill_name = full_path.stem
-            content = full_path.read_text(encoding="utf-8").rstrip()
+            content = _strip_yaml_frontmatter(full_path.read_text(encoding="utf-8")).rstrip()
             content = _strip_outer_markers(content, sub_skill_name)
             result.append(f"<!-- sub-skill: {sub_skill_name} -->")
             result.append(content)
@@ -399,14 +428,14 @@ def _assemble_claude(role_name: str) -> str:
     # Layer 1 — Base agent instructions (at roles/ root)
     base_claude = BASE_ROLE_DIR / "instructions.md"
     if base_claude.exists():
-        parts.append(base_claude.read_text(encoding="utf-8").rstrip())
+        parts.append(_strip_yaml_frontmatter(base_claude.read_text(encoding="utf-8")).rstrip())
         parts.append("")
 
     # Layer 2 — Role instructions (the role's entry template)
     role_identity = _get_entry_file_for_role(role_name)
     role_claude = ROLES_DIR / role_identity / "instructions.md"
     if role_claude.exists():
-        parts.append(role_claude.read_text(encoding="utf-8").rstrip())
+        parts.append(_strip_yaml_frontmatter(role_claude.read_text(encoding="utf-8")).rstrip())
 
     # Layer 3 — Variant instructions (nested: roles/<base>/<variant>/)
     resolved = _resolve_variant(role_name)
@@ -415,7 +444,7 @@ def _assemble_claude(role_name: str) -> str:
         variant_claude = ROLES_DIR / base / variant / "instructions.md"
         if variant_claude.exists():
             parts.append("")
-            parts.append(variant_claude.read_text(encoding="utf-8").rstrip())
+            parts.append(_strip_yaml_frontmatter(variant_claude.read_text(encoding="utf-8")).rstrip())
 
     # Layer 4 — Project sub-skills (PM-owned, role-filtered)
     # Live project content is in .squidsquad/project/ (project-local).
@@ -446,7 +475,7 @@ def _assemble_claude(role_name: str) -> str:
                     and _BASE_ALIAS_6274.get(role_identity) != file_prefix
                 ):
                     continue
-            content = skill_file.read_text(encoding="utf-8").rstrip()
+            content = _strip_yaml_frontmatter(skill_file.read_text(encoding="utf-8")).rstrip()
             content = _strip_outer_markers(content, name)
             parts.append("")
             parts.append("---")
@@ -1607,7 +1636,7 @@ def _assemble_soul(role_name: str) -> str:
     base_soul = BASE_ROLE_DIR / "SOUL.md"
     if base_soul.exists():
         parts.append(SOUL_LAYER_BASE_START)
-        parts.append(base_soul.read_text(encoding="utf-8").rstrip())
+        parts.append(_strip_yaml_frontmatter(base_soul.read_text(encoding="utf-8")).rstrip())
         parts.append(SOUL_LAYER_BASE_END)
         parts.append("")
 
@@ -1625,7 +1654,7 @@ def _assemble_soul(role_name: str) -> str:
             role_soul_path = ROLES_DIR / role_identity / "SOUL.md"
 
     if role_soul_path.exists():
-        parts.append(role_soul_path.read_text(encoding="utf-8").rstrip())
+        parts.append(_strip_yaml_frontmatter(role_soul_path.read_text(encoding="utf-8")).rstrip())
 
     # Layer 3 — Variant SOUL (variant-specific personality delta)
     if resolved:
@@ -1633,7 +1662,7 @@ def _assemble_soul(role_name: str) -> str:
         variant_soul_path = ROLES_DIR / base / variant / "SOUL.md"
         if variant_soul_path.exists():
             parts.append("")
-            parts.append(variant_soul_path.read_text(encoding="utf-8").rstrip())
+            parts.append(_strip_yaml_frontmatter(variant_soul_path.read_text(encoding="utf-8")).rstrip())
 
     return "\n".join(parts) + "\n"
 
@@ -1692,7 +1721,7 @@ def upgrade_soul(role_name: str, target_root: Path = None) -> Path:
     base_soul = BASE_ROLE_DIR / "SOUL.md"
     if base_soul.exists():
         parts.append(SOUL_LAYER_BASE_START)
-        parts.append(base_soul.read_text(encoding="utf-8").rstrip())
+        parts.append(_strip_yaml_frontmatter(base_soul.read_text(encoding="utf-8")).rstrip())
         parts.append(SOUL_LAYER_BASE_END)
         parts.append("")
 

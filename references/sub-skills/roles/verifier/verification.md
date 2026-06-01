@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [verifier]
+---
+
 ### Step 2 — Run E2E Tests
 
 Print: `[🦑 HH:MM:SS] Running E2E tests...` (or `[🦑 HH:MM:SS] No E2E command — skipping tests.`)

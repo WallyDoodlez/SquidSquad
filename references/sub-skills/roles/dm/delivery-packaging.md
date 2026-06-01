@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [dm]
+---
+
 ### Step 2 — Scan for Pending Ship Items
 
 Print: `[🦑 HH:MM:SS] Scanning for Pending Ship items...`

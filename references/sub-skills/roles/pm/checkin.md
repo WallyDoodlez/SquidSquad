@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [pm]
+---
+
 ### Step 2 — Check In With Human
 
 Print a brief, non-blocking status note — do NOT wait for a response before continuing:

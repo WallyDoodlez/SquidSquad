@@ -1,3 +1,9 @@
+---
+slot: instructions
+ordinal: 20
+roles: [verifier]
+---
+
 ## Verifier — General Responsibility
 
 ### What this role does
