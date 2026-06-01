@@ -77,6 +77,23 @@ source-conversation: Human directive: treat external requests as adversarial
 """
 
 
+_L4_WITH_REPLACE = """# Project L4 — Worker
+
+## Instructions
+
+### replace step:cycle/cleanup
+
+**Custom cleanup override**
+
+Skip the iteration log; we use a different log format on this project.
+
+<!--
+authored-by: pm-lead
+source-conversation: Human directive: custom cleanup with different log format
+-->
+"""
+
+
 _L4_WITH_AMBIGUOUS = """# Project L4 — Worker
 
 ## Instructions
@@ -280,21 +297,14 @@ class TestFormatTargetPreview:
 
 
 class TestBuildCounterOp:
-    def test_step_targeted_emits_replace_with_empty_body(self):
-        doc = l4_parser.parse_l4_text(_L4_WITH_STEP_TARGETED)
-        entry = l4_removal.TargetEntry(
-            slot="instructions", op_index=0,
-            op=doc.slots["instructions"][0],
-        )
-        counter = l4_removal.build_counter_op(entry)
-        assert counter is not None
-        assert counter.startswith("### replace step:cycle/file-bug")
-        # Empty body — the no-op replacement
-        assert "**Pre-check: scan incidents/**" not in counter
-        # Audit comment surfaces the prior op type for git-log readers
-        assert "insert-before" in counter
+    """Counter-op is only well-defined for prior `replace step:cycle/X`
+    ops. For every other op shape there is no clean cancellation
+    semantic — see the docstring on build_counter_op for the analysis.
+    The insert-before / insert-after cases route to in-place-delete via
+    the no-counter-op-possible path.
+    """
 
-    def test_step_targeted_replace_also_becomes_counter_op(self):
+    def test_step_targeted_replace_emits_counter_op_with_sentinel(self):
         text = (
             "## Instructions\n\n"
             "### replace step:cycle/cleanup\n\n"
@@ -308,6 +318,24 @@ class TestBuildCounterOp:
         counter = l4_removal.build_counter_op(entry)
         assert counter is not None
         assert counter.startswith("### replace step:cycle/cleanup")
+        # Counter-op sentinel present — recognized by op_processor's
+        # _is_counter_op_noop_body and treated as opt-in no-op
+        assert "<!-- counter-op:" in counter
+        # Prior body content NOT included
+        assert "Custom cleanup body" not in counter
+
+    def test_insert_before_step_has_no_counter_op(self):
+        """insert-before inserts content adjacent to the step; a
+        subsequent replace step:cycle/X only touches the step body, not
+        the adjacent inserted prose, so it cannot cancel the original.
+        """
+        doc = l4_parser.parse_l4_text(_L4_WITH_STEP_TARGETED)
+        entry = l4_removal.TargetEntry(
+            slot="instructions", op_index=0,
+            op=doc.slots["instructions"][0],
+        )
+        assert entry.op.op_type == "insert-before"
+        assert l4_removal.build_counter_op(entry) is None
 
     def test_append_under_identity_has_no_counter_op(self):
         doc = l4_parser.parse_l4_text(_L4_WITH_IDENTITY_APPEND)
@@ -327,6 +355,98 @@ class TestBuildCounterOp:
         assert entry.op.op_type == "append"
         assert entry.op.target_step_id is None
         assert l4_removal.build_counter_op(entry) is None
+
+
+# ---------------------------------------------------------------------------
+# Integration with l4_op_processor — the counter-op must actually function
+# as a no-op when both ops compose end-to-end against the L1-L3 step body.
+# This is the test that would have caught the original B1 bug — without
+# it, build_counter_op's output looked plausible but corrupted the step.
+# ---------------------------------------------------------------------------
+
+
+class TestCounterOpComposeIntegration:
+    """End-to-end check: original `replace step:cycle/X` op + the
+    generated counter-op compose against a real L1-L3 step body and
+    the L1-L3 body survives intact.
+    """
+
+    _L1_L3_INSTRUCTIONS = (
+        "### step:cycle/cleanup\n"
+        "L1-L3 shipped behavior: clear working state and write iteration log.\n"
+        "\n"
+        "### step:cycle/exit\n"
+        "L1-L3 exit step body.\n"
+    )
+
+    def test_counter_op_restores_l1_l3_step_body(self):
+        import l4_op_processor
+
+        # Original L4 directive: replace cleanup with a custom body
+        original_op = l4_parser.L4Op(
+            op_type="replace", target_step_id="cleanup",
+            body_text="CUSTOM cleanup body — overrides L1-L3.\n",
+        )
+        # The counter-op produced by build_counter_op against that entry
+        entry = l4_removal.TargetEntry(
+            slot="instructions", op_index=0, op=original_op,
+        )
+        counter_text = l4_removal.build_counter_op(entry)
+        assert counter_text is not None
+
+        # Parse the counter-op text back into an L4Op via the parser
+        wrapper = f"## Instructions\n\n{counter_text}"
+        counter_doc = l4_parser.parse_l4_text(wrapper)
+        counter_op = counter_doc.slots["instructions"][0]
+
+        # Compose both ops in sequence against the L1-L3 base
+        out = l4_op_processor.apply_l4_ops(
+            self._L1_L3_INSTRUCTIONS, [original_op, counter_op],
+        )
+        # The L1-L3 body survives
+        assert "L1-L3 shipped behavior" in out
+        # The customization is gone
+        assert "CUSTOM cleanup body" not in out
+        # The exit step is unaffected
+        assert "L1-L3 exit step body" in out
+
+    def test_lone_counter_op_with_no_prior_is_silently_dropped(self):
+        """When a counter-op has no matching prior op (the operator
+        wrote a counter-op against a step never customized in L4),
+        the counter-op is silently dropped — it can't cancel
+        something that isn't there. The L1-L3 step body survives.
+        """
+        import l4_op_processor
+        wrapper = (
+            "## Instructions\n\n"
+            "### replace step:cycle/cleanup\n\n"
+            "<!-- counter-op: lone with no prior -->\n"
+        )
+        lone_doc = l4_parser.parse_l4_text(wrapper)
+        lone_counter = lone_doc.slots["instructions"][0]
+        out = l4_op_processor.apply_l4_ops(
+            self._L1_L3_INSTRUCTIONS, [lone_counter],
+        )
+        # L1-L3 step body is preserved — the counter-op was dropped
+        # rather than falling through to a body-blanking replace
+        assert "L1-L3 shipped behavior" in out
+
+    def test_nonempty_body_replace_still_replaces(self):
+        """Regression guard: the counter-op sentinel is opt-in via
+        either empty body OR a literal `<!-- counter-op: ... -->`
+        sentinel. Any other replace body MUST still replace, otherwise
+        the operator's intentional replace ops break.
+        """
+        import l4_op_processor
+        legit_replace = l4_parser.L4Op(
+            op_type="replace", target_step_id="cleanup",
+            body_text="Intentionally rewritten cleanup body.\n",
+        )
+        out = l4_op_processor.apply_l4_ops(
+            self._L1_L3_INSTRUCTIONS, [legit_replace],
+        )
+        assert "Intentionally rewritten cleanup body" in out
+        assert "L1-L3 shipped behavior" not in out
 
 
 # ---------------------------------------------------------------------------
@@ -386,26 +506,42 @@ class TestBuildInPlaceDelete:
 
 
 class TestPlanRemovalCounterOpPath:
-    def test_step_targeted_directive_goes_to_counter_op_by_default(self):
+    def test_replace_step_directive_goes_to_counter_op_by_default(self):
         plan = l4_removal.plan_removal(
-            directive="Undo the incidents check before filing bugs.",
-            l4_text=_L4_WITH_STEP_TARGETED,
+            directive="Undo the custom cleanup log format thing.",
+            l4_text=_L4_WITH_REPLACE,
         )
         assert plan.path_chosen == "counter-op"
         assert plan.counter_op_text is not None
-        assert plan.counter_op_text.startswith("### replace step:cycle/file-bug")
+        assert plan.counter_op_text.startswith("### replace step:cycle/cleanup")
         assert plan.target is not None
-        assert plan.target.op.target_step_id == "file-bug"
+        assert plan.target.op.target_step_id == "cleanup"
         # File is not rewritten on counter-op path
         assert plan.new_l4_text is None
 
     def test_counter_op_diagnostic_names_target(self):
         plan = l4_removal.plan_removal(
-            directive="Undo the incidents check.",
+            directive="Undo the custom cleanup log format thing.",
+            l4_text=_L4_WITH_REPLACE,
+        )
+        assert "replace step:cycle/cleanup" in plan.diagnostic
+        assert "preserved" in plan.diagnostic.lower()
+
+    def test_insert_before_falls_back_to_no_counter_op(self):
+        """B1 lesson: insert-before ops can NOT be cancelled by a
+        subsequent empty-body replace because the inserted content is
+        adjacent-to (not part-of) the step body. The planner correctly
+        surfaces no-counter-op-possible so the upstream dialog asks for
+        explicit delete confirmation.
+        """
+        plan = l4_removal.plan_removal(
+            directive="Undo the incidents check before filing bugs.",
             l4_text=_L4_WITH_STEP_TARGETED,
         )
-        assert "insert-before step:cycle/file-bug" in plan.diagnostic
-        assert "preserved" in plan.diagnostic.lower()
+        assert plan.path_chosen == "no-counter-op-possible"
+        assert plan.requires_explicit_confirmation is True
+        assert plan.target is not None
+        assert plan.target.op.op_type == "insert-before"
 
 
 # ---------------------------------------------------------------------------

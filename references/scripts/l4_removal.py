@@ -49,17 +49,19 @@ import l4_parser
 # Removal-verb detection — sentence-anchored to avoid false matches on
 # "I would never forget X" (a non-removal directive that mentions
 # "forget"). Matches at the start of the directive OR right after a
-# clause break (./?/!/;). Words are listed broadly because operators
-# phrase removals many ways. ``undo`` covers "undo the X thing",
-# ``remove`` / ``drop`` / ``delete`` cover the explicit verbs, ``forget``
-# covers the colloquial "forget the X" pattern, ``cancel`` / ``revert``
-# cover the "we don't need that anymore" framing, ``stop`` covers
-# "stop doing X". ``no longer`` is the prefix idiom.
+# clause break (./?/!/;) or "let's" / "let us" prefix. Words are listed
+# broadly because operators phrase removals many ways: ``undo`` /
+# ``remove`` / ``drop`` / ``delete`` / ``kill`` / ``scrap`` / ``ditch`` /
+# ``rip out`` are the explicit verbs; ``forget`` is the colloquial
+# pattern; ``cancel`` / ``revert`` / ``back out`` cover "we don't need
+# that anymore"; ``stop doing`` / ``no longer`` / ``get rid of`` are
+# idiom variants.
 _REMOVAL_RE = re.compile(
-    r"(?:^|[.;!?]\s+)"
+    r"(?:^|[.;!?]\s+|let[''']?s\s+|let\s+us\s+)"
     r"(?:please\s+)?"
-    r"(?:undo|remove|drop|delete|forget|cancel|revert|stop\s+doing"
-    r"|stop\s+\w+ing|no\s+longer|we\s+don'?t\s+need)"
+    r"(?:undo|remove|drop|delete|forget|cancel|revert|kill|scrap|ditch"
+    r"|rip\s+out|back\s+out|get\s+rid\s+of|stop\s+doing|stop\s+\w+ing"
+    r"|no\s+longer|we\s+don'?t\s+need)"
     r"\b",
     re.IGNORECASE,
 )
@@ -191,12 +193,25 @@ def find_target_entry(directive, l4_doc, *, blame_lookup_fn=None):
     """Locate the existing L4 op that best matches ``directive``.
 
     Scoring: count of distinct content-token overlap between the
-    directive (stems pruned) and the op's body text + metadata
-    ``source-conversation`` field. Returns one of:
+    directive (stems pruned) and the op's body text + H3 heading text
+    + ``source-conversation`` metadata. Including the H3 heading
+    means operator phrasings like "undo the file-bug pre-check"
+    match `replace step:cycle/file-bug` ops via the step-id token,
+    not just by body overlap.
+
+    Single-entry fast path: when only ONE L4 op exists across all
+    slots and the operator's directive is a removal-shape request,
+    score threshold drops to 1 — the user can't be ambiguous about
+    which entry to remove if there's only one. This handles the
+    operator's common case (the first removal after one prior
+    customization) without forcing them to repeat distinctive body
+    phrases.
+
+    Returns one of:
 
       - **single match** — ``([entry], confident=True)`` when the top
-        entry beats ``_MIN_OVERLAP`` AND beats the runner-up by at
-        least ``_AMBIGUITY_MARGIN``.
+        entry beats ``_MIN_OVERLAP`` (or the single-entry threshold)
+        AND beats the runner-up by at least ``_AMBIGUITY_MARGIN``.
       - **ambiguous** — ``(candidates, confident=False)`` when two or
         more entries score above threshold but no single winner.
       - **empty** — ``([], confident=False)`` when no entry crosses
@@ -208,16 +223,17 @@ def find_target_entry(directive, l4_doc, *, blame_lookup_fn=None):
     git. Real callers wire it to a git-blame helper.
     """
     directive_tokens = _directive_content_tokens(directive)
+    total_ops = sum(len(ops) for ops in (l4_doc.slots or {}).values())
+    min_overlap = 1 if total_ops <= 1 else _MIN_OVERLAP
     candidates = []
     for slot, ops in (l4_doc.slots or {}).items():
         for i, op in enumerate(ops):
-            body_with_source = op.body_text
+            heading_text = _format_op_heading(op).replace("step:cycle/", " ").replace("-", " ")
             sc = op.metadata.get("source-conversation", "") if op.metadata else ""
-            if sc:
-                body_with_source = f"{body_with_source} {sc}"
-            body_tokens = _content_tokens(body_with_source)
+            scoring_text = f"{op.body_text} {heading_text} {sc}"
+            body_tokens = _content_tokens(scoring_text)
             score = len(directive_tokens & body_tokens)
-            if score < _MIN_OVERLAP:
+            if score < min_overlap:
                 continue
             sha, authored_by = None, None
             if blame_lookup_fn is not None:
@@ -242,7 +258,7 @@ def find_target_entry(directive, l4_doc, *, blame_lookup_fn=None):
         return [candidates[0]], True
     if candidates[0].overlap_score - candidates[1].overlap_score >= _AMBIGUITY_MARGIN:
         return [candidates[0]], True
-    above_threshold = [c for c in candidates if c.overlap_score >= _MIN_OVERLAP]
+    above_threshold = [c for c in candidates if c.overlap_score >= min_overlap]
     return above_threshold[:5], False
 
 
@@ -292,30 +308,39 @@ def _format_op_heading(op):
 
 
 def build_counter_op(entry):
-    """Return the staged H3 op text that cancels ``entry``'s effect.
+    """Return the staged H3 op text that cancels ``entry``'s effect, or None.
 
-    For step-targeted ops (``replace step:cycle/X``,
-    ``insert-before step:cycle/X``, ``insert-after step:cycle/X``):
-    emits ``### replace step:cycle/X`` with an empty body. When the
-    compose pipeline replays L4 ops in order, this no-op replacement
-    wipes the earlier targeted op's effect; the underlying L1-L3 step
-    keeps its shipped behavior because compose falls back to that when
-    the L4 replace body is empty.
+    Counter-op is only well-defined for prior ``replace step:cycle/X``
+    ops. In that case we emit ``### replace step:cycle/X`` with a
+    counter-op HTML sentinel; the op-processor's
+    ``_apply_replace_step`` treats sentinel-only bodies as opt-in
+    no-ops, so the underlying L1-L3 step body survives both the
+    original op and its counter-op. Additive history: the prior H3
+    block stays in the file.
 
-    For whole-slot ``replace`` (Responsibility only) or non-targeted
-    ``append`` ops: there is no clean counter-op shape — an
-    ``append`` adds prose and there's no "delete-append" in the
-    grammar. Returns ``None``; the caller's only option is the
-    in-place-delete path with explicit confirmation.
+    For every other op shape there is NO clean counter-op:
+
+    - ``insert-before step:cycle/X`` / ``insert-after step:cycle/X``
+      — the inserted body survives a subsequent ``replace step:cycle/X``
+      because replace only touches the step body, not adjacent
+      inserted prose. Counter-op would not actually cancel the
+      inserted content.
+    - whole-slot ``replace`` (Responsibility only) and non-targeted
+      ``append`` — there is no "delete-append" in the grammar.
+
+    For all of these the caller's only path is in-place delete with
+    explicit human confirmation; we return ``None`` so
+    ``plan_removal`` surfaces ``no-counter-op-possible`` and the
+    upstream dialog re-asks the human.
     """
     op = entry.op
-    if op.target_step_id is None:
-        # Whole-slot replace OR append — both have no targeted counter-op.
+    if op.op_type != "replace" or op.target_step_id is None:
         return None
     return (
         f"### replace step:cycle/{op.target_step_id}\n"
         f"\n"
-        f"<!-- counter-op: removes the prior `{op.op_type} step:cycle/{op.target_step_id}` entry -->\n"
+        f"<!-- counter-op: removes the prior `replace step:cycle/{op.target_step_id}` entry -->\n"
+        f"\n"
     )
 
 
@@ -342,7 +367,11 @@ def build_in_place_delete(l4_text, entry):
 
     for i, raw in enumerate(lines):
         stripped = raw.rstrip("\n").rstrip()
-        if stripped.startswith("## ") and not stripped.startswith("### "):
+        # Exact-prefix check using regex anchors so ``#### subhead``
+        # in a body is not mistaken for an H2 / H3 boundary.
+        is_h2 = bool(re.match(r"^##\s+\S", stripped)) and not stripped.startswith("### ")
+        is_h3 = bool(re.match(r"^###\s+\S", stripped)) and not stripped.startswith("#### ")
+        if is_h2:
             # H2 boundary; reset per-slot H3 counter
             current_slot = _normalize_slot(stripped[3:])
             h3_index_in_slot = -1
@@ -350,7 +379,7 @@ def build_in_place_delete(l4_text, entry):
                 end = i
                 break
             continue
-        if stripped.startswith("### ") and current_slot == target_slot_norm:
+        if is_h3 and current_slot == target_slot_norm:
             h3_index_in_slot += 1
             if h3_index_in_slot == entry.op_index and start is None:
                 # Consume immediately-preceding blank lines so we don't
@@ -372,6 +401,10 @@ def build_in_place_delete(l4_text, entry):
 
 
 def _normalize_slot(raw):
+    """Same shape as :func:`l4_parser._normalize_slot`. Inlined to avoid
+    importing a private helper across modules; if the parser's
+    normalization ever evolves, update both call sites.
+    """
     return re.sub(r"\s+", "-", raw.strip().lower())
 
 
