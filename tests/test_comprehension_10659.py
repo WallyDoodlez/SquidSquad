@@ -89,14 +89,21 @@ class TestRequiredScenarioCoverage:
 
     @pytest.mark.parametrize("label,regex", REQUIRED_TOPICS)
     def test_topic_covered_by_at_least_one_question(self, spec, label, regex):
+        """The topic must surface in BOTH the question prose AND the
+        expected answer for at least one scenario. Scanning the answer
+        too is what guards against a sloppy spec that earns topic credit
+        on keywords alone (e.g. an id named 'vault' with no actual test
+        of the L1-exclusive refusal behavior).
+        """
         pat = re.compile(regex, re.IGNORECASE)
         for q in spec["questions"]:
-            blob = f"{q['id']} {q['question']}"
-            if pat.search(blob):
+            question_blob = f"{q['id']} {q['question']}"
+            if pat.search(question_blob) and pat.search(q["expected"]):
                 return
         pytest.fail(
-            f"No question covers required scenario {label!r} "
-            f"(regex /{regex}/). Have ids: {[q['id'] for q in spec['questions']]}"
+            f"No question covers required scenario {label!r} in BOTH "
+            f"question prose AND expected answer (regex /{regex}/). "
+            f"Have ids: {[q['id'] for q in spec['questions']]}"
         )
 
     def test_at_least_five_questions(self, spec):
