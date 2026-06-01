@@ -65,9 +65,6 @@ def _instant_sleep(_):
     pass
 
 
-_FAKE_CLOCK_TICK = {"t": 0.0}
-
-
 def _stepped_clock():
     """Returns a clock function that advances by 1.0s each call."""
     state = {"t": 0.0}
@@ -233,6 +230,43 @@ class TestRevertL4CommitHappy:
         revert_argv = next(c["argv"] for c in calls if c["argv"][:2] == ["git", "revert"])
         assert "--no-edit" in revert_argv
 
+    def test_revert_does_not_pass_m_flag(self, tmp_path):
+        """C7 review BLOCKER #1 fix: C6's L4 commits are always linear
+        (no merge parent), so the `-m <parent-number>` flag is wrong.
+        The old code passed `-m 1` then tried to retry on a substring-
+        match error from git — but git's error string for that case
+        varies across versions, so the retry was unreliable. Drop the
+        flag entirely.
+        """
+        run, calls = _make_runner()
+        rr.revert_l4_commit(
+            commit_sha="abc", reason="x", runner=run, target_root=tmp_path,
+        )
+        revert_argv = next(c["argv"] for c in calls if c["argv"][:2] == ["git", "revert"])
+        assert "-m" not in revert_argv
+        # And there's only one revert call (no retry pattern)
+        revert_calls = [c["argv"] for c in calls if c["argv"][:2] == ["git", "revert"]]
+        assert len(revert_calls) == 1
+
+    def test_amend_failure_is_captured_but_does_not_block_push(self, tmp_path):
+        """C7 review CONCERN #2: when `git commit --amend` fails, the
+        revert still landed locally — the only loss is that the audit-
+        trail enrichment didn't happen and the revert commit carries
+        git's default message. Capture the failure into
+        `amend_failed_detail` so the alert can surface it; don't block
+        the push.
+        """
+        run, _ = _make_runner(fail_command_prefix=("git", "commit", "--amend"))
+        outcome = rr.revert_l4_commit(
+            commit_sha="abc", reason="x", runner=run, target_root=tmp_path,
+        )
+        # The push DID land — amend failure is non-fatal
+        assert outcome.ok is True
+        assert outcome.pushed is True
+        # The amend-failed warning is captured
+        assert "amend" in outcome.amend_failed_detail.lower()
+        assert "non-fatal" in outcome.amend_failed_detail.lower()
+
 
 # ---------------------------------------------------------------------------
 # revert_l4_commit — failure modes
@@ -281,7 +315,9 @@ class TestOrchestratorSuccessPath:
         assert plan.path_chosen == "success-no-action"
         # No git operations dispatched
         assert calls == []
-        assert plan.revert is None
+        # revert is the sentinel default — no revert SHA, no failure stage
+        assert plan.revert.revert_sha is None
+        assert plan.revert.failure_stage == ""
         assert "succeeded" in plan.alert_message.lower()
 
 
@@ -377,8 +413,26 @@ class TestOrchestratorSkipPath:
             check_recompose_fn=None,
         )
         assert plan.path_chosen == "skip"
-        assert plan.revert is None
         assert "PRD-E" in plan.alert_message
+
+    def test_skip_path_subfields_are_safe_to_access(self):
+        """C7 review CONCERN #3 fix: a caller iterating
+        `plan.recompose.diagnostic` or `plan.revert.failure_stage`
+        should NOT AttributeError on the skip path. Sentinel-default
+        subfields make wrong-path access return empty strings instead.
+        """
+        plan = rr.recover_on_recompose_failure(
+            commit_sha="abc", check_recompose_fn=None,
+        )
+        # Both subfields are populated with sentinel instances, not None
+        assert plan.recompose is not None
+        assert plan.revert is not None
+        assert plan.recompose.status == "not-checked"
+        assert plan.recompose.diagnostic == ""
+        assert plan.revert.failure_stage == ""
+        assert plan.revert.ok is True  # sentinel says "no failure"
+        # And property access doesn't AttributeError
+        assert plan.recompose.succeeded is False
 
 
 # ---------------------------------------------------------------------------

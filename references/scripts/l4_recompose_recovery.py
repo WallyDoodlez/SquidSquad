@@ -34,10 +34,10 @@ Iteration-log fields per AC5 are formatted by
 block to ``.squidsquad/skill/iterations/iter-<N>.md``.
 """
 
-import re
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 
@@ -53,13 +53,19 @@ PathChoice = Literal[
 class RecomposeOutcome:
     """Result of one ``wait_for_recompose`` call.
 
-    ``status`` is one of ``"success"`` / ``"failure"`` / ``"timeout"``.
-    ``diagnostic`` carries the failure reason on non-success outcomes
-    so the caller can surface it to the human and log it.
-    ``duration_seconds`` is the wall time the wait actually took.
+    ``status`` is one of ``"not-checked"`` (default sentinel) /
+    ``"success"`` / ``"failure"`` / ``"timeout"``. ``diagnostic``
+    carries the failure reason on non-success outcomes so the caller
+    can surface it to the human and log it. ``duration_seconds`` is
+    the wall time the wait actually took.
+
+    Default sentinel ``"not-checked"`` lets ``RecoveryPlan`` carry a
+    non-``None`` instance on the ``skip`` path, so callers accessing
+    ``plan.recompose.diagnostic`` don't ``AttributeError`` when
+    recovery wasn't wired (C7 review concern #3).
     """
 
-    status: str
+    status: str = "not-checked"
     diagnostic: str = ""
     duration_seconds: float = 0.0
 
@@ -77,12 +83,20 @@ class RevertOutcome:
     push to remote succeeded. ``failure_stage`` is ``""`` on full
     success, otherwise one of ``"revert"`` / ``"push"`` — callers
     render stage-specific human guidance.
+
+    ``amend_failed_detail`` is non-empty when the commit-amend step
+    that injects the recompose failure reason into the revert message
+    failed (non-fatal to the revert+push flow, but the audit-trail
+    message on the revert commit will be git's default rather than
+    the agent's enriched one). Surfacing this lets the alert message
+    note the degraded audit trail.
     """
 
     revert_sha: str | None = None
     pushed: bool = False
     failure_stage: str = ""
     failure_detail: str = ""
+    amend_failed_detail: str = ""
 
     @property
     def ok(self):
@@ -107,12 +121,18 @@ class RecoveryPlan:
     - ``"skip"`` — caller disabled recovery (PRD-E harness-watch
       contract not yet wired in this install); informational return,
       no action taken.
+
+    Sentinel-default subfields (``recompose=RecomposeOutcome()``,
+    ``revert=RevertOutcome()``) mean callers can safely access
+    ``plan.recompose.diagnostic`` / ``plan.revert.failure_stage``
+    without checking ``path_chosen`` first — wrong-path access just
+    returns empty strings, not AttributeError.
     """
 
     path_chosen: PathChoice
     original_commit_sha: str = ""
-    recompose: RecomposeOutcome = None
-    revert: RevertOutcome = None
+    recompose: RecomposeOutcome = field(default_factory=RecomposeOutcome)
+    revert: RevertOutcome = field(default_factory=RevertOutcome)
     alert_message: str = ""
 
 
@@ -210,9 +230,6 @@ def wait_for_recompose(
 # ---------------------------------------------------------------------------
 
 
-_SHA_RE = re.compile(r"\b([0-9a-f]{7,40})\b")
-
-
 def revert_l4_commit(*, commit_sha, reason, runner=None, target_root=None):
     """Revert ``commit_sha`` via ``git revert --no-edit`` then push.
 
@@ -222,11 +239,19 @@ def revert_l4_commit(*, commit_sha, reason, runner=None, target_root=None):
     ``git log`` reads as a complete audit trail without operators
     needing to dig back into the conversation.
 
-    NEVER raises. Returns :class:`RevertOutcome` with
-    ``failure_stage`` in ``""`` / ``"revert"`` / ``"push"``.
-    """
-    from pathlib import Path
+    No ``-m`` flag: C6's L4 commits are always linear (one parent),
+    never merges (see ``l4_write_commit.py``), so the ``-m
+    <parent-number>`` flag would never apply and any attempted
+    "retry without -m on non-merge error" pattern is unreliable
+    because git's error string varies across versions. Drop the
+    retry; pass no ``-m``. (C7 review BLOCKER #1.)
 
+    NEVER raises. Returns :class:`RevertOutcome` with
+    ``failure_stage`` in ``""`` / ``"revert"`` / ``"push"``. An
+    amend failure is captured into ``amend_failed_detail`` but does
+    not block the push — the revert still lands with git's default
+    message.
+    """
     if runner is None:
         runner = subprocess.run
     if target_root is None:
@@ -240,18 +265,9 @@ def revert_l4_commit(*, commit_sha, reason, runner=None, target_root=None):
         f"\nRecompose failure reason: {reason}\n"
     )
     revert_result = runner(
-        ["git", "revert", "--no-edit", "-m", "1", commit_sha],
+        ["git", "revert", "--no-edit", commit_sha],
         cwd=target_root, capture_output=True, text=True,
     )
-    # The -m 1 flag is needed for merge commits; for normal commits git
-    # ignores it. Some git versions reject -m on non-merges — retry
-    # without it on failure.
-    if revert_result.returncode != 0 and "is not a merge" in (
-            revert_result.stderr.lower() + revert_result.stdout.lower()):
-        revert_result = runner(
-            ["git", "revert", "--no-edit", commit_sha],
-            cwd=target_root, capture_output=True, text=True,
-        )
     if revert_result.returncode != 0:
         return RevertOutcome(
             failure_stage="revert",
@@ -264,18 +280,23 @@ def revert_l4_commit(*, commit_sha, reason, runner=None, target_root=None):
     # Amend the revert's commit message to include the failure reason.
     # git revert --no-edit uses the default "Revert \"<subject>\"" message;
     # we replace it with one that names the failure reason for the audit
-    # trail per AC5.
+    # trail per AC5. Amend failure is captured but non-fatal — the revert
+    # still lands, just with git's default message.
     amend_result = runner(
         ["git", "commit", "--amend", "-m", revert_msg],
         cwd=target_root, capture_output=True, text=True,
     )
+    amend_failed_detail = ""
     if amend_result.returncode != 0:
-        # Non-fatal — the revert landed, just with the default message.
-        # Continue to push; the operator can read the reason from the
-        # alert message instead.
-        pass
+        amend_failed_detail = (
+            f"amend of revert message failed (non-fatal — revert still "
+            f"landed with git's default message): "
+            f"{amend_result.stderr.strip() or amend_result.stdout.strip()}"
+        )
 
-    # Capture the revert SHA after any amendment.
+    # Capture the revert SHA after any amendment. On amend failure HEAD
+    # is unchanged so rev-parse returns the original revert SHA — still
+    # the correct SHA for the audit trail.
     sha_result = runner(
         ["git", "rev-parse", "HEAD"],
         cwd=target_root, capture_output=True, text=True,
@@ -296,9 +317,13 @@ def revert_l4_commit(*, commit_sha, reason, runner=None, target_root=None):
                 f"git push of revert {revert_sha[:8] if revert_sha else '?'} "
                 f"failed: {push_result.stderr.strip() or push_result.stdout.strip()}"
             ),
+            amend_failed_detail=amend_failed_detail,
         )
 
-    return RevertOutcome(revert_sha=revert_sha, pushed=True)
+    return RevertOutcome(
+        revert_sha=revert_sha, pushed=True,
+        amend_failed_detail=amend_failed_detail,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -368,17 +393,23 @@ def recover_on_recompose_failure(
     )
 
     if revert.ok:
+        alert = (
+            f"L4 write {commit_sha[:8]} reverted via "
+            f"{revert.revert_sha[:8] if revert.revert_sha else '?'} "
+            f"after recompose {recompose.status}. "
+            f"Reason: {recompose.diagnostic}"
+        )
+        if revert.amend_failed_detail:
+            alert += (
+                f" (note: revert commit message uses git's default — "
+                f"{revert.amend_failed_detail})"
+            )
         return RecoveryPlan(
             path_chosen="revert-attempted",
             original_commit_sha=commit_sha,
             recompose=recompose,
             revert=revert,
-            alert_message=(
-                f"L4 write {commit_sha[:8]} reverted via "
-                f"{revert.revert_sha[:8] if revert.revert_sha else '?'} "
-                f"after recompose {recompose.status}. "
-                f"Reason: {recompose.diagnostic}"
-            ),
+            alert_message=alert,
         )
 
     # Revert itself failed — the worst path. The L4 file is on disk in
