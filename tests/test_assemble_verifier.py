@@ -204,3 +204,148 @@ def test_preservation_result_fields_present():
         "extra_step_ids",
     ):
         assert hasattr(r, attr)
+
+
+# ---------------------------------------------------------------------------
+# B3 (#10442) — length floor
+# ---------------------------------------------------------------------------
+
+def test_length_floor_identity_passes():
+    body = "abc" * 100
+    assert av.check_length_floor(body, body) is True
+
+
+def test_length_floor_empty_linked_empty_assembled_passes():
+    assert av.check_length_floor("", "") is True
+
+
+def test_length_floor_empty_assembled_with_nonempty_linked_fails():
+    """AC: 'empty assembled fails floor' (when linked is non-empty)."""
+    assert av.check_length_floor("x" * 100, "") is False
+
+
+def test_length_floor_at_exactly_0_8x_passes():
+    """AC: 'assembled at exactly 0.8x passes' — boundary is inclusive."""
+    linked = "x" * 100
+    assembled = "y" * 80  # exactly 0.8 * 100
+    assert av.check_length_floor(linked, assembled) is True
+
+
+def test_length_floor_at_0_79x_fails():
+    """AC: '0.79x fails' — strictly below floor."""
+    linked = "x" * 100
+    assembled = "y" * 79
+    assert av.check_length_floor(linked, assembled) is False
+
+
+def test_length_floor_custom_floor_threshold():
+    linked = "x" * 100
+    assembled = "y" * 50
+    assert av.check_length_floor(linked, assembled, floor=0.5) is True
+    assert av.check_length_floor(linked, assembled, floor=0.51) is False
+
+
+def test_length_floor_longer_assembled_passes():
+    """A grown assembled (e.g. compose injected content) trivially satisfies the floor."""
+    assert av.check_length_floor("short", "much longer body here") is True
+
+
+# ---------------------------------------------------------------------------
+# B3 (#10442) — code-block parity (fenced)
+# ---------------------------------------------------------------------------
+
+def _fenced(n, lang=""):
+    """Return a body containing ``n`` well-formed fenced blocks."""
+    return "\n".join(f"```{lang}\nbody {i}\n```" for i in range(n))
+
+
+def test_code_block_parity_identity_passes():
+    body = _fenced(10)
+    assert av.check_code_block_parity(body, body) is True
+
+
+def test_code_block_parity_no_blocks_either_side_passes():
+    assert av.check_code_block_parity("just prose\n", "just prose still\n") is True
+
+
+def test_code_block_parity_fenced_drop_at_tolerance_passes():
+    """10/10 -> 9/10 is exactly 10% drop; at-tolerance boundary passes."""
+    linked = _fenced(10)
+    assembled = _fenced(9)
+    assert av.check_code_block_parity(linked, assembled) is True
+
+
+def test_code_block_parity_fenced_drop_just_over_tolerance_fails():
+    """AC: 'code block count drops by >10% fails' — 10 -> 8 is 20%."""
+    linked = _fenced(10)
+    assembled = _fenced(8)
+    assert av.check_code_block_parity(linked, assembled) is False
+
+
+def test_code_block_parity_fenced_spike_over_tolerance_fails():
+    """Symmetry: a >10% increase also fails."""
+    linked = _fenced(10)
+    assembled = _fenced(12)
+    assert av.check_code_block_parity(linked, assembled) is False
+
+
+def test_code_block_parity_fenced_with_lang_tag_counted():
+    """Language-tagged fences (```python) count like bare fences."""
+    linked = _fenced(5, lang="python") + "\n" + _fenced(5)
+    assembled = linked
+    assert av.check_code_block_parity(linked, assembled) is True
+
+
+# ---------------------------------------------------------------------------
+# B3 (#10442) — code-block parity (inline backticks)
+# ---------------------------------------------------------------------------
+
+def _inline(n):
+    """Return a body with ``n`` inline single-backtick spans."""
+    return " ".join(f"prose `code{i}` more" for i in range(n))
+
+
+def test_code_block_parity_inline_identity_passes():
+    body = _inline(10)
+    assert av.check_code_block_parity(body, body) is True
+
+
+def test_code_block_parity_inline_drop_just_over_tolerance_fails():
+    """AC: 'inline backtick count change >10% fails' — 10 -> 8 is 20%."""
+    linked = _inline(10)
+    assembled = _inline(8)
+    assert av.check_code_block_parity(linked, assembled) is False
+
+
+def test_code_block_parity_inline_spike_just_over_tolerance_fails():
+    linked = _inline(10)
+    assembled = _inline(12)
+    assert av.check_code_block_parity(linked, assembled) is False
+
+
+def test_code_block_parity_inline_does_not_count_fenced_backticks():
+    """Triple-backtick fences must not inflate the inline count."""
+    linked = _fenced(3)  # zero inline spans
+    assembled = _fenced(3) + "\n" + _inline(1)  # one inline span (10 backticks delta if naive)
+    # Inline count goes 0 -> 1; using max(linked,1) denominator, delta=1/1=1.0 > 0.1 → fail.
+    assert av.check_code_block_parity(linked, assembled) is False
+
+
+def test_code_block_parity_mixed_fenced_and_inline_pass():
+    body = _fenced(4) + "\n" + _inline(20)
+    assert av.check_code_block_parity(body, body) is True
+
+
+def test_code_block_parity_custom_tolerance():
+    linked = _inline(10)
+    assembled = _inline(7)
+    # 30% drop: fails at default 0.1, passes at 0.3
+    assert av.check_code_block_parity(linked, assembled) is False
+    assert av.check_code_block_parity(linked, assembled, tolerance=0.3) is True
+
+
+def test_code_block_parity_either_side_failure_fails_combined():
+    """When fenced is OK but inline is off, the combined check still fails."""
+    linked = _fenced(5) + "\n" + _inline(10)
+    assembled = _fenced(5) + "\n" + _inline(7)  # fenced fine, inline -30%
+    assert av.check_code_block_parity(linked, assembled) is False
