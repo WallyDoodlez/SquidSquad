@@ -130,6 +130,7 @@ STATIC_TEST_MODULES = [
     "test_atomic_emit_b7",
     "test_compose_check_a45_10395",
     "test_a3_golden_link_stage",
+    "test_b8_golden_assemble",
 ]
 
 
