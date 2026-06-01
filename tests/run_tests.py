@@ -127,6 +127,7 @@ STATIC_TEST_MODULES = [
     "test_assemble_pass_b1",
     "test_conflict_detector_b4",
     "test_conflict_resolver_b5",
+    "test_atomic_emit_b7",
 ]
 
 
