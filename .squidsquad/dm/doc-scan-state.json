@@ -8,9 +8,15 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 73,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 74,
   "scan_history": [
+    {
+      "file": "CHANGELOG.md",
+      "date": "2026-05-31",
+      "findings": 0,
+      "note": "R73 scan-7 / FINAL R73 (cycle 1715). CHANGELOG.md unchanged since c1271. 0/20 v0.44.0 queue items in CHANGELOG (by design \u2014 included on next bump). Historical QA references in pre-rename sections are intentional history, not drift. R73 ROTATION COMPLETE \u2014 all 7 files re-verifications. rotation_count -> 74."
+    },
     {
       "file": "CONTRIBUTING.md",
       "date": "2026-05-31",
@@ -353,7 +359,7 @@
       "status": "current"
     },
     "CHANGELOG.md": {
-      "last_scanned": "2026-05-23",
+      "last_scanned": "2026-05-31",
       "status": "current"
     }
   },
