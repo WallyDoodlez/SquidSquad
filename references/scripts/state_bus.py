@@ -294,10 +294,12 @@ def commit_and_push(message, role="unknown"):
     # Push with retry (up to 3 attempts for concurrent conflicts).
     # #9930: each git op is bounded by DEFAULT_GIT_TIMEOUT and uses the
     # gh-credential override so credential.helper=manager can't wedge it.
-    # The pull is `--rebase` (not the default merge) so divergence keeps
-    # history linear instead of accumulating merge commits — a previous
-    # default-merge pull was creating `Merge branch 'squid-squad'` commits
-    # on every concurrent-write cycle.
+    # Pull uses merge (default), not rebase, per operator rule
+    # [[feedback_never_rebase_merge_instead]]. State-branch history will
+    # accumulate `Merge branch 'squid-squad'` commits on every concurrent-
+    # write cycle; that's accepted because the state branch is internal
+    # infrastructure and merge is safer than rebase (no history rewrite,
+    # less fragile on Windows/MSYS2).
     last_pull_result = None
     for attempt in range(3):
         result = _run(
@@ -307,22 +309,23 @@ def commit_and_push(message, role="unknown"):
         )
         if result.returncode == 0:
             return True
-        # Pull --rebase and retry. If the rebase itself fails (true
-        # conflict OR pull timeout), abort it so the next iteration
-        # starts from a clean worktree — leaving a half-rebased state
+        # Pull (merge) and retry. If the pull itself fails (true
+        # conflict OR pull timeout), abort the merge so the next iteration
+        # starts from a clean worktree — leaving a half-merged state
         # would make `git push` fail in a worse way on the next attempt.
+        # --no-edit suppresses the editor for the merge commit message.
         pull_result = _run(
             ["git"] + _GH_CREDENTIAL_OVERRIDE +
-            ["pull", "--rebase", "origin", state_branch],
+            ["pull", "--no-rebase", "--no-edit", "origin", state_branch],
             cwd=cwd, check=False, timeout=DEFAULT_GIT_TIMEOUT,
         )
         last_pull_result = pull_result
         if pull_result.returncode != 0:
-            _run(["git", "rebase", "--abort"], cwd=cwd, check=False)
+            _run(["git", "merge", "--abort"], cwd=cwd, check=False)
             # #9930 DS review F1: if the pull timed out (returncode=124),
             # the child `git fetch` may have left tmp packfiles or a
-            # FETCH_HEAD.lock behind — `rebase --abort` only cleans up
-            # rebase state. Prune remote-tracking refs so the next
+            # FETCH_HEAD.lock behind — `merge --abort` only cleans up
+            # merge state. Prune remote-tracking refs so the next
             # fetch starts from a clean slate. Bounded by the same
             # timeout — defense in depth.
             if pull_result.returncode == 124:
@@ -333,13 +336,13 @@ def commit_and_push(message, role="unknown"):
                 )
 
     # #9934: All 3 attempts exhausted. The retry loop fixes credential /
-    # timeout / merge-pollution issues from #9930, but it CANNOT recover
-    # from a real content conflict — pull --rebase keeps failing in the
-    # same way, and the next push attempt is back to square one. When
-    # this happens, give the operator a structured diagnostic with the
-    # actual divergence and a manual recovery command (per QA's
-    # recommendation #3 in the issue — the lower-risk paths). Don't
-    # auto-recover; that's outside this fix's risk budget.
+    # timeout issues from #9930, but it CANNOT recover from a real content
+    # conflict — pull (merge) keeps failing in the same way, and the next
+    # push attempt is back to square one. When this happens, give the
+    # operator a structured diagnostic with the actual divergence and a
+    # manual recovery command (per QA's recommendation #3 in the issue —
+    # the lower-risk paths). Don't auto-recover; that's outside this fix's
+    # risk budget.
     print("WARNING: State push failed after 3 attempts", file=sys.stderr)
     _print_divergence_diagnostic(cwd, state_branch, last_pull_result)
     return False
@@ -386,7 +389,7 @@ def _print_divergence_diagnostic(cwd, state_branch, last_pull_result):
         ]
         if had_conflict:
             msg.append(
-                "  Last pull --rebase reported a real content conflict — "
+                "  Last pull (merge) reported a real content conflict — "
                 "retries cannot resolve this automatically."
             )
         msg.append(

@@ -1007,7 +1007,7 @@ def main():
         sys.exit(0 if success else 1)
     elif cmd == "pr-merge":
         if not rest:
-            print("Usage: git_ops.py pr-merge <pr-number> [--strategy squash|merge|rebase]", file=sys.stderr)
+            print("Usage: git_ops.py pr-merge <pr-number> [--strategy squash|merge]", file=sys.stderr)
             sys.exit(1)
         strategy = "squash"
         if "--strategy" in rest:

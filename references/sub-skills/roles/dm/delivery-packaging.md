@@ -49,10 +49,10 @@ For each Pending Ship task that is NOT skipped:
    ```
 
    - **If `$PR_BASE` is empty** (PR not found in list, or `gh pr list` returned a degraded payload): skip the base check defensively and fall through to the citation gate. Do not infer a stacked-PR state from missing data — a false-positive route-back here would block ship for transient `gh` failures.
-   - **If `$PR_BASE` is non-empty AND `$PR_BASE` != `$WORKING_BRANCH`**: the PR is stacked on another feature branch. Merging the parent would squash-delete its source and auto-close this PR (`state=CLOSED, mergeable=CONFLICTING`); the PR cannot be re-targeted in place once that happens. Do **not** request a harness merge. Route back to in-progress so the worker agent rebases onto `$WORKING_BRANCH` **and** retargets the PR base on GitHub (a git rebase alone does NOT change the GitHub PR's `baseRefName` — without `gh pr edit --base`, DM will detect the same stacked state next cycle and the route-back loops):
+   - **If `$PR_BASE` is non-empty AND `$PR_BASE` != `$WORKING_BRANCH`**: the PR is stacked on another feature branch. Merging the parent would squash-delete its source and auto-close this PR (`state=CLOSED, mergeable=CONFLICTING`); the PR cannot be re-targeted in place once that happens. Do **not** request a harness merge. Route back to in-progress so the worker agent merges `$WORKING_BRANCH` into the branch **and** retargets the PR base on GitHub (the git merge alone does NOT change the GitHub PR's `baseRefName` — without `gh pr edit --base`, DM will detect the same stacked state next cycle and the route-back loops). **Never rebase** (operator rule [[feedback_never_rebase_merge_instead]] — rebase rewrites history, invalidates open PR review state, and is fragile on Windows/MSYS2):
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR #[PR_NUMBER] is stacked on \`$PR_BASE\` instead of \`$WORKING_BRANCH\`. Stacked PRs auto-close when their parent merges (squash-delete) and cannot be re-targeted in place. Worker agent: rebase the branch onto \`$WORKING_BRANCH\`, then retarget the PR base with \`gh pr edit [PR_NUMBER] --base $WORKING_BRANCH\` (the git rebase alone does not change the PR's baseRefName on GitHub), then re-route to pending-ship. Alternatively wait for the parent PR to merge before re-routing."
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR #[PR_NUMBER] is stacked on \`$PR_BASE\` instead of \`$WORKING_BRANCH\`. Stacked PRs auto-close when their parent merges (squash-delete) and cannot be re-targeted in place. Worker agent: merge \`$WORKING_BRANCH\` into the branch (\`git fetch origin && git merge origin/$WORKING_BRANCH\`), then retarget the PR base with \`gh pr edit [PR_NUMBER] --base $WORKING_BRANCH\` (changing the base on GitHub is separate from the merge), then re-route to pending-ship. **Do not rebase** — merge is the canonical approach (operator rule). Alternatively wait for the parent PR to merge before re-routing."
      ```
      Skip this item and move to the next.
 
@@ -76,7 +76,7 @@ For each Pending Ship task that is NOT skipped:
      ```
      The harness returns 202 immediately. Check for `pr-merged` event in your next cycle's `recent_events`. If merge fails (`success: false` in event payload):
      ```bash
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR merge failed — merge conflict. Worker agent: resolve conflicts and re-push. Status → In Progress."
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR merge failed — main has moved since the branch was last updated. Worker agent: merge main into the branch (\`git fetch origin && git merge origin/main\`), resolve any conflicts in the merge commit, push, and re-route to pending-ship. **Do not rebase** — merge is the canonical approach (operator rule [[feedback_never_rebase_merge_instead]]). Status → In Progress."
      python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
      ```
      Skip this item and move to the next.
