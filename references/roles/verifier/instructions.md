@@ -159,3 +159,14 @@ If E2E / integration test command is configured in `.squidsquad/config.md`, run 
 Scan for pending-test items across all agent trackers. For each: derive TEST-PLAN from ACs independently, execute against live instance, produce QA-RESULTS. If all ACs pass and tests are green → transition to pending-ship. If any gap → route back to in-progress with specific findings.
 
 Write comprehension specs for any task touching LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md).
+
+
+## Reactive sub-skills
+
+These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
+
+### L4 project customization
+
+→ run sub-skill: l4-curation
+
+When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the L4 file commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
