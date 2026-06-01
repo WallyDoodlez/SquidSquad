@@ -1239,6 +1239,60 @@ def check_role(role_name: str, target_root: Path = None,
     return "drift", _diff_compose_output(expected, on_disk)
 
 
+# A4.5 (#10395): staged-content check for `deploy <alias> --check --staged-l4 <path>`.
+# Runs in-memory v2 link-stage validation against a to-be-committed L4 file
+# WITHOUT writing anything to disk. Returns "clean" on success or raises the
+# original LinkStageValidationError so the CLI can render the rule name + path.
+
+
+def check_alias_staged_l4(alias, staged_l4_path, *, target_root=None,
+                          registry=None):
+    """Validate a staged L4 file as if it were ``.squidsquad/project/<role-class>.md``.
+
+    Resolves ``alias`` → ``(role_class, l3_domain)`` via the A5 registry,
+    walks L1-L3 sources via A2d's ``collect_sources_for_validation``,
+    parses the staged file via A2b, then runs A2e's seven R1-R7 rules
+    via ``validate_link_stage``. No disk writes.
+
+    Returns the resolved ``role_class`` on success. Raises:
+    - ``FileNotFoundError`` — ``staged_l4_path`` missing (setup error).
+    - ``KeyError`` — alias not in registry (setup error).
+    - ``LinkStageValidationError`` — R1-R7 violation; carries the rule
+      label and offending path/step-id for the CLI diagnostic.
+    - Other ``Exception`` — registry parse / l4 parse / source walk fault;
+      caller maps to setup-error exit code.
+    """
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+    staged_l4_path = Path(staged_l4_path)
+    if not staged_l4_path.is_file():
+        raise FileNotFoundError(
+            f"staged L4 file not found: {staged_l4_path}"
+        )
+    if registry is None:
+        registry = _config_module.parse_aliases_registry()
+    if alias not in registry:
+        raise KeyError(
+            f"alias '{alias}' not found in `## Aliases` registry. "
+            f"Known aliases: {sorted(registry)}"
+        )
+    role_class, l3_domain = registry[alias]
+
+    # Lazy imports — same pattern as deploy_alias_v2: keep v1 paths
+    # from loading these modules.
+    import v2_link_stage as _v2
+    from l4_parser import parse_l4_file as _parse_l4_file
+    from link_stage_validator import validate_link_stage as _validate_link_stage
+
+    sources = _v2.collect_sources_for_validation(
+        role_class, l3_domain, repo_root=target_root
+    )
+    l4_doc = _parse_l4_file(staged_l4_path)
+    _validate_link_stage(l4_doc, sources, l4_path=str(staged_l4_path))
+    return role_class
+
+
 def deploy_role(role_name: str, target_root: Path = None,
                 output_name: str = None,
                 output_filename: str = "CLAUDE.md",
@@ -1806,10 +1860,27 @@ def main():
 
     # #10388 PRD-A/A4: --check runs in-memory compose and diffs against
     # on-disk CLAUDE.md without writing. Recognized on `deploy` and
-    # `deploy-all` (mirrors --v2 placement). Mutually exclusive with --v2
-    # for now — A4.5 (#10395) layers v2 + staged-content semantics on top.
+    # `deploy-all` (mirrors --v2 placement).
     check_mode = "--check" in args
     args = [a for a in args if a != "--check"]
+
+    # #10395 PRD-A/A4.5: --staged-l4 <path> opts `deploy <alias> --check`
+    # into staged-content validation (R1-R7 vs a to-be-committed L4 file).
+    # Distinct from A4's drift-check: A4 compares in-memory compose to
+    # on-disk; A4.5 runs the v2 validator against the staged L4 + L1-L3
+    # sources without composing or writing anything. No --staged-l4 →
+    # `--check` falls through to A4's existing behavior.
+    staged_l4_path = None
+    while "--staged-l4" in args:
+        idx = args.index("--staged-l4")
+        if idx + 1 >= len(args):
+            print(
+                "ERROR: --staged-l4 requires a path argument.",
+                file=sys.stderr,
+            )
+            sys.exit(CHECK_EXIT_ERROR)
+        staged_l4_path = args[idx + 1]
+        args = args[:idx] + args[idx + 2:]
 
     cmd = args[0]
     if v2_mode and cmd not in ("deploy", "deploy-all"):
@@ -1845,6 +1916,34 @@ def main():
             sys.exit(1)
         role_name = args[1]
         if check_mode:
+            # A4.5 (#10395): --staged-l4 routes to staged-content validation.
+            if staged_l4_path is not None:
+                # Lazy import — only the staged-check path needs A2e here.
+                from link_stage_validator import LinkStageValidationError
+                try:
+                    check_alias_staged_l4(role_name, staged_l4_path)
+                except FileNotFoundError as e:
+                    print(f"ERROR: setup error for alias '{role_name}': {e}",
+                          file=sys.stderr)
+                    sys.exit(CHECK_EXIT_ERROR)
+                except KeyError as e:
+                    print(f"ERROR: setup error for alias '{role_name}': {e}",
+                          file=sys.stderr)
+                    sys.exit(CHECK_EXIT_ERROR)
+                except LinkStageValidationError as e:
+                    # AC: stderr names the rule that failed (R1-R7).
+                    print(
+                        f"  {role_name} (staged): VALIDATION FAIL — {e}",
+                        file=sys.stderr,
+                    )
+                    sys.exit(CHECK_EXIT_DRIFT)
+                except Exception as e:
+                    print(f"ERROR: setup error for alias '{role_name}': {e}",
+                          file=sys.stderr)
+                    sys.exit(CHECK_EXIT_ERROR)
+                print(f"  {role_name} (staged): clean")
+                sys.exit(CHECK_EXIT_CLEAN)
+            # A4 (#10388) per-alias drift-check fallback.
             try:
                 status, sections = check_role(role_name)
             except Exception as e:
