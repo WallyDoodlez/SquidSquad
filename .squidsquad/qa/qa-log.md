@@ -1,5 +1,13 @@
 # QA Log
 
+## Agent Health — 2026-05-31 23:36
+
+- **skill**: 👻 stalled (72m — re-crossed threshold; was healthy during cycles 494–498)
+- **pm**: 🦑 healthy (28m, idle)
+- **verifier**: 👻 stalled (356m — ~5.9h, unchanged since cycle 491)
+- **dm**: 🦑 healthy (26m, idle)
+- **Notes**: skill stall blocks #10443 merge-main route-back per [[feedback_never_rebase_merge_instead]]; #10443 has been in-progress since 02:40Z waiting. PM has not booted skill or verifier per [[feedback_manual_agents]] — operator may want to investigate why PM is idle on dead-agent boot, OR `--no-auto-reboot` env may be intentional pause.
+
 ## Agent Health — 2026-05-31 19:06
 
 - **skill**: 👻 stalled (81m — exceeds 60m threshold)
