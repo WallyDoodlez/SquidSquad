@@ -1,5 +1,5 @@
 # Working State
 
 - **Task**: none
-- **Status**: idle
-- **Quiet Cycle Counter**: 7
+- **Status**: none
+- **Quiet Cycle Counter**: 0
