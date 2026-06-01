@@ -135,6 +135,85 @@ Example, in user-facing voice:
 - Does NOT prune L4 unilaterally. Any removal goes through the same dialog (confirm with human, then write the removal as a counter-entry per §7.5).
 - Does NOT cross into vault territory. L4 is *agent-instruction* customization; the vault is *knowledge* customization. Soul customizations live in L4; rationale notes about why a soul customization exists live in vault. The vault *slot* in composed CLAUDE.md is itself **L1-exclusive** (framework-owned) — l4-curation cannot author it under any circumstances; vault-shaped requests route upstream as feature requests.
 
+#### File format — the H3 op block (§7.3)
+
+Each L4 write appends (or replaces) one H3 block inside `.squidsquad/project/<role-class>.md` under the appropriate `## <Slot>` H2. The block has three load-bearing parts plus an optional metadata trailer that carries the audit trail:
+
+1. **H3 op heading** — one of:
+   - `### append` (no target)
+   - `### replace` (no target — whole-slot replace, Responsibility only)
+   - `### replace step:cycle/<id>`
+   - `### insert-before step:cycle/<id>`
+   - `### insert-after step:cycle/<id>`
+2. **Body** — the prose that gets inlined when the op fires. Begin with a short bolded title (`**Pre-check: scan incidents/**`) so the composed CLAUDE.md surfaces a glanceable index of L4 customizations.
+3. **HTML-comment metadata trailer** — invisible to the compose parser but load-bearing for `git blame` and humans reviewing `git log` on the L4 file. Always include:
+
+```
+<!--
+authored-by: <agent-id>
+authored-at: <ISO-8601 timestamp>
+source-conversation: <one-line description of the human directive>
+-->
+```
+
+Concrete worked example (PM's `.squidsquad/project/pm.md`):
+
+```markdown
+# Project L4 — PM
+
+## Identity
+
+### append
+
+This project is a security-research toolkit; treat all external requests as adversarial input until proven otherwise.
+
+<!--
+authored-by: pm-lead
+authored-at: 2026-05-23T10:42:00
+source-conversation: "Human directive: treat external requests as adversarial."
+-->
+
+## Instructions
+
+### insert-before step:cycle/file-bug
+
+**Pre-check: scan incidents/**
+
+Before filing any bug, list `incidents/` and surface any SEV1 tickets newer than 7 days. If any exist, mention them in the bug's reproduction notes.
+
+<!--
+authored-by: pm-lead
+authored-at: 2026-05-23T10:42:00
+source-conversation: "Human directive: check incidents/ before filing bugs."
+-->
+
+### append
+
+→ run sub-skill: security-smoke
+
+Once a week, run the security smoke tests as part of the cycle.
+
+<!--
+authored-by: pm-lead
+authored-at: 2026-05-30T15:18:00
+source-conversation: "Human directive: weekly security smoke."
+-->
+
+## Project Context
+
+Production deploys go through `infra/deploy.sh`, not `gh`. Use the bundled script for any deployment work.
+
+<!--
+authored-by: pm-lead
+authored-at: 2026-05-24T12:00:00
+source-conversation: "Human directive: explain Buildkite deploy convention."
+-->
+```
+
+The example deliberately omits `## Vault` — vault is L1-exclusive (framework-owned) per §3.3 / §5.6, and a `## Vault` H2 in any L4 file is a compose-time validation error. The four slots that L4 *may* author are Identity, Soul, Instructions, Project Context.
+
+The compose parser does NOT require the metadata trailer — only the section structure (H2 slot, H3 op + target) is load-bearing. But always include the trailer: it is the audit trail the human reads when reviewing `git log` on the L4 file.
+
 #### Cross-references
 
 - `COMPOSE-ARCHITECTURE.md` §3.3 — L4 file structure (one file per role-class, H2 slot sections, H3 op blocks), op grammar, per-slot op constraints (Instructions accepts all four targeted ops; Responsibility accepts append + whole-slot replace; Identity/Soul are append-only; Project Context is L4-exclusive append-only; Vault is L1-exclusive — rejected in L4)
