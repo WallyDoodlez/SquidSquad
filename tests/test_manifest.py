@@ -103,14 +103,13 @@ class TestManifestIntegrity:
             else:
                 referenced.add(inc)
 
-        # Also scan includes.yml AND includes-events.yml files for
-        # additional_includes (Layer 3 variants) + dual-mode (#8697). A
-        # fragment is an orphan only when NO manifest of any mode references
-        # it.
+        # Also scan includes.yml files for additional_includes (Layer 3
+        # variants). Post-E6 (#10685) v2-cutover the includes-events.yml
+        # split is retired — there is one unified manifest per role.
         try:
             import yaml
             roles_dir = self.sub_skills_dir.parent / "roles"
-            for inc_yml in list(roles_dir.rglob("includes.yml")) + list(roles_dir.rglob("includes-events.yml")):
+            for inc_yml in roles_dir.rglob("includes.yml"):
                 data = yaml.safe_load(inc_yml.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
                     for inc in data.get("additional_includes", []):
@@ -179,29 +178,26 @@ class TestIncludesYml:
         request.cls.sub_skills_dir = REFERENCES_DIR / "sub-skills"
 
     def test_includes_yml_exists_per_role(self):
-        """TC-A1: Each role directory has both includes.yml AND
-        includes-events.yml (#8697 dual-mode)."""
+        """TC-A1: Each role directory has includes.yml. The pre-E6
+        includes-events.yml mode split (#8697) was retired by the
+        v2 cutover (#10685) — a single unified manifest per role."""
         for role in self.ROLES:
-            for fname in ("includes.yml", "includes-events.yml"):
-                path = self.roles_dir / role / fname
-                assert path.exists(), f"Missing {fname} for {role}"
+            path = self.roles_dir / role / "includes.yml"
+            assert path.exists(), f"Missing includes.yml for {role}"
 
     def test_includes_yml_valid_yaml(self):
         """TC-X6: All manifests are valid YAML with expected structure."""
         import yaml
         for role in self.ROLES:
-            for fname in ("includes.yml", "includes-events.yml"):
-                path = self.roles_dir / role / fname
-                if not path.exists():
-                    continue
-                data = yaml.safe_load(path.read_text(encoding="utf-8"))
-                assert isinstance(data, dict), f"{role}/{fname}: not a dict"
-                assert "includes" in data, (
-                    f"{role}/{fname}: missing 'includes' key"
-                )
-                assert isinstance(data["includes"], list), (
-                    f"{role}/{fname}: 'includes' not a list"
-                )
+            path = self.roles_dir / role / "includes.yml"
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            assert isinstance(data, dict), f"{role}/includes.yml: not a dict"
+            assert "includes" in data, (
+                f"{role}/includes.yml: missing 'includes' key"
+            )
+            assert isinstance(data["includes"], list), (
+                f"{role}/includes.yml: 'includes' not a list"
+            )
 
     def test_includes_yml_paths_exist(self):
         """All sub-skill paths in includes.yml resolve to actual files."""
@@ -214,14 +210,17 @@ class TestIncludesYml:
                 assert full.exists(), f"{role}: includes.yml references missing {inc}"
 
     def test_includes_yml_covers_template(self):
-        """TC-A2: includes.yml + includes-events.yml jointly cover all
-        `{{include:}}` directives in templates (#8697).
+        """TC-A2: includes.yml covers all `{{include:}}` directives in
+        the role's template.
 
-        Each template include must appear in at least one mode-specific
-        manifest (polling or events), either directly, via a slim variant,
-        or via a role-specific override. Common-events/ entries are
-        expected only in includes-events.yml; common/ entries should be in
-        both manifests OR explicitly known-excluded.
+        Each template include must appear in the role's manifest, either
+        directly, via a slim variant, or via a role-specific override.
+        Mode-specific (event-driven) fragments are Read at runtime via
+        `common/boot-bootstrap` and intentionally absent from the manifest.
+
+        Pre-E6 (#10685) this used to take the union of polling and events
+        manifests (#8697 dual-mode); the cutover unified into a single
+        per-role manifest.
         """
         import yaml
         for role in self.ROLES:
@@ -231,26 +230,17 @@ class TestIncludesYml:
                 r'\{\{include:\s*(.+?)\}\}', tmpl_text,
             ))
 
-            # Build the union of polling and events manifests.
-            manifests = {}
-            for mode_name, fname in (("polling", "includes.yml"),
-                                     ("events", "includes-events.yml")):
-                yml_path = self.roles_dir / role / fname
-                if not yml_path.exists():
-                    continue
-                data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
-                assert isinstance(data, dict), f"{role} {fname}: not a dict"
-                assert "includes" in data, f"{role} {fname}: missing includes"
-                manifests[mode_name] = set(data["includes"])
-                # Every manifest entry must resolve to a file
-                for inc in data["includes"]:
-                    full = self.sub_skills_dir / f"{inc}.md"
-                    assert full.exists(), (
-                        f"{role} {fname}: references non-existent {inc}"
-                    )
-
-            assert manifests, f"{role}: no manifests found"
-            yml_union = set().union(*manifests.values())
+            yml_path = self.roles_dir / role / "includes.yml"
+            data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
+            assert isinstance(data, dict), f"{role} includes.yml: not a dict"
+            assert "includes" in data, f"{role} includes.yml: missing includes"
+            yml_union = set(data["includes"])
+            # Every manifest entry must resolve to a file
+            for inc in data["includes"]:
+                full = self.sub_skills_dir / f"{inc}.md"
+                assert full.exists(), (
+                    f"{role} includes.yml: references non-existent {inc}"
+                )
 
             uncovered = set()
             for inc in tmpl_includes:
@@ -298,8 +288,8 @@ class TestIncludesYml:
             }
             unexpected = uncovered - known_exclusions - mode_specific_runtime_loaded
             assert not unexpected, (
-                f"{role}: template includes not covered by ANY manifest "
-                f"(polling+events), and not slim/role-override/excluded: "
+                f"{role}: template includes not covered by includes.yml, "
+                f"and not slim/role-override/excluded: "
                 f"{sorted(unexpected)}"
             )
 
