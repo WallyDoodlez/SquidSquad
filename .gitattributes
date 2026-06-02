@@ -13,6 +13,13 @@
 .squidsquad/*/cycle-input.json merge=ours
 .squidsquad/*/cycle-output.json merge=ours
 
+# PM-regenerated backlog cache — transient counters, recomputed every PM
+# cycle from forge state. Treat as overwrite-on-merge so feature branches
+# don't chase main on a value PM will reset anyway. Caught chasing D2
+# (#10673) + E2 (#10681) through three DM route-backs in cycle 1519 — every
+# conflict here, nothing in actual feature code.
+.squidsquad/.backlog-cache merge=ours
+
 # Vault files (#5674)
 # BRIEFING.md — last writer wins (staleness fix runs every cycle).
 .squidsquad/vault/BRIEFING.md merge=ours

@@ -2613,8 +2613,6 @@ tests/test_scan_index.py::TestRecordScan::test_inserts_findings PASSED   [ 69%]
 tests/test_scan_index.py::TestRecordScan::test_increments_scan_count_on_repeat PASSED [ 69%]
 tests/test_scan_index.py::TestRecordScan::test_invalid_json_does_not_leak_connection PASSED [ 69%]
 tests/test_scan_index.py::TestRecordDecision::test_accept_updates_finding PASSED [ 69%]
-tests/test_scan_index.py::TestRecordDecision::test_reject_updates_finding_and_rejections PASSED [ 69%]
-tests/test_scan_index.py::TestRecordDecision::test_missing_issue_returns_false PASSED [ 70%]
-tests/test_scan_index.py::TestRecordDecision::test_accept_creates_coverage_row_if_missing 
+tests/test_scan_index.py::TestRecordDecision::test_reject_updates_finding_and_rejections 
 === Static Analysis Tests (pytest) ===
 
