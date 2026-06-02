@@ -411,13 +411,231 @@ Commands:
   restart <role>     Restart a single agent
   status             Show harness + agent health
   shutdown           Stop all agents and exit harness
+  check [--full]     Diagnose compose freshness (read-only — no spawn,
+                     no mutation). With --full also runs `compose.py
+                     deploy-all --check` to verify on-disk outputs match
+                     source-tree composition.
 
 Examples:
   squidsquad start
   squidsquad restart skill
   squidsquad status
+  squidsquad check
+  squidsquad check --full
   squidsquad shutdown
 """
+
+
+# PRD-E E4 (#10683): operator-driven freshness diagnostic. Pure read-
+# only — never spawns agents, never mutates state, never runs
+# ``compose.py deploy-all`` (only the ``--check`` dry-run when
+# ``--full`` is passed).
+#
+# Exit codes per AC5:
+#   0 — clean (no drift, sources compose cleanly)
+#   1 — drift detected (structured report on stderr)
+#   2 — error (couldn't read sources, malformed config, compose
+#       dry-run errored)
+_STATE_FILE = (
+    Path(__file__).resolve().parent.parent.parent
+    / ".squidsquad" / ".harness-state.json"
+)
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def _load_state_checksum(state_file=_STATE_FILE):
+    """Return ``(stored_checksum_or_None, error_message_or_None)``.
+
+    The checksum can be ``None`` when:
+    - state file does not exist (fresh install, never booted),
+    - state file exists but has no ``last_compose_checksum`` field
+      (legacy file, pre-E2).
+
+    Both cases are normal "first boot" states the operator should be
+    informed about — not exit-2 errors. A malformed JSON file IS an
+    exit-2 error.
+    """
+    if not state_file.is_file():
+        return None, None
+    try:
+        raw = state_file.read_text(encoding="utf-8")
+    except OSError as e:
+        return None, f"could not read {state_file}: {e}"
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return None, f"malformed JSON in {state_file}: {e}"
+    return data.get("last_compose_checksum"), None
+
+
+def _enumerate_drifted_paths(repo_root):
+    """Return the sorted list of compose-input paths that exist on
+    disk today. Used by the drift report so the operator can see what
+    the gate would hash; pinpointing WHICH files changed requires
+    keeping the prior file-by-file hash list, which today's state file
+    does not store. AC6 asks for a "human-readable summary" — listing
+    the input set + the current checksum is the honest answer until a
+    future story adds a per-file manifest.
+
+    Per DS-10683 F2: uses ``compose_freshness.iter_compose_input_files``
+    (public API) and returns ``None`` on enumeration failure so the
+    drift report can render a clean fallback line instead of crashing.
+    """
+    try:
+        import compose_freshness as _cf  # lazy — avoid module import on usage-only paths
+        paths = []
+        for path in _cf.iter_compose_input_files(repo_root):
+            try:
+                rel = path.relative_to(repo_root).as_posix()
+            except ValueError:
+                continue
+            if rel not in paths:
+                paths.append(rel)
+        return sorted(paths)
+    except Exception:  # noqa: BLE001 — operator-facing fallback
+        return None
+
+
+def _format_drift_report(stored, current, repo_root):
+    """Render the AC6 drift report for stderr."""
+    lines = [
+        "compose freshness: DRIFT DETECTED",
+        "",
+        f"  stored checksum (.harness-state.json): {stored}",
+        f"  current checksum (live source tree):   {current}",
+        "",
+        (
+            "  The compose-input set has changed since the last "
+            "successful boot. Run `python references/scripts/"
+            "compose.py deploy-all` to bring composed outputs back in "
+            "sync. To diagnose WHICH files changed, compare git diff "
+            "against the boot point that wrote the stored checksum."
+        ),
+        "",
+        "  Compose-input set (current files on disk):",
+    ]
+    paths = _enumerate_drifted_paths(repo_root)
+    if paths is None:
+        # DS-10683 F2 fallback: enumeration failed (private API
+        # broke, filesystem permission error, etc.). Report it so
+        # the operator sees the drift summary anyway.
+        lines.append(
+            "    (could not enumerate compose-input files — see "
+            "compose_freshness.iter_compose_input_files)"
+        )
+    else:
+        for rel in paths:
+            lines.append(f"    - {rel}")
+    return "\n".join(lines)
+
+
+def cmd_check(full=False, *, repo_root=None, state_file=None):
+    """Run the E4 read-only freshness diagnostic.
+
+    Returns the AC5 exit code: 0 / 1 / 2.
+
+    ``repo_root`` + ``state_file`` are injection seams for tests.
+    """
+    if repo_root is None:
+        repo_root = _REPO_ROOT
+    if state_file is None:
+        state_file = _STATE_FILE
+
+    # Import E1's checksum helper. Lazy so the CLI's other subcommands
+    # don't pay the import cost when they don't need it.
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import compose_freshness as _cf
+    except Exception as e:  # noqa: BLE001
+        print(
+            f"check: could not import compose_freshness: {e}", file=sys.stderr
+        )
+        return 2
+
+    stored, error = _load_state_checksum(state_file=state_file)
+    if error:
+        print(f"check: {error}", file=sys.stderr)
+        return 2
+
+    try:
+        current = _cf.compute_compose_checksum(repo_root)
+    except Exception as e:  # noqa: BLE001 — surface as exit 2
+        print(f"check: could not compute checksum: {e}", file=sys.stderr)
+        return 2
+
+    # DS-10683 F1 fix: track drift as a flag instead of exiting early.
+    # If --full is passed AND the checksum already mismatched, the
+    # operator still wants the A4 dry-run output (which names the
+    # specific composed files that need regeneration). Pre-fix, the
+    # early ``return 1`` silently swallowed --full on drift.
+    drift = False
+    if stored is None:
+        # AC8 covers clean / drifted / broken — first-boot isn't
+        # called out, but the honest read is "no stored checksum to
+        # compare against; the harness will run compose at next boot."
+        # That's not drift; treat as clean from the diagnostic POV so
+        # operators don't see a red signal on a fresh install.
+        print("compose freshness: no stored checksum (first boot / fresh install)")
+        print(f"  current checksum: {current}")
+    elif stored != current:
+        print(_format_drift_report(stored, current, repo_root), file=sys.stderr)
+        drift = True
+    else:
+        print("compose freshness: clean")
+        print(f"  checksum: {current}")
+
+    # AC4: --full adds the A4 drift check (compose.py deploy-all --check)
+    # IN ADDITION TO the checksum comparison above. The two checks are
+    # complementary: checksum says "the source tree changed," the
+    # dry-run says "the composed outputs are stale relative to the
+    # source tree" — only the dry-run pinpoints which composed files
+    # need regeneration.
+    if not full:
+        return 1 if drift else 0
+
+    print("\nrunning compose.py deploy-all --check ...")
+    cmd = [
+        sys.executable,
+        str(Path(repo_root) / "references" / "scripts" / "compose.py"),
+        "deploy-all",
+        "--check",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, cwd=str(repo_root),
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"check: --full failed to invoke compose.py: {e}", file=sys.stderr)
+        return 2
+
+    # DS-10683 F3: always emit compose.py's stderr regardless of exit
+    # code so an unexpected exit-1 traceback is at least visible to
+    # the operator (we still map exit codes per A4's contract below;
+    # the contract is documented in compose.py's CHECK_EXIT_CLEAN /
+    # CHECK_EXIT_DRIFT / CHECK_EXIT_ERROR constants).
+    if proc.stdout:
+        print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n")
+    if proc.stderr:
+        print(proc.stderr, end="" if proc.stderr.endswith("\n") else "\n",
+              file=sys.stderr)
+    # Map A4's exit codes to our AC5 codes:
+    #   0 = clean, 1 = drift, ≥2 = error.
+    # Contract is load-bearing — see compose.py CHECK_EXIT_* constants.
+    if proc.returncode == 0:
+        print("compose dry-run: clean")
+        # Even if the dry-run was clean, a checksum mismatch above
+        # still means the operator should look at why the input set
+        # hashed differently — exit 1 surfaces that.
+        return 1 if drift else 0
+    if proc.returncode == 1:
+        # A4 drift — same exit semantic as our checksum drift.
+        return 1
+    # Any other non-zero (A4 maps unhandled errors to exit 2).
+    print(
+        f"check: compose dry-run exited {proc.returncode} (setup/parse error)",
+        file=sys.stderr,
+    )
+    return 2
 
 
 def main():
@@ -444,6 +662,17 @@ def main():
         return cmd_status()
     elif cmd == "shutdown":
         return cmd_shutdown()
+    elif cmd == "check":
+        full = "--full" in args[1:]
+        extra = [a for a in args[1:] if a != "--full"]
+        if extra:
+            print(
+                f"check: unrecognized arguments: {' '.join(extra)}",
+                file=sys.stderr,
+            )
+            print("Usage: squidsquad check [--full]", file=sys.stderr)
+            return 2
+        return cmd_check(full=full)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         print(USAGE)

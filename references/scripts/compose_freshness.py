@@ -96,8 +96,13 @@ class FreshnessResult:
 _COMPOSE_STDERR_MAX = 4000
 
 
-def _iter_compose_input_files(repo_root):
+def iter_compose_input_files(repo_root):
     """Yield every file path that contributes to the checksum.
+
+    Public API per DS-10683 F2 (used by ``squidsquad_cli.cmd_check``'s
+    drift report). The leading-underscore private name still exists
+    as an alias below for backwards compatibility with any pre-#10683
+    importer.
 
     Resolution: each glob in ``COMPOSE_INPUT_GLOBS`` is expanded
     against ``repo_root``. Symlinks are followed only one level
@@ -113,6 +118,10 @@ def _iter_compose_input_files(repo_root):
         for path in repo_root.glob(pattern):
             if path.is_file():
                 yield path
+
+
+# Backwards-compat alias for any pre-#10683 importer.
+_iter_compose_input_files = iter_compose_input_files
 
 
 def compute_compose_checksum(repo_root):
