@@ -444,55 +444,29 @@ class TestBacktickWrappedNonMatchingRaises:
 class TestLiveCatalogIntegration:
     """Live catalog integration check.
 
-    The real `docs/sub-skill-catalog.md` currently has a known defect —
-    `improvement-scan` is listed under BOTH `common/` and `roles/pm/`
-    sections, which the parser correctly catches per AC3. PM must
-    disambiguate (filed as #10687). Until that's fixed, the
-    parser-catches-duplicate test is marked `xfail(strict=True)` so it
-    flips to XPASS (loud test failure) the moment PM disambiguates —
-    forcing whoever fixes #10687 to also update this test rather than
-    silently leaving stale expected-fail behavior.
+    The original #10687 (and re-filing as #10743) defect — duplicate
+    bare-name catalog rows for `improvement-scan`, `issue-filing`,
+    `task-pickup`, `discussion-protocol`, `ralph-loop-overview` — was
+    resolved by renaming the per-role variants to slash-bearing form
+    (e.g. `roles/pm/improvement-scan`). The xfail-strict regression
+    pin flipped to XPASS and is now removed; the live catalog parses
+    cleanly.
     """
 
-    @pytest.mark.xfail(
-        reason="Pinned to the #10687 catalog defect (duplicate "
-        "`improvement-scan`). Will XPASS (and fail the suite) once PM "
-        "disambiguates — at which point this test should be deleted and "
-        "the clean-parse path enabled below.",
-        strict=True,
-    )
     def test_real_catalog_parses_cleanly(self):
-        """When PM disambiguates #10687, this test should pass cleanly.
-        Today the parser raises on the catalog's duplicate name (which
-        is correct behavior), so the test is xfail strict.
-        """
+        """The live catalog must parse without raising. Replaces the
+        old xfail-strict pin from when #10743's duplicates blocked
+        parsing."""
         catalog = REPO_ROOT / "docs" / "sub-skill-catalog.md"
         if not catalog.is_file():
             pytest.skip("docs/sub-skill-catalog.md not present")
         out = cp.parse_catalog(catalog)
         assert len(out) >= 10
-
-    def test_real_catalog_diagnostic_for_known_defect(self):
-        """Today's behavior: parser raises CatalogParseError naming
-        both conflicting source-paths. Survives PM's fix because the
-        moment the catalog is clean, this test's `xfail` doesn't apply
-        — the assertion-side flips out of scope. Keep this test as a
-        defect-pinning audit trail until #10687 ships."""
-        catalog = REPO_ROOT / "docs" / "sub-skill-catalog.md"
-        if not catalog.is_file():
-            pytest.skip("docs/sub-skill-catalog.md not present")
-        try:
-            cp.parse_catalog(catalog)
-            # Clean parse — #10687 was fixed; this defect-pinning test
-            # is obsolete. The xfail-strict test above will XPASS and
-            # tell the human to delete BOTH tests.
-            return
-        except cp.CatalogParseError as e:
-            msg = str(e)
-            assert "duplicate" in msg.lower()
-            # Both source-paths surfaced per C3
-            assert "common/improvement-scan.md" in msg
-            assert "roles/pm/improvement-scan.md" in msg
+        # Spot-check: the previously-duplicated name now appears in
+        # both forms (common bare-name + roles/pm slash-bearing) so
+        # callers that look up either string find the right source.
+        assert "improvement-scan" in out
+        assert "roles/pm/improvement-scan" in out
 
     def test_real_catalog_partial_entries_have_valid_path_shape(self, tmp_path):
         """Up to the point the parser hits the duplicate, every emitted
