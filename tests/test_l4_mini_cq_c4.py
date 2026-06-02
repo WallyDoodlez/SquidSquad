@@ -150,6 +150,100 @@ def test_classify_reply_punctuation_tolerant():
 
 
 # ---------------------------------------------------------------------------
+# #10753 W3 — approval-prefix + politeness/intensifier suffix
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("reply", [
+    # The three the audit specifically called out.
+    "do it now",
+    "ship it please",
+    "y please",
+    # Generalized: any approval prefix + non-rejection suffix should
+    # approve. Tests below pin the behaviour at multiple prefix lengths.
+    "yes please",
+    "ok thanks",
+    "go ahead now",
+    "go for it please",
+    "looks good to me thanks",
+    "lgtm please",
+    "approve please",
+    "ship now",
+    "do that please",
+    "sure thing please",
+])
+def test_classify_reply_approval_prefix_with_polite_suffix(reply):
+    """Pre-fix: the head-only allowlist treated every one of these as
+    ambiguous despite each being a clear approval. Gate 2 would
+    re-prompt or abandon — hurting throughput on the very interaction
+    Gate 2 exists to validate."""
+    assert l4_mini_cq.classify_reply(reply) == "approve"
+
+
+@pytest.mark.parametrize("reply", [
+    # Approval prefix BUT a negation in the rest demotes to ambiguous.
+    "yes but no",
+    "ok but actually stop",
+    "do it but wait",
+    "ship it but cancel",
+    "go ahead but abort",
+])
+def test_classify_reply_approval_prefix_plus_negation_is_ambiguous(reply):
+    """The relaxation in W3 must NOT swallow mixed-signal replies. A
+    negation anywhere in the rest demotes the match to ambiguous —
+    the conservative bias from the original implementation stays."""
+    assert l4_mini_cq.classify_reply(reply) == "ambiguous"
+
+
+@pytest.mark.parametrize("reply", [
+    # Words that LOOK like they might be approval prefixes but
+    # aren't in _APPROVAL_TOKENS — the relaxation must not promote
+    # arbitrary first-word matches.
+    "maybe later",
+    "tomorrow please",
+    "let's see",
+    "show me first",
+])
+def test_classify_reply_non_approval_prefix_stays_ambiguous(reply):
+    assert l4_mini_cq.classify_reply(reply) == "ambiguous"
+
+
+# ---------------------------------------------------------------------------
+# DS-10753 review F1 + F2 — false-positive risks from missing rejection
+# tokens. The W3 relaxation matched a 1-4 word approval prefix; without
+# "away" / "back" / "not" / "never" in _REJECTION_TOKENS, dismissals and
+# questioning replies like "go away" or "y not" would incorrectly
+# classify as approve.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("reply", [
+    # DS-10753 F1: "go away" / "go back" — dismissals, NOT approvals.
+    # "go" matches as a one-word approval prefix; the dismissal word in
+    # the rest must demote to ambiguous.
+    "go away",
+    "go back",
+    # DS-10753 F2: "y not" reads as "why not?" — a question, not an
+    # approval. "do it not" / "ok never" same pattern. Each is the
+    # exact failure mode the audit's "false approvals worse than
+    # re-prompts" caveat targets.
+    "y not",
+    "do it not",
+    "ok never",
+    "yes not really",
+    "sure never mind",
+])
+def test_classify_reply_dismissal_and_negation_after_approval_prefix_is_not_approve(
+    reply,
+):
+    # Per the docstring: false approvals are worse than a re-prompt
+    # because they commit an L4 write the human didn't intend. Each
+    # of these replies must demote to ambiguous OR classify as reject
+    # — but it must NEVER approve.
+    assert l4_mini_cq.classify_reply(reply) != "approve"
+
+
+# ---------------------------------------------------------------------------
 # Parser semantics — boundaries
 # ---------------------------------------------------------------------------
 
