@@ -1,8 +1,8 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: PRD-C complete; pipeline empty; PRD-D+E (#10392) is the only remaining work
-- **Last Processed Event ID**: 24c51d20e22b1e00
+- **Status**: pipeline empty; pending backlog needs triage
+- **Last Processed Event ID**: a746107f022467aa
 - **Quiet cycles**: 0
 
 ## Pipeline
@@ -10,45 +10,42 @@
 - Harness: reachable
 - pending_ship: 0
 - pending_test: 0
-- in_progress: 1 (only #9968 PM EPIC umbrella)
-- Open PRs: 1 (PR #10392 PRDs D+E held)
+- in_progress: 1 (#9968 PM EPIC)
+- Open PRs: 1 (PR #10392 held)
 - Approved queue: 0
+- pending backlog: 29 items (after closing #10557)
 - shipped_since_bump: 6
 - Agents:
-  - PM: 1086100, cycle 2021 ✓
-  - QA: 263116, cycle 541
-  - DM: 2199912, cycle 1762
-  - skill: 1348408 alive 19+ hours (the restart wedge resolved itself — skill kept cycling productively)
+  - PM: 1086100, cycle 2022 ✓
+  - QA: 263116, cycle 542 idle
+  - DM: 2199912, cycle 1762 idle
+  - skill: 1348408 alive 20+ hours
 
-## Session totals
+## Pending backlog overview (29 items)
 
-**31 items shipped this session.**
+Mix of:
+- **Pre-PRD-model impl tasks** (#10013-10024 Compose-arch A-N, #10100, #10180-10182) — likely superseded by PRD-A/B/C delivery; need verification
+- **Vault tasks** (#10098, #10099, #10100, #10179, #10180) — VAULT-ARCH PRD candidates (not yet drafted)
+- **PM/DM docs tasks** (#10354, #10355, #10362) — DM/PM coordination work
+- **Legitimate skill follow-ups** (#10358 alias rename, #10670 state-hygiene, #10393 A2.5 migration)
+- **#10377** — gated on TRD impl
 
-- **PRD-A COMPLETE** (11 stories): A2a, A2b, A2c, A2d, A2e, A2f, A3, A4, A4.5, A6, A2.6
-- **PRD-B COMPLETE** (8 stories): B1-B8
-- **PRD-C COMPLETE** (10 stories): C1-C10
-- **Bugs** (2): #10440 process_utils, #10559 gh pr edit GraphQL fix
+Triage approach: user-directed sweep in a dedicated conversation turn. Not blocking current PRD-D+E focus.
 
-## What's on main now (new arch)
+## Closed this cycle
 
-- v2 compose link stage operational behind --v2 (A family)
-- v2 assemble stage with LLM call, conflict detection, resolver, atomic emit, caching (B family)
-- L4 customization sub-skill `l4-curation` with 3-gate safety model, atomic write, recovery, conflict pre-emption (C family)
-- All v1-coexistent — no runtime change until E6 cutover
-
-## What's left
-
-- **PR #10392** (PRDs D+E) — held; D = catalog + wake-mode; E = freshness + E6 v2 switch PR
-- **#10377** — still gated on TRD impl
-- **#10541** — operator awareness; skill mostly stable, restart paradox didn't actually wedge
-
-After PR #10392 merges and D + E stories ship, **E6 is the v2 cutover** — the atomic switch PR that flips v1→v2 paths, deletes v1 code, marks the COMPOSE-ARCH PRD family done. Then HARNESS-ARCH / AGENT-RUNTIME / INSTALLER-ARCH / VAULT-ARCH PRD families come up.
+- #10557 (DM rebase prescription) — completed by ffa211b1, parallel skill finding closed with credit
 
 ## Held / awaiting human
 
-- PR #10392 — naturally next
+- PR #10392 (PRDs D+E) — naturally next
 - #10377 (gated)
 - #10541 (operator awareness)
+
+## Session totals
+
+31 ships:
+- PRD-A (11), PRD-B (8), PRD-C (10), bugs (2)
 
 ## Context
 
