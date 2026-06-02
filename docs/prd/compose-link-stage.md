@@ -126,7 +126,7 @@ For clarity, the following items belong to other PRDs and should NOT slip into P
 - A1 (audit) — read-only; no v1 risk.
 - A2 (validation rules) — when implemented against v2 link stage; v2 path only.
 - A3 (byte-stability tests) — runs against v2 outputs (`CLAUDE.linked.v2.md`) AND continues to verify v1 outputs unchanged (the dual-track regression check above).
-- A4 (`deploy-all --check`) — operates on v1 paths initially (PRD-E's freshness consumer); a v2 sibling `--check --v2` lands as A4.5 per Q-C5 surfaced in [[compose-l4-customization]].
+- A4 (`deploy-all --check`) — operates on v1 paths initially (PRD-E's freshness consumer). A4.5 ships `--check --staged-l4` (staged-content R1-R7 validation for L4 writes), not the originally-planned `--check --v2` v2 drift check. A v2 drift check (in-memory v2 compose diff against on-disk `CLAUDE.linked.v2.md`) is NOT delivered by any landed PRD-A story; if needed it would be a follow-on under PRD-E or a new slice (see #10756 for triage trail).
 - A5 (`## Aliases` parser) — additive new module; no v1 path touched. Existing v1 `Workers:` reading stays in place until the switch.
 - A6 (CLI accepts alias) — adds `--v2` flag to opt into the new alias-keyed entrypoint; v1 `<role>`-keyed path remains the default.
 
