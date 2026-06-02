@@ -8,7 +8,8 @@
 
 ## Completed Steps
 
-- Cycle 1526: PRD-E E5 (#10684) — wire freshness check into harness restart-safety (step 1b). Builds on E1 (already wires check into lifespan = restart path). Added --no-freshness-check CLI flag + env var; lifespan guard fires before check_and_repair; bypass logs once. DS 3 findings (F1 persistence missing for compose_freshness_failed flag — fixed via save_state/load_state round-trip with legacy default; F2 failed branch didn't flush — added save_state call; F3 init comment misnamed lifespan as deferred-init mutator) all fixed pre-commit with regression tests. 14 tests; 228 wider sweep. PR #10760 pending-test.
+- Cycle 1527: PRD-E E4 (#10683) — squidsquad_cli check operator CLI. New `squidsquad check [--full]` subcommand (read-only diagnostic, no spawn / no mutation per AC7). Reuses E1's compute_compose_checksum (AC2). --full delegates to A4's compose deploy-all --check (AC4). Exit 0/1/2; stderr drift report names checksums + enumerates input set; fallback line when enumeration fails. DS 3 findings (F1 --full silently swallowed on drift — refactored to defer drift exit until after dry-run; F2 private API consumed by CLI — promoted _iter_compose_input_files to public iter_compose_input_files; F3 exit-code contract undocumented + stderr only emitted on some branches — documented + always-emit) all fixed pre-commit. 18 tests. PR #10761 pending-test.
+- Cycle 1526: PRD-E E5 (#10684) — wire freshness check into harness restart-safety. Added --no-freshness-check escape hatch; DS F1 persistence fix for compose_freshness_failed flag (save_state/load_state round-trip); F2 failed-branch flush; F3 comment correction. PR #10760 pending-test.
 - Cycle 1525: PRD-E E1 (#10680) — harness boot-time freshness check (Layer 1 primary gate). New compose_freshness.py + lifespan SYNCHRONOUS wiring (DS-10680 F3 TOCTOU fix). compose_freshness_failed flag gates EVERY spawn path. 16 tests. PR #10759 pending-test.
 - Cycle 1524: PRD-C audit (#10753) — fixed ERROR + W1/W2/W3 + DS 3 findings. PR #10758 pending-test.
 - Cycle 1523: PRD-A audit (#10751) — fixed ERROR (bullet-form fallback in parse_aliases_registry — was blocking ALL --v2 deploys on real installs), W1 (A2f fixture column header), W2 (qa/dev shim mirrored into table-form path), W4 (R3 explicit layer guard). W3 deferred to PM as #10756. Filed #10754 (B1-B7 wiring missing story) per pattern memo. Fixed 4 collateral test_compose_a6_v2 failures from D3 (#10747) shipping w/o catalog fixture. PR #10757 pending-test.
@@ -28,7 +29,7 @@
 - Watch QA/DM on PR #10692 (E2), PR #10748 (D7).
 - PRD-E queue next: E1 (#10680 — depends on E2 merged), E4 (#10683 — depends on E1), E5 (#10684 — depends on E1), E6 (#10685 cutover — depends on all).
 - PRD-D queue: D6 (#10677 — executes in E6 window). D2 + D3 shipped; D5/D7 pending-test.
-- Follow-ups: #10670, #10671, #10750 (catalog↔source orphan cleanup), #10754 (PM scope question: missing assemble-pipeline wiring story for PRD-B), #10756 (PM scope question: --check --v2 deferral). #10752 (PRD-B audit) BLOCKED on #10754. E4 (#10683 operator check CLI) — last unblocked PRD-E story before E6 cutover.
+- Follow-ups: #10670, #10671, #10750, #10754 (PM scope question: missing assemble-pipeline wiring story for PRD-B), #10756 (PM scope question: --check --v2 deferral). #10752 (PRD-B audit) BLOCKED on #10754. PRD-E pre-cutover queue DRAINED — E1/E2/E3/E4/E5 all pending-test or shipped. Remaining: E6 (#10685 V2 CUTOVER, gated on all merged + #10754 PM answer), D6 (executes in E6 window), E7 (manual smoke post-E6).
 
 ## Key Decisions (latest only)
 
