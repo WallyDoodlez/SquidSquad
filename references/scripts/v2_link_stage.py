@@ -26,10 +26,15 @@ DEFINITIONS — their bodies are loaded at runtime via
 orchestrator files under ``references/roles/.../instructions.md``.
 Walking such bodies into the instructions slot would defeat the
 thin-orchestration invariant and inflate composed CLAUDE.md by the
-size of every sub-skill body. The filter applies ONLY to the
-instructions slot; sub-skill paths with non-instructions slot
-frontmatter (a test-fixture pattern, not seen in production) continue
-to flow normally so the slot's other-content semantics stay intact.
+size of every sub-skill body. Both ``common/`` (cycle-step
+sub-skills) AND ``common-events/`` (event-mode runtime-loaded
+fragments per the boot Step 3 contract — also Read by the agent at
+runtime, not at compose time) are suppressed by design — the filter
+intentionally covers the whole ``references/sub-skills/`` subtree.
+The filter applies ONLY to the instructions slot; sub-skill paths
+with non-instructions slot frontmatter (a synthetic test pattern, not
+seen in production) continue to flow normally so the slot's
+other-content semantics stay intact.
 
 Pure additive. A2f (#10492) is the caller that wires this into
 ``deploy_alias_v2``. This module does no I/O beyond ``read_text`` on the

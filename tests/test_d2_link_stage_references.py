@@ -17,10 +17,12 @@ These tests pin the new behavior at three levels:
    reference grammar is present.
 3. Size invariant (AC3) — per role-class and across the four mandatory
    role-classes, v2 composed output is at most 30% the byte size of the
-   v1 counterpart. Measurement uses ``l4_path=Path('nonexistent.md')``
-   to isolate D2's effect from project-state L4 file divergence; D2's
-   contract is about emission, not about how operators have authored
-   their L4 files.
+   v1 counterpart. v2 uses ``_NO_L4`` (a guaranteed-nonexistent path)
+   so ``emit_v2_linked`` falls back to ``L4Document.empty()``; v1 is
+   composed into a tmp ``target_root`` that has no ``.squidsquad/``
+   tree of its own, so v1's `{{include:}}` resolution likewise sees no
+   per-install L4. Both sides measure the "no project L4 applied"
+   baseline — the comparison is symmetric.
 """
 
 import sys
@@ -35,6 +37,16 @@ sys.path.insert(0, str(SCRIPTS))
 
 import compose  # noqa: E402
 import v2_link_stage as v2  # noqa: E402
+
+
+# Guaranteed-nonexistent L4 path for tests that intentionally bypass L4
+# customization. Anchored under the live tree's own scripts dir with a
+# component that cannot exist (``__d2_no_l4_sentinel__/...md``), so the
+# path is absolute and cannot be shadowed by an operator dropping a real
+# ``nonexistent.md`` at the repo root. ``emit_v2_linked`` falls back to
+# ``L4Document.empty()`` when ``Path(l4_path).is_file()`` is False, which
+# this path guarantees.
+_NO_L4 = SCRIPTS / "__d2_no_l4_sentinel__" / "nonexistent.md"
 
 
 # ---------------------------------------------------------------------------
@@ -91,11 +103,12 @@ def test_subskill_filter_applies_only_to_instructions_slot(tmp_path):
     """A sub-skill PATH with a non-instructions slot is NOT filtered.
 
     The filter is keyed on (slot=instructions, path-under-sub-skills/).
-    Other slots under the same path prefix still flow normally — this
-    preserves the test-fixture pattern that places identity/soul content
-    under ``references/sub-skills/common/`` for orthogonal tests, and
-    leaves room for future slot semantics under sub-skill paths without
-    silently disappearing content.
+    Other slots under the same path prefix still flow normally — locking
+    this property means a future tightening of the predicate that
+    over-broadens it (e.g. dropping all sub-skill paths regardless of
+    slot) fails loudly here rather than silently. Today the live tree
+    has zero non-instructions-slot files under ``references/sub-skills/``,
+    so this test is a forward guard, not a current-behavior assertion.
     """
     refs = tmp_path / "references"
     _write(
@@ -139,7 +152,7 @@ def test_live_v2_has_no_inlined_sub_skill_markers(role):
     frontmatter; spotting it in v2 output is a deterministic regression
     indicator that the D2 filter has been bypassed.
     """
-    out = v2.emit_v2_linked(role, None, l4_path=Path("nonexistent.md"))
+    out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
     assert "<!-- sub-skill:" not in out
 
 
@@ -151,7 +164,7 @@ def test_live_v2_emits_sub_skill_references(role):
     instructions files; D2's filter only DROPS sub-skill bodies — it must
     NOT also drop the reference text.
     """
-    out = v2.emit_v2_linked(role, None, l4_path=Path("nonexistent.md"))
+    out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
     assert "→ run sub-skill: " in out
 
 
@@ -161,7 +174,7 @@ def test_live_v2_boot_block_not_inlined_when_role_uses_boot_bootstrap():
     for any role that references boot-bootstrap.
     """
     for role in _MANDATORY_ROLES:
-        out = v2.emit_v2_linked(role, None, l4_path=Path("nonexistent.md"))
+        out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
         assert "## Boot — Mode Detection" not in out, (
             f"role={role}: Boot block prose was inlined; D2 filter bypassed."
         )
@@ -181,7 +194,7 @@ def test_v2_size_is_at_most_30pct_of_v1(role):
     path isolates D2's emission contract from project-state L4
     customizations that vary per install.
     """
-    v2_out = v2.emit_v2_linked(role, None, l4_path=Path("nonexistent.md"))
+    v2_out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
     with tempfile.TemporaryDirectory() as td:
         v1_out = compose.deploy_role(role, target_root=Path(td)).read_text(
             encoding="utf-8",
@@ -197,7 +210,7 @@ def test_v2_average_size_at_most_30pct_of_v1():
     """Average across role-classes: v2 / v1 <= 30%. PRD-D §10 criterion 10."""
     ratios = []
     for role in _MANDATORY_ROLES:
-        v2_out = v2.emit_v2_linked(role, None, l4_path=Path("nonexistent.md"))
+        v2_out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
         with tempfile.TemporaryDirectory() as td:
             v1_out = compose.deploy_role(role, target_root=Path(td)).read_text(
                 encoding="utf-8",
