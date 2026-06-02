@@ -8,7 +8,8 @@
 
 ## Completed Steps
 
-- Cycle 1529: QUIET — same state as 1528. Approved-task list empty for skill role; no open PRs; PM scope questions (#10754, #10756) still pending. #10762 (own improvement-scan finding from 1528) needs PM/human triage per [[feedback-improvement-scan-no-autofix]]. No new improvement findings worth filing — recently-touched modules are stable post-DS review.
+- Cycle 1530: PRD-B B9 (#10763 — the wiring story PM scoped in response to #10754) shipped on PR #10764. Five-piece change: new assemble_adapter.py (B7↔B6 bridge with make_b6_cache_adapter); atomic_emit gains filename_suffix param (default .v2.md, explicit branch for v1 canonical names); assemble_and_emit threads it through; compose.deploy_alias_v2 now calls assemble_and_emit after emit_v2_linked+D3 gate and returns CLAUDE.v2.md (assembled artifact); model_router locks assemble→sonnet as compose-time constant before env override. AC9 mandatory DS review came back with 1 warning (stale _V2_LINKED_FILENAME label in deploy success message) fixed pre-commit; NO_FINDINGS on cache contract, return semantics, §9a coexistence, failure isolation, error semantics. 232 wider sweep, no regressions. PR description cross-links #10754 + #10752 (now testable + fixable).
+- Cycle 1529: QUIET — pre-B9 blocked state.
 - Cycle 1528: QUIET — pre-cutover queue drained, PM scope questions in flight. Filed #10762 (low) — compose_freshness COMPOSE_INPUT_GLOBS misses docs/sub-skill-catalog.md.
 - Cycle 1527: PRD-E E4 (#10683) — squidsquad_cli check operator CLI. Read-only diagnostic, reuses E1's compute_compose_checksum, --full delegates to A4 dry-run. DS 3 findings (F1 --full swallowed on drift; F2 private API consumed; F3 exit-code contract) all fixed pre-commit. 18 tests. PR #10761 pending-test.
 - Cycle 1526: PRD-E E5 (#10684) — wire freshness check into harness restart-safety. Added --no-freshness-check escape hatch; DS F1 persistence fix for compose_freshness_failed flag (save_state/load_state round-trip); F2 failed-branch flush; F3 comment correction. PR #10760 pending-test.
@@ -31,7 +32,7 @@
 - Watch QA/DM on PR #10692 (E2), PR #10748 (D7).
 - PRD-E queue next: E1 (#10680 — depends on E2 merged), E4 (#10683 — depends on E1), E5 (#10684 — depends on E1), E6 (#10685 cutover — depends on all).
 - PRD-D queue: D6 (#10677 — executes in E6 window). D2 + D3 shipped; D5/D7 pending-test.
-- Follow-ups: #10670, #10671, #10750, #10754 (PM scope question: missing assemble-pipeline wiring story for PRD-B), #10756 (PM scope question: --check --v2 deferral), #10762 (low improvement-scan: catalog file missing from E1 input globs). #10752 (PRD-B audit) BLOCKED on #10754. Pre-cutover queue DRAINED. Remaining: E6 (#10685 V2 CUTOVER, gated on all merged + #10754 PM answer), D6 (executes in E6 window), E7 (manual smoke post-E6).
+- Follow-ups: #10670, #10671, #10750, #10756 (PM scope question: --check --v2 deferral), #10762 (low improvement-scan). #10754 RESOLVED via PM scoping #10763 (B9), which just shipped. #10752 (PRD-B audit) now UNBLOCKED — re-evaluate after B9 merges; most findings should be auto-resolved or become small fixes now that the pipeline runs. E6 (#10685 V2 CUTOVER) unblocks once B9 + #10752 follow-up both ship.
 
 ## Key Decisions (latest only)
 
