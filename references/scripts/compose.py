@@ -1670,6 +1670,31 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
         )
         sys.exit(1)
 
+    # PRD-D D3 (#10674): catalog gate. Every emitted
+    # ``→ run sub-skill: <name>`` MUST resolve via D1's catalog parser
+    # to a source-path that exists on disk. Drift aborts BEFORE the
+    # write, so the gate emits zero partial artifacts on failure
+    # (consistent with A2f's atomic-write contract).
+    import v2_catalog_gate as _v2_gate
+    catalog_path = target_root / "docs" / "sub-skill-catalog.md"
+    try:
+        gate_result = _v2_gate.validate_v2_compose(
+            body, catalog_path=catalog_path, repo_root=target_root,
+        )
+    except Exception as e:
+        print(
+            f"ERROR: catalog gate setup failed for alias '{alias}': {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if gate_result.has_issues:
+        print(
+            f"ERROR: catalog gate FAILED for alias '{alias}':",
+            file=sys.stderr,
+        )
+        print(gate_result.format(), file=sys.stderr)
+        sys.exit(1)
+
     output_path = target_root / ".squidsquad" / alias / _V2_LINKED_FILENAME
     output_path.parent.mkdir(parents=True, exist_ok=True)
     header = f"# SquidSquad -- {alias} Lead\n\n"
