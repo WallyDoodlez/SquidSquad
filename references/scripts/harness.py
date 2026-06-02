@@ -68,6 +68,10 @@ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
 HEALTH_POLL_INTERVAL = 5  # seconds
+# PRD-E E3 (#10682): cadence of the L4-write file-watcher supervisor.
+# The watchdog Observer runs as its own thread; this interval governs
+# how quickly the supervisor notices a crashed Observer and respawns it.
+L4_WATCHER_SUPERVISE_INTERVAL = 5  # seconds
 # #4792 Phase 1 (Q7): seconds after intent flip to STOPPING/RESTARTING before
 # the harness force-kills the claude PID. The cooperative path (cycle_post
 # exit 42 → /quit → process exits) typically wins in under 5s; this safety
@@ -195,6 +199,13 @@ class HarnessState:
         self._lock = threading.Lock()
         self._poller_running = False
         self._poller_thread = None
+        # PRD-E E3 (#10682) — L4-write file-watch supervisor state.
+        # The watchdog Observer runs as its own thread; the supervisor
+        # loop here checks aliveness and restarts on death per AC5.
+        self._l4_watcher_running = False
+        self._l4_watcher_thread = None
+        self._l4_observer = None
+        self._l4_debouncer = None
 
     def get_agent(self, role: str) -> AgentState | None:
         with self._lock:
@@ -416,6 +427,138 @@ class HarnessState:
             except Exception:
                 pass  # Don't crash poller on transient errors
             time.sleep(HEALTH_POLL_INTERVAL)
+
+    # ----- PRD-E E3 (#10682): L4-write file-watch lifecycle -------------
+
+    def start_l4_watcher(self):
+        """Start the L4-write file-watch supervisor thread.
+
+        The supervisor checks the watchdog Observer's aliveness on every
+        tick and (re-)spawns it via ``l4_file_watcher.start_watcher``
+        whenever the Observer is missing or dead — per AC5's
+        "file-watch crashes -> harness logs + restarts the watcher"
+        rule. ``watchdog`` import failure degrades gracefully: the
+        supervisor logs once and exits; the rest of the harness keeps
+        running so a missing optional dep doesn't take the harness down.
+        """
+        if self._l4_watcher_running:
+            return
+        self._l4_watcher_running = True
+        self._l4_watcher_thread = threading.Thread(
+            target=self._l4_watcher_loop,
+            daemon=True,
+            name="l4-watcher-supervisor",
+        )
+        self._l4_watcher_thread.start()
+
+    def stop_l4_watcher(self):
+        """Signal the supervisor to exit and tear down the Observer.
+
+        The supervisor loop sees the flag flip on its next tick, stops
+        the Observer, joins it (5s timeout), and flushes the debouncer
+        so no pending fire callbacks run after shutdown.
+        """
+        self._l4_watcher_running = False
+        observer = self._l4_observer
+        debouncer = self._l4_debouncer
+        self._l4_observer = None
+        self._l4_debouncer = None
+        if observer is not None:
+            try:
+                observer.stop()
+                observer.join(timeout=5)
+            except Exception as e:
+                _log(f"L4 file-watcher stop raised (ignored): {e}")
+        if debouncer is not None:
+            try:
+                debouncer.flush()
+            except Exception:
+                pass
+
+    def _l4_watcher_loop(self):
+        """Survive-and-restart supervisor for the L4-write file-watcher.
+
+        Tightly mirrors ``_poll_loop``: tick the supervise helper on a
+        fixed cadence and swallow exceptions so a transient fault never
+        kills the supervisor thread itself.
+        """
+        # Lazy import inside the thread body — keeps harness import
+        # cost off the critical boot path and surfaces a clean log
+        # when watchdog is missing instead of crashing at module load.
+        try:
+            import l4_file_watcher as _lfw
+        except Exception as e:
+            _log(
+                f"L4 file-watcher supervisor disabled: cannot import "
+                f"l4_file_watcher ({e!r})"
+            )
+            self._l4_watcher_running = False
+            return
+
+        import config as _cfg  # parse_aliases_registry lives here.
+
+        def starter():
+            return _lfw.start_watcher(
+                repo_root=REPO_ROOT,
+                registry_provider=_cfg.parse_aliases_registry,
+                emit_event=_emit_event,
+            )
+
+        while self._l4_watcher_running:
+            try:
+                self._supervise_l4_once(starter)
+            except Exception as e:
+                _log(f"L4 file-watcher supervisor tick raised (ignored): {e}")
+            time.sleep(L4_WATCHER_SUPERVISE_INTERVAL)
+
+    def _supervise_l4_once(self, starter):
+        """Single supervisor tick — testable without ``watchdog``.
+
+        Behavior:
+        - Observer absent (first tick or after a crash) -> call
+          ``starter()`` to (re-)spawn. The starter returns
+          ``(observer, debouncer)``. On success store the pair; on
+          exception log + leave state unset (next tick retries).
+        - Observer present and ``is_alive()`` is True -> no-op.
+        - Observer present and ``is_alive()`` is False -> AC5 crash
+          path: log, clear stored handles, and call ``starter()`` to
+          respawn on this same tick. A flush on the stale debouncer
+          prevents leftover timers from firing into the new observer.
+
+        Returns the action taken as a string (``"started"`` /
+        ``"running"`` / ``"restarted"`` / ``"start-failed"``) so the
+        regression test can assert the right branch fired without
+        depending on the watchdog Observer's internals.
+        """
+        observer = self._l4_observer
+        action = "running"
+        needs_start = observer is None
+        if observer is not None and not observer.is_alive():
+            _log("L4 file-watcher Observer died — respawning.")
+            if self._l4_debouncer is not None:
+                try:
+                    self._l4_debouncer.flush()
+                except Exception:
+                    pass
+            self._l4_observer = None
+            self._l4_debouncer = None
+            needs_start = True
+            action = "restarted"
+        if needs_start:
+            try:
+                new_observer, new_debouncer = starter()
+            except Exception as e:
+                _log(f"L4 file-watcher start failed: {e!r}")
+                return "start-failed"
+            self._l4_observer = new_observer
+            self._l4_debouncer = new_debouncer
+            if action != "restarted":
+                action = "started"
+                _log(
+                    f"L4 file-watcher started, watching "
+                    f"{REPO_ROOT / '.squidsquad' / 'project'}"
+                )
+        return action
 
     def save_state(self):
         """Persist per-agent PIDs and intents to .harness-state.json (#4966).
@@ -1242,11 +1385,17 @@ async def lifespan(app: FastAPI):
 
     threading.Thread(target=_deferred_init, daemon=True, name="deferred-init").start()
     state.start_poller()
+    # PRD-E E3 (#10682): L4-write file-watch supervisor. Starts after
+    # the health poller so the order matches their wake-cadence
+    # priorities (poller is the canonical liveness signal; the
+    # file-watcher is best-effort and may degrade if watchdog is missing).
+    state.start_l4_watcher()
 
     yield
 
     # Shutdown
     _log("Shutting down...")
+    state.stop_l4_watcher()
     state.stop_poller()
 
     # Clean up port files (primary + clones, retry for Windows file locking)

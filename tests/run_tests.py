@@ -144,6 +144,7 @@ STATIC_TEST_MODULES = [
     "test_catalog_parser_d1",
     "test_catalog_parser_d8",
     "test_manifest_v2_d5",
+    "test_l4_file_watcher_e3",
 ]
 
 
