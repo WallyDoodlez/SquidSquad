@@ -1840,3 +1840,10 @@
 - **Files scanned**: references/scripts/git_ops.py (focused: commit_code, _is_state_file)
 - **Findings**: 1 filed — #9963 (TASK: defensive unstage in commit_code so state files never leak into feature PRs; follow-up to #9946 discovery)
 - **Trigger**: empirical observation during #9946 implementation/merge cycles, not a fresh code read
+
+## Scan — 2026-06-01 20:53
+
+- **Files scanned**: full sweep of all `references/scripts/l4_*.py` + `references/scripts/{conflict_detector,conflict_resolver,atomic_emit,assemble_pass,link_stage_validator,v2_link_stage}.py` for unused imports + bare-except + TODO/FIXME markers
+- **Findings**: 1 filed — #10671 (low — dead `import os` in `l4_audit_gate.py:20` AND `assemble_pass.py`; copy-paste residue from sibling modules that do use `os`)
+- **Items rejected by human**: none yet
+- **Notes**: ZERO bare `except:` clauses repo-wide (clean). ZERO `TODO`/`FIXME`/`XXX` markers in `references/scripts/` (clean — the team handles deferrals via tracker tasks instead). The cycle-script `subprocess.run` calls in `cycle_pre.py` / `cycle_post.py` all use explicit timeouts via `_run` helper (confirmed during #10541 audit cycle 1500). `boot_remote.py:479` has one `subprocess.run` without timeout for `tmux kill-session` on Linux — not a concern since Linux spawn path isn't current production target (Windows-only host). PRD-C work shipped 6 new l4_*.py modules in the last 7 cycles; only 2 of them carry dead imports, suggesting the pattern was caught by reviewers on most modules.
