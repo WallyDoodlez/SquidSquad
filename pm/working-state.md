@@ -1,8 +1,8 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: skill wedged at intent=restarting; operator chose wait-one
-- **Last Processed Event ID**: 63f380e1b90f9973
+- **Status**: PRD-C complete; pipeline empty; PRD-D+E (#10392) is the only remaining work
+- **Last Processed Event ID**: 24c51d20e22b1e00
 - **Quiet cycles**: 0
 
 ## Pipeline
@@ -10,39 +10,45 @@
 - Harness: reachable
 - pending_ship: 0
 - pending_test: 0
-- Open PRs: 1 (#10392 held)
-- Approved queue: 10 (PRD-C untouched)
+- in_progress: 1 (only #9968 PM EPIC umbrella)
+- Open PRs: 1 (PR #10392 PRDs D+E held)
+- Approved queue: 0
 - shipped_since_bump: 6
 - Agents:
-  - PM: 1086100, cycle 2020 ✓
-  - QA: 263116, cycle 528 idle
-  - DM: 2199912, cycle 1748 idle
-  - skill: 1348408 — intent=restarting, context-pressure 79%, harness has not executed the kill
+  - PM: 1086100, cycle 2021 ✓
+  - QA: 263116, cycle 541
+  - DM: 2199912, cycle 1762
+  - skill: 1348408 alive 19+ hours (the restart wedge resolved itself — skill kept cycling productively)
 
-## Skill restart state machine bug
+## Session totals
 
-- 12:54 — current-state flips to 'restarting'
-- 13:21 — last cycle-input.json refresh (skill kept cycling!)
-- 13:24 — context-pressure file last updated at 79
-- 13:36 — PM cycle 2020, PID still 1348408
+**31 items shipped this session.**
 
-Harness should have: detected intent=restarting → killed PID → (under no-auto-reboot) left it dead awaiting operator boot.
-What actually happened: skill continues cycling with restart-pending state. Same family as #10541 paradox (state machine intent doesn't drive action under no-auto-reboot).
+- **PRD-A COMPLETE** (11 stories): A2a, A2b, A2c, A2d, A2e, A2f, A3, A4, A4.5, A6, A2.6
+- **PRD-B COMPLETE** (8 stories): B1-B8
+- **PRD-C COMPLETE** (10 stories): C1-C10
+- **Bugs** (2): #10440 process_utils, #10559 gh pr edit GraphQL fix
 
-## Escalation threshold
+## What's on main now (new arch)
 
-If skill still wedged at intent=restarting at PM cycle 2021: escalate to operator for manual taskkill + boot.
+- v2 compose link stage operational behind --v2 (A family)
+- v2 assemble stage with LLM call, conflict detection, resolver, atomic emit, caching (B family)
+- L4 customization sub-skill `l4-curation` with 3-gate safety model, atomic write, recovery, conflict pre-emption (C family)
+- All v1-coexistent — no runtime change until E6 cutover
 
-## PRD-C queue (10 approved, untouched)
+## What's left
 
-- C1 #10650, C2 #10651, C3 #10652, C4 #10653, C5 #10654
-- C6 #10655, C7 #10656, C8 #10657, C9 #10658, C10 #10659
+- **PR #10392** (PRDs D+E) — held; D = catalog + wake-mode; E = freshness + E6 v2 switch PR
+- **#10377** — still gated on TRD impl
+- **#10541** — operator awareness; skill mostly stable, restart paradox didn't actually wedge
+
+After PR #10392 merges and D + E stories ship, **E6 is the v2 cutover** — the atomic switch PR that flips v1→v2 paths, deletes v1 code, marks the COMPOSE-ARCH PRD family done. Then HARNESS-ARCH / AGENT-RUNTIME / INSTALLER-ARCH / VAULT-ARCH PRD families come up.
 
 ## Held / awaiting human
 
-- PR #10392 (PRDs D+E)
+- PR #10392 — naturally next
 - #10377 (gated)
-- #10541 (operator awareness; this cycle adds new surface)
+- #10541 (operator awareness)
 
 ## Context
 
