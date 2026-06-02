@@ -142,6 +142,7 @@ STATIC_TEST_MODULES = [
     "test_l4_conflict_preempt_c8",
     "test_l4_recompose_recovery_c7",
     "test_catalog_parser_d1",
+    "test_feat_10681_compose_checksum",
 ]
 
 
