@@ -116,8 +116,14 @@ def _check_r2_l2_l3_no_vault_slot(sources):
 
 
 def _check_r3_l1_l3_no_project_context_slot(sources):
+    # #10751 W4: explicit layer guard for self-documenting symmetry
+    # with `_check_r2_l2_l3_no_vault_slot` above. Today the source
+    # collector pre-filters to L1-L3 so the guard is functionally
+    # equivalent, but pinning the layer set inline means R3 stays
+    # correct if the collector ever yields L4 (or any new layer) —
+    # the maintenance hazard the audit called out.
     for src in sources:
-        if src.slot == "project-context":
+        if src.slot == "project-context" and src.layer in ("L1", "L2", "L3"):
             raise LinkStageValidationError(
                 "R3",
                 "L1-L3 source declares `slot: project-context` in its "

@@ -242,3 +242,123 @@ class TestExportedConstants:
     def test_error_is_value_error_subclass(self):
         """Callers that already catch ValueError keep working."""
         assert issubclass(config.AliasesRegistryError, ValueError)
+
+
+# ---------------------------------------------------------------------------
+# #10751 ERROR — legacy bullet-form fallback. Real installs still ship
+# the `- **alias**: value` form. The parser must NOT abort on the bullet
+# form; it should produce a registry equivalent to what an explicit
+# 3-column table would have produced.
+# ---------------------------------------------------------------------------
+
+
+class TestBulletFormFallback:
+
+    def test_canonical_pm_and_dm_bullets(self):
+        body = (
+            "- **pm**: pm\n"
+            "- **dm**: dm\n"
+        )
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {
+            "pm": ("pm", None),
+            "dm": ("dm", None),
+        }
+
+    def test_qa_bullet_maps_to_verifier_via_shim(self):
+        # #10751 W2: `- **qa**: qa` on a real install must produce
+        # role_class=verifier, NOT raise "unknown role-class qa".
+        body = "- **qa**: qa\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {"qa": ("verifier", None)}
+
+    def test_dev_bullet_maps_to_worker_via_shim(self):
+        body = "- **dev**: dev\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {"dev": ("worker", None)}
+
+    def test_skill_bullet_maps_to_worker_skill_variant(self):
+        # `- **skill**: skill` is the legacy convention for a
+        # worker-skill variant: role_class=worker, l3_domain=skill.
+        body = "- **skill**: skill\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {"skill": ("worker", "skill")}
+
+    def test_full_live_repo_install_bullets(self):
+        # Matches the live config.md on this repo exactly.
+        body = (
+            "- **skill**: skill\n"
+            "- **pm**: pm\n"
+            "- **dm**: dm\n"
+            "- **qa**: qa\n"
+        )
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {
+            "skill": ("worker", "skill"),
+            "pm": ("pm", None),
+            "dm": ("dm", None),
+            "qa": ("verifier", None),
+        }
+
+    def test_unrecognized_value_raises_with_diagnostic(self):
+        # Per DS-10751 review: an unrecognized bullet value raises so
+        # a typo cannot slip past the operator. The diagnostic names
+        # the offending alias + value AND the accepted value set so
+        # the fix is obvious from the error alone.
+        body = "- **bogus**: not-a-thing\n"
+        with pytest.raises(
+            config.AliasesRegistryError,
+            match="unrecognized value",
+        ):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
+
+    def test_mixed_recognized_and_typo_raises_not_silently_drops(self):
+        # DS-10751 regression: a typo in ONE bullet must raise even
+        # when other bullets are well-formed. Before the fix this
+        # returned {"pm": ("pm", None)} and silently dropped the
+        # `skill` alias because the typo'd `skil` value was just
+        # `continue`d past.
+        body = (
+            "- **pm**: pm\n"
+            "- **skill**: skil\n"  # typo: should be `skill`
+        )
+        with pytest.raises(
+            config.AliasesRegistryError,
+            match="unrecognized value `skil`",
+        ):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
+
+    def test_duplicate_alias_in_bullet_form_raises(self):
+        body = (
+            "- **pm**: pm\n"
+            "- **pm**: dm\n"
+        )
+        with pytest.raises(
+            config.AliasesRegistryError,
+            match="duplicate alias",
+        ):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
+
+
+class TestTableFormShim:
+    """#10751 W2 — table form must also auto-map `qa`/`dev` so an
+    install that migrates to table form without first manually
+    rewriting role-class cells works the same as the bullet form."""
+
+    def test_qa_role_class_in_table_maps_to_verifier(self):
+        body = (
+            "| alias | role-class | L3 domain |\n"
+            "|---|---|---|\n"
+            "| qa | qa | — |\n"
+        )
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {"qa": ("verifier", None)}
+
+    def test_dev_role_class_in_table_maps_to_worker(self):
+        body = (
+            "| alias | role-class | L3 domain |\n"
+            "|---|---|---|\n"
+            "| dev | dev | skill |\n"
+        )
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {"dev": ("worker", "skill")}

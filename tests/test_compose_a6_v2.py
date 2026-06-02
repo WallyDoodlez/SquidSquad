@@ -13,6 +13,27 @@ sys.path.insert(0, str(SCRIPTS))
 import compose  # noqa: E402
 
 
+def _stage_minimal_catalog(target_root):
+    """PRD-D D3 (#10674) added a catalog gate inside ``deploy_alias_v2``
+    that reads ``<target_root>/docs/sub-skill-catalog.md`` after
+    ``emit_v2_linked`` returns. Tests that mock the emit stage but
+    still drive the full ``deploy_alias_v2`` body must provide a
+    minimal catalog so the gate's parser can succeed. A single
+    ``common/`` row is enough — the emitted body in these tests
+    contains no ``→ run sub-skill:`` references for the gate to look
+    up, so the catalog only needs to be parseable.
+    """
+    catalog = Path(target_root) / "docs" / "sub-skill-catalog.md"
+    catalog.parent.mkdir(parents=True, exist_ok=True)
+    catalog.write_text(
+        "## `common/` — Cross-cutting\n\n"
+        "| Sub-skill | One-liner | Used by |\n"
+        "|---|---|---|\n"
+        "| `boot-bootstrap` | Mode detection | all |\n",
+        encoding="utf-8",
+    )
+
+
 # ---------------------------------------------------------------------------
 # deploy_role: backward compatibility for v1 (output_filename default)
 # ---------------------------------------------------------------------------
@@ -79,6 +100,7 @@ def test_deploy_alias_v2_resolves_via_parser_and_writes_v2_path(tmp_path, monkey
     monkeypatch.setattr(v2_link_stage, "collect_sources_for_validation",
                         lambda role_class, l3_domain, repo_root=None: [])
     monkeypatch.setattr(v2_link_stage, "emit_v2_linked", fake_emit)
+    _stage_minimal_catalog(tmp_path)
 
     out = compose.deploy_alias_v2("pm", target_root=tmp_path)
 
@@ -109,6 +131,7 @@ def test_deploy_alias_v2_uses_role_class_not_alias_for_compose_source(tmp_path, 
     monkeypatch.setattr(v2_link_stage, "collect_sources_for_validation", fake_collect)
     monkeypatch.setattr(v2_link_stage, "emit_v2_linked",
                         lambda role_class, l3_domain, *, repo_root=None, l4_path=None: "x")
+    _stage_minimal_catalog(tmp_path)
 
     out = compose.deploy_alias_v2("frontend-1", target_root=tmp_path)
 
@@ -169,6 +192,7 @@ def test_deploy_alias_v2_passes_registry_through(tmp_path, monkeypatch):
                         lambda role_class, l3_domain, repo_root=None: [])
     monkeypatch.setattr(v2_link_stage, "emit_v2_linked",
                         lambda role_class, l3_domain, *, repo_root=None, l4_path=None: "body")
+    _stage_minimal_catalog(tmp_path)
     compose.deploy_alias_v2("pm", registry={"pm": ("pm", None)}, target_root=tmp_path)
     assert calls["parse"] == 0
 
@@ -189,6 +213,7 @@ def test_deploy_alias_v2_v2_regenerate_cmd_in_output_header(tmp_path, monkeypatc
                         lambda role_class, l3_domain, repo_root=None: [])
     monkeypatch.setattr(v2_link_stage, "emit_v2_linked",
                         lambda role_class, l3_domain, *, repo_root=None, l4_path=None: "body")
+    _stage_minimal_catalog(tmp_path)
 
     out = compose.deploy_alias_v2("frontend-1", target_root=tmp_path)
     header = out.read_text(encoding="utf-8")

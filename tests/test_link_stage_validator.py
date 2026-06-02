@@ -93,6 +93,18 @@ def test_r3_any_l1_l3_source_with_project_context_slot_aborts(layer):
     assert exc.value.rule == "R3"
 
 
+def test_r3_l4_source_with_project_context_slot_does_not_trigger():
+    # #10751 W4 regression: R3 must only fire on L1-L3 sources. If the
+    # source collector ever yields L4 entries (today it pre-filters,
+    # but the asymmetry with R2 was a maintenance hazard), R3's
+    # explicit layer guard must keep L4's project-context content
+    # flowing — that's the slot L4 is supposed to own.
+    sources = [_src("L4", "project/pm.md", "project-context")]
+    # No raise = guard works. R4/R5/R6/R7 don't apply to this minimal
+    # input either, so the validator completes cleanly.
+    v.validate_link_stage(L4Document.empty(), sources)
+
+
 # ---------------------------------------------------------------------------
 # R4: L4 ### append under ## Instructions without sub-skill ref → abort
 # ---------------------------------------------------------------------------
