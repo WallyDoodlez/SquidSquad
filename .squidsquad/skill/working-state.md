@@ -8,7 +8,8 @@
 
 ## Completed Steps
 
-- Cycle 1530: PRD-B B9 (#10763 — the wiring story PM scoped in response to #10754) shipped on PR #10764. Five-piece change: new assemble_adapter.py (B7↔B6 bridge with make_b6_cache_adapter); atomic_emit gains filename_suffix param (default .v2.md, explicit branch for v1 canonical names); assemble_and_emit threads it through; compose.deploy_alias_v2 now calls assemble_and_emit after emit_v2_linked+D3 gate and returns CLAUDE.v2.md (assembled artifact); model_router locks assemble→sonnet as compose-time constant before env override. AC9 mandatory DS review came back with 1 warning (stale _V2_LINKED_FILENAME label in deploy success message) fixed pre-commit; NO_FINDINGS on cache contract, return semantics, §9a coexistence, failure isolation, error semantics. 232 wider sweep, no regressions. PR description cross-links #10754 + #10752 (now testable + fixable).
+- Cycle 1531: PRD-B audit umbrella CLOSED on PR #10765. Post-B9 re-evaluation: 5 of 7 findings (E1/E2/E3/W2/W3) auto-resolved by B9. Remaining W1 (B2 verify_preservation incomplete — missing fenced-block content + file-path checks) addressed by extending PreservationResult with 4 new diff fields + verify_fenced_block_content (multiset of (lang_tag, body) tuples — catches the case where check_code_block_parity passes because counts match but body was swapped) + verify_file_paths (regex requires `/` and 1-6 char extension; bare README / version strings don't false-positive). W4 (LLM context string omitted directives) addressed by extending assemble_pass.py context to name all four SC3 dimensions explicitly + static-grep regression. 16 new tests; 145 wider sweep.
+- Cycle 1530: PRD-B B9 (#10763) shipped on PR #10764. Five-piece wiring change. DS AC9 1 warning fixed pre-commit; NO_FINDINGS on five focus areas.
 - Cycle 1529: QUIET — pre-B9 blocked state.
 - Cycle 1528: QUIET — pre-cutover queue drained, PM scope questions in flight. Filed #10762 (low) — compose_freshness COMPOSE_INPUT_GLOBS misses docs/sub-skill-catalog.md.
 - Cycle 1527: PRD-E E4 (#10683) — squidsquad_cli check operator CLI. Read-only diagnostic, reuses E1's compute_compose_checksum, --full delegates to A4 dry-run. DS 3 findings (F1 --full swallowed on drift; F2 private API consumed; F3 exit-code contract) all fixed pre-commit. 18 tests. PR #10761 pending-test.
@@ -32,7 +33,7 @@
 - Watch QA/DM on PR #10692 (E2), PR #10748 (D7).
 - PRD-E queue next: E1 (#10680 — depends on E2 merged), E4 (#10683 — depends on E1), E5 (#10684 — depends on E1), E6 (#10685 cutover — depends on all).
 - PRD-D queue: D6 (#10677 — executes in E6 window). D2 + D3 shipped; D5/D7 pending-test.
-- Follow-ups: #10670, #10671, #10750, #10756 (PM scope question: --check --v2 deferral), #10762 (low improvement-scan). #10754 RESOLVED via PM scoping #10763 (B9), which just shipped. #10752 (PRD-B audit) now UNBLOCKED — re-evaluate after B9 merges; most findings should be auto-resolved or become small fixes now that the pipeline runs. E6 (#10685 V2 CUTOVER) unblocks once B9 + #10752 follow-up both ship.
+- Follow-ups: #10670, #10671, #10750, #10762 (low improvement-scan). #10754 / #10756 RESOLVED. #10752 PRD-B audit CLOSED (cycle 1531 PR). All DS-audit umbrella issues now drained. E6 (#10685 V2 CUTOVER) unblocks once both pending-test PRs (#10764 B9, #10765 audit close-out) merge.
 
 ## Key Decisions (latest only)
 
