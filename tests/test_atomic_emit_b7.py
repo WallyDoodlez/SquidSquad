@@ -94,7 +94,10 @@ def test_success_writes_all_three_files(tmp_path):
     )
     assert all(p.exists() for p in paths)
     names = {p.name for p in paths}
-    assert names == {"CLAUDE.md", "CLAUDE.linked.md", "CLAUDE.conflicts.md"}
+    # PRD-B B9 (#10763 AC2 + AC3): default filename_suffix=".v2.md"
+    # so the triple lands at the §9a-safe v2 paths. v1 paths are only
+    # written when the caller explicitly passes filename_suffix="".
+    assert names == {"CLAUDE.v2.md", "CLAUDE.linked.v2.md", "CLAUDE.conflicts.v2.md"}
 
 
 def test_success_no_tmp_files_remain(tmp_path):
@@ -110,7 +113,7 @@ def test_success_claude_linked_md_equals_input(tmp_path):
     ae.assemble_and_emit(
         _LINKED_COMPOSITE, tmp_path, role_class="worker", **_stubs(),
     )
-    on_disk = (tmp_path / "CLAUDE.linked.md").read_text(encoding="utf-8")
+    on_disk = (tmp_path / "CLAUDE.linked.v2.md").read_text(encoding="utf-8")
     assert on_disk == _LINKED_COMPOSITE
 
 
@@ -118,7 +121,7 @@ def test_success_claude_md_contains_six_h2_sections_in_order(tmp_path):
     ae.assemble_and_emit(
         _LINKED_COMPOSITE, tmp_path, role_class="worker", **_stubs(),
     )
-    claude = (tmp_path / "CLAUDE.md").read_text(encoding="utf-8")
+    claude = (tmp_path / "CLAUDE.v2.md").read_text(encoding="utf-8")
     h2 = [ln for ln in claude.splitlines() if ln.startswith("## ")]
     assert h2 == [
         "## Identity",
@@ -282,7 +285,7 @@ def test_conflict_report_write_failure_raises_specific_subclass(tmp_path, monkey
     real_write = Path.write_text
 
     def selective_fail(self, content, *args, **kwargs):
-        if self.name == "CLAUDE.conflicts.md.tmp":
+        if self.name == "CLAUDE.conflicts.v2.md.tmp":
             raise OSError(f"simulated failure on {self.name}")
         return real_write(self, content, *args, **kwargs)
 
@@ -317,9 +320,60 @@ def test_zero_conflicts_still_emits_report_file(tmp_path):
     ae.assemble_and_emit(
         _LINKED_COMPOSITE, tmp_path, role_class="worker", **stubs,
     )
-    on_disk = (tmp_path / "CLAUDE.conflicts.md").read_text(encoding="utf-8")
+    on_disk = (tmp_path / "CLAUDE.conflicts.v2.md").read_text(encoding="utf-8")
     assert "Total conflicts resolved: 0" in on_disk
     assert on_disk == report_capture["text"]
+
+
+# ---------------------------------------------------------------------------
+# PRD-B B9 (#10763 AC3) — filename_suffix parameter
+# ---------------------------------------------------------------------------
+
+
+def test_filename_suffix_default_is_v2(tmp_path):
+    """Default filename_suffix is ``.v2.md`` so the triple lands at
+    the §9a-safe v2 paths."""
+    paths = ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker", **_stubs(),
+    )
+    names = sorted(p.name for p in paths)
+    assert names == [
+        "CLAUDE.conflicts.v2.md",
+        "CLAUDE.linked.v2.md",
+        "CLAUDE.v2.md",
+    ]
+
+
+def test_filename_suffix_empty_writes_v1_canonical_paths(tmp_path):
+    """``filename_suffix=""`` is the seam the E6 V2 CUTOVER PR uses to
+    atomically flip the default onto v1 canonical names. The same
+    helper writes either path family with no other change."""
+    paths = ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker",
+        filename_suffix="",
+        **_stubs(),
+    )
+    names = sorted(p.name for p in paths)
+    assert names == [
+        "CLAUDE.conflicts.md",
+        "CLAUDE.linked.md",
+        "CLAUDE.md",
+    ]
+    # And the v2 outputs are NOT written when v1 is selected.
+    assert not (tmp_path / "CLAUDE.v2.md").exists()
+    assert not (tmp_path / "CLAUDE.linked.v2.md").exists()
+    assert not (tmp_path / "CLAUDE.conflicts.v2.md").exists()
+
+
+def test_filename_suffix_v2_does_not_write_v1_paths(tmp_path):
+    """§9a coexistence check (AC2): v2 path must NEVER write v1
+    canonical filenames. Operator's v1 CLAUDE.md is untouched."""
+    ae.assemble_and_emit(
+        _LINKED_COMPOSITE, tmp_path, role_class="worker", **_stubs(),
+    )
+    assert not (tmp_path / "CLAUDE.md").exists()
+    assert not (tmp_path / "CLAUDE.linked.md").exists()
+    assert not (tmp_path / "CLAUDE.conflicts.md").exists()
 
 
 # ---------------------------------------------------------------------------

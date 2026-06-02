@@ -125,6 +125,16 @@ def get_model_for_task(task_type):
     if task_type in CLAUDE_LOCKED_TASKS:
         return "claude"
 
+    # PRD-B B9 / #10763 AC5: assemble model is a compose-time constant
+    # locked to ``sonnet`` per PRD-B SC10 ("Model: ``sonnet`` (compose-
+    # time constant; not config)"). This branch runs BEFORE the env
+    # override and the config-routing fall-through so the operator
+    # cannot accidentally substitute a cheaper model and break the
+    # cache key contract (which folds the model_id into its SHA256 —
+    # changing models silently invalidates every prior cache entry).
+    if task_type == "assemble":
+        return "sonnet"
+
     # Allow override for testing (live integration tests force gpt-5.2)
     override = os.environ.get("SQUIDSQUAD_MODEL_OVERRIDE")
     if override:
