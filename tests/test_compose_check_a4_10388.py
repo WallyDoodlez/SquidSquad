@@ -153,11 +153,10 @@ def test_cli_deploy_check_does_not_write(tmp_path, monkeypatch):
     assert not (role_dir / "CLAUDE.md").exists()
 
 
-def test_cli_deploy_check_v2_combination_emits_error():
-    """--check + --v2 is reserved for A4.5 (#10395) — this PR rejects it with exit 2."""
-    result = _run_compose("deploy-all", "--check", "--v2")
-    assert result.returncode == compose.CHECK_EXIT_ERROR
-    assert "A4.5" in result.stderr or "#10395" in result.stderr
+# PRD-E E6 (#10685) V2 CUTOVER: the legacy ``--check + --v2`` reserved-
+# error case is retired. Post-cutover ``--v2`` is silently stripped from
+# argv (backward compat), so ``--check + --v2`` simplifies to ``--check``
+# — the existing per-alias drift loop. No new error contract needed.
 
 
 def test_cli_check_on_unrecognized_command_emits_warning():

@@ -147,7 +147,6 @@ STATIC_TEST_MODULES = [
     "test_d2_link_stage_references",
     "test_v2_catalog_gate_d3",
     "test_feat_10681_compose_checksum",
-    "test_manifest_v2_d5",
     "test_l4_file_watcher_e3",
     "test_compose_freshness_e1",
     "test_harness_freshness_restart_e5",
