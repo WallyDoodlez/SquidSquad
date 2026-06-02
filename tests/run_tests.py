@@ -151,6 +151,7 @@ STATIC_TEST_MODULES = [
     "test_l4_file_watcher_e3",
     "test_compose_freshness_e1",
     "test_harness_freshness_restart_e5",
+    "test_squidsquad_cli_check_e4",
 ]
 
 
