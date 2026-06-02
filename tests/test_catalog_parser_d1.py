@@ -98,6 +98,52 @@ class TestCleanParse:
                 "references/sub-skills/roles/dev/implement-tasks.md",
         }
 
+    def test_slash_bearing_name_overrides_h2_directory(self, tmp_path):
+        """B1 fix: names containing slashes encode the relative source-path
+        directly (catalog convention used at lines 177 + 225 of the
+        live catalog for cross-directory sub-skills like
+        `roles/dm/events/pr-merge-wait`). The slash-bearing name IS
+        the lookup key, and source-path = `references/sub-skills/{name}.md`.
+        """
+        catalog = _write_catalog(tmp_path, """
+        ## `common-events/` — Event-shaped fragments
+
+        ### Role-specific event extras
+
+        | Sub-skill | One-liner | Used by |
+        |---|---|---|
+        | `roles/dm/events/pr-merge-wait` | DM's behavior while a PR is merging | DM (event mode) |
+        """)
+        out = cp.parse_catalog(catalog)
+        assert out == {
+            "roles/dm/events/pr-merge-wait":
+                "references/sub-skills/roles/dm/events/pr-merge-wait.md",
+        }
+
+    def test_slash_bearing_name_under_role_h3(self, tmp_path):
+        """Live-catalog row at line 225 — `skill/finding-categories`
+        under `### QA (\`roles/qa/\`)` — uses the slash-name override
+        even when the H3 has its own role directory.
+        """
+        catalog = _write_catalog(tmp_path, """
+        ## `roles/<role>/` — Role-specific sub-skills
+
+        ### QA (`roles/qa/`)
+
+        | Sub-skill | One-liner |
+        |---|---|
+        | `verification` | E2E tests | QA |
+        | `skill/finding-categories` | Skill-domain finding taxonomy | QA |
+        """)
+        out = cp.parse_catalog(catalog)
+        assert out == {
+            "verification": "references/sub-skills/roles/qa/verification.md",
+            # Slash-name overrides the H3 directory — it's an absolute
+            # path under references/sub-skills/
+            "skill/finding-categories":
+                "references/sub-skills/skill/finding-categories.md",
+        }
+
     def test_project_section_is_excluded(self, tmp_path):
         """L4 seed templates under `project/` are NOT sub-skills resolved
         by compose — they're install scaffolding. Parser excludes them.
@@ -184,6 +230,34 @@ class TestDuplicateAbort:
             cp.parse_catalog(catalog)
         assert "duplicate" in str(e.value).lower()
         assert "discussion" in str(e.value)
+
+    def test_duplicate_diagnostic_includes_both_source_paths(self, tmp_path):
+        """C3 fix: the duplicate diagnostic surfaces BOTH source-paths
+        so PM can disambiguate without manually re-reading the catalog.
+        """
+        catalog = _write_catalog(tmp_path, """
+        ## `common/` — Cross-cutting
+
+        | Sub-skill | One-liner | Used by |
+        |---|---|---|
+        | `improvement-scan` | The common variant | all |
+
+        ## `roles/<role>/` — Role-specific
+
+        ### PM (`roles/pm/`)
+
+        | Sub-skill | One-liner | Used by |
+        |---|---|---|
+        | `improvement-scan` | The PM variant | PM |
+        """)
+        with pytest.raises(cp.CatalogParseError) as e:
+            cp.parse_catalog(catalog)
+        msg = str(e.value)
+        # Both source-paths named in the diagnostic
+        assert "common/improvement-scan.md" in msg
+        assert "roles/pm/improvement-scan.md" in msg
+        # PM-facing guidance present
+        assert "disambiguate" in msg.lower() or "rename" in msg.lower()
 
     def test_duplicate_across_sections_aborts(self, tmp_path):
         catalog = _write_catalog(tmp_path, """
@@ -306,6 +380,61 @@ class TestIgnoredRows:
             "discussion": "references/sub-skills/common/discussion.md",
         }
 
+    def test_non_backtick_meta_rows_are_skipped(self, tmp_path):
+        """Rows whose first cell has NO backticks (like the catalog's
+        `| Domain context | Per-stack QA notes ... |` meta-row at
+        line 223) are silently skipped — they describe how the section
+        works, they're not catalog entries.
+        """
+        catalog = _write_catalog(tmp_path, """
+        ## `common/` — Cross-cutting
+
+        | Sub-skill | One-liner | Used by |
+        |---|---|---|
+        | `discussion` | Active row | all |
+        | Domain context | Per-stack notes | all |
+        """)
+        out = cp.parse_catalog(catalog)
+        assert out == {
+            "discussion": "references/sub-skills/common/discussion.md",
+        }
+
+
+class TestBacktickWrappedNonMatchingRaises:
+    """C1 fix: when first cell has a backtick-wrapped name that does NOT
+    match the strict name regex, silent-skip would mask either a PM typo
+    OR a real catalog entry. The parser RAISES so the defect surfaces
+    at parser-build time rather than at v2 compose time.
+    """
+
+    def test_capital_letter_in_name_raises(self, tmp_path):
+        catalog = _write_catalog(tmp_path, """
+        ## `common/` — Cross-cutting
+
+        | Sub-skill | One-liner | Used by |
+        |---|---|---|
+        | `Boot-bootstrap` | Capital B is wrong | all |
+        """)
+        with pytest.raises(cp.CatalogParseError) as e:
+            cp.parse_catalog(catalog)
+        assert "strict-name regex" in str(e.value).lower() \
+            or "lowercase" in str(e.value).lower()
+
+    def test_html_strikethrough_raises(self, tmp_path):
+        """If a PM uses HTML strikethrough instead of Markdown `~~`,
+        the parser RAISES rather than silently skipping. The right
+        retirement convention is `~~`name`~~`.
+        """
+        catalog = _write_catalog(tmp_path, """
+        ## `common/` — Cross-cutting
+
+        | Sub-skill | One-liner | Used by |
+        |---|---|---|
+        | <s>`old-name`</s> | HTML strike instead of Markdown | _retired_ |
+        """)
+        with pytest.raises(cp.CatalogParseError):
+            cp.parse_catalog(catalog)
+
 
 # ---------------------------------------------------------------------------
 # Live catalog integration check
@@ -318,29 +447,54 @@ class TestLiveCatalogIntegration:
     The real `docs/sub-skill-catalog.md` currently has a known defect —
     `improvement-scan` is listed under BOTH `common/` and `roles/pm/`
     sections, which the parser correctly catches per AC3. PM must
-    disambiguate (filed separately). Until that's fixed, these tests
-    pin the parser's diagnostic shape against the live file so a
-    regression in parser behavior would surface, while not blocking
-    D1 on PM's catalog-content fix.
+    disambiguate (filed as #10687). Until that's fixed, the
+    parser-catches-duplicate test is marked `xfail(strict=True)` so it
+    flips to XPASS (loud test failure) the moment PM disambiguates —
+    forcing whoever fixes #10687 to also update this test rather than
+    silently leaving stale expected-fail behavior.
     """
 
-    def test_real_catalog_surfaces_duplicate_diagnostic_with_line_numbers(self):
-        """The parser correctly detects the catalog's duplicate-name
-        defect with a precise diagnostic (line numbers + name). When
-        PM disambiguates the catalog, this test will start failing —
-        flip it to assert clean parse at that point.
+    @pytest.mark.xfail(
+        reason="Pinned to the #10687 catalog defect (duplicate "
+        "`improvement-scan`). Will XPASS (and fail the suite) once PM "
+        "disambiguates — at which point this test should be deleted and "
+        "the clean-parse path enabled below.",
+        strict=True,
+    )
+    def test_real_catalog_parses_cleanly(self):
+        """When PM disambiguates #10687, this test should pass cleanly.
+        Today the parser raises on the catalog's duplicate name (which
+        is correct behavior), so the test is xfail strict.
         """
         catalog = REPO_ROOT / "docs" / "sub-skill-catalog.md"
         if not catalog.is_file():
             pytest.skip("docs/sub-skill-catalog.md not present")
-        with pytest.raises(cp.CatalogParseError) as e:
-            cp.parse_catalog(catalog)
-        msg = str(e.value)
-        assert "duplicate" in msg.lower()
-        # Diagnostic includes both line numbers so PM can disambiguate
-        assert "line" in msg.lower()
+        out = cp.parse_catalog(catalog)
+        assert len(out) >= 10
 
-    def test_real_catalog_partial_entries_have_valid_path_shape(self):
+    def test_real_catalog_diagnostic_for_known_defect(self):
+        """Today's behavior: parser raises CatalogParseError naming
+        both conflicting source-paths. Survives PM's fix because the
+        moment the catalog is clean, this test's `xfail` doesn't apply
+        — the assertion-side flips out of scope. Keep this test as a
+        defect-pinning audit trail until #10687 ships."""
+        catalog = REPO_ROOT / "docs" / "sub-skill-catalog.md"
+        if not catalog.is_file():
+            pytest.skip("docs/sub-skill-catalog.md not present")
+        try:
+            cp.parse_catalog(catalog)
+            # Clean parse — #10687 was fixed; this defect-pinning test
+            # is obsolete. The xfail-strict test above will XPASS and
+            # tell the human to delete BOTH tests.
+            return
+        except cp.CatalogParseError as e:
+            msg = str(e)
+            assert "duplicate" in msg.lower()
+            # Both source-paths surfaced per C3
+            assert "common/improvement-scan.md" in msg
+            assert "roles/pm/improvement-scan.md" in msg
+
+    def test_real_catalog_partial_entries_have_valid_path_shape(self, tmp_path):
         """Up to the point the parser hits the duplicate, every emitted
         path satisfies AC4 (rooted, no traversal, .md suffix). This
         exercises the live catalog's first 100+ lines.
@@ -348,22 +502,19 @@ class TestLiveCatalogIntegration:
         catalog = REPO_ROOT / "docs" / "sub-skill-catalog.md"
         if not catalog.is_file():
             pytest.skip("docs/sub-skill-catalog.md not present")
-        # Read up to (but not past) the duplicate row to exercise the
-        # path-shape validator against the real catalog format.
         text = catalog.read_text(encoding="utf-8").splitlines()
         # Cut at the section containing the duplicate (line ~140)
         partial_text = "\n".join(text[:138])
-        partial_catalog = catalog.parent / ".partial-catalog-for-test.md"
+        # N3 fix: write under tmp_path, not docs/, so an interrupted
+        # test doesn't leave a dotfile in the docs tree.
+        partial_catalog = tmp_path / "partial-catalog.md"
         partial_catalog.write_text(partial_text, encoding="utf-8")
-        try:
-            out = cp.parse_catalog(partial_catalog)
-            assert len(out) >= 10  # non-trivial number of entries
-            for name, path in out.items():
-                assert path.startswith("references/sub-skills/"), name
-                assert ".." not in Path(path).parts, name
-                assert path.endswith(".md"), name
-        finally:
-            partial_catalog.unlink(missing_ok=True)
+        out = cp.parse_catalog(partial_catalog)
+        assert len(out) >= 10  # non-trivial number of entries
+        for name, path in out.items():
+            assert path.startswith("references/sub-skills/"), name
+            assert ".." not in Path(path).parts, name
+            assert path.endswith(".md"), name
 
 
 # ---------------------------------------------------------------------------
