@@ -1,0 +1,40 @@
+# Worker agent sub-skill manifest — v2 (mode-agnostic, PRD-D Story D5 #10676)
+# Union of includes.yml + includes-events.yml. No mode-conditional sections;
+# wake-mode selection is a runtime concern handled by `common/boot-bootstrap`
+# at session start, not a compose-time concern. Per TRD §6.5.
+#
+# v2 compose reads this file via `_load_manifest_v2(role_class)` (no
+# wake_mode arg). v1 compose continues reading `includes.yml` /
+# `includes-events.yml` unchanged. Deletion of the v1 pair + rename of this
+# file to `includes.yml` happens atomically in the E6 switch PR (#10685).
+#
+# Mode-specific fragments (`roles/worker/ralph-loop-overview`, the six
+# `common-events/*` fragments) are Read at runtime by `common/boot-bootstrap`,
+# NOT inlined at compose time. The composed CLAUDE.md is identical regardless
+# of which wake mode the agent eventually probes into at boot.
+#
+# Order matters — includes are resolved top-to-bottom.
+includes:
+  - common/boot-bootstrap
+  - common/cycle-runner
+  - common/context-pressure
+  - common/resume-working-state
+  - common/interval-sync
+  - roles/worker/triage-issues
+  - roles/worker/implement-tasks
+  - common/pickup-comment-fidelity
+  - common/improvement-scan
+  - common/vault-remember
+  - common/vault-optimize
+  - common/git-commit
+  - common/discussion-protocol
+  - common/issue-filing
+  - common/working-state
+  - common/vault-protocol
+  - common/file-conventions
+  - common/status-line
+  - common/self-restart
+  - common/agent-lifecycle
+  - common/prohibitions
+  - common/agent-boundaries
+  - roles/worker/responsibility
