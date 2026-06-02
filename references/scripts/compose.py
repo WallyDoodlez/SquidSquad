@@ -2100,6 +2100,74 @@ def main():
         lines = soul_path.read_text(encoding="utf-8").count("\n")
         print(f"Upgraded {role_name} SOUL.md ({lines} lines) -> {soul_path.relative_to(REPO_ROOT)}")
 
+    elif cmd == "drift-check":
+        # PRD-D D4 (#10675). Two-way orphan scan: catalog row <-> source
+        # file. Dead-code candidates (catalog row not referenced in any
+        # role manifest) warn but do not abort. Exit 0 = clean (no
+        # drift; dead-code may have been warned), 1 = drift detected,
+        # 2 = catalog parse / setup error.
+        catalog_arg = None
+        repo_root_arg = None
+        sub_args = args[1:]
+        i = 0
+        while i < len(sub_args):
+            tok = sub_args[i]
+            if tok == "--catalog" and i + 1 < len(sub_args):
+                catalog_arg = sub_args[i + 1]
+                i += 2
+                continue
+            if tok == "--repo-root" and i + 1 < len(sub_args):
+                repo_root_arg = sub_args[i + 1]
+                i += 2
+                continue
+            print(
+                f"ERROR: unrecognized drift-check argument: {tok}",
+                file=sys.stderr,
+            )
+            print(
+                "Usage: compose.py drift-check "
+                "[--catalog <path>] [--repo-root <path>]",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        target_repo = Path(repo_root_arg) if repo_root_arg else REPO_ROOT
+        target_catalog = (
+            Path(catalog_arg) if catalog_arg
+            else target_repo / "docs" / "sub-skill-catalog.md"
+        )
+        # Lazy import — keep v1 deploy paths free of D4 module load
+        # cost until the explicit subcommand is invoked.
+        import catalog_drift as _cd
+        from catalog_parser import CatalogParseError as _CPE
+        try:
+            report = _cd.scan_drift(target_catalog, target_repo)
+        except _CPE as e:
+            print(
+                f"ERROR: catalog parse failed: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        except Exception as e:
+            print(
+                f"ERROR: drift-check setup failed: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        if report.has_drift:
+            print(report.format(), file=sys.stderr)
+            sys.exit(1)
+        if report.has_dead_code:
+            # Warn but exit 0 per Q-D3.
+            print(
+                "WARNING: dead-code candidates (catalog rows with no "
+                "call-site in any role manifest):",
+                file=sys.stderr,
+            )
+            print(report.format(), file=sys.stderr)
+            sys.exit(0)
+        print("Catalog drift check: clean")
+        sys.exit(0)
+
     else:
         # Treat as role entry file name
         content = compose_role(cmd)
