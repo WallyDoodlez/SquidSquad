@@ -8,15 +8,16 @@
 
 ## Completed Steps
 
-- Cycle 1517: PRD-E/E3 (#10682) rework — QA route-back addressed. Wired start_watcher() into HarnessState lifecycle: _l4_observer/_l4_debouncer slots, start_l4_watcher()/stop_l4_watcher(), supervisor thread + testable _supervise_l4_once() helper. Lifespan starts after poller, stops before. l4_file_watcher + config lazy-imported in supervisor thread so missing watchdog degrades. 6 new supervisor tests (incl. lifespan static-grep gate). 28 tests total on module. Re-transitioned to pending-test on PR #10746.
-- Cycle 1516: PRD-E/E3 (#10682) — L4-write file-watch + restart-required event (Layer 2). PR #10746 initial pass — module + 22 tests. ROUTED BACK by QA for missing harness wiring (AC5 second half). Re-shipped same cycle as 1517.
+- Cycle 1518: Merge-conflict resolution on D2 (#10673) + E2 (#10681). Both routed back by DM as CONFLICTING/DIRTY. Merged origin/main into both feature branches; conflicts in tests/run_tests.py (union resolution of test entries) plus .squidsquad/skill/test-output-10673.log (kept branch version). 76 tests on D2 + 44 on E2 post-merge. Both re-transitioned to pending-test. Unblocks D3, D7, E1, E4, E5 once these land.
+- Cycle 1517: PRD-E/E3 (#10682) rework — QA route-back addressed. Wired start_watcher() into HarnessState lifecycle. PR #10746 MERGED.
+- Cycle 1516: PRD-E/E3 (#10682) — L4-write file-watch + restart-required event (Layer 2). Initial pass routed back; re-shipped cycle 1517.
 - Cycle 1515: PRD-D/D5 (#10676) — unified mode-agnostic v2 manifest. PR #10745 SHIPPED. 4 includes-v2.yml files + `_load_manifest_v2(role_name)` (no wake_mode). 36 tests. §9a byte-stability gate green.
 - Cycle 1514: PRD-D/D4 (#10675) — catalog drift check (two-way orphan scan + dead-code warn). PR #10744 MERGED. 18 tests. Live catalog scan blocked by pre-existing duplicate `improvement-scan` row (filed #10743).
 - Cycle 1513: PRD-E/E2 (#10681) — `last_compose_checksum` field plumbing. PR #10692 pending-test.
 
 ## Remaining Steps
 
-- Watch QA on PR #10691 (D2), PR #10692 (E2), PR #10746 (E3).
+- Watch QA/DM on PR #10691 (D2), PR #10692 (E2). Both re-routed pending-test after cycle 1518 merge.
 - PRD-E queue next: E1 (#10680 — depends on E2 merged), E4 (#10683 — depends on E1), E5 (#10684 — depends on E1), E6 (#10685 cutover — depends on all).
 - PRD-D queue: D3 (#10674 catalog gate — depends on D2 merged), D6 (#10677 — executes in E6 window), D7 (#10678 — depends on D2/D3 stable).
 - Follow-ups: #10670, #10671, #10743 (catalog duplicate).
