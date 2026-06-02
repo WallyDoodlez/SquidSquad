@@ -213,6 +213,12 @@ class HarnessState:
         self._l4_watcher_thread = None
         self._l4_observer = None
         self._l4_debouncer = None
+        # PRD-E E1 (#10680) — boot-time freshness gate. Set to True by
+        # ``_deferred_init`` when ``compose_freshness.check_and_repair``
+        # returns ``status="failed"``. The auto-start loop short-
+        # circuits when this is True; per AC4 the harness refuses to
+        # spawn agents until the operator fixes the source + restarts.
+        self.compose_freshness_failed = False
 
     def get_agent(self, role: str) -> AgentState | None:
         with self._lock:
@@ -418,6 +424,19 @@ class HarnessState:
 
         # Reboot outside the lock to avoid blocking health updates
         for role in reboot_roles:
+            # PRD-E E1 (#10680) / DS-10680 F4: respect the freshness
+            # gate. If the E1 check failed at boot, every spawn path
+            # (auto-start, HTTP endpoints, AND this auto-reboot loop)
+            # must refuse. The operator has to fix the source + restart
+            # the harness — re-spawning an agent against a broken
+            # compose set is exactly the "degraded boot" AC4 forbids.
+            if self.compose_freshness_failed:
+                _log(
+                    f"[compose-freshness-failed] {role} died but not "
+                    f"respawning — E1 gate is red, operator must fix "
+                    f"source + restart harness"
+                )
+                continue
             _log(f"Auto-rebooting {role} (was running, intent={self.agents[role].intent})")
             try:
                 result = boot_remote.boot_agent(role)
@@ -1352,12 +1371,22 @@ async def lifespan(app: FastAPI):
         except (SystemExit, Exception) as e:
             _log(f"WARNING: Could not distribute port to clones: {e}")
 
-        _log("Loading saved state...")
-        state.load_state()
         event_lifecycle.load()
         event_lifecycle.start_timeout_scanner()
         activity_detector.start()
         _log(f"Event state loaded: {len(event_stream)} events in stream")
+
+        # E1 check + state.load_state() ran SYNCHRONOUSLY in lifespan
+        # before yield (per DS-10680 review F3 — the TOCTOU race fix).
+        # Spawn paths beyond auto-start (HTTP /agents/*/start, the
+        # health poller's auto-reboot) read ``state.compose_freshness_failed``
+        # directly so they enforce the same refusal.
+        if state.compose_freshness_failed:
+            _log(
+                "Auto-start skipped — compose freshness check failed. "
+                "Operator: fix the source issue + restart the harness."
+            )
+            return
 
         # Skip initial update_health() — it's slow on Windows (tasklist per agent).
         # The health poller will pick up state within HEALTH_POLL_INTERVAL seconds.
@@ -1413,6 +1442,53 @@ async def lifespan(app: FastAPI):
             )
     except (SystemExit, Exception) as e:
         _log(f"WARNING: legacy-sentinel cleanup failed: {e}")
+
+    # PRD-E E1 (#10680): boot-time freshness check (Layer 1 — primary
+    # gate). Runs SYNCHRONOUSLY in lifespan BEFORE yield so the server
+    # never accepts spawn requests while the gate is still deciding
+    # (per DS-10680 review F3). On failure, ``state.compose_freshness_failed``
+    # blocks every spawn path: ``_deferred_init`` auto-start short-
+    # circuits, HTTP ``/agents/{role}/start`` returns 503, and the
+    # health poller's auto-reboot loop also gates on the flag.
+    _log("Loading saved state...")
+    state.load_state()
+    try:
+        import compose_freshness as _cf
+        _freshness = _cf.check_and_repair(
+            repo_root=REPO_ROOT,
+            stored_checksum=state.get_last_compose_checksum(),
+        )
+    except Exception as e:  # noqa: BLE001 — defensive against import bugs
+        _log(
+            f"WARNING: compose_freshness check raised {e!r}; proceeding "
+            f"without the E1 gate (degraded boot)"
+        )
+        _freshness = None
+    if _freshness is not None:
+        if _freshness.status == "failed":
+            state.compose_freshness_failed = True
+            _log(
+                "ERROR: compose freshness check FAILED — harness will NOT "
+                "spawn agents. Operator: fix the source issue + restart "
+                "the harness."
+            )
+            _log(f"  diagnostic: {_freshness.diagnostic}")
+            if _freshness.compose_stderr:
+                _log(
+                    f"  compose stderr (truncated): {_freshness.compose_stderr}"
+                )
+        elif _freshness.status == "repaired":
+            state.set_last_compose_checksum(_freshness.new_checksum)
+            state.save_state()
+            _log(
+                f"compose freshness: {_freshness.diagnostic} — checksum "
+                f"now {_freshness.new_checksum[:12]}..."
+            )
+        else:  # clean
+            _log(
+                f"compose freshness: clean (checksum "
+                f"{_freshness.new_checksum[:12]}...)"
+            )
 
     threading.Thread(target=_deferred_init, daemon=True, name="deferred-init").start()
     state.start_poller()
@@ -1539,6 +1615,18 @@ async def list_agents():
 @app.post("/agents/all/start")
 async def start_all():
     """Spawn all configured agents."""
+    # PRD-E E1 (#10680) / DS-10680 F1: the E1 spawn-refusal contract
+    # applies to every spawn path, not just _deferred_init's auto-
+    # start. Reject HTTP-driven spawns while the freshness gate is
+    # red so the operator can't bypass the gate with a manual POST.
+    if state.compose_freshness_failed:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Compose freshness check failed — agents cannot be "
+                "spawned. Fix the source issue and restart the harness."
+            ),
+        )
     roles = boot_remote._get_all_roles()
     _log(f"Starting all agents: {', '.join(roles)}")
 
@@ -1625,6 +1713,17 @@ async def get_agent(role: str):
 async def start_agent(role: str):
     """Spawn an agent in a visible terminal."""
     _validate_role(role)
+
+    # PRD-E E1 (#10680) / DS-10680 F1: per-role spawn endpoint must
+    # honor the E1 gate too. Same 503 + message as /agents/all/start.
+    if state.compose_freshness_failed:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Compose freshness check failed — agents cannot be "
+                "spawned. Fix the source issue and restart the harness."
+            ),
+        )
 
     # Check if already running
     agent = state.get_agent(role)
