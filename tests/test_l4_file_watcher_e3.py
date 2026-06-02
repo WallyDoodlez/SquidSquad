@@ -415,3 +415,159 @@ class TestChangeCallback:
         assert e["payload"]["target_alias"] == "pm"
         assert e["payload"]["event_context"] == "compose-failed"
         assert "config.md missing" in e["payload"]["stderr"]
+
+
+# ---------------------------------------------------------------------------
+# Harness supervisor — survive-and-restart loop (AC5, QA route-back on
+# PR #10746). The supervise tick is factored into
+# ``HarnessState._supervise_l4_once`` so the regression test can drive
+# it without spinning up FastAPI or watchdog.
+# ---------------------------------------------------------------------------
+
+
+class _FakeObserver:
+    """Minimal watchdog.Observer stand-in: ``is_alive`` + ``stop`` +
+    ``join``. Used by the supervisor regression test so it doesn't
+    depend on watchdog being installed."""
+
+    def __init__(self, *, alive=True):
+        self._alive = alive
+        self.stopped = False
+        self.joined = False
+
+    def is_alive(self):
+        return self._alive
+
+    def stop(self):
+        self.stopped = True
+        self._alive = False
+
+    def join(self, timeout=None):
+        self.joined = True
+
+
+class _FakeDebouncer:
+    def __init__(self):
+        self.flush_calls = 0
+
+    def flush(self):
+        self.flush_calls += 1
+
+
+def _fresh_harness_state():
+    try:
+        import harness  # noqa: F401
+    except Exception:
+        pytest.skip("harness module unavailable (likely missing fastapi)")
+    return harness.HarnessState()
+
+
+class TestHarnessSupervisor:
+    """AC5 — when the file-watch Observer dies, the harness logs +
+    restarts the watcher (QA route-back on PR #10746)."""
+
+    def test_first_tick_spawns_observer(self):
+        state = _fresh_harness_state()
+        observers = []
+
+        def starter():
+            obs = _FakeObserver(alive=True)
+            deb = _FakeDebouncer()
+            observers.append(obs)
+            return obs, deb
+
+        action = state._supervise_l4_once(starter)
+        assert action == "started"
+        assert state._l4_observer is observers[0]
+        assert state._l4_debouncer is not None
+        assert len(observers) == 1
+
+    def test_live_observer_is_no_op(self):
+        state = _fresh_harness_state()
+        starter_calls = []
+
+        def starter():
+            starter_calls.append(True)
+            return _FakeObserver(alive=True), _FakeDebouncer()
+
+        state._supervise_l4_once(starter)
+        action = state._supervise_l4_once(starter)
+        assert action == "running"
+        assert len(starter_calls) == 1
+
+    def test_dead_observer_is_respawned(self):
+        # AC5 regression. QA route-back on PR #10746 named this as the
+        # specific gap: "include a regression test that crashes the
+        # Observer (e.g., raise inside the handler) and asserts the
+        # harness re-spawns it."
+        state = _fresh_harness_state()
+        spawned = []
+
+        def starter():
+            obs = _FakeObserver(alive=True)
+            spawned.append(obs)
+            return obs, _FakeDebouncer()
+
+        state._supervise_l4_once(starter)
+        first = state._l4_observer
+
+        # Kill the Observer to simulate a crash.
+        first._alive = False
+
+        action = state._supervise_l4_once(starter)
+        assert action == "restarted"
+        assert state._l4_observer is spawned[-1]
+        assert state._l4_observer is not first
+        assert len(spawned) == 2
+
+    def test_start_failure_logs_and_retries_next_tick(self):
+        state = _fresh_harness_state()
+        attempts = []
+
+        def starter():
+            attempts.append(True)
+            if len(attempts) == 1:
+                raise RuntimeError("watchdog missing")
+            return _FakeObserver(alive=True), _FakeDebouncer()
+
+        action1 = state._supervise_l4_once(starter)
+        assert action1 == "start-failed"
+        assert state._l4_observer is None
+
+        action2 = state._supervise_l4_once(starter)
+        assert action2 == "started"
+        assert state._l4_observer is not None
+        assert len(attempts) == 2
+
+    def test_stale_debouncer_flushed_on_respawn(self):
+        state = _fresh_harness_state()
+        observers = []
+
+        def starter():
+            obs = _FakeObserver(alive=True)
+            deb = _FakeDebouncer()
+            observers.append((obs, deb))
+            return obs, deb
+
+        state._supervise_l4_once(starter)
+        stale_debouncer = state._l4_debouncer
+        observers[0][0]._alive = False
+        state._supervise_l4_once(starter)
+        assert stale_debouncer.flush_calls == 1
+
+
+class TestHarnessLifespanWiring:
+    """Static-grep gate: the lifespan must reach start_l4_watcher() +
+    stop_l4_watcher() — defining the methods is not enough."""
+
+    def test_lifespan_calls_start_and_stop(self):
+        src = (SCRIPTS / "harness.py").read_text(encoding="utf-8")
+        start = src.index("async def lifespan(")
+        end = src.index("app = FastAPI(", start)
+        block = src[start:end]
+        assert "state.start_l4_watcher()" in block, (
+            "lifespan must call state.start_l4_watcher() on boot"
+        )
+        assert "state.stop_l4_watcher()" in block, (
+            "lifespan must call state.stop_l4_watcher() on shutdown"
+        )
