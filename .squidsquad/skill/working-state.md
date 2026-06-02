@@ -8,7 +8,8 @@
 
 ## Completed Steps
 
-- Cycle 1528: QUIET — pre-cutover queue drained, PM scope questions in flight, zero unblocked tickets. Ran the configured improvement scan and filed one finding: #10762 (low) — compose_freshness COMPOSE_INPUT_GLOBS misses docs/sub-skill-catalog.md (genuine compose input via D3 catalog gate + D4 drift-check; freshness check coverage gap, not a runtime crash since D3 abort surfaces it at agent-boot). 1/2 max-per-cycle budget used.
+- Cycle 1529: QUIET — same state as 1528. Approved-task list empty for skill role; no open PRs; PM scope questions (#10754, #10756) still pending. #10762 (own improvement-scan finding from 1528) needs PM/human triage per [[feedback-improvement-scan-no-autofix]]. No new improvement findings worth filing — recently-touched modules are stable post-DS review.
+- Cycle 1528: QUIET — pre-cutover queue drained, PM scope questions in flight. Filed #10762 (low) — compose_freshness COMPOSE_INPUT_GLOBS misses docs/sub-skill-catalog.md.
 - Cycle 1527: PRD-E E4 (#10683) — squidsquad_cli check operator CLI. Read-only diagnostic, reuses E1's compute_compose_checksum, --full delegates to A4 dry-run. DS 3 findings (F1 --full swallowed on drift; F2 private API consumed; F3 exit-code contract) all fixed pre-commit. 18 tests. PR #10761 pending-test.
 - Cycle 1526: PRD-E E5 (#10684) — wire freshness check into harness restart-safety. Added --no-freshness-check escape hatch; DS F1 persistence fix for compose_freshness_failed flag (save_state/load_state round-trip); F2 failed-branch flush; F3 comment correction. PR #10760 pending-test.
 - Cycle 1525: PRD-E E1 (#10680) — harness boot-time freshness check (Layer 1 primary gate). New compose_freshness.py + lifespan SYNCHRONOUS wiring (DS-10680 F3 TOCTOU fix). compose_freshness_failed flag gates EVERY spawn path. 16 tests. PR #10759 pending-test.
