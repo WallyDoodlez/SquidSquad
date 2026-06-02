@@ -8,7 +8,8 @@
 
 ## Completed Steps
 
-- Cycle 1521: PRD-D/D7 (#10678) comprehension spec + validator for → run sub-skill resolution. PR #10748 pending-test. tests/comprehension/10678_spec.json with 7 questions covering AC3's four scenarios + 3 supporting invariants from COMPOSE-ARCHITECTURE §4.5/§4.1. tests/test_comprehension_10678.py validator (16 tests: schema, two-sided regex AC3 coverage, expected-length floor, files-list sanity). DS review 3 findings all fixed (F1 unresolved-name regex matched wrong question, F2 resolvable-ref regex matched two questions via Q2's filename mention, F3 question_blob leaked ID match). Also re-merged E2 fourth pass (D3 landed; tests/run_tests.py union resolution).
+- Cycle 1522: Bug fix #10743 — catalog parser blocked by 5 duplicate-name patterns (improvement-scan, issue-filing, task-pickup, discussion-protocol, ralph-loop-overview). Renamed all per-role variants in PM/QA/DM/Dev sections to slash-bearing form. xfail-strict pin in test_catalog_parser_d1.py removed (now real pass + positive assertion). D4 drift-check now runs end-to-end on the live catalog and surfaces pre-existing orphans (filed as #10750 follow-up). PR #10749 pending-test. 145 tests pass adjacent suites with no regressions.
+- Cycle 1521: PRD-D/D7 (#10678) comprehension spec + validator. PR #10748 pending-ship. 7-question spec + 16-test validator. DS 3 findings all fixed. Also re-merged E2 fourth pass.
 - Cycle 1520: PRD-D/D3 (#10674) catalog gate at v2 compose time. PR #10747 SHIPPED. v2_catalog_gate.py module wired into deploy_alias_v2 between emit_v2_linked and write (atomic-write contract). Both failure modes (unresolved + missing-file) abort with multi-issue structured report. 15 tests + DS review NO_FINDINGS.
 - Cycle 1519: Second-pass merge of D2 + E2 (D5/E3 landed after 1518's merge) PLUS root-cause fix. `.gitattributes` now declares `.squidsquad/.backlog-cache merge=ours` so this transient PM-regenerated counter file never conflicts during feature-branch merges of main.
 - Cycle 1518: Merge-conflict resolution on D2 (#10673) + E2 (#10681). Both routed back by DM as CONFLICTING/DIRTY. Merged origin/main into both feature branches; conflicts in tests/run_tests.py (union resolution of test entries) plus .squidsquad/skill/test-output-10673.log (kept branch version). 76 tests on D2 + 44 on E2 post-merge.
@@ -23,7 +24,7 @@
 - Watch QA/DM on PR #10692 (E2), PR #10748 (D7).
 - PRD-E queue next: E1 (#10680 — depends on E2 merged), E4 (#10683 — depends on E1), E5 (#10684 — depends on E1), E6 (#10685 cutover — depends on all).
 - PRD-D queue: D6 (#10677 — executes in E6 window). D2 + D3 shipped; D5/D7 pending-test.
-- Follow-ups: #10670, #10671, #10743 (catalog duplicate — same as xfail in test_catalog_parser_d1).
+- Follow-ups: #10670, #10671, #10750 (catalog↔source orphan cleanup surfaced after #10743 fix). #10743 itself now pending-test on PR #10749.
 
 ## Key Decisions (latest only)
 
