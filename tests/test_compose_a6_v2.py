@@ -11,6 +11,46 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import compose  # noqa: E402
+import atomic_emit  # noqa: E402 — needed by the assemble-stub fixture
+
+
+@pytest.fixture(autouse=True)
+def _stub_assemble_pipeline(monkeypatch):
+    """A6 tests assert against ``deploy_alias_v2``'s routing + output
+    filename contract. PRD-B B9 (#10763) wires the assemble pipeline
+    in after the link stage; without a real LLM provider those tests
+    would fail. Stub ``atomic_emit.assemble_and_emit`` to write the
+    triple deterministically — same content for the linked + assembled
+    files so existing assertions on header content still pass."""
+
+    def fake_assemble_and_emit(
+        linked_composite, output_dir, *, role_class, model_id=None,
+        commit_sha=None, generated_at=None, filename_suffix=".v2.md",
+        **kwargs,
+    ):
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if filename_suffix == "":
+            base, linked, conflicts = (
+                "CLAUDE.md", "CLAUDE.linked.md", "CLAUDE.conflicts.md",
+            )
+        else:
+            base = f"CLAUDE{filename_suffix}"
+            linked = f"CLAUDE.linked{filename_suffix}"
+            conflicts = f"CLAUDE.conflicts{filename_suffix}"
+        (output_dir / base).write_text(linked_composite, encoding="utf-8")
+        (output_dir / linked).write_text(linked_composite, encoding="utf-8")
+        (output_dir / conflicts).write_text(
+            "# Stub conflicts report — assemble bypassed in tests\n",
+            encoding="utf-8",
+        )
+        return (
+            output_dir / base,
+            output_dir / linked,
+            output_dir / conflicts,
+        )
+
+    monkeypatch.setattr(atomic_emit, "assemble_and_emit", fake_assemble_and_emit)
 
 
 def _stage_minimal_catalog(target_root):
@@ -105,9 +145,13 @@ def test_deploy_alias_v2_resolves_via_parser_and_writes_v2_path(tmp_path, monkey
     out = compose.deploy_alias_v2("pm", target_root=tmp_path)
 
     assert captured["role_class"] == "pm"
-    assert out.name == "CLAUDE.linked.v2.md"
+    # PRD-B B9 (#10763): post-wire, deploy_alias_v2 returns the
+    # assembled CLAUDE.v2.md (the runtime artifact) rather than the
+    # linked composite. Both live in the alias dir.
+    assert out.name == "CLAUDE.v2.md"
     assert out.parent.name == "pm"
     assert out.exists()
+    assert (out.parent / "CLAUDE.linked.v2.md").exists()
 
 
 def test_deploy_alias_v2_uses_role_class_not_alias_for_compose_source(tmp_path, monkeypatch):

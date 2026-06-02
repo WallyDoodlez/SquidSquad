@@ -108,6 +108,11 @@ def assemble_and_emit(
     model_id="<unknown>",
     commit_sha="<unknown>",
     generated_at=None,
+    # PRD-B B9 (#10763 AC3): filename family selector. ``.v2.md``
+    # default keeps §9a coexistence (CLAUDE.v2.md / linked.v2.md /
+    # conflicts.v2.md). The E6 cutover PR will pass empty string to
+    # flip the triple onto v1 canonical names atomically.
+    filename_suffix=".v2.md",
     # Injection seams for tests:
     assemble_slot_fn=None,
     parse_output_fn=None,
@@ -216,6 +221,7 @@ def assemble_and_emit(
             claude_linked_md=claude_linked_md,
             claude_conflicts_md=claude_conflicts_md,
         ),
+        filename_suffix=filename_suffix,
     )
 
 
@@ -371,7 +377,7 @@ def _build_claude_md(assembled_per_slot):
     return "\n".join(chunks)
 
 
-def _atomic_write_triple(output_dir, triple):
+def _atomic_write_triple(output_dir, triple, *, filename_suffix=".v2.md"):
     """Write all three artifacts to ``.tmp`` files first, then rename.
 
     If any ``.tmp`` write fails, ALL ``.tmp`` files are unlinked and the
@@ -381,14 +387,47 @@ def _atomic_write_triple(output_dir, triple):
     we surface it as ``ConflictReportWriteFail`` for the conflicts
     artifact and as ``AssembleError`` otherwise — the operator's
     intervention is the safer answer than a half-rolled-back state.
+
+    ``filename_suffix`` (PRD-B B9 / #10763 AC3) selects the output
+    filename family:
+
+    - Default ``".v2.md"`` lands the triple at
+      ``CLAUDE.v2.md`` / ``CLAUDE.linked.v2.md`` /
+      ``CLAUDE.conflicts.v2.md``. This is the §9a coexistence path —
+      used by ``compose.py deploy_alias_v2`` so v2 outputs never
+      overwrite v1 outputs.
+    - Empty string ``""`` lands the triple at the v1 canonical names
+      (``CLAUDE.md`` / ``CLAUDE.linked.md`` / ``CLAUDE.conflicts.md``).
+      This is the seam the E6 V2 CUTOVER PR will use to atomically
+      flip the defaults once §9a coexistence is no longer required.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # PRD-B B9 / #10763 AC3 filename selection. Two intended values:
+    #
+    #   - ``.v2.md`` (default) -> the §9a-safe v2 triple
+    #     (``CLAUDE.v2.md`` / ``CLAUDE.linked.v2.md`` /
+    #     ``CLAUDE.conflicts.v2.md``).
+    #   - ``""`` -> v1 canonical names (``CLAUDE.md`` /
+    #     ``CLAUDE.linked.md`` / ``CLAUDE.conflicts.md``). This is the
+    #     seam the E6 V2 CUTOVER PR uses to atomically retire v1 with
+    #     a single parameter flip.
+    #
+    # Empty string takes the explicit v1 branch rather than literal-
+    # appending (which would produce extensionless ``CLAUDE`` etc.).
+    if filename_suffix == "":
+        base_md = "CLAUDE.md"
+        linked_md = "CLAUDE.linked.md"
+        conflicts_md = "CLAUDE.conflicts.md"
+    else:
+        base_md = f"CLAUDE{filename_suffix}"
+        linked_md = f"CLAUDE.linked{filename_suffix}"
+        conflicts_md = f"CLAUDE.conflicts{filename_suffix}"
     targets = {
-        "CLAUDE.md": triple.claude_md,
-        "CLAUDE.linked.md": triple.claude_linked_md,
-        "CLAUDE.conflicts.md": triple.claude_conflicts_md,
+        base_md: triple.claude_md,
+        linked_md: triple.claude_linked_md,
+        conflicts_md: triple.claude_conflicts_md,
     }
     tmp_paths = {name: output_dir / (name + ".tmp") for name in targets}
 
@@ -403,9 +442,11 @@ def _atomic_write_triple(output_dir, triple):
             except OSError:
                 pass
         # Conflict-report-write fail gets its own type for AC clarity.
-        if "CLAUDE.conflicts.md" in str(e) or e.filename and "CLAUDE.conflicts.md" in str(e.filename):
+        # Use ``conflicts_md`` (the suffix-aware basename) so the error
+        # discrimination still works under ``filename_suffix=""``.
+        if conflicts_md in str(e) or (e.filename and conflicts_md in str(e.filename)):
             raise ConflictReportWriteFail(
-                f"Failed to write CLAUDE.conflicts.md.tmp: {e}"
+                f"Failed to write {conflicts_md}.tmp: {e}"
             ) from e
         raise AssembleError(f"Failed to stage assemble triple: {e}") from e
 
@@ -418,9 +459,9 @@ def _atomic_write_triple(output_dir, triple):
         except OSError as e:
             # Leave any successful renames in place — surfacing the
             # exact failure is more useful than half-rolling-back.
-            if name == "CLAUDE.conflicts.md":
+            if name == conflicts_md:
                 raise ConflictReportWriteFail(
-                    f"Failed to rename CLAUDE.conflicts.md.tmp into place: {e}"
+                    f"Failed to rename {conflicts_md}.tmp into place: {e}"
                 ) from e
             raise AssembleError(
                 f"Failed to rename {name}.tmp into place: {e}"
@@ -428,7 +469,7 @@ def _atomic_write_triple(output_dir, triple):
         final_paths[name] = final
 
     return (
-        final_paths["CLAUDE.md"],
-        final_paths["CLAUDE.linked.md"],
-        final_paths["CLAUDE.conflicts.md"],
+        final_paths[base_md],
+        final_paths[linked_md],
+        final_paths[conflicts_md],
     )

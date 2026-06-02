@@ -12,7 +12,47 @@ sys.path.insert(0, str(SCRIPTS))
 
 import compose  # noqa: E402
 import v2_link_stage as v2  # noqa: E402
+import atomic_emit  # noqa: E402 — needed for the assemble stub fixture
 from link_stage_validator import LinkStageValidationError  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _stub_assemble_pipeline(monkeypatch):
+    """A2f tests exercise the v2 LINK stage. PRD-B B9 (#10763) wires
+    the assemble pipeline into ``deploy_alias_v2`` after the link
+    stage returns; without a real LLM provider those tests would now
+    fail. Stub ``atomic_emit.assemble_and_emit`` to write the linked
+    composite verbatim into all three v2 paths so the A2f tests can
+    keep asserting on what the link stage emitted."""
+
+    def fake_assemble_and_emit(
+        linked_composite, output_dir, *, role_class, model_id=None,
+        commit_sha=None, generated_at=None, filename_suffix=".v2.md",
+        **kwargs,
+    ):
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if filename_suffix == "":
+            base, linked, conflicts = (
+                "CLAUDE.md", "CLAUDE.linked.md", "CLAUDE.conflicts.md",
+            )
+        else:
+            base = f"CLAUDE{filename_suffix}"
+            linked = f"CLAUDE.linked{filename_suffix}"
+            conflicts = f"CLAUDE.conflicts{filename_suffix}"
+        (output_dir / base).write_text(linked_composite, encoding="utf-8")
+        (output_dir / linked).write_text(linked_composite, encoding="utf-8")
+        (output_dir / conflicts).write_text(
+            "# Stub conflicts report — assemble bypassed in tests\n",
+            encoding="utf-8",
+        )
+        return (
+            output_dir / base,
+            output_dir / linked,
+            output_dir / conflicts,
+        )
+
+    monkeypatch.setattr(atomic_emit, "assemble_and_emit", fake_assemble_and_emit)
 
 
 # ---------------------------------------------------------------------------
@@ -99,8 +139,16 @@ def test_deploy_alias_v2_writes_to_canonical_v2_path(tmp_path):
     _stage_minimal_install(tmp_path)
     registry = _mk_registry({"pm": "pm"})
     out = compose.deploy_alias_v2("pm", registry=registry, target_root=tmp_path)
-    assert out == tmp_path / ".squidsquad" / "pm" / "CLAUDE.linked.v2.md"
+    # PRD-B B9 (#10763): deploy_alias_v2 now returns the assembled
+    # ``CLAUDE.v2.md`` (the runtime artifact agents actually read).
+    # The linked composite sits beside it at CLAUDE.linked.v2.md and
+    # the conflict report at CLAUDE.conflicts.v2.md — all three are
+    # written by atomic_emit.assemble_and_emit.
+    alias_dir = tmp_path / ".squidsquad" / "pm"
+    assert out == alias_dir / "CLAUDE.v2.md"
     assert out.exists()
+    assert (alias_dir / "CLAUDE.linked.v2.md").exists()
+    assert (alias_dir / "CLAUDE.conflicts.v2.md").exists()
 
 
 def test_deploy_alias_v2_output_contains_six_canonical_h2_sections(tmp_path):
