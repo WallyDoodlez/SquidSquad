@@ -1,4 +1,4 @@
-"""Six-slot v2 link stage (#10490, PRD-A Story A2d).
+"""Six-slot v2 link stage (#10490, PRD-A Story A2d; #10673 PRD-D Story D2).
 
 Implements ``emit_v2_linked(role_class, l3_domain)`` per
 [[compose-link-stage]] §4.1 + §4.2 and COMPOSE-ARCHITECTURE §4.1-§4.2:
@@ -17,6 +17,19 @@ Implements ``emit_v2_linked(role_class, l3_domain)`` per
 8. Emit exactly six H2 sections in canonical order:
    ``Identity``, ``Responsibility``, ``Soul``, ``Instructions``,
    ``Project Context``, ``Vault``.
+
+D2 (#10673) hard rule per Q-D2 + COMPOSE-ARCHITECTURE §3.0: **the
+instructions slot never inlines sub-skill bodies.** Source files under
+``references/sub-skills/`` tagged ``slot: instructions`` are sub-skill
+DEFINITIONS — their bodies are loaded at runtime via
+``→ run sub-skill: <name>`` references that appear verbatim in the
+orchestrator files under ``references/roles/.../instructions.md``.
+Walking such bodies into the instructions slot would defeat the
+thin-orchestration invariant and inflate composed CLAUDE.md by the
+size of every sub-skill body. The filter applies ONLY to the
+instructions slot; sub-skill paths with non-instructions slot
+frontmatter (a test-fixture pattern, not seen in production) continue
+to flow normally so the slot's other-content semantics stay intact.
 
 Pure additive. A2f (#10492) is the caller that wires this into
 ``deploy_alias_v2``. This module does no I/O beyond ``read_text`` on the
@@ -61,6 +74,25 @@ SLOT_INDEX = {slot: i for i, slot in enumerate(CANONICAL_SLOT_ORDER)}
 # but kept local so this module can strip the block from each file's text
 # without re-coupling to A2a's internals.
 _FRONTMATTER_RE = re.compile(r"\A---[ \t]*\n[\s\S]*?\n---[ \t]*\n?")
+
+
+# D2 (#10673): sub-skill source-path prefix. Files under this prefix are
+# sub-skill definitions whose bodies are referenced at runtime via
+# ``→ run sub-skill: <name>`` and MUST NOT be inlined into the
+# instructions slot. POSIX-form to match the path strings the walker
+# normalizes to.
+_SUB_SKILLS_PATH_PREFIX = "references/sub-skills/"
+
+
+def _is_sub_skill_body_in_instructions(slot, posix_path):
+    """True iff this entry is a sub-skill body that must NOT be inlined.
+
+    Per D2 / Q-D2: the instructions slot only inlines ORCHESTRATOR
+    content (cycle-step references + brief glue prose authored under
+    ``references/roles/``). Sub-skill bodies live under
+    ``references/sub-skills/`` and are loaded at runtime by reference.
+    """
+    return slot == "instructions" and posix_path.startswith(_SUB_SKILLS_PATH_PREFIX)
 
 
 def emit_v2_linked(role_class, l3_domain, *, repo_root=None, l4_path=None):
@@ -142,9 +174,11 @@ def _parse_all_applicable_sources(repo_root, role_class, l3_domain):
             continue  # paranoia; source_frontmatter already validates
         if not _is_applicable_by_roles_filter(fm, role_class):
             continue
-        body = _strip_frontmatter(text)
-        # POSIX path string for stable cross-OS sort.
+        # POSIX path string for stable cross-OS sort + sub-skill detection.
         posix_path = path.relative_to(repo_root).as_posix()
+        if _is_sub_skill_body_in_instructions(fm.slot, posix_path):
+            continue
+        body = _strip_frontmatter(text)
         entries.append((SLOT_INDEX[fm.slot], int(fm.ordinal), posix_path, body))
     return entries
 
@@ -270,8 +304,10 @@ def collect_sources_for_validation(role_class, l3_domain, *, repo_root=None):
             continue
         if not _is_applicable_by_roles_filter(fm, role_class):
             continue
-        body = _strip_frontmatter(text)
         posix_path = path.relative_to(repo_root).as_posix()
+        if _is_sub_skill_body_in_instructions(fm.slot, posix_path):
+            continue
+        body = _strip_frontmatter(text)
         sources.append(LinkStageSource(
             layer=_classify_layer(posix_path, role_class),
             path=posix_path,
