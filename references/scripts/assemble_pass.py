@@ -75,11 +75,24 @@ def assemble_slot(slot_name, linked_body, *, task_id=None, model_router=None):
         output_path = td_path / f"assembled-{slot_name}.md"
         input_path.write_text(linked_body, encoding="utf-8")
 
+        # PRD-B SC3 + #10752 W4: the LLM context names all FOUR
+        # preservation dimensions the verifier checks (sub-skill refs,
+        # step IDs, fenced code blocks verbatim, file paths). Pre-fix
+        # the context only mentioned sub-skill + step-ID, so the LLM
+        # might rewrite fenced bodies or strip file paths and only be
+        # caught at verification time — that path either retries the
+        # LLM (cache-corruption fallback) or aborts (fresh-run
+        # PreservationFail). Including the full guarantee set upfront
+        # is cheaper than the abort cycle.
         context = (
             f"Rewrite the LINKED body for the `{slot_name}` slot into a "
-            f"single coherent voice while preserving every sub-skill and "
-            f"step:cycle/<id> reference verbatim. Higher-layer prose wins "
-            f"on contradiction (L4 > L3 > L2 > L1)."
+            f"single coherent voice while preserving (a) every "
+            f"`→ run sub-skill: <name>` reference verbatim, (b) every "
+            f"`step:cycle/<id>` reference verbatim, (c) every fenced "
+            f"code block (the lang tag AND the body content) verbatim, "
+            f"and (d) every file path token (anything containing a `/` "
+            f"and ending in a small extension) verbatim. Higher-layer "
+            f"prose wins on contradiction (L4 > L3 > L2 > L1)."
         )
 
         exit_code = model_router.route(

@@ -33,14 +33,47 @@ _SUB_SKILL_RE = re.compile(r"→\s*run\s+sub-skill:\s*([A-Za-z0-9_-]+)")
 # does not (``y`` is word, prevents the boundary).
 _STEP_ID_RE = re.compile(r"\bstep:cycle/([A-Za-z0-9_-]+)")
 
+# PRD-B / #10752 W1: fenced-block content extractor. Matches
+# ``` (or ````` etc.) [lang_tag] \n body \n ``` and captures the
+# (lang_tag, body) tuple so verify_fenced_block_content can multiset-
+# compare them. ``DOTALL`` lets ``.`` span lines inside the body.
+_FENCED_BLOCK_RE = re.compile(
+    r"^(`{3,})([^\n`]*)\n(.*?)^\1\s*$",
+    re.MULTILINE | re.DOTALL,
+)
+
+# PRD-B / #10752 W1: file-path extractor. Path-shaped tokens like
+# ``references/scripts/foo.py``, ``.squidsquad/config.md``, or
+# ``docs/COMPOSE-ARCHITECTURE.md`` — at least one path separator,
+# ending in a small file extension (1-6 chars). Conservative on
+# purpose: bare filenames (``README``) and version strings (``1.2.3``)
+# don't match; backtick-wrapped paths still match because the path
+# itself satisfies the pattern. The leading boundary
+# ``(?<![A-Za-z0-9._/-])`` prevents a longer URL fragment from being
+# truncated mid-path.
+_FILE_PATH_RE = re.compile(
+    r"(?<![A-Za-z0-9._/-])"
+    r"([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+\.[a-zA-Z]{1,6})"
+)
+
 
 @dataclass
 class PreservationResult:
     """Outcome of one ``verify_preservation`` call.
 
-    ``ok`` is True iff both multisets matched exactly (no missing, no
-    extra). The four list fields carry sorted multiset differences so
-    a caller (B7 abort path) can emit a precise diagnostic.
+    ``ok`` is True iff every preservation multiset matched exactly
+    (no missing, no extra) across all four preservation dimensions:
+
+    - Sub-skill references (PRD-B SC3 item 1)
+    - Step IDs (item 2)
+    - Fenced code blocks — ``(lang_tag, body)`` tuples preserved
+      verbatim per item 3 (PRD-B #10752 W1; pre-fix the verifier
+      only counted block PARITY, not content equality)
+    - File paths (item 4; PRD-B #10752 W1)
+
+    Each multiset diff is exposed as a sorted ``missing_*`` /
+    ``extra_*`` pair so a caller (B7 abort path) can emit a precise
+    operator diagnostic.
     """
 
     ok: bool
@@ -48,6 +81,11 @@ class PreservationResult:
     extra_sub_skills: list = field(default_factory=list)
     missing_step_ids: list = field(default_factory=list)
     extra_step_ids: list = field(default_factory=list)
+    # PRD-B #10752 W1: extended preservation coverage.
+    missing_fenced_blocks: list = field(default_factory=list)
+    extra_fenced_blocks: list = field(default_factory=list)
+    missing_file_paths: list = field(default_factory=list)
+    extra_file_paths: list = field(default_factory=list)
 
 
 def _multiset_diff(linked_items, assembled_items):
@@ -63,10 +101,62 @@ def _multiset_diff(linked_items, assembled_items):
     return missing, extra
 
 
+def _extract_fenced_block_tuples(text):
+    """Return list of ``(lang_tag, body)`` tuples for every fenced
+    block in ``text``.
+
+    Bodies are returned with surrounding whitespace stripped so an
+    indentation diff that doesn't change the block's content doesn't
+    flag drift. The lang tag is taken from the opener line after the
+    fence run (e.g. ``python`` from ```` ```python ````); empty when
+    no tag is present.
+    """
+    tuples = []
+    for m in _FENCED_BLOCK_RE.finditer(text):
+        lang_tag = m.group(2).strip()
+        body = m.group(3).strip()
+        tuples.append((lang_tag, body))
+    return tuples
+
+
+def verify_fenced_block_content(linked, assembled):
+    """Return ``(missing, extra)`` multiset diff of fenced blocks.
+
+    Each element is a ``(lang_tag, body)`` tuple. Pre-#10752 W1 the
+    verifier only counted block COUNT parity via
+    ``check_code_block_parity``; the LLM could swap an entire block's
+    contents and still pass the count check. This helper closes that
+    hole.
+    """
+    linked_tuples = _extract_fenced_block_tuples(linked)
+    assembled_tuples = _extract_fenced_block_tuples(assembled)
+    return _multiset_diff(linked_tuples, assembled_tuples)
+
+
+def verify_file_paths(linked, assembled):
+    """Return ``(missing, extra)`` multiset diff of file-path tokens.
+
+    Per PRD-B SC3 item 4 (#10752 W1), every file path the linked body
+    mentions must survive the assemble pass — losing one means the
+    LLM rewrote the prose into a "see the script" form that no longer
+    names the script. The regex matches path tokens with at least one
+    separator AND a small file extension (1-6 chars) so version
+    strings and bare slugs don't false-positive.
+    """
+    linked_paths = _FILE_PATH_RE.findall(linked)
+    assembled_paths = _FILE_PATH_RE.findall(assembled)
+    return _multiset_diff(linked_paths, assembled_paths)
+
+
 def verify_preservation(linked, assembled):
     """Verify the assembled body preserved every preservation token from the linked input.
 
     Pure, deterministic, no I/O. Empty inputs are valid and trivially pass.
+
+    Per PRD-B SC3 + #10752 W1, this covers all four preservation
+    dimensions: sub-skill references, step IDs, fenced-block content
+    (``(lang_tag, body)`` multiset), and file paths. ``ok`` is True
+    iff every multiset matched exactly.
     """
     linked_subs = _SUB_SKILL_RE.findall(linked)
     assembled_subs = _SUB_SKILL_RE.findall(assembled)
@@ -75,13 +165,24 @@ def verify_preservation(linked, assembled):
 
     missing_subs, extra_subs = _multiset_diff(linked_subs, assembled_subs)
     missing_steps, extra_steps = _multiset_diff(linked_steps, assembled_steps)
+    missing_blocks, extra_blocks = verify_fenced_block_content(linked, assembled)
+    missing_paths, extra_paths = verify_file_paths(linked, assembled)
 
     return PreservationResult(
-        ok=not (missing_subs or extra_subs or missing_steps or extra_steps),
+        ok=not (
+            missing_subs or extra_subs
+            or missing_steps or extra_steps
+            or missing_blocks or extra_blocks
+            or missing_paths or extra_paths
+        ),
         missing_sub_skills=missing_subs,
         extra_sub_skills=extra_subs,
         missing_step_ids=missing_steps,
         extra_step_ids=extra_steps,
+        missing_fenced_blocks=missing_blocks,
+        extra_fenced_blocks=extra_blocks,
+        missing_file_paths=missing_paths,
+        extra_file_paths=extra_paths,
     )
 
 
