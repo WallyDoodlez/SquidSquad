@@ -1,12 +1,13 @@
-# Verifier agent sub-skill manifest — v2 (mode-agnostic, PRD-D Story D5 #10676)
-# Union of includes.yml + includes-events.yml. No mode-conditional sections;
-# wake-mode selection is a runtime concern handled by `common/boot-bootstrap`
-# at session start, not a compose-time concern. Per TRD §6.5.
+# Verifier agent sub-skill manifest — unified mode-agnostic manifest
+# (PRD-D D5 #10676 introduced as `includes-v2.yml`; PRD-E E6 #10685
+# renamed to the canonical `includes.yml`). No mode-conditional
+# sections; wake-mode selection is a runtime concern handled by
+# `common/boot-bootstrap` at session start, not a compose-time
+# concern. Per TRD §6.5.
 #
-# v2 compose reads this file via `_load_manifest_v2(role_class)` (no
-# wake_mode arg). v1 compose continues reading `includes.yml` /
-# `includes-events.yml` unchanged. Deletion of the v1 pair + rename of this
-# file to `includes.yml` happens atomically in the E6 switch PR (#10685).
+# Compose reads this file via `_load_manifest_v2(role_class)` (no
+# wake_mode arg). The legacy v1 split (`includes.yml` polling +
+# `includes-events.yml` events) was retired in E6.
 #
 # Uses slim variants for vault-protocol and improvement-scan (read-only role).
 #

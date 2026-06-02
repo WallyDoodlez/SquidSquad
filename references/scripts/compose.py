@@ -342,20 +342,23 @@ _V2_MANIFEST_FILENAME = "includes.yml"
 
 
 def _load_manifest_v2(role_name: str) -> list | None:
-    """Load the role's v2 mode-agnostic manifest (PRD-D D5 #10676).
+    """Load the role's v2 mode-agnostic manifest (PRD-D D5 #10676, PRD-E E6 #10685).
 
-    Reads ``references/roles/<role>/includes-v2.yml`` for base roles and
-    follows the same ``base_role`` + ``additional_includes`` schema as
-    variants in v1. Variant Layer-3 manifests (e.g.
-    ``roles/worker/skill/includes.yml``) are ALREADY mode-agnostic
-    (single ``includes.yml`` with ``additional_includes``) and are read
-    in place — D5 does not introduce a ``includes-v2.yml`` for variants
-    since there is nothing to unify on the variant side.
+    Reads ``references/roles/<role>/includes.yml`` for base roles via the
+    ``_V2_MANIFEST_FILENAME`` constant and follows the
+    ``base_role`` + ``additional_includes`` schema. Variant Layer-3
+    manifests (e.g. ``roles/worker/skill/includes.yml``) are mode-
+    agnostic by construction (single ``includes.yml`` with
+    ``additional_includes``) and are read in place.
+
+    Post-E6 cutover, base and variant manifests share the same filename
+    (``includes.yml``); pre-E6 D5 the base used ``includes-v2.yml`` while
+    variants already used ``includes.yml``. The v1 polling/event split
+    (``includes.yml`` polling + ``includes-events.yml`` events) is
+    retired.
 
     Returns the resolved include list (variant: base + additional) or
-    ``None`` when no v2 manifest can be located. Never references
-    ``includes.yml`` or ``includes-events.yml`` directly — variant
-    ``includes.yml`` is the input to ``_resolve_variant`` only.
+    ``None`` when no v2 manifest can be located.
 
     No ``wake_mode`` argument: the architectural rule is that v2 compose
     is wake-mode-blind. Mode-specific behavior lives inside the cycle
@@ -416,7 +419,8 @@ def _load_manifest_v2_from_file(
     paths reading from a single YAML loader + schema dispatcher. Resolves
     ``base_role`` recursively via ``_load_manifest_v2`` so the base
     always lands on the v2 file (a variant whose base is ``worker``
-    picks up ``roles/worker/includes-v2.yml`` here).
+    picks up ``roles/worker/includes.yml`` here, since post-E6 the v2
+    manifest IS the canonical ``includes.yml``).
     """
     try:
         data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
