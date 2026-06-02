@@ -8,7 +8,8 @@
 
 ## Completed Steps
 
-- Cycle 1525: PRD-E E1 (#10680) — harness boot-time freshness check (Layer 1 primary gate). New compose_freshness.py module + lifespan wiring runs check SYNCHRONOUSLY before yield (DS-10680 F3 TOCTOU fix). state.compose_freshness_failed flag gates EVERY spawn path: auto-start short-circuit + HTTP /agents/*/start return 503 (F1) + health-poller auto-reboot skip (F4) — defense-in-depth across all four sites. Also fixed F2 manifest.md double-hashing (overlapping globs collapsed + dedup guard). 16 tests; 247 across the wider sweep with no regressions. PR #10759 pending-test.
+- Cycle 1526: PRD-E E5 (#10684) — wire freshness check into harness restart-safety (step 1b). Builds on E1 (already wires check into lifespan = restart path). Added --no-freshness-check CLI flag + env var; lifespan guard fires before check_and_repair; bypass logs once. DS 3 findings (F1 persistence missing for compose_freshness_failed flag — fixed via save_state/load_state round-trip with legacy default; F2 failed branch didn't flush — added save_state call; F3 init comment misnamed lifespan as deferred-init mutator) all fixed pre-commit with regression tests. 14 tests; 228 wider sweep. PR #10760 pending-test.
+- Cycle 1525: PRD-E E1 (#10680) — harness boot-time freshness check (Layer 1 primary gate). New compose_freshness.py + lifespan SYNCHRONOUS wiring (DS-10680 F3 TOCTOU fix). compose_freshness_failed flag gates EVERY spawn path. 16 tests. PR #10759 pending-test.
 - Cycle 1524: PRD-C audit (#10753) — fixed ERROR + W1/W2/W3 + DS 3 findings. PR #10758 pending-test.
 - Cycle 1523: PRD-A audit (#10751) — fixed ERROR (bullet-form fallback in parse_aliases_registry — was blocking ALL --v2 deploys on real installs), W1 (A2f fixture column header), W2 (qa/dev shim mirrored into table-form path), W4 (R3 explicit layer guard). W3 deferred to PM as #10756. Filed #10754 (B1-B7 wiring missing story) per pattern memo. Fixed 4 collateral test_compose_a6_v2 failures from D3 (#10747) shipping w/o catalog fixture. PR #10757 pending-test.
 - Cycle 1522: Bug fix #10743 — catalog parser blocked by 5 duplicate-name patterns. Renamed per-role variants to slash-bearing form. xfail pin removed. PR #10749 pending-test.
@@ -27,7 +28,7 @@
 - Watch QA/DM on PR #10692 (E2), PR #10748 (D7).
 - PRD-E queue next: E1 (#10680 — depends on E2 merged), E4 (#10683 — depends on E1), E5 (#10684 — depends on E1), E6 (#10685 cutover — depends on all).
 - PRD-D queue: D6 (#10677 — executes in E6 window). D2 + D3 shipped; D5/D7 pending-test.
-- Follow-ups: #10670, #10671, #10750 (catalog↔source orphan cleanup), #10754 (PM scope question: missing assemble-pipeline wiring story for PRD-B), #10756 (PM scope question: --check --v2 deferral). #10752 (PRD-B audit) BLOCKED on #10754. E1 (#10680) shipped → unblocks E4 (#10683) + E5 (#10684) next cycle.
+- Follow-ups: #10670, #10671, #10750 (catalog↔source orphan cleanup), #10754 (PM scope question: missing assemble-pipeline wiring story for PRD-B), #10756 (PM scope question: --check --v2 deferral). #10752 (PRD-B audit) BLOCKED on #10754. E4 (#10683 operator check CLI) — last unblocked PRD-E story before E6 cutover.
 
 ## Key Decisions (latest only)
 
