@@ -110,7 +110,15 @@ When a customization request is detected, walk this dialog before writing L4. St
 
 7. **Propose a draft and read it back** (user-facing). Show the human the rule in plain prose (rule + why + when-not-to-apply) and get explicit approval before writing. The agent translates that approved prose into the L4 file; the human never sees the frontmatter.
 
-8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the four §7.4 gates in order:
+8. **Run the safety gates** (agent-internal). Before persisting, the agent runs the conflict pre-emption check then the four §7.4 gates in order. The pre-emption check (Gate 0, C8) only fires for `insert-before` / `insert-after` / `append` ops — `replace` ops supersede prior prose by construction and short-circuit to "skip":
+
+   0. **Conflict pre-emption (Gate 0, C8)**: for `insert-before step:cycle/X` / `insert-after step:cycle/X` / `append` ops only, invoke `references/scripts/l4_conflict_preempt.py:preempt_conflict(op_type, target_slot, target_step_id, target_role_class, body_text, linked_composite, source_directive)`. The helper reads the existing LINKED-composite prose for `(target_slot, target_role_class)` and dispatches to `model_router.route(task_type="l4-conflict-preempt", ...)` with the `l4-conflict-preempt.md.j2` template. The model returns one of:
+      - **clean** — no material contradiction; proceed to Gate 1.
+      - **contradiction** — surface `format_contradiction_for_human(result)` to the human (quotes from both sides + the `why` + reframe options). Three reframe options are offered: replace-reframe (the model's preferred path when a `replace step:cycle/X` would resolve cleanly), reword (when a wording change lifts the contradiction without changing intent), or abandon (when the new directive is incompatible with the role's shipped contract). The model marks one as recommended. The human picks; the agent re-walks the dialog with their choice as the refined directive. Never silently writes the conflicting op.
+      - **skip** — returned (without an LLM call) when the op type is `replace` (whole-slot or step-targeted). Proceed to Gate 1.
+      - **Pre-emption error** (model_router unreachable / timeout / no output / parse failure): the helper raises `ConflictPreemptError` (subclasses: `PreemptModelRouterError`, `PreemptTimeoutError`, `PreemptOutputMissingError`, `PreemptParseError`). Surface the diagnostic to the human and abort the write — do not advance to Gate 1.
+
+   The vocabulary ("materially contradicting prose between layers") mirrors B4's assemble-pass detector (`conflict_detector.py`, PRD-B #10445). Pre-emption catches what would otherwise force the assemble-pass to reconcile a contradiction later — better to surface to the human now so they reframe explicitly than let the assemble-pass paper over it at compose time.
 
    1. **DeepSeek decision-tree audit (Gate 1, C3)**: invoke `references/scripts/l4_audit_gate.py:audit_l4_op(op_type, target_slot, target_step_id, target_role_class, body_text, source_directive)`. The helper dispatches to `model_router.route(task_type="l4-audit", ...)` with the `l4-audit.md.j2` prompt template; the deepseek-class model reviews the slot + op + target classification against the human's source directive and returns one of:
       - **approve** — proceed to Gate 2 (mini-CQ).
@@ -131,6 +139,14 @@ When a customization request is detected, walk this dialog before writing L4. St
       - **Push** (per C6 AC4 + AC5) — plain `git push` (no `--rebase`, no `--force` — honors the operator's standing merge-not-rebase rule). On push failure: `git reset --hard HEAD~1` reverts the local commit, the diagnostic is surfaced to the human verbatim, and **there is no automatic retry**. The operator decides the next step (commonly: pull merge changes first, then re-run the curation dialog). The C6 helper never raises on push failure — it returns a `WriteResult` with `failure_stage="push"` and the full diagnostic in `failure_detail`. Callers branch on `failure_stage` to render stage-specific human guidance.
 
    Only after all four gates pass is the L4 customization durable. Gates 1-3 are dry checks (no on-disk change); Gate 4 is the single point at which the staged text becomes the new L4 file. The gates are agent-side, not part of the compose pipeline itself — the file does not change until all four are green, and on any failure between gates the staged text is discarded with no on-disk side effect.
+
+9. **Watch for the post-commit recompose race (Gate 5, C7)**: after Gate 4 commits + pushes the L4 file, the harness's file-watch (per PRD-E) triggers `compose.py deploy-all` to fold the new L4 prose into every role-class's composed CLAUDE.md. If that recompose fails, the on-disk L4 file no longer matches what the compose pipeline accepts — the next agent boot would read stale composed prose. Invoke `references/scripts/l4_recompose_recovery.py:recover_on_recompose_failure(commit_sha=write_result.committed_sha, check_recompose_fn=harness_recompose_status, ...)` to handle the race. The orchestrator polls within a bounded window and:
+   - On `success-no-action`: log + continue cycle normally.
+   - On `revert-attempted`: the recompose failed (or timed out) and the helper successfully landed a `git revert <sha> --no-edit` + push. The revert is a NEW commit on top of HEAD per AC4 — never a rebase or force-push — so git history is additive. Log the original SHA, the recompose reason, and the revert SHA per AC5; surface the alert message to the human.
+   - On `revert-failed`: the recompose failed AND the revert itself failed at the `revert` or `push` phase. The L4 file is on disk in the broken state; manual operator intervention is required. Surface the CRITICAL alert to the human verbatim.
+   - On `skip`: the PRD-E harness-watch contract is not yet wired in this install (`check_recompose_fn=None`). The orchestrator returns informationally; the caller logs the skip and continues. Until PRD-E lands, every L4 write returns this path.
+   
+   Append `format_iteration_log_entry(plan)` to the cycle's iteration log so the original SHA, recompose outcome, and revert SHA (when applicable) form a durable audit trail per AC5.
 
 #### When the request can't be fulfilled
 
