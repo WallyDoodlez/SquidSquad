@@ -1,5 +1,13 @@
 # QA Log
 
+## Agent Health — 2026-06-02 05:06
+
+- **skill**: 👻 stalled (~175m — `current-state` mtime `Jun 2 02:11`; well past 2× 30min interval)
+- **pm**: 🦑 healthy (`current-state` mtime `Jun 2 04:39`, ~27m, idle)
+- **verifier**: 👻 stalled (long-running, mtime `May 31 17:39`)
+- **dm**: 🦑 healthy (`current-state` mtime `Jun 2 04:39`, ~27m, idle)
+- **Notes**: skill stall is pipeline-blocking: #10673 (D2 v2 link-stage refs) + #10681 (E2 checksum plumbing) both bounced back to in-progress at 03:40 by DM due to PR merge conflicts; both need skill to `git merge origin/main` + re-push to re-enter QA flow. Without skill alive, PRD-D + PRD-E drain stalls. PM should boot skill (per `feedback_manual_agents`).
+
 ## Agent Health — 2026-06-01 11:06
 
 - **skill**: 🦑 healthy (11m, idle)
