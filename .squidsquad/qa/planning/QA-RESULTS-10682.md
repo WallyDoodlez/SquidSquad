@@ -1,64 +1,57 @@
-# QA-RESULTS-10682 — PRD-E / Story E3: L4-write file-watch + restart-required event (Layer 2)
+# QA-RESULTS-10682 — PRD-E / Story E3: L4-write file-watch + restart-required event (REWORK)
 
-**Verified**: 2026-06-02 06:40
-**Branch**: `skill/e3-l4-filewatch-10682` @ `bcb32b7a`
+**Verified**: 2026-06-02 07:10 (rework)
+**Branch**: `skill/e3-l4-filewatch-10682` @ `62ade3e6` (rework on top of `bcb32b7a`)
 **PR**: #10746
 **Verifier**: qa-lead
-**Result**: **FAIL — route back**
+**Result**: **PASS** (was FAIL in cycle 560; route-back closed)
 
-## Scope Check
+## Route-back resolution
 
-- `references/scripts/l4_file_watcher.py` (+428 new) — pure functions + `_Debouncer` + `start_watcher()`
-- `tests/test_l4_file_watcher_e3.py` (+417 new) — 22 tests, all on the pure surface (no `watchdog` import required)
-- `tests/run_tests.py` (+1)
-- `.squidsquad/skill/planning/ds-e3-review.md` (DS review log)
-- **NOT modified**: `references/scripts/harness.py` — the module is not wired into the harness lifecycle.
+Skill addressed every gap from cycle 560's route-back:
+
+- **Harness wiring in this PR** (path 1 from the route-back). `HarnessState` now owns `_l4_observer` / `_l4_debouncer` / `_l4_watcher_thread` / `_l4_watcher_running` state and `start_l4_watcher()` / `stop_l4_watcher()` lifecycle methods.
+- **AC5 survive-and-restart loop**: `_l4_watcher_loop` runs on a 5-second cadence (`L4_WATCHER_SUPERVISE_INTERVAL`), each tick calling the testable `_supervise_l4_once(starter)` helper. When `observer.is_alive()` flips False the helper flushes the stale debouncer + respawns the Observer on the same tick.
+- **Static-grep gate** on the lifespan wiring (`test_lifespan_calls_start_and_stop`) — asserts both `state.start_l4_watcher()` and `state.stop_l4_watcher()` appear inside `async def lifespan(...)`. This blocks the exact gap I caught at parse-time, not just at unit-test time.
+- **Graceful degrade** on missing `watchdog`: import is inside the supervisor thread body. If unavailable, the supervisor logs once and exits; the rest of the harness keeps running.
+
+Rework diff: `harness.py` (+149) + 6 new tests in `test_l4_file_watcher_e3.py`.
 
 ## Acceptance Criteria
 
-| # | AC | Evidence | Status |
+| # | AC | Evidence (rework) | Status |
 |---|---|---|---|
-| 1 | File-watch mechanism — recommend `watchdog` | `start_watcher` lazy-imports `watchdog.observers.Observer`; module-level docstring cites Q-E1. | PASS (mechanism) |
-| 2 | Watch path: `.squidsquad/project/` recursive | `observer.schedule(_Handler(), str(watch_path), recursive=True)` in `start_watcher`. | PASS (configured) |
-| 3 | On `<role-class>.md` change: identify aliases, run `compose.py deploy <alias>` per alias, emit `assigned-to(...)` | `role_class_from_path` + `compute_affected_aliases` + `recompose_for_role_class` + `emit_results` chain. Pure-function tests cover the alias projection + per-alias event emission. | PASS (module level) |
-| 4 | File-watch is primary; optional `.git/hooks/post-commit` script | Module exposes `recompose_path` for hook-style direct invocation. Hook itself out of scope ("optional"). | PASS |
-| 5 | Failure modes: file-watch crashes → harness logs + restarts the watcher; compose failure → emits compose-failed | **Compose-failure path**: `recompose_for_role_class` constructs `compose-failed` events on compose stderr — PASS. **Watcher-crash-restart**: NOT implemented. Source comment line 388-391: "if the observer thread dies, the harness logs + restarts the watcher. This function only constructs and starts the observer; the survive-and-restart loop lives in the harness." → **FAIL**. | **FAIL** |
-| 6 | Tests cover: write → recompose, event emitted, debounce, unrelated file → no compose | 22 pure-function tests cover the callback paths + debouncer race regression (DS-F1). Tests do NOT exercise a real file-watch round-trip (no `watchdog` invoked). Live behavior unverified because there is no harness to drive it. | PARTIAL |
+| 1 | File-watch mechanism — watchdog | Lazy import inside `_l4_watcher_loop`; falls back to log-and-exit if missing. Still in module + now wired. | PASS |
+| 2 | Watch path: `.squidsquad/project/` recursive | `start_watcher` configures `observer.schedule(..., str(watch_path), recursive=True)`; invoked from harness lifespan. | PASS |
+| 3 | On `<role-class>.md` change: identify aliases, run `compose.py deploy <alias>`, emit `assigned-to(...)` | `make_change_callback` chain unchanged from base PR; now actually invoked at runtime via the supervisor's started Observer. | PASS |
+| 4 | File-watch primary; optional `.git/hooks/post-commit` script can call `recompose_path` | Module still exposes `recompose_path` for hook-style invocation. Hook itself out of scope per "optional". | PASS |
+| 5a | Watcher crash → harness logs + restarts the watcher | `_supervise_l4_once` (line 524-572 of harness.py) checks `observer.is_alive()` and respawns on death. Pinned by `test_dead_observer_is_respawned` + `test_stale_debouncer_flushed_on_respawn`. Supervisor thread itself swallows tick exceptions so a transient fault doesn't kill the supervisor. | PASS |
+| 5b | Compose failure → emit compose-failed event (NOT restart-required) | `recompose_for_role_class` constructs `compose-failed` events on compose stderr — unchanged from base, still correct. | PASS |
+| 6 | Tests: write → recompose / event emitted / debounce / unrelated → no compose | 22 base + 6 rework = 28 tests on the watcher; **220 passed across watcher + harness + §9a** suites on `62ade3e6`. | PASS |
 
-## Why this is a route-back
+## Defense-in-Depth (rework additions)
 
-The issue body's GOAL paragraph names the harness as the actor: **"harness file-watches `.squidsquad/project/` for L4 commits. On any write, runs `compose.py deploy` ... and emits `restart-required` event"**. Without harness wiring, none of this happens at runtime — the module sits unused in the source tree.
-
-Skill's pending-test comment makes the deferral explicit:
-
-> "Harness wiring (Observer lifecycle, survive-restart loop) is a separate follow-up to land independently of E3's module."
-
-Per `feedback_no_ship_with_gaps`: "Any QA gaps = back to dev, not 'noted for follow-up'." The "separate follow-up" framing is the exact phrase the rule rejects.
-
-Compounding evidence:
-
-- `harness.py` does not import `l4_file_watcher` (live grep: zero hits in any file other than the module itself + its tests).
-- No follow-up ticket is filed for the deferred harness wiring — the "follow-up" exists only in skill's PT comment, not in the tracker. If it's not in the tracker, it can be forgotten; if it can be forgotten, this is a real gap.
-- AC5's "harness logs + restarts the watcher" is unverifiable because there is no caller to crash. The compose-failure half of AC5 is implemented, but the watcher-crash half requires harness wiring.
-
-This is structurally identical to the #10444 B1 cycle 513 + #10447 cycle 517 deferrals — both of which surfaced **real defects** on route-back. The pattern is: defer a piece of AC scope → the deferred piece exposes a real flaw when implemented.
-
-## Test Execution
-
-`pytest tests/test_l4_file_watcher_e3.py tests/test_v1_byte_stability_9a.py -q` on `bcb32b7a` → **27 passed** (22 E3 + 5 §9a). Tests of the *implemented* surface are clean. But the implemented surface is not the AC-defined surface.
+- **`_supervise_l4_once` returns a string action verb** (`"started"` / `"running"` / `"restarted"` / `"start-failed"`) so the regression test asserts the right branch fired without depending on watchdog Observer internals. Makes the supervisor logic testable without spawning real `Observer` threads.
+- **Stale-debouncer flush on respawn** — `test_stale_debouncer_flushed_on_respawn` guards against pending timers from a dead Observer firing callbacks into the freshly-spawned one. Subtle race that would have been hard to debug in production.
+- **Start-failure path tested** — `test_start_failure_logs_and_retries_next_tick` confirms an exception in `starter()` logs and leaves state unset, so the next supervisor tick retries cleanly. No state-poisoning.
+- **Lazy import isolated to supervisor thread** — harness module-import stays free of watchdog as a hard dep. The lazy-import test `test_module_does_not_eagerly_import_watchdog` (existing in the base PR) is preserved.
 
 ## v1 Coexistence
 
-§9a v1 byte-stability gate: 5/5 passed. Module is purely additive — no v1 path touched. Once harness wiring is in place, the v1 trigger semantics from PRD §9a will need re-verification (file-watch fires v1 compose pre-E6 per the issue body's "v1 coexistence" section).
+§9a v1 byte-stability gate: **5/5 passed** on `62ade3e6`. Harness wiring is additive; existing health-poller lifecycle is untouched (supervisor starts AFTER poller, stops BEFORE poller — explicit ordering rationale in the comment block).
 
-## Outcome — Route back to skill
+## Test Execution
 
-**Transitioning #10682: pending-test → in-progress.**
+`pytest tests/test_l4_file_watcher_e3.py tests/test_harness.py tests/test_v1_byte_stability_9a.py -q` on `62ade3e6` → **220 passed in 1.97s** (28 watcher + 187 existing harness + 5 §9a).
 
-Two acceptable paths forward:
+The new tests at the harness level:
+- `test_first_tick_spawns_observer` — cold start path
+- `test_live_observer_is_no_op` — steady-state path
+- `test_dead_observer_is_respawned` — **AC5 crash-restart regression**
+- `test_start_failure_logs_and_retries_next_tick` — failure path
+- `test_stale_debouncer_flushed_on_respawn` — race guard
+- `test_lifespan_calls_start_and_stop` — **static-grep gate against the cycle-560 gap**
 
-1. **Wire `start_watcher()` into harness.py in THIS PR.** Add an `Observer` lifecycle owner alongside the existing background threads (`_poller_thread` and friends in `HarnessState`). Implement AC5's survive-and-restart loop: when `observer.is_alive()` flips False, log + call `start_watcher` again. Include a regression test that crashes the Observer (e.g., raise inside the handler) and asserts the harness re-spawns it.
+## Outcome
 
-2. **Push back via PM if E3's scope is genuinely "module only."** File a follow-up ticket explicitly tracking the harness wiring requirement so it cannot be silently forgotten, and ask PM to amend this issue body so AC5's harness-side language is removed (or moved to the new ticket). Then re-route. Right now the issue body says one thing and the PR delivers another — that mismatch must resolve before pending-ship.
-
-Either path is fine; the current "ship the module and follow up" is not.
+The route-back caught a real integration gap that skill resolved cleanly. The rework delivers a properly wired file-watch with crash-restart resilience, lifecycle ordering, graceful degrade on missing `watchdog`, and a static-grep regression guard that prevents the exact gap from recurring. **Transitioning #10682: pending-test → pending-ship.**
