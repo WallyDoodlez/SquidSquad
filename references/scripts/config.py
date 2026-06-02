@@ -296,6 +296,25 @@ def set_field(field, value):
 
 ALIASES_ROLE_CLASSES = frozenset({"pm", "worker", "verifier", "dm"})
 
+# #6274 dual-aware shim mirror — bullet-form fallback and table-form
+# normalization both pre-map legacy aliases (`qa` → `verifier`,
+# `dev` → `worker`) before validation, so a real install that still
+# declares `- **qa**: qa` resolves to `(verifier, None)` instead of
+# raising "unknown role-class `qa`". Symmetric with
+# `compose._BASE_ALIAS_6274` — avoids importing compose into config
+# (would create a cycle).
+_BULLET_LEGACY_ROLE_CLASS_SHIM = {"qa": "verifier", "dev": "worker"}
+
+# Worker-variant L3 domains carry the "skill" / "ios" / "web" /
+# "android" / "fullstack" shorthand in the legacy bullet form
+# (`- **skill**: skill` means alias=skill / role_class=worker /
+# l3_domain=skill — the dev-agent L3 fan-out). Used only by the
+# bullet-form fallback; table-form callers pass the explicit
+# (role-class, L3 domain) cells.
+_BULLET_LEGACY_WORKER_L3_DOMAINS = frozenset({
+    "skill", "ios", "web", "android", "fullstack",
+})
+
 # U+2014 EM DASH only. Hyphen-minus and en-dash are rejected by the strict
 # cell comparison below, giving the operator a crisper diagnostic than
 # silent acceptance of three lookalike characters.
@@ -312,6 +331,75 @@ class AliasesRegistryError(ValueError):
     config-parsing errors keep working; tests assert against the more
     specific type when they care about the diagnostic source.
     """
+
+
+def _parse_aliases_bullet_form(section_text):
+    """Parse the legacy bullet-form `## Aliases` block.
+
+    Recognizes lines of shape ``- **<alias>**: <value>`` and returns
+    ``{alias: (role_class, l3_domain)}`` using these rules:
+
+    - ``<value>`` in ``ALIASES_ROLE_CLASSES`` -> ``role_class=value``,
+      ``l3_domain=None``.
+    - ``<value>`` in ``_BULLET_LEGACY_ROLE_CLASS_SHIM`` (e.g. ``qa`` /
+      ``dev``) -> ``role_class=<shim-target>`` (``verifier`` /
+      ``worker``), ``l3_domain=None``.
+    - ``<value>`` in ``_BULLET_LEGACY_WORKER_L3_DOMAINS`` (e.g.
+      ``skill`` / ``ios`` / ``web`` / ``android`` / ``fullstack``)
+      -> ``role_class="worker"``, ``l3_domain=<value>``. This is the
+      legacy convention that ``- **skill**: skill`` declares a
+      worker-skill variant.
+    - Any other ``<value>`` -> bullet form does not recognize it;
+      ``_parse_aliases_bullet_form`` returns ``{}`` so the caller
+      raises its normal "needs table format" diagnostic.
+
+    Returns ``{}`` (NOT ``None``) when the section has NO bullet rows
+    at all so the caller's "needs table format" diagnostic stays the
+    canonical on-empty path. When at least one bullet row IS present,
+    every row must resolve via the rules above — an unrecognized value
+    raises :class:`AliasesRegistryError` rather than being silently
+    dropped. Per DS-10751 review: silent skip + ``return registry``
+    (when other rows were recognized) would make a single-character
+    typo like ``- **skill**: skil`` invisible to the operator; matches
+    the docstring's "rather than silently dropping it" guarantee.
+    """
+    bullet_re = re.compile(
+        r"^\s*-\s+\*\*([^*]+)\*\*\s*:\s*(\S+)\s*$",
+    )
+    registry = {}
+    for raw_line in section_text.splitlines():
+        m = bullet_re.match(raw_line)
+        if m is None:
+            continue
+        alias, value = m.group(1).strip(), m.group(2).strip()
+        if not alias or not value:
+            continue
+        if value in ALIASES_ROLE_CLASSES:
+            role_class, l3_domain = value, None
+        elif value in _BULLET_LEGACY_ROLE_CLASS_SHIM:
+            role_class = _BULLET_LEGACY_ROLE_CLASS_SHIM[value]
+            l3_domain = None
+        elif value in _BULLET_LEGACY_WORKER_L3_DOMAINS:
+            role_class, l3_domain = "worker", value
+        else:
+            # Unrecognized value — raise so a typo can't slip past
+            # the operator. Names the bullet that failed AND the
+            # accepted value set so the fix is obvious from the
+            # diagnostic alone.
+            raise AliasesRegistryError(
+                f"`## Aliases` bullet form has unrecognized value "
+                f"`{value}` for alias `{alias}`. Accepted values are "
+                f"role-classes ({sorted(ALIASES_ROLE_CLASSES)}), legacy "
+                f"shim aliases ({sorted(_BULLET_LEGACY_ROLE_CLASS_SHIM)}), "
+                f"or worker L3 domains "
+                f"({sorted(_BULLET_LEGACY_WORKER_L3_DOMAINS)})."
+            )
+        if alias in registry:
+            raise AliasesRegistryError(
+                f"`## Aliases` bullet form has duplicate alias `{alias}`."
+            )
+        registry[alias] = (role_class, l3_domain)
+    return registry
 
 
 def _split_table_row(line):
@@ -367,10 +455,20 @@ def parse_aliases_registry(text=None):
         rows.append(cells)
 
     if not rows:
+        # #10751 ERROR: bullet-form fallback. Real installs still ship
+        # the legacy `- **alias**: value` form (e.g. this repo's
+        # config.md). Without the fallback every v2 deploy aborts here
+        # before any link-stage work. Symmetric in semantics with the
+        # canonical 3-column table — see `_parse_aliases_bullet_form`
+        # for the per-row interpretation.
+        bullet_registry = _parse_aliases_bullet_form(section_text)
+        if bullet_registry:
+            return bullet_registry
         raise AliasesRegistryError(
             "`## Aliases` section is present but contains no table — expected "
             "a 3-column markdown table with header `| alias | role-class | "
-            "L3 domain |` (see COMPOSE-ARCHITECTURE §3.0)."
+            "L3 domain |` (see COMPOSE-ARCHITECTURE §3.0), OR the legacy "
+            "`- **alias**: value` bullet form."
         )
 
     header = rows[0]
@@ -409,11 +507,19 @@ def parse_aliases_registry(text=None):
                 f"`## Aliases` data row {data_row_index} (`{alias}`) has an "
                 f"empty `role-class` cell."
             )
+        # #10751 W2: pre-normalize via the #6274 shim so a real
+        # install with `qa` / `dev` in the role-class column resolves
+        # to `verifier` / `worker` instead of raising. Symmetric with
+        # `_parse_aliases_bullet_form` above and with
+        # `compose._BASE_ALIAS_6274` elsewhere.
+        if role_class in _BULLET_LEGACY_ROLE_CLASS_SHIM:
+            role_class = _BULLET_LEGACY_ROLE_CLASS_SHIM[role_class]
         if role_class not in ALIASES_ROLE_CLASSES:
             raise AliasesRegistryError(
                 f"`## Aliases` data row {data_row_index} (`{alias}`) has "
                 f"unknown role-class `{role_class}` — must be one of "
-                f"{sorted(ALIASES_ROLE_CLASSES)}."
+                f"{sorted(ALIASES_ROLE_CLASSES)} (with legacy `qa`/`dev` "
+                f"auto-mapped to `verifier`/`worker`)."
             )
         if alias in registry:
             raise AliasesRegistryError(

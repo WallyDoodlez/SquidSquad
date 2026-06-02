@@ -52,12 +52,32 @@ def _stage_minimal_install(tmp_path, alias="pm", role="pm"):
         roles=[role],
     )
 
+    # PRD-D D3 (#10674) catalog gate: deploy_alias_v2 now consults
+    # docs/sub-skill-catalog.md after emit_v2_linked. The fixture's
+    # instructions slot doesn't emit any `→ run sub-skill:` references
+    # (just `### step:` markers and prose), so a minimal one-section
+    # catalog with at least one valid row is enough to pass the gate.
+    catalog = tmp_path / "docs" / "sub-skill-catalog.md"
+    catalog.parent.mkdir(parents=True, exist_ok=True)
+    catalog.write_text(
+        "## `common/` — Cross-cutting\n\n"
+        "| Sub-skill | One-liner | Used by |\n"
+        "|---|---|---|\n"
+        "| `boot-bootstrap` | Mode detection | all |\n",
+        encoding="utf-8",
+    )
+
     # Aliases registry: alias -> role (no L3 domain).
+    # #10751 W1: canonical column header is `| alias | role-class |
+    # L3 domain |` (lowercase, hyphen). The previous "Role class" with
+    # space silently fell through `parse_aliases_registry`'s strict
+    # comparison and only passed in this test because the test bypasses
+    # the parser via a pre-built registry dict elsewhere.
     config_md = tmp_path / ".squidsquad" / "config.md"
     config_md.parent.mkdir(parents=True, exist_ok=True)
     config_md.write_text(
         "## Aliases\n\n"
-        "| Alias | Role class | L3 domain |\n"
+        "| alias | role-class | L3 domain |\n"
         "|---|---|---|\n"
         f"| {alias} | {role} | |\n",
         encoding="utf-8",
