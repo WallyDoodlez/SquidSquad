@@ -17,6 +17,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Recently Shipped
 
+- **EPIC PRD-C: L4 customization stack** (shipped 2026-06-01, cycles 1490-1499) — 10 stories C1-C10 covering the full L4 project-role customization flow: sub-skill prose (C1) + wire-up (C2) + 5-gate safety model (C3 DS audit / C4 mini-CQ / C5 compose dry-run / C6 atomic write+commit+push / C7 recompose-failure recovery) + Gate 0 conflict pre-emption (C8) + counter-entry/in-place-delete removal flow (C9) + comprehension tests (C10). ~6 new helper modules in `references/scripts/l4_*.py`, ~200 unit tests. Architectural pattern: never-raises orchestrators for multi-failure-mode helpers (C5/C6/C7/C9); raise-on-failure for LLM gates (C3/C8).
 - #6274 Generalize 'dev' to 'worker' across architecture (shipped 2026-05-23) — terminology rename: dev→worker, qa→verifier across L1-L4
 - #9184 PM defines ACs only / QA owns TEST-PLAN + CQs (shipped 2026-05-19, cycle 1499) — workflow restructure across pm/dev/qa sub-skills + L3 CQ directive rewrite + #8950 patch
 - #9243 Harness /status exposes code_version (shipped 2026-05-19, cycle 1498)
