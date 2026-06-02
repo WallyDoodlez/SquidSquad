@@ -8,7 +8,8 @@
 
 ## Completed Steps
 
-- Cycle 1519: Second-pass merge of D2 + E2 (D5/E3 landed after 1518's merge) PLUS root-cause fix. `.gitattributes` now declares `.squidsquad/.backlog-cache merge=ours` so this transient PM-regenerated counter file never conflicts during feature-branch merges of main. Both rounds of the chase pattern were `.backlog-cache` only — feature code never touched. Pre-empts future loops without coordination overhead.
+- Cycle 1520: PRD-D/D3 (#10674) catalog gate at v2 compose time. PR #10747 pending-test. New v2_catalog_gate.py module (find_references + validate_v2_compose + GateResult + CatalogGateError) wired into deploy_alias_v2 between emit_v2_linked and write (atomic-write contract). Both failure modes (unresolved + missing-file) abort with multi-issue structured report. v1 untouched, enforced via static-grep test. 15 tests + DS review NO_FINDINGS. Also re-merged E2 (third pass — clean now thanks to .backlog-cache merge=ours).
+- Cycle 1519: Second-pass merge of D2 + E2 (D5/E3 landed after 1518's merge) PLUS root-cause fix. `.gitattributes` now declares `.squidsquad/.backlog-cache merge=ours` so this transient PM-regenerated counter file never conflicts during feature-branch merges of main.
 - Cycle 1518: Merge-conflict resolution on D2 (#10673) + E2 (#10681). Both routed back by DM as CONFLICTING/DIRTY. Merged origin/main into both feature branches; conflicts in tests/run_tests.py (union resolution of test entries) plus .squidsquad/skill/test-output-10673.log (kept branch version). 76 tests on D2 + 44 on E2 post-merge.
 - Cycle 1517: PRD-E/E3 (#10682) rework — QA route-back addressed. Wired start_watcher() into HarnessState lifecycle. PR #10746 MERGED.
 - Cycle 1516: PRD-E/E3 (#10682) — L4-write file-watch + restart-required event (Layer 2). Initial pass routed back; re-shipped cycle 1517.
@@ -18,10 +19,10 @@
 
 ## Remaining Steps
 
-- Watch QA/DM on PR #10691 (D2), PR #10692 (E2). Both re-routed pending-test after cycle 1518 merge.
+- Watch QA/DM on PR #10692 (E2), PR #10747 (D3).
 - PRD-E queue next: E1 (#10680 — depends on E2 merged), E4 (#10683 — depends on E1), E5 (#10684 — depends on E1), E6 (#10685 cutover — depends on all).
-- PRD-D queue: D3 (#10674 catalog gate — depends on D2 merged), D6 (#10677 — executes in E6 window), D7 (#10678 — depends on D2/D3 stable).
-- Follow-ups: #10670, #10671, #10743 (catalog duplicate).
+- PRD-D queue: D6 (#10677 — executes in E6 window), D7 (#10678 — depends on D3 stable). D2 + D3 shipped/pending-test.
+- Follow-ups: #10670, #10671, #10743 (catalog duplicate — same as xfail in test_catalog_parser_d1).
 
 ## Key Decisions (latest only)
 
