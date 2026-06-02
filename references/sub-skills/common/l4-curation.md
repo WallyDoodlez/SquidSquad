@@ -140,6 +140,14 @@ When a customization request is detected, walk this dialog before writing L4. St
 
    Only after all four gates pass is the L4 customization durable. Gates 1-3 are dry checks (no on-disk change); Gate 4 is the single point at which the staged text becomes the new L4 file. The gates are agent-side, not part of the compose pipeline itself — the file does not change until all four are green, and on any failure between gates the staged text is discarded with no on-disk side effect.
 
+9. **Watch for the post-commit recompose race (Gate 5, C7)**: after Gate 4 commits + pushes the L4 file, the harness's file-watch (per PRD-E) triggers `compose.py deploy-all` to fold the new L4 prose into every role-class's composed CLAUDE.md. If that recompose fails, the on-disk L4 file no longer matches what the compose pipeline accepts — the next agent boot would read stale composed prose. Invoke `references/scripts/l4_recompose_recovery.py:recover_on_recompose_failure(commit_sha=write_result.committed_sha, check_recompose_fn=harness_recompose_status, ...)` to handle the race. The orchestrator polls within a bounded window and:
+   - On `success-no-action`: log + continue cycle normally.
+   - On `revert-attempted`: the recompose failed (or timed out) and the helper successfully landed a `git revert <sha> --no-edit` + push. The revert is a NEW commit on top of HEAD per AC4 — never a rebase or force-push — so git history is additive. Log the original SHA, the recompose reason, and the revert SHA per AC5; surface the alert message to the human.
+   - On `revert-failed`: the recompose failed AND the revert itself failed at the `revert` or `push` phase. The L4 file is on disk in the broken state; manual operator intervention is required. Surface the CRITICAL alert to the human verbatim.
+   - On `skip`: the PRD-E harness-watch contract is not yet wired in this install (`check_recompose_fn=None`). The orchestrator returns informationally; the caller logs the skip and continues. Until PRD-E lands, every L4 write returns this path.
+   
+   Append `format_iteration_log_entry(plan)` to the cycle's iteration log so the original SHA, recompose outcome, and revert SHA (when applicable) form a durable audit trail per AC5.
+
 #### When the request can't be fulfilled
 
 If the customization the human asks for contradicts how SquidSquad is built — e.g., asking a delivery role to write production code, asking for mid-cycle role switching, asking an agent to skip approvals — explain the capability boundary in plain terms and offer the closest request the system *can* fulfill. Never narrate internal mechanisms as the reason; describe the team's working model functionally.
