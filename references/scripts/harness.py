@@ -98,6 +98,19 @@ _NO_AUTO_START = False
 # (HARNESS-ARCH §14) during a harness restart.
 _NO_AUTO_REBOOT = False
 
+# PRD-E E5 (#10684): operator escape hatch for the E1 boot/restart
+# freshness gate. When True (set by ``main()`` from
+# ``--no-freshness-check`` or ``SQUIDSQUAD_HARNESS_NO_FRESHNESS_CHECK=1``),
+# the lifespan SKIPS ``compose_freshness.check_and_repair`` entirely
+# and proceeds straight to deferred-init. Use ONLY for emergency boots
+# where the operator already knows the compose set is correct and
+# needs the harness up before the (potentially slow) compose subprocess
+# can run. The flag does NOT bypass the spawn-refusal contract — if a
+# previous boot persisted ``compose_freshness_failed=True``, that's
+# still honored. Operators bypassing the check are responsible for
+# verifying source freshness themselves.
+_NO_FRESHNESS_CHECK = False
+
 import boot_remote
 import health_check
 import reboot_agent
@@ -213,11 +226,15 @@ class HarnessState:
         self._l4_watcher_thread = None
         self._l4_observer = None
         self._l4_debouncer = None
-        # PRD-E E1 (#10680) — boot-time freshness gate. Set to True by
-        # ``_deferred_init`` when ``compose_freshness.check_and_repair``
-        # returns ``status="failed"``. The auto-start loop short-
-        # circuits when this is True; per AC4 the harness refuses to
-        # spawn agents until the operator fixes the source + restarts.
+        # PRD-E E1 (#10680) / E5 (#10684) — boot-time freshness gate.
+        # Set to True by the lifespan freshness-check block when
+        # ``compose_freshness.check_and_repair`` returns
+        # ``status="failed"``. The deferred-init thread, the HTTP
+        # ``/agents/*/start`` endpoints, and the health-poller auto-
+        # reboot loop all read this flag to refuse spawning. Per E5
+        # AC2 the flag is persisted to ``.harness-state.json`` so it
+        # survives harness restart — a prior failure stays in effect
+        # until the operator fixes the source set + restarts.
         self.compose_freshness_failed = False
 
     def get_agent(self, role: str) -> AgentState | None:
@@ -618,6 +635,12 @@ class HarnessState:
                 # Persisted at the top level (not per-agent) since the
                 # checksum spans the whole compose-input set.
                 "last_compose_checksum": self.last_compose_checksum,
+                # PRD-E E5 (#10684) / DS-10684 F1: persist the failure
+                # flag so a `--no-freshness-check` restart after a prior
+                # failure still sees the failure and refuses to spawn.
+                # Legacy state files without the key default to False
+                # on read (see load_state).
+                "compose_freshness_failed": self.compose_freshness_failed,
                 "agents": {
                     role: {
                         "intent": a.intent,
@@ -665,6 +688,12 @@ class HarnessState:
             # (which E1 reads as drift on first boot, triggering compose).
             # An explicit null in the file is also honored.
             self.last_compose_checksum = state_data.get("last_compose_checksum")
+            # PRD-E E5 (#10684) / DS-10684 F1: restore the failure flag
+            # so a prior failed boot stays in effect across restart.
+            # Legacy state files default safely to False.
+            self.compose_freshness_failed = bool(
+                state_data.get("compose_freshness_failed", False)
+            )
             for role, agent_data in state_data.get("agents", {}).items():
                 if role not in self.agents:
                     self.agents[role] = AgentState(
@@ -1452,21 +1481,36 @@ async def lifespan(app: FastAPI):
     # health poller's auto-reboot loop also gates on the flag.
     _log("Loading saved state...")
     state.load_state()
-    try:
-        import compose_freshness as _cf
-        _freshness = _cf.check_and_repair(
-            repo_root=REPO_ROOT,
-            stored_checksum=state.get_last_compose_checksum(),
-        )
-    except Exception as e:  # noqa: BLE001 — defensive against import bugs
+    if _NO_FRESHNESS_CHECK:
+        # PRD-E E5 (#10684) AC3: operator escape hatch for emergency
+        # boots. Logs ONCE so the bypass surfaces in the audit trail.
         _log(
-            f"WARNING: compose_freshness check raised {e!r}; proceeding "
-            f"without the E1 gate (degraded boot)"
+            "compose freshness check SKIPPED — `--no-freshness-check` "
+            "or `SQUIDSQUAD_HARNESS_NO_FRESHNESS_CHECK=1` is set. "
+            "Operator is responsible for source-tree freshness."
         )
         _freshness = None
+    else:
+        try:
+            import compose_freshness as _cf
+            _freshness = _cf.check_and_repair(
+                repo_root=REPO_ROOT,
+                stored_checksum=state.get_last_compose_checksum(),
+            )
+        except Exception as e:  # noqa: BLE001 — defensive against import bugs
+            _log(
+                f"WARNING: compose_freshness check raised {e!r}; proceeding "
+                f"without the E1 gate (degraded boot)"
+            )
+            _freshness = None
     if _freshness is not None:
         if _freshness.status == "failed":
             state.compose_freshness_failed = True
+            # DS-10684 F2: persist the flag immediately so a harness
+            # crash between here and the next save_state-triggering
+            # event doesn't lose the failure signal. Matches the
+            # `repaired` branch's flush pattern below.
+            state.save_state()
             _log(
                 "ERROR: compose freshness check FAILED — harness will NOT "
                 "spawn agents. Operator: fix the source issue + restart "
@@ -3196,6 +3240,20 @@ def main():
             "Honors `SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT=1` too."
         ),
     )
+    parser.add_argument(
+        "--no-freshness-check",
+        action="store_true",
+        help=(
+            "Skip the PRD-E E1 boot-time compose freshness check (#10684 / "
+            "E5 escape hatch). The lifespan still loads state and gates "
+            "spawn paths on a persisted `compose_freshness_failed=True`, "
+            "but does NOT re-run `compose.py deploy-all`. Use ONLY for "
+            "emergency boots where the operator already knows the compose "
+            "set is correct and needs the harness up before the compose "
+            "subprocess can run. Honors "
+            "`SQUIDSQUAD_HARNESS_NO_FRESHNESS_CHECK=1` too."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -3203,11 +3261,16 @@ def main():
     # honors the `SQUIDSQUAD_HARNESS_NO_AUTO_START=1` env var so callers
     # that don't go through argparse (e.g. test harnesses, restart
     # scripts) can opt in too.
-    global _NO_AUTO_START, _NO_AUTO_REBOOT
+    global _NO_AUTO_START, _NO_AUTO_REBOOT, _NO_FRESHNESS_CHECK
     env_flag = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_START", "")
     _NO_AUTO_START = args.no_auto_start or env_flag.lower() in ("1", "true", "yes")
     env_reboot = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT", "")
     _NO_AUTO_REBOOT = args.no_auto_reboot or env_reboot.lower() in ("1", "true", "yes")
+    env_freshness = os.environ.get("SQUIDSQUAD_HARNESS_NO_FRESHNESS_CHECK", "")
+    _NO_FRESHNESS_CHECK = (
+        args.no_freshness_check
+        or env_freshness.lower() in ("1", "true", "yes")
+    )
 
     # Determine port
     desired_port = args.port or _read_config_port()

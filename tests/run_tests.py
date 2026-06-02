@@ -150,6 +150,7 @@ STATIC_TEST_MODULES = [
     "test_manifest_v2_d5",
     "test_l4_file_watcher_e3",
     "test_compose_freshness_e1",
+    "test_harness_freshness_restart_e5",
 ]
 
 
