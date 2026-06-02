@@ -8,6 +8,7 @@
 
 ## Completed Steps
 
+- Cycle 1534 (Phase 2 — drop `--v2` flag): recovered Phase 2 work-in-progress left uncommitted by the previous skill session (compose.py + 2 test files mid-edit; the user-visible 996-line agent-instructions.md "rewrite" turned out to be test-side-effect drift from `test_cli_check_on_unrecognized_command_emits_warning` running `compose all` in subprocess without monkeypatching `OUTPUT_FILE` — reverted, see watch list). Updated `compose.py` `main()` to silently strip `--v2` from argv; retired the `--check + --v2` reserved-error path; collapsed the v1 `deploy_role` + `derive_and_write_event_contracts` side effect in the `deploy` cmd (route unconditionally through `deploy_alias_v2`); collapsed the `if v2_mode:` branch in the `deploy-all` cmd (iterate `parse_aliases_registry()` always; install topology bookkeeping runs after as a harness-wiring concern). Updated tests/test_compose_a6_v2.py (header assertions drop `--v2`; bare-deploy test renamed v1→v2 default; legacy "warn unsupported-cmd" → "accept silently"). Updated tests/test_compose_check_a4_10388.py (retire `--check + --v2` case). Updated tests/test_compose_a2f_10492.py (post-cutover header assertion). Phase 1 followup: deleted stale `test_manifest_v2_d5` entry from tests/run_tests.py (test file was deleted in Phase 1, runner reference left behind). Single commit `559a861c`. 53 / 54 affected tests pass; 1 skipped. DS review for `10685-phase2` launched in background (job `bc6ml5j38`).
 - Cycle 1533 (Phase 1 — manifest unification): renamed per-role `includes-v2.yml` → `includes.yml` for all 4 roles (pm/dm/verifier/worker); deleted v1 `includes.yml` (the polling manifest) and `includes-events.yml` (the events split); pointed `compose.py`'s `_V2_MANIFEST_FILENAME` constant at the new canonical name; deleted `tests/test_manifest_v2_d5.py` (the v1/v2 coexistence test file) and `TestLoadManifestSelectsByWakeMode` class in `tests/test_compose.py` (both gate behavior being retired by the cutover). Two commits on branch: `01fcc923` (Phase 1) + `0160f296` (DS-10685-phase1 F1-F4 doc fixup — `_load_manifest_v2`/`_load_manifest_v2_from_file` docstrings + 4 manifest header comments rewritten to describe post-E6 state; F5 was false-positive). 145 / 146 affected tests pass; 1 pre-existing fail (`test_event_driven_workflow_has_no_frontmatter`) slated for Phase 5 D6 retirement.
 - Cycle 1532: QUIET — DS-audit umbrella fully drained (A/B/C all shipped). All E6 cutover pre-reqs met. PM applied hard hold on #10685 (removed role:skill, added blocked:audit-review + blocked:pm-coordination) until pre-reqs were met. Posted unblock-notification comment on #10685; awaiting PM re-label.
 - Cycle 1531: PRD-B audit umbrella CLOSED on PR #10765.
@@ -26,7 +27,6 @@
 
 ## Remaining Steps on E6 Branch (skill/e6-v2-cutover-10685)
 
-- Phase 2: drop `--v2` CLI flag from compose.py; make v2 path the default; collapse the `if v2_mode:` branches in `main()`. Estimated medium scope — multiple call sites + tests.
 - Phase 3: delete v1 `deploy_role`, v1 `_load_manifest`, v1 hint emit, v1 `_resolve_includes` manifest-split logic. Estimated large scope — most v1 code paths in compose.py go away.
 - Phase 4: flip `atomic_emit._atomic_write_triple` `filename_suffix` default from `.v2.md` to `""` so v2 outputs land at v1 paths.
 - Phase 5: D6 (#10677) work — remove `event-driven:` field from config.md template; config.py silently ignores the field for backward compat.
@@ -34,13 +34,20 @@
 - Phase 7: AC10 cumulative DS review pre-merge (or rely on per-phase DS reviews).
 - Phase 8: open single squash-PR with logical commit groupings; PM/QA gate; DM merge.
 
-## Pre-existing test failure to track
+## Pre-existing test failures to track (additive — confirmed pre-existing on branch HEAD via stash test)
 
-- `test_compose.py::TestEventDrivenWorkflowLocation::test_event_driven_workflow_has_no_frontmatter` was failing on `main` BEFORE this branch (verified via stash test). Will be retired in Phase 5 (D6) when the event-mode boot path is folded down. Not a follow-up to file — slated for in-branch cleanup.
+- `test_compose.py::TestEventDrivenWorkflowLocation::test_event_driven_workflow_has_no_frontmatter` — retire in Phase 5 (D6) when event-mode boot path folds down.
+- `test_l4_parser.py::test_v1_compose_untouched` — guards "compose.py has not imported l4_parser yet"; contradicted by post-A2 compose.py, retired by E6 cutover. Retire in Phase 3 with v1 path deletion.
+- `test_source_frontmatter.py::test_v1_compose_untouched` — same shape, guards `source_frontmatter` import. Retire in Phase 3.
+- `test_feat_6126_harness_merge.py::TestEventReactionsTable::test_compose_completed_in_table` — missing `references/sub-skills/common/event-reactions.md` (pre-existing infra gap); investigate separately, not E6-scope.
+- `test_feat_9588_lazy_load_bootstrap.py::test_tc_14_compose_runtime_read_frozenset_present` — `RUNTIME_READ_FRAGMENTS` missing `roles/dev/ralph-loop-overview` (pre-existing); investigate separately, not E6-scope.
+- `test_feat_10681_compose_checksum.py` — ImportError on `HarnessState` (collection failure, pre-existing); investigate separately, not E6-scope.
 
 ## Watch list
 
-- DS review #10685-phase1 (background task `b9dv1dqhd`) — address any findings as a fixup commit next cycle.
+- DS review #10685-phase2 (background task `bc6ml5j38`) — address findings as a fixup commit next cycle.
+- DS review #10685-phase1 (background task `b9dv1dqhd`) — already addressed in commit `0160f296`; confirm green.
+- Test isolation bug: `test_cli_check_on_unrecognized_command_emits_warning` writes the real `references/agent-instructions.md` (subprocess `compose all` without `OUTPUT_FILE` monkeypatch). File improvement-scan issue next quiet cycle if not already filed.
 - PR #10692 (E2), PR #10748 (D7) for QA/DM movement.
 - All other audit/D/E PRs upstream.
 
