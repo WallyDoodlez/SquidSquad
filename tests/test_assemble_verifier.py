@@ -349,3 +349,182 @@ def test_code_block_parity_either_side_failure_fails_combined():
     linked = _fenced(5) + "\n" + _inline(10)
     assembled = _fenced(5) + "\n" + _inline(7)  # fenced fine, inline -30%
     assert av.check_code_block_parity(linked, assembled) is False
+
+
+# ---------------------------------------------------------------------------
+# PRD-B #10752 W1 — verify_fenced_block_content + verify_file_paths
+# ---------------------------------------------------------------------------
+
+from pathlib import Path  # noqa: E402
+
+_PY_BLOCK = "```python\nprint('hello')\n```"
+_BASH_BLOCK = "```bash\ncd /tmp\n```"
+
+
+class TestVerifyFencedBlockContent:
+
+    def test_identity_passes(self):
+        text = f"prose\n\n{_PY_BLOCK}\n\nmore\n\n{_BASH_BLOCK}\n"
+        missing, extra = av.verify_fenced_block_content(text, text)
+        assert missing == []
+        assert extra == []
+
+    def test_swapped_body_fails(self):
+        # Same count, same lang tags, but the body content was rewritten.
+        # check_code_block_parity passes (counts match); content check
+        # catches the swap.
+        linked = f"prose\n\n{_PY_BLOCK}\n"
+        assembled = "prose\n\n```python\nprint('CHANGED')\n```\n"
+        missing, extra = av.verify_fenced_block_content(linked, assembled)
+        assert missing == [("python", "print('hello')")]
+        assert extra == [("python", "print('CHANGED')")]
+        # The parity counter agrees both texts have 1 block — that's
+        # the gap this check closes.
+        assert av.check_code_block_parity(linked, assembled) is True
+
+    def test_dropped_block_fails(self):
+        linked = f"a\n\n{_PY_BLOCK}\n\nb\n\n{_BASH_BLOCK}\n"
+        assembled = f"a\n\nb\n\n{_BASH_BLOCK}\n"
+        missing, extra = av.verify_fenced_block_content(linked, assembled)
+        assert missing == [("python", "print('hello')")]
+        assert extra == []
+
+    def test_added_block_fails(self):
+        linked = f"a\n\n{_PY_BLOCK}\n"
+        assembled = f"a\n\n{_PY_BLOCK}\n\n{_BASH_BLOCK}\n"
+        missing, extra = av.verify_fenced_block_content(linked, assembled)
+        assert missing == []
+        assert extra == [("bash", "cd /tmp")]
+
+    def test_no_blocks_at_all_passes(self):
+        missing, extra = av.verify_fenced_block_content(
+            "just prose", "rewritten prose")
+        assert missing == []
+        assert extra == []
+
+
+class TestVerifyFilePaths:
+
+    def test_identity_passes(self):
+        text = (
+            "See references/scripts/foo.py for details, and "
+            "docs/COMPOSE-ARCHITECTURE.md for the spec.\n"
+        )
+        missing, extra = av.verify_file_paths(text, text)
+        assert missing == []
+        assert extra == []
+
+    def test_dropped_path_fails(self):
+        # SC3 item 4 failure mode: the LLM rewrote the prose into
+        # "see the script" and no longer names the script.
+        linked = "Read references/scripts/foo.py for the helper."
+        assembled = "Read the helper script for details."
+        missing, extra = av.verify_file_paths(linked, assembled)
+        assert "references/scripts/foo.py" in missing
+        assert extra == []
+
+    def test_substituted_path_fails(self):
+        linked = "See references/scripts/foo.py."
+        assembled = "See references/scripts/bar.py."
+        missing, extra = av.verify_file_paths(linked, assembled)
+        assert missing == ["references/scripts/foo.py"]
+        assert extra == ["references/scripts/bar.py"]
+
+    def test_bare_filename_does_not_false_positive(self):
+        # Bare README, version strings, and slug-only tokens
+        # shouldn't be flagged as file paths.
+        linked = "See README. Version is 1.2.3. The pipeline-sentinel skill."
+        missing, extra = av.verify_file_paths(linked, linked)
+        assert missing == []
+        assert extra == []
+
+    def test_multiple_paths_multiset(self):
+        linked = "Files: a/b.py, c/d.md, and a/b.py again."
+        assembled = "Files: a/b.py and c/d.md."
+        missing, extra = av.verify_file_paths(linked, assembled)
+        # a/b.py appears twice in linked, once in assembled.
+        assert missing == ["a/b.py"]
+        assert extra == []
+
+
+class TestVerifyPreservationFullCoverage:
+    """The top-level ``verify_preservation`` rolls fenced-content +
+    file-paths into ``ok``. #10752 W1 acceptance: a failure in either
+    new dimension flips ``ok`` to False."""
+
+    def test_ok_when_all_four_dimensions_intact(self):
+        text = (
+            "→ run sub-skill: pipeline-sentinel\n"
+            "step:cycle/boot\n"
+            f"{_PY_BLOCK}\n"
+            "See references/scripts/foo.py.\n"
+        )
+        result = av.verify_preservation(text, text)
+        assert result.ok is True
+
+    def test_dropped_fenced_block_flips_ok(self):
+        linked = f"→ run sub-skill: x\n{_PY_BLOCK}\n"
+        assembled = "→ run sub-skill: x\n"
+        result = av.verify_preservation(linked, assembled)
+        assert result.ok is False
+        assert result.missing_fenced_blocks == [("python", "print('hello')")]
+
+    def test_dropped_file_path_flips_ok(self):
+        linked = "→ run sub-skill: x\nSee references/scripts/foo.py."
+        assembled = "→ run sub-skill: x\nSee the helper."
+        result = av.verify_preservation(linked, assembled)
+        assert result.ok is False
+        assert "references/scripts/foo.py" in result.missing_file_paths
+
+    def test_preservation_result_carries_all_eight_diff_fields(self):
+        """Smoke: PreservationResult has the four new ``missing_*`` +
+        ``extra_*`` lists for fenced blocks + file paths in addition
+        to sub-skills + step IDs."""
+        result = av.verify_preservation("", "")
+        for field_name in (
+            "missing_sub_skills", "extra_sub_skills",
+            "missing_step_ids", "extra_step_ids",
+            "missing_fenced_blocks", "extra_fenced_blocks",
+            "missing_file_paths", "extra_file_paths",
+        ):
+            assert hasattr(result, field_name)
+            assert getattr(result, field_name) == []
+
+
+class TestAssemblePassContextStringW4:
+    """#10752 W4: the LLM context string in assemble_pass must name
+    ALL FOUR preservation dimensions, not just sub-skills + step IDs."""
+
+    def test_context_mentions_all_four_dimensions(self):
+        # Static-grep on the assemble_pass source. The prompt is a
+        # string literal whose parens balance — walk forward until
+        # the open-paren count returns to zero to capture the full
+        # multi-line concat (inner parens like "(a)" / "(b)" don't
+        # trip the balance check).
+        src = (
+            (Path(__file__).resolve().parent.parent
+             / "references" / "scripts" / "assemble_pass.py")
+            .read_text(encoding="utf-8")
+        )
+        marker = "context = ("
+        start = src.index(marker) + len(marker) - 1
+        depth = 0
+        end = start
+        for i in range(start, len(src)):
+            ch = src[i]
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        ctx_block = src[start:end].lower()
+        assert "sub-skill" in ctx_block or "run sub-skill" in ctx_block, ctx_block
+        assert (
+            "step:cycle" in ctx_block
+            or "step id" in ctx_block
+            or "step-id" in ctx_block
+        )
+        assert "fenced" in ctx_block or "code block" in ctx_block
+        assert "file path" in ctx_block or "path" in ctx_block
