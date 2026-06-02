@@ -196,6 +196,13 @@ class HarnessState:
         # squidsquad_version, git_sha, git_branch, git_dirty — see
         # compute_code_version(). Stays None until lifespan fills it.
         self.code_version = None
+        # #10681 (PRD-E E2): SHA256 hex of the composed source tree taken
+        # at the end of the last successful compose. E1's boot-time
+        # freshness check compares the live checksum against this; drift
+        # triggers a recompose + checksum refresh. None means "no compose
+        # has succeeded under this harness yet" — E1 treats it as drift
+        # and runs compose unconditionally on first boot.
+        self.last_compose_checksum = None
         self._lock = threading.Lock()
         self._poller_running = False
         self._poller_thread = None
@@ -218,6 +225,22 @@ class HarnessState:
     def all_agents(self) -> list[dict]:
         with self._lock:
             return [a.to_dict() for a in self.agents.values()]
+
+    # #10681 (PRD-E E2): atomic accessors for last_compose_checksum.
+    # E1 (the boot-time freshness check) calls these; tests pin the
+    # under-lock contract so a future refactor that splits the lock
+    # cannot silently break read/write coordination.
+
+    def get_last_compose_checksum(self) -> str | None:
+        """Return the persisted SHA256 hex (64 chars) or None if absent."""
+        with self._lock:
+            return self.last_compose_checksum
+
+    def set_last_compose_checksum(self, checksum: str | None) -> None:
+        """Update the in-memory checksum. Does not flush to disk on its
+        own — caller pairs with ``save_state()`` to persist atomically."""
+        with self._lock:
+            self.last_compose_checksum = checksum
 
     # #4792 Phase 2: the per-class `_read_claude_pid` was a near-duplicate
     # of `reboot_agent._read_claude_pid`. All three call sites (this class
@@ -572,6 +595,10 @@ class HarnessState:
                 "harness_pid": os.getpid(),
                 "start_time": self.start_time,
                 "port": self.port,
+                # #10681: E1 reads this on boot to detect source-tree drift.
+                # Persisted at the top level (not per-agent) since the
+                # checksum spans the whole compose-input set.
+                "last_compose_checksum": self.last_compose_checksum,
                 "agents": {
                     role: {
                         "intent": a.intent,
@@ -615,6 +642,10 @@ class HarnessState:
             return
 
         with self._lock:
+            # #10681 (E2): legacy state files lack this field; treat as None
+            # (which E1 reads as drift on first boot, triggering compose).
+            # An explicit null in the file is also honored.
+            self.last_compose_checksum = state_data.get("last_compose_checksum")
             for role, agent_data in state_data.get("agents", {}).items():
                 if role not in self.agents:
                     self.agents[role] = AgentState(
