@@ -1,16 +1,19 @@
-# Worker agent sub-skill manifest (polling / /loop mode — #8697, #9588)
-# This is the default manifest. compose.py loads `includes-events.yml`
-# instead when the role's wake mode is `event-driven`.
+# Worker agent sub-skill manifest — v2 (mode-agnostic, PRD-D Story D5 #10676)
+# Union of includes.yml + includes-events.yml. No mode-conditional sections;
+# wake-mode selection is a runtime concern handled by `common/boot-bootstrap`
+# at session start, not a compose-time concern. Per TRD §6.5.
 #
-# #9588: `common/boot-bootstrap` is the FIRST entry across both manifests.
-# The mode-specific fragments (`roles/worker/ralph-loop-overview` here, the
-# six `common-events/*` fragments in `includes-events.yml`, and DM's
-# `roles/dm/events/pr-merge-wait`) are Read at runtime by the bootstrap,
-# not inlined at compose time. Keeps the composed CLAUDE.md mode-uniform
-# and lets `event-driven:` flips take effect on next agent restart
-# without a recompose.
+# v2 compose reads this file via `_load_manifest_v2(role_class)` (no
+# wake_mode arg). v1 compose continues reading `includes.yml` /
+# `includes-events.yml` unchanged. Deletion of the v1 pair + rename of this
+# file to `includes.yml` happens atomically in the E6 switch PR (#10685).
 #
-# Order matters — includes are resolved top-to-bottom
+# Mode-specific fragments (`roles/worker/ralph-loop-overview`, the six
+# `common-events/*` fragments) are Read at runtime by `common/boot-bootstrap`,
+# NOT inlined at compose time. The composed CLAUDE.md is identical regardless
+# of which wake mode the agent eventually probes into at boot.
+#
+# Order matters — includes are resolved top-to-bottom.
 includes:
   - common/boot-bootstrap
   - common/cycle-runner

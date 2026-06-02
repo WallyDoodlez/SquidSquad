@@ -1,8 +1,16 @@
-# Verifier agent sub-skill manifest (polling / /loop mode — #8697, #9588)
+# Verifier agent sub-skill manifest — v2 (mode-agnostic, PRD-D Story D5 #10676)
+# Union of includes.yml + includes-events.yml. No mode-conditional sections;
+# wake-mode selection is a runtime concern handled by `common/boot-bootstrap`
+# at session start, not a compose-time concern. Per TRD §6.5.
+#
+# v2 compose reads this file via `_load_manifest_v2(role_class)` (no
+# wake_mode arg). v1 compose continues reading `includes.yml` /
+# `includes-events.yml` unchanged. Deletion of the v1 pair + rename of this
+# file to `includes.yml` happens atomically in the E6 switch PR (#10685).
+#
 # Uses slim variants for vault-protocol and improvement-scan (read-only role).
-# #9588: `common/boot-bootstrap` is the first include; mode-specific
-# `roles/verifier/ralph-loop-overview` is Read at runtime by the bootstrap.
-# Order matters — includes are resolved top-to-bottom
+#
+# Order matters — includes are resolved top-to-bottom.
 includes:
   - common/boot-bootstrap
   - common/cycle-runner

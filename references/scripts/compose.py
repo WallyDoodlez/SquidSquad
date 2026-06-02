@@ -333,7 +333,12 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
 # compose-time concern. v1 ``_load_manifest`` stays untouched per the
 # §9a coexistence rule (AC4: D5 must NOT modify any existing
 # ``includes.yml`` / ``includes-events.yml`` file).
-_V2_MANIFEST_FILENAME = "includes-v2.yml"
+# PRD-E E6 (#10685) V2 CUTOVER: the v2 manifest IS the unified
+# manifest now. ``includes-v2.yml`` is renamed to ``includes.yml`` in
+# every role; the legacy ``includes-events.yml`` polling/event split is
+# retired. The v2 loader keeps its name for now (downstream callers
+# import it) but reads the canonical file.
+_V2_MANIFEST_FILENAME = "includes.yml"
 
 
 def _load_manifest_v2(role_name: str) -> list | None:

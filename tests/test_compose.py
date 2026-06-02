@@ -928,67 +928,14 @@ class TestGetWakeMode:
             assert compose._get_wake_mode("skill") == "polling"
 
 
-class TestLoadManifestSelectsByWakeMode:
-    """#8697: _load_manifest picks includes.yml or includes-events.yml based on mode."""
-
-    def test_polling_loads_includes_yml(self):
-        manifest = compose._load_manifest("dev", wake_mode="polling")
-        assert manifest is not None
-        assert "common/cycle-runner" in manifest
-        # event-driven-workflow lives in common-events/ now
-        assert "common-events/event-driven-workflow" not in manifest
-
-    def test_event_driven_loads_includes_events_yml(self):
-        manifest = compose._load_manifest("dev", wake_mode="event-driven")
-        assert manifest is not None
-        # #9588: the events manifest is identified by the loader fragment
-        # (`common/boot-bootstrap`) plus the absence of polling-only
-        # entries like `common/cycle-runner`. The legacy assertion checked
-        # for `common-events/event-driven-workflow` — that fragment is now
-        # Read at runtime via the bootstrap, not listed in the manifest.
-        assert "common/boot-bootstrap" in manifest
-        # cycle-runner is polling-only, should NOT appear in events manifest
-        assert "common/cycle-runner" not in manifest
-
-    def test_event_driven_falls_back_to_includes_yml_when_events_absent(self, tmp_path):
-        """If a role has no includes-events.yml, fall back to includes.yml so
-        agents in event-driven mode still get *something*."""
-        role_dir = tmp_path / "roles" / "fakerole"
-        role_dir.mkdir(parents=True)
-        sub_skills = tmp_path / "sub-skills" / "common"
-        sub_skills.mkdir(parents=True)
-        (sub_skills / "frag.md").write_text("x", encoding="utf-8")
-        (role_dir / "includes.yml").write_text(
-            "includes:\n  - common/frag\n", encoding="utf-8"
-        )
-        with patch.object(compose, "ROLES_DIR", tmp_path / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"), \
-             patch.object(compose, "_resolve_variant", return_value=None), \
-             patch.object(compose, "_list_known_role_identities", return_value=["fakerole"]):
-            manifest = compose._load_manifest("fakerole", wake_mode="event-driven")
-        assert manifest == ["common/frag"]
-
-    def test_all_four_roles_have_both_manifests(self):
-        """Every shipped role must define both manifests so mode-flipping works."""
-        for role in ("dev", "pm", "qa", "dm"):
-            poll = compose._load_manifest(role, wake_mode="polling")
-            event = compose._load_manifest(role, wake_mode="event-driven")
-            assert poll is not None, f"{role}: missing includes.yml"
-            assert event is not None, f"{role}: missing includes-events.yml"
-            # #9588: under the boot-bootstrap architecture, the mark that a
-            # manifest is wired correctly is the presence of the loader
-            # itself (`common/boot-bootstrap`) — the legacy check looked
-            # for `common-events/` entries directly in the events manifest,
-            # but those fragments are now Read at runtime by the bootstrap
-            # rather than listed in the manifest.
-            assert "common/boot-bootstrap" in poll, (
-                f"{role}: includes.yml missing `common/boot-bootstrap` "
-                f"loader entry"
-            )
-            assert "common/boot-bootstrap" in event, (
-                f"{role}: includes-events.yml missing `common/boot-bootstrap` "
-                f"loader entry"
-            )
+# #10685 PRD-E E6 V2 CUTOVER: the legacy ``TestLoadManifestSelectsByWakeMode``
+# class lived here and gated v1 ``_load_manifest`` against polling vs
+# event-driven manifests. Post-cutover the v2 path owns composition, and
+# wake_mode-based manifest selection is retired — there is only one unified
+# manifest per role (``includes.yml``, formerly ``includes-v2.yml``). The
+# event-driven boot path remains as runtime behavior (config.md still flips
+# the wake mode), but the COMPOSE-time mode-conditional manifest split is
+# gone. Tests for that gone behavior are deleted rather than kept skipped.
 
 
 class TestEventDrivenWorkflowLocation:
