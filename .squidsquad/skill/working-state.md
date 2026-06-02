@@ -1,45 +1,36 @@
 # Working State
 
-- **Task**: #6274 — sub-phase 6274.1 (terminology dual-aware shim)
+- **Task**: #10673 — PRD-D Story D2 (v2 link-stage references)
 - **Status**: in-progress
-- **Branch**: squidsquad/task/6274 (pushed; no PR yet)
-- **Started**: 2026-05-23 03:08
+- **Branch**: squidsquad/task/10673
+- **Started**: 2026-06-02 01:35
 - **Last Processed Event ID**: 9d7c2489
 - **Quiet Cycle Counter**: 0
 
-## Completed (sub-phase 6274.1) — 6/7 ACs + both helpers
+## Completed
 
-- [x] **AC1.1** (`e4d21b37`) — compose._list_known_role_identities() dual set
-- [x] **AC1.2** (`eef5b49b`) — compose._resolve_variant + _get_entry_file_for_role alias-aware
-- [x] **AC1.3** (`eef5b49b`) — config.get_field("workers") fallback + deprecation warning
-- [x] **AC1.4** (`f110e564`) — tracker dual-tag + --role suffix shim per D11
-- [x] **AC1.5** (`db8c5fc4`) — references/scripts/migrate_labels_6274.py
-- [x] **AC1.6** (`db8c5fc4`) — .squidsquad/vault/galaxy/migration-6274-cutover.md
-- [x] **verify_dual_label_6274.py** (`db8c5fc4`) — G2→3 gate per F1 resolution
-
-27 dual-aware tests pass.
+- v2_link_stage.py: filter `(slot=instructions AND path under references/sub-skills/) → skip` so sub-skill bodies don't inline into the instructions slot. Applied to both `_parse_all_applicable_sources` and `collect_sources_for_validation`.
+- D2 tests: synthetic fixture + live-tree invariants + size invariant; 17 tests in test_d2_link_stage_references.py.
+- AC verification:
+  - AC1: orchestrator files already contain `→ run sub-skill: <name>` per TRD §3.0; bodies now dropped from v2 emission
+  - AC2: zero `<!-- sub-skill: -->` markers; `## Boot — Mode Detection` no longer inlined; reference present
+  - AC3: avg v2/v1 = 24.9% (pm 22.3% / dm 28.5% / verifier 26.2% / worker 22.7%) — under 30% target
+  - AC4: v1 path untouched; v1 byte-stability test stays green
+  - AC5: v2 path unchanged (`CLAUDE.linked.v2.md` via existing deploy_alias_v2)
+  - AC6: A3 golden fixtures use only orchestrator files so goldens byte-stable
+- Full static suite: 2583 passing, exit 0
 
 ## Remaining
 
-- [ ] **AC1.7** — Full `python tests/run_tests.py` exit 0.
-- [ ] Self-verify + pickup-comment fidelity check + external review.
-- [ ] Open PR for sub-phase 6274.1.
-- [ ] Transition in-progress → pending-test.
-
-## Next-cycle plan
-
-1. Full `python tests/run_tests.py` (AC1.7).
-2. Self-verification reflection.
-3. Pickup-comment fidelity check (`git diff origin/main...HEAD --name-only`).
-4. External code review (model_router, background — large diff; results processed next cycle).
-5. Create PR.
-6. Transition.
+- Process DS review findings (running in background)
+- Commit on `squidsquad/task/10673`
+- Open PR; pickup-fidelity check
+- Transition in-progress → pending-test
 
 ## Key Decisions
 
-- **AC1.5/AC1.6/verify all in one commit** (`db8c5fc4`) — tightly coupled by the structural test that asserts LABEL_PAIRS consistency between migrate and verify scripts.
-- **Migration script uses gh CLI not forge adapter** — one-shot operator tool, not normal cycle flow.
-- **Vault note placeholder says "TBD — populated in 6274.2 PR"** — gives AC2.9 a single canonical location to update.
-- **G2→3 verifier shares LABEL_PAIRS with migration script** via structural test, preventing drift.
+- Filter scoped to instructions-slot only (test fixtures putting non-instructions slot under sub-skills paths continue working)
+- D2 does NOT consult catalog — catalog gate is D3's job; D2's name is the existing reference text in orchestrator files (TRD §3.0 verbatim-emission contract)
+- L4 ops still apply to slot content; cycle-step-targeted ops still match step headings in orchestrator content
 
-- **Vault Writes This Cycle**: 1
+- **Vault Writes This Cycle**: 0
