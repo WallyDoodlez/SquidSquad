@@ -256,6 +256,30 @@ class TestPromptAssembly:
         template = model_router._load_prompt_template("unknown-task")
         assert template is None
 
+    def test_loads_l4_audit_template(self):
+        # PRD-C C3 Gate 1 (#10652).
+        template = model_router._load_prompt_template("l4-audit")
+        assert template is not None
+
+    def test_loads_l4_conflict_preempt_template(self):
+        # #10753 ERROR regression: PRD-C C8 Gate 0 prompt template was
+        # authored under references/prompts/l4-conflict-preempt.md.j2 but
+        # NOT registered in template_map. Result: Gate 0 ran in degraded
+        # mode (bare generic prompt) on every L4 customization request
+        # post-C8 ship. The lookup must succeed and return the C8
+        # template's load-bearing language.
+        template = model_router._load_prompt_template("l4-conflict-preempt")
+        assert template is not None
+        # The C8 template's distinguishing markers — the contradiction
+        # vocabulary + sub-skill exemption that the audit said were
+        # stripped under the generic-prompt fallback.
+        assert (
+            "contradict" in template.lower()
+            or "sub-skill" in template.lower()
+            or "step-id" in template.lower()
+            or "preempt" in template.lower()
+        )
+
     def test_assemble_substitutes_variables(self):
         prompt = model_router.assemble_prompt(
             "research", "FEAT-TEST-001", "", "Test context"

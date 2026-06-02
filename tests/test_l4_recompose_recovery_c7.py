@@ -177,15 +177,31 @@ class TestWaitForRecomposeTimeout:
 
 
 class TestWaitForRecomposeDefaults:
-    def test_no_check_fn_returns_failure_outcome(self):
-        """Calling wait_for_recompose without a check_fn returns a failure
-        outcome with a diagnostic naming the unwired PRD-E contract.
-        The orchestrator wraps this same case with a `skip` path; this
-        test checks the lower-level helper's behavior directly.
+    def test_no_check_fn_returns_skip_outcome(self):
+        """#10753 W2 regression: prior behavior returned status="failure"
+        when check_recompose_fn=None — direct callers would interpret
+        the missing-config no-op as a real failure and trigger spurious
+        reverts. Standardized on the orchestrator's existing "skip"
+        semantic so both code paths agree.
         """
         outcome = rr.wait_for_recompose(commit_sha="abc")
-        assert outcome.status == "failure"
+        assert outcome.status == "skip"
+        assert outcome.skipped is True
+        # `skip` is not the same as `failure` — the `succeeded` property
+        # stays False either way, but `skipped` distinguishes the two.
+        assert outcome.succeeded is False
         assert "PRD-E" in outcome.diagnostic
+
+    def test_skip_outcome_does_not_match_failure(self):
+        """Belt-and-suspenders: the `skip` and `failure` statuses must
+        be distinguishable so a downstream `if outcome.status ==
+        "failure"` branch doesn't fire on the missing-config case."""
+        skip_outcome = rr.RecomposeOutcome(status="skip")
+        fail_outcome = rr.RecomposeOutcome(status="failure")
+        assert skip_outcome.skipped is True
+        assert fail_outcome.skipped is False
+        assert skip_outcome.succeeded is False
+        assert fail_outcome.succeeded is False
 
 
 # ---------------------------------------------------------------------------

@@ -2,13 +2,13 @@
 
 > **Status**: PRD draft, 2026-05-31. Derived from TRD [[COMPOSE-ARCHITECTURE]] §3.3 (L4 ops + per-slot constraints) + §4.2 (compose-time L4 application — read-side) + §7 (runtime L4 writes — write-side, the focus of this PRD). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (assemble) / C (this) / D (catalog + wake-mode) / E (harness-owned freshness).
 >
-> **Scope:** the **write path** for L4 customization — the `l4-curation` sub-skill that detects customization requests in human-agent conversation, elicits scope, classifies the structural op, runs the three safety gates (DS audit + mini-CQ + dry-run), and commits the L4 change. Excludes compose-time L4 reading mechanics (PRD A), the LLM assemble pass (PRD B), sub-skill catalog enforcement (PRD D), and harness-owned freshness (PRD E).
+> **Scope:** the **write path** for L4 customization — the `l4-curation` sub-skill that detects customization requests in human-agent conversation, elicits scope, classifies the structural op, runs the six safety gates (Gate 0 conflict pre-emption → Gate 1 DS audit → Gate 2 mini-CQ → Gate 3 dry-run → Gate 4 atomic write/commit/push → Gate 5 recompose recovery), and commits the L4 change. Excludes compose-time L4 reading mechanics (PRD A), the LLM assemble pass (PRD B), sub-skill catalog enforcement (PRD D), and harness-owned freshness (PRD E).
 
 ---
 
 ## 1. Goal
 
-Today, when a human says "from now on, before filing a bug, also check `incidents/`", that customization either gets lost (only that conversation remembers it) or muddled (the agent makes ad-hoc behavior changes that no other instance of the same role-class sees, no audit trail captures, and the next session forgets). PRD-C delivers the **durable + safe** path: the human's conversational customization is captured once in `l4-curation`'s elicitation dialog, classified into a structural op (replace / insert-before / insert-after / append), gated by three safety checks (DS audit, mini-CQ confirmation, compose dry-run), committed atomically to `.squidsquad/project/<role-class>.md`, and immediately effective for all instances of that role-class on the next cycle via a post-commit recompose.
+Today, when a human says "from now on, before filing a bug, also check `incidents/`", that customization either gets lost (only that conversation remembers it) or muddled (the agent makes ad-hoc behavior changes that no other instance of the same role-class sees, no audit trail captures, and the next session forgets). PRD-C delivers the **durable + safe** path: the human's conversational customization is captured once in `l4-curation`'s elicitation dialog, classified into a structural op (replace / insert-before / insert-after / append), gated by six safety checks (Gate 0 conflict pre-emption, Gate 1 DS audit, Gate 2 mini-CQ confirmation, Gate 3 compose dry-run, Gate 4 atomic write/commit/push, Gate 5 post-commit recompose recovery), committed atomically to `.squidsquad/project/<role-class>.md`, and immediately effective for all instances of that role-class on the next cycle via a post-commit recompose.
 
 ## 2. User-facing outcomes
 
@@ -38,7 +38,7 @@ PRD-C is "done" when ALL of the following hold:
 10. **Post-commit recompose**: a hook (file-watch or post-commit) detects `.squidsquad/project/*.md` change, triggers `compose.py deploy-all` for the affected role-class's aliases, and (per [[project_compose_freshness_harness_owned]]) the harness emits `restart-required` to the affected agents. Affected agents pick up the new CLAUDE.md on next cycle.
 11. **Recompose-failure recovery (§7.4 step 3 race)**: if the post-commit recompose fails (e.g., concurrent L1-L3 PR renamed a step ID between dry-run and commit), the writing agent `git revert`s the L4 commit, alerts the human via tracker comment with the diagnostic, and aborts the cycle. No broken CLAUDE.md ever lands on `main`.
 12. **Iteration-log entry**: the cycle that performed the L4 write logs the directive, classification, gate results, and commit SHA in the alias's iteration file.
-13. **Counter-entry / removal flow** (§7.5 + §7.7): the human can request removal of a prior customization through the same dialog. Agent writes either a counter-entry (`replace` with empty body, or matching removal op) or — with explicit human confirmation — deletes the H3 block in-place. Both paths go through the same three gates.
+13. **Counter-entry / removal flow** (§7.5 + §7.7): the human can request removal of a prior customization through the same dialog. Agent writes either a counter-entry (`replace` with empty body, or matching removal op) or — with explicit human confirmation — deletes the H3 block in-place. Both paths go through the same six gates.
 
 ## 4. Non-goals
 
@@ -57,7 +57,7 @@ PRD-C is "done" when ALL of the following hold:
 - **TRD §7.1** — Trigger detection: durable vs one-off, customization vs feature, shared write effect across role-class instances.
 - **TRD §7.2** — Agent decision tree (the five-step classification logic).
 - **TRD §7.3** — L4 file format: H2 slot, H3 op + target, HTML-comment metadata trailer.
-- **TRD §7.4** — Safety: DS audit + mini-CQ + dry-run (the three gates).
+- **TRD §7.4** — Safety: the six gates (Gate 0 conflict pre-emption + Gate 1 DS audit + Gate 2 mini-CQ + Gate 3 dry-run + Gate 4 atomic write + Gate 5 recompose recovery).
 - **TRD §7.5** — Audit trail: commit, log, reversibility.
 - **TRD §7.6** — End-to-end sequence diagram.
 - **TRD §7.7** — Curation is one-shot + durable: no recurring scan, no drift detector, no auto-conflict-resolver.

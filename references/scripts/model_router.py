@@ -543,6 +543,14 @@ def _load_prompt_template(task_type):
         "code-review": "code-review.md.j2",  # #5932
         "assemble": "assemble.md.j2",  # #10444 PRD-B/B1
         "l4-audit": "l4-audit.md.j2",  # #10652 PRD-C/C3 Gate 1
+        # #10753 ERROR: l4-conflict-preempt was authored at #10657
+        # PRD-C/C8 Gate 0 but never registered here. Without this
+        # entry, `l4_conflict_preempt.run_gate0_pre_emption` calls
+        # `model_router.route(task_type="l4-conflict-preempt", ...)`,
+        # `_load_prompt_template` returns None, and the router falls
+        # back to a bare generic prompt — Gate 0 ran in degraded mode
+        # on every L4 customization request post-C8 ship.
+        "l4-conflict-preempt": "l4-conflict-preempt.md.j2",
     }
     filename = template_map.get(task_type)
     if not filename:

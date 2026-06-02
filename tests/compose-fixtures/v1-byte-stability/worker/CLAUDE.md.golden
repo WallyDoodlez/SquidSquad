@@ -1970,6 +1970,24 @@ These instructions apply to the worker/skill agent on this project.
 
 - **Cross-file issues directly to owning role** via `tracker.py create-issue --role [target]`. Don't wait for PM to discover and route.
 - **Auto-merge enabled**: Verifier handles merge. Check for `review:human-required` before assuming auto-merge.
+
+### Front-loaded planning for batched issue work
+
+On every wake, **before touching any code**, look across the full set of issues currently assigned to you. If **any** of these is true, switch into front-loaded planning mode:
+
+- 2+ open issues assigned to you, or
+- a single issue whose body cites multiple findings (umbrella bug — e.g. the PRD-A/B/C DS-audit umbrellas #10751/#10752/#10753), or
+- issues that touch the same file / module / sub-skill repeatedly.
+
+**Front-loaded planning mode** — heavy work up front, mechanical execution after:
+
+1. **Read everything first.** Read every assigned issue body, every cited CONTEXT / RESEARCH / AUDIT artifact, and the prior comments on each issue — end-to-end — before opening any source file with intent to edit. Skim-then-fix is the failure mode this rule exists to prevent.
+2. **Identify systematic patterns.** What recurs across findings? A shared abstraction, a single protocol violation duplicated across modules, a common missing check, an identical fix recipe? Findings often look independent and turn out to share one root cause.
+3. **Plan one strategy that resolves the whole set, not N fixes that resolve one finding each.** Heavy loaded up front (thinking, sequencing, edge-case enumeration) so execution eases out (the actual edits should feel mechanical because the strategy already settled the ambiguity).
+4. **Publish the strategy before executing.** Post the plan as a tracker comment on the umbrella (or, if no umbrella, on the first issue you'll pick up). Cite which findings it covers, the order you'll execute, and what you'll defer with reasoning. This is your work contract — both for the verifier and for your own consistency.
+5. **Then execute.** Re-plan only if execution surfaces something the strategy didn't anticipate — then update the comment with the revision, don't silently drift.
+
+**Why**: fixing in isolation surfaces emergent contradictions during the last fix that force re-work of the first. Front-loading thought is cheap; re-doing landed work is expensive.
 <!-- /sub-skill: project-worker-instructions -->
 
 ---
@@ -2096,6 +2114,24 @@ Vault remember 4-gate logic: write budget → dedup check → reusability → fr
 ### Vault
 
 - vault-check Level 1 auto-runs after every vault-create or vault-update.
+
+### Front-loaded planning for batched issue work
+
+On every wake, **before touching any code**, look across the full set of issues currently assigned to you. If **any** of these is true, switch into front-loaded planning mode:
+
+- 2+ open issues assigned to you, or
+- a single issue whose body cites multiple findings (umbrella bug — e.g. the PRD-A/B/C DS-audit umbrellas #10751/#10752/#10753), or
+- issues that touch the same file / module / sub-skill repeatedly.
+
+**Front-loaded planning mode** — heavy work up front, mechanical execution after:
+
+1. **Read everything first.** Read every assigned issue body, every cited CONTEXT / RESEARCH / AUDIT artifact, and the prior comments on each issue — end-to-end — before opening any source file with intent to edit. Skim-then-fix is the failure mode this rule exists to prevent.
+2. **Identify systematic patterns.** What recurs across findings? A shared abstraction, a single protocol violation duplicated across modules, a common missing check, an identical fix recipe? Findings often look independent and turn out to share one root cause.
+3. **Plan one strategy that resolves the whole set, not N fixes that resolve one finding each.** Heavy loaded up front (thinking, sequencing, edge-case enumeration) so execution eases out (the actual edits should feel mechanical because the strategy already settled the ambiguity).
+4. **Publish the strategy before executing.** Post the plan as a tracker comment on the umbrella (or, if no umbrella, on the first issue you'll pick up). Cite which findings it covers, the order you'll execute, and what you'll defer with reasoning. This is your work contract — both for the verifier and for your own consistency.
+5. **Then execute.** Re-plan only if execution surfaces something the strategy didn't anticipate — then update the comment with the revision, don't silently drift.
+
+**Why**: fixing in isolation surfaces emergent contradictions during the last fix that force re-work of the first. Front-loading thought is cheap; re-doing landed work is expensive.
 
 ## Project Context
 

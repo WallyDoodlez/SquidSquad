@@ -54,15 +54,26 @@ class RecomposeOutcome:
     """Result of one ``wait_for_recompose`` call.
 
     ``status`` is one of ``"not-checked"`` (default sentinel) /
-    ``"success"`` / ``"failure"`` / ``"timeout"``. ``diagnostic``
-    carries the failure reason on non-success outcomes so the caller
-    can surface it to the human and log it. ``duration_seconds`` is
-    the wall time the wait actually took.
+    ``"success"`` / ``"failure"`` / ``"timeout"`` /
+    ``"skip"``. ``diagnostic`` carries the failure reason on
+    non-success outcomes so the caller can surface it to the human
+    and log it. ``duration_seconds`` is the wall time the wait
+    actually took.
 
     Default sentinel ``"not-checked"`` lets ``RecoveryPlan`` carry a
     non-``None`` instance on the ``skip`` path, so callers accessing
     ``plan.recompose.diagnostic`` don't ``AttributeError`` when
     recovery wasn't wired (C7 review concern #3).
+
+    ``"skip"`` (added per #10753 W2) is returned by the standalone
+    ``wait_for_recompose`` when ``check_recompose_fn=None`` — the
+    PRD-E harness-watch contract is not wired in this install. Prior
+    behavior returned ``"failure"`` here, which the orchestrator
+    correctly mapped to a recovery-skip path but direct callers
+    interpreted as a real failure (would trigger spurious reverts).
+    The orchestrator's ``RecoveryPlan.path_chosen="skip"`` already
+    used this semantic; ``RecomposeOutcome.status="skip"`` aligns the
+    standalone path with it.
     """
 
     status: str = "not-checked"
@@ -72,6 +83,14 @@ class RecomposeOutcome:
     @property
     def succeeded(self):
         return self.status == "success"
+
+    @property
+    def skipped(self):
+        """True iff the check was deliberately not performed (e.g.
+        ``check_recompose_fn=None``). Distinct from ``failure`` —
+        callers should NOT treat a skipped outcome as a reason to
+        revert."""
+        return self.status == "skip"
 
 
 @dataclass
@@ -170,8 +189,15 @@ def wait_for_recompose(
     exception text in the diagnostic.
     """
     if check_recompose_fn is None:
+        # #10753 W2: standardize on `"skip"` so direct standalone
+        # callers don't interpret a missing-config no-op as a real
+        # failure (which would trigger a spurious revert). The
+        # orchestrator's `recover_from_l4_write` already returns
+        # `RecoveryPlan.path_chosen="skip"` for the same condition;
+        # `RecomposeOutcome.status="skip"` here makes both code paths
+        # agree.
         return RecomposeOutcome(
-            status="failure",
+            status="skip",
             diagnostic=(
                 "wait_for_recompose called without a check_recompose_fn — "
                 "the PRD-E harness-watch contract is not yet wired in this "
