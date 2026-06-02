@@ -326,6 +326,148 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
     return includes
 
 
+# PRD-D D5 (#10676): v2 manifest is the union of polling + event-driven
+# include lists, expressed as a single mode-agnostic file. v2 compose
+# reads ``includes-v2.yml`` only — wake mode is a runtime concern handled
+# by ``common/boot-bootstrap`` at session start (per TRD §6.5), NOT a
+# compose-time concern. v1 ``_load_manifest`` stays untouched per the
+# §9a coexistence rule (AC4: D5 must NOT modify any existing
+# ``includes.yml`` / ``includes-events.yml`` file).
+_V2_MANIFEST_FILENAME = "includes-v2.yml"
+
+
+def _load_manifest_v2(role_name: str) -> list | None:
+    """Load the role's v2 mode-agnostic manifest (PRD-D D5 #10676).
+
+    Reads ``references/roles/<role>/includes-v2.yml`` for base roles and
+    follows the same ``base_role`` + ``additional_includes`` schema as
+    variants in v1. Variant Layer-3 manifests (e.g.
+    ``roles/worker/skill/includes.yml``) are ALREADY mode-agnostic
+    (single ``includes.yml`` with ``additional_includes``) and are read
+    in place — D5 does not introduce a ``includes-v2.yml`` for variants
+    since there is nothing to unify on the variant side.
+
+    Returns the resolved include list (variant: base + additional) or
+    ``None`` when no v2 manifest can be located. Never references
+    ``includes.yml`` or ``includes-events.yml`` directly — variant
+    ``includes.yml`` is the input to ``_resolve_variant`` only.
+
+    No ``wake_mode`` argument: the architectural rule is that v2 compose
+    is wake-mode-blind. Mode-specific behavior lives inside the cycle
+    body (per TRD §6.5).
+    """
+    if yaml is None:
+        return None
+
+    def _resolve_v2_path(role_dir: Path) -> Path | None:
+        v2_path = role_dir / _V2_MANIFEST_FILENAME
+        if v2_path.exists():
+            return v2_path
+        return None
+
+    # Variant role: walk to <base>/<variant>/, fall back to <base>/.
+    # Variant manifests are mode-agnostic by construction so we read the
+    # existing variant includes.yml. The recursion below substitutes the
+    # base role's v2 manifest when ``base_role`` is present.
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, variant = resolved
+        variant_dir = ROLES_DIR / base / variant
+        variant_manifest = variant_dir / "includes.yml"
+        if variant_manifest.exists():
+            return _load_manifest_v2_from_file(
+                variant_manifest, role_name,
+            )
+        # No variant manifest — fall through to the base v2 manifest.
+        manifest_path = _resolve_v2_path(ROLES_DIR / base)
+    else:
+        manifest_path = _resolve_v2_path(ROLES_DIR / role_name)
+
+    # Legacy alias fallback — symmetric with v1 ``_load_manifest`` so a
+    # variant whose base lacks a v2 manifest still resolves via the
+    # ``dev`` legacy identity or ``_BASE_ALIAS_6274`` alias. Per DS-D5
+    # review F1/F4: kept OUTSIDE the if/else so it fires for both the
+    # variant and the base-role path. v1 applies this fallback to both
+    # paths; v2 must mirror that.
+    if manifest_path is None:
+        identities = _list_known_role_identities()
+        if role_name not in identities and "dev" in identities:
+            manifest_path = _resolve_v2_path(ROLES_DIR / "dev")
+        if manifest_path is None and role_name in _BASE_ALIAS_6274:
+            aliased_dir = ROLES_DIR / _BASE_ALIAS_6274[role_name]
+            if aliased_dir.is_dir():
+                manifest_path = _resolve_v2_path(aliased_dir)
+
+    if manifest_path is None:
+        return None
+    return _load_manifest_v2_from_file(manifest_path, role_name)
+
+
+def _load_manifest_v2_from_file(
+        manifest_path: Path, role_name: str) -> list | None:
+    """Parse a v2 manifest file (or a variant ``includes.yml``).
+
+    Shared body for ``_load_manifest_v2`` — keeps base-role and variant
+    paths reading from a single YAML loader + schema dispatcher. Resolves
+    ``base_role`` recursively via ``_load_manifest_v2`` so the base
+    always lands on the v2 file (a variant whose base is ``worker``
+    picks up ``roles/worker/includes-v2.yml`` here).
+    """
+    try:
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(
+            f"WARNING: Failed to parse {manifest_path}: {e}",
+            file=sys.stderr,
+        )
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    if "base_role" in data:
+        base_role = data["base_role"]
+        # Recurse on v2 path — guarantees the base manifest comes from
+        # the v2 file, never includes.yml or includes-events.yml.
+        base_includes = _load_manifest_v2(base_role)
+        if base_includes is None:
+            print(
+                f"ERROR: {manifest_path.name} for {role_name} declares "
+                f"base_role={base_role} but {base_role} has no v2 manifest",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        additional = data.get("additional_includes", []) or []
+        if not isinstance(additional, list):
+            additional = []
+        for inc_path in additional:
+            full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+            if not full_path.exists():
+                print(
+                    f"ERROR: {manifest_path.name} for {role_name} references "
+                    f"missing sub-skill: {inc_path} (expected at {full_path})",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+        return base_includes + additional
+
+    if "includes" not in data:
+        return None
+    includes = data["includes"]
+    if not isinstance(includes, list):
+        return None
+    for inc_path in includes:
+        full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+        if not full_path.exists():
+            print(
+                f"ERROR: {manifest_path.name} for {role_name} references "
+                f"missing sub-skill: {inc_path} (expected at {full_path})",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    return includes
+
+
 def _resolve_includes_with_manifest(entry_file: Path, manifest: list, wake_mode: str = "polling") -> str:
     """Resolve includes using manifest order, preserving inline content.
 
@@ -2099,6 +2241,74 @@ def main():
         soul_path = upgrade_soul(role_name)
         lines = soul_path.read_text(encoding="utf-8").count("\n")
         print(f"Upgraded {role_name} SOUL.md ({lines} lines) -> {soul_path.relative_to(REPO_ROOT)}")
+
+    elif cmd == "drift-check":
+        # PRD-D D4 (#10675). Two-way orphan scan: catalog row <-> source
+        # file. Dead-code candidates (catalog row not referenced in any
+        # role manifest) warn but do not abort. Exit 0 = clean (no
+        # drift; dead-code may have been warned), 1 = drift detected,
+        # 2 = catalog parse / setup error.
+        catalog_arg = None
+        repo_root_arg = None
+        sub_args = args[1:]
+        i = 0
+        while i < len(sub_args):
+            tok = sub_args[i]
+            if tok == "--catalog" and i + 1 < len(sub_args):
+                catalog_arg = sub_args[i + 1]
+                i += 2
+                continue
+            if tok == "--repo-root" and i + 1 < len(sub_args):
+                repo_root_arg = sub_args[i + 1]
+                i += 2
+                continue
+            print(
+                f"ERROR: unrecognized drift-check argument: {tok}",
+                file=sys.stderr,
+            )
+            print(
+                "Usage: compose.py drift-check "
+                "[--catalog <path>] [--repo-root <path>]",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        target_repo = Path(repo_root_arg) if repo_root_arg else REPO_ROOT
+        target_catalog = (
+            Path(catalog_arg) if catalog_arg
+            else target_repo / "docs" / "sub-skill-catalog.md"
+        )
+        # Lazy import — keep v1 deploy paths free of D4 module load
+        # cost until the explicit subcommand is invoked.
+        import catalog_drift as _cd
+        from catalog_parser import CatalogParseError as _CPE
+        try:
+            report = _cd.scan_drift(target_catalog, target_repo)
+        except _CPE as e:
+            print(
+                f"ERROR: catalog parse failed: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        except Exception as e:
+            print(
+                f"ERROR: drift-check setup failed: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        if report.has_drift:
+            print(report.format(), file=sys.stderr)
+            sys.exit(1)
+        if report.has_dead_code:
+            # Warn but exit 0 per Q-D3.
+            print(
+                "WARNING: dead-code candidates (catalog rows with no "
+                "call-site in any role manifest):",
+                file=sys.stderr,
+            )
+            print(report.format(), file=sys.stderr)
+            sys.exit(0)
+        print("Catalog drift check: clean")
+        sys.exit(0)
 
     else:
         # Treat as role entry file name

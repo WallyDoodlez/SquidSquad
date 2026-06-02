@@ -142,7 +142,10 @@ STATIC_TEST_MODULES = [
     "test_l4_conflict_preempt_c8",
     "test_l4_recompose_recovery_c7",
     "test_catalog_parser_d1",
+    "test_catalog_parser_d8",
     "test_d2_link_stage_references",
+    "test_manifest_v2_d5",
+    "test_l4_file_watcher_e3",
 ]
 
 
