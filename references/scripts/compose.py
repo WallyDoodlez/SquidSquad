@@ -2187,6 +2187,19 @@ def main():
                 print(f"  {role_name} (staged): clean")
                 sys.exit(CHECK_EXIT_CLEAN)
             # A4 (#10388) per-alias drift-check fallback.
+            # DS-10685-phase2 F1: between Phase 2 (drop --v2) and Phase 4
+            # (suffix flip), ``deploy`` writes ``CLAUDE.v2.md`` while
+            # ``check_role`` still reads ``CLAUDE.md`` — the two are
+            # disconnected. Warn the operator so the result isn't misread.
+            # Phase 4 flips the suffix back to ``""`` and the alignment is
+            # restored without a check_role change.
+            print(
+                "WARNING: --check is unreliable between E6 phase 2 and "
+                "phase 4 (#10685). deploy writes CLAUDE.v2.md but --check "
+                "reads CLAUDE.md; expect MISSING/DRIFT against a stale "
+                "v1 file. Re-run --check after the phase-4 suffix flip.",
+                file=sys.stderr,
+            )
             try:
                 status, sections = check_role(role_name)
             except Exception as e:
@@ -2223,6 +2236,18 @@ def main():
 
     elif cmd == "deploy-all":
         if check_mode:
+            # DS-10685-phase2 F1: same asymmetry as the per-alias deploy
+            # --check above — between Phase 2 and Phase 4 the check loop
+            # reads ``CLAUDE.md`` while the deploy loop writes
+            # ``CLAUDE.v2.md``. See comment above for full rationale.
+            print(
+                "WARNING: --check is unreliable between E6 phase 2 and "
+                "phase 4 (#10685). deploy-all writes CLAUDE.v2.md but "
+                "--check reads CLAUDE.md; expect MISSING/DRIFT against "
+                "stale v1 files. Re-run --check after the phase-4 suffix "
+                "flip.",
+                file=sys.stderr,
+            )
             try:
                 roles = _collect_all_roles()
             except Exception as e:

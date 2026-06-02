@@ -289,35 +289,27 @@ def test_deploy_alias_v2_aborts_on_malformed_registry(monkeypatch, capsys):
 
 
 # ---------------------------------------------------------------------------
-# CLI argv parsing: --v2 flag detected; v1 path byte-equivalent
+# CLI argv parsing: --v2 is silently stripped for backward compat
 # ---------------------------------------------------------------------------
 
-def test_main_strips_v2_flag_and_routes_v1_without_it(monkeypatch):
+def test_main_strips_v2_flag_and_routes_to_v2(monkeypatch):
+    """Post-E6 cutover (#10685): ``--v2`` is silently stripped from argv;
+    the surviving compose path is ``deploy_alias_v2`` regardless of the
+    flag's presence. Pre-cutover this test asserted that ``--v2`` was the
+    opt-in for ``deploy_alias_v2``; that distinction is retired.
+    """
     called = {}
 
     def fake_v2(alias, registry=None):
         called["v2"] = alias
-        out = compose.REPO_ROOT / "_fake"
-        return out
-
-    def fake_v1(role_name):
-        called["v1"] = role_name
         return compose.REPO_ROOT / "_fake"
 
-    # deploy_alias_v2 is only entered when --v2 is present.
     monkeypatch.setattr(compose, "deploy_alias_v2", fake_v2)
-    # Stub deploy_role and the v1-only event-contract step so the test
-    # focuses on routing, not on the compose pipeline.
-    monkeypatch.setattr(compose, "deploy_role", lambda *a, **kw: (called.setdefault("v1", a[0]), compose.REPO_ROOT / "_fake")[1])
-    monkeypatch.setattr(compose, "derive_and_write_event_contracts", lambda *a, **kw: True)
-    # Stub Path.read_text on the fake path so the post-deploy line-count
-    # call doesn't blow up.
     monkeypatch.setattr(Path, "read_text", lambda self, encoding=None: "x\n")
 
     monkeypatch.setattr(sys, "argv", ["compose.py", "deploy", "pm", "--v2"])
     compose.main()
     assert called.get("v2") == "pm"
-    assert "v1" not in called
 
 
 def test_main_no_v2_flag_takes_v2_path(monkeypatch):
@@ -377,7 +369,7 @@ def test_main_accepts_legacy_v2_flag_silently(monkeypatch, capsys):
     assert "--v2" not in err
 
 
-def test_main_deploy_all_v2_iterates_registry(monkeypatch):
+def test_main_deploy_all_v2_iterates_registry(monkeypatch, tmp_path):
     captured_aliases = []
 
     def fake_v2(alias, registry=None):
@@ -391,6 +383,19 @@ def test_main_deploy_all_v2_iterates_registry(monkeypatch):
         lambda: {"pm": ("pm", None), "dm": ("dm", None), "skill": ("worker", None)},
     )
     monkeypatch.setattr(Path, "read_text", lambda self, encoding=None: "x\n")
+    # Post-cutover the deploy-all path no longer returns after the alias
+    # loop — it falls through to install topology bookkeeping (mandatory-
+    # role check + generate_local_config). Stub those so the test stays
+    # isolated and does NOT touch the real ``.squidsquad/.local-config``.
+    monkeypatch.setattr(compose, "_collect_all_roles", lambda: ["pm", "verifier", "dm"])
+    monkeypatch.setattr(compose, "_check_mandatory_roles", lambda roles: [])
+    # ``generate_local_config`` must return a Path under REPO_ROOT because
+    # compose.py prints it via ``.relative_to(REPO_ROOT)``. Use a fake
+    # under-root path; never reach disk.
+    monkeypatch.setattr(
+        compose, "generate_local_config", lambda roles: compose.REPO_ROOT / "_fake_local_config"
+    )
+    monkeypatch.setattr(Path, "write_text", lambda self, content, encoding=None: len(content))
 
     monkeypatch.setattr(sys, "argv", ["compose.py", "deploy-all", "--v2"])
     compose.main()
@@ -398,25 +403,12 @@ def test_main_deploy_all_v2_iterates_registry(monkeypatch):
     assert captured_aliases == ["dm", "pm", "skill"]  # sorted
 
 
-def test_main_deploy_v2_returns_without_calling_event_contracts(monkeypatch):
-    called = {"events": 0}
-
-    monkeypatch.setattr(compose, "deploy_alias_v2", lambda alias: compose.REPO_ROOT / "_fake_x")
-    monkeypatch.setattr(Path, "read_text", lambda self, encoding=None: "x\n")
-
-    def fake_events(*a, **kw):
-        called["events"] += 1
-        return True
-
-    monkeypatch.setattr(compose, "derive_and_write_event_contracts", fake_events)
-
-    monkeypatch.setattr(sys, "argv", ["compose.py", "deploy", "pm", "--v2"])
-    compose.main()
-
-    # PRD-B §9a: v2 path leaves v1 side-effects untouched. event-contract
-    # derivation is a v1 step keyed off the v1 agent-instructions tree;
-    # firing it on every --v2 deploy would mutate v1 state.
-    assert called["events"] == 0
+# DS-10685-phase2 F3: ``test_main_deploy_v2_returns_without_calling_event_contracts``
+# deleted. Post-cutover both ``deploy`` and ``deploy-all`` retired the
+# ``derive_and_write_event_contracts`` call from all paths, so asserting
+# "v2 doesn't call it" is now a tautology that gives false confidence.
+# The distinction the test was designed to validate (v2 path leaves v1
+# side-effects untouched) no longer exists because there is no v1 path.
 
 
 # ---------------------------------------------------------------------------
