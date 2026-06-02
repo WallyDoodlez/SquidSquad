@@ -255,6 +255,18 @@ def parse_catalog_entries(catalog_path):
             if description_col_index is not None \
                     and description_col_index < len(cols):
                 description = cols[description_col_index].strip()
+            # D8 (#10679): every catalog row MUST have a non-empty
+            # description so v2 compose can render the catalog as the
+            # operator-facing `→ run sub-skill: <name>` documentation
+            # surface. Empty cells in the description column are
+            # treated as a missing required column per AC3.
+            _validate_row_schema(
+                name=name,
+                description=description,
+                cols=cols,
+                description_col_index=description_col_index,
+                lineno=lineno,
+            )
             entries.append(CatalogEntry(
                 name=name,
                 source_path=source_path,
@@ -262,6 +274,37 @@ def parse_catalog_entries(catalog_path):
             ))
 
     return entries
+
+
+def _validate_row_schema(*, name, description, cols, description_col_index,
+                         lineno):
+    """D8: enforce the required-columns schema on one catalog row.
+
+    Required columns: ``name`` (already extracted by ``_NAME_CELL_RE``)
+    + ``source-path`` (derived by ``_resolve_source_dir`` + checked by
+    ``_validate_source_path``) + ``description`` (the one-liner
+    column). This helper closes the loop on the third required field
+    so a row with a valid name + path but no description aborts per
+    AC2/AC3.
+
+    Optional columns (``Used by`` etc.) are NOT enforced — they're
+    forward-compatible per AC4 of D1 + AC4 of D8. Future PRDs may add
+    ``role-scope`` / ``slot`` columns; this helper stays narrow.
+    """
+    if description_col_index is None or description_col_index >= len(cols):
+        raise CatalogParseError(
+            f"catalog row at line {lineno} for `{name}` is missing the "
+            f"required `description` column (the one-liner / second "
+            f"column). Add a description so v2 compose can render the "
+            f"catalog as the operator-facing reference surface."
+        )
+    if not description:
+        raise CatalogParseError(
+            f"catalog row at line {lineno} for `{name}` has an empty "
+            f"`description` value. Required columns cannot be empty — "
+            f"either fill the description or mark the row as retired "
+            f"via ``~~`{name}`~~``."
+        )
 
 
 def _split_row(row_line):
