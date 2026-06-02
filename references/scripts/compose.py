@@ -326,6 +326,148 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
     return includes
 
 
+# PRD-D D5 (#10676): v2 manifest is the union of polling + event-driven
+# include lists, expressed as a single mode-agnostic file. v2 compose
+# reads ``includes-v2.yml`` only — wake mode is a runtime concern handled
+# by ``common/boot-bootstrap`` at session start (per TRD §6.5), NOT a
+# compose-time concern. v1 ``_load_manifest`` stays untouched per the
+# §9a coexistence rule (AC4: D5 must NOT modify any existing
+# ``includes.yml`` / ``includes-events.yml`` file).
+_V2_MANIFEST_FILENAME = "includes-v2.yml"
+
+
+def _load_manifest_v2(role_name: str) -> list | None:
+    """Load the role's v2 mode-agnostic manifest (PRD-D D5 #10676).
+
+    Reads ``references/roles/<role>/includes-v2.yml`` for base roles and
+    follows the same ``base_role`` + ``additional_includes`` schema as
+    variants in v1. Variant Layer-3 manifests (e.g.
+    ``roles/worker/skill/includes.yml``) are ALREADY mode-agnostic
+    (single ``includes.yml`` with ``additional_includes``) and are read
+    in place — D5 does not introduce a ``includes-v2.yml`` for variants
+    since there is nothing to unify on the variant side.
+
+    Returns the resolved include list (variant: base + additional) or
+    ``None`` when no v2 manifest can be located. Never references
+    ``includes.yml`` or ``includes-events.yml`` directly — variant
+    ``includes.yml`` is the input to ``_resolve_variant`` only.
+
+    No ``wake_mode`` argument: the architectural rule is that v2 compose
+    is wake-mode-blind. Mode-specific behavior lives inside the cycle
+    body (per TRD §6.5).
+    """
+    if yaml is None:
+        return None
+
+    def _resolve_v2_path(role_dir: Path) -> Path | None:
+        v2_path = role_dir / _V2_MANIFEST_FILENAME
+        if v2_path.exists():
+            return v2_path
+        return None
+
+    # Variant role: walk to <base>/<variant>/, fall back to <base>/.
+    # Variant manifests are mode-agnostic by construction so we read the
+    # existing variant includes.yml. The recursion below substitutes the
+    # base role's v2 manifest when ``base_role`` is present.
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        base, variant = resolved
+        variant_dir = ROLES_DIR / base / variant
+        variant_manifest = variant_dir / "includes.yml"
+        if variant_manifest.exists():
+            return _load_manifest_v2_from_file(
+                variant_manifest, role_name,
+            )
+        # No variant manifest — fall through to the base v2 manifest.
+        manifest_path = _resolve_v2_path(ROLES_DIR / base)
+    else:
+        manifest_path = _resolve_v2_path(ROLES_DIR / role_name)
+
+    # Legacy alias fallback — symmetric with v1 ``_load_manifest`` so a
+    # variant whose base lacks a v2 manifest still resolves via the
+    # ``dev`` legacy identity or ``_BASE_ALIAS_6274`` alias. Per DS-D5
+    # review F1/F4: kept OUTSIDE the if/else so it fires for both the
+    # variant and the base-role path. v1 applies this fallback to both
+    # paths; v2 must mirror that.
+    if manifest_path is None:
+        identities = _list_known_role_identities()
+        if role_name not in identities and "dev" in identities:
+            manifest_path = _resolve_v2_path(ROLES_DIR / "dev")
+        if manifest_path is None and role_name in _BASE_ALIAS_6274:
+            aliased_dir = ROLES_DIR / _BASE_ALIAS_6274[role_name]
+            if aliased_dir.is_dir():
+                manifest_path = _resolve_v2_path(aliased_dir)
+
+    if manifest_path is None:
+        return None
+    return _load_manifest_v2_from_file(manifest_path, role_name)
+
+
+def _load_manifest_v2_from_file(
+        manifest_path: Path, role_name: str) -> list | None:
+    """Parse a v2 manifest file (or a variant ``includes.yml``).
+
+    Shared body for ``_load_manifest_v2`` — keeps base-role and variant
+    paths reading from a single YAML loader + schema dispatcher. Resolves
+    ``base_role`` recursively via ``_load_manifest_v2`` so the base
+    always lands on the v2 file (a variant whose base is ``worker``
+    picks up ``roles/worker/includes-v2.yml`` here).
+    """
+    try:
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(
+            f"WARNING: Failed to parse {manifest_path}: {e}",
+            file=sys.stderr,
+        )
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    if "base_role" in data:
+        base_role = data["base_role"]
+        # Recurse on v2 path — guarantees the base manifest comes from
+        # the v2 file, never includes.yml or includes-events.yml.
+        base_includes = _load_manifest_v2(base_role)
+        if base_includes is None:
+            print(
+                f"ERROR: {manifest_path.name} for {role_name} declares "
+                f"base_role={base_role} but {base_role} has no v2 manifest",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        additional = data.get("additional_includes", []) or []
+        if not isinstance(additional, list):
+            additional = []
+        for inc_path in additional:
+            full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+            if not full_path.exists():
+                print(
+                    f"ERROR: {manifest_path.name} for {role_name} references "
+                    f"missing sub-skill: {inc_path} (expected at {full_path})",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+        return base_includes + additional
+
+    if "includes" not in data:
+        return None
+    includes = data["includes"]
+    if not isinstance(includes, list):
+        return None
+    for inc_path in includes:
+        full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+        if not full_path.exists():
+            print(
+                f"ERROR: {manifest_path.name} for {role_name} references "
+                f"missing sub-skill: {inc_path} (expected at {full_path})",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    return includes
+
+
 def _resolve_includes_with_manifest(entry_file: Path, manifest: list, wake_mode: str = "polling") -> str:
     """Resolve includes using manifest order, preserving inline content.
 

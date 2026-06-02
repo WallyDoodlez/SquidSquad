@@ -143,6 +143,7 @@ STATIC_TEST_MODULES = [
     "test_l4_recompose_recovery_c7",
     "test_catalog_parser_d1",
     "test_catalog_parser_d8",
+    "test_manifest_v2_d5",
 ]
 
 
