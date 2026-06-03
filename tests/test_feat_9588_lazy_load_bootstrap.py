@@ -321,9 +321,9 @@ def test_tc_14_compose_runtime_read_frozenset_present():
     src = (SCRIPTS_DIR / "compose.py").read_text(encoding="utf-8")
     assert "RUNTIME_READ_FRAGMENTS = frozenset" in src
     required = [
-        "roles/dev/ralph-loop-overview",
+        "roles/worker/ralph-loop-overview",
         "roles/pm/ralph-loop-overview",
-        "roles/qa/ralph-loop-overview",
+        "roles/verifier/ralph-loop-overview",
         "roles/dm/ralph-loop-overview",
         "common-events/event-driven-workflow",
         "common-events/l1-base",

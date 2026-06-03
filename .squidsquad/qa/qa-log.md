@@ -1,5 +1,13 @@
 # QA Log
 
+## Agent Health — 2026-06-02 18:36
+
+- **skill**: ⚠️ no progress (E6 branch HEAD at `250c9e20` since 16:34 EDT, **~2h unchanged**; heartbeat file long-stale per known infra divergence, but commit-based liveness is the canonical signal here)
+- **pm**: 🦑 healthy (`current-state` mtime 18:07 EDT, ~30m)
+- **dm**: 🦑 healthy (per recent merge activity)
+- **verifier**: 👻 stalled (long-running, mtime May 31 17:39)
+- **Notes**: Skill last commit on E6 cutover branch was 16:34 EDT (Phase 2 DS fixup). Skill's own working-state.md mentions a DS background review job (bc6ml5j38) for Phase 2 — could be that review is genuinely pacing the work (multi-phase atomic cutover, no PR until end). PM is healthy and presumably observing same data; deferring to PM's `feedback_manual_agents` ownership of boot. **Will escalate via tracker comment if no progress by cycle ~586** (additional 1h).
+
 ## Agent Health — 2026-06-02 05:06
 
 - **skill**: 👻 stalled (~175m — `current-state` mtime `Jun 2 02:11`; well past 2× 30min interval)
