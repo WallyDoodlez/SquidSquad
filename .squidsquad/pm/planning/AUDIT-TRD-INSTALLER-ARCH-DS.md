@@ -1,0 +1,3 @@
+# STATUS: generating...
+# Task: AUDIT-INSTALLER-ARCH-2
+# Model: deepseek-v4-pro
