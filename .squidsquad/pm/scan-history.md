@@ -489,3 +489,10 @@
 - **Findings**: (1) PM L4 (pm.md) clean — docs-only boundary clearly stated, pure-orphan inline-delete exception preserved; aligns with last 2 cycles' actions (#10750 reroute, #9969 parking). (2) Worker L4 duplication: commit bd64e86f added "Front-loaded planning for batched issue work" section to BOTH worker.md AND worker-instructions.md — violates feedback_compose_dry (one authoring location). Self-resolves via #10836 Direction A (deletes worker-instructions.md as legacy stub). Added content-preservation gate to CONTEXT-10836.md.
 - **Auto-fixed**: CONTEXT-10836.md content-preservation gate documented for skill to honor at implementation time.
 - **Items rejected by human**: (none)
+
+## Scan — 2026-06-03 03:38
+
+- **Files scanned**: .squidsquad/project/{verifier.md,verifier-instructions.md,verifier-responsibility.md,verifier-soul-directives.md,pm-*.md,dm-*.md} (legacy L4 stub content-vs-unified-file inventory; follow-up to cycle 2084 worker.md finding)
+- **Findings**: (1) verifier-soul-directives.md contains 'Deterministic testing law' rule with #1291 incident cite — NOT in verifier.md. MIGRATION REQUIRED before stub deletion. (2) Bold-heading inventory across pm-*.md and dm-*.md flagged ~60 themes not appearing as bold headings in unified files — needs per-stub content comparison at implementation time (verifier finding proves bold-diff != content-diff).
+- **Auto-fixed**: CONTEXT-10836.md content-preservation gate expanded with specific verifier finding + hard rule (no stub deletion without per-stub audit log). Tracker comment on #10836 with same.
+- **Items rejected by human**: (none)

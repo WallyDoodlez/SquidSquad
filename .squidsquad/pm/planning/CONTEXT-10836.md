@@ -114,7 +114,17 @@ These directions are settled before Phase 1 research begins, so research surface
 - Migration path for existing installs that have the legacy multi-file stubs already on disk.
 - Test surface (CQ for the wizard step; fresh-install + existing-install scenarios).
 
-**Content-preservation gate (added 2026-06-03, cycle 2084 scan)**: Before deleting legacy multi-file stubs from any install, audit each existing `worker-instructions.md` / `worker-responsibility.md` / `worker-soul-directives.md` / `verifier-*.md` / `pm-*.md` / `dm-*.md` for content that exists ONLY in the stub and NOT in the unified `<role-class>.md`. Known duplication that's safe to drop: PM cycle 2084 confirmed the "Front-loaded planning for batched issue work" section (commit `bd64e86f`) was added to BOTH `worker.md` AND `worker-instructions.md` simultaneously — content is identical, so stub removal loses nothing. Other sections may not be duplicated and would need to migrate to the unified file before the stub is deleted.
+**Content-preservation gate (added 2026-06-03, cycle 2084-2085 scan)**: Before deleting legacy multi-file stubs from any install, audit each existing `worker-instructions.md` / `worker-responsibility.md` / `worker-soul-directives.md` / `verifier-*.md` / `pm-*.md` / `dm-*.md` for content that exists ONLY in the stub and NOT in the unified `<role-class>.md`. **The audit is mandatory per role and per stub** — themes can drop silently if not surveyed.
+
+**Cycle 2085 scan findings**:
+
+1. **Safe to drop** (confirmed duplicate): the "Front-loaded planning for batched issue work" section (commit `bd64e86f`) exists in BOTH `worker.md` AND `worker-instructions.md` — content is identical.
+
+2. **MIGRATION REQUIRED before deletion** — `verifier-soul-directives.md` contains the "Deterministic testing law" rule with explicit citation to the #1291 incident ("After the #1291 incident, every TC that CAN be deterministic MUST be. Only genuinely stochastic outputs qualify for probabilistic measurement."). This rule + its historical incident cite are NOT present in `verifier.md`. Deletion without migration loses both the rule and the institutional memory of the #1291 incident.
+
+3. **Broader audit pending** — bold-heading-level inventory across `pm-*.md` and `dm-*.md` stubs surfaced ~60 themes that don't appear verbatim as bold headings in the unified `pm.md` / `dm.md`. PM cycle 2085 did NOT confirm these are genuinely missing vs. absorbed-into-L3-with-different-wording — the verifier finding above demonstrates the audit must do actual content comparison, not just structural lookup. Skill at implementation time MUST do per-role/per-stub content comparison and surface anything not covered in `<role-class>.md` or L3 prose for migration before the stub deletion lands.
+
+**Hard rule**: NO stub deletion without an audit log of "verified migrated" or "verified duplicate" per stub, committed alongside the deletion.
 
 ## Related
 

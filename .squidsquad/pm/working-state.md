@@ -9,15 +9,15 @@
 - pending_ship: 0
 - pending_test: 0
 - Open PRs: 0
-- In flight: E6 #10685 (skill on `skill/e6-v2-cutover-10685`, **Phase 3d.1 DONE in cycle 1554** — `compose_all` deleted + v1 CLI fallback retired, Phase 3d continues; ~3 cycles to squash PR)
+- In flight: E6 #10685 (skill on `skill/e6-v2-cutover-10685`, **Phase 3d.2 DONE in cycle 1555** — v1 retire-marked test bodies deleted, more 3d sub-phases pending)
 - Approved queue (E6-gated): 7 items
 
 ## Recent cycles
 
-- Cycle 2084: scanned L4 — found worker.md/worker-instructions.md duplication of "Front-loaded planning" section (cycle 2080 commit bd64e86f). Self-resolves via #10836 Direction A. Added content-preservation gate to CONTEXT-10836.md so skill audits each legacy stub for unique content before deletion.
-- Cycle 2083: filed #10855 verifier-boot bug; verified HARD GATE consistency across 4 umbrellas
-- Cycle 2082: BRIEFING.md staleness rewrite; #9969 triage with Option B
-- Cycle 2081: booted skill+verifier; deduped #10755→#10750; pre-locked #10836 Direction A
+- Cycle 2085: scanned legacy L4 stubs for unique content. Confirmed verifier-soul-directives.md has the "Deterministic testing law" rule with #1291 incident cite — NOT in verifier.md, MIGRATION REQUIRED before #10836 stub deletion. Expanded CONTEXT-10836 content-preservation gate with hard rule (no deletion without per-stub audit log).
+- Cycle 2084: found worker.md/worker-instructions.md duplication of "Front-loaded planning" (commit bd64e86f) — self-resolves via #10836. Added content-preservation gate to CONTEXT-10836.
+- Cycle 2083: filed #10855 verifier-boot bug; HARD GATE consistency verified
+- Cycle 2082: BRIEFING.md staleness rewrite; #9969 triage
 
 ## Open in PM queue
 
