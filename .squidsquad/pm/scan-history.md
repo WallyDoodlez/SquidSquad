@@ -496,3 +496,10 @@
 - **Findings**: (1) verifier-soul-directives.md contains 'Deterministic testing law' rule with #1291 incident cite — NOT in verifier.md. MIGRATION REQUIRED before stub deletion. (2) Bold-heading inventory across pm-*.md and dm-*.md flagged ~60 themes not appearing as bold headings in unified files — needs per-stub content comparison at implementation time (verifier finding proves bold-diff != content-diff).
 - **Auto-fixed**: CONTEXT-10836.md content-preservation gate expanded with specific verifier finding + hard rule (no stub deletion without per-stub audit log). Tracker comment on #10836 with same.
 - **Items rejected by human**: (none)
+
+## Scan — 2026-06-03 04:38
+
+- **Files scanned**: references/ grep — verify PHASE2-LOCKED-10781 premise (3 standing rules have zero → run sub-skill: invocations; 2 kept entries have positive invocations)
+- **Findings**: PHASE2-LOCKED-10781 premise CONFIRMED — self-restart/context-pressure/cycle-runner have 0 references/ invocations (correctly removed from catalog); boot-bootstrap + agent-lifecycle have 2 each in references/agent-instructions.md + references/roles/instructions.md (correctly kept). Post-E6 (after agent-instructions.md deletes), count drops to 1 each but still ≥1 threshold — Phase 2 lock stays valid.
+- **Auto-fixed**: none (verification scan only)
+- **Items rejected by human**: (none)

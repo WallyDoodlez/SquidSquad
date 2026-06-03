@@ -9,29 +9,26 @@
 - pending_ship: 0
 - pending_test: 0
 - Open PRs: 0
-- In flight: E6 #10685 (skill on `skill/e6-v2-cutover-10685`, cycle 1556 **paused awaiting PM/human on deploy --check fate** — audit at `.squidsquad/skill/planning/AUDIT-10685-phase3d3-deploy-check.md` in skill clone)
+- In flight: E6 #10685 (skill on `skill/e6-v2-cutover-10685`, paused awaiting PM/human on deploy --check fate; skill cycle 1557 went quiet on improvement scan instead)
 - Approved queue (E6-gated): 7 items
+- New skill-owned bugs from cycle 1557 scan (auto-approved): #10861 manifest test regex false-positive, #10862 manifest test orphan-detector blind to → run sub-skill: grammar — both pickup post-E6
 
 ## Active decision pending
 
-**#10685 Phase 3d.3 — deploy --check post-cutover fate** (surfaced cycle 2086):
-- Skill audit cycle 1556 found v1 `check_role` chain produces always-drift post-cutover (v1 pre-LLM expected vs v2 post-LLM on-disk)
-- **Option A (PM recommendation)**: delete `--check` entirely, -150 LOC, lose drift-detection workflow
-- **Option B (skill recommendation)**: migrate `check_role` to compare against `CLAUDE.linked.md`, +60 LOC, preserve drift-detection
-- Option C (always-drift) rejected as footgun by both
-- Surfaced to operator cycle 2086; awaiting answer
+**#10685 Phase 3d.3 — deploy --check post-cutover fate**:
+- PM recommends Option A (delete -150 LOC); skill recommends Option B (migrate to CLAUDE.linked.md, +60 LOC)
+- Awaiting operator
 
 ## Recent cycles
 
+- Cycle 2087: verified PHASE2-LOCKED-10781 premise (3 standing rules zero-invocation, 2 kept positive); triaged #10861 + #10862 (skill-owned, parked behind E6)
 - Cycle 2086: surfaced skill's deploy --check audit + A/B recommendation
 - Cycle 2085: verifier-soul-directives "Deterministic testing law (#1291)" unique-content finding → #10836 hard rule
 - Cycle 2084: worker.md / worker-instructions.md duplication → #10836 content-preservation gate
-- Cycle 2083: filed #10855 verifier-boot bug
-- Cycle 2082: BRIEFING.md staleness rewrite
 
 ## Open in PM queue
 
-- #9969 manifest.md naming convention — parked, awaiting human ack post-E6
+- #9969 manifest.md naming convention — parked
 
 ## Context
 
