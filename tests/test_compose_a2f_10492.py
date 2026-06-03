@@ -243,17 +243,9 @@ def test_deploy_alias_v2_no_l4_file_is_noop(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# AC: v1 byte-identical (no --v2 path untouched)
+# A2f's v1 byte-stability assertion (test_v1_deploy_role_signature_unchanged)
+# retired in E6 #10685 Phase 3d.4 — v1 ``deploy_role`` was deleted.
 # ---------------------------------------------------------------------------
-
-def test_v1_deploy_role_signature_unchanged():
-    """A2f must not change deploy_role's signature — v1 byte-stability per §9a."""
-    import inspect
-    sig = inspect.signature(compose.deploy_role)
-    # Same param names as A6 ship.
-    assert list(sig.parameters.keys()) == [
-        "role_name", "target_root", "output_name", "output_filename", "regenerate_cmd",
-    ]
 
 
 # ---------------------------------------------------------------------------

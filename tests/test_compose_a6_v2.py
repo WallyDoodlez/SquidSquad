@@ -75,23 +75,10 @@ def _stage_minimal_catalog(target_root):
 
 
 # ---------------------------------------------------------------------------
-# deploy_role: backward compatibility for v1 (output_filename default)
+# deploy_role v1 backward-compat tests retired in E6 #10685 Phase 3d.4
+# (deploy_role itself deleted; v2 ``deploy_alias_v2`` / ``deploy_role_v2``
+# are the only deploy paths post-cutover).
 # ---------------------------------------------------------------------------
-
-def test_deploy_role_output_filename_defaults_to_v1():
-    sig = inspect.signature(compose.deploy_role)
-    assert sig.parameters["output_filename"].default == "CLAUDE.md"
-
-
-def test_deploy_role_preserves_role_parameter_name():
-    # #10358: the public signature keeps `role_name` (compose's existing
-    # name for what the rest of the code treats as the role-class).
-    sig = inspect.signature(compose.deploy_role)
-    assert "role_name" in sig.parameters
-    # First positional param.
-    first = next(iter(sig.parameters))
-    assert first == "role_name"
-
 
 def test_deploy_alias_v2_preserves_role_variable_name_per_10358():
     # #10358: variable name `role` is preserved in code signatures. The
@@ -267,14 +254,6 @@ def test_deploy_alias_v2_v2_regenerate_cmd_in_output_header(tmp_path, monkeypatc
     assert "Regenerate: python references/scripts/compose.py deploy frontend-1" in header
     # Sanity: post-E6 the hint must NOT mention the retired flag.
     assert "--v2" not in header
-
-
-def test_deploy_role_default_regenerate_cmd_preserves_v1_header(monkeypatch):
-    # When regenerate_cmd is not passed, the v1 header must say
-    # `deploy <role_name>` — same wording as pre-A6 (§9a byte-equivalence
-    # already verified via stash/restore/diff, but lock it at unit level too).
-    sig = inspect.signature(compose.deploy_role)
-    assert sig.parameters["regenerate_cmd"].default is None
 
 
 def test_deploy_alias_v2_aborts_on_malformed_registry(monkeypatch, capsys):
