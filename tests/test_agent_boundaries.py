@@ -158,23 +158,6 @@ def test_ac8_l4_live_stub_exists(prefix):
 
 
 # ---------------------------------------------------------------------------
-# AC9 — L4 prefix-filtered inclusion in composed output
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.skip(
-    reason="AC9 tested v1's D6b filename-prefix L4 routing "
-    "(references/sub-skills/project/<prefix>-responsibility.md). v2 L4 "
-    "semantics are different — `v2_link_stage.emit_v2_linked` reads a "
-    "single L4 file at `.squidsquad/project/<role_class>.md`, not a "
-    "directory of prefix-routed files. The AC9 invariant doesn't carry "
-    "over. Retires with v1 in E6 #10685 Phase 3d."
-)
-def test_ac9_pm_compose_includes_pm_and_shared_l4_not_others():
-    """v1 invariant — see skip reason above."""
-
-
-# ---------------------------------------------------------------------------
 # AC10 — byte-identical re-runs with agent_compose disabled
 # ---------------------------------------------------------------------------
 
