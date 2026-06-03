@@ -183,6 +183,21 @@ class TestManifestIntegrity:
                         ralph.relative_to(self.sub_skills_dir).as_posix()
                     )
 
+        # #10862: role instructions reference sub-skills via the
+        # ``→ run sub-skill: <name>`` directive grammar (per
+        # ``common/base-l1-instructions.md`` step-id contract). These
+        # references are resolved by compose at inline time, not via
+        # ``includes.yml``, so the manifest-only scan above doesn't see
+        # them. Walk every ``references/roles/**/instructions.md`` for
+        # the directive and mark any file whose stem matches the named
+        # sub-skill as referenced.
+        directive_names = self._collect_run_subskill_directive_names()
+        if directive_names:
+            for md_rel in all_md:
+                stem = Path(md_rel).stem
+                if stem in directive_names:
+                    referenced.add(md_rel)
+
         # #8697: common/event-reactions.md exists but isn't referenced by
         # any current role manifest. It's a sub-skill that may be wired in
         # for future event-driven needs; explicitly tolerate its
@@ -190,6 +205,29 @@ class TestManifestIntegrity:
         known_unused = {"common/event-reactions.md"}
         orphans = all_md - referenced - known_unused
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"
+
+    @staticmethod
+    def _collect_run_subskill_directive_names() -> set:
+        """Return the set of bare sub-skill names referenced via the
+        ``→ run sub-skill: <name>`` directive grammar in any
+        ``references/roles/**/instructions.md`` file.
+
+        The directive is the base-layer mechanism by which role
+        instructions point at a sub-skill that compose will inline; it
+        does NOT live in any ``includes.yml``. Names are bare kebab-case
+        identifiers (e.g. ``l4-curation``) — file resolution happens at
+        compose time across ``common/`` and ``roles/<role>/``.
+        """
+        roles_dir = REFERENCES_DIR / "roles"
+        if not roles_dir.exists():
+            return set()
+        directive_re = re.compile(r'→\s*run\s+sub-skill:\s*([A-Za-z0-9][\w-]*)')
+        names = set()
+        for instr in roles_dir.rglob("instructions.md"):
+            text = instr.read_text(encoding="utf-8")
+            for m in directive_re.finditer(text):
+                names.add(m.group(1))
+        return names
 
     def test_legacy_souls_namespace_gone(self):
         """Manifest must no longer reference a `souls/` include namespace."""
