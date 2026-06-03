@@ -8,6 +8,7 @@
 
 ## Completed Steps
 
+- Cycle 1542 (Phase 3c — Path B `deploy_role_v2` wedge): commit `e572b414`. Added `compose.deploy_role_v2(role_name, target_root, output_name, source_root)` — 188 lines new code in compose.py + 188-line test file. Resolves role_name → (role_class, l3_domain) via the v1 variant convention, runs the v2 link+assemble pipeline directly (bypassing the `## Aliases` registry), seeds SOUL.md when missing. **source_root/target_root split is new** — wizard's foreign-project install reads templates from REPO_ROOT (source_root default) and writes outputs to target_root. 9 new tests pass; broader smoke 426 passed / 1 skipped. **Did NOT migrate wizard.py:1099 yet** — blocked on catalog drift surfaced during integration: docs/sub-skill-catalog.md retains pre-#6274 section headers `### Dev (roles/dev/)` and `### QA (roles/qa/)` but files moved to `roles/worker/` and `roles/verifier/`. Filed as #10817 (high-severity prerequisite). Once #10817 ships, wizard migration is a one-line follow-up. DS review #10685-phase3c launched in background (task `byfiilp1c`). Also filed cycle-1541's PM Discussion comment on #10685 yesterday — no PM response yet but proceeded with Path B since recommendation was clear.
 - Cycle 1541 (Phase 5 D6 wedge + Phase 3c wedge research): two artifacts.
   - **D6 wedge commit `6a636155`**: deleted `TestEventDrivenWorkflowLocation::test_event_driven_workflow_has_no_frontmatter` from `tests/test_compose.py` (10 lines). Asserts v1-era invariant that A2.6 (#10394) overturned by adding `slot:`/`ordinal:` frontmatter to L1-L3 sources for the v2 link stage to sort. Pure deletion, no DS review. Class now 2/2 pass (was 2/3). Retires one pre-existing failure.
   - **Phase 3c wedge research** (recorded in Key Decisions below): traced the alias-registry population path, audited `deploy_alias_v2` vs `deploy_role` contracts, identified four concrete gaps, and recommend **Path B** (`deploy_role_v2` thin wrapper) over Path A (extend deploy_alias_v2) and a newly-surfaced Path C (registry-first wizard). Decision is documented for PM/human concurrence on next pickup; no code change this cycle.
@@ -39,7 +40,7 @@
 - Phase 3b.2: ✅ DONE cycle 1537 (commit `129fb553`) — retire two A2-era `test_v1_compose_untouched` coexistence guards (l4_parser and source_frontmatter).
   - Audit `tests/test_d2_link_stage_references.py::test_v1_link_stage_references_match_v1_compose` for v1-byte-stability semantics — likely retires in Phase 3d alongside `deploy_role` deletion.
   - Audit `tests/test_compose.py::TestEventDrivenWorkflowLocation::test_event_driven_workflow_has_no_frontmatter` for D6 retirement (already on the watch list).
-- Phase 3c (research complete cycle 1541, decision pending): migrate `references/scripts/wizard.py:1099` from `deploy_role(compose_name, target_root=target_root, output_name=agent_id)` to a v2-equivalent. **Recommendation: Path B (thin `deploy_role_v2` wrapper)** — see "Phase 3c wedge research" under Key Decisions below for the full Path A/B/C comparison and gap analysis. Next pickup should either confirm Path B and implement, or post a Discussion comment on #10685 to seek PM concurrence first.
+- Phase 3c: **Step A ✅ DONE cycle 1542 (commit `e572b414`)** — `compose.deploy_role_v2` implemented per Path B with `source_root`/`target_root` split, 9 tests passing. **Step B (wizard.py:1099 swap) BLOCKED** on #10817 (catalog drift `roles/dev/` → `roles/worker/` rename for catalog sections). Once #10817 ships: one-line edit to `wizard.py` swapping `deploy_role` → `deploy_role_v2` + a `_stub_assemble_for_scaffold` autouse fixture in `tests/test_wizard.py` mirroring the test_compose_a2f_10492 pattern. Was staged this cycle but reverted because of #10817 blockage.
 - Phase 3d: with wizard migrated, delete `deploy_role`, `compose_role`, `compose_all` (the v1 worker template entry), `_load_manifest`, `_resolve_includes`, `_resolve_includes_with_manifest`, the v1 "hint emit" (the v1 path's regenerate-hint emission — search for `"# This file is generated"` etc.), the `tests/test_compose.py` v1 tests, the remaining 3 v1 `deploy_role` call sites in tests (test_compose.py, test_d2_link_stage_references.py), and `tests/test_v1_byte_stability_9a.py`'s sibling v1 contract tests if any remain.
 - Phase 3e: catalog_drift.py — uses `_resolve_includes` per the Phase 3 grep; audit whether the call site needs to migrate to v2 or get deleted alongside.
 
@@ -71,6 +72,8 @@
 
 ## Watch list
 
+- DS review #10685-phase3c (background task `byfiilp1c`) — pending; address findings as a fixup commit next cycle.
+- #10817 (catalog drift, high) — filed cycle 1542. Hard prerequisite for the wizard.py:1099 migration. Next cycle could either wait for PM to triage / a worker to pick up, or pick it up directly since it's already labeled `role:skill`.
 - DS review #10685-phase4 (background task `bmqht901r`) — completed; all 4 warnings addressed in fixup commit `8db9c0ba` cycle 1539.
 - DS review #10685-phase2 (background task `bc6ml5j38`) — addressed in fixup commit `eb3ab95e`. F1 cutover-window WARNINGs removed cycle 1538 with Phase 4 landing.
 - DS review #10685-phase1 (background task `b9dv1dqhd`) — already addressed in commit `0160f296`; confirm green.
@@ -80,6 +83,12 @@
 - All other audit/D/E PRs upstream.
 
 ## Key Decisions (latest only)
+
+- **NEW: Surface catalog drift at the v2-gate boundary, not inside the migration commit.** Cycle 1542 lesson. When `deploy_role_v2` was trial-wired into wizard, the PRD-D D3 catalog gate (v2-only) immediately revealed that `docs/sub-skill-catalog.md` retains pre-#6274 section headers `### Dev (roles/dev/)` and `### QA (roles/qa/)` while the files moved to `roles/worker/`/`roles/verifier/`. Two options at the moment of discovery: (a) widen the Phase 3c commit to include the catalog fix (touches `test_catalog_parser_d1.py` line 86/125/131 + likely `test_feat_9588_lazy_load_bootstrap.py` 324-326), or (b) split — keep Phase 3c as just the new function, file the catalog drift as a separate high-severity issue (#10817), and migrate the wizard once #10817 ships. **Chose (b).** Recipe: when a downstream gate exposes upstream rot during a migration, file the upstream as a hard-dependency issue rather than bundling the fix into the migration commit. Keeps the migration commit's blast radius bounded to the migration itself, makes the rot visible to other agents (PM/QA) for prioritization, and keeps DS review focused on the migration's actual logic instead of the catalog churn.
+
+  **How to apply:** Any time a v2 gate (catalog, R1-R7 validation, atomic-emit triple) fires on an unrelated pre-existing drift during a Phase X commit, peel the drift into its own issue with a `blocks: PhaseY` cross-reference. Don't widen the migration commit to absorb the fix.
+
+- **NEW: Wizard's source/target split forces a source_root parameter on `deploy_role_v2`.** Cycle 1542. v1 `deploy_role` reads templates from REPO_ROOT module constants and writes outputs to `target_root` — two different paths. `deploy_alias_v2` conflates them: it reads sources from `target_root` (via `repo_root=target_root`). The wizard test suite passes for v1 because v1 doesn't use target_root for sources; it would break for v2 unless `deploy_role_v2` accepts a separate `source_root`. Added `source_root: Path = None` (defaults to REPO_ROOT). Tests staging a hermetic fixture pass `source_root=tmp_path`; the wizard's production call uses the default. Recipe: when extracting a v2 entry point from a v1 caller that's already split source/output paths, preserve that split rather than forcing a single root.
 
 - **NEW: Phase 3c wedge research — recommend Path B (`deploy_role_v2` thin wrapper).** Cycle 1541. Full wedge picture below; recommendation is Path B.
 
