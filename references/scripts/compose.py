@@ -1838,7 +1838,16 @@ def deploy_role_v2(role_name: str, target_root: Path = None,
         role_class, l3_domain = resolved
     else:
         role_class = _get_entry_file_for_role(role_name)
-        l3_domain = None
+        # When the role_name is itself an alias for another class (e.g.
+        # ``skill`` → ``worker``), the alias IS the L3 domain — wizard
+        # fresh installs of canonical alias-named agents (skill / qa /
+        # dev) need the domain-specific L3 sources (project-context
+        # etc.) included. CLI ``deploy <alias>`` goes through
+        # ``deploy_alias_v2`` which looks up the (class, domain) pair
+        # from the ``## Aliases`` registry; the wizard's fresh-install
+        # path doesn't have the registry yet, so derive the domain here
+        # from the alias-vs-class delta.
+        l3_domain = role_name if role_class != role_name else None
 
     # Lazy imports — same pattern as deploy_alias_v2: keep v1 callers
     # from loading these modules until they're needed.

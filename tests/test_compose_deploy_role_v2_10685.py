@@ -276,7 +276,7 @@ def test_deploy_role_v2_wizard_contract_source_root_split(tmp_path):
 
 
 def test_deploy_role_v2_no_variant_l3_is_none(tmp_path, monkeypatch):
-    """Bare role_name (no hyphen) resolves with l3_domain=None."""
+    """Bare role_name (no hyphen) AND no alias-mapping resolves with l3_domain=None."""
     _stage_install(tmp_path, role_class="pm")
 
     captured = {}
@@ -296,3 +296,41 @@ def test_deploy_role_v2_no_variant_l3_is_none(tmp_path, monkeypatch):
         "pm", target_root=tmp_path, output_name="pm", source_root=tmp_path,
     )
     assert captured == {"role_class": "pm", "l3_domain": None}
+
+
+def test_deploy_role_v2_alias_role_name_derives_l3_domain(tmp_path, monkeypatch):
+    """Alias-style role_name (e.g. ``skill`` → worker class) treats the
+    alias as the L3 domain so wizard fresh installs pick up the
+    domain-specific L3 sources (project context fragment, etc.).
+
+    Regression test for the cycle-1548 finding: pre-fix, ``deploy_role_v2(
+    "skill", ...)`` resolved to ``(role_class="worker", l3_domain=None)``
+    because ``_resolve_variant("skill")`` returns None and the fallback
+    set l3_domain unconditionally to None — dropping the skill domain.
+    CLI ``deploy skill`` was unaffected (routes through
+    ``deploy_alias_v2`` which reads the ``## Aliases`` registry); only
+    the wizard's fresh-install path lost the domain. Post-fix: when
+    ``_get_entry_file_for_role(role_name) != role_name``, treat
+    ``role_name`` as the L3 domain.
+    """
+    _stage_install(tmp_path, role_class="worker", l3_variant="skill")
+
+    captured = {}
+    import v2_link_stage
+    real_collect = v2_link_stage.collect_sources_for_validation
+
+    def spy_collect(role_class, l3_domain, *, repo_root=None):
+        captured["role_class"] = role_class
+        captured["l3_domain"] = l3_domain
+        return real_collect(role_class, l3_domain, repo_root=repo_root)
+
+    monkeypatch.setattr(
+        v2_link_stage, "collect_sources_for_validation", spy_collect,
+    )
+
+    compose.deploy_role_v2(
+        "skill", target_root=tmp_path, output_name="skill",
+        source_root=tmp_path,
+    )
+    # Pre-fix: l3_domain was None. Post-fix: "skill" — the alias IS the domain.
+    assert captured == {"role_class": "worker", "l3_domain": "skill"}
