@@ -269,20 +269,6 @@ def test_existing_dm_identity_parses_correctly():
 
 
 # ---------------------------------------------------------------------------
-# Coexistence: parser does not modify v1 read sites
-# ---------------------------------------------------------------------------
-
-def test_v1_compose_untouched():
-    import compose
-    source = compose.__file__
-    with open(source, encoding="utf-8") as f:
-        text = f.read()
-    assert "source_frontmatter" not in text, (
-        "A2a is parse-only; A2 will wire source_frontmatter into compose.py later."
-    )
-
-
-# ---------------------------------------------------------------------------
 # Result shape
 # ---------------------------------------------------------------------------
 

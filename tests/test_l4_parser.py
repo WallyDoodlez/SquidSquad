@@ -300,21 +300,6 @@ def test_parse_l4_file_round_trip(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Coexistence: parser does not modify v1 read sites
-# ---------------------------------------------------------------------------
-
-def test_v1_compose_untouched():
-    # A2b is pure additive. compose.py must not import l4_parser yet.
-    import compose
-    source = compose.__file__
-    with open(source, encoding="utf-8") as f:
-        text = f.read()
-    assert "l4_parser" not in text, (
-        "A2b is parse-only; A2 will wire l4_parser into compose.py later."
-    )
-
-
-# ---------------------------------------------------------------------------
 # Result shape
 # ---------------------------------------------------------------------------
 
