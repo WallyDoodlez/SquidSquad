@@ -1074,3 +1074,6 @@
 {"timestamp": 1780462970.5383015, "task_type": "code-review", "task_id": "AUDIT-VAULT-ARCH", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16017, "elapsed_seconds": 345.8}
 {"timestamp": 1780463070.2449634, "task_type": "code-review", "task_id": "AUDIT-COMPOSE-ARCH", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 24070, "elapsed_seconds": 445.5}
 {"timestamp": 1780463368.8646255, "task_type": "code-review", "task_id": "AUDIT-INSTALLER-ARCH-2", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 18200, "elapsed_seconds": 263.0}
+{"timestamp": 1780477984.6521506, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1780477984.662897, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1780477984.662897, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
