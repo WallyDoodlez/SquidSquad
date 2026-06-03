@@ -1792,6 +1792,23 @@ def deploy_role_v2(role_name: str, target_root: Path = None,
             still composing from the canonical templates. Tests staging
             a hermetic fixture pass ``source_root=tmp_path``.
 
+            **Known limitation**: two helpers honor only the global
+            ``REPO_ROOT``, not ``source_root``:
+            - ``_resolve_variant`` + ``_get_entry_file_for_role`` (the
+              ``role_name`` → ``(role_class, l3_domain)`` resolution
+              below) check ``ROLES_DIR`` to decide which side of the
+              #6274 dev/worker alias to return.
+            - ``_assemble_and_write_soul`` reads SOUL layer templates
+              from ``BASE_ROLE_DIR`` (= ``ROLES_DIR``).
+            Both are zero-blast-radius in production (wizard always uses
+            ``source_root=None`` → ``REPO_ROOT``, so the helpers and the
+            v2 pipeline read the same tree) but means a fully hermetic
+            test must either keep ``role_name`` to canonical (no #6274
+            alias detour) or monkeypatch the helpers. Threading
+            ``source_root`` through both helpers would touch the v1
+            ``deploy_role`` path that's slated for retirement in
+            Phase 3d — deferred to that cleanup.
+
     Returns the absolute path of the assembled ``CLAUDE.md``.
 
     Path B of the E6 #10685 Phase 3c decision: smallest blast radius

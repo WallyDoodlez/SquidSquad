@@ -184,7 +184,9 @@ def test_deploy_role_v2_header_uses_output_name(tmp_path):
 
 def test_deploy_role_v2_seeds_soul_when_missing(tmp_path):
     _stage_install(tmp_path, role_class="pm")
-    compose.deploy_role_v2("pm", target_root=tmp_path, output_name="peggy")
+    compose.deploy_role_v2(
+        "pm", target_root=tmp_path, output_name="peggy", source_root=tmp_path,
+    )
     soul = tmp_path / ".squidsquad" / "peggy" / "SOUL.md"
     assert soul.exists()
     assert "peggy" in soul.read_text(encoding="utf-8")
@@ -198,7 +200,9 @@ def test_deploy_role_v2_preserves_existing_soul(tmp_path):
     existing_soul = agent_dir / "SOUL.md"
     existing_soul.write_text("# Custom SOUL — do not overwrite\n", encoding="utf-8")
 
-    compose.deploy_role_v2("pm", target_root=tmp_path, output_name="peggy")
+    compose.deploy_role_v2(
+        "pm", target_root=tmp_path, output_name="peggy", source_root=tmp_path,
+    )
 
     assert existing_soul.read_text(encoding="utf-8") == (
         "# Custom SOUL — do not overwrite\n"
@@ -216,7 +220,9 @@ def test_deploy_role_v2_requires_no_aliases_registry(tmp_path):
     # Explicitly assert no config.md exists.
     assert not (tmp_path / ".squidsquad" / "config.md").exists()
     # Must not raise.
-    out = compose.deploy_role_v2("pm", target_root=tmp_path, output_name="peggy")
+    out = compose.deploy_role_v2(
+        "pm", target_root=tmp_path, output_name="peggy", source_root=tmp_path,
+    )
     assert out.exists()
 
 
@@ -231,7 +237,6 @@ def test_deploy_role_v2_resolves_variant_to_role_and_l3(tmp_path, monkeypatch):
 
     captured = {}
 
-    real_collect = compose.__dict__.get("collect_sources_for_validation")
     import v2_link_stage
     real_collect = v2_link_stage.collect_sources_for_validation
 
