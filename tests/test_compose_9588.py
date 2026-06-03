@@ -29,6 +29,9 @@ SUB_SKILLS = REPO_ROOT / "references" / "sub-skills"
 
 sys.path.insert(0, str(SCRIPTS))
 import compose  # noqa: E402
+import v2_link_stage  # noqa: E402
+
+from _v2_test_helpers import expand_v2_includes  # noqa: E402
 
 
 ROLES = ["skill", "pm", "qa", "dm"]
@@ -68,15 +71,31 @@ MODE_SPECIFIC_MARKERS = [
 
 
 def _compose_for(role: str) -> str:
-    """Compose a role end-to-end, including placeholder substitution.
+    """Hermetic v2-equivalent compose for product-invariant tests.
 
-    Mirrors what `deploy_role` does up to (but not including) writing the
-    composed text to .squidsquad/<role>/CLAUDE.md. Skipping the disk write
-    keeps the test hermetic on a clean checkout.
+    Pipeline: ``_resolve_variant`` → ``emit_v2_linked`` (L4 overridden
+    to a nonexistent path for hermeticity) → ``expand_v2_includes``
+    (deterministic ``{{include:}}`` expansion mirroring v1
+    ``_resolve_includes``) → ``_substitute_placeholders``. The
+    composed string has the same shape v1's ``compose_role`` produced
+    — ``<!-- sub-skill: X --> body <!-- /sub-skill: X -->`` wrapping
+    + substituted placeholders — so the assertions below carry over
+    from the pre-E6 v1 path verbatim.
+
+    Replaces the E6-retired ``compose.compose_role(role)`` call.
     """
-    entry_file = compose._get_entry_file_for_role(role)
-    composed = compose.compose_role(role)
-    return compose._substitute_placeholders(composed, role, entry_file)
+    resolved = compose._resolve_variant(role)
+    if resolved:
+        role_class, l3_domain = resolved
+    else:
+        role_class = compose._get_entry_file_for_role(role)
+        l3_domain = role if role_class != role else None
+    linked = v2_link_stage.emit_v2_linked(
+        role_class, l3_domain,
+        l4_path=REPO_ROOT / "tests" / "_nonexistent_l4_for_hermetic_v2_compose.md",
+    )
+    expanded = expand_v2_includes(linked)
+    return compose._substitute_placeholders(expanded, role, role_class)
 
 
 @pytest.mark.parametrize("role", ROLES)

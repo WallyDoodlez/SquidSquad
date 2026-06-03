@@ -10,7 +10,16 @@ sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
 
 
 class TestCapabilityDirective:
-    """Test {{capability: id}} directive resolution in compose.py."""
+    """Test {{capability: id}} directive resolution in v1 compose.py.
+
+    **E6 #10685 retirement notice (cycle 1551 audit)**: the
+    ``{{capability:}}`` directive is dead code in v2 — ``v2_link_stage``
+    has zero handling for it, no production source file uses it, and
+    ``references/sub-skills/capabilities/`` doesn't exist on disk. This
+    class tests v1 ``_resolve_includes``'s ``_resolve_capability``
+    branch. Both retire together in Phase 3d alongside the rest of v1
+    compose; do NOT migrate this class to v2 entry points.
+    """
 
     def test_capability_directive_resolves(self, tmp_path):
         """A valid {{capability: id}} directive inlines the sub-skill.md content."""
