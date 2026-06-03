@@ -1,6 +1,6 @@
 # PRD B — Compose Assemble Stage
 
-> **Status**: PRD draft, 2026-05-31. Derived from TRD [[COMPOSE-ARCHITECTURE]] §4.6 (assemble pass). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (this) / C (L4 + l4-curation) / D (catalog + wake-mode) / E (harness-owned freshness).
+> **Status**: shipped, 2026-06-02 (E6 V2 CUTOVER, #10685). Derived from TRD [[COMPOSE-ARCHITECTURE]] §4.6 (assemble pass). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (this) / C (L4 + l4-curation) / D (catalog + wake-mode) / E (harness-owned freshness).
 >
 > **Scope:** the LLM-driven coherence rewrite that runs **after** the link stage produces a per-slot linked composite. Excludes link-stage mechanics (PRD A), runtime L4 writes (PRD C), sub-skill catalog enforcement (PRD D), and harness-owned freshness (PRD E).
 

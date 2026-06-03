@@ -1,6 +1,6 @@
 # PRD C — L4 Customization (Runtime L4 Writes by Agents)
 
-> **Status**: PRD draft, 2026-05-31. Derived from TRD [[COMPOSE-ARCHITECTURE]] §3.3 (L4 ops + per-slot constraints) + §4.2 (compose-time L4 application — read-side) + §7 (runtime L4 writes — write-side, the focus of this PRD). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (assemble) / C (this) / D (catalog + wake-mode) / E (harness-owned freshness).
+> **Status**: shipped, 2026-06-02 (E6 V2 CUTOVER, #10685). Derived from TRD [[COMPOSE-ARCHITECTURE]] §3.3 (L4 ops + per-slot constraints) + §4.2 (compose-time L4 application — read-side) + §7 (runtime L4 writes — write-side, the focus of this PRD). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (assemble) / C (this) / D (catalog + wake-mode) / E (harness-owned freshness).
 >
 > **Scope:** the **write path** for L4 customization — the `l4-curation` sub-skill that detects customization requests in human-agent conversation, elicits scope, classifies the structural op, runs the six safety gates (Gate 0 conflict pre-emption → Gate 1 DS audit → Gate 2 mini-CQ → Gate 3 dry-run → Gate 4 atomic write/commit/push → Gate 5 recompose recovery), and commits the L4 change. Excludes compose-time L4 reading mechanics (PRD A), the LLM assemble pass (PRD B), sub-skill catalog enforcement (PRD D), and harness-owned freshness (PRD E).
 

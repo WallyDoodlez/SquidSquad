@@ -1,6 +1,6 @@
 # PRD D — Sub-Skill Catalog Gate + Wake-Mode Handling
 
-> **Status**: PRD draft, 2026-05-31. Derived from TRD [[COMPOSE-ARCHITECTURE]] §4.5 (sub-skill reference resolution + catalog gate) + §6.5 (wake-mode handling — one manifest, boot-probe selection). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (assemble) / C (L4 customization) / D (this) / E (compose freshness).
+> **Status**: shipped, 2026-06-02 (E6 V2 CUTOVER, #10685). Derived from TRD [[COMPOSE-ARCHITECTURE]] §4.5 (sub-skill reference resolution + catalog gate) + §6.5 (wake-mode handling — one manifest, boot-probe selection). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (assemble) / C (L4 customization) / D (this) / E (compose freshness).
 >
 > **Scope:** two coupled v1→v2 pivots that share a TRD chapter:
 > 1. **Sub-skill catalog gate** — composed `CLAUDE.md` emits `→ run sub-skill: <name>` references instead of inlining sub-skill bodies; the catalog (`docs/sub-skill-catalog.md`) is the authoritative gate; agents resolve references at runtime

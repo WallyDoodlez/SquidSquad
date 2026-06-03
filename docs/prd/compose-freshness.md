@@ -1,6 +1,6 @@
 # PRD E — Compose Freshness (Harness-Owned) + v2 Cutover
 
-> **Status**: PRD draft, 2026-05-31. Derived from TRD [[COMPOSE-ARCHITECTURE]] §8 (source-output sync — harness-owned freshness). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (assemble) / C (L4 customization) / D (catalog + wake-mode) / E (this — freshness + final v2 cutover).
+> **Status**: shipped, 2026-06-02 (E6 V2 CUTOVER, #10685). Derived from TRD [[COMPOSE-ARCHITECTURE]] §8 (source-output sync — harness-owned freshness). Part of the COMPOSE-ARCH PRD slice family: A (link) / B (assemble) / C (L4 customization) / D (catalog + wake-mode) / E (this — freshness + final v2 cutover).
 >
 > **Scope:** the three-layer freshness model that keeps composed `CLAUDE.md` outputs in sync with their L1–L4 sources, PLUS the family-wide **v2 switch PR** that makes v2 the default and retires v1. Excludes link-stage mechanics (PRD A), the LLM assemble pass (PRD B), runtime L4 writes (PRD C), and catalog/wake-mode handling (PRD D).
 >
