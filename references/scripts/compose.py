@@ -841,16 +841,6 @@ def compose_role(role_name: str) -> str:
     return composed
 
 
-def compose_all() -> str:
-    """Compose the worker-agent template as the default agent-instructions.md."""
-    # agent-instructions.md is the worker template (primary output)
-    header = "<!-- GENERATED FILE — DO NOT EDIT. -->\n"
-    header += "<!-- Source: references/roles/worker/instructions.md + sub-skills/ -->\n"
-    header += "<!-- Regenerate with: python references/scripts/compose.py all -->\n\n"
-    composed = compose_role("worker")
-    return header + composed
-
-
 def _read_config_value(field: str) -> str:
     """Read a config value using config.py.
 
@@ -2596,9 +2586,21 @@ def main():
         sys.exit(0)
 
     else:
-        # Treat as role entry file name
-        content = compose_role(cmd)
-        print(content)
+        # v1 ``compose.py <role>`` fallback retired in E6 (#10685) Phase 3d.1.
+        # Was a developer-inspection convenience that printed v1 ``compose_role``
+        # output to stdout. The v2 equivalent is reading the on-disk linked
+        # composite after ``deploy --check``:
+        #   python compose.py deploy <role> --check
+        #   cat .squidsquad/<role>/CLAUDE.linked.md
+        print(
+            f"ERROR: unknown command {cmd!r}. The v1 `compose.py <role>` "
+            "stdout-inspection fallback was retired in E6 (#10685). "
+            "Use `python compose.py deploy <role> --check` and read "
+            "`.squidsquad/<role>/CLAUDE.linked.md` to inspect the "
+            "composed output.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":
