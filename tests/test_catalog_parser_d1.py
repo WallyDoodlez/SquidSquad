@@ -83,11 +83,11 @@ class TestCleanParse:
         | `pm-planning` | Phase 1/2 research | PM |
         | `pm-orphan-cleanup` | Stale ticket sweep | PM |
 
-        ### Dev (`roles/dev/`)
+        ### Worker (`roles/worker/`)
 
         | Sub-skill | One-liner | Used by |
         |---|---|---|
-        | `implement-tasks` | Task implementation flow | dev |
+        | `implement-tasks` | Task implementation flow | worker |
         """)
         out = cp.parse_catalog(catalog)
         assert out == {
@@ -95,7 +95,7 @@ class TestCleanParse:
             "pm-orphan-cleanup":
                 "references/sub-skills/roles/pm/pm-orphan-cleanup.md",
             "implement-tasks":
-                "references/sub-skills/roles/dev/implement-tasks.md",
+                "references/sub-skills/roles/worker/implement-tasks.md",
         }
 
     def test_slash_bearing_name_overrides_h2_directory(self, tmp_path):
@@ -121,23 +121,24 @@ class TestCleanParse:
         }
 
     def test_slash_bearing_name_under_role_h3(self, tmp_path):
-        """Live-catalog row at line 225 — `skill/finding-categories`
-        under `### QA (\`roles/qa/\`)` — uses the slash-name override
-        even when the H3 has its own role directory.
+        r"""Live-catalog row — ``skill/finding-categories`` under
+        ``### Verifier (\`roles/verifier/\`)`` — uses the slash-name
+        override even when the H3 has its own role directory.
         """
         catalog = _write_catalog(tmp_path, """
         ## `roles/<role>/` — Role-specific sub-skills
 
-        ### QA (`roles/qa/`)
+        ### Verifier (`roles/verifier/`)
 
         | Sub-skill | One-liner |
         |---|---|
-        | `verification` | E2E tests | QA |
-        | `skill/finding-categories` | Skill-domain finding taxonomy | QA |
+        | `verification` | E2E tests | Verifier |
+        | `skill/finding-categories` | Skill-domain finding taxonomy | Verifier |
         """)
         out = cp.parse_catalog(catalog)
         assert out == {
-            "verification": "references/sub-skills/roles/qa/verification.md",
+            "verification":
+                "references/sub-skills/roles/verifier/verification.md",
             # Slash-name overrides the H3 directory — it's an absolute
             # path under references/sub-skills/
             "skill/finding-categories":

@@ -213,16 +213,16 @@ Role-specific event extras:
 | `roles/pm/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
 | Domain context | Per-stack PM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
-### QA (`roles/qa/`)
+### Verifier (`roles/verifier/`)
 
 | Sub-skill | One-liner |
 |---|---|
 | `verification` | Steps 2–6 — E2E tests, AC verification, health check |
-| `roles/qa/issue-filing` | QA's bug template (with reproduction + AC reference) — slash-bearing per #10743 |
-| `roles/qa/discussion-protocol` | QA's comment format (→ retires; common/`discussion` is the canonical) — slash-bearing per #10743 |
-| `roles/qa/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
-| Domain context | Per-stack QA notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
-| `skill/finding-categories` | Skill-domain finding taxonomy for QA reports |
+| `roles/verifier/issue-filing` | Verifier's bug template (with reproduction + AC reference) — slash-bearing per #10743 |
+| `roles/verifier/discussion-protocol` | Verifier's comment format (→ retires; common/`discussion` is the canonical) — slash-bearing per #10743 |
+| `roles/verifier/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
+| Domain context | Per-stack verifier notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
+| `skill/finding-categories` | Skill-domain finding taxonomy for verifier reports |
 
 ### DM (`roles/dm/`)
 
@@ -238,14 +238,14 @@ Role-specific event extras:
 | `roles/dm/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
 | Domain context | Per-stack DM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
-### Dev (`roles/dev/`)
+### Worker (`roles/worker/`)
 
 | Sub-skill | One-liner |
 |---|---|
 | `triage-issues` | Step 2 — deterministic work-queue triage |
 | `implement-tasks` | Step 2b — pick up approved tasks; commit on feature branch; open PR |
-| `roles/dev/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
-| Domain context | Per-stack dev notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
+| `roles/worker/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
+| Domain context | Per-stack worker notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
 > Removed from all per-role tables: `responsibility`, `file-conventions`, `status-line`. These are no longer sub-skills (see the migration notes earlier in this section). Source files remain on disk under `references/sub-skills/roles/<role>/` until #10360 implements the migration; this catalog reflects target architecture, not v1 disk state.
 
