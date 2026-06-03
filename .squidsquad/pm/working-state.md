@@ -1,35 +1,33 @@
 # Working State
 
-- **Task**: TRD Claude-audit final-pass — completed across all 5 architecture docs
-- **Status**: idle (awaiting human direction for PR)
-- **Last Processed Event ID**: df9f33751a6a
+- **Task**: pipeline sentinel — monitoring E6 burndown
+- **Status**: idle
+- **Last Processed Event ID**: 3e50e129c8e74594
 
-## Branch state — `docs/root-cause-fixes`
+## Pipeline
 
-6 commits ahead of main:
-- `28cfbda7` — VAULT-ARCH (13 findings: 4H/6M/3L)
-- `4aa90f27` — INSTALLER-ARCH (9 findings: 2H/4M/3L)
-- `17b43d35` — HARNESS-ARCH (10 findings: 3H/5M/3L; 1 dismissed)
-- `13518f57` — AGENT-RUNTIME (12 findings: 3H/6M/3L)
-- `6963dabb` — COMPOSE-ARCHITECTURE (7 findings)
-- `44306a78` — root-cause fixes (3 architectural disambiguations)
+- pending_ship: 0
+- pending_test: 0
+- Open PRs: 0
+- In flight: E6 #10685 (skill on `skill/e6-v2-cutover-10685`, ~4 cycles to squash PR per cycle 1552)
+- Approved queue (E6-gated): 7 items
+  - #10677 D6 (bundled into E6 squash PR)
+  - #10686 E7 (post-E6)
+  - #10690 wiki-link rework (post-E6+E7)
+  - #10781 PRD-D sub-skills→Skills (post-E6; inserted ahead of umbrella PRDs per OOM-relief rationale)
+  - #10836 PRD: INSTALLER-ARCH alignment (post-PRD-D; Finding 26 pre-locked Direction A)
+  - #10837 PRD: HARNESS-ARCH (post-PRD-D; DS re-audit queued at E6 squash PR open)
+  - #10838 PRD: VAULT-ARCH (post-PRD-D; HARD GATE only)
+  - #10839 PRD: cross-TRD rename (post-E6+PRD-D; DS re-audit queued at E6 squash PR open)
 
-Total 51 Claude-audit findings applied. Per `feedback_audit_pipeline` — TRD set
-is now Claude-final-pass complete; ready to declare settled.
+## Recent decisions this cycle
+
+- Booted skill + verifier (both stalled at cycle pickup)
+- #10755 closed as duplicate of #10750
+- #10750 re-routed role:pm → role:skill (catalog = code-consumed data per feedback_pm_docs_only); skill picks up post-E6
+- #10836 Finding 26: Direction A pre-locked (wizard matches deploy_role_v2 / TRD §4.8); CONTEXT updated + tracker comment
+- PM strategy reply posted on #10685 with adjusted post-E6 queue (#10781 ahead of umbrellas)
 
 ## Context
 
-22% (post-compact, healthy).
-
-## Plan-First Hold
-
-Active. No PRs opened, no merges. Awaiting human direction on:
-- Open PR for docs/root-cause-fixes branch
-- Move to PRD-shaping phase per `project_trd_prd_delivery_model`
-- Slim other L4 files (worker.md, verifier.md, dm.md) like pm.md was last session
-
-## Tracker
-
-- #3 (Take SquidSquad public) — dm-owned, not PM concern
-- No pending-test / pending-ship items
-- No open PRs blocking
+healthy.
