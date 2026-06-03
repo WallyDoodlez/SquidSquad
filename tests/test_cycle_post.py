@@ -2083,3 +2083,164 @@ class TestTaskModeLog:
         assert len(list(log_dir.glob("task-8701-*.md"))) == \
             cycle_post._TASK_LOG_RETENTION_PER_TASK
 
+
+# ---------------------------------------------------------------------------
+# #10820: DM/PM/other arm pre-checkout + _warn_if_role_files_uncommitted
+# ---------------------------------------------------------------------------
+
+class TestCommitPushDmArmPreCheckout:
+    """#10820 AC-4: DM/PM/other arm must checkout the working branch before
+    commit-role-scoped, mirroring the QA arm. Without this, a mid-cycle
+    branch switch (e.g. DM left on a task branch from doc-improvement-loop)
+    would land the commit on the wrong branch."""
+
+    def test_dm_arm_checks_out_working_branch_when_on_other_branch(self, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            # Simulate being on a stale task branch — `git branch --show-current`
+            # is what the arm uses to detect the mismatch.
+            if isinstance(cmd, list) and cmd[:3] == ["git", "branch", "--show-current"]:
+                r.stdout = "squidsquad/task/9999\n"
+            else:
+                r.stdout = ""
+            r.stderr = ""
+            return r
+
+        def fake_run_script(script, *args, **kwargs):
+            calls.append((script, args))
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script", fake_run_script)
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "develop")
+        monkeypatch.setattr(cycle_post, "_check_disposable_files", lambda: None)
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
+        # _warn_if_role_files_uncommitted runs git status; stub to silent.
+        monkeypatch.setattr(cycle_post, "_warn_if_role_files_uncommitted",
+                            lambda role, label: None)
+
+        data = {
+            "cycle_type": "active",
+            "cycle_number": 10820,
+            "commit_message": "dm cycle test",
+        }
+        cycle_post._do_commit_push(data, "dm")
+
+        # Locate ['git', 'checkout', 'develop'] BEFORE the commit-role-scoped call.
+        commit_idx = next(
+            (i for i, c in enumerate(calls)
+             if isinstance(c, tuple) and c[0] == "git_ops.py"
+             and len(c[1]) >= 1 and c[1][0] == "commit-role-scoped"),
+            None,
+        )
+        assert commit_idx is not None, f"commit-role-scoped never invoked; calls={calls}"
+        checkout_idx = next(
+            (i for i, c in enumerate(calls[:commit_idx])
+             if isinstance(c, list) and c == ["git", "checkout", "develop"]),
+            None,
+        )
+        assert checkout_idx is not None, (
+            f"DM arm missing pre-checkout to working branch before commit-role-scoped; "
+            f"calls before commit: {calls[:commit_idx]}"
+        )
+
+    def test_dm_arm_skips_checkout_when_already_on_working_branch(self, monkeypatch):
+        """Don't issue a redundant checkout when already on the working branch."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            r = MagicMock()
+            r.returncode = 0
+            if isinstance(cmd, list) and cmd[:3] == ["git", "branch", "--show-current"]:
+                r.stdout = "develop\n"
+            else:
+                r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        monkeypatch.setattr(cycle_post, "_run_script",
+                            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""))
+        monkeypatch.setattr(cycle_post, "_get_working_branch", lambda: "develop")
+        monkeypatch.setattr(cycle_post, "_check_disposable_files", lambda: None)
+        monkeypatch.setattr(cycle_post, "_worktree_exists", lambda: False)
+        monkeypatch.setattr(cycle_post, "_warn_if_role_files_uncommitted",
+                            lambda role, label: None)
+
+        data = {"cycle_type": "active", "cycle_number": 1, "commit_message": "x"}
+        cycle_post._do_commit_push(data, "dm")
+
+        assert not any(c == ["git", "checkout", "develop"] for c in calls if isinstance(c, list)), (
+            f"Should not issue checkout when already on working branch; calls={calls}"
+        )
+
+
+class TestWarnIfRoleFilesUncommitted:
+    """#10820 AC-5: _warn_if_role_files_uncommitted re-checks the working tree
+    after commit-role-scoped and emits a stderr WARNING listing role-owned
+    files still M. Three observable cases must be covered."""
+
+    def test_stranded_role_owned_file_emits_warning(self, monkeypatch, capsys):
+        """Role-owned M file → WARNING (#10820) + file list on stderr."""
+        # DM owns SKILL.md per git_ops._role_owned_patterns. Simulate it left M.
+        status_output = " M SKILL.md\n M docs/foo.md\n"
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = status_output if cmd == ["git", "status", "--porcelain"] else ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        cycle_post._warn_if_role_files_uncommitted("dm", "develop")
+        captured = capsys.readouterr()
+        assert "WARNING (#10820)" in captured.err
+        assert "SKILL.md" in captured.err
+        assert "docs/foo.md" in captured.err
+        # The success line still prints to stdout.
+        assert "Committed and pushed" in captured.out
+
+    def test_clean_working_tree_is_silent(self, monkeypatch, capsys):
+        """Empty `git status --porcelain` output → no WARNING."""
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        cycle_post._warn_if_role_files_uncommitted("dm", "develop")
+        captured = capsys.readouterr()
+        assert "WARNING" not in captured.err
+        assert captured.err == ""
+        # The success line still prints (the function's first action).
+        assert "Committed and pushed" in captured.out
+
+    def test_non_role_owned_modifications_are_silent(self, monkeypatch, capsys):
+        """M files outside the role's owned patterns → no WARNING.
+
+        DM owns SKILL.md / docs/ / .squidsquad/dm/ / config.md but NOT
+        arbitrary source paths like src/foo.py — those belong to the skill
+        worker's PR flow, not DM's domain commit.
+        """
+        status_output = " M src/foo.py\n M tests/test_bar.py\n"
+
+        def fake_run(cmd, **kwargs):
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = status_output if cmd == ["git", "status", "--porcelain"] else ""
+            r.stderr = ""
+            return r
+
+        monkeypatch.setattr(cycle_post, "_run", fake_run)
+        cycle_post._warn_if_role_files_uncommitted("dm", "develop")
+        captured = capsys.readouterr()
+        assert "WARNING" not in captured.err
+        assert captured.err == ""

@@ -449,6 +449,58 @@ def _check_disposable_files():
         )
 
 
+def _warn_if_role_files_uncommitted(role, target_label):
+    """Verify ``commit-role-scoped`` actually committed the role's work (#10820).
+
+    ``git_ops.commit_role_scoped`` silently no-ops when an unresolved merge
+    blocks ``git commit``, or when the working tree is sitting on a branch
+    where the role's files can't be staged. The CLI shim has no exit-code
+    signal (its return value is ambiguous between "noop, nothing to commit"
+    and "tried and failed"), so we re-check the working tree post-call.
+
+    If role-owned files are still ``M`` in the working tree after
+    commit-role-scoped, emit a loud stderr WARNING with the file list — this
+    is the failure mode that stranded DM's SKILL.md doc fixes for 70+ cycles
+    before #10820 surfaced it.
+
+    Always prints the success line on stdout (we don't have a clean signal
+    to suppress it) but the WARNING on stderr is the loud one the operator
+    will actually notice.
+    """
+    print(f"  Committed and pushed{f' ({target_label})' if target_label else ''}")
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from git_ops import _role_owned_patterns, _path_matches
+    except Exception:
+        return
+    result = _run(["git", "status", "--porcelain"], check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        return
+    patterns = _role_owned_patterns(role)
+    stranded = []
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].strip().strip('"')
+        if " -> " in path:
+            path = path.split(" -> ")[1]
+        if _path_matches(path, patterns):
+            stranded.append(path)
+    if stranded:
+        print(
+            f"WARNING (#10820): commit-role-scoped left {len(stranded)} role-owned "
+            f"file(s) uncommitted in the working tree for '{role}'. "
+            f"This is the silent-failure mode that stranded DM SKILL.md fixes "
+            f"for 70+ cycles. Likely cause: unresolved merge path or wrong "
+            f"branch. Stranded files:",
+            file=sys.stderr,
+        )
+        for f in stranded[:20]:
+            print(f"  {f}", file=sys.stderr)
+        if len(stranded) > 20:
+            print(f"  ... and {len(stranded) - 20} more", file=sys.stderr)
+
+
 def _do_commit_push(data, role):
     """Handle git commit and push operations."""
     _check_disposable_files()
@@ -551,12 +603,22 @@ def _do_commit_push(data, role):
         # #8691: scope commit to QA's domain so foreign uncommitted files
         # (other agents' work in the same clone) don't get bundled in.
         _run_script("git_ops.py", "commit-role-scoped", role, commit_msg)
-        print(f"  Committed and pushed (QA → main)")
+        _warn_if_role_files_uncommitted(role, "QA → main")
 
     else:
         # #8691: PM/DM/other roles also commit only their own domain.
+        # #10820: mirror the QA arm's pre-checkout — without this the DM
+        # arm could be sitting on a task branch (mid-cycle branch switches
+        # don't reliably bounce back) and commit-role-scoped would land
+        # the commit on the wrong branch.
+        working = _get_working_branch()
+        current = _run(["git", "branch", "--show-current"], check=False)
+        current_branch = current.stdout.strip() if current.returncode == 0 else ""
+        if current_branch != working:
+            _run(["git", "checkout", working], check=False)
+
         _run_script("git_ops.py", "commit-role-scoped", role, commit_msg)
-        print(f"  Committed and pushed")
+        _warn_if_role_files_uncommitted(role, working)
 
     # Commit state files to state branch if worktree exists (#3664)
     if _worktree_exists():
