@@ -8,6 +8,7 @@
 
 ## Completed Steps
 
+- Cycle 1544 (Phase 3e — catalog_drift.py post-cutover cleanup): commit `03146792`. Audit conclusion: catalog_drift.py is NOT a production caller of v1's `_resolve_includes` / `_load_manifest` — only doc-comment references. The actual code dependency on v1 was the multi-filename manifest scan (`_MANIFEST_FILENAMES`). Collapsed to `("includes.yml",)`. Rewrote 4 doc comments to point at v2 equivalents (`v2_link_stage.collect_sources_for_validation` instead of `_resolve_includes`). Retired `TestManifestVariants` (2 tests pinning v1-coexistence behavior of accepting includes from the multi-file scan). 21 insertions / 60 deletions. Tests: 16/16 catalog_drift pass; 160 broader smoke pass. Phase 3e ✅.
 - Cycle 1543 (pick up #10817 — catalog drift fix): branched off main to `squidsquad/task/10817`, addressed the high-severity blocker filed last cycle. **PR #10819 open against main** with three deltas:
   - `docs/sub-skill-catalog.md` — `### QA (roles/qa/)` → `### Verifier (roles/verifier/)`, `### Dev (roles/dev/)` → `### Worker (roles/worker/)`. Row keys (`roles/qa/issue-filing` → `roles/verifier/issue-filing`, etc.) realigned to on-disk filesystem.
   - `tests/test_catalog_parser_d1.py` — parser fixtures use the new section headers. Added `r"""` to silence a SyntaxWarning the existing escape sequence was emitting.
@@ -52,7 +53,7 @@
   - Audit `tests/test_compose.py::TestEventDrivenWorkflowLocation::test_event_driven_workflow_has_no_frontmatter` for D6 retirement (already on the watch list).
 - Phase 3c: **Step A ✅ DONE cycle 1542 (commit `e572b414`)**. **Step B (wizard.py:1099 swap) BLOCKED-PENDING-MERGE on PR #10819** (`squidsquad/task/10817`). Once #10819 merges to main: merge main into this E6 branch, then one-line edit to `wizard.py` (swap `deploy_role` → `deploy_role_v2`) + `_stub_assemble_for_scaffold` autouse fixture in `tests/test_wizard.py` mirroring the test_compose_a2f_10492 pattern.
 - Phase 3d: with wizard migrated, delete `deploy_role`, `compose_role`, `compose_all` (the v1 worker template entry), `_load_manifest`, `_resolve_includes`, `_resolve_includes_with_manifest`, the v1 "hint emit" (the v1 path's regenerate-hint emission — search for `"# This file is generated"` etc.), the `tests/test_compose.py` v1 tests, the remaining 3 v1 `deploy_role` call sites in tests (test_compose.py, test_d2_link_stage_references.py), and `tests/test_v1_byte_stability_9a.py`'s sibling v1 contract tests if any remain.
-- Phase 3e: catalog_drift.py — uses `_resolve_includes` per the Phase 3 grep; audit whether the call site needs to migrate to v2 or get deleted alongside.
+- Phase 3e: ✅ DONE cycle 1544 (commit `03146792`). Audit found no v1 production-code coupling — only doc-comment refs to `_resolve_includes`/`_load_manifest`. Collapsed `_MANIFEST_FILENAMES` to unified `includes.yml` only; retired 2 v1-coexistence tests; rewrote 4 doc comments to point at v2 equivalents.
 
 **Post-Phase-3:**
 
