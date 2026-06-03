@@ -69,14 +69,50 @@ class TestManifestIntegrity:
         `souls/` and `roles/` are no longer valid include namespaces after
         Q-new22 — they were removed from the sub-skills directory and moved
         to `references/roles/<role>/`.
+
+        Scope (#10861): only **numbered list entries** inside the
+        ``## Composition Order`` section count as real include targets.
+        Backticked prose in surrounding paragraphs (retirement notes
+        like ``### Legacy Sub-Skills``, narrative mentions, etc.) is
+        skipped — such mentions reference files that may have been
+        deleted or carry an explicit ``.md`` suffix for narrative
+        purposes, which would yield false-positive missing-file failures.
         """
-        includes = re.findall(
-            r'`((?:common|roles)/[^`]+)`',
-            self.manifest_text,
-        )
-        for inc in includes:
+        for inc in self._extract_composition_order_includes(self.manifest_text):
+            # Defensive: a manifest numbered-list entry should never carry
+            # an explicit ``.md`` suffix (this loop appends it). Skip if
+            # one slips in — it's prose, not a manifest target.
+            if inc.endswith(".md"):
+                continue
             path = self.sub_skills_dir / f"{inc}.md"
             assert path.exists(), f"Sub-skill file missing: {path}"
+
+    @staticmethod
+    def _extract_composition_order_includes(text: str) -> list:
+        """Return manifest include targets from ``## Composition Order``.
+
+        Walks the section line by line and captures backticked
+        ``namespace/name`` references only from **numbered list items**
+        of the form ``N. <backticked-path> — description``. Paragraph
+        prose and ``### Legacy Sub-Skills`` retirement notes are ignored
+        even though they share the section's enclosing scope. The walk
+        stops at the next top-level H2.
+        """
+        in_section = False
+        includes = []
+        entry_re = re.compile(r'^\s*\d+\.\s+.*?`((?:common|roles)/[^`]+)`')
+        for line in text.splitlines():
+            if re.match(r'^##\s+Composition Order\s*$', line):
+                in_section = True
+                continue
+            if in_section and re.match(r'^##\s+\S', line):
+                break
+            if not in_section:
+                continue
+            m = entry_re.match(line)
+            if m:
+                includes.append(m.group(1))
+        return includes
 
     def test_no_orphan_sub_skills(self):
         """Every .md file under sub-skills/ (except manifest.md and capabilities/) is referenced in manifest."""
