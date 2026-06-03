@@ -157,14 +157,11 @@ def test_cli_deploy_check_does_not_write(tmp_path, monkeypatch):
 # error case is retired. Post-cutover ``--v2`` is silently stripped from
 # argv (backward compat), so ``--check + --v2`` simplifies to ``--check``
 # — the existing per-alias drift loop. No new error contract needed.
-
-
-def test_cli_check_on_unrecognized_command_emits_warning():
-    """--check on a non-deploy command (e.g. `all`) emits a warning, doesn't crash."""
-    result = _run_compose("all", "--check")
-    # `all` writes agent-instructions.md and exits 0 normally; --check is
-    # silently ignored with a warning.
-    assert "--check has no effect on `compose.py all`" in result.stderr
+#
+# Phase 3c.5 (cycle 1547) retired ``compose.py all`` along with the prior
+# ``test_cli_check_on_unrecognized_command_emits_warning`` — that test
+# ran ``compose all --check`` as a subprocess and polluted the real
+# ``references/agent-instructions.md`` (since deleted) on every run.
 
 
 # ---------------------------------------------------------------------------

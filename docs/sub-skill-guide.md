@@ -132,8 +132,6 @@ A compose-time marker (introduced by #9925) for injecting the active team roster
 
 ### Build Pipeline
 
-`compose.py deploy <role>` and `compose.py all` are **independent** paths, not a sequence — `deploy` does not read `agent-instructions.md`.
-
 ```
 references/roles/<role>/instructions.md   (entry file with {{include}} directives)
         │
@@ -141,24 +139,21 @@ references/roles/<role>/instructions.md   (entry file with {{include}} directive
 .squidsquad/<role>/CLAUDE.md             (placeholders substituted with config values)
                                           + .squidsquad/<role>/SOUL.md (assembled from
                                             Layer 1 base + role SOUL.md if missing)
-
-references/roles/dev/instructions.md     (dev only; reference output)
-        │
-        ▼  compose.py all
-references/agent-instructions.md         (composed dev template, no placeholder substitution)
 ```
 
 Run composition:
 ```bash
-# Compose the dev entry file into agent-instructions.md
-python references/scripts/compose.py all
-
 # Deploy a specific role (compose + substitute placeholders + write CLAUDE.md)
 python references/scripts/compose.py deploy <role>
 
 # Deploy every configured role at once
 python references/scripts/compose.py deploy-all
 ```
+
+> **E6 (#10685) — `compose.py all` retired.** The bundled
+> `references/agent-instructions.md` was a v1-only artifact. Each
+> agent's composed instructions now live at
+> `.squidsquad/<role>/CLAUDE.md`.
 
 ### Section Markers
 
@@ -258,11 +253,9 @@ Add your sub-skill to `references/roles/<role>/includes.yml` for each role that 
 ### Step 6 — Test composition
 
 ```bash
-# Compose and check for errors
-python references/scripts/compose.py all
-
-# Verify section markers appear correctly
-grep "sub-skill: your-new-skill" references/agent-instructions.md
+# Compose a role into a tmp tree and verify the section marker
+python references/scripts/compose.py deploy <role> --check
+grep "sub-skill: your-new-skill" .squidsquad/<role>/CLAUDE.linked.md
 
 # Run composition tests
 python tests/run_tests.py
@@ -316,7 +309,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full contribution process.
 
 - **Keep sub-skills atomic** — one behavior per file. If it's doing two things, split it.
 - **Use Python scripts for gates** — don't rely on the agent to remember thresholds or limits. Scripts are deterministic.
-- **Test with `compose.py all`** — catch include errors before deploying.
+- **Test with `compose.py deploy <role> --check`** — catch include errors before deploying.
 - **Check includes.yml** — if your sub-skill isn't in the role's `includes.yml`, it won't be composed. Update `manifest.md` too to keep the reference doc in sync.
 - **Use section markers** — they power the status bar and make debugging easier.
 - **Mind the dev-only placeholders** — `[ROLE_TEST_CMD]` and `[OTHER_ROLES]` are only substituted in dev templates. Common sub-skills using `[ROLE]` or `[ROLE_UPPER]` work for all roles.

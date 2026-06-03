@@ -353,20 +353,14 @@ def test_main_v2_flag_position_does_not_matter(monkeypatch, argv):
     assert called.get("v2") == "pm"
 
 
-def test_main_accepts_legacy_v2_flag_silently(monkeypatch, capsys):
-    """Post-E6 cutover (#10685): ``--v2`` is silently stripped from argv
-    for backward compatibility with pre-cutover wrappers / docs /
-    muscle memory. The pre-cutover warning ("--v2 has no effect on …")
-    is retired.
-    """
-    monkeypatch.setattr(compose, "compose_all", lambda: "stub\n")
-    monkeypatch.setattr(compose, "OUTPUT_FILE", compose.REPO_ROOT / "_fake_all")
-    monkeypatch.setattr(Path, "write_text", lambda self, content, encoding=None: len(content))
-
-    monkeypatch.setattr(sys, "argv", ["compose.py", "all", "--v2"])
-    compose.main()
-    err = capsys.readouterr().err
-    assert "--v2" not in err
+# Phase 3c.5 (cycle 1547) retired ``compose.py all`` + the
+# ``OUTPUT_FILE`` constant. The prior
+# ``test_main_accepts_legacy_v2_flag_silently`` test invoked
+# ``compose.main()`` with ``argv=["compose.py", "all", "--v2"]`` to
+# assert ``--v2`` was silently stripped — but ``all`` is now itself a
+# retired command (`compose.py all` exits 1 with a retirement message),
+# so the test's premise no longer holds. The ``--v2 silently stripped``
+# invariant is exercised by the deploy / deploy-all tests below.
 
 
 def test_main_deploy_all_v2_iterates_registry(monkeypatch, tmp_path):

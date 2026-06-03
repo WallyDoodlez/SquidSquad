@@ -30,7 +30,6 @@ REPO_ROOT = SCRIPT_DIR.parent.parent
 SUB_SKILLS_DIR = REPO_ROOT / "references" / "sub-skills"
 CAPABILITIES_DIR = REPO_ROOT / "references" / "sub-skills" / "capabilities"
 ROLES_DIR = REPO_ROOT / "references" / "roles"
-OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
 
 # #9588: fragments the boot-bootstrap Reads at runtime. These MUST stay
 # out of every composed CLAUDE.md regardless of what the manifest looks
@@ -2359,9 +2358,17 @@ def main():
         )
 
     if cmd == "all":
-        content = compose_all()
-        OUTPUT_FILE.write_text(content, encoding="utf-8")
-        print(f"Composed agent-instructions.md ({len(content.splitlines())} lines)")
+        print(
+            "ERROR: `compose.py all` was retired in E6 (#10685). The "
+            "bundled `references/agent-instructions.md` is no longer "
+            "generated — each agent has its own composed CLAUDE.md "
+            "under `.squidsquad/<role>/CLAUDE.md`. Use "
+            "`python compose.py deploy <role>` for a single role, or "
+            "`python compose.py deploy-all` for every alias in the "
+            "registry.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     elif cmd == "deploy":
         if len(args) < 2:

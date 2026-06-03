@@ -8,7 +8,7 @@ Run the SquidSquad upgrade flow for this project.
    ```
    /squidsquad-compose
    ```
-   This runs `compose.py deploy-all` + `compose.py all` (reference copy) with post-compose validation. SOUL.md customizations are preserved — compose.py never overwrites existing SOUL.md files. Vault content (`.squidsquad/vault/`) is untouched.
+   This runs `compose.py deploy-all` with post-compose validation. SOUL.md customizations are preserved — compose.py never overwrites existing SOUL.md files. Vault content (`.squidsquad/vault/`) is untouched.
 6. Patch config schema if `Architecture Version` is `1` or absent. Add missing v2 sections with defaults (Preset, Tools, Loop, Flags, Git Branches, Forge Backend, Model Routing). Do NOT delete existing v1 sections — only add alongside. After patching, set `Architecture Version` to `2`.
 7. Sync GitHub Issue labels (idempotent):
    ```bash

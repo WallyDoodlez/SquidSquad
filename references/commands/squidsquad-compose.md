@@ -22,13 +22,7 @@ Run the SquidSquad composition engine to regenerate agent templates.
    - `.squidsquad/<role>/SOUL.md` exists and is non-empty
    - Report any failures clearly
 
-4. **Regenerate reference copy** (all-roles only):
-   ```bash
-   python references/scripts/compose.py all
-   ```
-   This updates `references/agent-instructions.md` — the reference copy of the dev template used by tests and documentation.
-
-5. **Report results**: Print which roles were composed, line counts, and any validation failures.
+4. **Report results**: Print which roles were composed, line counts, and any validation failures.
 
 ## Notes
 
