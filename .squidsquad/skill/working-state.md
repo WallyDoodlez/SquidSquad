@@ -72,7 +72,7 @@
 
 ## Watch list
 
-- DS review #10685-phase3c (background task `byfiilp1c`) — pending; address findings as a fixup commit next cycle.
+- DS review #10685-phase3c (background task `byfiilp1c`) — ✅ completed cycle 1542; all 4 findings addressed in fixup commit `c6abbaff`. F1 (error) — 3 tests missing `source_root=tmp_path` → fixed. F2/F4 (warnings) — SOUL/resolve_variant helpers ignore source_root → documented in docstring as known limitation, Phase 3d cleanup window. F3 (warning) — dead assignment → deleted.
 - #10817 (catalog drift, high) — filed cycle 1542. Hard prerequisite for the wizard.py:1099 migration. Next cycle could either wait for PM to triage / a worker to pick up, or pick it up directly since it's already labeled `role:skill`.
 - DS review #10685-phase4 (background task `bmqht901r`) — completed; all 4 warnings addressed in fixup commit `8db9c0ba` cycle 1539.
 - DS review #10685-phase2 (background task `bc6ml5j38`) — addressed in fixup commit `eb3ab95e`. F1 cutover-window WARNINGs removed cycle 1538 with Phase 4 landing.
