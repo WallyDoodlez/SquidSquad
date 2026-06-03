@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
@@ -19,6 +17,8 @@ SCRIPTS = REPO / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import compose  # noqa: E402
+
+from _v2_test_helpers import v2_compose_for as _v2_compose_for  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ def test_ac4_composed_contains_l1_awareness_and_l2(role):
     composed output must contain the L1 awareness instruction, the roster
     header, and the role's own L2 'What this role does' header (#9925 AC4).
     """
-    composed = compose.compose_role(role)
+    composed = _v2_compose_for(role)
     assert "Know each other's responsibilities" in composed, (
         f"L1 awareness instruction missing from composed {role}"
     )
@@ -55,7 +55,7 @@ def test_ac4_roster_has_exactly_active_roles():
     PM/Verifier/DM), the roster MUST contain exactly 4 entries — one per
     pm/verifier/dm/worker. Roles whose manifest exists but are NOT active
     in config.md must NOT appear (F4 lock). #10156: post-#6274.2 rename."""
-    composed = compose.compose_role("pm")
+    composed = _v2_compose_for("pm")
     # Each rendered entry uses a `### <DisplayName>` header inside the
     # 'Your Teammates' Responsibilities' block. Slice the roster section
     # and count its level-3 headers.
@@ -162,21 +162,16 @@ def test_ac8_l4_live_stub_exists(prefix):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="AC9 tested v1's D6b filename-prefix L4 routing "
+    "(references/sub-skills/project/<prefix>-responsibility.md). v2 L4 "
+    "semantics are different — `v2_link_stage.emit_v2_linked` reads a "
+    "single L4 file at `.squidsquad/project/<role_class>.md`, not a "
+    "directory of prefix-routed files. The AC9 invariant doesn't carry "
+    "over. Retires with v1 in E6 #10685 Phase 3d."
+)
 def test_ac9_pm_compose_includes_pm_and_shared_l4_not_others():
-    """AC9: composed PM CLAUDE.md must include the PM L4 stub and the
-    shared L4 stub, but NOT the qa/dm/dev L4 stubs (filename-prefix
-    routing per D6b).
-    """
-    composed = compose.compose_role("pm")
-    # The L4 stubs all contain the literal "Install-specific
-    # responsibility additions" string. We need to count occurrences to
-    # validate that the PM compose pulled in 2 (pm + shared) — not 5.
-    occurrences = composed.count("Install-specific responsibility additions")
-    assert occurrences == 2, (
-        f"AC9: PM compose must include exactly 2 L4 stubs (pm + shared), "
-        f"saw {occurrences} occurrences of the L4 template phrase. "
-        "Filename-prefix routing per D6b should filter out qa/dm/dev."
-    )
+    """v1 invariant — see skip reason above."""
 
 
 # ---------------------------------------------------------------------------
@@ -185,15 +180,23 @@ def test_ac9_pm_compose_includes_pm_and_shared_l4_not_others():
 
 
 def test_ac10_byte_identical_recompose_agent_compose_off():
-    """AC10: with `agent_compose: no` (or absent), running compose_role
-    twice produces byte-identical output. Locked precondition per v4-F3
-    — `agent_compose: yes` invokes a non-deterministic LLM polish that
-    legitimately breaks byte-identity.
+    """AC10: composing PM twice must produce byte-identical output.
+
+    v1 framing (pre-E6): with ``agent_compose: no`` (or absent),
+    ``compose_role`` twice is byte-identical — ``agent_compose: yes``
+    invokes a non-deterministic LLM polish that legitimately breaks
+    byte-identity, so the v1 form gated on the flag.
+
+    v2 framing (post-E6 #10685): ``v2_link_stage.emit_v2_linked`` has
+    NO non-deterministic step at the link stage — assemble (LLM polish)
+    is a separate downstream step. Link-stage byte-identity is
+    structural; the test no longer needs the ``_is_agent_compose_enabled``
+    gate. Re-running ``_v2_compose_for`` simply re-runs the same
+    deterministic pipeline.
     """
-    with patch.object(compose, "_is_agent_compose_enabled", return_value=False):
-        a = compose.compose_role("pm")
-        b = compose.compose_role("pm")
-    assert a == b, "AC10: compose_role('pm') is non-deterministic with agent_compose disabled"
+    a = _v2_compose_for("pm")
+    b = _v2_compose_for("pm")
+    assert a == b, "AC10: _v2_compose_for('pm') is non-deterministic"
 
 
 # ---------------------------------------------------------------------------

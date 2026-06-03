@@ -41,8 +41,13 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import compose  # noqa: E402
+import v2_link_stage  # noqa: E402
 
 _INCLUDE_RE = re.compile(r'^\s*\{\{include:\s*(.+?)\s*\}\}\s*$')
+
+_NONEXISTENT_L4 = (
+    REPO_ROOT / "tests" / "_nonexistent_l4_for_hermetic_v2_compose.md"
+)
 
 
 def expand_v2_includes(text: str, *, sub_skills_dir: Path = None) -> str:
@@ -83,3 +88,41 @@ def expand_v2_includes(text: str, *, sub_skills_dir: Path = None) -> str:
         out_lines.append(body)
         out_lines.append(f"<!-- /sub-skill: {name} -->")
     return "\n".join(out_lines)
+
+
+def v2_compose_for(role: str) -> str:
+    """Hermetic v2-equivalent compose for product-invariant tests.
+
+    Pipeline:
+      1. ``_resolve_variant`` — derive ``(role_class, l3_domain)``
+         using the cycle-1549 alias→domain symmetry.
+      2. ``v2_link_stage.emit_v2_linked`` with L4 overridden to a
+         nonexistent path — keeps the test hermetic against this
+         repo's own ``.squidsquad/project/<role>.md`` file.
+      3. ``expand_v2_includes`` — deterministic ``{{include:}}``
+         expansion mirroring v1's ``_resolve_includes``.
+      4. ``compose._inject_role_roster`` — deterministic
+         ``{{role-roster}}`` expansion mirroring v1's ``compose_role``
+         step 3 (#9925 D7). In production v2 the LLM in
+         ``atomic_emit.assemble_and_emit`` does this; the helper
+         replicates it without an LLM. ``agent-boundaries`` is in
+         every role's manifest so the marker is always present.
+      5. ``compose._substitute_placeholders`` — substitute the
+         v1-style ``[ROLE]`` / ``[INTERVAL]`` / etc. placeholders.
+
+    Output shape matches what v1 ``compose_role + _substitute_placeholders``
+    produced, so product-invariant assertions written against v1 carry
+    over to v2 verbatim. Retires alongside v1 in E6 Phase 3d.
+    """
+    resolved = compose._resolve_variant(role)
+    if resolved:
+        role_class, l3_domain = resolved
+    else:
+        role_class = compose._get_entry_file_for_role(role)
+        l3_domain = role if role_class != role else None
+    linked = v2_link_stage.emit_v2_linked(
+        role_class, l3_domain, l4_path=_NONEXISTENT_L4,
+    )
+    expanded = expand_v2_includes(linked)
+    with_roster = compose._inject_role_roster(expanded, role)
+    return compose._substitute_placeholders(with_roster, role, role_class)

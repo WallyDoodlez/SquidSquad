@@ -25,47 +25,8 @@ SCRIPTS = REPO / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import compose  # noqa: E402
-import v2_link_stage  # noqa: E402
 
-from _v2_test_helpers import expand_v2_includes  # noqa: E402
-
-
-def _v2_compose_for(role: str) -> str:
-    """Hermetic v2-equivalent compose for product-invariant tests.
-
-    Pipeline:
-      1. Resolve ``role`` → ``(role_class, l3_domain)`` via the same
-         convention ``deploy_role_v2`` uses (alias→domain symmetry
-         restored in cycle 1549).
-      2. ``v2_link_stage.emit_v2_linked`` with L4 overridden to a
-         nonexistent path — keeps the test hermetic against this
-         repo's own ``.squidsquad/project/<role>.md`` (which may
-         carry project-local L4 ops irrelevant to the invariant
-         under test).
-      3. ``_v2_test_helpers.expand_v2_includes`` — deterministic
-         ``{{include:}}`` expansion that mirrors v1's
-         ``_resolve_includes`` semantics. This gives the test the
-         same ``<!-- sub-skill: X --> body <!-- /sub-skill: X -->``
-         form v1's ``compose_role`` produced, so body-content
-         invariants (e.g. "State-file filter" appears) carry over
-         from v1 to v2 verbatim.
-      4. ``_substitute_placeholders`` so dev-variant placeholders
-         resolve.
-
-    Replaces the E6-retired ``compose.compose_role(role)`` call.
-    """
-    resolved = compose._resolve_variant(role)
-    if resolved:
-        role_class, l3_domain = resolved
-    else:
-        role_class = compose._get_entry_file_for_role(role)
-        l3_domain = role if role_class != role else None
-    linked = v2_link_stage.emit_v2_linked(
-        role_class, l3_domain,
-        l4_path=REPO / "tests" / "_nonexistent_l4_for_hermetic_v2_compose.md",
-    )
-    expanded = expand_v2_includes(linked)
-    return compose._substitute_placeholders(expanded, role, role_class)
+from _v2_test_helpers import v2_compose_for as _v2_compose_for  # noqa: E402
 
 FRAGMENT = REPO / "references" / "sub-skills" / "common" / "pickup-comment-fidelity.md"
 DEV_TEMPLATE = REPO / "references" / "roles" / "dev" / "instructions.md"

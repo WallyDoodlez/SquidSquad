@@ -29,9 +29,8 @@ SUB_SKILLS = REPO_ROOT / "references" / "sub-skills"
 
 sys.path.insert(0, str(SCRIPTS))
 import compose  # noqa: E402
-import v2_link_stage  # noqa: E402
 
-from _v2_test_helpers import expand_v2_includes  # noqa: E402
+from _v2_test_helpers import v2_compose_for  # noqa: E402
 
 
 ROLES = ["skill", "pm", "qa", "dm"]
@@ -70,32 +69,7 @@ MODE_SPECIFIC_MARKERS = [
 ]
 
 
-def _compose_for(role: str) -> str:
-    """Hermetic v2-equivalent compose for product-invariant tests.
-
-    Pipeline: ``_resolve_variant`` → ``emit_v2_linked`` (L4 overridden
-    to a nonexistent path for hermeticity) → ``expand_v2_includes``
-    (deterministic ``{{include:}}`` expansion mirroring v1
-    ``_resolve_includes``) → ``_substitute_placeholders``. The
-    composed string has the same shape v1's ``compose_role`` produced
-    — ``<!-- sub-skill: X --> body <!-- /sub-skill: X -->`` wrapping
-    + substituted placeholders — so the assertions below carry over
-    from the pre-E6 v1 path verbatim.
-
-    Replaces the E6-retired ``compose.compose_role(role)`` call.
-    """
-    resolved = compose._resolve_variant(role)
-    if resolved:
-        role_class, l3_domain = resolved
-    else:
-        role_class = compose._get_entry_file_for_role(role)
-        l3_domain = role if role_class != role else None
-    linked = v2_link_stage.emit_v2_linked(
-        role_class, l3_domain,
-        l4_path=REPO_ROOT / "tests" / "_nonexistent_l4_for_hermetic_v2_compose.md",
-    )
-    expanded = expand_v2_includes(linked)
-    return compose._substitute_placeholders(expanded, role, role_class)
+_compose_for = v2_compose_for  # local alias retained for the test body below
 
 
 @pytest.mark.parametrize("role", ROLES)
