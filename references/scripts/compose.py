@@ -53,19 +53,10 @@ RUNTIME_READ_FRAGMENTS = frozenset({
 })
 
 
-def _get_wake_mode(role_name: str) -> str:
-    """Delegate to canonical config.get_wake_mode (#9745).
-
-    Thin wrapper kept so existing compose-internal callers don't need
-    import-path churn. See ``config.get_wake_mode`` for the resolution
-    rules — that is the single source of truth referenced by bootstrap.md.
-    """
-    sys.path.insert(0, str(SCRIPT_DIR))
-    try:
-        from config import get_wake_mode
-    except Exception:
-        return "polling"
-    return get_wake_mode(role_name)
+# compose._get_wake_mode retired in E6 (#10685) Phase 5 — the v1
+# ``compose_role`` chain was its only caller and was deleted in Phase
+# 3d.5 (cycle 1564). ``config.get_wake_mode`` remains the canonical
+# wake-mode resolver for ``cycle_post`` / ``statusline_data`` / harness.
 
 
 def _strip_outer_markers(content: str, name: str) -> str:

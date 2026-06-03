@@ -690,27 +690,11 @@ class TestNoRedundantReImport:
 # ---------------------------------------------------------------------------
 
 
-class TestGetWakeMode:
-    """#9745: compose._get_wake_mode delegates to config.get_wake_mode.
-
-    The behavioral semantics (precedence, normalization, fallback) live in
-    config.get_wake_mode and are exhaustively tested in
-    tests/test_feat_9745_wake_mode_canonical.py::TestGetWakeMode. These tests
-    only verify the compose-side wrapper delegates correctly — patch the
-    canonical helper directly rather than the underlying get_field.
-    """
-
-    def test_delegates_to_canonical_helper(self):
-        with patch("config.get_wake_mode", return_value="event-driven") as m:
-            assert compose._get_wake_mode("skill") == "event-driven"
-            m.assert_called_once_with("skill")
-
-    def test_falls_back_to_polling_on_import_failure(self):
-        """If `from config import get_wake_mode` raises, wrapper returns polling."""
-        import sys as _sys
-        # Drop the config module so the wrapper's import re-runs and fails.
-        with patch.dict(_sys.modules, {"config": None}):
-            assert compose._get_wake_mode("skill") == "polling"
+# TestGetWakeMode (#9745 compose-side delegation wrapper) retired in E6
+# #10685 Phase 5 — ``compose._get_wake_mode`` was the v1 ``compose_role``
+# helper, deleted in Phase 3d.5 (cycle 1564). ``cycle_post`` /
+# ``statusline_data`` delegation is still covered in
+# ``test_feat_9745_wake_mode_canonical.py``.
 
 
 # #10685 PRD-E E6 V2 CUTOVER: the legacy ``TestLoadManifestSelectsByWakeMode``
