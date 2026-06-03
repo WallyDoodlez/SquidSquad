@@ -27,16 +27,30 @@ sys.path.insert(0, str(SCRIPTS))
 import compose  # noqa: E402
 import v2_link_stage  # noqa: E402
 
+from _v2_test_helpers import expand_v2_includes  # noqa: E402
+
 
 def _v2_compose_for(role: str) -> str:
-    """Hermetic v2 compose for product-invariant tests.
+    """Hermetic v2-equivalent compose for product-invariant tests.
 
-    Returns the v2 link-stage output (linked composite, pre-assemble)
-    with deterministic placeholder substitution applied. Sufficient
-    for "is this sub-skill marker present" invariants — skips both
-    the LLM assemble step (would prose-rewrite markers) and any L4
-    project-local ops (would couple the test to this repo's own
-    ``.squidsquad/project/<role>.md`` file).
+    Pipeline:
+      1. Resolve ``role`` → ``(role_class, l3_domain)`` via the same
+         convention ``deploy_role_v2`` uses (alias→domain symmetry
+         restored in cycle 1549).
+      2. ``v2_link_stage.emit_v2_linked`` with L4 overridden to a
+         nonexistent path — keeps the test hermetic against this
+         repo's own ``.squidsquad/project/<role>.md`` (which may
+         carry project-local L4 ops irrelevant to the invariant
+         under test).
+      3. ``_v2_test_helpers.expand_v2_includes`` — deterministic
+         ``{{include:}}`` expansion that mirrors v1's
+         ``_resolve_includes`` semantics. This gives the test the
+         same ``<!-- sub-skill: X --> body <!-- /sub-skill: X -->``
+         form v1's ``compose_role`` produced, so body-content
+         invariants (e.g. "State-file filter" appears) carry over
+         from v1 to v2 verbatim.
+      4. ``_substitute_placeholders`` so dev-variant placeholders
+         resolve.
 
     Replaces the E6-retired ``compose.compose_role(role)`` call.
     """
@@ -45,12 +59,13 @@ def _v2_compose_for(role: str) -> str:
         role_class, l3_domain = resolved
     else:
         role_class = compose._get_entry_file_for_role(role)
-        l3_domain = None
-    body = v2_link_stage.emit_v2_linked(
+        l3_domain = role if role_class != role else None
+    linked = v2_link_stage.emit_v2_linked(
         role_class, l3_domain,
         l4_path=REPO / "tests" / "_nonexistent_l4_for_hermetic_v2_compose.md",
     )
-    return compose._substitute_placeholders(body, role, role_class)
+    expanded = expand_v2_includes(linked)
+    return compose._substitute_placeholders(expanded, role, role_class)
 
 FRAGMENT = REPO / "references" / "sub-skills" / "common" / "pickup-comment-fidelity.md"
 DEV_TEMPLATE = REPO / "references" / "roles" / "dev" / "instructions.md"
@@ -137,24 +152,26 @@ def test_triage_issues_crossref_to_implement_tasks_not_off_by_one():
 
 
 @pytest.mark.parametrize("role", ["skill"])
-def test_fragment_wired_in_v2_link_stage_for_dev_variant(role):
-    """End-to-end: the v2 link-stage output for the worker/skill variant
-    must wire ``common/pickup-comment-fidelity`` via an ``{{include:}}``
-    directive — assemble (LLM polish) then expands the directive into
-    the full fragment body in the deployed ``CLAUDE.md``.
+def test_fragment_renders_in_composed_dev_variant_claude_md(role):
+    """End-to-end: composing the dev variant CLAUDE.md must inline the full
+    fragment, not just the 8b-bis / 7b-bis pointer lines.
 
-    Pre-E6 this test asserted the resolved ``<!-- sub-skill: X -->``
-    marker + body content from v1's ``compose_role`` (which inlined
-    includes deterministically). Post-E6 (#10685) the link stage leaves
-    ``{{include:}}`` directives raw — the same include is still there,
-    just not yet expanded. The body-content assertions retire with the
-    v1 compose path; the wiring invariant survives as the directive check
-    here.
+    Post-E6 (#10685) this uses ``_v2_compose_for`` — v2 link stage +
+    the deterministic ``expand_v2_includes`` helper that gives the
+    test the same expanded ``<!-- sub-skill: X --> body -->`` shape
+    v1's ``compose_role`` produced. The invariant set is identical
+    to the pre-cutover version (marker + three body-text checks).
     """
     composed = _v2_compose_for(role)
-    assert "{{include: common/pickup-comment-fidelity}}" in composed, (
-        f"v2 link-stage output for {role} is missing the "
-        f"common/pickup-comment-fidelity include directive — either the "
-        f"L2 source dropped the directive or the manifest no longer "
-        f"routes the fragment through the worker template."
+    assert "<!-- sub-skill: pickup-comment-fidelity -->" in composed, (
+        f"sub-skill marker for pickup-comment-fidelity missing from {role}"
+    )
+    assert "State-file filter" in composed, (
+        f"fragment content (State-file filter) missing from composed {role}"
+    )
+    assert "Test-result fidelity" in composed, (
+        f"fragment content (Test-result fidelity) missing from composed {role}"
+    )
+    assert "Prior-cycle phantoms" in composed, (
+        f"fragment content (Prior-cycle phantoms) missing from composed {role}"
     )
