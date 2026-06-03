@@ -148,8 +148,13 @@ def _get_all_roles():
     is deleted and this line switches to `_parse_workers()`.
     """
     roles = set(_parse_dev_agents())
-    # Fixed team: PM + QA + DM always present (#6261)
-    roles.update({"pm", "qa", "dm"})
+    # Fixed team: PM + verifier + DM always present (#6261/#6274 D5: qa→verifier).
+    # Missed call-site from the #6274 rename — root cause for #10855
+    # (harness rejected ``/agents/verifier/start`` with ``Unknown role:
+    # verifier`` because the configured roster still listed ``qa``).
+    # config.py:_collect_install_agents already uses "verifier" (line 742);
+    # this brings boot_remote in sync.
+    roles.update({"pm", "verifier", "dm"})
     return sorted(roles)
 
 

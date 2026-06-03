@@ -330,7 +330,7 @@ class TestHarnessRejectsUnknownRoleAtBoundary(unittest.TestCase):
 
         cls._roles_patch = mock.patch.object(
             _harness.boot_remote, "_get_all_roles",
-            return_value=["skill", "qa", "dm"],
+            return_value=["skill", "verifier", "dm"],
         )
         cls._roles_patch.start()
         cls._health_patch = mock.patch.object(_harness.state, "update_health")

@@ -372,7 +372,7 @@ class TestBootAgentLock:
 
 
 class TestGetAllRoles:
-    @patch("boot_remote._parse_dev_agents", return_value=["skill", "qa"])
+    @patch("boot_remote._parse_dev_agents", return_value=["skill", "verifier"])
     @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})
     def test_includes_pm_from_config(self, mock_local, mock_devs, tmp_path):
         config = tmp_path / "config.md"
@@ -383,16 +383,18 @@ class TestGetAllRoles:
             roles = boot_remote._get_all_roles()
             assert "pm" in roles
             assert "skill" in roles
-            assert "qa" in roles
+            assert "verifier" in roles
             assert "dm" in roles
 
     @patch("boot_remote._parse_dev_agents", return_value=["skill"])
     @patch("boot_remote._parse_local_config", return_value={"skill": Path("/tmp")})
     def test_mandatory_roles_always_present(self, mock_local, mock_devs):
-        """Fixed team: PM + QA + DM always present regardless of config (#6261)."""
+        """Fixed team: PM + verifier + DM always present regardless of config
+        (#6261/#6274 D5: qa→verifier — fixed #10855 missed call-site).
+        """
         roles = boot_remote._get_all_roles()
         assert "pm" in roles
-        assert "qa" in roles
+        assert "verifier" in roles
         assert "dm" in roles
         assert "skill" in roles
 
