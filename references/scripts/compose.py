@@ -1761,6 +1761,194 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
     return triple_paths[0]
 
 
+def deploy_role_v2(role_name: str, target_root: Path = None,
+                   output_name: str = None,
+                   source_root: Path = None) -> Path:
+    """v2 equivalent of ``deploy_role`` — the wizard's compose+output entry point.
+
+    Used by ``wizard.py`` for fresh installs where the agent's identity is
+    known directly (not via the ``## Aliases`` registry). Resolves
+    ``role_name`` → ``(role_class, l3_domain)`` via the v1 variant
+    convention (``_resolve_variant`` + ``_get_entry_file_for_role``), then
+    runs the v2 link+assemble pipeline directly. Seeds ``SOUL.md`` from
+    the role's layer-base template when missing, mirroring v1's
+    ``deploy_role`` behavior.
+
+    Args:
+        role_name: a variant-prefixed compose source (``worker-ios``) or
+            a base role/alias (``skill``). Resolved identically to v1's
+            ``deploy_role``.
+        target_root: install root containing ``.squidsquad/<output_name>/``.
+            Defaults to ``REPO_ROOT``. Only the OUTPUT directory and the
+            project-specific L4 file (``.squidsquad/project/<role>.md``)
+            are read/written here.
+        output_name: the agent instance directory name (typically the
+            alias). Defaults to ``role_name``.
+        source_root: where to read L1-L3 sources, the sub-skill catalog,
+            and the v2 link-stage fixtures. Defaults to ``REPO_ROOT``
+            (the squidsquad install holding ``references/``). This split
+            from ``target_root`` is what lets the wizard write into a
+            fresh foreign project (no ``references/`` of its own) while
+            still composing from the canonical templates. Tests staging
+            a hermetic fixture pass ``source_root=tmp_path``.
+
+    Returns the absolute path of the assembled ``CLAUDE.md``.
+
+    Path B of the E6 #10685 Phase 3c decision: smallest blast radius
+    that lets E6 delete v1's ``deploy_role``. The link+assemble pipeline
+    body intentionally duplicates ``deploy_alias_v2`` lines 1624-1761
+    rather than refactoring both through a shared internal helper —
+    consolidation would force the v2 alias-registry path through the
+    same risky test surface that 15+ ``deploy_alias_v2`` tests already
+    pin. If/when Path C (registry-first wizard, alias-as-truth) is
+    undertaken in a follow-up PRD, this function becomes throwaway and
+    the duplication retires with it.
+    """
+    if target_root is None:
+        target_root = REPO_ROOT
+    target_root = Path(target_root)
+    if source_root is None:
+        source_root = REPO_ROOT
+    source_root = Path(source_root)
+    if output_name is None:
+        output_name = role_name
+
+    # Resolve role_name → (role_class, l3_domain) via the v1 convention.
+    # Variant-prefixed names (``worker-ios``, ``pm-skill``) split into a
+    # base + variant; base names route through _get_entry_file_for_role
+    # which knows about the worker/dev #6274 alias shim.
+    resolved = _resolve_variant(role_name)
+    if resolved:
+        role_class, l3_domain = resolved
+    else:
+        role_class = _get_entry_file_for_role(role_name)
+        l3_domain = None
+
+    # Lazy imports — same pattern as deploy_alias_v2: keep v1 callers
+    # from loading these modules until they're needed.
+    import v2_link_stage as _v2
+    from l4_parser import L4Document as _L4Document
+    from l4_parser import parse_l4_file as _parse_l4_file
+    from link_stage_validator import (
+        LinkStageValidationError as _LinkStageValidationError,
+    )
+    from link_stage_validator import validate_link_stage as _validate_link_stage
+
+    # L4 is project-specific — reads from target_root so the wizard's
+    # foreign-project installs pick up any project-local customisations.
+    l4_path = target_root / ".squidsquad" / "project" / f"{role_class}.md"
+
+    try:
+        sources = _v2.collect_sources_for_validation(
+            role_class, l3_domain, repo_root=source_root
+        )
+    except Exception as e:
+        print(
+            f"ERROR: cannot walk L1-L3 sources for role '{role_name}' (v2): {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if l4_path.is_file():
+        try:
+            l4_doc = _parse_l4_file(l4_path)
+        except Exception as e:
+            print(
+                f"ERROR: cannot parse L4 file '{l4_path}' for role '{role_name}': {e}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
+        l4_doc = _L4Document.empty()
+
+    try:
+        _validate_link_stage(l4_doc, sources, l4_path=str(l4_path))
+    except _LinkStageValidationError as e:
+        print(
+            f"ERROR: v2 link stage validation failed for role '{role_name}':",
+            file=sys.stderr,
+        )
+        print(f"  {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        body = _v2.emit_v2_linked(
+            role_class, l3_domain, repo_root=source_root, l4_path=l4_path
+        )
+    except Exception as e:
+        print(
+            f"ERROR: emit_v2_linked failed for role '{role_name}': {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    import v2_catalog_gate as _v2_gate
+    catalog_path = source_root / "docs" / "sub-skill-catalog.md"
+    try:
+        gate_result = _v2_gate.validate_v2_compose(
+            body, catalog_path=catalog_path, repo_root=source_root,
+        )
+    except Exception as e:
+        print(
+            f"ERROR: catalog gate setup failed for role '{role_name}': {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if gate_result.has_issues:
+        print(
+            f"ERROR: catalog gate FAILED for role '{role_name}':",
+            file=sys.stderr,
+        )
+        print(gate_result.format(), file=sys.stderr)
+        sys.exit(1)
+
+    output_dir = target_root / ".squidsquad" / output_name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    header = f"# SquidSquad -- {output_name} Lead\n\n"
+    header += (
+        f"<!-- GENERATED by compose.py deploy {output_name}. DO NOT EDIT. -->\n"
+    )
+    header += (
+        f"<!-- Regenerate: python references/scripts/compose.py "
+        f"deploy {output_name} -->\n\n"
+    )
+    linked_composite = header + body
+
+    import atomic_emit as _atomic_emit
+    import assemble_adapter as _adapter
+    cache_lookup_fn, cache_store_fn = _adapter.make_b6_cache_adapter(
+        alias=output_name,
+        model_id="sonnet",
+        prompt_version="v1",
+    )
+    try:
+        triple_paths = _atomic_emit.assemble_and_emit(
+            linked_composite,
+            output_dir,
+            role_class=role_class,
+            model_id="sonnet",
+            cache_lookup_fn=cache_lookup_fn,
+            cache_store_fn=cache_store_fn,
+        )
+    except Exception as e:
+        print(
+            f"ERROR: assemble_and_emit failed for role '{role_name}': {e}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # SOUL.md seeding — mirror v1 deploy_role behavior (compose.py around
+    # the original lines 1548-1550). The v2 alias-registry path
+    # (deploy_alias_v2) does NOT seed SOUL because it's the per-command
+    # regenerate entry point — but wizard's first-install use needs SOUL
+    # in place for the assembled CLAUDE.md to load correctly at boot.
+    soul_path = output_dir / "SOUL.md"
+    if not soul_path.exists():
+        _assemble_and_write_soul(role_name, target_root, output_name)
+
+    return triple_paths[0]
+
+
 # Layer 1 source files live at the root of ROLES_DIR (no subdirectory)
 BASE_ROLE_DIR = ROLES_DIR
 
