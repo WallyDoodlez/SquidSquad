@@ -410,6 +410,14 @@ def test_tc_08_scaffold_overwrite_guard(tmp_path):
 # TC-9: compose.py L4 auto-include path works with new L4 file format
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(
+    reason="TC-9 tested v1's L4 filename-prefix routing of user-side "
+    "`.squidsquad/project/{shared,<role>}-*.md` files. v2 L4 semantics are "
+    "different — `v2_link_stage.emit_v2_linked` reads a single L4 file at "
+    "`.squidsquad/project/<role_class>.md`, not a directory of prefix-routed "
+    "files. The TC-9 invariant doesn't carry over. Retires with v1 in E6 "
+    "#10685 Phase 3d."
+)
 def test_tc_09_compose_l4_role_filtering(tmp_path):
     """TC-9: compose_role() includes shared-*.md for all roles and dev-*.md
     only for the dev agent, wrapped in <!-- sub-skill: project-* --> markers."""
