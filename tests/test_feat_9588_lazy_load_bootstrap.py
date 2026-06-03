@@ -33,7 +33,7 @@ ROLES_DIR = REPO_ROOT / "references" / "roles"
 SCRIPTS_DIR = REPO_ROOT / "references" / "scripts"
 
 ROLES = ["skill", "pm", "qa", "dm"]
-ROLE_TO_ENTRY = {"skill": "dev", "pm": "pm", "qa": "qa", "dm": "dm"}
+ROLE_TO_ENTRY = {"skill": "worker", "pm": "pm", "qa": "verifier", "dm": "dm"}
 
 MODE_SPECIFIC_MARKERS = [
     "<!-- sub-skill: ralph-loop-overview -->",
