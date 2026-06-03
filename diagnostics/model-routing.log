@@ -1068,3 +1068,8 @@
 {"timestamp": 1780454711.081799, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1780454711.0828001, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1780454812.1514747, "task_type": "assemble", "task_id": "assemble-instructions", "model": "sonnet", "provider": "openai", "action": "success", "response_length": 558, "elapsed_seconds": 0.0}
+{"timestamp": 1780462876.4884393, "task_type": "code-review", "task_id": "AUDIT-AGENT-RUNTIME", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16704, "elapsed_seconds": 251.7}
+{"timestamp": 1780462944.470589, "task_type": "code-review", "task_id": "AUDIT-HARNESS-ARCH", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16977, "elapsed_seconds": 319.7}
+{"timestamp": 1780462944.6053903, "task_type": "code-review", "task_id": "AUDIT-INSTALLER-ARCH", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "api-error", "error": "Tool-use loop exceeded max iterations (50)", "elapsed_seconds": 319.9}
+{"timestamp": 1780462970.5383015, "task_type": "code-review", "task_id": "AUDIT-VAULT-ARCH", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 16017, "elapsed_seconds": 345.8}
+{"timestamp": 1780463070.2449634, "task_type": "code-review", "task_id": "AUDIT-COMPOSE-ARCH", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 24070, "elapsed_seconds": 445.5}
