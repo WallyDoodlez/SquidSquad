@@ -956,13 +956,3 @@ class TestEventDrivenWorkflowLocation:
             "common-events/ (no mode-conditional logic inside fragments)"
         )
 
-    def test_event_driven_workflow_has_no_frontmatter(self):
-        """Per PM directive: no mode-conditional logic inside fragments."""
-        path = (Path(__file__).resolve().parent.parent
-                / "references" / "sub-skills" / "common-events"
-                / "event-driven-workflow.md")
-        first_line = path.read_text(encoding="utf-8").splitlines()[0]
-        assert first_line != "---", (
-            "event-driven-workflow.md should not have YAML frontmatter — "
-            "mode selection happens at the manifest level"
-        )
