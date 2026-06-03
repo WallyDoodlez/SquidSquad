@@ -1,65 +1,136 @@
 # Phase 2 LOCKED decisions for #10781 — Sub-skills as invokable Claude Skills
 
-Final decisions after Phase 2 discussion + DS feasibility audit + operator refinements (2026-06-03 — final rev).
+Final decisions after Phase 2 discussion + DS feasibility audit + 3 operator refinement rounds (2026-06-03, rev 3).
 
 ## Scope
 
-Only entries in `docs/sub-skill-catalog.md` (the catalog) are in scope. Filesystem fragments under `references/sub-skills/` that aren't in the catalog are out of scope. After excluding deferred (chat trio) and planned (`compose-output-review`), real convertible set is ~50–60 entries.
+Only entries in `docs/sub-skill-catalog.md` (the catalog) are in scope. Filesystem fragments under `references/sub-skills/` that aren't in the catalog are out of scope.
 
-## Terminology debt (acknowledged, deferred)
+## Two structural moves
 
-The architecture has two distinct runtime-invocation tiers but both are currently called "sub-skills" in TRDs, catalog, code, and the reference grammar. **Operator decision (2026-06-03): keep the existing "sub-skill" terminology for PRD-D and ship under that conflation.** Reconciliation effort (TRD revisions, catalog restructure, code identifier renames, possible grammar split into `→ run rule:` vs `→ invoke skill:`) is acknowledged as ~6–8 weeks of work and **deferred indefinitely** — may be picked up after several future PRDs land if the conflation becomes painful, otherwise treated as permanent legacy nomenclature. No tracking issue filed; this section is the record.
+### 1. Standing-rule / scaffold-content removal
 
-## Final decisions (rev 2 — 2-tier)
+The following 3 catalog entries are NOT Claude Skills — they're inlined CLAUDE.md content (standing rules + scaffold structure). They have ZERO `→ run sub-skill: <name>` invocations in active `references/` source files. Their bodies still reach composed CLAUDE.md via `includes.yml` (unchanged). They are **removed from `docs/sub-skill-catalog.md`** in PRD-D execution:
 
-| # | Decision | Operator pick |
-|---|----------|---------------|
-| Scope | What's in scope? | Catalog entries at `docs/sub-skill-catalog.md` only. Out-of-catalog fragments untouched. |
-| Route | Where do `.claude/skills/<name>/SKILL.md` files come from? | **Deploy-time generator** (separate installer step) reads `references/sub-skills/` templates for catalog entries → writes `.claude/skills/<name>/SKILL.md` artifacts. Sources unchanged at authoring time. |
-| Q1 | Which sub-skills convert to Claude Skills? | **2-tier classification (all entries still called "sub-skills" in catalog/grammar/code)**: <br>• **Inlined standing rules** (~3–5): body inlined in CLAUDE.md at compose time because they're observed rules, not invocable procedures. `self-restart`, `agent-lifecycle`, `context-pressure`, plus the cycle scaffold itself (boot sequence + 3-phase cycle structure). <br>• **Claude Skills** (~55–60): everything else in catalog. Generated `SKILL.md` at `.claude/skills/<name>/`. Composed CLAUDE.md's cycle scaffold invokes them explicitly via `→ run sub-skill: <name>` references (grammar redefined: agent invokes Skill tool, not Read tool), OR the model invokes them discretionarily via description matching. Includes: `checkin`, `task-intake`, `task-approval`, `pipeline-sentinel`, `triage-issues`, `implement-tasks`, `verification`, `delivery-packaging`, `version-bumps`, `health-check`, `vault-remember`, `vault-optimize`, `vault-synthesis`, `improvement-scan`, `improvement-scan-slim`, `soul-shepherd`, `l4-curation`, `boot-remote-agents`, `git-commit`, `issue-filing`, `discussion`, `boot-bootstrap`, `cycle-runner`, all role-specific procedures, etc. <br>**Why this works**: DS audit BLOCKER 2 (ordering risk) was based on assuming discretionary invocation only. Skills can also be invoked explicitly from the cycle scaffold by the agent, preserving order. The scaffold remains inlined; only the procedure bodies live in `.claude/skills/`. |
-| **Per-agent install filter** | Which Skills go into which agent's `.claude/skills/`? | **Per-clone materialization.** Catalog has a `Used by` column that lists which agents use each sub-skill (e.g., `boot-remote-agents` is PM-only; `delivery-packaging` is DM-only; `boot-bootstrap` is all roles). The materializer reads this column and installs a Skill into an agent's clone ONLY if that agent uses it. Each agent clone (`D:\Dev\Dev\SquidSquad`, `-2`, `-qa`, `-3`) gets its own filtered `.claude/skills/` directory. Result: an agent's available-Skills metadata at session start is restricted to Skills it can actually use — no context pollution from inapplicable Skills. |
-| Q2 | Dual-purpose vs export? | **Export** (confirmed by deploy-time-generator route). |
-| Q3 | `[ROLE]` placeholder handling | **One shared SKILL.md per Claude Skill (across all installs that include it).** The agent invoking the Skill already knows its own role (from its composed CLAUDE.md identity — "You are PM"). The generated SKILL.md uses prose instructions like "use your own role name (`pm`/`dm`/`qa`/`skill`) wherever you see `<your-role>` below". Agent fills in its role at runtime by reading the instructions. No Skill tool runtime args needed (which don't exist per DS audit). No N×M per-role-class file proliferation. (The per-agent filter above governs WHICH Skills are installed in which clone, not their CONTENT — content is the same shared template.) |
-| Q4 | `[[wikilink]]` handling | **PRD-D ships without #10690 dependency.** Wikilinks in Claude-Skill-tier sub-skills point primarily at vault notes (not other sub-skills). Preserved as plain text in generated SKILL.md. Sub-skill-to-sub-skill wikilinks are concentrated in `common-events/` which stays runtime-loaded by `boot-bootstrap` (out of PRD-D scope). #10690 dependency dissolves. |
-| Q5 | L1–L4 surrounding context | **Accept reduced fidelity** — skills are project-scoped only (per-clone), so the surrounding composed CLAUDE.md is always present at invocation time within the SquidSquad install. |
-| Q6 | Catalog and discovery | Catalog stays at `docs/sub-skill-catalog.md`; add **`tier`** column (`inlined-rule` / `skill`) and **`skill-description`** column (human-authored, used by generator for SKILL.md `description:` frontmatter). The existing **`Used by`** column drives the per-clone materialization filter. `catalog_parser.py:394` guard unchanged. New columns at end of table — parser already supports N-column tables per DS audit Concern 4. |
-| Q7 | TRD vs PRD framing | **PRD-D under COMPOSE-ARCHITECTURE TRD**; not a new TRD. |
-| #10362 | Existing follow-up issue | **Fold into PRD-D** — close #10362 as superseded by PRD-D. |
-| Generator hook | Where does the materializer run? | **Separate installer step**. Runs at install and at `squidsquad-upgrade`. Has its own freshness check (catalog hash + `Used by` filter hash vs last-materialized hash, analogous to COMPOSE-ARCHITECTURE §8.1). Per-clone materialization handled in a loop over `config.md` aliases. Decouples from per-alias compose; keeps compose fast. |
-| Cap monitoring | Drift protection | PM tracks per-clone Claude Skill count in routine improvement scans. Flag when an individual clone exceeds 70 Skills installed for tier review (to prevent decision-overload drift). System-wide cap is ~80 Skills before the upfront-context cost (~15K tokens at session start, rough) starts to noticeably bite. |
-| Gate | Hard pre-req | **E6 #10685 must ship before PRD-D implementation begins.** |
+| Removed entry | Why | Body size |
+|---------------|-----|-----------|
+| `self-restart` | Ambient rules about exit-42 handling — never invoked, always read | 38 lines |
+| `context-pressure` | Step 1b procedure inlined as cycle scaffold step — never invoked via reference grammar | 25 lines |
+| `cycle-runner` | The 3-phase cycle structure itself — inlined as the scaffold | 98 lines |
 
-## DS audit dispositions (final)
+The 2 originally-mandatory-core entries that DO have active invocations stay in catalog as Claude Skills:
 
-- **BLOCKER Q3 (args mechanism)**: ✅ Dissolved — agent infers role from its own identity context, not from runtime args.
-- **BLOCKER Q1 (tier drift)**: ❌ **Re-disputed and rejected** by operator. DS conflated "can be discretionary" with "must be discretionary." Skills can be invoked explicitly from the cycle scaffold (preserves order) AND discretionarily by the model. The cycle scaffold stays inlined in CLAUDE.md so step ordering is preserved. The 3-tier complication is unnecessary.
-- **RISK generator hook**: ✅ Accepted — separate installer step.
-- **RISK wikilink ordering**: ✅ Accepted — #10690 dependency dissolved by scope analysis.
-- **CONFIRMED items** (reference grammar, catalog parser flexibility, upgrade path): ✅ As stated.
-- **Pre-existing bug** (slash-bearing sub-skill name parser inconsistency): file as a follow-on bug if PRD-D execution surfaces it.
+| Kept entry | Active invocations in `references/` |
+|------------|--------------------------------------|
+| `boot-bootstrap` | `agent-instructions.md:15`, `roles/instructions.md:17` |
+| `agent-lifecycle` | `agent-instructions.md:53`, `roles/instructions.md:55` |
 
-## What PRD-D actually delivers
+**Test for "is this a standing rule" (and thus removed from catalog)**: zero `→ run sub-skill: <name>` references in any active `references/` source file (TRD prose in `docs/` doesn't count).
 
-1. **`tier` and `skill-description` columns** added to `docs/sub-skill-catalog.md`; backfill for all existing entries. `Used by` column already exists; verified accurate during backfill.
-2. **Skill materializer** at a new script (e.g. `references/scripts/skill_materializer.py`) that:
+### 2. Per-agent install filter via `Used by` column
+
+The catalog has an existing `Used by` column. The PRD-D installer materializes a Skill into an agent's clone-local `.claude/skills/` directory ONLY if that agent appears in the row's `Used by`. Result: each agent's available-Skills metadata at session start is restricted to Skills it can actually invoke.
+
+**Many catalog rows have an empty `Used by` column today.** Phase 3 AC must include backfilling these before the materializer runs. Proposed assignments based on path/content evidence (for skill execution to apply during PRD-D):
+
+| Catalog row | Current `Used by` | Proposed (rev 3) |
+|-------------|-------------------|------------------|
+| `checkin` | empty | PM |
+| `task-intake` | empty | PM |
+| `task-approval` | empty | PM |
+| `testing-and-verification` | empty | verifier |
+| `delivery` | empty | DM |
+| `pipeline-sentinel` | empty | PM |
+| `own-domain-autofix` | empty | PM |
+| `health-check` | empty | PM |
+| `github-issues` | empty | all roles |
+| `soul-shepherd` | empty | PM |
+| `vault-synthesis` | empty | PM |
+| `verification` | empty | verifier |
+| `issue-triage` | empty | PM |
+| `delivery-packaging` | empty | DM |
+| `version-bumps` | empty | DM |
+| `doc-improvement-loop` | empty | DM |
+| `triage-issues` | empty | worker |
+| `implement-tasks` | empty | worker |
+| `skill/finding-categories` | empty | worker |
+| `roles/dm/task-pickup` | empty | DM (derivable from path) |
+| `roles/pm/improvement-scan` | empty | PM (derivable from path) |
+| `roles/pm/issue-filing` | empty | PM (derivable from path) |
+| `roles/pm/discussion-protocol` | empty | PM (derivable from path) |
+| `roles/pm/ralph-loop-overview` | empty | PM (derivable from path) |
+| `roles/verifier/issue-filing` | empty | verifier (derivable from path) |
+| `roles/verifier/discussion-protocol` | empty | verifier (derivable from path) |
+| `roles/verifier/ralph-loop-overview` | empty | verifier (derivable from path) |
+| `roles/dm/issue-filing` | empty | DM (derivable from path) |
+| `roles/dm/discussion-protocol` | empty | DM (derivable from path) |
+| `roles/dm/ralph-loop-overview` | empty | DM (derivable from path) |
+| `roles/worker/ralph-loop-overview` | empty | worker (derivable from path) |
+| `pm.md` | empty | PM (L4 seed — likely should NOT be in Skill catalog at all; verify in Phase 3) |
+| `verifier.md` | empty | verifier (same caveat as pm.md) |
+| `dm.md` | empty | DM (same caveat) |
+| `worker.md` | empty | worker (same caveat) |
+| `l1-base`, `event-driven-workflow`, `cursor-management`, `forge-read-pattern`, `idle-cooldown-loop`, `comment-handling` | empty | Out of scope — these are `common-events/` fragments, runtime-loaded by `boot-bootstrap`, NOT being converted to Skills |
+
+Existing rows with `Used by` populated stay as-is unless Phase 3 audit finds errors.
+
+## Final decisions (rev 3)
+
+| # | Decision | Lock |
+|---|----------|------|
+| Scope | What's in scope? | Catalog entries minus the 3 standing rules. ~55–60 entries become Claude Skills (depending on Phase 3 disposition of `pm.md`/`verifier.md`/`dm.md`/`worker.md` and the deferred chat trio). |
+| Route | Where do `.claude/skills/<name>/SKILL.md` files come from? | Deploy-time generator (separate installer step) reads `references/sub-skills/` templates → writes `.claude/skills/<name>/SKILL.md` artifacts per agent clone. Sources unchanged at authoring time. |
+| Tiering | Catalog structure | **2-tier** (no 3-tier complication): inlined CLAUDE.md content (NOT in catalog: 3 removals + cycle scaffold composition) + Claude Skills (~55–60, all in catalog). |
+| Per-agent install filter | Which Skills materialize in which clone? | `Used by` column drives the filter. PRD-D execution backfills empty rows per proposed assignments above. |
+| Placeholder handling | `[ROLE]` and similar | ONE shared SKILL.md content per Skill. Agent infers role from its own identity context (composed CLAUDE.md "You are PM"). Generated SKILL.md uses prose like "use your own role name (`pm`/`dm`/`qa`/`skill`) wherever you see `<your-role>` below". |
+| Wikilink handling | `[[name]]` references | Vault-note wikilinks preserved as plain text. Sub-skill-to-sub-skill wikilinks are concentrated in `common-events/` (out of scope). #10690 dependency dissolved. |
+| Surrounding L1–L4 context | Reduced fidelity outside SquidSquad? | Accepted — skills are project-scoped per-clone; composed CLAUDE.md always present at invocation. |
+| Catalog columns | Schema additions | Add `tier` (only takes value `skill` for catalog rows; standing rules removed entirely) — OR omit since 2-tier means all surviving rows are Skills. Plus `skill-description` column (human-authored, used by generator for SKILL.md `description:` frontmatter). |
+| Framing | TRD vs PRD | PRD-D under COMPOSE-ARCHITECTURE TRD. |
+| #10362 disposition | Existing follow-up issue | Fold into PRD-D — close as superseded. |
+| Generator hook | Where it runs | Separate installer step, runs at install + `squidsquad-upgrade`. Has freshness check (catalog hash + per-clone Used-by filter hash). |
+| Cap monitoring | Drift protection | PM tracks per-clone Skill count in routine improvement scans; flag at >70 per clone, >80 system-wide. |
+| Terminology debt | Rename effort | Acknowledged (6–8 weeks) and deferred indefinitely. PRD-D ships under existing "sub-skill" nomenclature. |
+| Gate | Hard pre-req | E6 #10685 must ship before PRD-D implementation begins. |
+
+## What PRD-D delivers
+
+1. **Catalog edits**:
+   - Remove rows: `self-restart`, `context-pressure`, `cycle-runner`
+   - Backfill empty `Used by` rows per proposed assignments
+   - Add `skill-description` column; backfill for all surviving rows
+   - Decide disposition of `pm.md` / `verifier.md` / `dm.md` / `worker.md` (likely remove — they're L4 seed files, not Skills)
+2. **Skill materializer** at `references/scripts/skill_materializer.py`:
    - Reads catalog
-   - For each agent clone (resolved from `.squidsquad/.local-config`)
-   - For each catalog entry where `tier == skill` AND this agent appears in `Used by`
-   - Generates `.claude/skills/<name>/SKILL.md` in that clone, with prose role-resolution baked in per Q3
-3. **`squidsquad-upgrade` migration step** for materializing on existing installs.
-4. **Freshness check** — installer compares (catalog hash, per-clone Used-by filter hash) against last-materialized hash; re-materializes when stale.
-5. **Cycle scaffold update**: composed CLAUDE.md's `→ run sub-skill: <name>` references are reinterpreted at runtime as Skill tool invocations (was Read tool). For catalog entries with `tier == inlined-rule`, body is still inlined and there's no `→ run sub-skill:` reference for it. Reference-grammar parsers (`v2_catalog_gate.py`, `assemble_verifier.py`, `link_stage_validator.py`) unchanged (regexes still capture the name correctly per DS audit Concern 2).
+   - For each agent clone (from `.squidsquad/.local-config`)
+   - For each catalog row where this agent appears in `Used by`
+   - Generates `.claude/skills/<name>/SKILL.md` in that clone with prose role-resolution baked in
+3. **`squidsquad-upgrade` migration step**: materialize on existing installs.
+4. **Freshness check**: (catalog hash, per-clone Used-by filter hash) vs last-materialized hash.
+5. **Reference grammar runtime semantics update**: composed CLAUDE.md's `→ run sub-skill: <name>` references for catalog Skills are reinterpreted as Skill tool invocations (was Read tool). Standing-rule references (the 3 removed rows) keep their inlined bodies via includes.yml — no `→ run sub-skill:` references existed for them in active source.
 6. **`docs/COMPOSE-ARCHITECTURE.md §4.5.1`** updated from "Gap" to "Delivered by PRD-D".
-7. **#10362 closed as superseded** by PRD-D.
+7. **#10362 closed as superseded**.
 
-## Open questions deferred to Phase 3 (AC drafting)
+## Phase 3 audit checklist
 
-- Exact tier classification per catalog row (inlined-rule vs skill). Initial list above is provisional; Phase 3 audits each row against the test ("would skipping it entirely be acceptable AND does the cycle scaffold orchestrate its invocation order if needed?").
-- Whether `boot-bootstrap` and `cycle-runner` stay inlined or convert. They're invocable procedures but boot-time efficiency may favor inlining. Phase 3 reads the actual files to decide.
-- Whether `compose-output-review` (planned, not implemented) gets the `tier: skill` classification preemptively.
+Before PRD-D acceptance, verify:
+- [ ] Each of the 3 removed rows has zero active `→ run sub-skill: <name>` references in `references/` (re-confirm Phase 2 audit findings)
+- [ ] Each empty-Used-by row has a final `Used by` assignment (per proposed table above + skill review)
+- [ ] `pm.md`, `verifier.md`, `dm.md`, `worker.md` catalog rows — confirmed removed (not L4 seeds in disguise) or confirmed as Skills with reasoning
+- [ ] `skill-description` field authored for all surviving rows
+- [ ] Per-clone materialization audit: for each agent clone, list which Skills would be installed; verify matches expectation
+- [ ] No `→ run sub-skill: <name>` reference in `references/` survives without a matching catalog row (catalog gate stays green)
+
+## DS audit dispositions (final, rev 3)
+
+- **BLOCKER Q3 (args mechanism)**: ✅ Dissolved — agent infers role from its own identity context.
+- **BLOCKER Q1 (tier drift)**: ❌ Re-disputed — Skills can be explicitly invoked (preserves order); 3-tier complication unnecessary. 2-tier locked.
+- **RISK generator hook**: ✅ Accepted — separate installer step.
+- **RISK wikilink ordering**: ✅ Accepted — #10690 dependency dissolved by scope.
+- **CONFIRMED items**: ✅ As stated.
 
 ## Reference artifacts
 
 - Research: `.squidsquad/pm/planning/RESEARCH-10781.md`
 - DS feasibility audit: `.squidsquad/pm/planning/FEASIBILITY-10781-DS.md`
-- This document: `.squidsquad/pm/planning/PHASE2-LOCKED-10781.md` (rev 2)
+- This document: `.squidsquad/pm/planning/PHASE2-LOCKED-10781.md` (rev 3)
