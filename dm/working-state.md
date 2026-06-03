@@ -3,26 +3,26 @@
 - **Task**: bump deferred on 7 open issues (#10820 skill, #10818 skill, #10762 skill, #10755 pm, #10750 pm, #10540 dm-stuck, #9969 pm); queue clear
 - **Status**: idle
 - **Last Processed Event ID**: 55f645cecd099ad2
-- **Quiet Cycle Counter**: 1
+- **Quiet Cycle Counter**: 2
 
-## Session Context (checkpoint at cycle 1819)
+## Session Context (checkpoint at cycle 1820)
 - Version: v0.43.0
 - Shipped count: **54/10** (bump_due, deferred on open issues)
-- Harness: HEALTHY on 7373 (cycle_pre's harness_status=unreachable is a flaky probe — live /status returns 200)
+- Harness: HEALTHY on 7373 (verified live this cycle; cycle_pre's `harness_status=unreachable` has been a persistent false-negative for 4 cycles now — probe bug not impacting actual work)
 - Session cron 30m (job 4930bd69)
 - Doc scan: blocked by #10540 status:open.
-- **Stuck bug**: #10540 (DM batch ship dispatch) — DM-prohibited, parked at PM. **14h+ parked.**
-- **DM-filed bugs awaiting skill triage**: #10820 (SKILL.md commit gap root-cause).
+- **Stuck bug**: #10540 (DM batch ship dispatch) — DM-prohibited, parked at PM. **14h30m+ parked.**
+- **DM-filed bugs awaiting skill triage**: #10820 (SKILL.md commit gap root-cause), filed cycle 1816.
 - **CHANGELOG queue for v0.44.0** (~48 items): last added #10817 c1817.
 
 ## Recent cycle log (last 5 cycles)
-- **Cycle 1819**: Quiet. Counter persisted 54 (last cycle's manual increment held). Quiet counter 0→1.
-- **Cycle 1818**: Active. Corrected missed counter increment 53→54 from c1817 ship of #10817. Saved feedback memory about manual ship-counter increment.
+- **Cycle 1820**: Quiet. Verified harness probe is the false-negative source (live OK). Quiet counter 1→2.
+- **Cycle 1819**: Quiet. Counter persisted 54.
+- **Cycle 1818**: Active. Corrected missed counter increment 53→54 from c1817 ship. Saved feedback memory about manual ship-counter increment.
 - **Cycle 1817**: Active. Shipped #10817 (catalog drift) via PR#10819 c87f9167.
 - **Cycle 1816**: Active. Filed #10820 (skill, medium) for SKILL.md commit gap root-cause.
-- **Cycle 1815**: Quiet. #10817 filed by another agent.
 
-## Earlier session highlights (cycles 1719-1814, compacted)
+## Earlier session highlights (cycles 1719-1815, compacted)
 - 54 ships this session (53 PRD batch + #10817). Pattern: post-merge UNKNOWN→DIRTY route-backs via merge-from-main (not rebase) per feedback memory.
 - R74 rotation complete cycle 1780 (2 fixes — both stranded due to #10820 commit gap). R75 in progress (scans 1-4 complete, all re-verification 0 findings).
 - Milestones: 30 ships (c1755), 40 ships (c1782), 50 ships (c1793).
