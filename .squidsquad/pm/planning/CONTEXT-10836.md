@@ -114,6 +114,8 @@ These directions are settled before Phase 1 research begins, so research surface
 - Migration path for existing installs that have the legacy multi-file stubs already on disk.
 - Test surface (CQ for the wizard step; fresh-install + existing-install scenarios).
 
+**Content-preservation gate (added 2026-06-03, cycle 2084 scan)**: Before deleting legacy multi-file stubs from any install, audit each existing `worker-instructions.md` / `worker-responsibility.md` / `worker-soul-directives.md` / `verifier-*.md` / `pm-*.md` / `dm-*.md` for content that exists ONLY in the stub and NOT in the unified `<role-class>.md`. Known duplication that's safe to drop: PM cycle 2084 confirmed the "Front-loaded planning for batched issue work" section (commit `bd64e86f`) was added to BOTH `worker.md` AND `worker-instructions.md` simultaneously — content is identical, so stub removal loses nothing. Other sections may not be duplicated and would need to migrate to the unified file before the stub is deleted.
+
 ## Related
 
 - DS audit: `.squidsquad/pm/planning/AUDIT-TRD-INSTALLER-ARCH-DS.md`

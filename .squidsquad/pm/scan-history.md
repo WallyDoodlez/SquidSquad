@@ -482,3 +482,10 @@
 - **Findings**: BRIEFING.md heavily stale — PRs #10378/#10379 listed in-flight but merged 2026-05-30; PRD-A/B/C/D-catalog/E1-E5 ships not reflected; E6 #10685 in-flight + 4 new umbrella PRDs #10836-#10839 + PRD-D #10781 missing from active priorities; #9242 harness-unreachable constraint stale (harness now reachable)
 - **Auto-fixed**: BRIEFING.md fully rewritten — current Active Priorities (E6 + PRD-D + 4 umbrellas + E7 + wiki-link + catalog cleanup), Recently Shipped (PRD-A/B/C/D-catalog/E1-E5 + TRD-polish settlement + TRD Claude final-pass), Recent Decisions (PRD-D 2-tier + #10836 Direction A + audit refresh strategy + skill OOM finding + post-E6 queue), Constraints (skill OOM, verifier boot intermittency)
 - **Items rejected by human**: (none)
+
+## Scan — 2026-06-03 03:08
+
+- **Files scanned**: .squidsquad/project/{pm.md,worker.md,worker-instructions.md} (L4 long-living context + legacy stubs); cross-reference against feedback_compose_dry + feedback_pm_docs_only memory rules
+- **Findings**: (1) PM L4 (pm.md) clean — docs-only boundary clearly stated, pure-orphan inline-delete exception preserved; aligns with last 2 cycles' actions (#10750 reroute, #9969 parking). (2) Worker L4 duplication: commit bd64e86f added "Front-loaded planning for batched issue work" section to BOTH worker.md AND worker-instructions.md — violates feedback_compose_dry (one authoring location). Self-resolves via #10836 Direction A (deletes worker-instructions.md as legacy stub). Added content-preservation gate to CONTEXT-10836.md.
+- **Auto-fixed**: CONTEXT-10836.md content-preservation gate documented for skill to honor at implementation time.
+- **Items rejected by human**: (none)
