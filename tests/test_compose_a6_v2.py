@@ -411,10 +411,3 @@ def test_main_deploy_all_v2_iterates_registry(monkeypatch, tmp_path):
 # side-effects untouched) no longer exists because there is no v1 path.
 
 
-# ---------------------------------------------------------------------------
-# _V2_LINKED_FILENAME constant — single source of truth
-# ---------------------------------------------------------------------------
-
-def test_v2_filename_constant_matches_pm_narrowed_scope():
-    # PM's narrowed-scope comment on #10386 recommends this exact path.
-    assert compose._V2_LINKED_FILENAME == "CLAUDE.linked.v2.md"

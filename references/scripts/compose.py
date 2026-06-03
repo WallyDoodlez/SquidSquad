@@ -1552,10 +1552,6 @@ def deploy_role(role_name: str, target_root: Path = None,
     return output_path
 
 
-# v2 output filename per PRD-B §9a coexistence and PM's narrowed-scope
-# comment on #10386: A6 writes the v2 LINKED output (assemble will add
-# CLAUDE.v2.md once PRD-B ships).
-_V2_LINKED_FILENAME = "CLAUDE.linked.v2.md"
 # Aliases come from config.md but `parse_aliases_registry` doesn't
 # character-validate them, so anything in the alias cell flows into a
 # filesystem path. Defense-in-depth allowlist matches the convention
@@ -1577,16 +1573,17 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
        artifacts on failure (the AC for A2e + the §4.6 atomic-write
        contract for A2f).
     5. Emit the six-slot composite via A2d's ``emit_v2_linked``.
-    6. Write to ``.squidsquad/<alias>/CLAUDE.linked.v2.md``.
+    6. Run the assemble pipeline and write the triple to
+       ``.squidsquad/<alias>/`` (``CLAUDE.md`` / ``CLAUDE.linked.md`` /
+       ``CLAUDE.conflicts.md``) via atomic_emit.
 
-    v1 ``compose.py deploy <role>`` (no ``--v2``) is untouched per the
-    §9a coexistence rule; v1 ``compose.py deploy <alias> --v2`` lands at
-    the v2 path filename.
+    Post-E6 cutover (#10685) this is the only deploy path — the v1
+    ``deploy_role`` branch and the ``--v2`` CLI flag are retired.
 
     Aborts with ``SystemExit(1)`` on alias/registry errors, a
     LinkStageValidationError from R1-R7, or any I/O failure.
 
-    ``registry`` is an optional pre-parsed registry; ``deploy-all --v2``
+    ``registry`` is an optional pre-parsed registry; ``deploy-all``
     passes the registry it iterated to avoid re-parsing per alias and to
     close the TOCTOU window where ``config.md`` could be rewritten
     between the iterate-list parse and the per-alias resolve.
@@ -1714,13 +1711,13 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
     linked_composite = header + body
 
     # PRD-B B9 (#10763): assemble pipeline. atomic_emit owns the
-    # triple write (CLAUDE.v2.md + CLAUDE.linked.v2.md +
-    # CLAUDE.conflicts.v2.md) so the linked composite lands at the
-    # same place as before AND the assembled + conflict-report
-    # artifacts join it — completing PRD-B SC1's "runs unconditionally
-    # after link stage" contract. The pipeline used to be dead code:
-    # B1-B7 modules existed but no caller invoked them (filed as
-    # #10752 / #10754; B9 is the wiring story PM scoped in response).
+    # triple write (CLAUDE.md + CLAUDE.linked.md + CLAUDE.conflicts.md
+    # post-E6 cutover #10685) so the linked composite lands alongside
+    # the assembled + conflict-report artifacts — completing PRD-B SC1's
+    # "runs unconditionally after link stage" contract. The pipeline
+    # used to be dead code: B1-B7 modules existed but no caller invoked
+    # them (filed as #10752 / #10754; B9 is the wiring story PM scoped
+    # in response).
     #
     # Cache is wired via assemble_adapter.make_b6_cache_adapter — the
     # bridge between B7's slot-shaped seam and B6's key-shaped API.
