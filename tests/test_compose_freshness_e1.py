@@ -45,6 +45,10 @@ def _stage_minimal_repo(tmp_path):
     (repo / "references" / "roles" / "pm").mkdir()
     (repo / "references" / "roles" / "pm" / "instructions.md").write_text(
         "# pm instructions\n", encoding="utf-8")
+    # #10762: docs/sub-skill-catalog.md is a compose-time input.
+    (repo / "docs").mkdir()
+    (repo / "docs" / "sub-skill-catalog.md").write_text(
+        "# catalog\n", encoding="utf-8")
     return repo
 
 
@@ -81,6 +85,20 @@ class TestComputeChecksum:
         b = cf.compute_compose_checksum(repo)
         assert a != b, (
             "rename must roll the checksum (path is part of the hash)"
+        )
+
+    def test_catalog_change_rolls_checksum(self, tmp_path):
+        # #10762: docs/sub-skill-catalog.md is a genuine compose-time
+        # input (read by v2_catalog_gate + catalog_drift). Edits MUST
+        # roll the checksum so E1 triggers a recompose at boot.
+        repo = _stage_minimal_repo(tmp_path)
+        a = cf.compute_compose_checksum(repo)
+        (repo / "docs" / "sub-skill-catalog.md").write_text(
+            "# catalog v2\n", encoding="utf-8")
+        b = cf.compute_compose_checksum(repo)
+        assert a != b, (
+            "edits to docs/sub-skill-catalog.md must roll the source-"
+            "tree checksum so E1 triggers a recompose at next boot"
         )
 
     def test_unrelated_file_does_not_affect_checksum(self, tmp_path):

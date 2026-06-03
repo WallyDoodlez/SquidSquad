@@ -57,6 +57,13 @@ COMPOSE_INPUT_GLOBS = (
     # L1-L3 source files — base roles + per-role-class subdirs +
     # variant subdirs (worker/skill etc.).
     "references/roles/**/*",
+    # Sub-skill catalog (#10762) — a genuine compose-time input:
+    # ``v2_catalog_gate.validate_v2_compose`` reads it to resolve
+    # ``→ run sub-skill: <name>`` references at v2 deploy time, and
+    # ``catalog_drift.scan_drift`` / ``compose.py drift-check`` (D4)
+    # read it for the drift CLI. Edits here MUST roll the source-tree
+    # checksum so E1 triggers a recompose at next harness boot.
+    "docs/sub-skill-catalog.md",
 )
 
 
