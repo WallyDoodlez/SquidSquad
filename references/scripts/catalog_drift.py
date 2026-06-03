@@ -14,10 +14,9 @@ Scans run in three directions:
    file with no catalog row is an "orphan source file".
 
 3. **Dead-code candidates** — a catalog row whose name does not appear as
-   an include in any role's ``includes.yml`` / ``includes-events.yml`` /
-   ``includes-v2.yml`` is a dead-code candidate. Per PRD §8 Q-D3 this is
-   warn-not-abort: the catalog row may be reserved for an in-flight role
-   or a sub-skill not yet referenced.
+   an include in any role's ``includes.yml`` is a dead-code candidate.
+   Per PRD §8 Q-D3 this is warn-not-abort: the catalog row may be
+   reserved for an in-flight role or a sub-skill not yet referenced.
 
 The dead-code warning is **scoped to call-sites in role manifests** —
 inline ``→ run sub-skill:`` references inside other sub-skill bodies are
@@ -56,13 +55,12 @@ _NON_SUB_SKILL_BASENAMES = frozenset({"manifest.md", "README.md", "index.md"})
 # (_resolve_capability) and are not catalog-tracked.
 _EXCLUDED_SUBDIRS = frozenset({"project", "capabilities"})
 
-# Manifest filenames scanned for dead-code detection. Tracks both the v1
-# split (polling vs event) and the post-D5 unified v2 file. Any subset
-# may be absent on a given role — we read whatever exists.
+# Manifest filenames scanned for dead-code detection. Post-E6 cutover
+# (#10685) only ``includes.yml`` exists — the v1 polling/event split
+# (``includes-events.yml``) and the v2 coexistence file
+# (``includes-v2.yml``) both retire under Phase 1.
 _MANIFEST_FILENAMES = (
     "includes.yml",
-    "includes-events.yml",
-    "includes-v2.yml",
 )
 
 
@@ -198,9 +196,10 @@ def scan_drift(
 def _is_referenced(catalog_name, referenced):
     """Decide if a catalog name has a call-site in any role manifest.
 
-    Match rules — symmetric with ``compose.py._resolve_includes`` which
-    resolves an include path like ``common/boot-bootstrap`` to the
-    catalog name ``boot-bootstrap`` via the source-path's last segment:
+    Match rules — symmetric with the link-stage source walker
+    (``v2_link_stage.collect_sources_for_validation``), which resolves
+    an include path like ``common/boot-bootstrap`` to the catalog name
+    ``boot-bootstrap`` via the source-path's last segment:
 
     - **Exact path match**: the catalog name appears verbatim in some
       manifest's ``includes:`` list (slash-bearing catalog names like
@@ -226,9 +225,9 @@ def _is_referenced(catalog_name, referenced):
 
 # Keys inside a role manifest yaml whose values are include-path lists.
 # ``includes`` is the canonical key; ``additional_includes`` is the
-# variant schema used by ``roles/<base>/<variant>/includes.yml``
-# (compose.py:_load_manifest merges these with the base role's
-# ``includes:`` list).
+# variant schema used by ``roles/<base>/<variant>/includes.yml`` —
+# the link-stage walker merges these with the base role's
+# ``includes:`` list when assembling the L3 source set.
 _MANIFEST_INCLUDE_KEYS = ("includes", "additional_includes")
 
 
