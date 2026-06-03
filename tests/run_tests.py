@@ -120,7 +120,6 @@ STATIC_TEST_MODULES = [
     "test_assemble_cache",
     "test_l4_parser",
     "test_l4_op_processor",
-    "test_compose_check_a4_10388",
     "test_v2_link_stage",
     "test_link_stage_validator",
     "test_compose_a2f_10492",

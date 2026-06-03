@@ -309,7 +309,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full contribution process.
 
 - **Keep sub-skills atomic** — one behavior per file. If it's doing two things, split it.
 - **Use Python scripts for gates** — don't rely on the agent to remember thresholds or limits. Scripts are deterministic.
-- **Test with `compose.py deploy <role> --check`** — catch include errors before deploying.
+- **Test with `compose.py deploy <role>` then read `.squidsquad/<role>/CLAUDE.linked.md`** — catch include errors before deploying. (The v1 `--check` drift-comparison was retired in E6 #10685 Phase 3d.3; for staged L4 validation, use `compose.py deploy <role> --check --staged-l4 <path>`.)
 - **Check includes.yml** — if your sub-skill isn't in the role's `includes.yml`, it won't be composed. Update `manifest.md` too to keep the reference doc in sync.
 - **Use section markers** — they power the status bar and make debugging easier.
 - **Mind the dev-only placeholders** — `[ROLE_TEST_CMD]` and `[OTHER_ROLES]` are only substituted in dev templates. Common sub-skills using `[ROLE]` or `[ROLE_UPPER]` work for all roles.

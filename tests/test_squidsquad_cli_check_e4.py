@@ -190,13 +190,24 @@ class TestReadOnly:
 
 
 # ---------------------------------------------------------------------------
-# AC4 — --full delegates to A4's compose.py deploy-all --check
+# AC4 — --full flag (post-E6 #10685 Phase 3d.3: deprecated, no-op)
 # ---------------------------------------------------------------------------
+#
+# AC4 originally specified that `--full` delegates to
+# `compose.py deploy-all --check`. That CLI command was retired in
+# #10685 Phase 3d.3 (Option A) because the v2 on-disk CLAUDE.md is
+# LLM-polished and cannot byte-match a deterministic in-memory compose.
+# `--full` is preserved as a backward-compat accepted flag that emits
+# a deprecation WARNING and falls through to the checksum-only exit
+# semantics.
 
 
 class TestFullFlag:
 
-    def test_full_invokes_compose_deploy_all_check(self, tmp_path, monkeypatch):
+    def test_full_does_not_invoke_compose_subprocess(self, tmp_path, monkeypatch):
+        """Post-E6: `--full` must NOT invoke any subprocess. The
+        compose.py deploy-all --check call was retired in #10685 Phase 3d.3.
+        """
         repo = _stage_minimal_repo(tmp_path)
         state = _write_state(repo, checksum=cf.compute_compose_checksum(repo))
         calls = []
@@ -204,77 +215,36 @@ class TestFullFlag:
         def tracking(argv, **kwargs):
             calls.append(argv)
             import subprocess
-            return subprocess.CompletedProcess(argv, 0, "all clean\n", "")
+            return subprocess.CompletedProcess(argv, 0, "", "")
 
         monkeypatch.setattr(cli.subprocess, "run", tracking)
         rc = cli.cmd_check(repo_root=repo, state_file=state, full=True)
         assert rc == 0
-        assert len(calls) == 1
-        # First three argv entries are python, compose.py path, "deploy-all".
-        assert calls[0][1].endswith("compose.py"), calls[0]
-        assert calls[0][2] == "deploy-all"
-        assert "--check" in calls[0]
+        assert calls == [], (
+            "--full must NOT invoke compose.py subprocess post-E6 "
+            "(#10685 Phase 3d.3 — deploy-all --check retired)"
+        )
 
-    def test_full_returns_one_when_dry_run_reports_drift(
-        self, tmp_path, monkeypatch, capsys,
-    ):
+    def test_full_emits_deprecation_warning(self, tmp_path, capsys):
+        """`--full` is accepted but logs a retirement notice on stderr."""
         repo = _stage_minimal_repo(tmp_path)
         state = _write_state(repo, checksum=cf.compute_compose_checksum(repo))
+        cli.cmd_check(repo_root=repo, state_file=state, full=True)
+        err = capsys.readouterr().err
+        assert "deprecated" in err
+        assert "#10685" in err
 
-        def fake(argv, **kwargs):
-            import subprocess
-            return subprocess.CompletedProcess(argv, 1, "", "  pm: DRIFT\n")
-
-        monkeypatch.setattr(cli.subprocess, "run", fake)
-        rc = cli.cmd_check(repo_root=repo, state_file=state, full=True)
-        assert rc == 1
-        assert "DRIFT" in capsys.readouterr().err
-
-    def test_full_returns_two_when_dry_run_setup_error(
-        self, tmp_path, monkeypatch, capsys,
+    def test_full_returns_one_when_checksum_drifted(
+        self, tmp_path, capsys,
     ):
-        repo = _stage_minimal_repo(tmp_path)
-        state = _write_state(repo, checksum=cf.compute_compose_checksum(repo))
-
-        def fake(argv, **kwargs):
-            import subprocess
-            return subprocess.CompletedProcess(argv, 2, "", "config parse error\n")
-
-        monkeypatch.setattr(cli.subprocess, "run", fake)
-        rc = cli.cmd_check(repo_root=repo, state_file=state, full=True)
-        assert rc == 2
-
-    def test_full_runs_dry_run_even_when_checksum_already_drifted(
-        self, tmp_path, monkeypatch, capsys,
-    ):
-        # DS-10683 F1 regression: prior to the fix, ``return 1`` fired
-        # before ``--full`` could run, so the operator never got the
-        # A4 dry-run output on the drift path. The dry-run names the
-        # specific composed files that need regeneration — exactly
-        # what an operator running ``check --full`` is asking for.
+        """With checksum drift, `--full` still surfaces drift (exit 1).
+        No subprocess invocation; behavior reduces to checksum-only."""
         repo = _stage_minimal_repo(tmp_path)
         state = _write_state(repo, checksum="z" * 64)  # bogus → drift
-        calls = []
-
-        def tracking(argv, **kwargs):
-            calls.append(argv)
-            import subprocess
-            return subprocess.CompletedProcess(argv, 0, "all aliases clean\n", "")
-
-        monkeypatch.setattr(cli.subprocess, "run", tracking)
         rc = cli.cmd_check(repo_root=repo, state_file=state, full=True)
-        # Checksum still mismatched even though the dry-run was clean;
-        # surface as drift (exit 1) so the operator sees both signals.
-        assert rc == 1, (
-            "checksum mismatch must still surface as drift even if the "
-            "dry-run is clean (exit 1) — DS-10683 F1 regression"
-        )
-        assert len(calls) == 1, (
-            "--full must invoke compose.py deploy-all --check EVEN WHEN "
-            "the checksum already mismatched (DS-10683 F1 regression)"
-        )
-        # Drift report still in stderr.
-        assert "DRIFT DETECTED" in capsys.readouterr().err
+        assert rc == 1
+        err = capsys.readouterr().err
+        assert "DRIFT DETECTED" in err
 
 
 # ---------------------------------------------------------------------------

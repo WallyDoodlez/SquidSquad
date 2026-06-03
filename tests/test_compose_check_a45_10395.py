@@ -207,16 +207,17 @@ def test_cli_staged_l4_with_unknown_alias_exits_2(tmp_path):
     assert "setup error" in result.stderr
 
 
-def test_cli_check_without_staged_l4_falls_through_to_a4_check():
-    """Without --staged-l4, `deploy <alias> --check` runs the A4 drift check."""
-    # A4 returns 0/1/2 depending on the on-disk state; we just assert it didn't crash
-    # and the exit code is one of the documented values.
+def test_cli_check_without_staged_l4_exits_error_post_e6():
+    """Post-E6 (#10685) Phase 3d.3: `deploy <alias> --check` without
+    `--staged-l4` exits CHECK_EXIT_ERROR with a retirement diagnostic.
+
+    The v1 drift-check fallback was retired (Option A) because the v2
+    on-disk CLAUDE.md is LLM-polished and cannot byte-match a
+    deterministic in-memory compose.
+    """
     result = _run_compose("deploy", "pm", "--check")
-    assert result.returncode in (
-        compose.CHECK_EXIT_CLEAN,
-        compose.CHECK_EXIT_DRIFT,
-        compose.CHECK_EXIT_ERROR,
-    )
+    assert result.returncode == compose.CHECK_EXIT_ERROR
+    assert "requires" in result.stderr and "--staged-l4" in result.stderr
 
 
 def test_cli_help_or_no_args_does_not_crash():
