@@ -108,11 +108,12 @@ def assemble_and_emit(
     model_id="<unknown>",
     commit_sha="<unknown>",
     generated_at=None,
-    # PRD-B B9 (#10763 AC3): filename family selector. ``.v2.md``
-    # default keeps §9a coexistence (CLAUDE.v2.md / linked.v2.md /
-    # conflicts.v2.md). The E6 cutover PR will pass empty string to
-    # flip the triple onto v1 canonical names atomically.
-    filename_suffix=".v2.md",
+    # PRD-B B9 (#10763 AC3): filename family selector. Post-E6 cutover
+    # (#10685) the default is "" — v2 outputs land at the canonical
+    # CLAUDE.md / linked.md / conflicts.md filenames. Pre-cutover the
+    # default was ".v2.md" to keep §9a coexistence with v1; the cutover
+    # retires that requirement so the default flips.
+    filename_suffix="",
     # Injection seams for tests:
     assemble_slot_fn=None,
     parse_output_fn=None,
@@ -377,7 +378,7 @@ def _build_claude_md(assembled_per_slot):
     return "\n".join(chunks)
 
 
-def _atomic_write_triple(output_dir, triple, *, filename_suffix=".v2.md"):
+def _atomic_write_triple(output_dir, triple, *, filename_suffix=""):
     """Write all three artifacts to ``.tmp`` files first, then rename.
 
     If any ``.tmp`` write fails, ALL ``.tmp`` files are unlinked and the
@@ -391,31 +392,23 @@ def _atomic_write_triple(output_dir, triple, *, filename_suffix=".v2.md"):
     ``filename_suffix`` (PRD-B B9 / #10763 AC3) selects the output
     filename family:
 
-    - Default ``".v2.md"`` lands the triple at
-      ``CLAUDE.v2.md`` / ``CLAUDE.linked.v2.md`` /
-      ``CLAUDE.conflicts.v2.md``. This is the §9a coexistence path —
-      used by ``compose.py deploy_alias_v2`` so v2 outputs never
-      overwrite v1 outputs.
-    - Empty string ``""`` lands the triple at the v1 canonical names
+    - Default empty string ``""`` lands the triple at canonical names
       (``CLAUDE.md`` / ``CLAUDE.linked.md`` / ``CLAUDE.conflicts.md``).
-      This is the seam the E6 V2 CUTOVER PR will use to atomically
-      flip the defaults once §9a coexistence is no longer required.
+      Post-E6 cutover (#10685) this is the only intended value — v2
+      outputs ARE the canonical CLAUDE.md.
+    - ``".v2.md"`` lands the triple at the pre-cutover §9a coexistence
+      filenames (``CLAUDE.v2.md`` etc.). Pre-cutover this was the default;
+      retained as a parameter so legacy callers / tests can opt into
+      coexistence-era paths if needed.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # PRD-B B9 / #10763 AC3 filename selection. Two intended values:
-    #
-    #   - ``.v2.md`` (default) -> the §9a-safe v2 triple
-    #     (``CLAUDE.v2.md`` / ``CLAUDE.linked.v2.md`` /
-    #     ``CLAUDE.conflicts.v2.md``).
-    #   - ``""`` -> v1 canonical names (``CLAUDE.md`` /
-    #     ``CLAUDE.linked.md`` / ``CLAUDE.conflicts.md``). This is the
-    #     seam the E6 V2 CUTOVER PR uses to atomically retire v1 with
-    #     a single parameter flip.
-    #
-    # Empty string takes the explicit v1 branch rather than literal-
-    # appending (which would produce extensionless ``CLAUDE`` etc.).
+    # Default branch is empty-suffix → canonical CLAUDE.md filenames
+    # (post-E6 cutover). The ``.v2.md`` branch is retained for legacy
+    # callers / coexistence-era tests. Empty string takes the explicit
+    # canonical branch rather than literal-appending (which would produce
+    # extensionless ``CLAUDE`` etc.).
     if filename_suffix == "":
         base_md = "CLAUDE.md"
         linked_md = "CLAUDE.linked.md"

@@ -1749,8 +1749,8 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
             model_id="sonnet",
             cache_lookup_fn=cache_lookup_fn,
             cache_store_fn=cache_store_fn,
-            # filename_suffix defaults to ".v2.md" — the §9a-safe
-            # paths. E6 cutover will flip this to "" elsewhere.
+            # filename_suffix defaults to "" post-E6 cutover (#10685) —
+            # canonical CLAUDE.md paths. v2 outputs ARE the v1 paths now.
         )
     except Exception as e:
         print(
@@ -1758,9 +1758,9 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
             file=sys.stderr,
         )
         sys.exit(1)
-    # The first path in the triple is CLAUDE.v2.md — return it as the
-    # canonical deploy_alias_v2 result (replaces the prior linked-only
-    # return). The linked + conflicts artifacts sit beside it.
+    # The first path in the triple is CLAUDE.md (post-E6 cutover) — return
+    # it as the canonical deploy_alias_v2 result. The linked + conflicts
+    # artifacts sit beside it.
     return triple_paths[0]
 
 
@@ -2186,20 +2186,11 @@ def main():
                     sys.exit(CHECK_EXIT_ERROR)
                 print(f"  {role_name} (staged): clean")
                 sys.exit(CHECK_EXIT_CLEAN)
-            # A4 (#10388) per-alias drift-check fallback.
-            # DS-10685-phase2 F1: between Phase 2 (drop --v2) and Phase 4
-            # (suffix flip), ``deploy`` writes ``CLAUDE.v2.md`` while
-            # ``check_role`` still reads ``CLAUDE.md`` — the two are
-            # disconnected. Warn the operator so the result isn't misread.
-            # Phase 4 flips the suffix back to ``""`` and the alignment is
-            # restored without a check_role change.
-            print(
-                "WARNING: --check is unreliable between E6 phase 2 and "
-                "phase 4 (#10685). deploy writes CLAUDE.v2.md but --check "
-                "reads CLAUDE.md; expect MISSING/DRIFT against a stale "
-                "v1 file. Re-run --check after the phase-4 suffix flip.",
-                file=sys.stderr,
-            )
+            # A4 (#10388) per-alias drift-check fallback. Post-E6
+            # (#10685) phase 4 suffix flip, ``deploy`` writes the
+            # canonical ``CLAUDE.md`` and ``check_role`` reads the same
+            # path — the cutover-window asymmetry from phases 2-3 no
+            # longer applies.
             try:
                 status, sections = check_role(role_name)
             except Exception as e:
@@ -2222,10 +2213,8 @@ def main():
         try:
             output = deploy_alias_v2(role_name)
             lines = output.read_text(encoding="utf-8").count("\n")
-            # DS-B9 review F1: use the returned path's actual basename
-            # instead of the stale ``_V2_LINKED_FILENAME`` constant —
-            # post-B9 the return is ``CLAUDE.v2.md`` (assembled), not
-            # ``CLAUDE.linked.v2.md``.
+            # Use the returned path's actual basename; post-E6 cutover
+            # (#10685) it is ``CLAUDE.md`` (assembled).
             print(f"Deployed {role_name} {output.name} ({lines} lines) -> {output.relative_to(REPO_ROOT)}")
         except SystemExit:
             # deploy_alias_v2 already printed a diagnostic; propagate exit.
@@ -2236,18 +2225,10 @@ def main():
 
     elif cmd == "deploy-all":
         if check_mode:
-            # DS-10685-phase2 F1: same asymmetry as the per-alias deploy
-            # --check above — between Phase 2 and Phase 4 the check loop
-            # reads ``CLAUDE.md`` while the deploy loop writes
-            # ``CLAUDE.v2.md``. See comment above for full rationale.
-            print(
-                "WARNING: --check is unreliable between E6 phase 2 and "
-                "phase 4 (#10685). deploy-all writes CLAUDE.v2.md but "
-                "--check reads CLAUDE.md; expect MISSING/DRIFT against "
-                "stale v1 files. Re-run --check after the phase-4 suffix "
-                "flip.",
-                file=sys.stderr,
-            )
+            # Post-E6 (#10685) phase 4: ``deploy-all`` writes the canonical
+            # ``CLAUDE.md`` filenames and ``check_role`` reads the same
+            # path — the cutover-window asymmetry from phases 2-3 no longer
+            # applies.
             try:
                 roles = _collect_all_roles()
             except Exception as e:
