@@ -4,70 +4,61 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- #3 Take SquidSquad public / v1.0.0 launch — approved (high, role:dm) — paused per 2026-05-24 scope refocus; awaiting human disposition (close / re-scope / keep)
-- #9968 EPIC: L1-L4 review + compose-architecture doc (in-progress, medium, role:pm) — current PM focus; advanced by PRs #10378 + #10379 this session
-- PR #10378 (in flight) — multi-doc TRD polish across COMPOSE/AGENT-RUNTIME/HARNESS/INSTALLER, 13 commits + 5 DS audit rounds; INSTALLER×COMPOSE cross-audit converged to 0 contradictions; awaiting human review
-- PR #10379 (in flight) — Agent Skill Dev Team preset rename + L1-L3 (`references/seed-v2/*`) + L4 (`.squidsquad/project/<role>.md`) new-compose-model seed; awaiting human review with 4 memory-vs-old-L4 contradictions surfaced for triage
-- #5855 Vault is static decision log, not living memory (pending, high, role:skill)
-- #3963 EPIC: Web dashboard — Harness Phase 4 (pending, high, role:skill)
-- #5620 L3 PM stuck-rebase recovery (pending, high, role:skill)
-- #6574 Zero-prereq install — gh repo creation + local forge fallback (pending, medium, role:skill)
-- #5783 L3: bug investigation boundary — PM symptoms, dev RCA (pending, medium, role:skill)
-- #5773 Document start.sh as boot entry point (pending, medium, role:dm)
+- **E6 V2 CUTOVER #10685** (in-progress, high, role:skill) — atomic switch dropping v1 compose paths, making v2 default. Branch `skill/e6-v2-cutover-10685`. Phase 3c.6 4/5 done (cycle 1552); ~4 cycles to squash PR per skill burndown. D6 #10677 bundled into E6 squash PR.
+- **PRD-D #10781** (planned, gated on E6 ship) — sub-skills as invokable Claude Skills. Phase 2 LOCKED rev 3. 2-tier model: ~3 standing rules inlined + ~55-60 Claude Skills. Inserted ahead of umbrella PRDs in post-E6 queue per OOM-relief rationale.
+- **4 umbrella PRDs from DS TRD audits** (approved, all gated on E6, #10839 also gated on PRD-D):
+  - #10836 INSTALLER-ARCH alignment (HIGH: migration walk, VERSION file, squidsquad_version field) — Finding 26 pre-locked Direction A 2026-06-03
+  - #10837 HARNESS-ARCH alignment (HIGH: POST /events/{id}/complete contradiction, POST /work/assign missing) — DS re-audit queued at E6 squash PR open
+  - #10838 VAULT-ARCH alignment
+  - #10839 Cross-TRD role → alias rename (gated on E6+PRD-D)
+- **E7 #10686** (approved, gated on E6) — V2 migration smoke
+- **#10690 wiki-link rework** (approved, gated on E6+E7)
+- **#10750 catalog orphan cleanup** (open, role:skill) — D4 drift-check surfaced path drift from #6274 dev→worker rename; skill picks up post-E6
 
 ## Recently Shipped
 
-- **EPIC PRD-C: L4 customization stack** (shipped 2026-06-01, cycles 1490-1499) — 10 stories C1-C10 covering the full L4 project-role customization flow: sub-skill prose (C1) + wire-up (C2) + 5-gate safety model (C3 DS audit / C4 mini-CQ / C5 compose dry-run / C6 atomic write+commit+push / C7 recompose-failure recovery) + Gate 0 conflict pre-emption (C8) + counter-entry/in-place-delete removal flow (C9) + comprehension tests (C10). ~6 new helper modules in `references/scripts/l4_*.py`, ~200 unit tests. Architectural pattern: never-raises orchestrators for multi-failure-mode helpers (C5/C6/C7/C9); raise-on-failure for LLM gates (C3/C8).
-- #6274 Generalize 'dev' to 'worker' across architecture (shipped 2026-05-23) — terminology rename: dev→worker, qa→verifier across L1-L4
-- #9184 PM defines ACs only / QA owns TEST-PLAN + CQs (shipped 2026-05-19, cycle 1499) — workflow restructure across pm/dev/qa sub-skills + L3 CQ directive rewrite + #8950 patch
-- #9243 Harness /status exposes code_version (shipped 2026-05-19, cycle 1498)
-- #7630 EPIC: Event-driven agent architecture (shipped) — harness owns cycle, agents react to events
-- #8917 PM body sync when planning rewrites scope (shipped)
-- #8950 Defense-in-depth gates: code-review/QA/DM check planning artifact (shipped)
-- #6581 Wizard reframing — L3 picks agents, L4 records project specifics (shipped) — v0.38.0
-- #6261 Fixed team architecture — PM+QA+DM+workers always present (shipped)
-- _Older entries graduated to_ [[shipped-pre-2026-05-19]] _(25 individual fixes/tests/dead-code removals — not strategic, kept for audit)_
+- **PRD-A (compose link stage)** — A1-A6 + A2.6 + A2a-A2f + A4.5 shipped. DS-audit umbrella #10751 shipped.
+- **PRD-B (compose assemble stage)** — B1-B8 + B9 wiring (#10763) shipped. DS-audit umbrella #10752 shipped.
+- **PRD-C (L4 customization)** — C1-C10 shipped (cycles 1490-1499). DS-audit umbrella #10753 shipped.
+- **PRD-D (catalog + wake-mode)** — D1-D5, D7, D8 shipped. D6 held for E6 bundle.
+- **PRD-E (freshness + cutover)** — E1-E5 shipped. E6 in flight. E7 held.
+- **TRD-polish settlement** — PR #10378 merged 2026-05-30 (5-round multi-doc TRD polish across COMPOSE/AGENT-RUNTIME/HARNESS/INSTALLER); PR #10379 merged 2026-05-30 (preset L1-L4 seeding for Agent Skill Dev Team).
+- **TRD set Claude final-pass** — All 5 TRDs (COMPOSE, AGENT-RUNTIME, HARNESS, INSTALLER, VAULT) audited via DS 2026-06-03; 4 umbrella PRDs filed for follow-up.
+- **#6274 dev→worker/qa→verifier terminology rename** (shipped 2026-05-23) — partial; cross-TRD rename completion deferred to #10839.
+- **#9184 PM-AC-only / verifier-test-plan workflow** (shipped 2026-05-19).
 
 ## Core Architecture
 
 - **Layered roles**: L1 (base) → L2 (role) → L3 (domain) → L4 (project). compose.py assembles.
-- **Harness**: Agent lifecycle owned by harness (REST API intent, .harness-state.json). Wrapper scripts eliminated (#4966).
-- **Branching**: Code → main. State → squid-squad. Feature branches when branch workflow on.
-- **PM boundaries**: PM does not rebase, merge PRs, or perform git ops on dev branches (#5234).
-- **Tracker**: GitHub Issues with structured labels.
+- **Harness**: Agent lifecycle owned by harness (REST API intent, .harness-state.json). Singleton enforcement, intent state machine.
+- **Branching**: Code → main. State → squid-squad. Feature branches per task (#9478).
+- **Delivery hierarchy**: TRD → PRD → Stories → Tasks. TRDs at `docs/*-ARCH.md`. Currently in TRD-polish + early-PRD phase.
+- **Tracker**: GitHub Issues with structured labels. tracker.py is abstraction layer (non-GitHub backends post-v1).
+- **PM boundary**: docs only; worker owns all code + code-consumed data per `feedback_pm_docs_only`.
 
 ## Recent Decisions
 
-- Agents use merge (not rebase) for conflict resolution — no force-push (#5445)
-- .gitattributes auto-resolves state file conflicts (union for logs, ours for overwrite/config) (#5469)
-- Sentinel files (.health, .claude-pid, .booting) are gitignored (#5469)
-- Branch creation always from origin/<working>, never from local HEAD (#5444)
-- L1 Soul: agents have situational awareness + vault-first knowledge (#5570)
-- All agents consult vault before work (PM in research, dev/QA before pickup) (#5571, #5572)
-- Improvement scans capture up to 3 vault writes per scan (#5569)
-- Skill never edits composed CLAUDE.md — source templates only (#5557)
-- PM agent uses --effort max for extended thinking (#5573)
-- Harness owns all agent lifecycle — REST API intent (v0.33.0)
-- Compose is its own skill (/squidsquad-compose) — single entry point (#5888)
-- git_ops.py commit_code/task_end reverts config.md to prevent branch contamination (#7491)
-- Wizard reframing: preset manifest owns domain variants, hybrid L4 writer, all roles get domain variant (#6581)
-- Cyclic/mechanical agent work must be programmatic, not LLM-interpreted prose — drives #7630
+- Sub-skills become invokable Claude Skills via PRD-D (#10781) — 2-tier model, per-clone `Used by` filter, ONE shared SKILL.md per Skill with prose role-resolution (rev 3, 2026-06-03).
+- Wizard L4 path Direction A pre-locked on #10836 Finding 26 — make wizard match `deploy_role_v2` per TRD §4.8; delete `_copy_l4_seed_stubs()` (2026-06-03).
+- Audit refresh strategy: HARD GATE for #10836/#10838; DS re-audit queued for #10837/#10839 at E6 squash PR open.
+- Skill OOM mid-cycle pattern identified — silent kill on heavy E6 work, no MSYS2 stackdump. PRD-D expected to materially shrink composed CLAUDE.md.
+- Post-E6 queue order: E6 → E7 → wiki-link → PRD-D → 4 umbrella PRDs (PRD-D inserted for OOM relief).
 
 ## Human Preferences
 
 - Never ship with failed TCs. Documents live on forge, not chat. Git = audit trail.
-- PM should not intervene in code or branch management
-- Dev agent disagreements with external code review escalate to human
-- Mechanical cycle operations should be deterministic code, not LLM prose interpretation
-- See `[[human-profile]]` for full preferences
+- PM should not intervene in code or branch management.
+- Mechanical cycle operations should be deterministic code, not LLM prose interpretation.
+- Never rebase, always merge (memory: feedback_never_rebase_merge_instead).
+- See `[[human-profile]]` for full preferences.
 
 ## Constraints & Blockers
 
-- Harness unreachable (#9242) — agents tolerate via direct gh CLI for tracker ops, but event wakes blocked. Human restart pending.
-- Large pending backlog (~40 tasks) awaiting human approval — pipeline idle when no work is approved
-- Event-driven architecture epic #7630 SHIPPED (PR #8620 merged). Monitor tool available in agent sessions.
+- Skill silent OOM mid-cycle on heavy E6 work — PRD-D composed-CLAUDE.md shrink is the structural fix.
+- Verifier agent intermittently fails to take after boot_remote.py — investigate post-E6 if pattern persists.
+- Pending backlog mostly E6-gated — pipeline appropriately throttled.
 
 ## Team State
 
-- Active agents: pm, qa, dm, skill (Dev Agents: skill; PM/QA/DM always present per config.md)
+- Active agents: pm (SquidSquad), skill (SquidSquad-2), verifier (SquidSquad-qa), dm (SquidSquad-3)
 - Current version: 0.43.0
