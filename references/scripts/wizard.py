@@ -1024,11 +1024,11 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
     # Import compose.py lazily so tests that don't need the scaffolder
     # don't import it either.
     try:
-        from compose import deploy_role  # same dir as wizard.py
+        from compose import deploy_role_v2  # same dir as wizard.py
     except ImportError:
         import sys as _sys
         _sys.path.insert(0, str(SCRIPT_DIR))
-        from compose import deploy_role  # type: ignore
+        from compose import deploy_role_v2  # type: ignore
 
     squid.mkdir(parents=True, exist_ok=True)
 
@@ -1087,7 +1087,7 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             summary["created_dirs"].append(str(agent_dir))
 
         # CLAUDE.md — composed from role identity template + sub-skills.
-        # deploy_role handles the compose/substitute/write pipeline.
+        # deploy_role_v2 handles the v2 link+assemble pipeline.
         # When a variant is set, compose from the variant role (e.g. "dev-ios")
         # but output to the agent_id directory (e.g. "skill").
         variant = agent.get("variant")
@@ -1096,8 +1096,8 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
         else:
             compose_name = agent_id
         try:
-            claude_path = deploy_role(compose_name, target_root=target_root,
-                                      output_name=agent_id)
+            claude_path = deploy_role_v2(compose_name, target_root=target_root,
+                                         output_name=agent_id)
         except (SystemExit, Exception) as e:
             print(f"  WARNING: Failed to deploy {agent_id}: {e}", file=sys.stderr)
             summary["agents"].append({
@@ -1107,7 +1107,7 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             })
             continue
 
-        # SOUL.md — deploy_role wrote it if missing; honour existing files.
+        # SOUL.md — deploy_role_v2 wrote it if missing; honour existing files.
         # Seed with ### Project Context section from adaptive answers (#462).
         soul_path = agent_dir / "SOUL.md"
         domain_ctx = (spec.get("project") or {}).get("domain_context", "")

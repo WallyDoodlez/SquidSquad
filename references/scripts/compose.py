@@ -1919,6 +1919,15 @@ def deploy_role_v2(role_name: str, target_root: Path = None,
         print(gate_result.format(), file=sys.stderr)
         sys.exit(1)
 
+    # v1 deploy_role applied _substitute_placeholders deterministically
+    # before write; the v2 alias path lets the LLM in assemble_pass do
+    # this implicitly. The wizard's contract requires substituted
+    # output (variant agents must show their agent_id in cycle-runner
+    # paths, etc.) — restore the deterministic substitution here so
+    # placeholders never leak when assemble is cached, stubbed, or
+    # silently no-ops.
+    body = _substitute_placeholders(body, output_name, role_class)
+
     output_dir = target_root / ".squidsquad" / output_name
     output_dir.mkdir(parents=True, exist_ok=True)
     header = f"# SquidSquad -- {output_name} Lead\n\n"
