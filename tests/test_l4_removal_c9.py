@@ -653,10 +653,16 @@ class TestPlanRemovalBackoffs:
     def test_unparseable_l4_returns_not_found_not_raises(self):
         """Defensive: a malformed L4 file should NOT crash the planner
         — return ``not-found`` with the parse error in the diagnostic.
+
+        #10987 update: H3 lines that don't start with a reserved op keyword
+        are now treated as prose, not as malformed ops, so a heading like
+        ``### gibberish-not-a-real-op`` parses cleanly into an implicit
+        append body. Pick an *op-like* malformed heading instead — the
+        strict op-grammar still rejects those.
         """
         plan = l4_removal.plan_removal(
             directive="Undo the something thing.",
-            l4_text="## Instructions\n\n### gibberish-not-a-real-op\n\nbody\n",
+            l4_text="## Instructions\n\n### replace step:cycle/\n\nbody\n",
         )
         assert plan.path_chosen == "not-found"
         assert "unparseable" in plan.diagnostic.lower()
