@@ -176,12 +176,18 @@ def _parse_text(text, source):
                 )
             current_slot = slot_name
             slots.setdefault(current_slot, [])
-            # #10987: non-instructions slots open an implicit append op
-            # immediately. The instructions slot still requires explicit
-            # ``### <op>`` directives (which is where the H3-op grammar
-            # is meaningful — step-targeted edits).
-            if current_slot != "instructions":
-                _open_implicit_append()
+            # #10987: every slot opens an implicit append at the ``## <Slot>``
+            # boundary. This single rule covers three otherwise-separate
+            # edge cases: (a) prose H3 sub-headings (DM SOUL etc.), (b)
+            # plain prose between the slot heading and the first H3, (c)
+            # prose H3 sub-headings appearing AFTER an explicit op
+            # (without this, the prose H3 would be absorbed into the
+            # explicit op's body instead of opening a fresh append).
+            # The implicit op is suppressed by _commit_current_op when
+            # its body+metadata are empty, so an explicit ``### <op>``
+            # immediately following the slot heading still produces the
+            # explicit op without a leading no-op implicit alongside it.
+            _open_implicit_append()
             continue
 
         if h3 is not None:
@@ -193,17 +199,21 @@ def _parse_text(text, source):
                     f"heading."
                 )
             # #10987: H3 lines are op directives only when they ``look
-            # like'' ops (start with a reserved op keyword). Op-like
-            # headings parse strictly — malformed forms still raise a
-            # diagnostic. Non-op-like headings are prose sub-headings
-            # and flow into the slot's implicit append body.
+            # like'' ops (start with a reserved op keyword followed by
+            # whitespace or end-of-string). Op-like headings parse
+            # strictly — malformed forms still raise a diagnostic.
+            # Non-op-like headings are prose sub-headings and flow into
+            # the slot's implicit append body. ``_open_implicit_append``
+            # already ran at the ``## <Slot>`` boundary, so the current
+            # op exists; if a prose H3 lands after an explicit op was
+            # just opened, commit the explicit op and open a fresh
+            # implicit so the prose isn't absorbed into the explicit
+            # body.
             if _OP_LIKE_RE.match(heading) is None:
-                # Make sure we have an open op to absorb the prose. The
-                # instructions slot doesn't auto-open an implicit append
-                # at the ``## Instructions`` boundary (the strict grammar
-                # there is op-first), but a content H3 inside it should
-                # still open one so the prose isn't dropped.
-                if current_op is None:
+                if current_op is not None and not getattr(
+                    current_op, "_implicit", False,
+                ):
+                    _commit_current_op()
                     _open_implicit_append()
                 current_body.append(raw)
                 continue

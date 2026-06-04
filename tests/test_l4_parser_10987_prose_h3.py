@@ -166,6 +166,137 @@ class TestNonOpH3UnderInstructionsSlot:
         assert "### Boot & Pre-flight" not in instr[1].body_text
         assert instr[1].body_text == "Explicit append body."
 
+    def test_explicit_op_then_prose_h3_both_captured(self):
+        """DS finding 3: an explicit op followed by a prose H3 must
+        produce two separate L4Op entries — the prose H3 must NOT be
+        silently absorbed into the explicit op's body.
+        """
+        text = (
+            "## Instructions\n"
+            "\n"
+            "### append\n"
+            "\n"
+            "→ run sub-skill: example\n"
+            "\n"
+            "Explicit body.\n"
+            "\n"
+            "### Boot & Pre-flight\n"
+            "\n"
+            "Prose paragraph that must not be absorbed into the explicit append above.\n"
+        )
+        doc = l4.parse_l4_text(text)
+        instr = doc.slots.get("instructions", [])
+        assert len(instr) == 2
+        # First op: explicit append — body must NOT contain the prose H3 line.
+        assert instr[0].op_type == "append"
+        assert "### Boot & Pre-flight" not in instr[0].body_text
+        assert "Prose paragraph" not in instr[0].body_text
+        assert "Explicit body." in instr[0].body_text
+        # Second op: implicit append containing the prose H3.
+        assert instr[1].op_type == "append"
+        assert "### Boot & Pre-flight" in instr[1].body_text
+        assert "Prose paragraph that must not be absorbed" in instr[1].body_text
+
+    def test_plain_prose_before_first_h3_in_instructions_not_lost(self):
+        """DS finding 4: plain prose between ``## Instructions`` and the
+        first H3 must flow into the implicit append, not silently drop.
+        """
+        text = (
+            "## Instructions\n"
+            "\n"
+            "Plain prose paragraph that should be captured.\n"
+            "\n"
+            "More prose.\n"
+            "\n"
+            "### Boot & Pre-flight\n"
+            "\n"
+            "Sub-heading body.\n"
+        )
+        doc = l4.parse_l4_text(text)
+        instr = doc.slots.get("instructions", [])
+        assert len(instr) == 1
+        op = instr[0]
+        assert op.op_type == "append"
+        assert "Plain prose paragraph that should be captured." in op.body_text
+        assert "More prose." in op.body_text
+        assert "### Boot & Pre-flight" in op.body_text
+        assert "Sub-heading body." in op.body_text
+
+
+class TestImplicitAppendExemptFromR4Validation:
+    """DS finding 1: R4 in link_stage_validator rejects ``### append``
+    ops under ``## Instructions`` without a ``→ run sub-skill:`` ref.
+    Implicit appends from prose H3s (which by definition can't have a
+    sub-skill ref — that's the whole point of being prose) must be
+    exempt, otherwise compose for dm/verifier/worker aborts at R4.
+    """
+
+    def test_implicit_append_op_is_marked_implicit(self):
+        """Sanity: the parser sets ``_implicit=True`` on auto-opened
+        appends so downstream consumers (R4, future validators) can
+        distinguish them from explicit author-written appends.
+        """
+        text = "## Soul\n\n### Some principle\n\nBody.\n"
+        op = l4.parse_l4_text(text).slots["soul"][0]
+        assert getattr(op, "_implicit", False) is True
+
+    def test_explicit_append_op_is_not_marked_implicit(self):
+        text = "## Instructions\n\n### append\n\n→ run sub-skill: x\n"
+        op = l4.parse_l4_text(text).slots["instructions"][0]
+        assert getattr(op, "_implicit", False) is False
+
+    def test_r4_skips_implicit_append_op(self):
+        """The validator integration is the load-bearing test for
+        Finding 1 — without the exemption, the live dm.md L4 file
+        aborts at R4 even though it should compose cleanly.
+        """
+        SCRIPTS = REPO_ROOT / "references" / "scripts"
+        sys.path.insert(0, str(SCRIPTS))
+        from link_stage_validator import (  # noqa: E402
+            LinkStageValidationError,
+            _check_r4_instructions_append_has_sub_skill_ref,
+        )
+
+        text = (
+            "## Instructions\n"
+            "\n"
+            "### Boot & Pre-flight\n"
+            "\n"
+            "Bullet-list content with no `→ run sub-skill:` reference.\n"
+        )
+        doc = l4.parse_l4_text(text)
+        # Implicit append, no sub-skill ref — must not raise post-fix.
+        try:
+            _check_r4_instructions_append_has_sub_skill_ref(doc, "<text>")
+        except LinkStageValidationError as e:
+            pytest.fail(
+                f"R4 should exempt implicit append ops; got {e}"
+            )
+
+    def test_r4_still_rejects_explicit_append_without_sub_skill_ref(self):
+        """Hardening: the exemption must NOT loosen R4 for explicit
+        ops. An explicit ``### append`` under Instructions with no
+        sub-skill ref still violates the thin-orchestration invariant.
+        """
+        SCRIPTS = REPO_ROOT / "references" / "scripts"
+        sys.path.insert(0, str(SCRIPTS))
+        from link_stage_validator import (  # noqa: E402
+            LinkStageValidationError,
+            _check_r4_instructions_append_has_sub_skill_ref,
+        )
+
+        text = (
+            "## Instructions\n"
+            "\n"
+            "### append\n"
+            "\n"
+            "Body without a sub-skill ref.\n"
+        )
+        doc = l4.parse_l4_text(text)
+        with pytest.raises(LinkStageValidationError) as exc:
+            _check_r4_instructions_append_has_sub_skill_ref(doc, "<text>")
+        assert exc.value.rule == "R4"
+
 
 class TestOpLikeH3StillStrict:
     """``_OP_LIKE_RE`` reserves the ``append`` / ``replace`` /

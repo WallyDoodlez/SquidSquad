@@ -137,6 +137,17 @@ def _check_r4_instructions_append_has_sub_skill_ref(l4_doc, l4_path):
     for op in instructions_ops:
         if op.op_type != "append":
             continue
+        # #10987: ``_implicit`` append ops come from prose H3 sub-headings
+        # under ``## Instructions`` (the L4 parser opens them when the L4
+        # author uses H3 as content structure rather than as a step-op
+        # directive). They are NOT thin-orchestrator appends and so are
+        # exempt from R4's sub-skill-reference invariant — that rule
+        # targets explicit ``### append`` ops authored as orchestrator
+        # edits. Without this exemption, every shipped L4 file under
+        # ``.squidsquad/project/`` with prose H3s under Instructions
+        # would fail validation (dm/verifier/worker all use this layout).
+        if getattr(op, "_implicit", False):
+            continue
         if not _SUB_SKILL_REF_RE.search(op.body_text):
             raise LinkStageValidationError(
                 "R4",
