@@ -1083,3 +1083,4 @@
 {"timestamp": 1780490754.075449, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1780490754.0869324, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
 {"timestamp": 1780490754.0869324, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1780532343.906331, "task_type": "code-review", "task_id": "E6-AUDIT-A-COMPOSE-PY", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "api-error", "error": "Tool-use loop exceeded max iterations (50)", "elapsed_seconds": 459.1}
