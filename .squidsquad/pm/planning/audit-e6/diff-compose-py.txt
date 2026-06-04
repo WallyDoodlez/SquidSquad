@@ -1,0 +1,1369 @@
+diff --git a/references/scripts/compose.py b/references/scripts/compose.py
+index 5e9cd649..1ec1d3ed 100644
+--- a/references/scripts/compose.py
++++ b/references/scripts/compose.py
+@@ -30,7 +30,6 @@ REPO_ROOT = SCRIPT_DIR.parent.parent
+ SUB_SKILLS_DIR = REPO_ROOT / "references" / "sub-skills"
+ CAPABILITIES_DIR = REPO_ROOT / "references" / "sub-skills" / "capabilities"
+ ROLES_DIR = REPO_ROOT / "references" / "roles"
+-OUTPUT_FILE = REPO_ROOT / "references" / "agent-instructions.md"
+ 
+ # #9588: fragments the boot-bootstrap Reads at runtime. These MUST stay
+ # out of every composed CLAUDE.md regardless of what the manifest looks
+@@ -54,19 +53,10 @@ RUNTIME_READ_FRAGMENTS = frozenset({
+ })
+ 
+ 
+-def _get_wake_mode(role_name: str) -> str:
+-    """Delegate to canonical config.get_wake_mode (#9745).
+-
+-    Thin wrapper kept so existing compose-internal callers don't need
+-    import-path churn. See ``config.get_wake_mode`` for the resolution
+-    rules — that is the single source of truth referenced by bootstrap.md.
+-    """
+-    sys.path.insert(0, str(SCRIPT_DIR))
+-    try:
+-        from config import get_wake_mode
+-    except Exception:
+-        return "polling"
+-    return get_wake_mode(role_name)
++# compose._get_wake_mode retired in E6 (#10685) Phase 5 — the v1
++# ``compose_role`` chain was its only caller and was deleted in Phase
++# 3d.5 (cycle 1564). ``config.get_wake_mode`` remains the canonical
++# wake-mode resolver for ``cycle_post`` / ``statusline_data`` / harness.
+ 
+ 
+ def _strip_outer_markers(content: str, name: str) -> str:
+@@ -114,216 +104,11 @@ def _strip_yaml_frontmatter(content: str) -> str:
+     return _YAML_FRONTMATTER_RE.sub("", content, count=1)
+ 
+ 
+-def _resolve_capability(cap_id: str) -> list[str]:
+-    """Resolve a {{capability: id}} directive into content lines."""
+-    full_path = CAPABILITIES_DIR / cap_id / "sub-skill.md"
+-    if not full_path.exists():
+-        return [f"<!-- ERROR: Missing capability: {cap_id} -->"]
+-    content = _strip_yaml_frontmatter(full_path.read_text(encoding="utf-8")).rstrip()
+-    content = _strip_outer_markers(content, f"capability-{cap_id}")
+-    return [
+-        f"<!-- sub-skill: capability-{cap_id} -->",
+-        content,
+-        f"<!-- /sub-skill: capability-{cap_id} -->",
+-    ]
+-
+-
+-def _resolve_runtime(runtime_path: str) -> list[str]:
+-    """Resolve a {{runtime: path}} directive into content lines."""
+-    sub_skill_name = Path(runtime_path).stem
+-    return [
+-        f"<!-- sub-skill: {sub_skill_name} -->",
+-        "## Soul",
+-        "",
+-        "Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its "
+-        "instructions as your professional identity. If SOUL.md is missing, "
+-        "proceed with default behavior — you are a pragmatic engineer focused "
+-        "on correctness and simplicity.",
+-        f"<!-- /sub-skill: {sub_skill_name} -->",
+-    ]
+-
+-
+-def _resolve_includes(entry_file: Path, wake_mode: str = "polling") -> str:
+-    """Resolve all {{include: path}} directives in an entry file.
+-
+-    Manifest-less fallback path used when no includes.yml exists or pyyaml
+-    is unavailable. This path does NOT perform mode-aware filtering — every
+-    `{{include:}}` directive in the template is rendered. Mode filtering
+-    requires the manifest to know which fragments are mode-specific
+-    (#8697 design). `wake_mode` is accepted for API symmetry with
+-    `_resolve_includes_with_manifest` but currently has no effect here.
+-    """
+-    # `wake_mode` is intentionally unused; see docstring.
+-    del wake_mode  # silence "unused" linters; keeps the signature stable
+-    text = _strip_yaml_frontmatter(entry_file.read_text(encoding="utf-8"))
+-    lines = text.splitlines()
+-    result = []
+-
+-    for line in lines:
+-        # {{include: path}} — inline the content
+-        inc_match = re.match(r'\s*\{\{include:\s*(.+?)\}\}\s*$', line)
+-        # {{runtime: path}} — emit a "read at boot" instruction
+-        rt_match = re.match(r'\s*\{\{runtime:\s*(.+?)\}\}\s*$', line)
+-        # {{capability: id}} — inline a capability sub-skill
+-        cap_match = re.match(r'\s*\{\{capability:\s*(.+?)\}\}\s*$', line)
+-
+-        if inc_match:
+-            include_path = inc_match.group(1).strip()
+-            # #9588 belt-and-suspenders (DS cycle 1301 phase d4c44589 F1): the
+-            # manifest-aware path filters RUNTIME_READ_FRAGMENTS explicitly;
+-            # this manifest-less fallback must do the same, otherwise a yaml
+-            # parse error / pyyaml-absent install silently inlines runtime
+-            # fragments and defeats the lazy-load design.
+-            if include_path in RUNTIME_READ_FRAGMENTS:
+-                continue
+-            full_path = SUB_SKILLS_DIR / f"{include_path}.md"
+-            if not full_path.exists():
+-                result.append(f"<!-- ERROR: Missing include: {include_path} -->")
+-                continue
+-            sub_skill_name = full_path.stem
+-            content = _strip_yaml_frontmatter(full_path.read_text(encoding="utf-8")).rstrip()
+-            content = _strip_outer_markers(content, sub_skill_name)
+-            result.append(f"<!-- sub-skill: {sub_skill_name} -->")
+-            result.append(content)
+-            result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+-
+-        elif cap_match:
+-            cap_id = cap_match.group(1).strip()
+-            result.extend(_resolve_capability(cap_id))
+-
+-        elif rt_match:
+-            runtime_path = rt_match.group(1).strip()
+-            result.extend(_resolve_runtime(runtime_path))
+-
+-        else:
+-            result.append(line)
+-
+-    return "\n".join(result)
+-
+-
+-def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
+-    """Load the role's wake-mode-specific manifest with variant inheritance.
+-
+-    `wake_mode='polling'`  → `includes.yml`           (default; pre-existing)
+-    `wake_mode='event-driven'` → `includes-events.yml` (falls back to
+-                                 `includes.yml` if it doesn't exist yet)
+-
+-    Per PM directive (#8697): parallel manifests with NO mode-conditional
+-    logic inside fragments. compose.py selects the entire manifest based on
+-    the role's wake mode; the chosen manifest is rendered in full.
+-
+-    Returns a list of include paths (e.g. ['common/cycle-runner', ...]) or
+-    None if no manifest exists.
+-
+-    Supports two schemas:
+-    - Base role (Layer 2): ``includes: [list]``
+-    - Variant (Layer 3): ``base_role: <base>`` + ``additional_includes: [list]``
+-      Recursively loads the base role's manifest and appends additional includes.
+-    """
+-    if yaml is None:
+-        return None
+-
+-    # #8697: choose the right manifest filename based on wake mode.
+-    primary_name = "includes-events.yml" if wake_mode == "event-driven" else "includes.yml"
+-    fallback_name = "includes.yml"  # used when event-driven manifest absent
+-
+-    def _resolve_manifest_path(role_dir: Path) -> Path | None:
+-        primary = role_dir / primary_name
+-        if primary.exists():
+-            return primary
+-        if primary_name != fallback_name:
+-            fallback = role_dir / fallback_name
+-            if fallback.exists():
+-                return fallback
+-        return None
+-
+-    # Try nested variant path first (worker-skill -> worker/skill/<manifest>;
+-    # dev-skill is also accepted via the 6274.1 dual-aware shim)
+-    resolved = _resolve_variant(role_name)
+-    if resolved:
+-        base, variant = resolved
+-        manifest_path = _resolve_manifest_path(ROLES_DIR / base / variant)
+-    else:
+-        manifest_path = _resolve_manifest_path(ROLES_DIR / role_name)
+-    if manifest_path is None:
+-        # Legacy dev variant inheritance: fall back to dev manifest
+-        identities = _list_known_role_identities()
+-        if role_name not in identities and "dev" in identities:
+-            manifest_path = _resolve_manifest_path(ROLES_DIR / "dev")
+-        if manifest_path is None:
+-            # #6274 dual-aware: belt-and-suspenders alias fallback (DS finding
+-            # cycle 1301 phase 2.2.2-3 F3). If role_name is in _BASE_ALIAS_6274
+-            # (e.g., "dev" → "worker", "qa" → "verifier"), retry against the
+-            # aliased identity. Defense in depth — phase 2.2.1 already updated
+-            # all base_role: values in variant includes.yml to new names; this
+-            # catches any legacy caller that still passes "dev"/"qa".
+-            # #6274.2 (3b) disk-check shim: `_resolve_manifest_path` already
+-            # tests `.exists()` on the resolved file, so this fallback safely
+-            # returns None when the alias directory is absent on disk — making
+-            # the dual-aware behavior consistent between pre- and post-rename
+-            # installs (no spurious successes against ghost role names).
+-            if role_name in _BASE_ALIAS_6274:
+-                aliased = _BASE_ALIAS_6274[role_name]
+-                aliased_dir = ROLES_DIR / aliased
+-                if aliased_dir.is_dir():
+-                    manifest_path = _resolve_manifest_path(aliased_dir)
+-        if manifest_path is None:
+-            return None
+-
+-    try:
+-        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+-    except Exception as e:
+-        print(f"WARNING: Failed to parse {manifest_path}: {e}", file=sys.stderr)
+-        return None
+-
+-    if not isinstance(data, dict):
+-        return None
+-
+-    # Layer 3 variant schema: base_role + additional_includes
+-    if "base_role" in data:
+-        base_role = data["base_role"]
+-        base_includes = _load_manifest(base_role, wake_mode)
+-        if base_includes is None:
+-            print(
+-                f"ERROR: includes.yml for {role_name} declares base_role={base_role} "
+-                f"but {base_role} has no includes.yml",
+-                file=sys.stderr,
+-            )
+-            sys.exit(1)
+-        additional = data.get("additional_includes", [])
+-        if not isinstance(additional, list):
+-            additional = []
+-        # Validate additional includes
+-        for inc_path in additional:
+-            full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+-            if not full_path.exists():
+-                print(
+-                    f"ERROR: includes.yml for {role_name} references missing "
+-                    f"sub-skill: {inc_path} (expected at {full_path})",
+-                    file=sys.stderr,
+-                )
+-                sys.exit(1)
+-        return base_includes + additional
+-
+-    # Base role schema: includes list
+-    if "includes" not in data:
+-        return None
+-    includes = data["includes"]
+-    if not isinstance(includes, list):
+-        return None
+-
+-    # Validate all paths exist
+-    for inc_path in includes:
+-        full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
+-        if not full_path.exists():
+-            print(
+-                f"ERROR: includes.yml for {role_name} references missing "
+-                f"sub-skill: {inc_path} (expected at {full_path})",
+-                file=sys.stderr,
+-            )
+-            sys.exit(1)
+-
+-    return includes
++# v1 ``_resolve_capability`` / ``_resolve_runtime`` / ``_resolve_includes`` /
++# ``_load_manifest`` / ``_resolve_includes_with_manifest`` / ``_assemble_claude`` /
++# ``compose_role`` retired in E6 (#10685) Phase 3d.5. v2 path
++# (``v2_link_stage.emit_v2_linked`` → ``atomic_emit.assemble_and_emit``)
++# is the only compose pipeline post-cutover.
+ 
+ 
+ # PRD-D D5 (#10676): v2 manifest is the union of polling + event-driven
+@@ -333,24 +118,32 @@ def _load_manifest(role_name: str, wake_mode: str = "polling") -> list | None:
+ # compose-time concern. v1 ``_load_manifest`` stays untouched per the
+ # §9a coexistence rule (AC4: D5 must NOT modify any existing
+ # ``includes.yml`` / ``includes-events.yml`` file).
+-_V2_MANIFEST_FILENAME = "includes-v2.yml"
++# PRD-E E6 (#10685) V2 CUTOVER: the v2 manifest IS the unified
++# manifest now. ``includes-v2.yml`` is renamed to ``includes.yml`` in
++# every role; the legacy ``includes-events.yml`` polling/event split is
++# retired. The v2 loader keeps its name for now (downstream callers
++# import it) but reads the canonical file.
++_V2_MANIFEST_FILENAME = "includes.yml"
+ 
+ 
+ def _load_manifest_v2(role_name: str) -> list | None:
+-    """Load the role's v2 mode-agnostic manifest (PRD-D D5 #10676).
++    """Load the role's v2 mode-agnostic manifest (PRD-D D5 #10676, PRD-E E6 #10685).
+ 
+-    Reads ``references/roles/<role>/includes-v2.yml`` for base roles and
+-    follows the same ``base_role`` + ``additional_includes`` schema as
+-    variants in v1. Variant Layer-3 manifests (e.g.
+-    ``roles/worker/skill/includes.yml``) are ALREADY mode-agnostic
+-    (single ``includes.yml`` with ``additional_includes``) and are read
+-    in place — D5 does not introduce a ``includes-v2.yml`` for variants
+-    since there is nothing to unify on the variant side.
++    Reads ``references/roles/<role>/includes.yml`` for base roles via the
++    ``_V2_MANIFEST_FILENAME`` constant and follows the
++    ``base_role`` + ``additional_includes`` schema. Variant Layer-3
++    manifests (e.g. ``roles/worker/skill/includes.yml``) are mode-
++    agnostic by construction (single ``includes.yml`` with
++    ``additional_includes``) and are read in place.
++
++    Post-E6 cutover, base and variant manifests share the same filename
++    (``includes.yml``); pre-E6 D5 the base used ``includes-v2.yml`` while
++    variants already used ``includes.yml``. The v1 polling/event split
++    (``includes.yml`` polling + ``includes-events.yml`` events) is
++    retired.
+ 
+     Returns the resolved include list (variant: base + additional) or
+-    ``None`` when no v2 manifest can be located. Never references
+-    ``includes.yml`` or ``includes-events.yml`` directly — variant
+-    ``includes.yml`` is the input to ``_resolve_variant`` only.
++    ``None`` when no v2 manifest can be located.
+ 
+     No ``wake_mode`` argument: the architectural rule is that v2 compose
+     is wake-mode-blind. Mode-specific behavior lives inside the cycle
+@@ -411,7 +204,8 @@ def _load_manifest_v2_from_file(
+     paths reading from a single YAML loader + schema dispatcher. Resolves
+     ``base_role`` recursively via ``_load_manifest_v2`` so the base
+     always lands on the v2 file (a variant whose base is ``worker``
+-    picks up ``roles/worker/includes-v2.yml`` here).
++    picks up ``roles/worker/includes.yml`` here, since post-E6 the v2
++    manifest IS the canonical ``includes.yml``).
+     """
+     try:
+         data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+@@ -468,167 +262,6 @@ def _load_manifest_v2_from_file(
+     return includes
+ 
+ 
+-def _resolve_includes_with_manifest(entry_file: Path, manifest: list, wake_mode: str = "polling") -> str:
+-    """Resolve includes using manifest order, preserving inline content.
+-
+-    The manifest declares which sub-skills to include. The entry file's
+-    {{include:}} directives are replaced with manifest-resolved content.
+-    Inline (non-include) content is preserved in its original position.
+-
+-    Mode separation (#8697): wake_mode is resolved upstream by _load_manifest
+-    which selects an entire mode-specific manifest. By design, fragments
+-    themselves have no mode-conditional logic — the manifest IS the gate.
+-    `wake_mode` is threaded here only so future template-side directives
+-    (e.g. `{{include: mode-specific/foo}}`) can take advantage of it.
+-    """
+-    text = _strip_yaml_frontmatter(entry_file.read_text(encoding="utf-8"))
+-    lines = text.splitlines()
+-    result = []
+-
+-    # Build a set of manifest includes for quick lookup
+-    manifest_set = set(manifest)
+-
+-    for line in lines:
+-        inc_match = re.match(r'\s*\{\{include:\s*(.+?)\}\}\s*$', line)
+-        rt_match = re.match(r'\s*\{\{runtime:\s*(.+?)\}\}\s*$', line)
+-        cap_match = re.match(r'\s*\{\{capability:\s*(.+?)\}\}\s*$', line)
+-
+-        if inc_match:
+-            include_path = inc_match.group(1).strip()
+-
+-            # #9588: short-circuit before the variant heuristic for any
+-            # fragment the boot-bootstrap Reads at runtime. The variant-
+-            # resolution fallback below (`m_base.startswith(base + "-") …`)
+-            # is otherwise liberal enough to resurrect, e.g.,
+-            # `common-events/l1-base` if some future manifest entry has
+-            # the stem `l1-base-…`.
+-            if include_path in RUNTIME_READ_FRAGMENTS:
+-                continue
+-
+-            # Check if the manifest overrides this include
+-            # (e.g. vault-protocol -> vault-protocol-slim)
+-            resolved_path = include_path
+-            if include_path not in manifest_set:
+-                # Check for a variant in the manifest that shares the
+-                # same base name (e.g. vault-protocol-slim for vault-protocol)
+-                base = include_path.rsplit("/", 1)[-1] if "/" in include_path else include_path
+-                found = False
+-                for m in manifest:
+-                    m_base = m.rsplit("/", 1)[-1] if "/" in m else m
+-                    if m_base.startswith(base + "-") or base.startswith(m_base + "-"):
+-                        resolved_path = m
+-                        found = True
+-                        break
+-                if not found:
+-                    # Include is in the template but not in the manifest — skip it
+-                    # This enables manifest-driven removal in Phase B
+-                    continue
+-
+-            full_path = SUB_SKILLS_DIR / f"{resolved_path}.md"
+-            if not full_path.exists():
+-                result.append(f"<!-- ERROR: Missing include: {resolved_path} -->")
+-                continue
+-            sub_skill_name = full_path.stem
+-            content = _strip_yaml_frontmatter(full_path.read_text(encoding="utf-8")).rstrip()
+-            content = _strip_outer_markers(content, sub_skill_name)
+-            result.append(f"<!-- sub-skill: {sub_skill_name} -->")
+-            result.append(content)
+-            result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+-
+-        elif cap_match:
+-            cap_id = cap_match.group(1).strip()
+-            result.extend(_resolve_capability(cap_id))
+-
+-        elif rt_match:
+-            runtime_path = rt_match.group(1).strip()
+-            sub_skill_name = Path(runtime_path).stem
+-            result.append(f"<!-- sub-skill: {sub_skill_name} -->")
+-            result.append("## Soul")
+-            result.append("")
+-            result.append("Read `.squidsquad/[ROLE]/SOUL.md` at session start and follow its instructions as your professional identity. If SOUL.md is missing, proceed with default behavior — you are a pragmatic engineer focused on correctness and simplicity.")
+-            result.append(f"<!-- /sub-skill: {sub_skill_name} -->")
+-
+-        else:
+-            result.append(line)
+-
+-    return "\n".join(result)
+-
+-
+-def _assemble_claude(role_name: str) -> str:
+-    """Assemble a CLAUDE.md template from Layer 1 + Layer 2 + Layer 3 sources.
+-
+-    Same concatenation pattern as _assemble_soul():
+-    - Layer 1: references/roles/base/CLAUDE.md (shared agent definition)
+-    - Layer 2: references/roles/<role>/CLAUDE.md (role definition)
+-    - Layer 3: references/roles/<variant>/CLAUDE.md (variant customization)
+-
+-    The assembled template still contains {{include:}} directives which
+-    are resolved separately by _resolve_includes_with_manifest().
+-    """
+-    parts = []
+-
+-    # Layer 1 — Base agent instructions (at roles/ root)
+-    base_claude = BASE_ROLE_DIR / "instructions.md"
+-    if base_claude.exists():
+-        parts.append(_strip_yaml_frontmatter(base_claude.read_text(encoding="utf-8")).rstrip())
+-        parts.append("")
+-
+-    # Layer 2 — Role instructions (the role's entry template)
+-    role_identity = _get_entry_file_for_role(role_name)
+-    role_claude = ROLES_DIR / role_identity / "instructions.md"
+-    if role_claude.exists():
+-        parts.append(_strip_yaml_frontmatter(role_claude.read_text(encoding="utf-8")).rstrip())
+-
+-    # Layer 3 — Variant instructions (nested: roles/<base>/<variant>/)
+-    resolved = _resolve_variant(role_name)
+-    if resolved:
+-        base, variant = resolved
+-        variant_claude = ROLES_DIR / base / variant / "instructions.md"
+-        if variant_claude.exists():
+-            parts.append("")
+-            parts.append(_strip_yaml_frontmatter(variant_claude.read_text(encoding="utf-8")).rstrip())
+-
+-    # Layer 4 — Project sub-skills (PM-owned, role-filtered)
+-    # Live project content is in .squidsquad/project/ (project-local).
+-    # references/sub-skills/project/ holds seed templates only.
+-    # Filtering: shared-*.md → all roles, <identity>-*.md → matching role
+-    # only, unprefixed files → all roles.
+-    project_skills_dir = REPO_ROOT / ".squidsquad" / "project"
+-    if project_skills_dir.is_dir():
+-        role_identity = _get_entry_file_for_role(role_name)
+-        known_prefixes = _list_known_role_identities()
+-        for skill_file in sorted(project_skills_dir.glob("*.md")):
+-            name = skill_file.stem
+-            # Determine the file's target prefix (text before first hyphen)
+-            file_prefix = name.split("-", 1)[0] if "-" in name else None
+-            # Include if: shared, unprefixed, prefix not a known role, or
+-            # prefix matches this role's identity (or its #6274 alias).
+-            if file_prefix and file_prefix != "shared" and file_prefix in known_prefixes:
+-                # #6274 D2: L4 prefix routing dual-aware. A `worker-` prefixed
+-                # file routes to the `dev`-identity consumer (and vice-versa);
+-                # `verifier-` / `qa-` likewise. Without this, AC1.1's
+-                # identity-set widening makes `worker-foo.md` pass the
+-                # known-prefix gate but silently skip the dev-identity role
+-                # because `file_prefix != role_identity`. The alias table
+-                # canonicalizes both sides to the same form for the comparison.
+-                if (
+-                    file_prefix != role_identity
+-                    and _BASE_ALIAS_6274.get(file_prefix) != role_identity
+-                    and _BASE_ALIAS_6274.get(role_identity) != file_prefix
+-                ):
+-                    continue
+-            content = _strip_yaml_frontmatter(skill_file.read_text(encoding="utf-8")).rstrip()
+-            content = _strip_outer_markers(content, name)
+-            parts.append("")
+-            parts.append("---")
+-            parts.append("")
+-            parts.append(f"<!-- sub-skill: project-{name} -->")
+-            parts.append(content)
+-            parts.append(f"<!-- /sub-skill: project-{name} -->")
+-
+-    return "\n".join(parts)
+-
+-
+ # #9925: cache manifest reads within a single compose run so the
+ # role-roster injection doesn't re-parse the same manifest.yaml once per
+ # active role per composed agent (would be N×N parses for N active roles).
+@@ -792,57 +425,6 @@ def _inject_role_roster(content: str, role_name: str) -> str:
+     return content.replace("{{role-roster}}", roster)
+ 
+ 
+-def compose_role(role_name: str) -> str:
+-    """Compose a role's full CLAUDE.md from 3-layer assembly + include resolution.
+-
+-    Step 1: Assemble the template from Layer 1 + Layer 2 + Layer 3 CLAUDE.md
+-            source files (same concatenation pattern as SOUL.md).
+-    Step 2: Resolve {{include:}}, {{runtime:}}, {{capability:}} directives
+-            using the role's includes.yml manifest.
+-    Step 3 (#9925): inject the role roster by replacing the
+-            ``{{role-roster}}`` marker introduced via L1
+-            ``common/agent-boundaries`` include.
+-
+-    The result is a single flat CLAUDE.md with all sub-skills inlined.
+-    """
+-    # Step 1: Assemble template from 3 layers
+-    assembled = _assemble_claude(role_name)
+-
+-    # Write to a temp file for include resolution (reuses existing logic).
+-    # Use NamedTemporaryFile to avoid TOCTOU race from deprecated mktemp (#4918).
+-    import tempfile
+-    with tempfile.NamedTemporaryFile(suffix=".md", delete=False, mode="w",
+-                                     encoding="utf-8") as tf:
+-        tf.write(assembled)
+-        tmp = Path(tf.name)
+-
+-    try:
+-        # Step 2: Resolve includes
+-        wake_mode = _get_wake_mode(role_name)
+-        manifest = _load_manifest(role_name, wake_mode)
+-        if manifest is not None:
+-            composed = _resolve_includes_with_manifest(tmp, manifest, wake_mode)
+-        else:
+-            composed = _resolve_includes(tmp, wake_mode)
+-    finally:
+-        tmp.unlink(missing_ok=True)
+-
+-    # Step 3 (#9925 D7 item 3): role-roster post-processing.
+-    composed = _inject_role_roster(composed, role_name)
+-
+-    return composed
+-
+-
+-def compose_all() -> str:
+-    """Compose the worker-agent template as the default agent-instructions.md."""
+-    # agent-instructions.md is the worker template (primary output)
+-    header = "<!-- GENERATED FILE — DO NOT EDIT. -->\n"
+-    header += "<!-- Source: references/roles/worker/instructions.md + sub-skills/ -->\n"
+-    header += "<!-- Regenerate with: python references/scripts/compose.py all -->\n\n"
+-    composed = compose_role("worker")
+-    return header + composed
+-
+-
+ def _read_config_value(field: str) -> str:
+     """Read a config value using config.py.
+ 
+@@ -1312,104 +894,15 @@ def agent_compose(deterministic_output: str, role_name: str,
+         return deterministic_output
+ 
+ 
+-# A4 (#10388): in-memory compose + on-disk diff. Shared between deploy_role
+-# (when paired with agent_compose + write) and check_role (read-only).
+-def _compose_role_to_string(role_name: str, output_name: str = None,
+-                            regenerate_cmd: str = None) -> str:
+-    """Produce the would-be-deployed file content as a string.
+-
+-    Deterministic — does NOT run ``agent_compose`` (the LLM polish step).
+-    ``check_role`` relies on determinism for a reliable diff; when
+-    ``agent-compose`` is enabled in config, the on-disk file may carry
+-    LLM polish that this string lacks, and the diff will flag the role
+-    as drifted. ``check_role`` warns in that case.
+-    """
+-    if output_name is None:
+-        output_name = role_name
+-    entry_file = _get_entry_file_for_role(role_name)
+-    composed = compose_role(role_name)
+-    final = _substitute_placeholders(composed, output_name, entry_file)
+-    header = f"# SquidSquad -- {output_name} Lead\n\n"
+-    regenerate_display = regenerate_cmd if regenerate_cmd else role_name
+-    header += f"<!-- GENERATED by compose.py deploy {regenerate_display}. DO NOT EDIT. -->\n"
+-    header += f"<!-- Regenerate: python references/scripts/compose.py deploy {regenerate_display} -->\n\n"
+-    return header + final
+-
+-
+-def _diff_compose_output(expected: str, on_disk: str) -> list:
+-    """Identify which top-level ``## …`` sections diverge between expected and on-disk.
+-
+-    Returns a sorted list of unique section headings whose content
+-    differs. Lines before the first ``## `` heading are attributed to the
+-    synthetic section ``<preamble>``. An empty list means the two strings
+-    are byte-identical.
+-    """
+-    import difflib
+-    if expected == on_disk:
+-        return []
+-    expected_lines = expected.splitlines(keepends=True)
+-    ondisk_lines = on_disk.splitlines(keepends=True)
+-    # Map expected_lines index -> nearest preceding ## heading text.
+-    expected_section = []
+-    current = "<preamble>"
+-    for ln in expected_lines:
+-        if ln.startswith("## "):
+-            current = ln.strip().lstrip("#").strip().rstrip("#").strip()
+-        expected_section.append(current)
+-    # Same map for on-disk, used when the diverging region exists only in on-disk.
+-    ondisk_section = []
+-    current = "<preamble>"
+-    for ln in ondisk_lines:
+-        if ln.startswith("## "):
+-            current = ln.strip().lstrip("#").strip().rstrip("#").strip()
+-        ondisk_section.append(current)
+-    sm = difflib.SequenceMatcher(None, expected_lines, ondisk_lines)
+-    diffed = set()
+-    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+-        if tag == "equal":
+-            continue
+-        for idx in range(i1, i2):
+-            if idx < len(expected_section):
+-                diffed.add(expected_section[idx])
+-        for idx in range(j1, j2):
+-            if idx < len(ondisk_section):
+-                diffed.add(ondisk_section[idx])
+-    return sorted(diffed)
+-
+-
+ # Distinct exit codes (per AC) so a future CI/harness consumer can tell
+ # "the compose was clean", "some role drifted, re-run deploy", and "we
+-# couldn't even read sources" apart.
++# couldn't even read sources" apart. Retained post-E6 #10685 Phase 3d.3
++# for `check_alias_staged_l4` CLI exit-code semantics (`--check --staged-l4`).
+ CHECK_EXIT_CLEAN = 0
+ CHECK_EXIT_DRIFT = 1
+ CHECK_EXIT_ERROR = 2
+ 
+ 
+-def check_role(role_name: str, target_root: Path = None,
+-               output_name: str = None) -> tuple:
+-    """Compare in-memory compose for ``role_name`` against the on-disk file.
+-
+-    Returns ``(status, diff_summary)`` where ``status`` is one of
+-    ``"clean"`` / ``"drift"`` / ``"missing"``. ``diff_summary`` is the list
+-    of diverging section headings (empty when ``clean`` or ``missing``).
+-    Raises any exception from ``_compose_role_to_string`` so the CLI can
+-    translate that to exit code 2.
+-    """
+-    if target_root is None:
+-        target_root = REPO_ROOT
+-    target_root = Path(target_root)
+-    if output_name is None:
+-        output_name = role_name
+-    expected = _compose_role_to_string(role_name, output_name=output_name)
+-    on_disk_path = target_root / ".squidsquad" / output_name / "CLAUDE.md"
+-    if not on_disk_path.exists():
+-        return "missing", []
+-    on_disk = on_disk_path.read_text(encoding="utf-8")
+-    if expected == on_disk:
+-        return "clean", []
+-    return "drift", _diff_compose_output(expected, on_disk)
+-
+-
+ # A4.5 (#10395): staged-content check for `deploy <alias> --check --staged-l4 <path>`.
+ # Runs in-memory v2 link-stage validation against a to-be-committed L4 file
+ # WITHOUT writing anything to disk. Returns "clean" on success or raises the
+@@ -1464,87 +957,13 @@ def check_alias_staged_l4(alias, staged_l4_path, *, target_root=None,
+     return role_class
+ 
+ 
+-def deploy_role(role_name: str, target_root: Path = None,
+-                output_name: str = None,
+-                output_filename: str = "CLAUDE.md",
+-                regenerate_cmd: str = None) -> Path:
+-    """Full pipeline: compose entry file -> substitute placeholders -> write CLAUDE.md.
+-
+-    Args:
+-        role_name: the role composition source (e.g. "skill", "worker-ios", "pm";
+-            legacy "dev-ios" still accepted via 6274.1 alias).
+-            Resolves to a role identity via `_get_entry_file_for_role`.
+-        target_root: base directory that will contain `.squidsquad/<output_name>/`.
+-            Defaults to REPO_ROOT (the installed repo). Tests override to
+-            write into a scratch directory without touching the real install.
+-        output_name: the agent instance id for the output directory. Defaults
+-            to role_name. Use this when the compose source differs from the
+-            agent directory (e.g. compose from "worker-ios" but output to "skill").
+-        output_filename: the filename to write under
+-            ``.squidsquad/<output_name>/``. Defaults to ``"CLAUDE.md"`` so the
+-            v1 path is byte-identical to pre-A6. The ``--v2`` branch (#10386)
+-            passes ``"CLAUDE.linked.v2.md"`` so the v2 path lands beside v1
+-            without disturbing it.
+-
+-    Returns the absolute path of the composed CLAUDE.md.
+-    """
+-    if target_root is None:
+-        target_root = REPO_ROOT
+-    target_root = Path(target_root)
+-    if output_name is None:
+-        output_name = role_name
+-
+-    entry_file = _get_entry_file_for_role(role_name)
+-    composed = compose_role(role_name)
+-    final = _substitute_placeholders(composed, output_name, entry_file)
+-
+-    # Agent-driven coherence polish (if enabled in config)
+-    final = agent_compose(final, output_name)
+-
+-    header = f"# SquidSquad -- {output_name} Lead\n\n"
+-    # `regenerate_cmd` lets v2 callers override the human-readable
+-    # regenerate hint so it points at the alias + --v2 (the command that
+-    # actually rewrites this file) instead of the v1 role-class shorthand.
+-    regenerate_display = regenerate_cmd if regenerate_cmd else role_name
+-    header += f"<!-- GENERATED by compose.py deploy {regenerate_display}. DO NOT EDIT. -->\n"
+-    header += f"<!-- Regenerate: python references/scripts/compose.py deploy {regenerate_display} -->\n\n"
+-
+-    output_path = target_root / ".squidsquad" / output_name / output_filename
+-    output_path.parent.mkdir(parents=True, exist_ok=True)
+-
+-    # Guard: warn if composed file has manual edits (#5557)
+-    if output_path.exists():
+-        existing = output_path.read_text(encoding="utf-8")
+-        if "GENERATED by compose.py" in existing and existing != header + final:
+-            # Check if the file has uncommitted changes (manual edits)
+-            try:
+-                diff = subprocess.run(
+-                    ["git", "diff", "--name-only", str(output_path.relative_to(target_root))],
+-                    capture_output=True, text=True, check=False,
+-                    cwd=str(target_root),
+-                )
+-                if output_path.relative_to(target_root).as_posix() in diff.stdout:
+-                    print(f"WARNING: {output_path.relative_to(target_root)} has uncommitted "
+-                          f"manual edits that will be overwritten by compose. "
+-                          f"Edit source templates instead.", file=sys.stderr)
+-            except Exception:
+-                pass  # Guard is best-effort
+-
+-    output_path.write_text(header + final, encoding="utf-8")
+-
+-    # Assemble SOUL.md from 3 layers if missing (#3465 layered architecture).
+-    # Never overwrite an existing local SOUL.md — use upgrade_soul() for that.
+-    soul_path = target_root / ".squidsquad" / output_name / "SOUL.md"
+-    if not soul_path.exists():
+-        _assemble_and_write_soul(role_name, target_root, output_name)
+-
+-    return output_path
++# v1 ``deploy_role`` retired in E6 (#10685) Phase 3d.4.
++# Zero production callers since cycle 1545 (wizard.py migrated to
++# ``deploy_role_v2``). The retirement leaves ``compose_role`` (and its
++# include/manifest helper chain) without external callers — those go in
++# Phase 3d.5 as the next pure-deletion slice.
+ 
+ 
+-# v2 output filename per PRD-B §9a coexistence and PM's narrowed-scope
+-# comment on #10386: A6 writes the v2 LINKED output (assemble will add
+-# CLAUDE.v2.md once PRD-B ships).
+-_V2_LINKED_FILENAME = "CLAUDE.linked.v2.md"
+ # Aliases come from config.md but `parse_aliases_registry` doesn't
+ # character-validate them, so anything in the alias cell flows into a
+ # filesystem path. Defense-in-depth allowlist matches the convention
+@@ -1566,16 +985,17 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
+        artifacts on failure (the AC for A2e + the §4.6 atomic-write
+        contract for A2f).
+     5. Emit the six-slot composite via A2d's ``emit_v2_linked``.
+-    6. Write to ``.squidsquad/<alias>/CLAUDE.linked.v2.md``.
++    6. Run the assemble pipeline and write the triple to
++       ``.squidsquad/<alias>/`` (``CLAUDE.md`` / ``CLAUDE.linked.md`` /
++       ``CLAUDE.conflicts.md``) via atomic_emit.
+ 
+-    v1 ``compose.py deploy <role>`` (no ``--v2``) is untouched per the
+-    §9a coexistence rule; v1 ``compose.py deploy <alias> --v2`` lands at
+-    the v2 path filename.
++    Post-E6 cutover (#10685) this is the only deploy path — the v1
++    ``deploy_role`` branch and the ``--v2`` CLI flag are retired.
+ 
+     Aborts with ``SystemExit(1)`` on alias/registry errors, a
+     LinkStageValidationError from R1-R7, or any I/O failure.
+ 
+-    ``registry`` is an optional pre-parsed registry; ``deploy-all --v2``
++    ``registry`` is an optional pre-parsed registry; ``deploy-all``
+     passes the registry it iterated to avoid re-parsing per alias and to
+     close the TOCTOU window where ``config.md`` could be rewritten
+     between the iterate-list parse and the per-alias resolve.
+@@ -1698,18 +1118,18 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
+     output_dir = target_root / ".squidsquad" / alias
+     output_dir.mkdir(parents=True, exist_ok=True)
+     header = f"# SquidSquad -- {alias} Lead\n\n"
+-    header += f"<!-- GENERATED by compose.py deploy {alias} --v2. DO NOT EDIT. -->\n"
+-    header += f"<!-- Regenerate: python references/scripts/compose.py deploy {alias} --v2 -->\n\n"
++    header += f"<!-- GENERATED by compose.py deploy {alias}. DO NOT EDIT. -->\n"
++    header += f"<!-- Regenerate: python references/scripts/compose.py deploy {alias} -->\n\n"
+     linked_composite = header + body
+ 
+     # PRD-B B9 (#10763): assemble pipeline. atomic_emit owns the
+-    # triple write (CLAUDE.v2.md + CLAUDE.linked.v2.md +
+-    # CLAUDE.conflicts.v2.md) so the linked composite lands at the
+-    # same place as before AND the assembled + conflict-report
+-    # artifacts join it — completing PRD-B SC1's "runs unconditionally
+-    # after link stage" contract. The pipeline used to be dead code:
+-    # B1-B7 modules existed but no caller invoked them (filed as
+-    # #10752 / #10754; B9 is the wiring story PM scoped in response).
++    # triple write (CLAUDE.md + CLAUDE.linked.md + CLAUDE.conflicts.md
++    # post-E6 cutover #10685) so the linked composite lands alongside
++    # the assembled + conflict-report artifacts — completing PRD-B SC1's
++    # "runs unconditionally after link stage" contract. The pipeline
++    # used to be dead code: B1-B7 modules existed but no caller invoked
++    # them (filed as #10752 / #10754; B9 is the wiring story PM scoped
++    # in response).
+     #
+     # Cache is wired via assemble_adapter.make_b6_cache_adapter — the
+     # bridge between B7's slot-shaped seam and B6's key-shaped API.
+@@ -1738,8 +1158,8 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
+             model_id="sonnet",
+             cache_lookup_fn=cache_lookup_fn,
+             cache_store_fn=cache_store_fn,
+-            # filename_suffix defaults to ".v2.md" — the §9a-safe
+-            # paths. E6 cutover will flip this to "" elsewhere.
++            # filename_suffix defaults to "" post-E6 cutover (#10685) —
++            # canonical CLAUDE.md paths. v2 outputs ARE the v1 paths now.
+         )
+     except Exception as e:
+         print(
+@@ -1747,9 +1167,232 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
+             file=sys.stderr,
+         )
+         sys.exit(1)
+-    # The first path in the triple is CLAUDE.v2.md — return it as the
+-    # canonical deploy_alias_v2 result (replaces the prior linked-only
+-    # return). The linked + conflicts artifacts sit beside it.
++    # The first path in the triple is CLAUDE.md (post-E6 cutover) — return
++    # it as the canonical deploy_alias_v2 result. The linked + conflicts
++    # artifacts sit beside it.
++    return triple_paths[0]
++
++
++def deploy_role_v2(role_name: str, target_root: Path = None,
++                   output_name: str = None,
++                   source_root: Path = None) -> Path:
++    """v2 equivalent of ``deploy_role`` — the wizard's compose+output entry point.
++
++    Used by ``wizard.py`` for fresh installs where the agent's identity is
++    known directly (not via the ``## Aliases`` registry). Resolves
++    ``role_name`` → ``(role_class, l3_domain)`` via the v1 variant
++    convention (``_resolve_variant`` + ``_get_entry_file_for_role``), then
++    runs the v2 link+assemble pipeline directly. Seeds ``SOUL.md`` from
++    the role's layer-base template when missing, mirroring v1's
++    ``deploy_role`` behavior.
++
++    Args:
++        role_name: a variant-prefixed compose source (``worker-ios``) or
++            a base role/alias (``skill``). Resolved identically to v1's
++            ``deploy_role``.
++        target_root: install root containing ``.squidsquad/<output_name>/``.
++            Defaults to ``REPO_ROOT``. Only the OUTPUT directory and the
++            project-specific L4 file (``.squidsquad/project/<role>.md``)
++            are read/written here.
++        output_name: the agent instance directory name (typically the
++            alias). Defaults to ``role_name``.
++        source_root: where to read L1-L3 sources, the sub-skill catalog,
++            and the v2 link-stage fixtures. Defaults to ``REPO_ROOT``
++            (the squidsquad install holding ``references/``). This split
++            from ``target_root`` is what lets the wizard write into a
++            fresh foreign project (no ``references/`` of its own) while
++            still composing from the canonical templates. Tests staging
++            a hermetic fixture pass ``source_root=tmp_path``.
++
++            **Known limitation**: two helpers honor only the global
++            ``REPO_ROOT``, not ``source_root``:
++            - ``_resolve_variant`` + ``_get_entry_file_for_role`` (the
++              ``role_name`` → ``(role_class, l3_domain)`` resolution
++              below) check ``ROLES_DIR`` to decide which side of the
++              #6274 dev/worker alias to return.
++            - ``_assemble_and_write_soul`` reads SOUL layer templates
++              from ``BASE_ROLE_DIR`` (= ``ROLES_DIR``).
++            Both are zero-blast-radius in production (wizard always uses
++            ``source_root=None`` → ``REPO_ROOT``, so the helpers and the
++            v2 pipeline read the same tree) but means a fully hermetic
++            test must either keep ``role_name`` to canonical (no #6274
++            alias detour) or monkeypatch the helpers. Threading
++            ``source_root`` through both helpers would touch the v1
++            ``deploy_role`` path that's slated for retirement in
++            Phase 3d — deferred to that cleanup.
++
++    Returns the absolute path of the assembled ``CLAUDE.md``.
++
++    Path B of the E6 #10685 Phase 3c decision: smallest blast radius
++    that lets E6 delete v1's ``deploy_role``. The link+assemble pipeline
++    body intentionally duplicates ``deploy_alias_v2`` lines 1624-1761
++    rather than refactoring both through a shared internal helper —
++    consolidation would force the v2 alias-registry path through the
++    same risky test surface that 15+ ``deploy_alias_v2`` tests already
++    pin. If/when Path C (registry-first wizard, alias-as-truth) is
++    undertaken in a follow-up PRD, this function becomes throwaway and
++    the duplication retires with it.
++    """
++    if target_root is None:
++        target_root = REPO_ROOT
++    target_root = Path(target_root)
++    if source_root is None:
++        source_root = REPO_ROOT
++    source_root = Path(source_root)
++    if output_name is None:
++        output_name = role_name
++
++    # Resolve role_name → (role_class, l3_domain) via the v1 convention.
++    # Variant-prefixed names (``worker-ios``, ``pm-skill``) split into a
++    # base + variant; base names route through _get_entry_file_for_role
++    # which knows about the worker/dev #6274 alias shim.
++    resolved = _resolve_variant(role_name)
++    if resolved:
++        role_class, l3_domain = resolved
++    else:
++        role_class = _get_entry_file_for_role(role_name)
++        # When the role_name is itself an alias for another class (e.g.
++        # ``skill`` → ``worker``), the alias IS the L3 domain — wizard
++        # fresh installs of canonical alias-named agents (skill / qa /
++        # dev) need the domain-specific L3 sources (project-context
++        # etc.) included. CLI ``deploy <alias>`` goes through
++        # ``deploy_alias_v2`` which looks up the (class, domain) pair
++        # from the ``## Aliases`` registry; the wizard's fresh-install
++        # path doesn't have the registry yet, so derive the domain here
++        # from the alias-vs-class delta.
++        l3_domain = role_name if role_class != role_name else None
++
++    # Lazy imports — same pattern as deploy_alias_v2: keep v1 callers
++    # from loading these modules until they're needed.
++    import v2_link_stage as _v2
++    from l4_parser import L4Document as _L4Document
++    from l4_parser import parse_l4_file as _parse_l4_file
++    from link_stage_validator import (
++        LinkStageValidationError as _LinkStageValidationError,
++    )
++    from link_stage_validator import validate_link_stage as _validate_link_stage
++
++    # L4 is project-specific — reads from target_root so the wizard's
++    # foreign-project installs pick up any project-local customisations.
++    l4_path = target_root / ".squidsquad" / "project" / f"{role_class}.md"
++
++    try:
++        sources = _v2.collect_sources_for_validation(
++            role_class, l3_domain, repo_root=source_root
++        )
++    except Exception as e:
++        print(
++            f"ERROR: cannot walk L1-L3 sources for role '{role_name}' (v2): {e}",
++            file=sys.stderr,
++        )
++        sys.exit(1)
++
++    if l4_path.is_file():
++        try:
++            l4_doc = _parse_l4_file(l4_path)
++        except Exception as e:
++            print(
++                f"ERROR: cannot parse L4 file '{l4_path}' for role '{role_name}': {e}",
++                file=sys.stderr,
++            )
++            sys.exit(1)
++    else:
++        l4_doc = _L4Document.empty()
++
++    try:
++        _validate_link_stage(l4_doc, sources, l4_path=str(l4_path))
++    except _LinkStageValidationError as e:
++        print(
++            f"ERROR: v2 link stage validation failed for role '{role_name}':",
++            file=sys.stderr,
++        )
++        print(f"  {e}", file=sys.stderr)
++        sys.exit(1)
++
++    try:
++        body = _v2.emit_v2_linked(
++            role_class, l3_domain, repo_root=source_root, l4_path=l4_path
++        )
++    except Exception as e:
++        print(
++            f"ERROR: emit_v2_linked failed for role '{role_name}': {e}",
++            file=sys.stderr,
++        )
++        sys.exit(1)
++
++    import v2_catalog_gate as _v2_gate
++    catalog_path = source_root / "docs" / "sub-skill-catalog.md"
++    try:
++        gate_result = _v2_gate.validate_v2_compose(
++            body, catalog_path=catalog_path, repo_root=source_root,
++        )
++    except Exception as e:
++        print(
++            f"ERROR: catalog gate setup failed for role '{role_name}': {e}",
++            file=sys.stderr,
++        )
++        sys.exit(1)
++    if gate_result.has_issues:
++        print(
++            f"ERROR: catalog gate FAILED for role '{role_name}':",
++            file=sys.stderr,
++        )
++        print(gate_result.format(), file=sys.stderr)
++        sys.exit(1)
++
++    # v1 deploy_role applied _substitute_placeholders deterministically
++    # before write; the v2 alias path lets the LLM in assemble_pass do
++    # this implicitly. The wizard's contract requires substituted
++    # output (variant agents must show their agent_id in cycle-runner
++    # paths, etc.) — restore the deterministic substitution here so
++    # placeholders never leak when assemble is cached, stubbed, or
++    # silently no-ops.
++    body = _substitute_placeholders(body, output_name, role_class)
++
++    output_dir = target_root / ".squidsquad" / output_name
++    output_dir.mkdir(parents=True, exist_ok=True)
++    header = f"# SquidSquad -- {output_name} Lead\n\n"
++    header += (
++        f"<!-- GENERATED by compose.py deploy {output_name}. DO NOT EDIT. -->\n"
++    )
++    header += (
++        f"<!-- Regenerate: python references/scripts/compose.py "
++        f"deploy {output_name} -->\n\n"
++    )
++    linked_composite = header + body
++
++    import atomic_emit as _atomic_emit
++    import assemble_adapter as _adapter
++    cache_lookup_fn, cache_store_fn = _adapter.make_b6_cache_adapter(
++        alias=output_name,
++        model_id="sonnet",
++        prompt_version="v1",
++    )
++    try:
++        triple_paths = _atomic_emit.assemble_and_emit(
++            linked_composite,
++            output_dir,
++            role_class=role_class,
++            model_id="sonnet",
++            cache_lookup_fn=cache_lookup_fn,
++            cache_store_fn=cache_store_fn,
++        )
++    except Exception as e:
++        print(
++            f"ERROR: assemble_and_emit failed for role '{role_name}': {e}",
++            file=sys.stderr,
++        )
++        sys.exit(1)
++
++    # SOUL.md seeding — mirror v1 deploy_role behavior (compose.py around
++    # the original lines 1548-1550). The v2 alias-registry path
++    # (deploy_alias_v2) does NOT seed SOUL because it's the per-command
++    # regenerate entry point — but wizard's first-install use needs SOUL
++    # in place for the assembled CLAUDE.md to load correctly at boot.
++    soul_path = output_dir / "SOUL.md"
++    if not soul_path.exists():
++        _assemble_and_write_soul(role_name, target_root, output_name)
++
+     return triple_paths[0]
+ 
+ 
+@@ -2096,11 +1739,12 @@ def main():
+             print(f"Available roles: {', '.join(sorted(roles))}")
+         sys.exit(0)
+ 
+-    # #10386 PRD-A/A6: --v2 is recognized on `deploy` and `deploy-all`.
+-    # Strip the flag from positional args so the rest of the dispatch
+-    # works unchanged in v1 mode (v1 byte-equivalence is the §9a coexistence
+-    # contract).
+-    v2_mode = "--v2" in args
++    # PRD-E E6 (#10685) V2 CUTOVER: v2 is now the default and only
++    # composition path. ``--v2`` is silently accepted (stripped from
++    # argv) so wrappers / docs / muscle-memory invocations from the
++    # pre-cutover world don't break. Pre-cutover (PRD-A A6 #10386 era)
++    # the flag opted into the v2 path while v1 was default; that
++    # coexistence contract is retired here.
+     args = [a for a in args if a != "--v2"]
+ 
+     # #10388 PRD-A/A4: --check runs in-memory compose and diffs against
+@@ -2128,188 +1772,144 @@ def main():
+         args = args[:idx] + args[idx + 2:]
+ 
+     cmd = args[0]
+-    if v2_mode and cmd not in ("deploy", "deploy-all"):
+-        print(
+-            f"WARNING: --v2 has no effect on `compose.py {cmd}` (only "
+-            f"`deploy` and `deploy-all` honor it).",
+-            file=sys.stderr,
+-        )
+     if check_mode and cmd not in ("deploy", "deploy-all"):
+         print(
+             f"WARNING: --check has no effect on `compose.py {cmd}` (only "
+             f"`deploy` and `deploy-all` honor it).",
+             file=sys.stderr,
+         )
+-    if check_mode and v2_mode:
++
++    if cmd == "all":
+         print(
+-            "ERROR: --check + --v2 combination is reserved for A4.5 "
+-            "(#10395) and not implemented here. Use `--check` alone for "
+-            "v1 drift detection.",
++            "ERROR: `compose.py all` was retired in E6 (#10685). The "
++            "bundled `references/agent-instructions.md` is no longer "
++            "generated — each agent has its own composed CLAUDE.md "
++            "under `.squidsquad/<role>/CLAUDE.md`. Use "
++            "`python compose.py deploy <role>` for a single role, or "
++            "`python compose.py deploy-all` for every alias in the "
++            "registry.",
+             file=sys.stderr,
+         )
+-        sys.exit(CHECK_EXIT_ERROR)
+-
+-    if cmd == "all":
+-        content = compose_all()
+-        OUTPUT_FILE.write_text(content, encoding="utf-8")
+-        print(f"Composed agent-instructions.md ({len(content.splitlines())} lines)")
++        sys.exit(1)
+ 
+     elif cmd == "deploy":
+         if len(args) < 2:
+-            print("Usage: compose.py deploy <role> [--v2|--check]", file=sys.stderr)
++            print("Usage: compose.py deploy <role> [--check]", file=sys.stderr)
+             print("  e.g.: compose.py deploy skill", file=sys.stderr)
+             sys.exit(1)
+         role_name = args[1]
+         if check_mode:
+             # A4.5 (#10395): --staged-l4 routes to staged-content validation.
+-            if staged_l4_path is not None:
+-                # Lazy import — only the staged-check path needs A2e here.
+-                from link_stage_validator import LinkStageValidationError
+-                try:
+-                    check_alias_staged_l4(role_name, staged_l4_path)
+-                except FileNotFoundError as e:
+-                    print(f"ERROR: setup error for alias '{role_name}': {e}",
+-                          file=sys.stderr)
+-                    sys.exit(CHECK_EXIT_ERROR)
+-                except KeyError as e:
+-                    print(f"ERROR: setup error for alias '{role_name}': {e}",
+-                          file=sys.stderr)
+-                    sys.exit(CHECK_EXIT_ERROR)
+-                except LinkStageValidationError as e:
+-                    # AC: stderr names the rule that failed (R1-R7).
+-                    print(
+-                        f"  {role_name} (staged): VALIDATION FAIL — {e}",
+-                        file=sys.stderr,
+-                    )
+-                    sys.exit(CHECK_EXIT_DRIFT)
+-                except Exception as e:
+-                    print(f"ERROR: setup error for alias '{role_name}': {e}",
+-                          file=sys.stderr)
+-                    sys.exit(CHECK_EXIT_ERROR)
+-                print(f"  {role_name} (staged): clean")
+-                sys.exit(CHECK_EXIT_CLEAN)
+-            # A4 (#10388) per-alias drift-check fallback.
++            # Post-E6 (#10685) Phase 3d.3 retires the A4 per-alias drift-check
++            # fallback (Option A): `--check` without `--staged-l4` is now an
++            # error. The on-disk CLAUDE.md is the LLM-polished v2 artifact,
++            # which the deterministic v1 compose can never byte-match.
++            if staged_l4_path is None:
++                print(
++                    f"ERROR: `deploy {role_name} --check` requires "
++                    f"`--staged-l4 <path>` post-E6 cutover. The drift-check "
++                    f"fallback was retired in #10685 Phase 3d.3 (the v2 "
++                    f"on-disk CLAUDE.md is LLM-polished, so byte-level "
++                    f"drift-check is not a meaningful operation).",
++                    file=sys.stderr,
++                )
++                sys.exit(CHECK_EXIT_ERROR)
++            # Lazy import — only the staged-check path needs A2e here.
++            from link_stage_validator import LinkStageValidationError
+             try:
+-                status, sections = check_role(role_name)
+-            except Exception as e:
+-                print(f"ERROR: cannot check role '{role_name}': {e}", file=sys.stderr)
++                check_alias_staged_l4(role_name, staged_l4_path)
++            except FileNotFoundError as e:
++                print(f"ERROR: setup error for alias '{role_name}': {e}",
++                      file=sys.stderr)
+                 sys.exit(CHECK_EXIT_ERROR)
+-            if status == "missing":
+-                print(f"  {role_name}: MISSING — .squidsquad/{role_name}/CLAUDE.md does not exist", file=sys.stderr)
+-                sys.exit(CHECK_EXIT_DRIFT)
+-            if status == "drift":
+-                summary = ", ".join(sections) if sections else "<whole file>"
+-                print(f"  {role_name}: DRIFT — sections: {summary}", file=sys.stderr)
++            except KeyError as e:
++                print(f"ERROR: setup error for alias '{role_name}': {e}",
++                      file=sys.stderr)
++                sys.exit(CHECK_EXIT_ERROR)
++            except LinkStageValidationError as e:
++                # AC: stderr names the rule that failed (R1-R7).
++                print(
++                    f"  {role_name} (staged): VALIDATION FAIL — {e}",
++                    file=sys.stderr,
++                )
+                 sys.exit(CHECK_EXIT_DRIFT)
+-            print(f"  {role_name}: clean")
+-            sys.exit(CHECK_EXIT_CLEAN)
+-        if v2_mode:
+-            try:
+-                output = deploy_alias_v2(role_name)
+-                lines = output.read_text(encoding="utf-8").count("\n")
+-                # DS-B9 review F1: use the returned path's actual
+-                # basename instead of the stale `_V2_LINKED_FILENAME`
+-                # constant — post-B9 the return is `CLAUDE.v2.md`
+-                # (assembled), not `CLAUDE.linked.v2.md`.
+-                print(f"Deployed {role_name} (v2) {output.name} ({lines} lines) -> {output.relative_to(REPO_ROOT)}")
+-            except SystemExit:
+-                # deploy_alias_v2 already printed a diagnostic; propagate exit.
+-                raise
+             except Exception as e:
+-                print(f"ERROR: Failed to deploy alias '{role_name}' (v2): {e}", file=sys.stderr)
+-                sys.exit(1)
+-            # v2 path skips event-contract derivation — that's a v1 side-effect
+-            # tied to the v1 agent-instructions tree. Re-evaluate when the v2
+-            # switch PR (end of PRD A-E family) makes v2 the default.
+-            return
++                print(f"ERROR: setup error for alias '{role_name}': {e}",
++                      file=sys.stderr)
++                sys.exit(CHECK_EXIT_ERROR)
++            print(f"  {role_name} (staged): clean")
++            sys.exit(CHECK_EXIT_CLEAN)
++        # PRD-E E6 (#10685) V2 CUTOVER: v2 is the only path. The v1
++        # ``deploy_role`` branch + the event-contract derivation side
++        # effect (which was tied to the v1 agent-instructions tree) are
++        # retired here. Event contract derivation has no v2 analog —
++        # restore in a follow-up if cross-agent validation regresses.
+         try:
+-            output = deploy_role(role_name)
++            output = deploy_alias_v2(role_name)
+             lines = output.read_text(encoding="utf-8").count("\n")
+-            print(f"Deployed {role_name} CLAUDE.md ({lines} lines) -> {output.relative_to(REPO_ROOT)}")
+-        except (SystemExit, Exception) as e:
+-            print(f"ERROR: Failed to deploy role '{role_name}': {e}", file=sys.stderr)
++            # Use the returned path's actual basename; post-E6 cutover
++            # (#10685) it is ``CLAUDE.md`` (assembled).
++            print(f"Deployed {role_name} {output.name} ({lines} lines) -> {output.relative_to(REPO_ROOT)}")
++        except SystemExit:
++            # deploy_alias_v2 already printed a diagnostic; propagate exit.
++            raise
++        except Exception as e:
++            print(f"ERROR: Failed to deploy alias '{role_name}': {e}", file=sys.stderr)
+             sys.exit(1)
+-        # Event contract derivation + cross-agent validation (#5868)
+-        print("Deriving event contracts...")
+-        if not derive_and_write_event_contracts():
+-            print("WARNING: Event contract validation found errors. "
+-                  "Review and fix, or re-run compose.", file=sys.stderr)
+ 
+     elif cmd == "deploy-all":
+         if check_mode:
++            # Post-E6 (#10685) Phase 3d.3: `deploy-all --check` retired
++            # (Option A pure deletion). The v1 drift-check compared a
++            # deterministic compose against the LLM-polished on-disk
++            # CLAUDE.md, which can never byte-match. For per-alias staged-L4
++            # validation, use `deploy <alias> --check --staged-l4 <path>`.
++            print(
++                "ERROR: `deploy-all --check` was retired in #10685 Phase "
++                "3d.3. The v2 on-disk CLAUDE.md is LLM-polished, so "
++                "byte-level drift-check is not a meaningful operation. "
++                "Use `deploy <alias> --check --staged-l4 <path>` for "
++                "per-alias staged-L4 validation.",
++                file=sys.stderr,
++            )
++            sys.exit(CHECK_EXIT_ERROR)
++        # PRD-E E6 (#10685) V2 CUTOVER: deploy-all iterates aliases
++        # (the v2 model — first-class agent identities) rather than the
++        # legacy ``_collect_all_roles()`` role-name list. Install
++        # topology bookkeeping (mandatory role check, ``.local-config``
++        # generation) runs after the alias-deploy loop since it's a
++        # harness-wiring concern decoupled from composition. Event
++        # contract derivation (#5868) had no v2 analog; restore in a
++        # follow-up if cross-agent validation regresses.
++        try:
++            registry = _config_module.parse_aliases_registry()
++        except Exception as e:
++            print(f"ERROR: cannot iterate aliases: failed to parse `## Aliases` registry: {e}", file=sys.stderr)
++            sys.exit(1)
++        failed = []
++        for alias in sorted(registry):
+             try:
+-                roles = _collect_all_roles()
+-            except Exception as e:
+-                print(f"ERROR: cannot iterate roles for --check: {e}", file=sys.stderr)
+-                sys.exit(CHECK_EXIT_ERROR)
+-            drifted = []
+-            for role in roles:
+-                try:
+-                    status, sections = check_role(role)
+-                except Exception as e:
+-                    print(f"ERROR: cannot check role '{role}': {e}", file=sys.stderr)
+-                    sys.exit(CHECK_EXIT_ERROR)
+-                if status == "missing":
+-                    print(f"  {role}: MISSING — .squidsquad/{role}/CLAUDE.md does not exist", file=sys.stderr)
+-                    drifted.append(role)
+-                elif status == "drift":
+-                    summary = ", ".join(sections) if sections else "<whole file>"
+-                    print(f"  {role}: DRIFT — sections: {summary}", file=sys.stderr)
+-                    drifted.append(role)
+-                else:
+-                    print(f"  {role}: clean")
+-            if drifted:
+-                sys.exit(CHECK_EXIT_DRIFT)
+-            sys.exit(CHECK_EXIT_CLEAN)
+-        if v2_mode:
+-            try:
+-                registry = _config_module.parse_aliases_registry()
++                output = deploy_alias_v2(alias, registry=registry)
++                lines = output.read_text(encoding="utf-8").count("\n")
++                print(f"  {alias}: {lines} lines -> {output.relative_to(REPO_ROOT)}")
++            except SystemExit:
++                failed.append(alias)
+             except Exception as e:
+-                print(f"ERROR: cannot iterate aliases (v2): failed to parse `## Aliases` registry: {e}", file=sys.stderr)
+-                sys.exit(1)
+-            failed = []
+-            for alias in sorted(registry):
+-                try:
+-                    output = deploy_alias_v2(alias, registry=registry)
+-                    lines = output.read_text(encoding="utf-8").count("\n")
+-                    print(f"  {alias} (v2): {lines} lines -> {output.relative_to(REPO_ROOT)}")
+-                except SystemExit:
+-                    failed.append(alias)
+-                except Exception as e:
+-                    print(f"  {alias} (v2): FAILED — {e}", file=sys.stderr)
+-                    failed.append(alias)
+-            if failed:
+-                print(f"ERROR: {len(failed)} alias(es) failed: {', '.join(failed)}", file=sys.stderr)
+-                sys.exit(1)
+-            return
+-        # Deploy all configured agents
++                print(f"  {alias}: FAILED — {e}", file=sys.stderr)
++                failed.append(alias)
++        if failed:
++            print(f"ERROR: {len(failed)} alias(es) failed: {', '.join(failed)}", file=sys.stderr)
++            sys.exit(1)
++        # Install topology bookkeeping (harness-wiring, not composition).
+         roles = _collect_all_roles()
+-        # #6055: Check mandatory roles are present
+         missing = _check_mandatory_roles(roles)
+         if missing:
+             print(f"ERROR: Mandatory role(s) missing: {', '.join(missing)}", file=sys.stderr)
+             print(f"Every SquidSquad team requires PM, Verifier, and DM.", file=sys.stderr)
+             print(f"Add missing roles with: /squidsquad-setup or manually create .squidsquad/{missing[0]}/", file=sys.stderr)
+             sys.exit(1)
+-        failed = []
+-        for role in roles:
+-            try:
+-                output = deploy_role(role)
+-                lines = output.read_text(encoding="utf-8").count("\n")
+-                print(f"  {role}: {lines} lines -> {output.relative_to(REPO_ROOT)}")
+-            except (SystemExit, Exception) as e:
+-                print(f"  {role}: FAILED — {e}", file=sys.stderr)
+-                failed.append(role)
+-        if failed:
+-            print(f"ERROR: {len(failed)} role(s) failed: {', '.join(failed)}", file=sys.stderr)
+-        # Generate .local-config for health check and auto-boot
+         lc = generate_local_config(roles)
+         print(f"  .local-config: {len(roles)} agents -> {lc.relative_to(REPO_ROOT)}")
+-        # Event contract derivation + cross-agent validation (#5868)
+-        print("Deriving event contracts...")
+-        if not derive_and_write_event_contracts(roles):
+-            print("WARNING: Event contract validation found errors. "
+-                  "Review and fix, or re-run compose.", file=sys.stderr)
+ 
+     elif cmd == "upgrade-soul":
+         if len(args) < 2:
+@@ -2389,9 +1989,21 @@ def main():
+         sys.exit(0)
+ 
+     else:
+-        # Treat as role entry file name
+-        content = compose_role(cmd)
+-        print(content)
++        # v1 ``compose.py <role>`` fallback retired in E6 (#10685) Phase 3d.1.
++        # Was a developer-inspection convenience that printed v1 ``compose_role``
++        # output to stdout. The v2 equivalent is reading the on-disk linked
++        # composite after a regular ``deploy``:
++        #   python compose.py deploy <role>
++        #   cat .squidsquad/<role>/CLAUDE.linked.md
++        print(
++            f"ERROR: unknown command {cmd!r}. The v1 `compose.py <role>` "
++            "stdout-inspection fallback was retired in E6 (#10685). "
++            "Use `python compose.py deploy <role>` and read "
++            "`.squidsquad/<role>/CLAUDE.linked.md` to inspect the "
++            "composed output.",
++            file=sys.stderr,
++        )
++        sys.exit(1)
+ 
+ 
+ if __name__ == "__main__":
