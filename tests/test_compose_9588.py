@@ -30,6 +30,8 @@ SUB_SKILLS = REPO_ROOT / "references" / "sub-skills"
 sys.path.insert(0, str(SCRIPTS))
 import compose  # noqa: E402
 
+from _v2_test_helpers import v2_compose_for  # noqa: E402
+
 
 ROLES = ["skill", "pm", "qa", "dm"]
 
@@ -67,16 +69,7 @@ MODE_SPECIFIC_MARKERS = [
 ]
 
 
-def _compose_for(role: str) -> str:
-    """Compose a role end-to-end, including placeholder substitution.
-
-    Mirrors what `deploy_role` does up to (but not including) writing the
-    composed text to .squidsquad/<role>/CLAUDE.md. Skipping the disk write
-    keeps the test hermetic on a clean checkout.
-    """
-    entry_file = compose._get_entry_file_for_role(role)
-    composed = compose.compose_role(role)
-    return compose._substitute_placeholders(composed, role, entry_file)
+_compose_for = v2_compose_for  # local alias retained for the test body below
 
 
 @pytest.mark.parametrize("role", ROLES)

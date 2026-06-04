@@ -26,6 +26,8 @@ sys.path.insert(0, str(SCRIPTS))
 
 import compose  # noqa: E402
 
+from _v2_test_helpers import v2_compose_for as _v2_compose_for  # noqa: E402
+
 FRAGMENT = REPO / "references" / "sub-skills" / "common" / "pickup-comment-fidelity.md"
 DEV_TEMPLATE = REPO / "references" / "roles" / "dev" / "instructions.md"
 DEV_POLL_MANIFEST = REPO / "references" / "roles" / "dev" / "includes.yml"
@@ -113,8 +115,15 @@ def test_triage_issues_crossref_to_implement_tasks_not_off_by_one():
 @pytest.mark.parametrize("role", ["skill"])
 def test_fragment_renders_in_composed_dev_variant_claude_md(role):
     """End-to-end: composing the dev variant CLAUDE.md must inline the full
-    fragment, not just the 8b-bis / 7b-bis pointer lines."""
-    composed = compose.compose_role(role)
+    fragment, not just the 8b-bis / 7b-bis pointer lines.
+
+    Post-E6 (#10685) this uses ``_v2_compose_for`` — v2 link stage +
+    the deterministic ``expand_v2_includes`` helper that gives the
+    test the same expanded ``<!-- sub-skill: X --> body -->`` shape
+    v1's ``compose_role`` produced. The invariant set is identical
+    to the pre-cutover version (marker + three body-text checks).
+    """
+    composed = _v2_compose_for(role)
     assert "<!-- sub-skill: pickup-comment-fidelity -->" in composed, (
         f"sub-skill marker for pickup-comment-fidelity missing from {role}"
     )

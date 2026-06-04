@@ -412,9 +412,10 @@ Commands:
   status             Show harness + agent health
   shutdown           Stop all agents and exit harness
   check [--full]     Diagnose compose freshness (read-only — no spawn,
-                     no mutation). With --full also runs `compose.py
-                     deploy-all --check` to verify on-disk outputs match
-                     source-tree composition.
+                     no mutation). --full is deprecated post-E6 (#10685
+                     Phase 3d.3): accepted for backward compat but no
+                     longer runs `compose.py deploy-all --check` (that
+                     CLI command was retired with the v1 chain).
 
 Examples:
   squidsquad start
@@ -584,58 +585,22 @@ def cmd_check(full=False, *, repo_root=None, state_file=None):
         print("compose freshness: clean")
         print(f"  checksum: {current}")
 
-    # AC4: --full adds the A4 drift check (compose.py deploy-all --check)
-    # IN ADDITION TO the checksum comparison above. The two checks are
-    # complementary: checksum says "the source tree changed," the
-    # dry-run says "the composed outputs are stale relative to the
-    # source tree" — only the dry-run pinpoints which composed files
-    # need regeneration.
-    if not full:
-        return 1 if drift else 0
-
-    print("\nrunning compose.py deploy-all --check ...")
-    cmd = [
-        sys.executable,
-        str(Path(repo_root) / "references" / "scripts" / "compose.py"),
-        "deploy-all",
-        "--check",
-    ]
-    try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, cwd=str(repo_root),
+    # Post-E6 (#10685) Phase 3d.3: `--full` is deprecated. The downstream
+    # `compose.py deploy-all --check` was retired (Option A) because the
+    # v2 on-disk CLAUDE.md is LLM-polished and cannot byte-match a
+    # deterministic in-memory compose. `--full` is accepted for backward
+    # compat but emits a retirement notice and falls through to the
+    # checksum-only exit semantics.
+    if full:
+        print(
+            "WARNING: `squidsquad check --full` is deprecated. The "
+            "underlying `compose.py deploy-all --check` was retired in "
+            "#10685 Phase 3d.3 (v2 on-disk CLAUDE.md is LLM-polished, so "
+            "byte-level drift-check is not a meaningful operation). "
+            "Falling through to checksum-only freshness diagnostic.",
+            file=sys.stderr,
         )
-    except Exception as e:  # noqa: BLE001
-        print(f"check: --full failed to invoke compose.py: {e}", file=sys.stderr)
-        return 2
-
-    # DS-10683 F3: always emit compose.py's stderr regardless of exit
-    # code so an unexpected exit-1 traceback is at least visible to
-    # the operator (we still map exit codes per A4's contract below;
-    # the contract is documented in compose.py's CHECK_EXIT_CLEAN /
-    # CHECK_EXIT_DRIFT / CHECK_EXIT_ERROR constants).
-    if proc.stdout:
-        print(proc.stdout, end="" if proc.stdout.endswith("\n") else "\n")
-    if proc.stderr:
-        print(proc.stderr, end="" if proc.stderr.endswith("\n") else "\n",
-              file=sys.stderr)
-    # Map A4's exit codes to our AC5 codes:
-    #   0 = clean, 1 = drift, ≥2 = error.
-    # Contract is load-bearing — see compose.py CHECK_EXIT_* constants.
-    if proc.returncode == 0:
-        print("compose dry-run: clean")
-        # Even if the dry-run was clean, a checksum mismatch above
-        # still means the operator should look at why the input set
-        # hashed differently — exit 1 surfaces that.
-        return 1 if drift else 0
-    if proc.returncode == 1:
-        # A4 drift — same exit semantic as our checksum drift.
-        return 1
-    # Any other non-zero (A4 maps unhandled errors to exit 2).
-    print(
-        f"check: compose dry-run exited {proc.returncode} (setup/parse error)",
-        file=sys.stderr,
-    )
-    return 2
+    return 1 if drift else 0
 
 
 def main():

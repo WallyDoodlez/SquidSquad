@@ -26,7 +26,6 @@ These tests pin the new behavior at three levels:
 """
 
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -181,43 +180,7 @@ def test_live_v2_boot_block_not_inlined_when_role_uses_boot_bootstrap():
 
 
 # ---------------------------------------------------------------------------
-# Size invariant (AC3): v2 <= 30% of v1
+# v1-vs-v2 size invariant retired in E6 #10685 Phase 3d.4 — v1 ``deploy_role``
+# was deleted, so the v1 byte baseline is no longer measurable. PRD-D §10
+# criterion 10 was a pre-cutover gate; once v1 is gone the gate is moot.
 # ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("role", _MANDATORY_ROLES)
-def test_v2_size_is_at_most_30pct_of_v1(role):
-    """Per-role: composed v2 byte size <= 30% of v1 byte size.
-
-    Per AC3 + PRD-D §10 criterion 10. The threshold is the average
-    across role-classes, but a per-role gate keeps a single inflated
-    role-class from sneaking past via averaging. ``nonexistent.md`` L4
-    path isolates D2's emission contract from project-state L4
-    customizations that vary per install.
-    """
-    v2_out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
-    with tempfile.TemporaryDirectory() as td:
-        v1_out = compose.deploy_role(role, target_root=Path(td)).read_text(
-            encoding="utf-8",
-        )
-    ratio = len(v2_out) / len(v1_out)
-    assert ratio <= 0.30, (
-        f"role={role}: v2/v1 size ratio = {ratio:.1%} exceeds 30% target. "
-        f"v1={len(v1_out)} v2={len(v2_out)}"
-    )
-
-
-def test_v2_average_size_at_most_30pct_of_v1():
-    """Average across role-classes: v2 / v1 <= 30%. PRD-D §10 criterion 10."""
-    ratios = []
-    for role in _MANDATORY_ROLES:
-        v2_out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
-        with tempfile.TemporaryDirectory() as td:
-            v1_out = compose.deploy_role(role, target_root=Path(td)).read_text(
-                encoding="utf-8",
-            )
-        ratios.append(len(v2_out) / len(v1_out))
-    avg = sum(ratios) / len(ratios)
-    assert avg <= 0.30, (
-        f"avg v2/v1 ratio = {avg:.1%} exceeds 30% target across "
-        f"roles {_MANDATORY_ROLES}."
-    )

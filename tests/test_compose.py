@@ -95,62 +95,11 @@ def compose_env(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _resolve_includes
+# _resolve_includes / TestResolveIncludes retired in E6 #10685 Phase 3d.5
+# along with the v1 compose_role chain. v2 path
+# (v2_link_stage.emit_v2_linked → atomic_emit.assemble_and_emit) is the
+# only compose pipeline post-cutover.
 # ---------------------------------------------------------------------------
-
-class TestResolveIncludes:
-    def test_basic_include(self, compose_env):
-        entry = compose_env / "references" / "roles" / "dev" / "instructions.md"
-        with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
-            result = compose._resolve_includes(entry)
-        assert "## Context Pressure" in result
-        assert "<!-- sub-skill: context-pressure -->" in result
-        assert "<!-- /sub-skill: context-pressure -->" in result
-
-    def test_missing_include(self, compose_env):
-        entry = compose_env / "test-entry.md"
-        entry.write_text("{{include: common/nonexistent}}", encoding="utf-8")
-        with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
-            result = compose._resolve_includes(entry)
-        assert "<!-- ERROR: Missing include: common/nonexistent -->" in result
-
-    def test_runtime_directive(self, compose_env):
-        entry = compose_env / "references" / "roles" / "dev" / "instructions.md"
-        with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
-            result = compose._resolve_includes(entry)
-        assert "## Soul" in result
-        assert "<!-- sub-skill: dev -->" in result
-        assert "SOUL.md" in result
-
-    def test_capability_directive(self, compose_env):
-        entry = compose_env / "cap-test.md"
-        entry.write_text("{{capability: test-cap}}", encoding="utf-8")
-        with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "CAPABILITIES_DIR", compose_env / "references" / "sub-skills" / "capabilities"):
-            result = compose._resolve_includes(entry)
-        assert "## Test Capability" in result
-        assert "<!-- sub-skill: capability-test-cap -->" in result
-
-    def test_missing_capability(self, compose_env):
-        entry = compose_env / "cap-test.md"
-        entry.write_text("{{capability: nonexistent}}", encoding="utf-8")
-        with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "CAPABILITIES_DIR", compose_env / "references" / "sub-skills" / "capabilities"):
-            result = compose._resolve_includes(entry)
-        assert "<!-- ERROR: Missing capability: nonexistent -->" in result
-
-    def test_preserves_inline_content(self, compose_env):
-        entry = compose_env / "inline-test.md"
-        entry.write_text(
-            "# Header\n\nSome inline text.\n\n{{include: common/context-pressure}}\n\nMore inline.",
-            encoding="utf-8",
-        )
-        with patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
-            result = compose._resolve_includes(entry)
-        assert "# Header" in result
-        assert "Some inline text." in result
-        assert "More inline." in result
-        assert "## Context Pressure" in result
 
 
 # ---------------------------------------------------------------------------
@@ -262,150 +211,19 @@ class TestGetEntryFileForRole:
 
 
 # ---------------------------------------------------------------------------
-# compose_role
+# compose_role / TestComposeRole and Layer 4 / TestL4RoleFiltering retired
+# in E6 #10685 Phase 3d.5 along with the v1 compose chain. v2 L4 semantics
+# diverge entirely from v1's filename-prefix routing (per cycle 1553
+# audit): v2_link_stage reads a single L4 file at
+# .squidsquad/project/<role-class>.md per parse_l4_file (no prefix
+# routing). TestL4RoleFiltering's invariants don't map to v2.
 # ---------------------------------------------------------------------------
-
-class TestComposeRole:
-    def test_composes_dev_role(self, compose_env):
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
-            result = compose.compose_role("dev")
-        assert "# Dev Agent" in result
-        assert "## Context Pressure" in result
-        assert "### Step 1 — Pull Latest" in result
-
-    def test_composes_pm_role(self, compose_env):
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
-            result = compose.compose_role("pm")
-        assert "# PM Agent" in result
-        assert "## Context Pressure" in result
-
-    def test_unknown_role_falls_back_to_dev(self, compose_env):
-        """Unknown roles fall back to dev (dev variant mechanism)."""
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
-            result = compose.compose_role("nonexistent_role_xyz")
-        # Falls back to dev template
-        assert "# Dev Agent" in result
 
 
 # ---------------------------------------------------------------------------
-# Layer 4 — project sub-skill role filtering
+# deploy_role: retired in E6 #10685 Phase 3d.4 (v2 ``deploy_role_v2`` /
+# ``deploy_alias_v2`` are the only deploy paths post-cutover).
 # ---------------------------------------------------------------------------
-
-class TestL4RoleFiltering:
-    """compose.py L4 should include only role-matched project sub-skills."""
-
-    def _setup_project_files(self, compose_env):
-        """Create project sub-skill files with role prefixes."""
-        # Ensure all role directories exist so known_prefixes includes them
-        roles_dir = compose_env / "references" / "roles"
-        for role in ("dm", "verifier"):  # #6274: qa→verifier
-            role_dir = roles_dir / role
-            role_dir.mkdir(parents=True, exist_ok=True)
-            (role_dir / "instructions.md").write_text(
-                f"# {role.upper()} Agent\n", encoding="utf-8")
-        project_dir = compose_env / ".squidsquad" / "project"
-        project_dir.mkdir(parents=True, exist_ok=True)
-        (project_dir / "dev-instructions.md").write_text(
-            "## Dev Instructions\n\nDev-only content.", encoding="utf-8")
-        (project_dir / "pm-instructions.md").write_text(
-            "## PM Instructions\n\nPM-only content.", encoding="utf-8")
-        (project_dir / "dm-instructions.md").write_text(
-            "## DM Instructions\n\nDM-only content.", encoding="utf-8")
-        (project_dir / "qa-instructions.md").write_text(
-            "## QA Instructions\n\nQA-only content.", encoding="utf-8")
-        (project_dir / "shared-instructions.md").write_text(
-            "## Shared Instructions\n\nAll-role content.", encoding="utf-8")
-        (project_dir / "setup-upgrade-gate.md").write_text(
-            "## Setup Gate\n\nUnprefixed content.", encoding="utf-8")
-        return project_dir
-
-    def test_dev_role_gets_only_dev_and_shared(self, compose_env):
-        self._setup_project_files(compose_env)
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "REPO_ROOT", compose_env):
-            result = compose.compose_role("dev")
-        assert "Dev-only content" in result
-        assert "All-role content" in result
-        assert "Unprefixed content" in result
-        assert "PM-only content" not in result
-        assert "DM-only content" not in result
-        assert "QA-only content" not in result
-
-    def test_pm_role_gets_only_pm_and_shared(self, compose_env):
-        self._setup_project_files(compose_env)
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "REPO_ROOT", compose_env):
-            result = compose.compose_role("pm")
-        assert "PM-only content" in result
-        assert "All-role content" in result
-        assert "Unprefixed content" in result
-        assert "Dev-only content" not in result
-        assert "DM-only content" not in result
-        assert "QA-only content" not in result
-
-    def test_skill_variant_gets_dev_files(self, compose_env):
-        """skill agent maps to dev identity, should get dev-* files."""
-        self._setup_project_files(compose_env)
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "REPO_ROOT", compose_env):
-            result = compose.compose_role("skill")
-        assert "Dev-only content" in result
-        assert "All-role content" in result
-        assert "PM-only content" not in result
-
-    def test_no_project_dir_no_error(self, compose_env):
-        """No .squidsquad/project/ dir should not cause an error."""
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "REPO_ROOT", compose_env):
-            result = compose.compose_role("dev")
-        # Should compose fine without project sub-skills
-        assert "# Dev Agent" in result
-
-
-# ---------------------------------------------------------------------------
-# deploy_role
-# ---------------------------------------------------------------------------
-
-class TestDeployRole:
-    def test_deploys_to_squidsquad_dir(self, compose_env):
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "_read_config_value", return_value=""):
-            output = compose.deploy_role("pm", target_root=compose_env)
-        assert output.exists()
-        assert output.name == "CLAUDE.md"
-        assert ".squidsquad" in str(output)
-        content = output.read_text(encoding="utf-8")
-        assert "GENERATED by compose.py" in content
-
-    def test_creates_soul_md(self, compose_env):
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "_read_config_value", return_value=""):
-            compose.deploy_role("skill", target_root=compose_env)
-        # Dev variant should get SOUL.md from dev role
-        soul = compose_env / ".squidsquad" / "skill" / "SOUL.md"
-        assert soul.exists()
-        assert "engineer" in soul.read_text(encoding="utf-8").lower()
-
-    def test_does_not_overwrite_existing_soul(self, compose_env):
-        soul_dir = compose_env / ".squidsquad" / "skill"
-        soul_dir.mkdir(parents=True)
-        soul = soul_dir / "SOUL.md"
-        soul.write_text("Custom soul content", encoding="utf-8")
-
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"), \
-             patch.object(compose, "_read_config_value", return_value=""):
-            compose.deploy_role("skill", target_root=compose_env)
-        assert soul.read_text(encoding="utf-8") == "Custom soul content"
 
 
 # ---------------------------------------------------------------------------
@@ -461,43 +279,10 @@ class TestGenerateLocalConfig:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# _load_manifest (requires pyyaml)
+# _load_manifest / TestLoadManifest retired in E6 #10685 Phase 3d.5 with
+# the v1 chain. v2 uses ``_load_manifest_v2`` against the unified
+# ``includes.yml`` and is exercised by test_manifest_v2 + test_compose_a*.
 # ---------------------------------------------------------------------------
-
-class TestLoadManifest:
-    def test_returns_none_without_yaml(self, compose_env):
-        with patch.object(compose, "yaml", None):
-            result = compose._load_manifest("dev")
-        assert result is None
-
-    def test_returns_none_for_missing_manifest(self, compose_env):
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"):
-            # No includes.yml exists
-            result = compose._load_manifest("pm")
-        assert result is None
-
-    @pytest.mark.skipif(compose.yaml is None, reason="pyyaml not installed")
-    def test_loads_valid_manifest(self, compose_env):
-        manifest_dir = compose_env / "references" / "roles" / "dev"
-        (manifest_dir / "includes.yml").write_text(
-            "includes:\n  - common/context-pressure\n  - common/pull-latest\n",
-            encoding="utf-8",
-        )
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", compose_env / "references" / "sub-skills"):
-            result = compose._load_manifest("dev")
-        assert result == ["common/context-pressure", "common/pull-latest"]
-
-    @pytest.mark.skipif(compose.yaml is None, reason="pyyaml not installed")
-    def test_invalid_yaml_returns_none(self, compose_env):
-        manifest_dir = compose_env / "references" / "roles" / "pm"
-        (manifest_dir / "includes.yml").write_text(
-            "not_includes: foo\n",
-            encoding="utf-8",
-        )
-        with patch.object(compose, "ROLES_DIR", compose_env / "references" / "roles"):
-            result = compose._load_manifest("pm")
-        assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -677,7 +462,12 @@ class TestUpgradeSoul:
 
 
 class TestVariantInheritance:
-    """Test Layer 3 variant inheritance in _load_manifest and _get_entry_file_for_role."""
+    """Test Layer 3 variant inheritance in _get_entry_file_for_role.
+
+    Post-E6 #10685 Phase 3d.5: ``_load_manifest`` was retired along with
+    the v1 compose chain; the remaining assertions exercise the entry-file
+    resolver only.
+    """
 
     def test_get_entry_file_suffix_strip(self):
         """pm-skill resolves to pm entry file."""
@@ -863,15 +653,10 @@ class TestNoDeprecatedMktemp:
         )
 
 
-class TestNoDeadPrefixVariable:
-    """#7062: _resolve_includes_with_manifest must not have dead prefix variable."""
-
-    def test_no_dead_prefix_in_resolve_includes(self):
-        import inspect
-        source = inspect.getsource(compose._resolve_includes_with_manifest)
-        assert "prefix = " not in source, (
-            "#7062: dead prefix variable should be removed from _resolve_includes_with_manifest"
-        )
+# TestNoDeadPrefixVariable (#7062 dead-code guard) retired in E6 #10685
+# Phase 3d.5 — ``_resolve_includes_with_manifest`` was deleted along with
+# the rest of the v1 compose chain, so the guard has no surface to assert
+# against.
 
 
 class TestNoRedundantReImport:
@@ -905,90 +690,21 @@ class TestNoRedundantReImport:
 # ---------------------------------------------------------------------------
 
 
-class TestGetWakeMode:
-    """#9745: compose._get_wake_mode delegates to config.get_wake_mode.
-
-    The behavioral semantics (precedence, normalization, fallback) live in
-    config.get_wake_mode and are exhaustively tested in
-    tests/test_feat_9745_wake_mode_canonical.py::TestGetWakeMode. These tests
-    only verify the compose-side wrapper delegates correctly — patch the
-    canonical helper directly rather than the underlying get_field.
-    """
-
-    def test_delegates_to_canonical_helper(self):
-        with patch("config.get_wake_mode", return_value="event-driven") as m:
-            assert compose._get_wake_mode("skill") == "event-driven"
-            m.assert_called_once_with("skill")
-
-    def test_falls_back_to_polling_on_import_failure(self):
-        """If `from config import get_wake_mode` raises, wrapper returns polling."""
-        import sys as _sys
-        # Drop the config module so the wrapper's import re-runs and fails.
-        with patch.dict(_sys.modules, {"config": None}):
-            assert compose._get_wake_mode("skill") == "polling"
+# TestGetWakeMode (#9745 compose-side delegation wrapper) retired in E6
+# #10685 Phase 5 — ``compose._get_wake_mode`` was the v1 ``compose_role``
+# helper, deleted in Phase 3d.5 (cycle 1564). ``cycle_post`` /
+# ``statusline_data`` delegation is still covered in
+# ``test_feat_9745_wake_mode_canonical.py``.
 
 
-class TestLoadManifestSelectsByWakeMode:
-    """#8697: _load_manifest picks includes.yml or includes-events.yml based on mode."""
-
-    def test_polling_loads_includes_yml(self):
-        manifest = compose._load_manifest("dev", wake_mode="polling")
-        assert manifest is not None
-        assert "common/cycle-runner" in manifest
-        # event-driven-workflow lives in common-events/ now
-        assert "common-events/event-driven-workflow" not in manifest
-
-    def test_event_driven_loads_includes_events_yml(self):
-        manifest = compose._load_manifest("dev", wake_mode="event-driven")
-        assert manifest is not None
-        # #9588: the events manifest is identified by the loader fragment
-        # (`common/boot-bootstrap`) plus the absence of polling-only
-        # entries like `common/cycle-runner`. The legacy assertion checked
-        # for `common-events/event-driven-workflow` — that fragment is now
-        # Read at runtime via the bootstrap, not listed in the manifest.
-        assert "common/boot-bootstrap" in manifest
-        # cycle-runner is polling-only, should NOT appear in events manifest
-        assert "common/cycle-runner" not in manifest
-
-    def test_event_driven_falls_back_to_includes_yml_when_events_absent(self, tmp_path):
-        """If a role has no includes-events.yml, fall back to includes.yml so
-        agents in event-driven mode still get *something*."""
-        role_dir = tmp_path / "roles" / "fakerole"
-        role_dir.mkdir(parents=True)
-        sub_skills = tmp_path / "sub-skills" / "common"
-        sub_skills.mkdir(parents=True)
-        (sub_skills / "frag.md").write_text("x", encoding="utf-8")
-        (role_dir / "includes.yml").write_text(
-            "includes:\n  - common/frag\n", encoding="utf-8"
-        )
-        with patch.object(compose, "ROLES_DIR", tmp_path / "roles"), \
-             patch.object(compose, "SUB_SKILLS_DIR", tmp_path / "sub-skills"), \
-             patch.object(compose, "_resolve_variant", return_value=None), \
-             patch.object(compose, "_list_known_role_identities", return_value=["fakerole"]):
-            manifest = compose._load_manifest("fakerole", wake_mode="event-driven")
-        assert manifest == ["common/frag"]
-
-    def test_all_four_roles_have_both_manifests(self):
-        """Every shipped role must define both manifests so mode-flipping works."""
-        for role in ("dev", "pm", "qa", "dm"):
-            poll = compose._load_manifest(role, wake_mode="polling")
-            event = compose._load_manifest(role, wake_mode="event-driven")
-            assert poll is not None, f"{role}: missing includes.yml"
-            assert event is not None, f"{role}: missing includes-events.yml"
-            # #9588: under the boot-bootstrap architecture, the mark that a
-            # manifest is wired correctly is the presence of the loader
-            # itself (`common/boot-bootstrap`) — the legacy check looked
-            # for `common-events/` entries directly in the events manifest,
-            # but those fragments are now Read at runtime by the bootstrap
-            # rather than listed in the manifest.
-            assert "common/boot-bootstrap" in poll, (
-                f"{role}: includes.yml missing `common/boot-bootstrap` "
-                f"loader entry"
-            )
-            assert "common/boot-bootstrap" in event, (
-                f"{role}: includes-events.yml missing `common/boot-bootstrap` "
-                f"loader entry"
-            )
+# #10685 PRD-E E6 V2 CUTOVER: the legacy ``TestLoadManifestSelectsByWakeMode``
+# class lived here and gated v1 ``_load_manifest`` against polling vs
+# event-driven manifests. Post-cutover the v2 path owns composition, and
+# wake_mode-based manifest selection is retired — there is only one unified
+# manifest per role (``includes.yml``, formerly ``includes-v2.yml``). The
+# event-driven boot path remains as runtime behavior (config.md still flips
+# the wake mode), but the COMPOSE-time mode-conditional manifest split is
+# gone. Tests for that gone behavior are deleted rather than kept skipped.
 
 
 class TestEventDrivenWorkflowLocation:
@@ -1009,13 +725,3 @@ class TestEventDrivenWorkflowLocation:
             "common-events/ (no mode-conditional logic inside fragments)"
         )
 
-    def test_event_driven_workflow_has_no_frontmatter(self):
-        """Per PM directive: no mode-conditional logic inside fragments."""
-        path = (Path(__file__).resolve().parent.parent
-                / "references" / "sub-skills" / "common-events"
-                / "event-driven-workflow.md")
-        first_line = path.read_text(encoding="utf-8").splitlines()[0]
-        assert first_line != "---", (
-            "event-driven-workflow.md should not have YAML frontmatter — "
-            "mode selection happens at the manifest level"
-        )

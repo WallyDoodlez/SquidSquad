@@ -139,14 +139,13 @@ class TestManifestIntegrity:
             else:
                 referenced.add(inc)
 
-        # Also scan includes.yml AND includes-events.yml files for
-        # additional_includes (Layer 3 variants) + dual-mode (#8697). A
-        # fragment is an orphan only when NO manifest of any mode references
-        # it.
+        # Also scan includes.yml files for additional_includes (Layer 3
+        # variants). Post-E6 (#10685) v2-cutover the includes-events.yml
+        # split is retired — there is one unified manifest per role.
         try:
             import yaml
             roles_dir = self.sub_skills_dir.parent / "roles"
-            for inc_yml in list(roles_dir.rglob("includes.yml")) + list(roles_dir.rglob("includes-events.yml")):
+            for inc_yml in roles_dir.rglob("includes.yml"):
                 data = yaml.safe_load(inc_yml.read_text(encoding="utf-8"))
                 if isinstance(data, dict):
                     for inc in data.get("additional_includes", []):
@@ -253,29 +252,26 @@ class TestIncludesYml:
         request.cls.sub_skills_dir = REFERENCES_DIR / "sub-skills"
 
     def test_includes_yml_exists_per_role(self):
-        """TC-A1: Each role directory has both includes.yml AND
-        includes-events.yml (#8697 dual-mode)."""
+        """TC-A1: Each role directory has includes.yml. The pre-E6
+        includes-events.yml mode split (#8697) was retired by the
+        v2 cutover (#10685) — a single unified manifest per role."""
         for role in self.ROLES:
-            for fname in ("includes.yml", "includes-events.yml"):
-                path = self.roles_dir / role / fname
-                assert path.exists(), f"Missing {fname} for {role}"
+            path = self.roles_dir / role / "includes.yml"
+            assert path.exists(), f"Missing includes.yml for {role}"
 
     def test_includes_yml_valid_yaml(self):
         """TC-X6: All manifests are valid YAML with expected structure."""
         import yaml
         for role in self.ROLES:
-            for fname in ("includes.yml", "includes-events.yml"):
-                path = self.roles_dir / role / fname
-                if not path.exists():
-                    continue
-                data = yaml.safe_load(path.read_text(encoding="utf-8"))
-                assert isinstance(data, dict), f"{role}/{fname}: not a dict"
-                assert "includes" in data, (
-                    f"{role}/{fname}: missing 'includes' key"
-                )
-                assert isinstance(data["includes"], list), (
-                    f"{role}/{fname}: 'includes' not a list"
-                )
+            path = self.roles_dir / role / "includes.yml"
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+            assert isinstance(data, dict), f"{role}/includes.yml: not a dict"
+            assert "includes" in data, (
+                f"{role}/includes.yml: missing 'includes' key"
+            )
+            assert isinstance(data["includes"], list), (
+                f"{role}/includes.yml: 'includes' not a list"
+            )
 
     def test_includes_yml_paths_exist(self):
         """All sub-skill paths in includes.yml resolve to actual files."""
@@ -288,14 +284,17 @@ class TestIncludesYml:
                 assert full.exists(), f"{role}: includes.yml references missing {inc}"
 
     def test_includes_yml_covers_template(self):
-        """TC-A2: includes.yml + includes-events.yml jointly cover all
-        `{{include:}}` directives in templates (#8697).
+        """TC-A2: includes.yml covers all `{{include:}}` directives in
+        the role's template.
 
-        Each template include must appear in at least one mode-specific
-        manifest (polling or events), either directly, via a slim variant,
-        or via a role-specific override. Common-events/ entries are
-        expected only in includes-events.yml; common/ entries should be in
-        both manifests OR explicitly known-excluded.
+        Each template include must appear in the role's manifest, either
+        directly, via a slim variant, or via a role-specific override.
+        Mode-specific (event-driven) fragments are Read at runtime via
+        `common/boot-bootstrap` and intentionally absent from the manifest.
+
+        Pre-E6 (#10685) this used to take the union of polling and events
+        manifests (#8697 dual-mode); the cutover unified into a single
+        per-role manifest.
         """
         import yaml
         for role in self.ROLES:
@@ -305,26 +304,17 @@ class TestIncludesYml:
                 r'\{\{include:\s*(.+?)\}\}', tmpl_text,
             ))
 
-            # Build the union of polling and events manifests.
-            manifests = {}
-            for mode_name, fname in (("polling", "includes.yml"),
-                                     ("events", "includes-events.yml")):
-                yml_path = self.roles_dir / role / fname
-                if not yml_path.exists():
-                    continue
-                data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
-                assert isinstance(data, dict), f"{role} {fname}: not a dict"
-                assert "includes" in data, f"{role} {fname}: missing includes"
-                manifests[mode_name] = set(data["includes"])
-                # Every manifest entry must resolve to a file
-                for inc in data["includes"]:
-                    full = self.sub_skills_dir / f"{inc}.md"
-                    assert full.exists(), (
-                        f"{role} {fname}: references non-existent {inc}"
-                    )
-
-            assert manifests, f"{role}: no manifests found"
-            yml_union = set().union(*manifests.values())
+            yml_path = self.roles_dir / role / "includes.yml"
+            data = yaml.safe_load(yml_path.read_text(encoding="utf-8"))
+            assert isinstance(data, dict), f"{role} includes.yml: not a dict"
+            assert "includes" in data, f"{role} includes.yml: missing includes"
+            yml_union = set(data["includes"])
+            # Every manifest entry must resolve to a file
+            for inc in data["includes"]:
+                full = self.sub_skills_dir / f"{inc}.md"
+                assert full.exists(), (
+                    f"{role} includes.yml: references non-existent {inc}"
+                )
 
             uncovered = set()
             for inc in tmpl_includes:
@@ -372,111 +362,16 @@ class TestIncludesYml:
             }
             unexpected = uncovered - known_exclusions - mode_specific_runtime_loaded
             assert not unexpected, (
-                f"{role}: template includes not covered by ANY manifest "
-                f"(polling+events), and not slim/role-override/excluded: "
+                f"{role}: template includes not covered by includes.yml, "
+                f"and not slim/role-override/excluded: "
                 f"{sorted(unexpected)}"
             )
 
 
-class TestComposeManifestIntegration:
-    """Test compose.py manifest-driven composition."""
-
-    @pytest.fixture(autouse=True, scope="class")
-    def _setup(self, request):
-        import sys
-        sys.path.insert(0, str(REFERENCES_DIR / "scripts"))
-        request.cls.roles_dir = REFERENCES_DIR / "roles"
-
-    def test_load_manifest_returns_list(self):
-        """_load_manifest returns a list for each role with includes.yml."""
-        from compose import _load_manifest
-        for role in ["dev", "pm", "qa", "dm"]:
-            result = _load_manifest(role)
-            assert isinstance(result, list), f"{role}: expected list, got {type(result)}"
-            assert len(result) > 0, f"{role}: empty manifest"
-
-    def test_load_manifest_dev_variant_inheritance(self):
-        """Worker variants inherit worker's manifest via base_role (post-6274.2).
-
-        Pre-6274.2 the legacy bare-name fallback (`_load_manifest('skill')`)
-        returned `dev`'s manifest verbatim because `roles/<variant>/includes.yml`
-        was absent. Post-6274.2 each variant has its own `includes.yml` with
-        `base_role: worker`, so the canonical inheritance check is now done
-        through the hyphenated variant form (`worker-skill`) and asserts the
-        base's manifest is a subset of the variant's expanded manifest.
-        """
-        from compose import _load_manifest
-        worker_manifest = _load_manifest("worker")
-        skill_manifest = _load_manifest("worker-skill")
-        assert worker_manifest, "worker manifest should be non-empty"
-        assert skill_manifest, "worker-skill manifest should be non-empty"
-        assert set(worker_manifest).issubset(set(skill_manifest)), (
-            "worker-skill should inherit every include from worker"
-        )
-
-    def test_manifest_composition_matches_inline_in_polling_mode(self):
-        """Phase A invariant — but mode-aware after #8697.
-
-        With the parallel-manifest design, the inline path renders every
-        `{{include:}}` directive in the template, including events-only
-        ones like `common-events/event-driven-workflow`. The polling
-        manifest path filters those out. So the two paths only match if we
-        compare polling-manifest output against an inline rendering that
-        also strips the events-only directives.
-
-        Test: inline output equals polling-manifest output once the
-        events-only fragments are removed from inline.
-        """
-        from compose import _resolve_includes, _resolve_includes_with_manifest, _load_manifest
-        entry_file = self.roles_dir / "worker" / "instructions.md"
-        manifest = _load_manifest("worker", wake_mode="polling")
-        manifest_result = _resolve_includes_with_manifest(
-            entry_file, manifest, wake_mode="polling"
-        )
-        inline_result = _resolve_includes(entry_file)
-        # Strip events-only sub-skill blocks from the inline rendering so
-        # the comparison is apples-to-apples with the polling manifest.
-        import re
-        events_only_names = (
-            "event-driven-workflow",
-            # #8915: the 5 event-mode L1 base fragments + DM's per-role
-            # pr-merge-wait fragment are only present in includes-events.yml,
-            # not includes.yml. The inline path will render them; the polling
-            # manifest path filters them out.
-            "l1-base",
-            "cursor-management",
-            "forge-read-pattern",
-            "idle-cooldown-loop",
-            "comment-handling",
-            "pr-merge-wait",
-            # #9588: the polling-mode ralph-loop-overview is now Read at
-            # runtime via boot-bootstrap rather than inlined via manifest.
-            # The inline path still renders it (the directive is in the
-            # template); strip it so the comparison stays apples-to-apples
-            # with the post-#9588 polling manifest output.
-            "ralph-loop-overview",
-        )
-        for name in events_only_names:
-            inline_result = re.sub(
-                rf"<!-- sub-skill: {re.escape(name)} -->.*?<!-- /sub-skill: {re.escape(name)} -->\n?",
-                "",
-                inline_result,
-                flags=re.DOTALL,
-            )
-        # Also collapse the resulting double-blank lines for fair compare.
-        inline_result = re.sub(r"\n{3,}", "\n\n", inline_result)
-        manifest_result = re.sub(r"\n{3,}", "\n\n", manifest_result)
-        assert inline_result.strip() == manifest_result.strip(), (
-            "Polling manifest composition differs from inline (stripped of "
-            "events-only fragments) — Phase A invariant broken within a mode"
-        )
-
-    def test_slim_variant_substitution(self):
-        """QA manifest with slim variants produces different (smaller) output."""
-        from compose import compose_role
-        # QA uses slim variants, dev uses full — QA should be smaller
-        qa_output = compose_role("qa")
-        dev_output = compose_role("dev")
-        assert len(qa_output) < len(dev_output), (
-            "QA composed output should be smaller than dev (slim variants)"
-        )
+# TestComposeManifestIntegration retired in E6 #10685 Phase 3d.5 — every
+# member exercised v1 helpers (``_load_manifest``, ``_resolve_includes``,
+# ``_resolve_includes_with_manifest``, ``compose_role``) that were deleted
+# alongside the v1 chain. The v2 manifest is exercised by
+# ``test_manifest_v2`` + ``test_compose_a*``; the unified ``includes.yml``
+# integrity tests in TestIncludesYml above already validate manifest
+# structure post-cutover.

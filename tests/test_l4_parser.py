@@ -146,11 +146,12 @@ def test_ops_across_multiple_slots():
 @pytest.mark.parametrize(
     "bad_h3",
     [
-        "### Boot & Queue",  # arbitrary prose H3
+        # #10987: only op-like H3s (heading starts with a reserved op
+        # keyword followed by whitespace or end-of-string) are subject
+        # to strict op-grammar validation. The cases here all match
+        # ``_OP_LIKE_RE`` and so still raise on malformed form.
         "### replace step:cycle/",  # missing step id
         "### replace step:wrong/foo",  # wrong step prefix
-        "### insert-around step:cycle/foo",  # unknown op
-        "### appendix",  # near-miss op name
         "### insert-before",  # missing target on a targeted op
         "### replace step:cycle/foo extra",  # trailing garbage
     ],
@@ -160,6 +161,32 @@ def test_malformed_h3_rejected(bad_h3):
     with pytest.raises(l4.L4ParseError) as exc:
         l4.parse_l4_text(text)
     assert "malformed H3 op" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "prose_h3",
+    [
+        "### Boot & Queue",  # arbitrary prose, no op prefix
+        "### insert-around step:cycle/foo",  # unknown op (no reserved prefix match)
+        "### appendix",  # not ``append`` followed by whitespace — prose
+        "### Zero-gap gate",  # production L4 file convention (verifier.md)
+    ],
+)
+def test_non_op_like_h3_treated_as_prose(prose_h3):
+    """#10987: H3 headings that don't start with a reserved op keyword
+    are content sub-headings — they flow into the slot's implicit append
+    body, preserving the raw heading line. Shipped production L4 files
+    under ``.squidsquad/project/`` use this convention pervasively.
+    """
+    text = f"## Instructions\n\n{prose_h3}\n\nfollowing prose\n"
+    doc = l4.parse_l4_text(text)
+    instructions = doc.slots.get("instructions", [])
+    assert len(instructions) == 1
+    op = instructions[0]
+    assert op.op_type == "append"
+    assert op.target_step_id is None
+    assert prose_h3 in op.body_text
+    assert "following prose" in op.body_text
 
 
 def test_h3_outside_any_slot_rejected():
@@ -297,21 +324,6 @@ def test_parse_l4_file_round_trip(tmp_path):
     assert set(doc.slots) == {"identity", "instructions"}
     assert len(doc.slots["instructions"]) == 2
     assert doc.slots["instructions"][1].target_step_id == "foo"
-
-
-# ---------------------------------------------------------------------------
-# Coexistence: parser does not modify v1 read sites
-# ---------------------------------------------------------------------------
-
-def test_v1_compose_untouched():
-    # A2b is pure additive. compose.py must not import l4_parser yet.
-    import compose
-    source = compose.__file__
-    with open(source, encoding="utf-8") as f:
-        text = f.read()
-    assert "l4_parser" not in text, (
-        "A2b is parse-only; A2 will wire l4_parser into compose.py later."
-    )
 
 
 # ---------------------------------------------------------------------------

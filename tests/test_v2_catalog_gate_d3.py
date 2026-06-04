@@ -323,12 +323,16 @@ class TestCatalogGateError:
 
 class TestV1Untouched:
     """AC5 — v1 compose path never calls the gate. Verified by static
-    grep: only the v2 dispatch (deploy_alias_v2) imports v2_catalog_gate."""
+    grep: every v2_catalog_gate reference must sit inside a v2
+    dispatch entry point (``deploy_alias_v2`` or ``deploy_role_v2``).
+    ``deploy_role_v2`` is the wizard-side v2 dispatch added in
+    E6 phase 3c (#10685) to give the foreign-project installer a v2
+    path that doesn't require the alias registry."""
+
+    _V2_DISPATCH_FNS = ("deploy_alias_v2", "deploy_role_v2")
 
     def test_only_v2_dispatch_imports_gate(self):
         src = (SCRIPTS / "compose.py").read_text(encoding="utf-8")
-        # Locate every v2_catalog_gate reference and confirm it sits
-        # inside ``def deploy_alias_v2(`` (the v2 dispatch).
         ref_positions = []
         start = 0
         while True:
@@ -341,9 +345,6 @@ class TestV1Untouched:
             "compose.py should reference v2_catalog_gate at least once "
             "(the v2 dispatch wiring)"
         )
-        # Find the function that ENCLOSES each reference. Walk back
-        # to the most recent ``def `` line and assert it's the v2
-        # dispatch.
         for pos in ref_positions:
             preceding = src.rfind("\ndef ", 0, pos)
             if preceding < 0:
@@ -352,7 +353,7 @@ class TestV1Untouched:
                 )
             fn_line_end = src.index("\n", preceding + 1)
             fn_signature = src[preceding + 1:fn_line_end]
-            assert "deploy_alias_v2" in fn_signature, (
+            assert any(fn in fn_signature for fn in self._V2_DISPATCH_FNS), (
                 f"v2_catalog_gate referenced inside non-v2 function: "
                 f"{fn_signature!r}"
             )

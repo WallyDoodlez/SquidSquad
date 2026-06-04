@@ -9,8 +9,7 @@ AC6 mandates tests for:
 
 Plus structural tests for the report format and manifest-reference
 collection (catalog rows whose names appear in any role's
-``includes.yml`` / ``includes-events.yml`` / ``includes-v2.yml`` are
-NOT flagged as dead-code).
+``includes.yml`` are NOT flagged as dead-code).
 """
 
 import subprocess
@@ -237,49 +236,12 @@ class TestDeadCodeCandidate:
         assert "cycle-runner" in out
 
 
-class TestManifestVariants:
-    """The dead-code scan must read includes.yml, includes-events.yml,
-    AND includes-v2.yml across every role."""
-
-    def test_v2_manifest_satisfies_reference(self, tmp_path):
-        repo, catalog = _make_fixture(
-            tmp_path,
-            catalog_body=_CATALOG_TWO_COMMON_ROWS,
-            sub_skill_files=[
-                "common/boot-bootstrap.md",
-                "common/cycle-runner.md",
-            ],
-            manifests={
-                # cycle-runner only appears in the v2 manifest.
-                ("pm", "includes.yml"): ["common/boot-bootstrap"],
-                ("pm", "includes-v2.yml"): [
-                    "common/boot-bootstrap",
-                    "common/cycle-runner",
-                ],
-            },
-        )
-        report = cd.scan_drift(catalog, repo)
-        assert report.dead_code_candidates == []
-
-    def test_events_manifest_satisfies_reference(self, tmp_path):
-        repo, catalog = _make_fixture(
-            tmp_path,
-            catalog_body=_CATALOG_TWO_COMMON_ROWS,
-            sub_skill_files=[
-                "common/boot-bootstrap.md",
-                "common/cycle-runner.md",
-            ],
-            manifests={
-                # cycle-runner appears in event-mode manifest only.
-                ("pm", "includes.yml"): ["common/boot-bootstrap"],
-                ("pm", "includes-events.yml"): [
-                    "common/boot-bootstrap",
-                    "common/cycle-runner",
-                ],
-            },
-        )
-        report = cd.scan_drift(catalog, repo)
-        assert report.dead_code_candidates == []
+# TestManifestVariants retired in E6 cutover (#10685) Phase 3e: the
+# v1 polling/event split (``includes-events.yml``) and the v2
+# coexistence file (``includes-v2.yml``) both retired under Phase 1, so
+# scanning multiple manifest filenames is no longer a behavior worth
+# pinning. The unified ``includes.yml`` path is exercised by every
+# other test class in this file.
 
 
 class TestExclusions:

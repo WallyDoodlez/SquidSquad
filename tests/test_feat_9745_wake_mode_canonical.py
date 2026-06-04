@@ -107,19 +107,9 @@ class TestWrappersDelegate:
         sys.modules.pop(name, None)
         return __import__(name)
 
-    def test_compose_delegates(self, monkeypatch):
-        compose = self._import_module("compose")
-        called_with = []
-
-        def fake_get_wake_mode(role):
-            called_with.append(role)
-            return "event-driven"
-
-        monkeypatch.setattr(config, "get_wake_mode", fake_get_wake_mode)
-        # Reimport compose so it picks up the patched config.get_wake_mode
-        # via its `from config import get_wake_mode` lazy import.
-        assert compose._get_wake_mode("skill") == "event-driven"
-        assert called_with == ["skill"]
+    # test_compose_delegates retired in E6 #10685 Phase 5 along with
+    # ``compose._get_wake_mode`` (orphan after Phase 3d.5 deleted the v1
+    # ``compose_role`` chain that was its only caller).
 
     def test_cycle_post_delegates(self, monkeypatch):
         cycle_post = self._import_module("cycle_post")

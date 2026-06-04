@@ -1,6 +1,6 @@
 # PRD A — Compose Link Stage
 
-> **Status**: PRD draft, 2026-05-30. Derived from TRD [[COMPOSE-ARCHITECTURE]] §1–§6 (link stage). Part of the COMPOSE-ARCH PRD slice family: A (this) / B (assemble) / C (L4 + l4-curation) / D (catalog + wake-mode) / E (harness-owned freshness).
+> **Status**: shipped, 2026-06-02 (E6 V2 CUTOVER, #10685). Derived from TRD [[COMPOSE-ARCHITECTURE]] §1–§6 (link stage). Part of the COMPOSE-ARCH PRD slice family: A (this) / B (assemble) / C (L4 + l4-curation) / D (catalog + wake-mode) / E (harness-owned freshness).
 >
 > **Scope:** the deterministic linking of L1–L4 source fragments into a single `.squidsquad/<alias>/CLAUDE.md` per agent instance. Excludes the LLM-driven assemble pass (PRD B), runtime L4 writes (PRD C), sub-skill catalog enforcement (PRD D), and harness-owned freshness (PRD E).
 

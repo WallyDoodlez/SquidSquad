@@ -24,6 +24,50 @@ sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
 import wizard  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _stub_assemble_for_scaffold(monkeypatch):
+    """scaffold_install routes through ``compose.deploy_role_v2`` (E6
+    cutover, #10685 phase 3c). The v2 pipeline runs ``atomic_emit.
+    assemble_and_emit`` after the link stage, which requires a real LLM
+    provider. Stub it to write the linked composite into the three
+    canonical paths so scaffold_install tests can exercise the wizard
+    end-to-end without a model call. Mirrors test_compose_a2f_10492's
+    fixture."""
+    try:
+        import atomic_emit
+    except ImportError:
+        return
+
+    def fake_assemble_and_emit(
+        linked_composite, output_dir, *, role_class, model_id=None,
+        commit_sha=None, generated_at=None, filename_suffix="",
+        **kwargs,
+    ):
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if filename_suffix == "":
+            base, linked, conflicts = (
+                "CLAUDE.md", "CLAUDE.linked.md", "CLAUDE.conflicts.md",
+            )
+        else:
+            base = f"CLAUDE{filename_suffix}"
+            linked = f"CLAUDE.linked{filename_suffix}"
+            conflicts = f"CLAUDE.conflicts{filename_suffix}"
+        (output_dir / base).write_text(linked_composite, encoding="utf-8")
+        (output_dir / linked).write_text(linked_composite, encoding="utf-8")
+        (output_dir / conflicts).write_text(
+            "# Stub conflicts report — assemble bypassed in tests\n",
+            encoding="utf-8",
+        )
+        return (
+            output_dir / base,
+            output_dir / linked,
+            output_dir / conflicts,
+        )
+
+    monkeypatch.setattr(atomic_emit, "assemble_and_emit", fake_assemble_and_emit)
+
+
 # ---------------------------------------------------------------------------
 # Helpers — make a fake subprocess.run and a fake `which`
 # ---------------------------------------------------------------------------
@@ -2112,7 +2156,7 @@ class TestSoulMdSeeding:
         mock_deploy = MagicMock(return_value=str(squid / "pm" / "CLAUDE.md"))
         mock_local = MagicMock()
         with patch.dict("sys.modules", {"compose": MagicMock(
-            deploy_role=mock_deploy, generate_local_config=mock_local
+            deploy_role_v2=mock_deploy, generate_local_config=mock_local
         )}):
             wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
 
@@ -2137,7 +2181,7 @@ class TestSoulMdSeeding:
         mock_deploy = MagicMock(return_value=str(squid / "pm" / "CLAUDE.md"))
         mock_local = MagicMock()
         with patch.dict("sys.modules", {"compose": MagicMock(
-            deploy_role=mock_deploy, generate_local_config=mock_local
+            deploy_role_v2=mock_deploy, generate_local_config=mock_local
         )}):
             wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
 
@@ -2164,7 +2208,7 @@ class TestSoulMdSeeding:
         mock_deploy = MagicMock(return_value=str(squid / "pm" / "CLAUDE.md"))
         mock_local = MagicMock()
         with patch.dict("sys.modules", {"compose": MagicMock(
-            deploy_role=mock_deploy, generate_local_config=mock_local
+            deploy_role_v2=mock_deploy, generate_local_config=mock_local
         )}):
             wizard.scaffold_install(spec, tmp_path, overwrite_existing=True)
 
