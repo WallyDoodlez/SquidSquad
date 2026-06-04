@@ -110,6 +110,64 @@ def _strip_yaml_frontmatter(content: str) -> str:
 # (``v2_link_stage.emit_v2_linked`` → ``atomic_emit.assemble_and_emit``)
 # is the only compose pipeline post-cutover.
 
+# #10981 B1: the v2 link stage walks ``references/roles/<role>/instructions.md``
+# (and L3 variants) and emits their bodies verbatim into the instructions
+# slot. Those bodies still carry v1-era ``{{include: <path>}}`` directives
+# that v1's ``_resolve_includes`` expanded inline. With v1 deleted in Phase
+# 3d.5, those directives leak through every operator ``deploy <alias>`` and
+# every harness ``deploy-all`` as literal ``{{include: common/cycle-runner}}``
+# text — agents booting against the composed CLAUDE.md would either fail
+# outright or interpret the directive as content.
+#
+# This minimal helper restores the directive-expansion behavior only —
+# capability + runtime directives are absent from current instructions.md
+# files (verified) and stay unsupported.
+
+_INCLUDE_DIRECTIVE_RE = re.compile(
+    r"^[ \t]*\{\{include:\s*(?P<path>[^\s}]+)\s*\}\}[ \t]*$", re.MULTILINE
+)
+
+
+def _resolve_includes_v2(content: str, source_root: Path = None) -> str:
+    """Expand ``{{include: <path>}}`` directives left over from v1 instructions.md.
+
+    Each directive references a sub-skill under ``<source_root>/references/sub-skills/``
+    (paths are relative to that root with no extension). When ``source_root``
+    is omitted the module-level ``SUB_SKILLS_DIR`` is used — that's the live
+    repo's tree, which is what ``deploy_alias_v2`` wants. The wizard path
+    (``deploy_role_v2``) threads its own ``source_root`` through so hermetic
+    fresh-installs read from the wizard's source tree.
+
+    The referenced body has its YAML frontmatter and any outer
+    ``<!-- sub-skill: ... -->`` markers stripped, then is wrapped with
+    fresh open/close markers to match the v1 inlined-fragment layout.
+
+    Directives whose path is in ``RUNTIME_READ_FRAGMENTS`` are dropped
+    (those fragments are Read at runtime by ``common/boot-bootstrap`` per
+    the #9588 lazy-load contract — inlining them would defeat that design).
+    Directives pointing at a non-existent source file are replaced with an
+    ``<!-- ERROR: Missing include: <path> -->`` marker so the failure is
+    visible in the composed output rather than a silent token leak.
+    """
+    if source_root is None:
+        sub_skills_dir = SUB_SKILLS_DIR
+    else:
+        sub_skills_dir = Path(source_root) / "references" / "sub-skills"
+
+    def _expand(match):
+        path = match.group("path").strip()
+        if path in RUNTIME_READ_FRAGMENTS:
+            return ""  # runtime-loaded — drop the directive entirely
+        full_path = sub_skills_dir / f"{path}.md"
+        if not full_path.is_file():
+            return f"<!-- ERROR: Missing include: {path} -->"
+        name = full_path.stem
+        body = _strip_yaml_frontmatter(full_path.read_text(encoding="utf-8")).rstrip()
+        body = _strip_outer_markers(body, name)
+        return f"<!-- sub-skill: {name} -->\n{body}\n<!-- /sub-skill: {name} -->"
+
+    return _INCLUDE_DIRECTIVE_RE.sub(_expand, content)
+
 
 # PRD-D D5 (#10676): v2 manifest is the union of polling + event-driven
 # include lists, expressed as a single mode-agnostic file. v2 compose
@@ -1115,6 +1173,18 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
         print(gate_result.format(), file=sys.stderr)
         sys.exit(1)
 
+    # #10981 B1 + B2 + B3: post-link deterministic resolution. The v2 link
+    # stage walks instructions.md verbatim and emits everything it walks,
+    # leaving v1-era ``{{include:}}`` directives + ``[ROLE]`` / ``[ACTIVE_AGENTS]``
+    # placeholders + the ``{{role-roster}}`` marker as literal text. The
+    # ``assemble_pass`` prompt explicitly forbids the LLM from introducing
+    # new content (references/prompts/assemble.md.j2 rule 5), so without
+    # these deterministic passes all three classes leak through every
+    # operator ``deploy <alias>`` and every harness ``deploy-all``.
+    body = _resolve_includes_v2(body)
+    body = _substitute_placeholders(body, alias, role)
+    body = _inject_role_roster(body, alias)
+
     output_dir = target_root / ".squidsquad" / alias
     output_dir.mkdir(parents=True, exist_ok=True)
     header = f"# SquidSquad -- {alias} Lead\n\n"
@@ -1341,13 +1411,19 @@ def deploy_role_v2(role_name: str, target_root: Path = None,
         sys.exit(1)
 
     # v1 deploy_role applied _substitute_placeholders deterministically
-    # before write; the v2 alias path lets the LLM in assemble_pass do
-    # this implicitly. The wizard's contract requires substituted
-    # output (variant agents must show their agent_id in cycle-runner
-    # paths, etc.) — restore the deterministic substitution here so
-    # placeholders never leak when assemble is cached, stubbed, or
-    # silently no-ops.
+    # before write; the wizard's contract requires substituted output
+    # (variant agents must show their agent_id in cycle-runner paths,
+    # etc.) — restore the deterministic substitution here so placeholders
+    # never leak when assemble is cached, stubbed, or silently no-ops.
+    # #10981 B1/B3: parity with the alias path — expand legacy
+    # ``{{include:}}`` directives and inject the role roster so the
+    # composed body has no leftover v1-era tokens. Wizard hermetic
+    # installs read sub-skills from the wizard's ``source_root`` (the
+    # squidsquad install holding ``references/``), not from
+    # ``target_root`` (the foreign project being installed into).
+    body = _resolve_includes_v2(body, source_root=source_root)
     body = _substitute_placeholders(body, output_name, role_class)
+    body = _inject_role_roster(body, output_name)
 
     output_dir = target_root / ".squidsquad" / output_name
     output_dir.mkdir(parents=True, exist_ok=True)
