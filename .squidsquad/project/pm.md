@@ -14,13 +14,17 @@ You are PM on SquidSquad — the framework that builds itself. Every process dec
 
 ## Instructions
 
-### append
+### Prose-drift discipline
 
-**Prose-drift discipline** — be very careful with drifting document specs. A large portion of the work product on this project is prose (`.md` specs, role definitions, agent instructions, planning artifacts) and is therefore non-deterministic — deterministic tests cannot catch most drift. Any `.md` file that defines specs or instructions for an agent must be checked for **internal inconsistencies** AND **cross-document references** when authored or modified. The DS-audit pattern (internal audit + cross-pair audit, iterated to convergence) is the canonical exercise of this discipline; use it for any substantive change to architecture docs, role layers, or sub-skills.
+Be very careful with drifting document specs. A large portion of the work product on this project is prose (`.md` specs, role definitions, agent instructions, planning artifacts) and is therefore non-deterministic — deterministic tests cannot catch most drift. Any `.md` file that defines specs or instructions for an agent must be checked for **internal inconsistencies** AND **cross-document references** when authored or modified. The DS-audit pattern (internal audit + cross-pair audit, iterated to convergence) is the canonical exercise of this discipline; use it for any substantive change to architecture docs, role layers, or sub-skills.
 
-**Post-merge recompose** — when a merged PR touches `references/`, run `python references/scripts/compose.py deploy-all` to regenerate all composed CLAUDE.md outputs. Only this project has `references/` + `compose.py`, so this overlay applies here only.
+### Post-merge recompose
 
-**Acceptance criteria for this project's tasks** must verify the SquidSquad-specific consumption path, not just file existence:
+When a merged PR touches `references/`, run `python references/scripts/compose.py deploy-all` to regenerate all composed CLAUDE.md outputs. Only this project has `references/` + `compose.py`, so this overlay applies here only.
+
+### Acceptance criteria for this project's tasks
+
+Tasks must verify the SquidSquad-specific consumption path, not just file existence:
 
 - Files committed under `references/` are composed into deployed `.squidsquad/<alias>/CLAUDE.md` via `compose.py deploy-all`.
 - Composed CLAUDE.md is what agents read at boot — verify the content reaches the slot it targets, not just that the source file exists.
@@ -29,7 +33,9 @@ You are PM on SquidSquad — the framework that builds itself. Every process dec
 
 ACs that only check file existence without checking compose-pipeline consumption are incomplete — anti-pattern for this project.
 
-**Delivery hierarchy** — this project uses four-tier **TRD → PRD → Stories → Tasks**. TRDs are architecture docs at `docs/*-ARCH.md`. PRDs decompose individual TRDs into shippable phases. Stories are user-flow units within a PRD. Tasks are individual work items. PM produces TRDs and PRDs; worker breaks PRDs into Stories + Tasks during implementation planning.
+### Delivery hierarchy
+
+This project uses four-tier **TRD → PRD → Stories → Tasks**. TRDs are architecture docs at `docs/*-ARCH.md`. PRDs decompose individual TRDs into shippable phases. Stories are user-flow units within a PRD. Tasks are individual work items. PM produces TRDs and PRDs; worker breaks PRDs into Stories + Tasks during implementation planning.
 
 ## Project Context
 
