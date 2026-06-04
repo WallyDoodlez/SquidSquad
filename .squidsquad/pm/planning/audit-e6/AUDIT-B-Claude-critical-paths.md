@@ -263,3 +263,19 @@ directives.
    NOT contain `[ROLE]`, `{{include:`, or `{{role-roster}}`.
 4. Update the `compose.py` docstring (`compose.py:1-13`) to reflect v2
    commands only.
+
+---
+
+## PM Verification Note (cycle 2121, 2026-06-03)
+
+The 3 BLOCKERs surfaced above were valid pre-fix. Skill landed commit `5c64247a` addressing all three (filed #10981, shipped).
+
+Initial PM re-verification (cycle 2121) appeared to show leaks still present, but the test was at the wrong layer (`emit_v2_linked` is the link stage only — resolvers run at the DEPLOY layer in `deploy_alias_v2` / `deploy_role_v2`). Second re-verification with multi-line input through the actual resolver chain (`_resolve_includes_v2(content) → _substitute_placeholders(body, alias, role) → _inject_role_roster(body, alias)`) confirms clean output.
+
+Fix call sites verified:
+- `deploy_alias_v2` calls all three at L1184-1186
+- `deploy_role_v2` calls all three at L1424-1426
+
+`_INCLUDE_DIRECTIVE_RE` regex (`^[ \t]*\{\{include:\s*(?P<path>[^\s}]+)\s*\}\}[ \t]*$`, MULTILINE flag set) correctly requires the directive to be on its own line — which is the actual usage pattern in source `instructions.md` files.
+
+**HALT LIFTED** on E6 squash PR open. See #10981 + #10685 comments.
