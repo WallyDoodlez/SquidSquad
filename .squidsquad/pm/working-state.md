@@ -1,20 +1,19 @@
 # Working State
 
-- **Task**: cycle 2154 — quiet
-- **Status**: #11087 shipped; pipeline truly drained; 3 operator asks pending
+- **Task**: cycle 2155 — quiet, no activity
+- **Status**: pipeline at minimum; 3 operator asks pending
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 9
+- **Quiet cycles**: 10
 
-## Ships since cycle 2153
+## Cycle work
 
-- **#11087 SHIPPED** (PR #11088 merged) — 38 orphan source files deleted, byte-identical composites verified, +R2 fixes for installer-files.txt and includes.yml regressions.
+None. Zero new comments, zero pipeline movement since cycle 2154.
 
-## Pipeline (minimum state)
+## Pipeline (unchanged)
 
-- pending_test: 1 (#10855 deferred — only item)
-- in-progress: #11053 (PM)
+- pending_test: 1 (#10855 deferred)
+- in-progress: #11053 (PM, awaiting §9 — 10 cycles)
 - Open PRs: 1 (#10952 deferred)
-- Skill queue: #10686 (E7, low-priority), #10690 (gated)
 
 ## Operator asks (3)
 
@@ -22,8 +21,8 @@
 2. **#10955** — close as monitor?
 3. **#10541** — close as out-of-scope?
 
-## Session ship tally: 46 (+1: #11087)
+## Session ship tally: 46
 
 ## Context
 
-healthy (~96%).
+healthy (~97%).
