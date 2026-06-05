@@ -456,6 +456,8 @@ The active dev agents on this project are: **skill** (read from `.squidsquad/con
 
 ---
 
+<!-- #10360-cleanup: inlined retired sub-skill `common/agent-boundaries` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
+
 <!-- sub-skill: agent-boundaries -->
 ## Team Awareness
 
@@ -479,6 +481,8 @@ The engineering specialist. Implements features and fixes bugs against a specifi
 
 The verification specialist. Takes completed engineering work, exercises it against the feature's acceptance criteria and smoke tests, and either hands it forward for delivery or sends it back with specific gaps.
 <!-- /sub-skill: agent-boundaries -->
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/verifier/responsibility` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: responsibility -->
 ## Verifier — General Responsibility
@@ -611,7 +615,7 @@ The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `wo
   in `tests/test_compose_9588.py`.
 -->
 
-
+→ run sub-skill: roles/verifier/ralph-loop-overview
 
 <!-- sub-skill: cycle-runner -->
 ## Cycle Runner (Transport Layer)
@@ -707,17 +711,17 @@ The script handles: status transitions, tracker comments, iteration logging, git
 - `version_bump`: `{new_version, items_included}`
 <!-- /sub-skill: cycle-runner -->
 
+→ run sub-skill: event-driven-workflow
 
+→ run sub-skill: l1-base
 
+→ run sub-skill: cursor-management
 
+→ run sub-skill: forge-read-pattern
 
+→ run sub-skill: idle-cooldown-loop
 
-
-
-
-
-
-
+→ run sub-skill: comment-handling
 
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
@@ -756,684 +760,15 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
-<!-- sub-skill: verification -->
-### Step 2 — Run E2E Tests
+→ run sub-skill: verification
 
-Print: `[🦑 HH:MM:SS] Running E2E tests...` (or `[🦑 HH:MM:SS] No E2E command — skipping tests.`)
+→ run sub-skill: improvement-scan
 
-If `E2E Tests` is configured in `config.md`, run: `(none)`
+→ run sub-skill: vault-remember
 
-If no E2E command is configured, skip this step.
+→ run sub-skill: vault-optimize
 
-Log results in `qa/qa-log.md`:
-
-```markdown
-## Verifier Run — YYYY-MM-DD HH:MM
-
-- **Result**: Passed | Failed | Skipped (no E2E command)
-- **Tests Run**: [N]
-- **Failures**: [list failing test names, or "none"]
-- **Notes**: [anything notable]
-```
-
-### Step 3 — Investigate and Route Findings
-
-Print: `[🦑 HH:MM:SS] Investigating test failures...` (or skip if no failures)
-
-#### Finding Routing Process
-
-For each finding (test failure, gap, or defect discovered during verification):
-
-**Step 3a — Classify the finding:**
-
-Determine the finding category using your domain-specific finding categories (defined in your L3 layer). If no domain categories are available, use this generic process:
-- Identify which role's **declared responsibilities** (from config.md team composition) the finding falls under.
-- If ownership is unclear, escalate to PM — PM is always present and owns coordination.
-
-**Step 3b — Check for duplicates:**
-
-```bash
-python references/scripts/tracker.py list-by-labels "type:issue,squidsquad"
-```
-Search output for keywords matching this finding. If a matching issue exists, comment on it — do not duplicate.
-
-**Step 3c — Document and file:**
-
-Every finding must include structured evidence:
-
-```
-**Finding**: [what is wrong — specific and testable]
-**Evidence**: [test output, file:line, command that reproduces it]
-**Category**: [implementation defect | spec gap | design defect | test infra]
-**Routed to**: [role] — [why this role is responsible]
-```
-
-- If **objective** (clear pass/fail, crash, error): File immediately with the structured format above.
-  ```bash
-  python references/scripts/tracker.py create-issue --title "[title]" --body "[structured finding]" --role [target-role] --severity [high|medium|low] --reporter verifier
-  ```
-- If **subjective** (coherence issue, style concern, architectural question): Flag for PM/human review. Do NOT file an issue — PM and human decide.
-  ```bash
-  python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Subjective finding flagged for PM/human review: [structured description]"
-  ```
-- If **ownership unclear**: Escalate to PM. PM is always present and owns coordination.
-- If the finding **spans multiple domains**: File to the primary responsible role, cross-reference others in comments.
-
-**Step 3d — Record on PR (if PR flow enabled):**
-
-If the finding relates to a PR, also post the structured finding as a PR comment for inline review context:
-```bash
-gh pr comment [PR_NUMBER] --body "## Verifier Finding\n\n[structured finding from 3c]"
-```
-
-### Step 4 — Verify Fixed Issues
-
-Print: `[🦑 HH:MM:SS] Verifying fixed issues...`
-
-Query all issues pending test:
-
-```bash
-python references/scripts/tracker.py list-issues skill --status pending-test
-```
-
-(Repeat for each worker role.)
-
-For each issue:
-
-0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
-1. Read details: `gh issue view [NUMBER] --json title,body,comments`
-1b. **Consult the vault** (#5572) — search for relevant context before verifying:
-   ```bash
-   grep -rl "[keyword from issue]" .squidsquad/vault/ --include="*.md" | head -5
-   ```
-   Check for: decisions that affect expected behavior, patterns the fix should follow, learnings from similar past issues, and human quality preferences (`[[human-profile]]`). This prevents false passes on code that violates vault-documented constraints.
-2. **Branch checkout** (#3296): Check out the task's feature branch before verification:
-   ```bash
-   python references/scripts/git_ops.py task-begin [role] [number]
-   ```
-   If the branch doesn't exist, task-begin exits non-zero — push back to the submitting agent (#9478: branch+PR is the only mode).
-   Run verification on the branch. When done, return to working branch:
-   ```bash
-   python references/scripts/git_ops.py task-end [role] [number]
-   ```
-3. Run the relevant test or manually verify the fix.
-4. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
-5. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
-6. If verified (fix works, regression test exists, all tests pass):
-   - If a PR exists for this issue, convert from draft to ready:
-     ```bash
-     gh pr list --search "squidsquad/" --state open --json number,headRefName | python -c "import sys,json; [print(p['number']) for p in json.load(sys.stdin) if '/[NUMBER]' in p['headRefName']]"
-     # If a PR number is found:
-     gh pr ready [PR_NUMBER]
-     ```
-   - Transition to pending-ship:
-     ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified. Status → Pending Ship."
-     ```
-   - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
-7. If not verified (fix doesn't work, no regression test, or tests fail):
-   - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead`
-   - Comment with specific failures — be specific about missing tests.
-
-### Step 5 — Verify Pending Test Tasks
-
-Print: `[🦑 HH:MM:SS] Verifying pending test tasks...`
-
-Query all tasks pending test:
-
-```bash
-python references/scripts/tracker.py list-tasks skill --status pending-test
-```
-
-(Adjust role as needed for other agents.)
-
-For each task:
-
-0. **Blocked check**: If the item has a `blocked:human-action` label, skip it. Print: `[🦑 HH:MM:SS] Skipping #[NUMBER] — blocked:human-action (waiting for human).` Do not change its status. Move to the next item.
-
-Read it: `gh issue view [NUMBER] --json title,body,labels,comments`
-
-**Branch checkout** (#3296): Check out the task's feature branch before testing:
-```bash
-python references/scripts/git_ops.py task-begin [role] [number]
-```
-When verification is complete (pass or fail), return to working branch:
-```bash
-python references/scripts/git_ops.py task-end [role] [number]
-```
-
-1. **Verifier produces the test plan from the AC list** (#9184). PM does not produce a test plan; Verifier is the verification owner. **Before exercising the implementation**, derive the test plan from the issue body's Acceptance Criteria + the locked CONTEXT artifact (if any) and write it to:
-
-   ```
-   .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md
-   ```
-
-   The test plan must be derivable from the AC list alone — do not reverse-engineer test cases from worker's diff. Read the AC list, read CONTEXT.md (for locked decisions and out-of-scope items), then write test cases that observably verify each AC against a real live test instance of the system (actual harness, actual tracker, actual filesystem). Running worker's unit tests is a sanity check only — not the gate.
-
-   Resume logic mirrors PM's: if `TEST-PLAN-<NUMBER>.md` already exists under `.squidsquad/qa/planning/` and the issue body's ACs have not changed since the file was committed, reuse it; otherwise re-derive.
-
-   **Optional: route test-plan drafting to an external model** (#9319 — was orphaned PM infrastructure, reclaimed for verifier):
-
-   ```bash
-   python references/scripts/model_router.py route \
-     --task-type test-plan \
-     --task-id <NUMBER> \
-     --input-files "<issue body export>,<CONTEXT artifact if any>" \
-     --output-file ".squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md" \
-     --context "Draft live-system test plan for #<NUMBER> from the AC list."
-   ```
-
-   The router uses the `Test Plan Model` config setting and falls back to a Claude subagent on failure (same fallback contract PM uses for research/discussion-prep). Verifier reviews the draft, adjusts as needed, and saves the final version. This is optional — Verifier can also write the plan directly without routing.
-
-   **Test plan structure**:
-
-   ```markdown
-   # TEST-PLAN-<NUMBER> — [Title]
-
-   **Source**: GitHub issue #<NUMBER> Acceptance Criteria (and CONTEXT-<NUMBER>.md locked decisions if present).
-   **Derived without reading the diff.**
-
-   ## Test Cases
-
-   ### TC-1 (covers AC-1): [observable scenario]
-   - **Precondition**: [state of live instance before]
-   - **Steps**: [what verifier does against the live system]
-   - **Expected**: [observable result that satisfies AC-1]
-   - **Verification command**: [exact command verifier runs]
-
-   ### TC-2 (covers AC-2): …
-   ...
-
-   ## Coverage matrix
-   - AC-1 → TC-1
-   - AC-2 → TC-2, TC-3
-   - AC-N → TC-…
-
-   Every AC must appear in this matrix.
-
-   ## Comprehension Questions (if task touches LLM-consumed instructions)
-
-   This section is REQUIRED when the task adds or modifies LLM-consumed
-   instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts).
-   Verifier writes the CQ specs here — not PM (#9184).
-
-   ### CQ-1: [observable question a fresh agent should answer from the modified files alone]
-   - **Files**: [exact files the comprehension agent will be given]
-   - **Expected answer**: [the correct answer, derivable from the files alone]
-
-   Also persist the CQ spec at `tests/comprehension/<NUMBER>_spec.json`
-   per the existing convention so the comprehension test runner can pick it up.
-   ```
-
-   Spawn a Verifier subagent (via the Agent tool) to write executable assertions for the live-system test cases:
-
-   Subagent prompt:
-   ```
-   Read .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md. For each test case:
-
-   1. Write an executable pytest test in .squidsquad/qa/planning/TEST-<NUMBER>-tests.py
-      - Each TC becomes a test function: test_tc_01_[name], test_tc_02_[name], etc.
-      - Tests must use concrete assertions (file exists, string matches, JSON parses, exit code checks)
-      - Tests must exercise the REAL live system — actual scripts, actual harness, actual tracker. Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure. Do not mock the system under test.
-   2. Run the tests: python -m pytest .squidsquad/qa/planning/TEST-<NUMBER>-tests.py -v
-   3. Record pytest output verbatim in QA-RESULTS-<NUMBER>.md
-
-   TC result rules:
-   - PASS: test function passes
-   - FAIL: test function fails — include assertion error
-   - HUMAN-REQUIRED: TC cannot run because the environment is not set up (missing API key,
-     Docker not running, etc.). This is NOT a code bug — a human must fix the environment.
-     Tag with `blocked:human-action` label and note what the human needs to do.
-   - "Deferred" and "Skipped" are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED.
-
-   Write results to .squidsquad/qa/planning/QA-RESULTS-<NUMBER>.md
-   Include the full pytest output and a summary table.
-   ```
-
-   **HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the `blocked:human-action` label and comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
-
-   Verifier reviews QA-RESULTS-<NUMBER>.md and makes the final decision.
-
-1b. **Comprehension testing** (if verifier's TEST-PLAN-<NUMBER>.md has a `## Comprehension Questions` section):
-
-   This applies when the task touches LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md). Verifier wrote the CQ specs as part of its own test plan (#9184). If TEST-PLAN-<NUMBER>.md has no `## Comprehension Questions` section, skip this step.
-
-   Spawn a comprehension agent (via the Agent tool) with a neutral, file-scoped prompt: "Read the following files and answer ONLY from what you find in them. Files: [list modified files]. Answer each question below, quoting file content."
-
-   **Adaptive spawning**: If 4+ sub-skills affected, spawn one agent per sub-skill group. Otherwise, single spawn.
-
-   Record results in QA-RESULTS-<NUMBER>.md under `## Comprehension Tests` with per-CQ PASS/FAIL entries. A comprehension failure is a legitimate finding.
-
-2. **Worker unit tests are a sanity check, not the gate** (#9184). Inspect worker's unit tests under `tests/` for the changed area. Running them as a sanity check is fine, but verifier's gate is the live-system execution of `TEST-PLAN-<NUMBER>.md` above. Coverage gaps in worker's unit tests are a separate finding routed back to worker — do not skip verifier's live execution because worker's tests pass.
-
-2b. **Test coverage check** (always runs): Verify worker's PR includes unit tests for new code per the worker workflow (#9184). If the implementation adds new functions, scripts, or modules but the PR ships with no unit tests AND no explicit "no testable surface" justification, reject — tests are part of the implementation, not follow-up work.
-
-2c. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
-
-2d. **AC walk against the issue body's Acceptance Criteria** (#8950 Gate #3, updated by #9184) — before marking any task `pending-test → pending-ship`, walk each AC in the **GitHub issue body**. For each AC:
-
-   - Confirm it is **observably satisfied** by the implementation — run the verification command stated in the AC, check the file the AC names, or observe the output the AC describes. **Tests passing is necessary but not sufficient — do not infer AC satisfaction from test names.**
-   - Use verifier's own `TEST-PLAN-<NUMBER>.md` coverage matrix to cross-check that every AC has at least one TC mapped to it.
-
-   Optional supporting artifacts (look in this precedence):
-
-   ```bash
-   QA_TEST_PLAN=$(ls .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md 2>/dev/null | head -1)
-   LEGACY_TEST_PLAN=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | grep -i 'test-plan' | head -1)
-   ```
-
-   - **Primary**: `$QA_TEST_PLAN` (the new convention, #9184) — when present, it is verifier's own derivation of the AC list; its coverage matrix is the source of truth for AC-walk coverage.
-   - **Legacy fallback**: `$LEGACY_TEST_PLAN` (`.squidsquad/pm/planning/FEAT-PM-<NUMBER>-TEST-PLAN.md` or `.squidsquad/pm/planning/TEST-PLAN-<NUMBER>.md`) — only used for in-flight tasks filed under the pre-#9184 workflow. Do not author new files at this path.
-
-   If any AC is not observably satisfied, transition `pending-test → in-progress` and comment which AC failed:
-
-   ```bash
-   python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-   python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "AC walk failed: AC-[N] from the issue body is not observably satisfied — [what was checked and what failed]. Status → In Progress."
-   ```
-
-3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered:
-   ```bash
-   python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "FAIL. [list every specific finding]. Back to In Progress."
-   ```
-   Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
-4. **Only exception**: The human explicitly says "ship with these gaps" — record the override:
-   ```bash
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."
-   ```
-5. If all criteria pass with zero gaps:
-
-   **Promote test files to tests/** (before transitioning):
-   If any test files exist in `.squidsquad/qa/planning/` matching `TEST-[NUMBER]-tests.py` or `QA-RESULTS-[NUMBER]*.md`:
-   - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`
-   - If comprehension test spec files exist at `tests/comprehension/[NUMBER]_spec.json`, leave them in place (already canonical)
-   - Verify the promoted tests still pass: `python -m pytest tests/test_feat_[NUMBER]_*.py`
-   - These tests persist as regression tests — they are NOT deleted during planning cleanup
-
-   Check PR Flow: `python references/scripts/config.py get pr-flow`
-
-   **If PR Flow `yes`** and a PR exists for this issue:
-   - Post verifier results on the PR:
-     ```bash
-     gh pr comment [PR_NUMBER] --body "## Verifier Results\n\n**Status**: PASS\n**Test Plan**: .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md (Verifier-owned, derived from AC list)\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified against a live instance."
-     ```
-   - Formally approve the PR:
-     ```bash
-     gh pr review [PR_NUMBER] --approve --body "Verifier verified — zero gaps."
-     ```
-   - **Check Auto Merge**: `python references/scripts/config.py get auto-merge`
-   - **Check per-ticket override**: `python references/scripts/tracker.py get-labels [NUMBER]` — look for `review:human-required` label.
-
-   **If Auto Merge `yes` AND no `review:human-required` label** — merge via harness:
-     ```bash
-     gh pr ready [PR_NUMBER]
-     curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "verifier"}'
-     ```
-     The harness returns 202 immediately. The `pr-merged` event appears in your next cycle's `recent_events`.
-     - **Merge succeeds** (check `pr-merged` event with `success: true`): transition to pending-ship:
-       ```bash
-       python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-       python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR auto-merged. Status → Pending Ship."
-       ```
-     - **Merge conflict**: handle as described in the PR Flow `no` merge conflict section below.
-
-   **If Auto Merge `no` OR `review:human-required` label present** — route to human review:
-     ```bash
-     gh pr ready [PR_NUMBER]
-     python references/scripts/tracker.py transition [NUMBER] pending-test pending-human-review --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Human Review."
-     ```
-
-   **If PR Flow `no`** (or no PR exists):
-
-   **Merge PR** (if a PR exists for this issue):
-   ```bash
-   # Find and merge the PR
-   gh pr list --search "squidsquad/ [NUMBER]" --state open --json number,headRefName --limit 5
-   ```
-   For each PR with branch matching `squidsquad/*/[NUMBER]`:
-   ```bash
-   gh pr ready [PR_NUMBER] 2>/dev/null
-   curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "verifier"}'
-   ```
-   - **Merge succeeds**: proceed to pending-ship transition
-   - **Merge conflict**: Verifier merges the working branch into the feature branch (code was already verified):
-     ```bash
-     git fetch origin
-     git checkout [BRANCH_NAME]
-     git merge origin/[WORKING_BRANCH]
-     ```
-     - **Merge succeeds (no code conflicts)**: push and retry merge
-       ```bash
-       git push origin [BRANCH_NAME]
-       curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH_NAME]", "role": "verifier"}'
-       ```
-       If merge now succeeds, proceed to pending-ship. Code was already verified — no re-verification needed.
-     - **Merge has code conflicts** (not just .squidsquad/ state files): reject back to worker with specific conflicting files
-       ```bash
-       git merge --abort
-       git checkout [WORKING_BRANCH]
-       python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-       python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Worker: resolve conflicts and re-submit."
-       ```
-     - **Only .squidsquad/ state file conflicts**: resolve by keeping both versions, then push and merge. State files are always auto-resolvable.
-   - **No PR found**: proceed (direct-to-main workflow, no merge needed)
-
-   After successful merge (or no PR):
-   ```bash
-   python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR merged. Status → Pending Ship."
-   ```
-
-6. **delivery:skip check**: If the task is internal-only, add `delivery:skip` to the comment message.
-
-7. If criteria fail:
-   **If PR Flow `yes`** and a PR exists:
-   - Post failure on the PR and request changes:
-     ```bash
-     gh pr comment [PR_NUMBER] --body "## Verifier Results\n\n**Status**: FAIL\n\n[list findings]"
-     gh pr review [PR_NUMBER] --request-changes --body "Verifier FAIL: [findings summary]"
-     ```
-   - Transition back to `In Progress`:
-     ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "FAIL. [findings]. PR changes requested. Back to In Progress."
-     ```
-
-   **If PR Flow `no`**: transition back to `In Progress` with specific failures in the comment.
-
-### Step 5b — Monitor PRs (if PR Flow enabled)
-
-If `PR Flow: yes` in `config.md`:
-
-Print: `[🦑 HH:MM:SS] Checking open PRs...`
-
-List open SquidSquad PRs:
-```bash
-gh pr list --search "squidsquad/" --state all --json number,title,state,mergedAt,url --limit 20
-```
-
-For each PR:
-- **If merged**: find the corresponding tracker item (parse the task/issue ID from the PR title). Update status to `Pending Ship`. Append Discussion entry: `> [YYYY-MM-DD HH:MM] **verifier**: PR [URL] merged by human. Status → Pending Ship.` Apply the same `delivery: skip` logic as Step 5 item 4 if the task is internal-only.
-- **If closed without merge**: update status back to `In Progress`. Append Discussion entry with note.
-- **If open with new comments**: fetch comments via `gh pr view [N] --comments`. Append any new comments to the tracker Discussion: `> [YYYY-MM-DD HH:MM] **verifier**: PR comment from [author]: [summary]`
-- **If open with "changes requested" review**: update status back to `In Progress`. Append Discussion entry with the requested changes.
-
-If `PR Flow: no`, skip this step.
-
-### Step 6 — Agent Health Check
-
-Print: `[🦑 HH:MM:SS] Checking agent health...`
-
-Check each agent's health by reading their `current-state` file via cross-clone paths from `.squidsquad/.local-config`. Each agent writes to its `current-state` file at the end of every cycle (including quiet cycles), so the file's mtime indicates when the agent last completed a cycle.
-
-Read `.squidsquad/.local-config` to get each agent's clone path. For each worker agent listed in `config.md`, plus PM, plus DM and designer (if their directories exist):
-
-1. Look up the agent's clone path from `.local-config` (format: `- **role**: /absolute/path`).
-2. Read `<path>/.squidsquad/<role>/current-state` and check the file's mtime.
-3. Read the `Iteration Interval > Minutes` value from `config.md` (default 30). An agent is stalled if the `current-state` mtime is older than 2× the iteration interval.
-
-- If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
-- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa/qa-log.md` and append a Discussion note:
-  ```
-  > [YYYY-MM-DD HH:MM] **verifier**: Agent [role] appears stalled — no cycle activity for [elapsed] minutes. Please check.
-  ```
-- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in `qa/qa-log.md` (install-coupled; will be renamed with `.squidsquad/qa/` → `.squidsquad/verifier/` in wizard.py D4).
-<!-- /sub-skill: verification -->
-
-<!-- sub-skill: improvement-scan -->
-## Improvement Scanning (Quiet Cycle Productivity)
-
-During quiet cycles, use your domain expertise to scan the **target project** for improvements. This turns idle time into proactive project improvement. Findings are reported to PM, who files them through the normal tracker pipeline.
-
-### Activation
-
-Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entirely.
-
-**Issue gate**: Before triggering a scan, check for open issues assigned to your role:
-```bash
-python references/scripts/tracker.py list-issues qa --status open
-```
-If any issues exist, skip the scan — fix issues instead. Issues always take priority over improvement scanning.
-
-Trigger an improvement scan on **every quiet cycle** (when no issues were fixed, no tasks progressed, no verification done), subject to the issue gate above.
-
-### Scanning Step
-
-When triggered, add a new step to your cycle:
-
-Print: `[🦑 HH:MM:SS] Scanning for improvements...`
-
-Write status bar state: `scanning|🔍 Scanning [target description]...`
-
-1. **Detect project type**: Read `config.md` project info. Scan file extensions, `package.json`, `Cargo.toml`, `go.mod`, etc. to understand the tech stack. No new config field needed — auto-detect at scan time.
-
-2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
-
-3. **Select files to scan**: Use the scan index for query-driven targeting:
-   ```bash
-   python references/scripts/scan_index.py suggest-targets qa --count 5
-   ```
-   This returns files ranked by a composite score (coverage gaps, git churn, cross-role findings, acceptance rate). If `scan_index.py` is not available or fails, fall back to manually checking `.squidsquad/[your-role]/scan-history.md` and picking files based on recency, coverage gaps, and staleness.
-
-   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
-
-4. **Scan with your domain lens**: Read your SOUL.md `### Improvement Scan` section for:
-   - **Scan criteria**: what to look for, in priority order
-   - **File patterns**: which file types to target
-   - **Noise filter**: what does NOT constitute a finding
-
-   Apply these criteria to the selected files. If your SOUL.md lacks an Improvement Scan section, fall back to general code quality checks (dead code, error handling, security).
-
-5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-issue` or `create-task`:
-
-   **Classification:**
-   - **Issue** (`type:issue`): something broken, wrong, inconsistent, stale, or not working as specified
-   - **Task** (`type:task`): something new that doesn't exist yet, enhancement, optimization
-
-   File each finding as a GitHub Issue with labels: the appropriate `type:issue` or `type:task`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
-
-   ```
-   **Found by**: [role]-lead (improvement-scan)
-   **File**: [path]
-   **Finding**: [specific finding]
-   **Recommendation**: [what to do]
-   ```
-
-   Tag all findings with the `improvement-scan` label so PM and human can filter them.
-
-6. **Update scan history**: Record the scan in both the DB and markdown (dual-write):
-   ```bash
-   python references/scripts/scan_index.py record-scan --role qa --files "[comma-separated files]" --findings '[JSON array of findings]'
-   ```
-   If `scan_index.py` is not available, skip the DB write — the markdown write below is sufficient.
-
-   Also append to `.squidsquad/[your-role]/scan-history.md`:
-
-   ```markdown
-   ## Scan — YYYY-MM-DD HH:MM
-
-   - **Files scanned**: [list of 3-5 files]
-   - **Findings**: [list of findings reported, or "none"]
-   - **Items rejected by human**: [list of previously rejected items — never refile these]
-   ```
-
-7. **Capture knowledge from navigation** (#5569): As you read files during the scan, you learn things — patterns, gaps, connections between systems. At the end of each scan, log up to **3 knowledge items** (subject to the vault write budget of 2 per cycle):
-
-   - **Vault writes**: learnings, patterns, or decisions discovered during navigation. Use vault-create for new notes, vault-update for existing ones. Apply the same 4-gate logic as vault-remember (write budget → dedup → reusability → fresh context).
-   - **Scan criteria adjustments**: if you notice your scan criteria consistently miss a category of issues, note it in scan-history.md under a `- **Criteria note**:` line for future scans.
-   - **Connection notes**: observations about how systems relate that aren't obvious from a single file — add as vault galaxy notes (`learning-*` or `pattern-*`).
-
-   Only capture genuinely useful knowledge — not noise. If nothing noteworthy was learned, skip this step.
-
-### Rules
-
-- **File directly to tracker** — agents file scan findings as issues/tasks with the `improvement-scan` label. PM reviews through the normal pipeline.
-- **Default Low priority** — all scan items are Low priority. Human bumps if valuable.
-- **Max 2 items per scan** — prevents noise. Quality over quantity.
-- **Never refile rejected items** — track rejected/dismissed items in scan history. If human says "not worth it," don't suggest it again.
-- **Scanning must not extend cycle time excessively** — if a scan takes too long, reduce file count for next cycle.
-- **PM does NOT auto-approve** scan items — human decides whether to act on them.
-<!-- /sub-skill: improvement-scan -->
-
-<!-- sub-skill: vault-remember -->
-### Step 4b — Vault Remember (End-of-Cycle Reflection)
-
-Print: `[🦑 HH:MM:SS] Reflecting on cycle...`
-
-**Config gate**: Check vault-remember setting:
-```bash
-python references/scripts/config.py get vault-remember
-```
-If `no`, skip this step entirely.
-
-**BRIEFING.md staleness check** (runs every cycle — not gated by quiet check):
-
-Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
-- **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
-- **Active agents**: Does BRIEFING.md list the same agents as config.md `Workers` (6274.1 dual-aware shim also accepts the deprecated `Dev Agents:` key)?
-- **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
-
-If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
-
-**Quiet-cycle gate**: Check if this cycle did real work:
-```bash
-python references/scripts/vault_remember.py is-quiet qa
-```
-If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
-
-**Reset write counter** at the start of each reflection:
-```bash
-python references/scripts/vault_remember.py reset-writes qa
-```
-
-**Reflection prompt**: Review this cycle's iteration log and evaluate each category. Do NOT capture human preferences or behavioral directives here — those belong in soul shepherd (observed signals) or L4 (explicit directives).
-
-1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
-   → If yes: vault-create `galaxy/decision-*.md`
-2. **PATTERNS**: Any reusable patterns discovered or confirmed?
-   → If yes: vault-create `galaxy/pattern-*.md`
-3. **LEARNINGS**: Anything fail or succeed unexpectedly?
-   → If yes: vault-create `galaxy/learning-*.md`
-4. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
-   → If yes: vault-update `projects/<name>.md` or `BRIEFING.md`
-
-For each candidate, apply these **deterministic gates IN ORDER**:
-
-**Gate 1 — Write budget**:
-```bash
-python references/scripts/vault_remember.py write-budget qa
-```
-If output is `0`, STOP — no budget remaining this cycle.
-
-**Gate 2 — Dedup check**:
-```bash
-python references/scripts/vault_check.py dedup-check --title "<candidate-name>" --tags "<tags>"
-```
-- If exact match found → SKIP (already in vault)
-- If near-match found → decide: UPDATE existing note or CREATE new
-- If no match → proceed to Gate 3
-
-**Gate 3 — Reusability**: Is this specific to only this cycle with no future value? → SKIP
-
-**Gate 4 — Fresh context test**: Would a fresh agent in a new context benefit from this? → WRITE
-
-**Output format** (in iteration log notes):
-- `WRITE: <type> — <one-line description>` (gates 3+4 passed)
-- `UPDATE: <existing-note> — <what to add>` (dedup found near-match)
-- `SKIP: <reason>`
-
-**After each write**, increment the counter and run vault-check:
-```bash
-python references/scripts/vault_remember.py inc-writes qa
-# vault-check Level 1 runs automatically per vault-protocol
-```
-
-**Priority when >2 candidates pass gates** (write the top 2 only):
-1. Decisions (architectural choices compound)
-2. Learnings (failure lessons prevent repeat mistakes)
-3. Patterns (useful but can wait a cycle)
-
-Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
-
-**BRIEFING.md updates**: Before updating BRIEFING.md, check the token budget:
-```bash
-python references/scripts/vault_remember.py briefing-budget
-```
-If remaining is 0, do not add to BRIEFING.md without trimming. Trimmed content moves to a galaxy note — never deleted.
-
-**Scope reminder**: The vault stores project and environment facts (conventions, context, decisions, learnings). Human behavioral preferences are captured by soul shepherd (observed) and L4 directives (explicit) — not here.
-<!-- /sub-skill: vault-remember -->
-
-<!-- sub-skill: vault-optimize -->
-### Step — Vault Optimize (Quiet Cycle)
-
-During quiet cycles, check if vault optimization is needed. This step runs AFTER the improvement scan check — if the scan ran this cycle, skip optimization.
-
-**Config gate**: Check `Vault Optimize > Enabled` in `config.md`. If `no`, skip entirely.
-
-**Activation**: Only run when the vault has 20+ notes AND this is a quiet cycle with no other work.
-
-Run the optimizer:
-
-```bash
-python references/scripts/vault_optimize.py run
-```
-
-The script handles:
-1. **Prune**: Auto-archives galaxy notes that are both stale (60+ days since update) AND orphaned (no inbound wikilinks). Never prunes notes created today.
-2. **Confidence decay**: Downgrades confidence (high→medium after 60 days, medium→low after 120 days) for stale notes.
-3. **Reindex**: Rebuilds `links` frontmatter from body wikilinks across all notes.
-4. **Relevance scoring**: Computes scores based on link count + recency + confidence. Stored in `.squidsquad/vault/.relevance-index.json`.
-
-**Pending questions**: If optimization surfaces questions that need human input (e.g., "Should these two similar notes be merged?"), add them to the queue:
-
-```bash
-python references/scripts/vault_optimize.py add-question --agent qa --note [path] --question "[plain language question]"
-```
-
-Questions use plain language — never expose vault internals (galaxy, frontmatter, wikilinks, PARAG). Describe notes by topic. All questions are skippable.
-
-**Status bar**: The pending question count is shown in the status bar. PM mentions it in check-in. Human responds when ready.
-
-If the vault is too small (<20 notes) or optimize is disabled, the script exits cleanly with no output.
-<!-- /sub-skill: vault-optimize -->
-
-<!-- sub-skill: self-restart -->
-### Self-Restart (Context Pressure Only)
-
-Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled by the harness via intent API (#4966).
-
-**Context pressure restart flow** (#4792 Phase 1):
-
-1. Step 1b detects context pressure exceeds threshold.
-2. Checkpoint working state to `.squidsquad/qa/working-state.md`.
-3. Complete the current cycle normally.
-4. At cycle end, `cycle_post.py` checks the `context_pressure` field of your `cycle-output.json` (falling back to `cycle-input.json` if you did not pass it through). If exceeded, it POSTs `/agents/qa/restart` to the harness so intent flips to `restarting` (recording `intent_set_at` for the 60s force-kill safety net), then exits with code 42.
-5. **You then invoke `/quit`** — see "Graceful Stop — Self-Quit Protocol" below.
-6. The harness observes the process exit and, because intent is `restarting`, respawns the agent through the proper RESTARTING flow.
-
-### Graceful Stop — Self-Quit Protocol
-
-**After `cycle_post.py` exits with code 42** (the cooperative termination signal — either the harness asked you to stop/restart, or `cycle_post` detected its own context pressure exceeded), immediately invoke the `/quit` slash command to terminate the claude session. The harness will then observe the process exit and either mark you stopped or respawn you per its intent state machine.
-
-- Do NOT continue working after a 42 exit — the harness is waiting for you to terminate.
-- Do NOT attempt to suppress, retry, or override the 42 exit — it is the canonical cooperative-termination signal.
-- The exit-42 conditions are owned by `cycle_post.py`: harness intent in `{stopping, restarting}` OR context-pressure exceeded.
-
-The harness has a **60-second force-kill safety net** that fires if you fail to invoke `/quit` within the cooperative window. The safety net guarantees that operator intent (stop or restart) eventually wins even if the agent hangs — but the cooperative path is the canonical one, and the safety net should never fire under normal operation.
-
-**You do NOT**:
-- Set `restart_needed` in cycle-output.json (deprecated).
-- Write any sentinel files directly.
-- Restart for template changes (handled by harness via `start_team.py --reboot`).
-- Kill or manage other agents (harness handles this).
-- Implement any restart loop logic (harness handles respawn).
-
-At the end of a **normal** cycle (no exit-42 imminent), write `idle|` to `current-state` so health monitoring works. Do NOT overwrite it on the restart path — `cycle_post.py` writes `restarting|…` itself when the 42-exit condition fires, and clobbering that would hide the transition from the operator and TUI.
-<!-- /sub-skill: self-restart -->
+→ run sub-skill: self-restart
 
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
@@ -1484,30 +819,11 @@ python references/scripts/squidsquad_cli.py shutdown
 
 ---
 
-<!-- sub-skill: issue-filing -->
-## Issue Filing Protocol
-
-File issues directly to the agent whose domain the failure is in — do not route through intermediaries.
-
-- **Objective failures** (test pass/fail, crash, error): File immediately with test evidence.
-- **Subjective findings** (coherence, style, design inconsistency): Flag in Discussion for PM/human review. Do not file as issue until human confirms.
-
-If you cannot determine ownership, file to all relevant trackers and cross-link them in Discussion.
-<!-- /sub-skill: issue-filing -->
+→ run sub-skill: roles/verifier/issue-filing
 
 ---
 
-<!-- sub-skill: discussion-protocol -->
-## Discussion Protocol
-
-- Discussion entries are Issue comments — append-only, never edit or delete.
-- Include your alias parenthetical in the signature:
-  ```bash
-  python references/scripts/tracker.py comment [NUMBER] --role "qa ($(python references/scripts/config.py alias qa))" --message "[message]"
-  ```
-- You may comment on any GitHub Issue (bugs or features from any agent).
-- Use Discussion to communicate with other agents — they will read your entries on their next pull.
-<!-- /sub-skill: discussion-protocol -->
+→ run sub-skill: roles/verifier/discussion-protocol
 
 ---
 
@@ -1536,112 +852,11 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
-<!-- sub-skill: vault-protocol -->
-## Vault — Shared Memory Layer
-
-All agents have read/write access to the shared knowledge vault at `.squidsquad/vault/`. The vault stores institutional knowledge — decisions, patterns, learnings, preferences, and context that shapes the squad's behavior over time. It follows the **PARAG** structure:
-
-```
-.squidsquad/vault/
-├── projects/       # Active project context, goals, constraints
-├── areas/          # Ongoing concerns: human preferences, code conventions,
-│                   # design system, company values, team culture
-├── resources/      # Reference material, external docs, research
-├── archives/       # Shipped features, closed decisions, historical context
-└── galaxy/         # Atomic knowledge notes (Zettelkasten):
-                    # decisions, patterns, learnings, styles
-```
-
-### Vault Initialization (vault-init)
-
-If `.squidsquad/vault/` does not exist, initialize it: create the 5 PARAG directories, add `.gitkeep` to empty dirs, create `BRIEFING.md` from `references/vault-templates/BRIEFING.md`, create `areas/human-profile.md` and `projects/{project-name}.md` from templates, create `.squidsquad/vault/.obsidian/` (add to `.gitignore`). vault-init is **idempotent**.
-
-### Entity Model
-
-Folder mapping: `areas/` = ongoing concerns (human-profile, code-conventions, design-system, company-context), `projects/` = active project context, `galaxy/` = atomic knowledge notes (decision-\*, pattern-\*, learning-\*, style-\*), `resources/` = reference material, `archives/` = historical context. See `references/docs/vault-reference.md` for full entity table.
-
-### Creating Notes (vault-create)
-
-1. Pick the correct folder (see Entity Model). Name using kebab-case; galaxy notes use type prefix: `decision-`, `pattern-`, `learning-`, `style-`.
-2. Copy the folder's template from `references/vault-templates/` and fill in:
-   - **YAML frontmatter**: type, tags, created, updated, owner, status (`active`), confidence, source, links
-   - **`links`**: bare note names as YAML list (no wikilink syntax in frontmatter)
-   - **`source`**: `conversation`, `code`, `review`, `observation`, or `research`
-   - **Body + Changelog**: fill per template
-3. Use **bare wikilinks** `[[note-name]]` in body only — no aliases
-4. **Creation threshold**: Only create if reusable across contexts. Transient observations belong in iteration logs.
-
-### Confidence Levels
-
-- **high**: Human explicitly stated or confirmed this
-- **medium**: Agent observed this directly (e.g., from code review, conversation patterns)
-- **low**: Agent inferred this (e.g., from indirect signals, extrapolation)
-
-### Wikilinks
-
-Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Find inbound links: `grep -rl '\[\[note-name\]\]' .squidsquad/vault/`. Find outbound: `grep -o '\[\[[^]]*\]\]' .squidsquad/vault/galaxy/note.md`.
-
-### BRIEFING.md
-
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every cycle (including quiet cycles) — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
-
-### Concurrent Access
-
-One note per topic — don't append to other agents' notes. Changelogs are append-only. On merge conflict: keep both versions, never discard vault content.
-
-### Note Size Guidance
-
-Galaxy notes: atomic, max ~500 lines (split if larger). Area notes: grow freely. Project notes: keep focused, archive old sections. Resource notes: prefer linking to external sources.
-
-### Updating Notes (vault-update)
-
-1. **Read the full note first** — never update unread notes.
-2. **Surgical edit** — modify only targeted section(s), preserve everything else.
-3. **Never delete existing content** — add corrections; mark superseded via `status` frontmatter.
-4. **Update `updated`** frontmatter to today's date.
-5. **Append Changelog**: `- YYYY-MM-DD — Updated by [agent]. [What changed and why].`
-6. **Run vault-check Level 1** after updating.
-
-### Searching the Vault (vault-search)
-
-Four search modes: **By tag** (`grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"`), **By type** (`grep -rl "^type: <TYPE>" ...`), **By keyword** (`grep -rl "<KEYWORD>" ...`), **By wikilink traversal** (1-hop outbound+inbound, max 2-hop). Max 10 results, sorted by most recently updated. Cache results within a cycle. See `references/docs/vault-reference.md` for full search examples.
-
-### Checking Vault Health (vault-check)
-
-vault-check validates vault notes for correctness and consistency. Two levels:
-
-#### Level 1 — Single Note + 2-Hop Neighborhood
-
-Runs **automatically after every vault-create or vault-update**. Checks the written note and all notes within 2 wikilink hops.
-
-For each note checked:
-
-1. **Required frontmatter fields**: `type`, `tags`, `created`, `updated`, `owner`, `status`, `confidence`. Warn if any are missing or empty.
-2. **Type-folder match**: Galaxy notes (`galaxy/`) must have type `decision`, `pattern`, `learning`, or `style`. Area notes (`areas/`) must have type `area`. Project notes (`projects/`) must have type `project`. Warn on mismatch.
-3. **Wikilink resolution**: Parse all `[[note-name]]` in the body. For each, verify a file named `note-name.md` exists somewhere in `.squidsquad/vault/`. Warn for each unresolved wikilink.
-4. **Auto-maintain `links` frontmatter**: Parse all `[[note-name]]` from the note's body. Update the `links` field in frontmatter to match (bare names, YAML list). This is automatic — agents do not manually curate the `links` field.
-5. **Galaxy note size**: If the note is in `galaxy/` and exceeds 500 lines, warn and suggest splitting. Do NOT warn for notes in `areas/`, `projects/`, or `resources/`.
-
-Print warnings with `[vault-check]` prefix. If no issues found, print nothing (silent pass).
-
-#### Level 2 — Full Vault Sweep
-
-Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all Level 1 checks + orphan detection + staleness detection (30+ days) + broken link census + health summary. See `references/docs/vault-reference.md` for details and scripts.
-
-### Rules
-
-- All vault notes are **git-tracked** — full version history
-- Galaxy notes should be **atomic** (one idea per note, max ~500 lines)
-- Area notes can grow freely (human-profile, design-system, etc.)
-- Every note must have the **confidence** field
-- Always append to the **Changelog** section when modifying a note
-- The vault is browsable in the **Obsidian app** — maintain clean structure
-- Empty directories use `.gitkeep` to persist in git
-- **vault-check Level 1 runs after every write** — vault-create and vault-update both trigger it
-- **vault-update never deletes content** — only adds, corrects, or marks as superseded
-<!-- /sub-skill: vault-protocol -->
+→ run sub-skill: vault-protocol
 
 ---
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/verifier/file-conventions` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: file-conventions -->
 ## File Conventions
@@ -1654,6 +869,8 @@ Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all
 <!-- /sub-skill: file-conventions -->
 
 ---
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/verifier/status-line` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: status-line -->
 ## Status Line
@@ -1670,6 +887,8 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: status-line -->
 
 ---
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/verifier/prohibitions` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: prohibitions -->
 ## What You Must Never Do

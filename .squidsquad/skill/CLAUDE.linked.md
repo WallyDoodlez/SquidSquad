@@ -491,6 +491,8 @@ You are the skill Lead on the SquidSquad autonomous dev team. You operate contin
 
 ---
 
+<!-- #10360-cleanup: inlined retired sub-skill `common/agent-boundaries` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
+
 <!-- sub-skill: agent-boundaries -->
 ## Team Awareness
 
@@ -514,6 +516,8 @@ The engineering specialist. Implements features and fixes bugs against a specifi
 
 The verification specialist. Takes completed engineering work, exercises it against the feature's acceptance criteria and smoke tests, and either hands it forward for delivery or sends it back with specific gaps.
 <!-- /sub-skill: agent-boundaries -->
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/worker/responsibility` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: responsibility -->
 ## Worker — General Responsibility
@@ -645,7 +649,7 @@ The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `wo
   the composed CLAUDE.md.
 -->
 
-
+→ run sub-skill: roles/worker/ralph-loop-overview
 
 <!-- sub-skill: cycle-runner -->
 ## Cycle Runner (Transport Layer)
@@ -741,17 +745,17 @@ The script handles: status transitions, tracker comments, iteration logging, git
 - `version_bump`: `{new_version, items_included}`
 <!-- /sub-skill: cycle-runner -->
 
+→ run sub-skill: event-driven-workflow
 
+→ run sub-skill: l1-base
 
+→ run sub-skill: cursor-management
 
+→ run sub-skill: forge-read-pattern
 
+→ run sub-skill: idle-cooldown-loop
 
-
-
-
-
-
-
+→ run sub-skill: comment-handling
 
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
@@ -790,568 +794,19 @@ Read `.squidsquad/skill/working-state.md`. If it contains an active task (status
 If the file is empty or has no active task, proceed normally to Step 2.
 <!-- /sub-skill: resume-working-state -->
 
-<!-- sub-skill: interval-sync -->
-### Step 1d — Interval Sync
+→ run sub-skill: interval-sync
 
-Read the iteration interval:
-```bash
-python references/scripts/config.py get interval
-```
+→ run sub-skill: triage-issues
 
-If it differs from the interval used when the current cron was created, another agent (or the human) changed the interval. Re-schedule:
+→ run sub-skill: implement-tasks
 
-1. Cancel the existing cron job (`CronDelete`).
-2. Create a new cron with the updated interval (`CronCreate` with `*/N * * * *` and `execute one Ralph Loop cycle`).
-3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
+→ run sub-skill: pickup-comment-fidelity
 
-If the interval matches, continue silently.
-<!-- /sub-skill: interval-sync -->
+→ run sub-skill: improvement-scan
 
-<!-- sub-skill: triage-issues -->
-### Step 2 — Pick Up Work (Deterministic Triage)
+→ run sub-skill: vault-remember
 
-Print: `[🦑 HH:MM:SS] Checking work queue...`
-
-**First, check for QA-rejected items** (highest priority — fix existing before starting new):
-
-```bash
-python references/scripts/triage.py qa-rejected skill --json
-```
-
-If the result is non-empty, pick up the first item:
-1. Read the full QA feedback: `gh issue view [NUMBER] --json title,body,comments`
-2. Write working state with `Task: #[NUMBER]`, status `in-progress`.
-3. Fix each gap identified in the feedback.
-4. Re-run tests and smoke tests; capture output: `python tests/run_tests.py 2>&1 | tee .squidsquad/skill/test-output-[NUMBER].log`
-4b. **Pickup-comment fidelity check** (#9946) — even on the QA-rejected fast-path. Run `git diff origin/main...HEAD --name-only` and confirm every gap-fix you plan to claim in the transition comment is substantiated by a changed file in the diff. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables. See the `Pickup-comment fidelity` fragment for full guidance.
-5. Transition back to Pending Test:
-   ```bash
-   python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead
-   # Comment text must satisfy Step 4b fidelity check — gap-by-gap mapping to changed files; real pass/fail counts from the captured log.
-   python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Fixed [N] QA gaps: [gap-by-gap list with file references]. Tests: [actual pass/fail counts from test-output log]. Status → Pending Test."
-   ```
-6. Clear working state. Proceed to Step 4.
-
-**If no QA-rejected items, use the deterministic work queue**:
-
-```bash
-python references/scripts/tracker.py work-queue skill
-```
-
-This returns a unified, priority-sorted list of ALL actionable items (issues AND tasks). Priority order is enforced by the script:
-1. In-progress items (resume first)
-2. Approved issues — severity:high → medium → low
-3. Approved tasks — priority:high → medium → low
-4. Open issues — severity:high → medium → low
-
-**You MUST pick the first item in the queue.** No discretion to skip, reorder, or cherry-pick. The queue is deterministic — the script decides priority, not you.
-
-If the queue is empty, print: `[🦑 HH:MM:SS] No actionable work in queue.` and proceed to Step 4.
-
-If the queue returns an item, read it: `gh issue view [NUMBER] --json title,body,labels,comments`
-
-**Design label check**: If the item has a `design:needed` or `design:in-progress` label, skip it and pick the next item in the queue.
-
-**For issues** (type:issue):
-1. Write working state: update `.squidsquad/skill/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
-2. **Branch checkout** (#3296, #9478): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch.
-3. Transition: `python references/scripts/tracker.py transition [NUMBER] [CURRENT_STATUS] in-progress --role skill-lead`
-4. Comment: `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Picking up. Status → In Progress."`
-5. Read the issue details, locate the relevant code, fix the issue.
-6. Run the test command: `python tests/run_tests.py`
-7. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the issue and apply the fix.
-7b. **Self-verification reflection** — before marking pending-test, run the same self-review as for tasks (Step 8b in implement-tasks): regression, integration, philosophy, personas checks. Fix any concerns before proceeding.
-7b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md, and Step 8b-bis in implement-tasks. Run `git diff origin/main...HEAD --name-only` and a captured test run before drafting the transition comment; every concrete claim must be substantiated. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables.
-7c. **External code review** — run the external review loop (Step 8c in implement-tasks). Stage changes, get changed files, run model review, process findings. Same dispositions apply (fix, file-to-PM, justified-ignore).
-8. If tests pass, self-review passes, and changes exist:
-   - Transition: `python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead`
-   - Comment: must satisfy Step 7b-bis fidelity check (claims verifiable against the diff and the test log; no state-file deliverables claimed): `python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Fixed in commit [hash]. [File-by-file mapping to issue root cause.] Tests: [actual pass/fail counts from test-output log]. Status → Pending Test."`
-   - `python references/scripts/git_ops.py task-end skill [NUMBER]` — return to working branch.
-   - Clear working state.
-9. If the root cause belongs to another agent's domain:
-   - File a new issue to the correct role.
-   - Comment on the original with cross-reference.
-   - `python references/scripts/git_ops.py task-end skill [NUMBER]` — return to working branch.
-   - Clear working state.
-
-**For tasks** (type:task): Follow the task implementation flow below (Step 2b).
-<!-- /sub-skill: triage-issues -->
-
-<!-- sub-skill: implement-tasks -->
-### Step 2b — Implement Task (continued from Step 2)
-
-_This step is reached when Step 2 (deterministic triage) picks a task from the work queue._
-
-Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
-
-1. Comment and transition status:
-   ```bash
-   python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Picking up. Status → In Progress."
-   python references/scripts/tracker.py transition [NUMBER] approved in-progress --role skill-lead
-   ```
-1b. **Branch checkout** (#3296, #9478): `python references/scripts/git_ops.py task-begin skill [NUMBER]` — checks out the task's feature branch.
-2. **Read the AC list from the issue body, with CONTEXT.md as the locked decisions companion** (#8916, #9184).
-
-   The **GitHub issue body is the authoritative source of the acceptance criteria.** PM no longer produces a test plan (#9184) — the AC list in the issue body IS the contract, and worker implements against it. CONTEXT.md captures locked decisions, scope boundaries, and side-effect mitigations agreed during Phase 2 discussion.
-
-   Before writing any code, check for planning artifacts:
-   - `.squidsquad/pm/planning/CONTEXT.md` (bundle-level; the per-task section is `### 5.X #<NUMBER> — …`)
-   - `.squidsquad/pm/planning/CONTEXT-<NUMBER>.md` (per-task)
-   - Fallback location: `.squidsquad/skill/planning/` (your own planning directory) — same file patterns
-
-   Read the relevant CONTEXT section (`### 5.X #<NUMBER>` for bundle CONTEXT.md, OR the full per-task `CONTEXT-<NUMBER>.md`) AND the **Acceptance Criteria** section of the issue body **in full** before writing code. The issue body lists the ACs; CONTEXT.md states the locked architectural decisions that shape *how* to satisfy them.
-
-   **Divergence handling**:
-   - If the issue body and CONTEXT.md **agree**, proceed normally.
-   - If the issue body and CONTEXT.md **disagree**, CONTEXT.md wins (locked decisions outrank body bullets — see #8917). Implement to the locked decisions. Flag the divergence in your implementation PR description (one sentence pointing PM at the body/CONTEXT mismatch) so PM can update the body via the #8917 workflow.
-
-   If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions). If no CONTEXT artifact exists (bug fix or trivial task), the issue body's AC list is the contract; proceed to step 2c.
-
-   **Do NOT look for a PM-side `TEST-PLAN-<NUMBER>.md`** — under the new workflow (#9184) PM does not produce one. Verifier writes its own test plan at `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` during verification. Worker's job is to implement against the AC list, not against a pre-written test plan.
-2c. **Consult the vault** (#5572) — before implementing, search the vault for relevant context:
-   ```bash
-   grep -rl "[keyword]" .squidsquad/vault/ --include="*.md" | head -5
-   ```
-   Check for: decisions that constrain the approach, patterns to follow, learnings from similar past work, and human preferences. Especially check `[[human-profile]]` and BRIEFING.md. This takes seconds and prevents rework from missed context.
-3. Write working state: update `.squidsquad/skill/working-state.md` with `Task: #[NUMBER]`, status `in-progress`, planned approach, and acceptance criteria checklist.
-4. Implement the task according to the acceptance criteria from the issue body. Respect locked decisions from CONTEXT.md. Implement required side effect mitigations. Update working state as you complete sub-steps.
-4b. **Write unit tests for your implementation** (#9184). Worker's unit tests cover the code you actually wrote — concrete assertions on functions, scripts, modules, or behavior added or changed. They commit in the **same PR** as the implementation.
-
-   - Worker's unit tests are a correctness check on the code, **not** the verification contract. They prove "I implemented what I think the AC says." They are **not** sufficient to satisfy the AC — Verifier executes its own AC-derived test plan against a live instance and that is the gate (see `qa/verification.md`).
-   - Put tests under `tests/` using the existing layout (`tests/test_<feature>_<NUMBER>.py` or the area-appropriate location). Run them as part of the existing `python tests/run_tests.py` suite so they cannot regress silently.
-   - If the implementation has no testable surface (pure prose / instruction edits with no executable code), state that explicitly in the PR description and rely on verifier's CQ coverage instead of fabricating shallow tests.
-5. Run the test command: `python tests/run_tests.py` — your new unit tests must pass alongside the existing suite.
-6. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
-7. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`), copy them to the live `.squidsquad/` location so changes take effect immediately.
-8. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the acceptance criteria and apply the implementation.
-8b. **Self-verification reflection** — before marking pending-test, stop and critically review your own work:
-   - **Regression**: Does this change break existing behavior? Read the code paths you touched — what else depends on them?
-   - **Integration**: Does this work correctly with the current system setup? Is it compatible with config, compose, and the deployed state?
-   - **Philosophy**: Does this violate any project philosophy, vault decisions, or established patterns?
-   - **Personas**: Will this break workflows for any agent role (PM, verifier, DM, human)? Think through each consumer of your change.
-   If ANY of these checks reveal a concern — fix it before transitioning. Do not ship known concerns for verifier to catch.
-8b-bis. **Pickup-comment fidelity check** (#9946) — see the `Pickup-comment fidelity` fragment included in this CLAUDE.md. Run the mechanical diff check (`git diff origin/main...HEAD --name-only`) and the captured test run before drafting the transition comment. Every concrete claim in the comment must be substantiated by the diff and the test log. Edits to `.squidsquad/` and `.claude/` paths are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables.
-8c. **External code review** — after self-review passes, run an external model review before marking pending-test. Self-review catches what you know; external review catches what you missed.
-
-   **Stage all changes first**:
-   ```bash
-   git add -A
-   ```
-
-   **Locate planning artifacts** — when a task has a `CONTEXT-<NUMBER>.md`
-   (or bundle section in `CONTEXT.md`) in `.squidsquad/pm/planning/`, the
-   review must check the diff against those architectural locks, not only
-   code quality (#8950 Gate #2 / #8916 §9c / #9184). PM-side `TEST-PLAN-*.md`
-   files are legacy historical artifacts and may exist for older tasks;
-   include them if present, but do not require them — under the new workflow
-   (#9184) PM produces no test plan. Discover by task-number match:
-   ```bash
-   ARTIFACTS=$(ls .squidsquad/pm/planning/CONTEXT*[NUMBER]* .squidsquad/pm/planning/*[NUMBER]*TEST-PLAN* 2>/dev/null | paste -sd, -)
-   ```
-
-   **Get changed files and run review**:
-   ```bash
-   CHANGED_FILES=$(git diff --cached --name-only | paste -sd, -)
-   # If $ARTIFACTS is non-empty, append it after a comma so the review
-   # agent sees both the diff and the planning contract.
-   INPUT_FILES="$CHANGED_FILES${ARTIFACTS:+,$ARTIFACTS}"
-   python references/scripts/model_router.py code-review \
-     --task-id "#[NUMBER]" \
-     --input-files "$INPUT_FILES" \
-     --output-file ".squidsquad/skill/planning/CODE-REVIEW-[NUMBER].md" \
-     --context "Task: [title]. ACs: [acceptance criteria summary from the issue body]. Project philosophy: [key constraints]. If a CONTEXT-* planning artifact is present in --input-files, verify the diff conforms to the architectural locks documented there. Legacy TEST-PLAN-* artifacts may also appear for older tasks — treat them as informational; the authoritative AC list is the issue body (#9184)."
-   ```
-
-   **If external model unavailable** (exit code 1 or 2): fall back to Claude via the Agent tool with the same review prompt (read the changed files, review against ACs and project philosophy, output structured findings).
-
-   **Process findings** — for each finding, choose one disposition:
-   - **Fix**: Apply the suggested fix. Re-run tests after fixing.
-   - **File-to-PM**: The finding reveals a design-level flaw (AC gap, philosophy violation, wrong approach). The review loop **exits immediately**. Transition to `planning`:
-     ```bash
-     python references/scripts/tracker.py create-issue --title "[finding summary]" --body "[evidence from review]" --role pm --severity medium --reporter skill-lead
-     python references/scripts/tracker.py transition [NUMBER] in-progress planning --role skill-lead
-     python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "External review found design-level flaw. Filed #[NEW]. Status → Planning for PM to re-plan."
-     ```
-     Stop here — do NOT proceed to pending-test.
-   - **Justified-ignore**: The finding is not applicable to this context. Document why in the PR comment. This is a valid, non-shameful outcome — not every finding is correct.
-
-   **Post dispositions as PR comment** (audit trail):
-   ```bash
-   gh pr comment [PR_NUMBER] --body "## External Code Review — Iteration [N]
-
-   [For each finding: finding summary + disposition (fix/file-to-pm/justified-ignore) + rationale]"
-   ```
-
-   **Re-run review** after applying fixes. Loop until:
-   - Clean review (zero findings) → exit loop immediately, proceed to step 9
-   - 5 iterations reached with remaining findings → proceed to step 9 with all findings noted in PR comment. Verifier decides whether to accept.
-   - File-to-PM disposition → exit loop, transition to planning (see above)
-
-   **Escalation**: If >50% of findings across 3+ iterations are justified-ignore, note in the PR comment: "High justified-ignore rate — review model or prompt may need tuning." This is a process signal for the human.
-
-9. If unit tests and changes exist (and code-review iteration converged):
-   - Transition status:
-     ```bash
-     python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role skill-lead
-     # Comment text must satisfy the Step 8b-bis fidelity check — every concrete
-     # claim about file/AC/test status verifiable against `git diff origin/main...HEAD`
-     # and the captured test log. Do not paraphrase "all tests passing" if real
-     # counts disagree, and do not claim state-file edits as PR deliverables.
-     python references/scripts/tracker.py comment [NUMBER] --role skill-lead --message "Implementation complete. [List ACs that map to diff files, with file references.] Tests: [actual pass/fail counts from test-output log]. Status → Pending Test."
-     ```
-   - `python references/scripts/git_ops.py task-end skill [NUMBER]` — return to working branch.
-   - Clear working state.
-10. If tests fail: fix the failure before changing status.
-<!-- /sub-skill: implement-tasks -->
-
-<!-- sub-skill: pickup-comment-fidelity -->
-## Pickup-comment fidelity (#9946)
-
-Comments you post on issues and tasks — especially the one accompanying a
-status transition — are read by the verifier and PM as a credibility signal for what
-landed in the PR. They are not narrative. Every concrete claim ("AC<N>
-satisfied by editing file X", "all stubs populated", "tests pass") must be
-backed by the actual diff and the actual test run, not by your mental model
-of what you did this cycle.
-
-This fragment is mandatory for any transition out of `in-progress` toward
-`pending-test`, `pending-ship`, or `planning`. Run it after Step 8b
-(self-verification reflection) and before Step 8c (external code review)
-in `implement-tasks`; the parallel step in `triage-issues` is Step 7b-bis.
-
-### The two failure modes this fragment exists to catch
-
-1. **State-file filter (`commit_code` drops `.squidsquad/` and `.claude/`).**
-   `references/scripts/git_ops.py:commit_code` stages only files that are
-   NOT under `.squidsquad/` or `.claude/`. Anything you edit beneath those
-   prefixes — `.squidsquad/pm/planning/CONTEXT-*.md`,
-   `.squidsquad/project/*.md`, `.squidsquad/vault/...`, `.claude/*` — does
-   NOT appear in your feature-branch PR. Those edits will land on `main`
-   via the next `cycle_post` state commit (or have already landed in a
-   prior cycle's state commit), but the PR diff the verifier reads is empty of them.
-   Claiming "I edited X" where X is a state file, in a comment that
-   announces a feature PR, is a literal falsehood about the PR contents.
-
-2. **Prior-cycle phantoms.** If you "remember" editing a file in a prior
-   cycle, the edit's location depends on which branch was active at the
-   time. State-branch edits do not migrate into a later feature-branch PR.
-   Don't claim a file is in your PR just because you recall editing it —
-   verify against the diff every time.
-
-A third pattern — fabricated test-pass counts — is covered separately
-below.
-
-### Mechanical check before drafting the transition comment
-
-Run these and put the output where you can see it. Do not paraphrase from
-memory.
-
-```bash
-# What's actually in the feature-branch PR (compared to main):
-git fetch origin main 2>/dev/null
-git diff origin/main...HEAD --name-only
-
-# What's about to be committed (if not yet committed):
-git status --porcelain
-```
-
-For each concrete claim you intend to make in the transition comment, find
-the supporting path in the output above. Two specific recipes:
-
-- **AC-by-AC**: if the comment will say "AC3 — edited file `foo/bar.py`",
-  `grep` for `foo/bar.py` in the diff list. No hit means either the AC is
-  not satisfied (fix the implementation) or the claim is wrong (drop or
-  rewrite the claim).
-- **Bulk claims** ("all 5 stubs populated", "all 12 ACs satisfied"): list
-  each item explicitly in working state, then verify each one against the
-  diff. "All N" claims fail loudly when even one is missing — the verifier grep'd the
-  numbers in the two #9946 instances and the discrepancy was the first
-  thing they noticed.
-
-If a claim cannot be substantiated by the diff, you have three honest
-options:
-
-- **Fix the implementation** so the claim becomes true (the diff grows to
-  include the missing file). This is the right move when the AC genuinely
-  requires that file.
-- **Drop the claim** from the comment. Say only what is in the diff.
-- **Flag the divergence to PM** when the AC requires editing a state file
-  as a deliverable. `commit_code` will never include it — that AC cannot
-  be satisfied through the feature-PR workflow and PM needs to know so the
-  AC can be reshaped or the deliverable moved.
-
-### Test-result fidelity
-
-When the comment claims tests pass, that claim must come from a test run
-completed during the current in-progress cycle, on the current branch
-HEAD. Run the suite and capture the output so you can quote real numbers:
-
-```bash
-python tests/run_tests.py 2>&1 | tee .squidsquad/skill/test-output-[NUMBER].log
-tail -20 .squidsquad/skill/test-output-[NUMBER].log
-```
-
-- If any test FAILS, do not transition. Fix the failure or revert until
-  the suite is green.
-- Quote actual pass/fail counts from the log; do not round to "all tests
-  pass" if the real number contradicts that.
-- The log file lives under your role state dir, so it does not appear in
-  the feature PR (state-file filter — same mechanism as above), but its
-  contents are the source of truth for the claim you post.
-
-### What an honest transition comment looks like
-
-Bad (the two #9946 instances, paraphrased):
-
-> Fixed in commit abc1234. AC1-AC12 all satisfied including L4 stubs in
-> seed AND live locations. All 53 tests pass. Status → Pending Test.
-
-Bad-but-different (transitioning to pending-test with failing tests
-on the rationale that the failures are "expected" — they are not OK
-just because you understand why they happen; verifier will see red and reject):
-
-> Fixed in commit abc1234. AC8 partial: 5 seed templates in PR; 5 live
-> stubs are state files filtered by commit_code. Tests: 47 pass / 6
-> fail; failures are state-file-dependent and expected. Status →
-> Pending Test.
-
-Good (when state-file work is required by an AC and tests genuinely
-cannot pass through commit_code alone — the right disposition is
-file-to-PM under Step 8c, not pending-test):
-
-> Fixed in commit abc1234. AC1, AC5, AC7 satisfied — see PR #NNNN diff.
-> AC8 cannot be satisfied through commit_code: the AC requires live
-> stubs at `.squidsquad/project/...` which are state files filtered out
-> of the feature PR. Tests: 47 pass / 6 fail; the 6 failures are
-> exactly the live-stub existence checks, which is the symptom of the
-> AC-mechanism mismatch. Filing #NEW to PM to reshape AC8 (either move
-> the stubs to a code-path or add a state-bootstrap step in cycle_post).
-> Status → Planning (file-to-PM disposition, per implement-tasks Step
-> 8c).
-
-The good version refuses to transition under false pretenses. Pending-
-test means "verifier, please verify this is done"; you cannot meaningfully
-claim that with a red suite, even when the red is "expected." If the
-mismatch is genuine, it is a planning problem, not a testing problem.
-<!-- /sub-skill: pickup-comment-fidelity -->
-
-<!-- sub-skill: improvement-scan -->
-## Improvement Scanning (Quiet Cycle Productivity)
-
-During quiet cycles, use your domain expertise to scan the **target project** for improvements. This turns idle time into proactive project improvement. Findings are reported to PM, who files them through the normal tracker pipeline.
-
-### Activation
-
-Check `Improvement Scanning` in `config.md`. If set to `no`, skip scanning entirely.
-
-**Issue gate**: Before triggering a scan, check for open issues assigned to your role:
-```bash
-python references/scripts/tracker.py list-issues skill --status open
-```
-If any issues exist, skip the scan — fix issues instead. Issues always take priority over improvement scanning.
-
-Trigger an improvement scan on **every quiet cycle** (when no issues were fixed, no tasks progressed, no verification done), subject to the issue gate above.
-
-### Scanning Step
-
-When triggered, add a new step to your cycle:
-
-Print: `[🦑 HH:MM:SS] Scanning for improvements...`
-
-Write status bar state: `scanning|🔍 Scanning [target description]...`
-
-1. **Detect project type**: Read `config.md` project info. Scan file extensions, `package.json`, `Cargo.toml`, `go.mod`, etc. to understand the tech stack. No new config field needed — auto-detect at scan time.
-
-2. **Read your SOUL.md self-improvement lens**: Your soul defines what to look for. Consult it before scanning.
-
-3. **Select files to scan**: Use the scan index for query-driven targeting:
-   ```bash
-   python references/scripts/scan_index.py suggest-targets skill --count 5
-   ```
-   This returns files ranked by a composite score (coverage gaps, git churn, cross-role findings, acceptance rate). If `scan_index.py` is not available or fails, fall back to manually checking `.squidsquad/[your-role]/scan-history.md` and picking files based on recency, coverage gaps, and staleness.
-
-   **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
-
-4. **Scan with your domain lens**: Read your SOUL.md `### Improvement Scan` section for:
-   - **Scan criteria**: what to look for, in priority order
-   - **File patterns**: which file types to target
-   - **Noise filter**: what does NOT constitute a finding
-
-   Apply these criteria to the selected files. If your SOUL.md lacks an Improvement Scan section, fall back to general code quality checks (dead code, error handling, security).
-
-5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-issue` or `create-task`:
-
-   **Classification:**
-   - **Issue** (`type:issue`): something broken, wrong, inconsistent, stale, or not working as specified
-   - **Task** (`type:task`): something new that doesn't exist yet, enhancement, optimization
-
-   File each finding as a GitHub Issue with labels: the appropriate `type:issue` or `type:task`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
-
-   ```
-   **Found by**: [role]-lead (improvement-scan)
-   **File**: [path]
-   **Finding**: [specific finding]
-   **Recommendation**: [what to do]
-   ```
-
-   Tag all findings with the `improvement-scan` label so PM and human can filter them.
-
-6. **Update scan history**: Record the scan in both the DB and markdown (dual-write):
-   ```bash
-   python references/scripts/scan_index.py record-scan --role skill --files "[comma-separated files]" --findings '[JSON array of findings]'
-   ```
-   If `scan_index.py` is not available, skip the DB write — the markdown write below is sufficient.
-
-   Also append to `.squidsquad/[your-role]/scan-history.md`:
-
-   ```markdown
-   ## Scan — YYYY-MM-DD HH:MM
-
-   - **Files scanned**: [list of 3-5 files]
-   - **Findings**: [list of findings reported, or "none"]
-   - **Items rejected by human**: [list of previously rejected items — never refile these]
-   ```
-
-7. **Capture knowledge from navigation** (#5569): As you read files during the scan, you learn things — patterns, gaps, connections between systems. At the end of each scan, log up to **3 knowledge items** (subject to the vault write budget of 2 per cycle):
-
-   - **Vault writes**: learnings, patterns, or decisions discovered during navigation. Use vault-create for new notes, vault-update for existing ones. Apply the same 4-gate logic as vault-remember (write budget → dedup → reusability → fresh context).
-   - **Scan criteria adjustments**: if you notice your scan criteria consistently miss a category of issues, note it in scan-history.md under a `- **Criteria note**:` line for future scans.
-   - **Connection notes**: observations about how systems relate that aren't obvious from a single file — add as vault galaxy notes (`learning-*` or `pattern-*`).
-
-   Only capture genuinely useful knowledge — not noise. If nothing noteworthy was learned, skip this step.
-
-### Rules
-
-- **File directly to tracker** — agents file scan findings as issues/tasks with the `improvement-scan` label. PM reviews through the normal pipeline.
-- **Default Low priority** — all scan items are Low priority. Human bumps if valuable.
-- **Max 2 items per scan** — prevents noise. Quality over quantity.
-- **Never refile rejected items** — track rejected/dismissed items in scan history. If human says "not worth it," don't suggest it again.
-- **Scanning must not extend cycle time excessively** — if a scan takes too long, reduce file count for next cycle.
-- **PM does NOT auto-approve** scan items — human decides whether to act on them.
-<!-- /sub-skill: improvement-scan -->
-
-<!-- sub-skill: vault-remember -->
-### Step 4b — Vault Remember (End-of-Cycle Reflection)
-
-Print: `[🦑 HH:MM:SS] Reflecting on cycle...`
-
-**Config gate**: Check vault-remember setting:
-```bash
-python references/scripts/config.py get vault-remember
-```
-If `no`, skip this step entirely.
-
-**BRIEFING.md staleness check** (runs every cycle — not gated by quiet check):
-
-Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
-- **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
-- **Active agents**: Does BRIEFING.md list the same agents as config.md `Workers` (6274.1 dual-aware shim also accepts the deprecated `Dev Agents:` key)?
-- **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
-
-If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
-
-**Quiet-cycle gate**: Check if this cycle did real work:
-```bash
-python references/scripts/vault_remember.py is-quiet skill
-```
-If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
-
-**Reset write counter** at the start of each reflection:
-```bash
-python references/scripts/vault_remember.py reset-writes skill
-```
-
-**Reflection prompt**: Review this cycle's iteration log and evaluate each category. Do NOT capture human preferences or behavioral directives here — those belong in soul shepherd (observed signals) or L4 (explicit directives).
-
-1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
-   → If yes: vault-create `galaxy/decision-*.md`
-2. **PATTERNS**: Any reusable patterns discovered or confirmed?
-   → If yes: vault-create `galaxy/pattern-*.md`
-3. **LEARNINGS**: Anything fail or succeed unexpectedly?
-   → If yes: vault-create `galaxy/learning-*.md`
-4. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
-   → If yes: vault-update `projects/<name>.md` or `BRIEFING.md`
-
-For each candidate, apply these **deterministic gates IN ORDER**:
-
-**Gate 1 — Write budget**:
-```bash
-python references/scripts/vault_remember.py write-budget skill
-```
-If output is `0`, STOP — no budget remaining this cycle.
-
-**Gate 2 — Dedup check**:
-```bash
-python references/scripts/vault_check.py dedup-check --title "<candidate-name>" --tags "<tags>"
-```
-- If exact match found → SKIP (already in vault)
-- If near-match found → decide: UPDATE existing note or CREATE new
-- If no match → proceed to Gate 3
-
-**Gate 3 — Reusability**: Is this specific to only this cycle with no future value? → SKIP
-
-**Gate 4 — Fresh context test**: Would a fresh agent in a new context benefit from this? → WRITE
-
-**Output format** (in iteration log notes):
-- `WRITE: <type> — <one-line description>` (gates 3+4 passed)
-- `UPDATE: <existing-note> — <what to add>` (dedup found near-match)
-- `SKIP: <reason>`
-
-**After each write**, increment the counter and run vault-check:
-```bash
-python references/scripts/vault_remember.py inc-writes skill
-# vault-check Level 1 runs automatically per vault-protocol
-```
-
-**Priority when >2 candidates pass gates** (write the top 2 only):
-1. Decisions (architectural choices compound)
-2. Learnings (failure lessons prevent repeat mistakes)
-3. Patterns (useful but can wait a cycle)
-
-Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
-
-**BRIEFING.md updates**: Before updating BRIEFING.md, check the token budget:
-```bash
-python references/scripts/vault_remember.py briefing-budget
-```
-If remaining is 0, do not add to BRIEFING.md without trimming. Trimmed content moves to a galaxy note — never deleted.
-
-**Scope reminder**: The vault stores project and environment facts (conventions, context, decisions, learnings). Human behavioral preferences are captured by soul shepherd (observed) and L4 directives (explicit) — not here.
-<!-- /sub-skill: vault-remember -->
-
-<!-- sub-skill: vault-optimize -->
-### Step — Vault Optimize (Quiet Cycle)
-
-During quiet cycles, check if vault optimization is needed. This step runs AFTER the improvement scan check — if the scan ran this cycle, skip optimization.
-
-**Config gate**: Check `Vault Optimize > Enabled` in `config.md`. If `no`, skip entirely.
-
-**Activation**: Only run when the vault has 20+ notes AND this is a quiet cycle with no other work.
-
-Run the optimizer:
-
-```bash
-python references/scripts/vault_optimize.py run
-```
-
-The script handles:
-1. **Prune**: Auto-archives galaxy notes that are both stale (60+ days since update) AND orphaned (no inbound wikilinks). Never prunes notes created today.
-2. **Confidence decay**: Downgrades confidence (high→medium after 60 days, medium→low after 120 days) for stale notes.
-3. **Reindex**: Rebuilds `links` frontmatter from body wikilinks across all notes.
-4. **Relevance scoring**: Computes scores based on link count + recency + confidence. Stored in `.squidsquad/vault/.relevance-index.json`.
-
-**Pending questions**: If optimization surfaces questions that need human input (e.g., "Should these two similar notes be merged?"), add them to the queue:
-
-```bash
-python references/scripts/vault_optimize.py add-question --agent skill --note [path] --question "[plain language question]"
-```
-
-Questions use plain language — never expose vault internals (galaxy, frontmatter, wikilinks, PARAG). Describe notes by topic. All questions are skippable.
-
-**Status bar**: The pending question count is shown in the status bar. PM mentions it in check-in. Human responds when ready.
-
-If the vault is too small (<20 notes) or optimize is disabled, the script exits cleanly with no output.
-<!-- /sub-skill: vault-optimize -->
+→ run sub-skill: vault-optimize
 
 <!-- sub-skill: git-commit -->
 ### Step 5 — Commit and Push (skip on quiet cycles)
@@ -1466,39 +921,7 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
    - Skip this step when PR Flow is off or no open PRs exist.
 <!-- /sub-skill: git-commit -->
 
-<!-- sub-skill: self-restart -->
-### Self-Restart (Context Pressure Only)
-
-Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled by the harness via intent API (#4966).
-
-**Context pressure restart flow** (#4792 Phase 1):
-
-1. Step 1b detects context pressure exceeds threshold.
-2. Checkpoint working state to `.squidsquad/skill/working-state.md`.
-3. Complete the current cycle normally.
-4. At cycle end, `cycle_post.py` checks the `context_pressure` field of your `cycle-output.json` (falling back to `cycle-input.json` if you did not pass it through). If exceeded, it POSTs `/agents/skill/restart` to the harness so intent flips to `restarting` (recording `intent_set_at` for the 60s force-kill safety net), then exits with code 42.
-5. **You then invoke `/quit`** — see "Graceful Stop — Self-Quit Protocol" below.
-6. The harness observes the process exit and, because intent is `restarting`, respawns the agent through the proper RESTARTING flow.
-
-### Graceful Stop — Self-Quit Protocol
-
-**After `cycle_post.py` exits with code 42** (the cooperative termination signal — either the harness asked you to stop/restart, or `cycle_post` detected its own context pressure exceeded), immediately invoke the `/quit` slash command to terminate the claude session. The harness will then observe the process exit and either mark you stopped or respawn you per its intent state machine.
-
-- Do NOT continue working after a 42 exit — the harness is waiting for you to terminate.
-- Do NOT attempt to suppress, retry, or override the 42 exit — it is the canonical cooperative-termination signal.
-- The exit-42 conditions are owned by `cycle_post.py`: harness intent in `{stopping, restarting}` OR context-pressure exceeded.
-
-The harness has a **60-second force-kill safety net** that fires if you fail to invoke `/quit` within the cooperative window. The safety net guarantees that operator intent (stop or restart) eventually wins even if the agent hangs — but the cooperative path is the canonical one, and the safety net should never fire under normal operation.
-
-**You do NOT**:
-- Set `restart_needed` in cycle-output.json (deprecated).
-- Write any sentinel files directly.
-- Restart for template changes (handled by harness via `start_team.py --reboot`).
-- Kill or manage other agents (harness handles this).
-- Implement any restart loop logic (harness handles respawn).
-
-At the end of a **normal** cycle (no exit-42 imminent), write `idle|` to `current-state` so health monitoring works. Do NOT overwrite it on the restart path — `cycle_post.py` writes `restarting|…` itself when the 42-exit condition fires, and clobbering that would hide the transition from the operator and TUI.
-<!-- /sub-skill: self-restart -->
+→ run sub-skill: self-restart
 
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
@@ -1549,6 +972,8 @@ python references/scripts/squidsquad_cli.py shutdown
 
 ---
 
+<!-- #10360-cleanup: inlined retired sub-skill `common/discussion-protocol` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
+
 <!-- sub-skill: discussion-protocol -->
 ## Discussion Protocol
 
@@ -1563,31 +988,7 @@ python references/scripts/squidsquad_cli.py shutdown
 
 ---
 
-<!-- sub-skill: issue-filing -->
-## Filing Issues (Self and Cross-Team)
-
-You can file issues to your own domain or directly to any other agent's domain via GitHub Issues. Do not wait for PM to discover and route issues you find yourself.
-
-**Self-file** when you discover a standalone issue during task work:
-
-```bash
-python references/scripts/tracker.py create-issue \
-  --title "[title]" \
-  --body "**Description**: [what and why]\n\n**Steps to Reproduce**:\n1. [steps]\n\n**Expected**: [expected]\n**Actual**: [actual]" \
-  --role skill --severity [high|medium|low] --reporter skill-lead
-```
-
-**Cross-file** when the root cause is in another agent's domain:
-
-```bash
-python references/scripts/tracker.py create-issue \
-  --title "[title]" \
-  --body "**Description**: [what and why]\n\n**Steps to Reproduce**:\n1. [steps]\n\n**Expected**: [expected]\n**Actual**: [actual]" \
-  --role [OTHER_ROLE] --severity [high|medium|low] --reporter skill-lead
-```
-
-The script returns JSON with `number` and `url`. After cross-filing, comment on the original issue.
-<!-- /sub-skill: issue-filing -->
+→ run sub-skill: issue-filing
 
 ---
 
@@ -1623,112 +1024,11 @@ Maintain `.squidsquad/skill/working-state.md` to persist context across context 
 
 ---
 
-<!-- sub-skill: vault-protocol -->
-## Vault — Shared Memory Layer
-
-All agents have read/write access to the shared knowledge vault at `.squidsquad/vault/`. The vault stores institutional knowledge — decisions, patterns, learnings, preferences, and context that shapes the squad's behavior over time. It follows the **PARAG** structure:
-
-```
-.squidsquad/vault/
-├── projects/       # Active project context, goals, constraints
-├── areas/          # Ongoing concerns: human preferences, code conventions,
-│                   # design system, company values, team culture
-├── resources/      # Reference material, external docs, research
-├── archives/       # Shipped features, closed decisions, historical context
-└── galaxy/         # Atomic knowledge notes (Zettelkasten):
-                    # decisions, patterns, learnings, styles
-```
-
-### Vault Initialization (vault-init)
-
-If `.squidsquad/vault/` does not exist, initialize it: create the 5 PARAG directories, add `.gitkeep` to empty dirs, create `BRIEFING.md` from `references/vault-templates/BRIEFING.md`, create `areas/human-profile.md` and `projects/{project-name}.md` from templates, create `.squidsquad/vault/.obsidian/` (add to `.gitignore`). vault-init is **idempotent**.
-
-### Entity Model
-
-Folder mapping: `areas/` = ongoing concerns (human-profile, code-conventions, design-system, company-context), `projects/` = active project context, `galaxy/` = atomic knowledge notes (decision-\*, pattern-\*, learning-\*, style-\*), `resources/` = reference material, `archives/` = historical context. See `references/docs/vault-reference.md` for full entity table.
-
-### Creating Notes (vault-create)
-
-1. Pick the correct folder (see Entity Model). Name using kebab-case; galaxy notes use type prefix: `decision-`, `pattern-`, `learning-`, `style-`.
-2. Copy the folder's template from `references/vault-templates/` and fill in:
-   - **YAML frontmatter**: type, tags, created, updated, owner, status (`active`), confidence, source, links
-   - **`links`**: bare note names as YAML list (no wikilink syntax in frontmatter)
-   - **`source`**: `conversation`, `code`, `review`, `observation`, or `research`
-   - **Body + Changelog**: fill per template
-3. Use **bare wikilinks** `[[note-name]]` in body only — no aliases
-4. **Creation threshold**: Only create if reusable across contexts. Transient observations belong in iteration logs.
-
-### Confidence Levels
-
-- **high**: Human explicitly stated or confirmed this
-- **medium**: Agent observed this directly (e.g., from code review, conversation patterns)
-- **low**: Agent inferred this (e.g., from indirect signals, extrapolation)
-
-### Wikilinks
-
-Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Find inbound links: `grep -rl '\[\[note-name\]\]' .squidsquad/vault/`. Find outbound: `grep -o '\[\[[^]]*\]\]' .squidsquad/vault/galaxy/note.md`.
-
-### BRIEFING.md
-
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every cycle (including quiet cycles) — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
-
-### Concurrent Access
-
-One note per topic — don't append to other agents' notes. Changelogs are append-only. On merge conflict: keep both versions, never discard vault content.
-
-### Note Size Guidance
-
-Galaxy notes: atomic, max ~500 lines (split if larger). Area notes: grow freely. Project notes: keep focused, archive old sections. Resource notes: prefer linking to external sources.
-
-### Updating Notes (vault-update)
-
-1. **Read the full note first** — never update unread notes.
-2. **Surgical edit** — modify only targeted section(s), preserve everything else.
-3. **Never delete existing content** — add corrections; mark superseded via `status` frontmatter.
-4. **Update `updated`** frontmatter to today's date.
-5. **Append Changelog**: `- YYYY-MM-DD — Updated by [agent]. [What changed and why].`
-6. **Run vault-check Level 1** after updating.
-
-### Searching the Vault (vault-search)
-
-Four search modes: **By tag** (`grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"`), **By type** (`grep -rl "^type: <TYPE>" ...`), **By keyword** (`grep -rl "<KEYWORD>" ...`), **By wikilink traversal** (1-hop outbound+inbound, max 2-hop). Max 10 results, sorted by most recently updated. Cache results within a cycle. See `references/docs/vault-reference.md` for full search examples.
-
-### Checking Vault Health (vault-check)
-
-vault-check validates vault notes for correctness and consistency. Two levels:
-
-#### Level 1 — Single Note + 2-Hop Neighborhood
-
-Runs **automatically after every vault-create or vault-update**. Checks the written note and all notes within 2 wikilink hops.
-
-For each note checked:
-
-1. **Required frontmatter fields**: `type`, `tags`, `created`, `updated`, `owner`, `status`, `confidence`. Warn if any are missing or empty.
-2. **Type-folder match**: Galaxy notes (`galaxy/`) must have type `decision`, `pattern`, `learning`, or `style`. Area notes (`areas/`) must have type `area`. Project notes (`projects/`) must have type `project`. Warn on mismatch.
-3. **Wikilink resolution**: Parse all `[[note-name]]` in the body. For each, verify a file named `note-name.md` exists somewhere in `.squidsquad/vault/`. Warn for each unresolved wikilink.
-4. **Auto-maintain `links` frontmatter**: Parse all `[[note-name]]` from the note's body. Update the `links` field in frontmatter to match (bare names, YAML list). This is automatic — agents do not manually curate the `links` field.
-5. **Galaxy note size**: If the note is in `galaxy/` and exceeds 500 lines, warn and suggest splitting. Do NOT warn for notes in `areas/`, `projects/`, or `resources/`.
-
-Print warnings with `[vault-check]` prefix. If no issues found, print nothing (silent pass).
-
-#### Level 2 — Full Vault Sweep
-
-Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all Level 1 checks + orphan detection + staleness detection (30+ days) + broken link census + health summary. See `references/docs/vault-reference.md` for details and scripts.
-
-### Rules
-
-- All vault notes are **git-tracked** — full version history
-- Galaxy notes should be **atomic** (one idea per note, max ~500 lines)
-- Area notes can grow freely (human-profile, design-system, etc.)
-- Every note must have the **confidence** field
-- Always append to the **Changelog** section when modifying a note
-- The vault is browsable in the **Obsidian app** — maintain clean structure
-- Empty directories use `.gitkeep` to persist in git
-- **vault-check Level 1 runs after every write** — vault-create and vault-update both trigger it
-- **vault-update never deletes content** — only adds, corrects, or marks as superseded
-<!-- /sub-skill: vault-protocol -->
+→ run sub-skill: vault-protocol
 
 ---
+
+<!-- #10360-cleanup: inlined retired sub-skill `common/file-conventions` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: file-conventions -->
 ## File Conventions
@@ -1745,6 +1045,8 @@ Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all
 
 ---
 
+<!-- #10360-cleanup: inlined retired sub-skill `common/status-line` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
+
 <!-- sub-skill: status-line -->
 ## Status Line
 
@@ -1759,6 +1061,8 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: status-line -->
 
 ---
+
+<!-- #10360-cleanup: inlined retired sub-skill `common/prohibitions` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: prohibitions -->
 ## What You Must Never Do
