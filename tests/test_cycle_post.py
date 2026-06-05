@@ -710,8 +710,18 @@ class TestDisposablePatterns:
 class TestVersionBumpChangelogSkip:
     """_do_version_bump skips CHANGELOG when DM is present."""
 
-    def test_skips_changelog_when_dm_present(self, patch_dirs, squid_dir):
-        """#4125: DM owns CHANGELOG — cycle_post must not write it."""
+    def test_skips_changelog_when_dm_present(self, patch_dirs, squid_dir, monkeypatch):
+        """#4125: DM owns CHANGELOG — cycle_post must not write it.
+
+        #11044: monkeypatch ``_run_script`` and ``_run`` to no-ops so the
+        version-bump path does not shell out and clobber the live
+        ``.squidsquad/config.md`` (subprocesses are not subject to
+        ``patch_dirs``' in-process monkeypatching — ``config.py``'s
+        module-level ``CONFIG_PATH`` resolves from the actual repo at
+        import time, not from this process's patched ``REPO_ROOT``).
+        The other version-bump tests below all do this; this one was
+        the outlier polluter root-caused in #11044.
+        """
         # Create DM dir (DM is present)
         (squid_dir / "dm").mkdir(parents=True, exist_ok=True)
         # Create a CHANGELOG
@@ -721,6 +731,16 @@ class TestVersionBumpChangelogSkip:
         config_md = squid_dir.parent / ".squidsquad" / "config.md"
         config_md.parent.mkdir(parents=True, exist_ok=True)
         config_md.write_text("- **SquidSquad Version**: 0.28.0\n", encoding="utf-8")
+
+        # Block subprocess fan-out from clobbering the real repo state.
+        monkeypatch.setattr(
+            cycle_post, "_run_script",
+            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""),
+        )
+        monkeypatch.setattr(
+            cycle_post, "_run",
+            lambda *a, **kw: MagicMock(returncode=0, stdout="", stderr=""),
+        )
 
         data = {"version_bump": {"new_version": "0.29.0", "items_included": [100, 200]}}
         cycle_post._do_version_bump(data, "pm")
