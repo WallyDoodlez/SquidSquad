@@ -587,6 +587,23 @@ Every other "mandatory inline" candidate from Path A's #11049 migration — `cyc
 
 **When it runs.** Compose-time only, after all ops are applied and after sub-skill reference resolution (§4.5) validates the linked composite. The assemble pass never runs at agent runtime — the runtime artifact (`CLAUDE.md`) is the assembled output.
 
+**Substrate.** The assemble pass is implemented as a **Claude Code Agent-tool spawn** from inside `references/scripts/atomic_emit.assemble_and_emit()` — the same dispatch site that hosted the retired PRD-B substrate. One Agent spawn per non-forced-verbatim slot, called inline during the per-slot rewrite step:
+
+```python
+result = Agent({
+    "description": f"assemble-{slot}",
+    "subagent_type": "assemble",
+    "prompt": _build_prompt(slot, linked_slot_body, repo_root),
+    "model": _model_for_slot(slot),  # default sonnet; per-slot override per §3.0
+})
+```
+
+The substrate uses a **custom `assemble` subagent type** registered at `.claude/agents/assemble.md` with frontmatter declaring `tools: Read` (the subagent's output IS the result; Write / Edit / Bash are never needed). The Read-only tool constraint mechanically enforces the "no new content, no new references, no new step IDs, no new file paths" contract from this section's Hard preservation guarantees: a subagent that lacks the tool surface to fetch external context cannot accidentally introduce it, even under a prompt-misinterpretation failure. Using the general-purpose subagent type instead would leave the contract enforced only by prompt discipline, which historically fails under retry or model-drift conditions.
+
+**Forced-verbatim slots — enforced in code.** Two slots are `_FORCED_VERBATIM_SLOTS` regardless of operator configuration: `project-context` (operator-authored L4 content where LLM rewrite would defeat the override contract) and `vault` (~29 lines of boilerplate-shaped composed-state pointer, identical across roles, nothing to reconcile). The forced-verbatim list is a constant in `atomic_emit`, not a config flag — operator's `assemble-slots:` config entry naming `project-context` or `vault` is a compose-time error before any Agent spawn occurs.
+
+The full implementation breakdown — call-site internals, prompt template structure, JSON output schema, per-slot prompt budget, retry semantics — is maintained in `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md` §§1 and 4 as a living planning artifact. This TRD subsection is the contract; the planning artifact is the implementation breakdown.
+
 **Per-slot scope.**
 
 | Slot | Assemble pass | Why |
