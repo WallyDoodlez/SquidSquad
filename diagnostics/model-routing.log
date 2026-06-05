@@ -1143,3 +1143,6 @@
 {"timestamp": 1780616545.9039066, "task_type": "assemble", "task_id": "assemble-instructions", "model": "claude", "action": "claude-cli-success", "response_length": 92981, "elapsed_seconds": 501.2}
 {"timestamp": 1780616940.373123, "task_type": "assemble", "task_id": "assemble-instructions", "model": "claude", "action": "claude-cli-success", "response_length": 69210, "elapsed_seconds": 382.7}
 {"timestamp": 1780619724.4703722, "task_type": "assemble", "task_id": "assemble-instructions", "model": "sonnet", "provider": "openai", "action": "success", "response_length": 558, "elapsed_seconds": 0.0}
+{"timestamp": 1780619929.0672286, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1780619929.0682273, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1780619929.0692277, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
