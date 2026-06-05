@@ -1,36 +1,31 @@
 # Working State
 
-- **Task**: HOLD #10685 E6 squash PR open — 3 BLOCKERS surfaced by independent audit
-- **Status**: blocking on skill fix of #10981
+- **Task**: #11000 INVESTIGATE intake (Phase 1 ownership accepted)
+- **Status**: #11000 transitioned pending → planning; Phase 1 research scoped (Q1–Q5)
 - **Last Processed Event ID**: 3e50e129c8e74594
-
-## Critical: do not green-light squash
-
-Pre-squash audit (cycle 2118-2119) found 3 BLOCKERS in post-cutover deploy_alias_v2 path. Filed as #10981:
-- B1: `{{include:}}` directives leak (link stage walks them, v1 resolver deleted)
-- B2: `[ROLE]` etc placeholders leak (deliberate omit but LLM doesn't substitute)
-- B3: `{{role-roster}}` never injected (orphan helper)
-
-Result: every operator `compose.py deploy <alias>` produces broken CLAUDE.md with literal `{{include:}}` + `[ROLE]` + `{{role-roster}}` text. Total agent boot breakage post-cutover.
-
-Audit artifact: `.squidsquad/pm/planning/audit-e6/AUDIT-B-Claude-critical-paths.md`
+- **Quiet cycles**: 0
 
 ## Pipeline
 
-- E6 squash PR: HOLD (not opened)
 - pending_ship: 0
-- pending_test: 1 (#10855)
-- Open PRs: 1 (#10952)
-- New blocker: #10981 (skill-owned, high)
-- Other queue dormant on E6 ship: #10677 D6 bundled / #10686 E7 / #10690 wiki / #10781 PRD-D / #10836-#10839 umbrellas
+- pending_test: 0 (D1 #10672 shipped 2026-06-02; #10855 still human-blocked on operator harness-state repair)
+- Approved queue: 14 (D2-D8 + E1-E7 + PRD umbrellas #10836-#10839 + wiki #10690)
+- Open PRs: 1 (#10952 for #10855, awaiting human-action repair before merge value)
+- E6 #10685 / #10999: SHIPPED (commit 1050bfe0)
+- New high-priority: **#11000 PM-owned INVESTIGATE (Phase 1 next cycle)**
 
-## Pending audits
+## #11000 Phase 1 research questions
 
-- Audit A (DS via model_router): FAILED — tool-use loop exceeded max iterations
-- Audit B (Claude critical paths): COMPLETE — 3 BLOCKERS surfaced
-- Audit C (test surface): NOT RUN yet
-- Audit D (TRD consistency): NOT RUN yet (early signal: docs/COMPOSE-ARCHITECTURE.md has 0 diff on E6 branch — TRD body never synced)
+- Q1: cutover bug ownership — 4 bugs vs. 1 combined? (lean combined)
+- Q2: inlining intent — read v2_link_stage.py history + #10999 thread
+- Q3: reference-only feasibility — enumerate runtime-Read patterns
+- Q4: procedural extraction candidates (pipeline-sentinel et al.)
+- Q5: assemble pass scope after inlining fix — retire or retain?
+
+Deliverable: `RESEARCH-11000.md` answering Q1-Q5; CONTEXT-11000.md already staged.
+
+## Session ship tally: 32 (D1 #10672 + E6 #10999 added since prior 31)
 
 ## Context
 
-healthy (40%).
+healthy.
