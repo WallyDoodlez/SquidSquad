@@ -158,17 +158,25 @@ class TestAc7TopicCoverage:
 
 
 class TestAc6M62ManifestWiring:
-    """AC-6 M-6.2 (post-#9588): the event-mode L1 base fragment + its four
-    supporting common-events fragments must reach the agent at runtime via
-    the boot bootstrap, NOT via compose-time inlining.
+    """AC-6 M-6.2 (post-#9588 + post-E6 cutover #10999): the event-mode L1
+    base fragment + its four supporting common-events fragments must reach
+    the agent at runtime via the boot bootstrap, NOT via compose-time
+    inlining.
 
     #9588 swapped the wiring mechanism: instead of every event-mode manifest
     listing all six common-events fragments and the template having matching
     `{{include:}}` directives, the manifest now contains `common/boot-bootstrap`
     only, and the bootstrap's content carries `Read references/sub-skills/
     common-events/<name>.md` directives that fire when the agent boots in
-    event mode. The previous compose-time-inline contract (#8915) is the old
-    contract; this class enforces the new one.
+    event mode.
+
+    #11046: post-E6 cutover (#10999, commit 1050bfe0) consolidated the v1
+    polling/event manifest split (``includes.yml`` + ``includes-events.yml``)
+    into a single mode-agnostic ``includes.yml`` per role. The per-role
+    ``includes-events.yml`` files are GONE — wake mode is a runtime
+    concern handled by ``common/boot-bootstrap`` at session start. This
+    fixture and the manifest test rebind from the retired file to the
+    surviving unified manifest. The wiring contract is unchanged.
     """
 
     REQUIRED_COMMON_EVENTS = [
@@ -184,11 +192,13 @@ class TestAc6M62ManifestWiring:
 
     @pytest.fixture(scope="class")
     def includes_by_role(self):
+        """#11046: switched from the retired ``includes-events.yml`` to the
+        post-cutover unified ``includes.yml``."""
         import yaml
         roles_dir = REPO_ROOT / "references" / "roles"
         out = {}
         for role in self.ROLES:
-            path = roles_dir / role / "includes-events.yml"
+            path = roles_dir / role / "includes.yml"
             assert path.exists(), f"missing manifest: {path}"
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
             out[role] = data.get("includes", [])
@@ -212,7 +222,7 @@ class TestAc6M62ManifestWiring:
         are Read at runtime by the bootstrap instead."""
         includes = includes_by_role[role]
         assert "common/boot-bootstrap" in includes, (
-            f"references/roles/{role}/includes-events.yml must list "
+            f"references/roles/{role}/includes.yml must list "
             f"`common/boot-bootstrap` — #9588 made it the manifest entry "
             f"that gets the agent into event mode (or fallback polling)."
         )
