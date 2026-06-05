@@ -1,47 +1,50 @@
 # Working State
 
-- **Task**: cycle 2146 — quiet; observation only
-- **Status**: pipeline draining well; PM coordination-only
+- **Task**: cycle 2147 — quiet; observation only
+- **Status**: pipeline draining; #11053 still awaiting op review
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 1
+- **Quiet cycles**: 2
 
-## Cycle work (observation only)
+## Ships since cycle 2146 (+2 → tally 43)
 
-Skill velocity since cycle 2145:
-- **#11047 SHIPPED** (PR #11082 merged)
-- **#11083 at pending-test** on PR #11084 — filed last cycle, picked up + shipped within minutes. Branch-guard on `commit_role_scoped`: when current branch ≠ working-branch, skip staging (file stays on disk for next on-working-branch cycle). Both AC pattern from #11065 applied successfully.
-- **#11044 re-verified** at pending-test (option C tactical: scope trimmed to 2 test files, operational state files restored to main).
+- **#11083 SHIPPED** (PR #11084 merged) — operational-state branch-guard. Same shape as #11065. Pattern complete.
+- **#11044 SHIPPED** (PR #11080 merged) — test pollution fix, +54/-2 lines, 110/110 PASS at trimmed scope.
 
-Both structural fixes (#11065 .backlog-cache, #11083 operational state on feature branches) now address the #10540 merge-spiral pattern systemically.
+**Both merge-spiral root causes (#10540 pattern) permanently fixed.**
+
+## New activity
+
+- **#10750 at pending-test** on PR #11085 — skill picked up catalog orphan cleanup (3 orphans resolved; 40+ orphan source files are #10360 intermediate state, out of scope per PM framing).
 
 ## Pipeline
 
 - pending_ship: 0
-- pending_test: 3 (#10855 deferred; **#11083 fresh** + **#11044 re-verified**)
+- pending_test: 2 (#10855 deferred; #10750 fresh)
 - in-progress: #11053 (PM, awaiting operator §9)
-- Approved queue: #10686 (E7), #10690 (gated), 4 TRD PRDs
-- Open PRs: 2 (#10952 deferred; #11080 trimmed for QA; — PR #11084 was bundled with #11083 sweep)
+- Approved queue: #10686 (E7), #10690 (gated on E7), 4 TRD PRDs
+- Open PRs: 1 (#10952 deferred)
 
-## v2 stabilization work map (largely settled)
+## v2 stabilization work map (mostly settled)
 
 | Surface | Status | Owner |
 |---|---|---|
 | 1. References only, no inline | SHIPPED | #11049 closed |
 | 4. Agent-spawn assemble | Phase 1 v1, op review | #11053 pm |
-| Cleanup | shipped | #11050 closed |
+| Cleanup (API-assemble prune) | shipped | #11050 closed |
 | E6 v2 cutover | shipped | #10685 closed |
-| E7 smoke | unblocked | #10686 skill |
+| E7 smoke | unblocked, awaiting skill | #10686 skill |
 | Tracker hygiene (.backlog-cache) | shipped | #11065 closed |
-| Tracker hygiene (state files on feature branches) | pending-test | #11083 skill |
-| Pytest stabilization 4-cluster sweep | 3 shipped + 1 trimming | #11044+45+47 |
-| docs/COMPOSE-ARCHITECTURE.md §4.6 prose refresh | pending Phase 2.x of #11053 | future |
+| Tracker hygiene (state files on feature branches) | shipped | #11083 closed |
+| Pytest stabilization sweep | all 4 clusters shipped | #11042+44+45+47 |
+| Catalog orphan cleanup | pending-test | #10750 |
+| docs/COMPOSE-ARCHITECTURE.md §4.6 prose refresh | Phase 2.x of #11053 | future |
 
 ## Operator asks (still pending)
 
-#11053 §9: 5 questions, default-accept available. Or just `go with defaults`.
+#11053 §9: 5 questions, or `go with defaults`.
 
-## Session ship tally: 41 (+1 since cycle 2145: #11047)
+## Session ship tally: 43 (+2 since cycle 2146: #11083 + #11044)
 
 ## Context
 
-healthy (~80%).
+healthy (~83%).
