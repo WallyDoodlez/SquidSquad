@@ -70,17 +70,11 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 10. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 11. `common/vault-optimize` — Vault optimization on quiet cycles
 12. `common/git-commit` — Step 5: commit/push protocol with PR flow
-13. `common/discussion-protocol` — Discussion entry format and rules
 14. `common/issue-filing` — Self-file and cross-file bug templates
 15. `common/working-state` — Working State File format
 16. `common/vault-protocol` — Vault operations (full)
-17. `common/file-conventions` — File/directory conventions
-18. `common/status-line` — Status line description
 19. `common/self-restart` — Context-pressure self-restart at cycle end
 20. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
-21. `common/prohibitions` — "Never do" rules (shared baseline)
-22. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
-23. `roles/worker/responsibility` — Worker-specific responsibility narrowing
 
 Optional (comms-layer, not yet included by default):
 - `common/chat-etiquette` — Chat room behavior rules
@@ -113,13 +107,8 @@ Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is c
 20. `roles/pm/task-approval` — Feature Approval Gate
 21. `roles/pm/discussion-protocol` — Discussion entry format
 22. `common/vault-protocol` — Vault operations (full)
-23. `roles/pm/file-conventions` — PM file/directory conventions
-24. `roles/pm/status-line` — PM status line description
 25. `common/self-restart` — Context-pressure self-restart at cycle end
 26. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
-27. `roles/pm/prohibitions` — PM "never do" rules
-28. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
-29. `roles/pm/responsibility` — PM-specific responsibility narrowing
 
 ### Verifier Agent (`references/roles/verifier/CLAUDE.md`)
 
@@ -134,13 +123,8 @@ Entry file with includes. **Source of truth**: `references/roles/verifier/includ
 7. `roles/verifier/issue-filing` — Verifier Bug Filing Protocol
 8. `roles/verifier/discussion-protocol` — Discussion entry format (verifier alias)
 9. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
-10. `roles/verifier/file-conventions` — Verifier file/directory conventions
-11. `roles/verifier/status-line` — Verifier status line description
 12. `common/self-restart` — Context-pressure self-restart at cycle end
 13. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
-14. `roles/verifier/prohibitions` — Verifier "never do" rules
-15. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
-16. `roles/verifier/responsibility` — Verifier-specific responsibility narrowing
 
 ### DM Agent (`references/roles/dm/CLAUDE.md`)
 
@@ -158,13 +142,8 @@ Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml
 10. `roles/dm/discussion-protocol` — Discussion entry format (dm alias)
 11. `roles/dm/issue-filing` — DM bug/feature filing
 12. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
-13. `roles/dm/file-conventions` — DM file/directory conventions
-14. `roles/dm/status-line` — DM status line description
 15. `common/self-restart` — Context-pressure self-restart at cycle end
 16. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
-17. `roles/dm/prohibitions` — DM "never do" rules
-18. `common/agent-boundaries` — #9925 inter-role responsibility layering rules (#9944)
-19. `roles/dm/responsibility` — DM-specific responsibility narrowing
 
 ### Legacy Sub-Skills
 

@@ -33,10 +33,10 @@ includes:
   - roles/pm/task-approval
   - roles/pm/discussion-protocol
   - common/vault-protocol
-  - roles/pm/file-conventions
-  - roles/pm/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - roles/pm/prohibitions
-  - common/agent-boundaries
-  - roles/pm/responsibility
+  # Removed in #11087 (post-#11049 D1-inlined; content lives in
+  # references/roles/pm/instructions.md with #10360-cleanup markers):
+  #   roles/pm/file-conventions, roles/pm/status-line,
+  #   roles/pm/prohibitions, common/agent-boundaries,
+  #   roles/pm/responsibility.

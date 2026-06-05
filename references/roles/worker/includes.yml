@@ -28,14 +28,12 @@ includes:
   - common/vault-remember
   - common/vault-optimize
   - common/git-commit
-  - common/discussion-protocol
   - common/issue-filing
   - common/working-state
   - common/vault-protocol
-  - common/file-conventions
-  - common/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - common/prohibitions
-  - common/agent-boundaries
-  - roles/worker/responsibility
+  # Removed in #11087 (post-#11049 D1-inlined; content lives in
+  # references/roles/worker/instructions.md with #10360-cleanup markers):
+  #   common/discussion-protocol, common/file-conventions, common/status-line,
+  #   common/prohibitions, common/agent-boundaries, roles/worker/responsibility.

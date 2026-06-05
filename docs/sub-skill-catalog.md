@@ -119,7 +119,7 @@ Reusable across multiple roles.
 | `working-state` | Working-state file format and update rules | worker |
 | `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | worker |
 
-> Rows removed: `agent-boundaries`, `file-conventions`, `status-line`, `prohibitions` — these are no longer classified as sub-skills. Migration targets (see retirement notes above for full detail): `agent-boundaries` → Identity + Responsibility slots; `file-conventions` → inline in instructions; `status-line` → cycle-inlined (no slot); `prohibitions` → Identity Boundaries + Responsibility "does NOT do". Source files remain on disk under `references/sub-skills/common/` and per-role overrides until #10360 deletes them; this catalog reflects target architecture, not v1 disk state.
+> Rows removed: `agent-boundaries`, `file-conventions`, `status-line`, `prohibitions` — these are no longer classified as sub-skills. Migration targets (see retirement notes above for full detail): `agent-boundaries` → Identity + Responsibility slots; `file-conventions` → inline in instructions; `status-line` → cycle-inlined (no slot); `prohibitions` → Identity Boundaries + Responsibility "does NOT do". Source files removed in #11087; content inlined per #11049 Path A D1 (verbatim into each role's `instructions.md` with `<!-- #10360-cleanup: ... -->` markers naming the eventual destination slot). Slot-migration (move bodies from `instructions` slot to Identity/Responsibility per the design above) deferred to #10360.
 
 ### Vault (institutional memory)
 
@@ -247,7 +247,7 @@ Role-specific event extras:
 | `roles/worker/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
 | Domain context | Per-stack worker notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
-> Removed from all per-role tables: `responsibility`, `file-conventions`, `status-line`. These are no longer sub-skills (see the migration notes earlier in this section). Source files remain on disk under `references/sub-skills/roles/<role>/` until #10360 implements the migration; this catalog reflects target architecture, not v1 disk state.
+> Removed from all per-role tables: `responsibility`, `file-conventions`, `status-line`. These are no longer sub-skills (see the migration notes earlier in this section). Source files removed in #11087; content inlined per #11049 Path A D1 (verbatim into each role's `instructions.md` with `<!-- #10360-cleanup: ... -->` markers naming the eventual destination slot). Slot-migration (move bodies from `instructions` slot to Identity/Responsibility per the design above) deferred to #10360.
 
 ---
 
