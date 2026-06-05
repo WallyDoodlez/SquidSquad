@@ -10,13 +10,13 @@ _Auto-maintained active context summary. Updated by agents when significant cont
   - #10838 VAULT-ARCH alignment (4 GAP + 6 DRIFT)
   - #10839 Cross-TRD role → alias rename — DS re-audit needed before pickup
 - **E7 #10686** (approved, role:skill) — V2 migration smoke; unblocked post-E6
-- **#11049 v2 migrate v1 {{include:}} directives** (pending-test, high, role:skill) — Path A migration shipped on PR #11069 (-4179 LOC); composites ~50% smaller (pm 2196→1066, skill 1964→1268); PM ruled revised AC3 ceilings 2026-06-05 (L2≤1100, L3≤1300); QA verification pending
-- **#11053 agent-spawn substrate investigation** (approved, role:pm) — gated on #11049 landing
+- **#11053 agent-spawn substrate investigation** (in-progress, role:pm) — unblocked by #11049 ship; design v3 per-slot polish architecture (Claude Code agents, not API)
 - **#10690 wiki-link rework** (approved, gated on E7)
 - **#10750 catalog orphan cleanup** (open, role:skill) — D4 drift-check surfaced path drift from #6274 dev→worker rename
 
 ## Recently Shipped
 
+- **#11049 v2 {{include:}}→Path A migration** (shipped 2026-06-05 via PR #11069, DM cycle 1351) — -4179 LOC; 137 directives processed; composites ~50% smaller (pm 2196→1066, dm 1568→1006, qa 1789→1008, skill 1964→1268). PM-revised AC3 (L2≤1100, L3≤1300) validated by QA verification.
 - **#11042 pytest suite stale refs** (shipped 2026-06-05 via PR #11048, DM batch cycle 1350) — 5-cluster stabilization, 271/271 pass at HEAD 5de4b7c57.
 - **#11066 stale L4 corrupt test** (shipped 2026-06-05 via PR #11068, DM batch cycle 1350) — post-#10987 prose-H3 routing alignment.
 - **#11065 .backlog-cache untrack** (shipped 2026-06-05 as 1dd58709c via PR #11067) — root cause for #10540 merge-spiral pattern eliminated.
@@ -58,7 +58,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 ## Constraints & Blockers
 
 - Verifier agent intermittently fails to take after boot_remote.py — investigate if pattern persists.
-- Auto-versioning: Shipped Since Last Bump = 13 (threshold 10) — DM should trigger version bump.
+- Auto-versioning: Shipped Since Last Bump = 16 (threshold 10) — DM-owned version bump overdue by 6.
 - DS re-audit needed on #10837 + #10839 before PM picks them up (queued condition: E6 squash PR open; E6 has now shipped — re-audit is the current bottleneck).
 
 ## Team State
