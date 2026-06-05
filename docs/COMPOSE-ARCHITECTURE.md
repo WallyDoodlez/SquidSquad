@@ -704,7 +704,7 @@ If any check fails, **compose aborts with a diagnostic**. There is no fallback t
 - Cache store: `.squidsquad/<alias>/.assemble-cache/` (git-tracked alongside the assembled output, so re-deploys on the same commit are free).
 - Cache invalidation is automatic via the hash — any change to the linked body, the slot's purpose statement (from this spec), the model, or the prompt produces a new key.
 
-**Model.** `sonnet` (cost/quality balance for prose rewriting; compose-time constant — operators do not configure this per install. If a different tier is ever justified, the constant changes in source, not in `config.md`). Always temperature ≤ 0.3 to reduce first-run drift.
+**Model.** `sonnet` default (cost/quality balance for goal-bounded prose reconciliation). The default is a compose-time constant. **Per-slot override** is available via the install's `assemble-slots:` config entry — e.g., an install whose `soul` slot consistently produces low-quality reconciliations may set `soul: { model: opus }`; an install with an unusually short `identity` slot may set `identity: { model: haiku }`. Temperature ≤ 0.3 to reduce first-run drift. The default is shipped behaviour; per-slot overrides are operator-configurable; `_FORCED_VERBATIM_SLOTS` (`project-context`, `vault`) accept no model setting because they never spawn.
 
 **Audit artifacts.** Compose emits three outputs to `.squidsquad/<alias>/`:
 
