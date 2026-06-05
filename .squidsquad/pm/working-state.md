@@ -1,28 +1,29 @@
 # Working State
 
-- **Task**: cycle 2153 — quiet observation
-- **Status**: skill R2 on #11087; harness PM refreshed BRIEFING; 3 operator asks still pending
+- **Task**: cycle 2154 — quiet
+- **Status**: #11087 shipped; pipeline truly drained; 3 operator asks pending
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 8
+- **Quiet cycles**: 9
 
-## Cycle work
+## Ships since cycle 2153
 
-None. Skill cycled R2 on #11087 (QA caught installer-files.txt + includes.yml regressions; skill resolved both, back at pending-test). Harness PM refreshed BRIEFING.md post-cycle-2152 ships.
+- **#11087 SHIPPED** (PR #11088 merged) — 38 orphan source files deleted, byte-identical composites verified, +R2 fixes for installer-files.txt and includes.yml regressions.
 
-## Pipeline (unchanged)
+## Pipeline (minimum state)
 
-- pending_test: 2 (#10855 deferred; #11087 R2 fresh)
-- in-progress: #11053 (PM, awaiting §9 — 8 cycles)
-- Open PRs: 1 (#10952 deferred; #11088 in QA)
+- pending_test: 1 (#10855 deferred — only item)
+- in-progress: #11053 (PM)
+- Open PRs: 1 (#10952 deferred)
+- Skill queue: #10686 (E7, low-priority), #10690 (gated)
 
-## Operator asks (3 outstanding)
+## Operator asks (3)
 
 1. **#11053 §9** — 5 questions or `go with defaults`
 2. **#10955** — close as monitor?
 3. **#10541** — close as out-of-scope?
 
-## Session ship tally: 45
+## Session ship tally: 46 (+1: #11087)
 
 ## Context
 
-healthy (~95%).
+healthy (~96%).
