@@ -606,16 +606,16 @@ The full implementation breakdown — call-site internals, prompt template struc
 
 **Per-slot scope.**
 
-| Slot | Assemble pass | Why |
+| Slot | Substrate | Why |
 |---|---|---|
-| `identity` | ✅ runs | L4 appends can layer onto Boundaries; rewriting unifies tone |
-| `responsibility` | ✅ runs | L4 may replace whole-slot or append; rewrite reconciles |
-| `soul` | ✅ runs | L1 + L2 + L3 + L4 appends produce stacked dispositions; rewrite collapses to coherent voice |
-| `instructions` | ✅ runs | Op stack here is the highest-volume; rewrite is most impactful |
-| `project-context` | ❌ skipped | Append-only chronological facts; rewriting would lose timeline + supersession semantics (per §5.5 monotonic append) |
-| `vault` | ❌ skipped | L1-only short prose describing the vault contract; nothing layered to reconcile |
+| `identity` | agent-tool spawn | L4 appends can layer onto Boundaries; rewriting unifies tone |
+| `responsibility` | agent-tool spawn | L4 may replace whole-slot or append; rewrite reconciles |
+| `soul` | agent-tool spawn | L1 + L2 + L3 + L4 appends produce stacked dispositions; rewrite collapses to coherent voice |
+| `instructions` | agent-tool spawn | Op stack here is the highest-volume; rewrite is most impactful |
+| `project-context` | **forced verbatim** (`_FORCED_VERBATIM_SLOTS`) | Append-only chronological facts; rewriting would lose timeline + supersession semantics (per §5.5 monotonic append). Forced in code — operator cannot opt this slot in via `assemble-slots:` |
+| `vault` | **forced verbatim** (`_FORCED_VERBATIM_SLOTS`) | L1-only short prose describing the vault contract; nothing layered to reconcile. Forced in code — operator cannot opt this slot in via `assemble-slots:` |
 
-**Skipped-slot behaviour.** For a slot whose `Assemble pass` is ❌, the assembled output contains the linked body **verbatim** — the assemble pass emits the linked content for that slot unchanged into the final `CLAUDE.md`. No LLM call, no preservation check, no conflict detection for that slot. This preserves the monotonic-append semantics of Project Context (chronological order + supersession) and the L1-only stability of Vault. Skipped slots do not contribute entries to `CLAUDE.conflicts.md`.
+**Forced-verbatim behaviour.** For a slot in `_FORCED_VERBATIM_SLOTS`, the assembled output contains the linked body **verbatim** — `atomic_emit` emits the linked content for that slot unchanged into the final `CLAUDE.md`. No Agent-tool spawn, no preservation check, no conflict detection for that slot. This preserves the monotonic-append semantics of Project Context (chronological order + supersession) and the L1-only stability of Vault. Forced-verbatim slots do not contribute entries to `CLAUDE.conflicts.md`. The forcing is **enforced in code** — an `assemble-slots:` config entry naming `project-context` or `vault` raises a compose-time validation error before any spawn occurs.
 
 **Hard preservation guarantees.** The assemble pass MUST preserve, verbatim, in the assembled output:
 
