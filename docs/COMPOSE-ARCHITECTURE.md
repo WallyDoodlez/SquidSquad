@@ -579,6 +579,12 @@ After the link stage produces a per-slot linked composite, each non-skipped slot
 
 **Authoring discipline.** If you find yourself writing procedure in a layer file — step-by-step mechanics, command invocations, branching logic — the content belongs in a sub-skill, not in the orchestrator. Layer files declare intent; sub-skills carry mechanics. This separation is the load-bearing constraint that keeps composed slots in the per-slot subagent's bounded-reconciliation regime (the assemble pass rewrites *prose at the goal layer*; it does not author procedures). When the rule is violated — when a layer file inlines mechanics — slots bloat, the assemble subagent's per-slot work shifts from "reconcile goal statements" to "reconcile mixed goals + procedures," and the §3.0 unconditional-assemble premise no longer holds.
 
+**Sub-skill criterion.** A piece of content becomes a sub-skill (invoked via the marker) if and only if, at the moment it fires, the agent already knows the marker convention. If the content fires *before* the agent has learned the convention, it is not a sub-skill — it stays inline at L1 (or moves upstream into harness-level setup before the agent prompt is even loaded).
+
+Applied to the current codebase, only one piece of content meets the must-be-inline criterion: **`boot-bootstrap`**. It fires at session start, before any tool use, before the agent has read anything that would tell it "the arrow marker means: load the named sub-skill." Boot-bootstrap's own body teaches the convention as part of bootstrapping; everything after it can rely on that knowledge and use the marker pattern.
+
+Every other "mandatory inline" candidate from Path A's #11049 migration — `cycle-runner`, `context-pressure`, `resume-working-state`, `task-pickup`, `working-state`, `git-commit`, `agent-lifecycle`, `improvement-scan-slim`, `status-line` — fires *after* boot-bootstrap. By the time those steps run, the agent has already booted and knows how to follow markers. Path A inlined them because the runtime-resolver story was incomplete at the time; under this criterion they are misplaced. A follow-up task reverses that over-inlining (Task B, gated on this TRD update landing) and restores marker-pattern references for the 9 misplaced sub-skills.
+
 **When it runs.** Compose-time only, after all ops are applied and after sub-skill reference resolution (§4.5) validates the linked composite. The assemble pass never runs at agent runtime — the runtime artifact (`CLAUDE.md`) is the assembled output.
 
 **Per-slot scope.**
