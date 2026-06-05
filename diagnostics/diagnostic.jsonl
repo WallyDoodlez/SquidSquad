@@ -3256,3 +3256,9 @@
 {"timestamp": "2026-06-01T02:39:52.293772", "severity": "info", "source": "tracker", "message": "Ship gate on #10386: branch 'squidsquad/task/10386' tip has 1 commit(s) not reachable from working branch, but PR #10476 is MERGED on the forge (squash-merge) \u2014 allowing ship."}
 {"timestamp": "2026-06-01T02:40:26.694851", "severity": "info", "source": "tracker", "message": "Ship gate on #10386: branch 'squidsquad/task/10386' tip has 1 commit(s) not reachable from working branch, but PR #10476 is MERGED on the forge (squash-merge) \u2014 allowing ship."}
 >>>>>>> 01e681bc2b6a4b97b82c7aa8ffb4bbcb5a2d75b0
+{"timestamp": "2026-06-04T21:08:43.708781", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-06-04T21:08:43.721001", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-06-04T21:08:43.768585", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-06-04T21:08:43.784689", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-06-04T21:08:43.916491", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
+{"timestamp": "2026-06-04T21:08:43.916491", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
