@@ -23,14 +23,14 @@ Walking every harness/agent interaction point that touches task/event flow under
 
 ### 1.2 Harness-side surfaces
 
-| Route | `harness.py` line | Role under pull-only | Disposition |
+| Surface | `harness.py` line | Role under pull-only | Disposition |
 |---|---|---|---|
 | `POST /events` | 1950 | Event publish (any actor — PM file, skill PR open, DM ship, etc.). | Stays — pull-only is silent on publish; agents still publish events for cross-awareness. |
 | `GET /events` | 2088 | Read all events. | Stays — debugging surface. |
 | `GET /events/for/{role}` | 2141 | Read events filtered to a role's interests. | Stays — primary subscription surface for agents. |
 | `GET /events/cursor/{role}` | 2211 | Read per-role consumer cursor (last processed). | Stays. |
 | `POST /events/{event_id}/complete` | 2232 | Ack event delivery. | Stays — required by pull subscription. |
-| `GET /events/in-flight/{role}` | 2290 | Diagnostic. | Stays. |
+| `GET /events/in-flight/{role}` | 2290 | Diagnostic. | Stays but handler modified — must drop the `get_in_flight()` call; either returns empty list or endpoint is removed entirely. Phase 2 picks. |
 | `GET /events/lifecycle` | 2429 | Diagnostic. | Stays. |
 | `POST /agents/{role}/start | stop | restart` | 1756, 2448, 2471 | Agent lifecycle control. | Stays. |
 | `EventLifecycleManager.dispatch()` | 923-939 | In-flight tracking for events dispatched to a role. **Already dormant** — comment line 926-927: "Not yet wired into POST /events — Phase 4 plumbing." Per §4.6 below, the ONE call site that existed (`GET /events/for/{role}`) was stripped by #9741, so today there is no caller in the codebase. | **Removed** — but see the consumer-disposition list below; removal cascades to dependent endpoints + state. |
@@ -38,7 +38,7 @@ Walking every harness/agent interaction point that touches task/event flow under
 | `EventLifecycleManager.ack()` | 941-953 | Reads `_in_flight`, `_dispatched`, `_dispatch_times`, `_retry_counts`. Called by `POST /events/{event_id}/complete` (harness.py:2255). | **Endpoint becomes always-410 (Gone)** under pull-only; `ack()` is removed alongside the state. The complete-endpoint loses its semantic purpose because there's nothing in-flight to ack. |
 | `EventLifecycleManager.get_in_flight()` | 955-958 | Reads `_in_flight`. Called by `GET /events/in-flight/{role}` (harness.py:2294) and `GET /events/lifecycle` (harness.py:2436). | **Endpoints lose the `in_flight` field** but stay (other diagnostics survive in `/events/lifecycle`); `get_in_flight()` is removed with the state. |
 | `_timeout_scanner` (background thread) | started at harness.py:1404, iterates `_in_flight` at line 1135 | Re-dispatches events whose ack hasn't arrived within `_timeout_minutes = 10`. | **Removed** alongside the state — nothing in-flight, nothing to scan. |
-| `_persist()` / `_load()` (state file I/O) | 1045-1107 | Serialize and deserialize all four fields to `.event-state.json`. | **Loses the four fields** but stays for the cursor field (`_cursors`), which is still load-bearing for `GET /events/cursor/{role}`. |
+| `_persist()` / `_load()` (state file I/O) | `_persist()` defined at 1034; `_load()` defined at 1060; four-field serialization at 1045-1048; deserialization at 1100-1107 | Serialize and deserialize all four fields to `.event-state.json`. | **Loses the four fields** but stays for the cursor field (`_cursors`), which is still load-bearing for `GET /events/cursor/{role}`. |
 
 ### 1.3 Net effect of pull-only adoption
 
