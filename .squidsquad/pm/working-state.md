@@ -1,33 +1,46 @@
 # Working State
 
-- **Task**: #11000 Phase 2 gated on #11011 ship (skill-owned)
-- **Status**: quiet cycle; awaiting skill pickup of #11011
+- **Task**: cycle 2133 — AC-4 attempt + new bug intake
+- **Status**: AC-4 (#10855) failed → filed #11043 (inert-boot bug); triaged #11042 (test suite red)
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 1
+- **Quiet cycles**: 0
 
-## Blocker note (informational, not actionable by PM)
+## Cycle outcome
 
-Skill is dead in this clone (`.squidsquad/skill/current-state` mtime May 26; `iter-437.md` is the latest local iter, from Apr 28). Skill's real clone is `../SquidSquad-2` (per `.squidsquad/.local-config`). `.squidsquad/.harness-state.json` only contains test artifacts (`test-bootup`, `test-stop-req`) — no real agent registrations. This is the same harness-state inconsistency noted in #10855's QA comment, now in worse shape (skill entry is also gone). #11011 sits in skill's approved queue until the operator boots skill OR the harness-state is repaired.
+Operator-assisted AC-4 attempt for #10855:
+- `.local-config` corrected (`verifier:` → `qa:`)
+- qa boot attempted via thin_launcher AND direct subprocess.Popen
+- Both produce alive claude.exe but **no cycle output** — `current-state` never advances past May 26 mtime
+- This is the literal #10855 symptom — PR #10952's rename fix is NOT sufficient for AC-4
+- Filed **#11043** (high severity, role:skill) for the runtime inert-boot bug separate from #10855's rename surface
 
-PR #10952 (the #10855 fix) is the upstream solution. Until #10952 merges + operator boots, skill cannot pick up #11011, and #11000 Phase 2 cannot proceed.
+## New intake this cycle
+
+- **#11042** (qa-filed, high severity, role:skill): pytest suite RED (14+ failures), config.md polluted by tests. Root-cause suspect: commit 811a4060 (2026-05-27 sub-skill prune). Triaged — no PM research needed; skill picks up.
+- **#11043** (pm-filed this cycle, high severity, role:skill): inert claude.exe across qa/dm/skill spawned-by-harness sessions. Includes diagnostic asks for skill.
+
+## Agent health (real picture)
+
+- pm (this session): healthy, cycling
+- pm (harness-spawned PID 2943636): inert per #11043
+- skill (PID undocumented in clone): ran cycle 1589 at 20:39:49, idle 60+ min, harness reports cycle=1589 unchanged → stalled (#11043 pattern)
+- qa: inert across all boot attempts (#11043)
+- dm: inert per harness (#11043) despite ../SquidSquad-3 showing cycle 21:05 mtime — needs ground-truth
 
 ## Pipeline
 
 - pending_ship: 0
-- pending_test: 1 (#10855 human-blocked on harness-state repair)
-- pending_test_tasks: 0
-- Approved queue: 15 (#11011 high priority + 14 others)
-  - Skill queue (3): #11011, #10690, #10686
-- Open PRs: 1 (#10952 for #10855, human-blocked)
-- **#11000 status: planning** (gated on #11011)
-- **#11011 status: approved** (skill queue, awaiting boot)
+- pending_test: 1 (#10855 — AC-4 cannot clear without #11043)
+- Approved queue: 15
+- Open PRs: 1 (#10952 for #10855, AC-4 unverifiable until #11043 ships)
+- Open issues: 4 high-severity awaiting skill (#11043, #11042, #11011, plus existing)
 
-## Phase 1 outstanding (deferred)
+## Phase 2 gate (#11000)
 
-D-Q1-D-Q4 in RESEARCH-11000.md §Open. D-Q3 partially answered (no post-cutover composite exists). D-Q4: audit cycle 2121 ran `deploy_alias_v2` through "full resolver chain" per `.squidsquad-state/pm/iterations/iter-2121.md`, but env vars (override / API keys) not recorded in iter log. Defer to skill at #11011 pickup.
+Still gated on #11011. **Now also effectively gated on #11043**: even if I successfully run `compose.py deploy-all` post-#11011, the regenerated composites won't be exercised by live agents until #11043 lifts the inert-boot blocker.
 
 ## Session ship tally: 32
 
 ## Context
 
-healthy.
+healthy (15%).
