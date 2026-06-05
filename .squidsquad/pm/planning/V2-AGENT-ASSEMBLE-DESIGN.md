@@ -130,6 +130,50 @@ Identity at 7-9 lines fits in ~2.5KB. No budget concern for the first opt-in.
 - Sub-skill bodies (they live elsewhere, agent doesn't need them to rewrite the slot)
 - The conflicts report from prior runs (each invocation is stateless)
 
+### 2.4 Worked example — PM identity slot (first opt-in candidate)
+
+Concrete input the subagent sees for `compose.py deploy pm` when `identity` is opted in. This is what the freshly-deployed PM composite produces at slot=identity (cycle 2143 measurement):
+
+```
+### append
+
+You are the PM on the SquidSquad autonomous dev team. You are the bridge between the human and the dev agents. You approve features, manage task intake, check in with the human each cycle, and coordinate all agents. You have a technical background — almost as if you were a highly skilled developer who switched career. You think in scope, priorities, and dependencies. You protect the human from noise and protect agents from ambiguity.
+
+The active dev agents on this project are listed in `.squidsquad/config.md` (Workers field). Read it at boot.
+
+You are PM on SquidSquad — the framework that builds itself. Every process decision you make affects your own next cycle. The team you coordinate develops the system you run on; treat this as a load-bearing constraint on every choice, not [...]
+```
+
+This input has FOUR distinct prose pieces:
+1. The L4 op header (`### append`) — preserve verbatim per §4.6 step-ID preservation
+2. L4 project-pm-identity body — "You are the PM..." (high ordinal, project layer)
+3. L1 base config pointer — "The active dev agents..." (low ordinal, applies to every role)
+4. L4 project-soul-style body — "You are PM on SquidSquad..." (highest ordinal)
+
+Pieces 2 and 4 both establish "who PM is" with overlapping but not identical prose. The assemble subagent's job: collapse into one coherent identity statement. Piece 3 is a procedural pointer, not character prose — it stays inline as-is (or merges into the first paragraph).
+
+**Expected output** (sketch — actual prose is the subagent's call):
+
+```
+### append
+
+You are the PM on the SquidSquad autonomous dev team — the framework that builds itself. You bridge the human and the dev agents: approving features, managing task intake, checking in with the human each cycle, and coordinating all agents. You have a technical background, the kind of highly skilled developer who switched into coordination. You think in scope, priorities, and dependencies. You protect the human from noise and protect agents from ambiguity.
+
+Every process decision you make affects your own next cycle. The team you coordinate develops the system you run on; treat this as a load-bearing constraint on every choice.
+
+The active dev agents on this project are listed in `.squidsquad/config.md` (Workers field). Read it at boot.
+```
+
+**Conflicts identified** (subagent JSON response):
+- None in this example. Pieces 2 and 4 don't materially contradict — they reinforce. The subagent merges them under the §4.6 rule "later/more-specific layers refine earlier/more-general ones" without invoking a precedence override.
+
+**If a conflict WERE present** (hypothetical): say a future L4 op replaced "highly skilled developer who switched career" with "career project manager with no engineering background." Then:
+- `winner_layer: "L4"`, `loser_layer: "L4"` (same layer, later ordinal wins via stable sort)
+- `justification_citation`: "§4.6 precedence rule: same layer → later ordinal wins via link stage's (slot_index, ordinal) sort"
+- `resolution`: "Identity describes PM as career project manager; engineering-background phrasing dropped."
+
+This worked example is what Phase 2.4 operator-driven prompt tuning iterates on. The prompt template in §2.1 should produce something close to the sketch on the first run.
+
 ---
 
 ## 3. Opt-in config surface
