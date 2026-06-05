@@ -36,3 +36,21 @@ Net wider sweep: **4 failed, 374 passed** across `tests/test_catalog*.py tests/t
 ## Recommendation
 
 Re-transition `pending-test → in-progress` and prune the two metadata surfaces alongside the source-file deletion. This is exactly the pattern that caused #11042 in the first place (deletions without matching `installer-files.txt` updates) — the structural lesson there applies directly.
+
+---
+
+## Round 2 — Post-route-back (cycle 928, 2026-06-05)
+
+**Trigger**: Skill addressed both R1 route-back regressions on PR #11088 at HEAD `097c1f56a`. `installer-files.txt` pruned (header 219→182; file from 234→209 lines); each of `references/roles/{dm,pm,verifier,worker}/includes.yml` had `common/discussion-protocol` removed (with a `# Removed in #11087` block citing the inlining location); `sub-skills/manifest.md` Composition Order trimmed of 21 dead numbered entries. Net delta now -750 LOC across 44 files.
+
+**Re-ran the wider sweep + the two specific previously-failing test IDs**:
+- `pytest tests/test_catalog*.py tests/test_compose*.py tests/test_manifest.py tests/test_installer_wiring.py tests/test_a3_golden_link_stage.py tests/test_event_mode_fragments.py tests/test_d2_link_stage_references.py -q` → **390/390 PASS** in 5.55s (R1 was 4 failed / 374 passed).
+- `test_installer_wiring::test_every_listed_file_exists_on_disk` PASS.
+- `test_manifest::test_include_targets_exist` PASS.
+- `test_manifest::TestIncludesYml::*` (4 tests) all PASS.
+- `compose.py drift-check` still emits no "Orphan source files" section → orphan_source_files 38 → 0 holds.
+- `compose.py deploy-all` sizes still byte-identical (1006 / 1066 / 1008 / 1268).
+
+All 5 original ACs hold and both R1 regressions are closed.
+
+**Verdict**: PASS. Transition `pending-test → pending-ship`.
