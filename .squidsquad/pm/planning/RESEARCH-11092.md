@@ -14,7 +14,7 @@ Walking every harness/agent interaction point that touches task/event flow under
 
 | Component | Path | Role under pull-only | Disposition |
 |---|---|---|---|
-| `cycle_pre.work_queue()` | `cycle_pre.py:1022, 1192, 1387` | Per-role work-queue builder. Reads tracker via `tracker.py list-tasks <role>` + filters by priority (high→medium→low per `tracker.py:606`), claims top item. | **Stays** — primary pull mechanism. |
+| `tracker.py work_queue()` + `cycle_pre ROLE_BUILDERS` dispatch | `tracker.py:600` (priority-ordered pull) + `cycle_pre.py:1192, 1387` (per-role builder map) | The actual pull mechanism: `ROLE_BUILDERS[role](role)` calls into the role's builder, which calls `tracker.py work_queue()` to fetch tasks ordered `priority:high → medium → low`. | **Stays** — primary pull mechanism. |
 | `event_bus_reader.query()` | `event_bus_reader.py:59` | Reads recent events from harness `/events` endpoint, filtered by `since` cursor + role + event_type. Surfaced as `recent_events` in cycle-input.json. | **Stays** — informational pull for cross-agent awareness (PR merges, status broadcasts, etc.). |
 | `cycle_pre.py --task <N>` flag | `cycle_pre.py:1207-1218, 1326, 1379-1385` | Skips work-queue scan when harness has pre-selected a task; writes minimal `role_input = {"task": task_id, "task_mode": True}`. Originally added in #8701 (closed 2026-05-18) for event-driven mode targeted dispatch. | **Removed** — no caller wires through to it; tracker pull already does the same job. |
 | `EVENT_REQUIRED_FIELDS` | `cycle_post.py:54-55` | Mode-gated validation enforcing `{"role", "task", "cycle_type"}` for event-driven `cycle-output.json`. Introduced by #8918 (closed 2026-05-18) as a gap fix for #8701. | **Loosened to `LOOP_REQUIRED_FIELDS` shape** — task becomes optional, quiet cycles representable. |
@@ -33,14 +33,19 @@ Walking every harness/agent interaction point that touches task/event flow under
 | `GET /events/in-flight/{role}` | 2290 | Diagnostic. | Stays. |
 | `GET /events/lifecycle` | 2429 | Diagnostic. | Stays. |
 | `POST /agents/{role}/start | stop | restart` | 1756, 2448, 2471 | Agent lifecycle control. | Stays. |
-| `EventLifecycleManager.dispatch()` | 923-939 | In-flight tracking for events dispatched to a role. **Currently dormant** — comment line 926-927: "Not yet wired into POST /events — Phase 4 plumbing." | **Removed or repurposed**. The in-flight tracking + retry semantics it implements could move to a future task-cancellation feature without the dispatch contract; alternative is straight removal. |
-| `_in_flight` / `_dispatched` / `_dispatch_times` / `_retry_counts` state | 904-908 | Backing state for the dispatch lifecycle. | Removed alongside `dispatch()`. |
+| `EventLifecycleManager.dispatch()` | 923-939 | In-flight tracking for events dispatched to a role. **Already dormant** — comment line 926-927: "Not yet wired into POST /events — Phase 4 plumbing." Per §4.6 below, the ONE call site that existed (`GET /events/for/{role}`) was stripped by #9741, so today there is no caller in the codebase. | **Removed** — but see the consumer-disposition list below; removal cascades to dependent endpoints + state. |
+| `_in_flight` / `_dispatched` / `_dispatch_times` / `_retry_counts` state | 904-908 | Backing state for the dispatch lifecycle. **Currently dead in `dispatch()` direction but still read by live consumers** — see consumer-disposition table below. | Removal must cascade to consumers; otherwise live endpoints AttributeError. |
+| `EventLifecycleManager.ack()` | 941-953 | Reads `_in_flight`, `_dispatched`, `_dispatch_times`, `_retry_counts`. Called by `POST /events/{event_id}/complete` (harness.py:2255). | **Endpoint becomes always-410 (Gone)** under pull-only; `ack()` is removed alongside the state. The complete-endpoint loses its semantic purpose because there's nothing in-flight to ack. |
+| `EventLifecycleManager.get_in_flight()` | 955-958 | Reads `_in_flight`. Called by `GET /events/in-flight/{role}` (harness.py:2294) and `GET /events/lifecycle` (harness.py:2436). | **Endpoints lose the `in_flight` field** but stay (other diagnostics survive in `/events/lifecycle`); `get_in_flight()` is removed with the state. |
+| `_timeout_scanner` (background thread) | started at harness.py:1404, iterates `_in_flight` at line 1135 | Re-dispatches events whose ack hasn't arrived within `_timeout_minutes = 10`. | **Removed** alongside the state — nothing in-flight, nothing to scan. |
+| `_persist()` / `_load()` (state file I/O) | 1045-1107 | Serialize and deserialize all four fields to `.event-state.json`. | **Loses the four fields** but stays for the cursor field (`_cursors`), which is still load-bearing for `GET /events/cursor/{role}`. |
 
 ### 1.3 Net effect of pull-only adoption
 
-- **0 new endpoints.** Harness HTTP surface narrows by 0 routes; some internal dead code paths get pruned.
-- **3 code deletions**: `cycle_pre.py --task` flag (+ its `_parse_args` task branch + `role_input` task-mode branch), `cycle_post.py EVENT_REQUIRED_FIELDS` constant, `EventLifecycleManager.dispatch()` method + backing state.
-- **1 code loosening**: `cycle_post.py` validation collapses to `LOOP_REQUIRED_FIELDS` for both modes (or a single unified `REQUIRED_FIELDS` constant).
+- **0 new endpoints.** Harness HTTP surface narrows by 0 routes; one endpoint changes semantics (`POST /events/{event_id}/complete` → always-410).
+- **6 code deletions** (cascading from `dispatch()` removal): `cycle_pre.py --task` flag (+ its `_parse_args` task branch + `role_input` task-mode branch), `cycle_post.py EVENT_REQUIRED_FIELDS` constant, `EventLifecycleManager.dispatch()` method, `EventLifecycleManager.ack()` method, `_in_flight`/`_dispatched`/`_dispatch_times`/`_retry_counts` state + their `_persist()`/`_load()` slots, `_timeout_scanner` background thread (+ thread-startup at harness.py:1404), `GET /events/in-flight/{role}` endpoint entirely OR strip its in-flight field, `GET /events/lifecycle` strip in-flight field.
+- **1 code loosening**: `cycle_post.py` validation collapses to a single mode-agnostic `REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}` — `LOOP_REQUIRED_FIELDS` and `EVENT_REQUIRED_FIELDS` merge.
+- **1 endpoint semantic change**: `POST /events/{event_id}/complete` becomes always-410. Keep the route shell for backward compatibility (callers that fire it get a clean error) but document it as removed.
 - **Behavioural effect**: agents pull from tracker by priority on each cycle; event bus stays as the cross-awareness channel for "something happened" notifications. PM files high-priority tasks → assigned agent picks up on its next pull.
 
 ---
@@ -159,13 +164,50 @@ The comment is a clear deferral signal, not an abandonment signal. The infrastru
 
 ### 4.4 Why the wiring never landed
 
-Reading the history forward: #7630 closed 2026-05-17 with "Phase 4 complete" but explicitly carrying the dispatch-wiring deferral comment. #8701 closed 2026-05-18 with the cycle_pre `--task` flag in place. #8918 closed 2026-05-18 with the EVENT_REQUIRED_FIELDS gap-fix. **From 2026-05-18 forward, no commit touches `EventLifecycleManager.dispatch()`** (re-confirmed by `git log -S "def dispatch" -- references/scripts/harness.py`).
+Reading the history forward: #7630 closed 2026-05-17 with "Phase 4 complete" but explicitly carrying the dispatch-wiring deferral comment. #8701 closed 2026-05-18 with the cycle_pre `--task` flag in place. #8918 closed 2026-05-18 with the EVENT_REQUIRED_FIELDS gap-fix. The `EventLifecycleManager.dispatch()` *method definition* has not been touched since 2026-05-17 (confirmed by `git log -S "def dispatch" -- references/scripts/harness.py`). But the dispatch *mechanism* as a functional system was actively dismantled in late May — see §4.6.
 
-The unstated reason the wiring stalled is in the EPIC's own framing: "harness owns cycle, agents react to events." This is the event-driven model. In practice, every install has stayed in polling mode (per the BRIEFING.md and operational pattern), so the event-driven model — and the dispatch endpoint it would have needed — has never been operationally required. The infrastructure outlives the use case that motivated it.
+The unstated reason the wiring stalled is in the EPIC's own framing: "harness owns cycle, agents react to events." This is the event-driven model. In practice, every install has stayed in polling mode (per the BRIEFING.md and operational pattern), so the event-driven model — and the dispatch endpoint it would have needed — has never been operationally required.
 
 ### 4.5 Implication for the design call
 
-The dispatch infrastructure was never abandoned, just unmotivated. Pull-only is not "deciding the dispatch model was wrong" — it's "deciding the dispatch model is not currently needed enough to justify the surface area." If a future install drives event-driven mode hard enough to need targeted dispatch (e.g., a high-concurrency multi-team install where 30-min pull latency is unacceptable), the infrastructure is still in the git history and can be re-wired in a one-cycle skill task.
+The dispatch infrastructure was never abandoned via deletion, but #9741 + #9813 below show the codebase made an operational pull-only decision in late May. Pull-only is not "deciding the dispatch model was wrong" — it's "ratifying a decision the codebase already made operationally, by removing the dead method definitions and dependent state." If a future install drives event-driven mode hard enough to need targeted dispatch, the infrastructure shape is documented in git history (#7630 P4) and can be re-built; restoration would not be a one-cycle skill task because the call site at `GET /events/for/{role}` would need to be rewritten too.
+
+### 4.6 The unwinding — #9741 and #9813 (the missing chapter)
+
+After #7630 / #8701 / #8918 landed the dispatch infrastructure (mid-May 2026), two follow-up issues partially un-wired it within a week:
+
+**#9741** ([closed 2026-05-21T10:40:05Z](https://github.com/WallyDoodlez/SquidSquad/issues/9741)) — "GET /events/for/{role} dispatches in-flight events but agents never ack — log spam plus state file growth." The dispatch infrastructure HAD been wired — `GET /events/for/{role}` called `event_lifecycle.dispatch()` on every read. But because no agent ever called `POST /events/{event_id}/complete` to ack, the `_in_flight` map and the persisted `.event-state.json` grew unboundedly, producing log spam and state-file bloat. The fix: strip the `dispatch()` call from `GET /events/for/{role}`. After #9741, `dispatch()` exists but has no call site in the harness. The endpoint became a pure filtered-read.
+
+Confirmed in current code:
+- `references/scripts/harness.py:2195-2197`: `"# #9741: dispatch() call stripped — endpoint is a pure filtered-read with no lifecycle side effects. The agent-side ack (event_bus.ack) was also removed in #9813 since it had no live..."`
+- `references/scripts/harness.py:2016-2017`: `"in-flight tracker is dead code since #9741 stripped dispatch()."`
+
+**#9813** ([closed 2026-05-21T11:40:35Z](https://github.com/WallyDoodlez/SquidSquad/issues/9813)) — "event_bus.ack() is a dead stub — Phase 4 wiring follow-up (#9741)." The agent-side counterpart to #9741: the agent's `event_bus.ack()` stub was removed because there was nothing to ack against post-#9741.
+
+**Reading the timeline corrected**:
+- 2026-05-17 (#7630 P4 complete): infrastructure shipped, partially wired (GET /events/for/{role} called dispatch()), POST /events/{event_id}/complete endpoint present.
+- 2026-05-18 (#8701): `cycle_pre --task` flag added (anticipating a future dispatch endpoint).
+- 2026-05-18 (#8918): `EVENT_REQUIRED_FIELDS` gap-fix.
+- 2026-05-21 (#9741 + #9813): operational pressure (log spam, state growth) forced the un-wiring. The dispatch call site was stripped; the agent-side ack stub was removed. **This is the codebase already deciding pull-only at the operational level.**
+- 2026-05-21 → today: the method definitions persist as dead code; nothing has tried to re-wire them.
+
+The "Phase 4 plumbing" comment at `harness.py:926-927` is technically still true — `dispatch()` was never *fully* wired into POST /events — but it understates what happened. A partial wiring existed and was *removed*. This significantly weakens any argument for keeping the infrastructure for "future re-activation."
+
+### 4.7 Net evidence for the design call
+
+- The codebase already runs pull-only operationally — #9741 stripped the only call site of `dispatch()`; #9813 removed the agent-side ack stub.
+- The dead-method-definitions (`dispatch()`, persisted in-flight state, timeout scanner) exist as carrying cost without operational benefit.
+- Re-activating the dispatch model would require not just adding a new HTTP endpoint, but also restoring a call site in `GET /events/for/{role}` (undone by #9741) and re-introducing the agent-side ack (undone by #9813). The reversibility argument is weaker than the original §4.5 framing implied.
+
+### 4.8 Commit-SHA verification
+
+The SHAs cited in §§4.1-4.3 (`e1aec7877`, `52d55e7ab`, `dcbccfd25`) come from `git log --oneline` queries run during this draft. To make the evidence self-contained for any reviewer without git access, the verbatim commit messages are:
+
+- `e1aec7877 feat: #8701 cycle_pre/post task-level refactor for event-driven mode (#8868)`
+- `52d55e7ab skill: #7630 — Event-driven agent architecture (Phase 4 complete) (#8620)`
+- `dcbccfd25 fix: #8918 mode-gate REQUIRED_FIELDS + remove _advance_event_cursor (#8701 gaps) (#8952)`
+
+A reviewer in a checkout can re-confirm with `git log --oneline | grep <sha>`.
 
 ---
 
@@ -209,13 +251,14 @@ The pull-only failure modes are mostly recoverable-without-intervention (next cy
 
 **Pull-only.**
 
-Three reasons consolidated:
+Four reasons consolidated:
 
-1. **Tracker already does dispatch** for the only use case (operator interrupt) with measurable benefit, and the latency penalty (~30 min vs ~30 sec) is rarely binding in practice.
-2. **Dispatch infrastructure was deliberately built and deliberately not wired** for ~3 weeks. The absence of operational pressure to complete the wiring is itself the strongest signal that pull-only is the right operating point.
-3. **Failure surface roughly doubles** under pull+dispatch, with several new modes requiring careful concurrency reasoning. The architectural simplicity of pull-only is a load-bearing virtue, not just a stylistic preference.
+1. **The codebase already runs pull-only operationally.** #9741 stripped the only `dispatch()` call site (May 21); #9813 removed the agent-side ack stub (May 21). The decision was effectively made by the squad in late May under operational pressure (log spam, state-file growth); this design call ratifies and completes it by also removing the dead-method definitions and dependent state.
+2. **Tracker already does dispatch** for the only use case (operator interrupt) with measurable benefit, and the latency penalty (~30 min vs ~30 sec) is rarely binding in practice. The other four candidate use cases are dispatch-neutral or dispatch-negative.
+3. **Dispatch infrastructure was built, partially wired, and then un-wired** within four days, and has been dead code for three weeks since. The absence of operational pressure to re-wire is the strongest evidence that pull-only is the operating point the squad has chosen.
+4. **Failure surface roughly doubles** under pull+dispatch (5 modes → 12), with several new modes requiring careful concurrency reasoning (`idempotency_key`, tie-break logic, timeout-scanner re-dispatch, persist atomicity, cross-clone divergence). The architectural simplicity of pull-only is a load-bearing virtue, not just a stylistic preference.
 
-Reversibility: the dispatch infrastructure code (`EventLifecycleManager.dispatch()`, `cycle_pre --task`, `EVENT_REQUIRED_FIELDS`) is in git history. If a future install hits operational pressure that pull cannot satisfy, re-wiring is a one-cycle skill task. The cost of going pull-only now and re-wiring later if needed is small; the cost of going pull+dispatch now and never using it is the carrying cost of the failure-surface complexity.
+Reversibility: the dispatch *shape* is documented in git history (#7630 P4 + #9741 + #9813), so if a future install drives operational pressure that pull cannot satisfy, the infrastructure can be re-built. But contrary to the original Phase 1 draft framing, restoration is NOT a one-cycle skill task — it requires the new HTTP endpoint AND restoring the stripped call site at `GET /events/for/{role}` AND re-introducing the agent-side ack. The carrying cost of keeping the dead method definitions in place "just in case" is higher than the marginal cost of re-creation if needed.
 
 ---
 
