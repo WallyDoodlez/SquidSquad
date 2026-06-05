@@ -12,10 +12,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - **E7 #10686** (approved, role:skill) — V2 migration smoke; unblocked post-E6
 - **#11053 agent-spawn substrate for v2 §4.6 assemble** (in-progress, role:pm) — Phase 1 v1 deliverable committed at `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md` (cycle 2143 ext); 5 operator-review questions in §9 outstanding. Substrate is Agent-tool spawn (replaces retired PRD-B API substrate); §4.6 architectural vision unchanged from v2 draft.
 - **#10690 wiki-link rework** (approved, gated on E7)
-- **#10750 catalog orphan cleanup** (open, role:skill) — D4 drift-check surfaced path drift from #6274 dev→worker rename
+- **Bump-gate** (DM, blocked): counter 22/10, waiting on operator close-decision for #10955 (skill OOM, structurally addressed by #11049 composite shrink — PM ruling cycle 2149) and #10541 (skill pre-bootup wedge, root-cause MSYS2 — PM ruling cycle 2150 proposes close as out-of-scope)
 
 ## Recently Shipped
 
+- **#11083 + #11044 architectural branch-guard** (shipped 2026-06-05 batch DM cycle 1355) — `commit_role_scoped` skips operational files when current branch ≠ working branch; closes the merge-spiral class (sibling to #11065 `.backlog-cache` fix). PM-filed in cycle 2145 after observing BRIEFING.md pollution from `/loop` PM session in skill clone.
+- **#10750 + #11046 + #11047 + #11045 post-cutover follow-ups** (shipped 2026-06-05) — catalog drift cleanup, manifest fixture rebind, doc path repoint, TC-11/TC-14 update. Entire #11042 scope-reduction sub-thread closed.
 - **#11049 v2 {{include:}}→Path A migration** (shipped 2026-06-05 via PR #11069, DM cycle 1351) — -4179 LOC; 137 directives processed; composites ~50% smaller (pm 2196→1066, dm 1568→1006, qa 1789→1008, skill 1964→1268). PM-revised AC3 (L2≤1100, L3≤1300) validated by QA verification.
 - **#11042 pytest suite stale refs** (shipped 2026-06-05 via PR #11048, DM batch cycle 1350) — 5-cluster stabilization, 271/271 pass at HEAD 5de4b7c57.
 - **#11066 stale L4 corrupt test** (shipped 2026-06-05 via PR #11068, DM batch cycle 1350) — post-#10987 prose-H3 routing alignment.
