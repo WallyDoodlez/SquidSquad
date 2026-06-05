@@ -1,42 +1,50 @@
 # Working State
 
-- **Task**: cycle 2137 — #11052 self-correction (DRY claim retracted)
-- **Status**: in-progress on #11052; awaiting operator review of 4 open questions
+- **Task**: cycle 2139 — broke #11042 merge-spiral; filed root-cause #11065
+- **Status**: pipeline healthy; new high-medium bug filed; PM in coordination mode
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
-## Cycle work (active, light)
+## Cycle work
 
-Self-correction on #11052 Phase 1 deliverable: the "24 role-norm duplicate" claim was wrong. Those 24 files are L2 role-layers (ordinal 20, `roles:` filter) intentionally adding role-tailored rules on top of common L1 norms. Same H2 heading is a cosmetic verbatim-default symptom that #11053 agent-spawn assemble resolves.
+DM routed #11042 PR #11048 back to in-progress (R2) — same `.backlog-cache` merge conflict as last cycle, this time triggered by my own cycle commits + DM's #11011 ship moving main between merges. DM asked for operator coordination (option a: quiesce PM writes) or scope reduction (option b: drop .backlog-cache from PR).
 
-Updated CLAUDE-SKILL-CANDIDATES.md inline (retraction + corrected §Always-on norms description). Comment on #11052 explaining the correction. No separate cleanup task filed.
+PM call: **option C (modified split-scope)**:
+1. Keep 5 test-cluster fixes in #11048; drop `.backlog-cache` deletion from scope
+2. Filed **#11065** — root-cause fix: stop committing `.backlog-cache` (untrack + remove from `git_ops.py:657` state-commit allowlist). 3-line change for skill, lands fast, prevents the entire merge-spiral pattern from recurring on this file
+3. After #11065 ships, PM cycles stop touching the tracked file → future PRs aren't conflicted
 
-Good catch on my part: a wrong-task to skill would have lost role-specific content.
+Trade-off: this defers the gitignore cleanup but unblocks #11042. Cleaner than asking the autonomous cycle to "hold."
 
-## Pipeline (unchanged since cycle 2136)
+## Issues touched this cycle
 
-- pending_ship: 1 (#11011 — DM closes)
+- **#11042**: PM-call comment recommending option C
+- **#11065** (NEW): high-medium bug, role:skill, approved. Concrete fix specified (file:line in body).
+- **#10686** (last cycle's surface): no skill response yet; let it bake
+
+## Pipeline
+
+- pending_ship: 0
 - pending_test: 1 (#10855 deferred)
-- in-progress: #11049 (skill — re-pickup with Path A spec), #11052 (pm — awaiting operator)
-- Approved queue: #11050, #11053, skill spinoffs #11044-47
-- Open PRs: 2 (#10952 deferred; #11048 draft)
+- pending_test_tasks: 0 (#11042 went back to in-progress this cycle)
+- in-progress: #11049 (skill), #11042 (skill — needs re-pickup with split scope)
+- Approved queue: #11050, #11053, #11065 (new), #10686, #10690
+- Open PRs: 2 (#10952 deferred; #11048 needs scope-split)
 
-## v3 work map (unchanged)
+## v2 stabilization work map (unchanged)
 
-| Principle | Status | Owner |
+| Surface | Status | Owner |
 |---|---|---|
-| 1. References only, no inline | re-spec'd Path A | #11049 skill |
-| 2. Sub-skill code bundling | deferred (#11051 closed) | — |
-| 3. Claude Skills audit | Phase 1 delivered + self-corrected | #11052 pm |
+| 1. References only, no inline | in-progress (Path A) | #11049 skill |
+| 2. Sub-skill code bundling | deferred | #11051 closed |
+| 3. Claude Skills audit | decided against | #11052 + #10781 closed |
 | 4. Agent-spawn assemble | approved, gated on #11049 | #11053 pm |
-| Cleanup | approved | #11050 skill |
+| Cleanup (API-assemble prune) | approved | #11050 skill |
+| E7 smoke (operator validation) | unblocked | #10686 skill |
+| Tracker hygiene (root cause fix) | NEW this cycle | #11065 skill |
 
-## Operator asks (still pending)
-
-For #11052: 4 questions on Tier 3 disposition + .claude/skills/ location + multi-agent invocation + #10781 close.
-
-## Session ship tally: 33
+## Session ship tally: 34
 
 ## Context
 
-healthy (~38%).
+healthy (~48%).
