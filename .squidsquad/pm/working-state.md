@@ -1,58 +1,37 @@
 # Working State
 
-- **Task**: cycle 2133 ext. — E6 cutover unblock SHIPPED
-- **Status**: deploy-all works; all 4 composites freshly regenerated; commit `8da22e25` merged to main
+- **Task**: cycle 2134 — Phase 2 in-flight; PM in coordination lane
+- **Status**: skill draining queue; #11049 in-progress; #11042 at pending-test via PR #11048
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
-## Cycle outcome — operator-prioritized cutover unblock
+## Cycle work
 
-PM modified `references/scripts/atomic_emit.py` (boundary cross authorized by operator):
-1. Expanded `_VERBATIM_SLOTS` to all 6 canonical slots — retires LLM assemble pass — Bugs 1/2/4 mooted
-2. Fixed `_split_linked_into_slots` regex to anchor on canonical names only — Bug 3 fixed
+- Refreshed `RESEARCH-11000.md` with corrected Phase 1 TL;DR + Phase 2 outcome section
+- Status note on #10855 explaining #11043 deferral + two paths forward (risk-merge PR #10952 or resume inert-boot work)
+- Triaged #11044-#11047 (all skill-spawned spinoffs from #11042 — proper severities, no PM intervention needed)
 
-Empirical result: `compose.py deploy-all` succeeds from clean shell.
-- dm: 1568 lines
-- pm: 2196 lines
-- qa: 1789 lines
-- skill: 1964 lines
+## Skill activity (this cycle window)
 
-Numbers match operator's debug session (+20 lines drift). These are the **first post-cutover successful regenerations** of any role's CLAUDE.md.
-
-## Phase 1 correction (#11000)
-
-My earlier RESEARCH-11000.md hypothesized D2 filter prevents inlining → wrong.
-
-Actual mechanism: `compose.py:1184` calls `_resolve_includes_v2(body)` which expands `{{include: <path>}}` directives (v1-era leftover in `references/roles/<role>/instructions.md` — 35 in pm orchestrator) AFTER the link stage. D2 filter only stops the link-stage walk path.
-
-Phase 2 work scoped in #11000 comment:
-1. Replace `{{include:}}` with `→ run sub-skill:` in 4 orchestrator files (+ L3 domain variants) — would drop composites from ~2000 to ~700 lines. Separate TASK, role:skill.
-2. Prune dead assemble pipeline modules + sonnet model_router branch. Housekeeping TASK.
+- PR #11048 (draft) opened against #11042 — 5 of 9 test clusters fixed, 270/270 green on changed-area suites. Remaining 4 clusters spun off as #11044-#11047
+- #11049 transitioned approved → in-progress (orchestrator `{{include:}}` migration)
+- #11050 still approved (assemble pipeline prune — queued)
 
 ## Pipeline
 
 - pending_ship: 0
-- pending_test: 1 (#10855 — still blocked on #11043)
-- pending_test_tasks: 0 (NOTE: #11011 implementation is complete on main but transition stuck — PM not authorized to transition skill-assigned; skill picks up & resolves at next cycle)
-- Approved queue: 14 + #11011 (effectively done, awaiting skill transition)
-- Open PRs: 1 (#10952)
-- Open issues: #11042 (test suite red), #11043 (inert-boot), #11011 (de facto done)
+- pending_test: 2 (#10855 deferred; #11042 awaiting QA verify on PR #11048's partial-fix scope)
+- pending_test_tasks: 0
+- Approved queue: 14+ (mix of PRD-D/E + #11050 + #11045-47 once approved)
+- in-progress: #11049 (skill)
+- Open PRs: 2 (#10952 deferred; #11048 draft)
 
 ## #11000 status
 
-Stays at **planning** until Phase 2 work decision: file two follow-up TASKs (orchestrator-include cleanup + dead-code prune) OR transition #11000 to in-progress as the Phase 2 umbrella. Defer to operator next cycle.
+stays at **planning**. Closes when #11049 lands and I re-measure composites against AC3 size targets (pm ≤700, dm ≤800, qa ≤700, skill ≤700 lines).
 
-## Agent ground truth
-
-- pm (this session): cycling, all work shipped
-- skill (../SquidSquad-2): direct-spawned 21:38, was triaging at 21:39; should pick up #11011 + #11042 next cycle
-- dm (../SquidSquad-3): direct-spawned 21:39, was scanning queues; cycle 1343 ran 21:34
-- qa (../SquidSquad-qa): direct-spawned 21:40; was idle pre-spawn
-
-#11043 finding: direct subprocess.Popen path works for boot; thin_launcher path produces inert agents. Skill diagnosis target.
-
-## Session ship tally: 33 (cutover unblock counts)
+## Session ship tally: 33
 
 ## Context
 
-healthy (~20%).
+healthy (~25%).
