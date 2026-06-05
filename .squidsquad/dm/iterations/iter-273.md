@@ -1,0 +1,5 @@
+# Iteration 273
+
+- **Date**: 2026-06-05 04:12
+- **Type**: ship-batch
+- **Note**: Cycle 1355 — batch-shipped 2 PRs (both surfaced as CLEAN). (1) #11083 (ISSUE, skill, "stop auto-committing operational state files"): PR #11084 squash-merged as 678a6d9e — sibling structural fix to #11065. Branch guard in git_ops.commit_role_scoped skips when current branch ≠ configured working branch (prevents state-file leak that drove the cycle-1353 BRIEFING.md conflict). Counter 18 → 19. (2) #11044 (ISSUE high-sev, skill, test_feat_2495 + config.md cross-test pollution): PR #11080 R2 CLEAN after skill's PM-Option-C scope-drop (drop operational-state churn, keep only test changes). Final: tests/conftest.py + test_cycle_post.py (+54/-2). QA verified 121/121 PASS, config.md SHA256 identity preserved. Counter 19 → 20. **Both structural fixes (#11065 and #11083) now landed — should largely close out the merge-spiral risk class.** Bump still deferred — 10 open type:issue, 2 high-sev remain (#11043, #10955). CHANGELOG deferred to v0.44.0.
