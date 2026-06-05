@@ -10,7 +10,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
   - #10838 VAULT-ARCH alignment (4 GAP + 6 DRIFT)
   - #10839 Cross-TRD role → alias rename — DS re-audit needed before pickup
 - **E7 #10686** (approved, role:skill) — V2 migration smoke; unblocked post-E6
-- **#11053 agent-spawn substrate investigation** (in-progress, role:pm) — unblocked by #11049 ship; design v3 per-slot polish architecture (Claude Code agents, not API)
+- **#11053 agent-spawn substrate for v2 §4.6 assemble** (in-progress, role:pm) — Phase 1 v1 deliverable committed at `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md` (cycle 2143 ext); 5 operator-review questions in §9 outstanding. Substrate is Agent-tool spawn (replaces retired PRD-B API substrate); §4.6 architectural vision unchanged from v2 draft.
 - **#10690 wiki-link rework** (approved, gated on E7)
 - **#10750 catalog orphan cleanup** (open, role:skill) — D4 drift-check surfaced path drift from #6274 dev→worker rename
 
