@@ -8,9 +8,9 @@ Companion: [#11053 issue body](https://github.com/WallyDoodlez/SquidSquad/issues
 
 ## TL;DR
 
-- **Substrate**: Agent-tool spawn from inside `atomic_emit.assemble_and_emit` (the same call site the retired API substrate used). One spawn per non-verbatim slot.
-- **Default**: verbatim. Operator opts a slot IN via new `.squidsquad/config.md` `assemble-slots:` field, default empty.
-- **First opt-in candidate**: `identity` (7-9 lines/role — smallest prompt budget, lowest preservation surface).
+- **Substrate**: Agent-tool spawn from inside `atomic_emit.assemble_and_emit` (the same call site the retired API substrate used). One spawn per non-forced-verbatim slot.
+- **Operating mode**: **unconditional** per TRD §3.0 / §4.6. Every non-forced-verbatim slot is rewritten on every compose run. The opt-in/opt-out framing from this doc's first draft is superseded — the TRD-locked decision is unconditional assemble, made tractable by the orchestrator-content rule keeping slots small and goal-shaped (TRD §4.6 "Orchestrator-content rule").
+- **`assemble-slots:` config**: per-slot **model overrides only** (per TRD §4.6 Model paragraph) — not a slot-level on/off switch. Forced-verbatim slots cannot be named in `assemble-slots:` (compose-time error per TRD §4.6 "Forced-verbatim behaviour").
 - **Audit substrate (AC7)**: hybrid — deterministic Python script as cheap fast-fail, second Agent spawn as semantic check (only runs if script passes).
 - **Hard rule (AC6)**: subagent must justify every override against §4.6's precedence rule verbatim; unjustifiable conflicts emit unresolved (degrade to verbatim for that fragment) + log.
 
@@ -18,14 +18,14 @@ Companion: [#11053 issue body](https://github.com/WallyDoodlez/SquidSquad/issues
 
 | slot | dm | pm | qa | skill | avg | recommendation |
 |---|---|---|---|---|---|---|
-| Identity | 9 | 9 | 9 | 7 | 8 | **first opt-in** — tiny, prose-heavy, low preservation surface |
-| Responsibility | 21 | 24 | 23 | 22 | 23 | second opt-in after identity proves out |
-| Soul | 157 | 194 | 168 | 206 | 181 | third opt-in; per-H3 sub-spawns within slot if needed |
-| Instructions | 770 | 795 | 760 | 985 | 828 | high preservation surface (step IDs + sub-skill refs); stays verbatim indefinitely |
-| Project Context | 20 | 15 | 19 | 19 | 18 | stays verbatim (operator-authored L4) |
-| Vault | 29 | 29 | 29 | 29 | 29 | stays verbatim (boilerplate-shaped) |
+| Identity | 9 | 9 | 9 | 7 | 8 | unconditional spawn — tiny, prose-heavy, low preservation surface |
+| Responsibility | 21 | 24 | 23 | 22 | 23 | unconditional spawn |
+| Soul | 157 | 194 | 168 | 206 | 181 | unconditional spawn; per-H3 sub-spawns within slot may be useful at the upper end |
+| Instructions | 770 | 795 | 760 | 985 | 828 | unconditional spawn under the orchestrator-content rule — sizes shown are pre-Task B (Path A over-inline reversal); post-Task B the instructions slot is expected to drop substantially as the 9 misplaced mandatory inlines move back to marker references |
+| Project Context | 20 | 15 | 19 | 19 | 18 | **forced verbatim** (`_FORCED_VERBATIM_SLOTS`) — never spawns |
+| Vault | 29 | 29 | 29 | 29 | 29 | **forced verbatim** (`_FORCED_VERBATIM_SLOTS`) — never spawns |
 
-**Hard verbatim slots** (`_VERBATIM_SLOTS`-forced regardless of config opt-in): `project-context`, `vault`. Operator can never opt these in — see §1.3 below.
+**Forced-verbatim slots** (`_FORCED_VERBATIM_SLOTS`): `project-context`, `vault`. Enforced in code; operator's `assemble-slots:` config cannot opt them in (compose-time error per TRD §4.6) — see §1.3 below.
 
 ---
 
@@ -33,15 +33,16 @@ Companion: [#11053 issue body](https://github.com/WallyDoodlez/SquidSquad/issues
 
 ### 1.1 Call site
 
-`references/scripts/atomic_emit.assemble_and_emit()` — the same function that was the PRD-B dispatch site. Current behavior (post-#11050 prune): every slot routes through `_VERBATIM_SLOTS` (all 6), no LLM dispatch occurs. Post-this-design, `_VERBATIM_SLOTS` shrinks to forced-verbatim slots only (`project-context`, `vault`); the rest route through:
+`references/scripts/atomic_emit.assemble_and_emit()` — the same function that was the PRD-B dispatch site. Current behavior (post-#11050 prune): every slot routes through `_VERBATIM_SLOTS` (all 6), no LLM dispatch occurs. Post-this-design, `_VERBATIM_SLOTS` shrinks to **`_FORCED_VERBATIM_SLOTS`** (only `project-context`, `vault`); every other slot dispatches unconditionally via Agent-tool spawn per TRD §3.0 / §4.6:
 
 ```python
 if slot in _FORCED_VERBATIM_SLOTS:
     assembled_per_slot[slot] = linked_slot_body
-elif slot not in opted_in_slots:           # operator config
-    assembled_per_slot[slot] = linked_slot_body
 else:
-    assembled_per_slot[slot] = _agent_spawn_assemble(slot, linked_slot_body, ...)
+    # Unconditional Agent-tool spawn per TRD §3.0 / §4.6. The assemble-slots:
+    # config may carry a per-slot model override; it does NOT gate on/off.
+    model = _model_for_slot(slot)  # default sonnet; per-slot override from config
+    assembled_per_slot[slot] = _agent_spawn_assemble(slot, linked_slot_body, model=model, ...)
 ```
 
 `_agent_spawn_assemble` does the Agent-tool call and returns the rewritten body + conflict records.
@@ -222,44 +223,37 @@ This pattern (L4 stub + L2 full) is the COMMON case for responsibility / instruc
 
 ---
 
-## 3. Opt-in config surface
+## 3. `assemble-slots:` config surface (model-override only)
+
+Per TRD §3.0 / §4.6, the assemble pass is **unconditional**: every non-forced-verbatim slot dispatches via Agent-tool spawn on every compose run. There is no slot-level on/off switch. The `assemble-slots:` config field exists for **per-slot model overrides only**.
 
 ### 3.1 Config field
 
-New field in `.squidsquad/config.md`:
+New field in `.squidsquad/config.md` (optional — installs without this field use the sonnet default for every spawning slot):
 
 ```markdown
 ## Assemble Slots
-- **identity**: yes
-- **responsibility**: no
-- **soul**: no
-- **instructions**: no
-- **project-context**: forced-verbatim
-- **vault**: forced-verbatim
+- **identity-model**: sonnet
+- **soul-model**: opus
+- **instructions-model**: sonnet
 ```
 
-Default state (no field present): all slots verbatim. Operator adds the section to opt in.
+Default state (field absent or no per-slot `-model` entry): sonnet for every spawning slot. Operator adds entries only to override the default for specific slots.
 
 ### 3.2 Per-slot model override
 
-For future flexibility, allow per-slot model selection:
+The `<slot>-model:` entries pick the model the per-slot Agent spawn uses. The forced-verbatim slots (`project-context`, `vault`) accept no `-model` entry — listing one is a compose-time error per §3.3.
 
-```markdown
-## Assemble Slots
-- **identity**: yes
-- **identity-model**: sonnet
-- **soul**: yes
-- **soul-model**: opus
-```
-
-Default model: sonnet. Per-slot `-model` field overrides.
+Valid model identifiers track the Anthropic tier names current at compose time (`sonnet`, `opus`, `haiku`). Compose treats unknown identifiers as a compose-time error rather than passing them through to the Agent tool.
 
 ### 3.3 Validation at compose time
 
 `config.py:parse_assemble_slots()` validates:
-- Slot name is in `_CANONICAL_SLOTS` — unknown slot is a compose-time error
-- `project-context` and `vault` cannot be `yes` — compose-time error
-- Value must be `yes` / `no` / `forced-verbatim` — anything else is a compose-time error
+
+- Slot name in `<slot>-model:` is in `_CANONICAL_SLOTS` — unknown slot is a compose-time error
+- Slot must NOT be in `_FORCED_VERBATIM_SLOTS` (`project-context`, `vault`) — naming a forced-verbatim slot is a compose-time error, regardless of value
+- Model identifier must be a known tier name — anything else is a compose-time error
+- Legacy on/off entries from this doc's first draft (`identity: yes`, `responsibility: no`, etc.) are **rejected** as a compose-time error with a migration hint pointing at the TRD §4.6 "unconditional" decision and this section's model-override format
 
 ---
 
