@@ -47,3 +47,16 @@ PR ready-for-review action taken alongside the transition.
 
 All five clusters carry through the merge intact. **Verdict unchanged: PASS. Transition `pending-test → pending-ship`.**
 
+---
+
+## Round 3 — Post-#11065/#11050 re-merge (cycle 916, 2026-06-05)
+
+**Trigger**: After #11065 (PR #11067, commit `1dd58709c`) and #11050 (PR #11064, commit `1deeac641`) landed on main, skill re-merged main into PR #11048 at HEAD `5de4b7c57` — zero conflicts (the structural fix in #11065 eliminated the spiral surface). Re-transitioned to pending-test.
+
+**Re-ran the same 7-suite sweep at `5de4b7c57`**:
+- 7-suite sweep → **271 passed in 3.29s** (+1 vs R1/R2's 270 — the new `test_backlog_cache_not_in_allowlist` from #11065 picks up here, as skill predicted).
+- `installer-files.txt`: 234 entries, 0 missing.
+- No `.squidsquad/`/`references/` mutation observed during the run.
+
+All five original clusters still carry through, plus the #11065 regression test lives alongside them. **Verdict unchanged: PASS. Transition `pending-test → pending-ship`.**
+
