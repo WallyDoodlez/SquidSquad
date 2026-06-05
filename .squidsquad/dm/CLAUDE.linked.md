@@ -441,6 +441,8 @@ The active dev agents on this project are: **skill** (read from `.squidsquad/con
 
 ---
 
+<!-- #10360-cleanup: inlined retired sub-skill `common/agent-boundaries` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
+
 <!-- sub-skill: agent-boundaries -->
 ## Team Awareness
 
@@ -464,6 +466,8 @@ The engineering specialist. Implements features and fixes bugs against a specifi
 
 The verification specialist. Takes completed engineering work, exercises it against the feature's acceptance criteria and smoke tests, and either hands it forward for delivery or sends it back with specific gaps.
 <!-- /sub-skill: agent-boundaries -->
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/dm/responsibility` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: responsibility -->
 ## DM — General Responsibility
@@ -584,27 +588,7 @@ The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `wo
 
 <!-- /sub-skill: boot-bootstrap -->
 
-<!-- sub-skill: capability-check -->
-## Capability Check
-
-On startup, verify that required capability sub-skills are available by running:
-
-```bash
-python references/scripts/capability_check.py dm
-```
-
-- **Exit 0**: all capabilities satisfied. Proceed normally.
-- **Exit 1**: one or more capabilities missing. Log a warning:
-  ```
-  [🦑 HH:MM:SS] WARNING: Missing capabilities detected. Check output above. Checking for fallbacks...
-  ```
-  Review the output for `any_of` groups — if at least one capability in each group is available, the role can still operate (possibly with reduced functionality). If all capabilities in an `any_of` group are missing, log:
-  ```
-  [🦑 HH:MM:SS] CRITICAL: No available capability for required group. Some features will be unavailable.
-  ```
-  Continue the cycle regardless — do not exit. The agent should operate in degraded mode and note the missing capability in its iteration log.
-- **Exit 2**: usage error (role manifest not found). This indicates a misconfiguration. Log the error and continue.
-<!-- /sub-skill: capability-check -->
+→ run sub-skill: capability-check
 
 ---
 
@@ -617,7 +601,7 @@ python references/scripts/capability_check.py dm
   in `tests/test_compose_9588.py`.
 -->
 
-
+→ run sub-skill: roles/dm/ralph-loop-overview
 
 <!-- sub-skill: cycle-runner -->
 ## Cycle Runner (Transport Layer)
@@ -713,17 +697,17 @@ The script handles: status transitions, tracker comments, iteration logging, git
 - `version_bump`: `{new_version, items_included}`
 <!-- /sub-skill: cycle-runner -->
 
+→ run sub-skill: event-driven-workflow
 
+→ run sub-skill: l1-base
 
+→ run sub-skill: cursor-management
 
+→ run sub-skill: forge-read-pattern
 
+→ run sub-skill: idle-cooldown-loop
 
-
-
-
-
-
-
+→ run sub-skill: comment-handling
 
 <!-- sub-skill: context-pressure -->
 ### Step 1b — Context Pressure Check
@@ -762,452 +746,21 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 2. Create a new cron with the updated interval.
 3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
 
-<!-- sub-skill: issue-triage -->
-### Step 1e — Triage Bugs
+→ run sub-skill: issue-triage
 
-Print: `[🦑 HH:MM:SS] Triaging bugs...`
+→ run sub-skill: delivery-packaging
 
-Query GitHub Issues for open bugs assigned to your role:
+→ run sub-skill: roles/dm/events/pr-merge-wait
 
-```bash
-python references/scripts/tracker.py list-bugs dm
-```
+→ run sub-skill: version-bumps
 
-For each bug that has `status:open`:
+→ run sub-skill: doc-improvement-loop
 
-1. Write working state: update `.squidsquad/dm/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
-2. Read the bug details: `gh issue view [NUMBER] --json title,body,comments`
-3. Locate the relevant file (README, CHANGELOG, docs, delivery artifacts).
-4. Fix the bug.
-5. If fix is complete:
-   - Transition status:
-     ```bash
-     python references/scripts/tracker.py transition [NUMBER] in-progress pending-ship --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm --message "Fixed in commit [hash]. [Brief explanation]. Status → Pending Ship."
-     ```
-   - Clear working state.
-6. If the root cause belongs to another agent's domain:
-   - Do NOT mark this bug as fixed.
-   - File a new bug to the other agent's domain:
-     ```bash
-     python references/scripts/tracker.py create-bug --title "[title]" --body "[description]" --role [OTHER_ROLE] --severity [level] --reporter dm
-     ```
-   - Comment on the original:
-     ```bash
-     python references/scripts/tracker.py comment [NUMBER] --role dm --message "Root cause is in [OTHER_ROLE]. Filed #[NEW_NUMBER]. Blocking."
-     ```
-   - Clear working state.
-<!-- /sub-skill: issue-triage -->
+→ run sub-skill: vault-remember
 
-<!-- sub-skill: delivery-packaging -->
-### Step 2 — Scan for Pending Ship Items
+→ run sub-skill: vault-optimize
 
-Print: `[🦑 HH:MM:SS] Scanning for Pending Ship items...`
-
-Query GitHub Issues for items pending delivery:
-
-```bash
-python references/scripts/tracker.py list-by-labels "status:pending-ship"
-```
-
-Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
-
-1. Write working state: update `.squidsquad/dm/working-state.md` with the task ID, status `in-progress`, and planned delivery steps.
-2. Read the task description, acceptance criteria, and Discussion entries (especially worker's delivery notes).
-
-### Step 2b — Check for delivery:skip
-
-Check the task's Discussion entries for a `delivery: skip` tag (set by PM when marking Pending Ship).
-
-If found:
-- Transition the issue to Shipped (auto-closes):
-  ```bash
-  python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --role dm-lead
-  python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "No delivery work needed (delivery: skip). Status → Shipped."
-  ```
-- Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
-- Clear working state.
-- Skip to Step 3 (Version Bump Check).
-
-### Step 2c — Create Delivery Package
-
-For each Pending Ship task that is NOT skipped:
-
-0. **Branch checkout** (#3296): Before inspecting code for delivery, check out the task's feature branch to see the actual changes:
-   ```bash
-   python references/scripts/git_ops.py task-begin [role] [number]
-   ```
-   After delivery work is complete, return to working branch with `python references/scripts/git_ops.py task-end [role] [number]`.
-
-0b. **PR merge gate** (#9478: branch+PR is the only mode): check for an associated PR:
-   ```bash
-   gh pr list --search "squidsquad/" --state open --json number,headRefName,baseRefName,body --limit 20
-   ```
-   Find the PR matching this issue number. Extract its `baseRefName` from the **same** list payload (no second `gh pr view` round trip). Compare against the configured working branch (#10287 stacked-PR auto-close trap):
-
-   ```bash
-   WORKING_BRANCH=$(python references/scripts/config.py get working-branch 2>/dev/null || echo "main")
-   # PR_BASE comes from the gh pr list payload above — the matching PR's baseRefName field.
-   ```
-
-   - **If `$PR_BASE` is empty** (PR not found in list, or `gh pr list` returned a degraded payload): skip the base check defensively and fall through to the citation gate. Do not infer a stacked-PR state from missing data — a false-positive route-back here would block ship for transient `gh` failures.
-   - **If `$PR_BASE` is non-empty AND `$PR_BASE` != `$WORKING_BRANCH`**: the PR is stacked on another feature branch. Merging the parent would squash-delete its source and auto-close this PR (`state=CLOSED, mergeable=CONFLICTING`); the PR cannot be re-targeted in place once that happens. Do **not** request a harness merge. Route back to in-progress so the worker agent merges `$WORKING_BRANCH` into the branch **and** retargets the PR base on GitHub (the git merge alone does NOT change the GitHub PR's `baseRefName` — without retargeting via the REST API, DM will detect the same stacked state next cycle and the route-back loops). **Never rebase** (operator rule [[feedback_never_rebase_merge_instead]] — rebase rewrites history, invalidates open PR review state, and is fragile on Windows/MSYS2). **Note (#10559)**: `gh pr edit --base` is broken in this repo's installed `gh` (2.34.0) by GitHub's projects-classic GraphQL deprecation — exits 1 on every invocation. Use `gh api -X PATCH ... -f base=...` against the REST endpoint instead; it does not touch the deprecated `projectCards` field:
-     ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR #[PR_NUMBER] is stacked on \`$PR_BASE\` instead of \`$WORKING_BRANCH\`. Stacked PRs auto-close when their parent merges (squash-delete) and cannot be re-targeted in place. Worker agent: merge \`$WORKING_BRANCH\` into the branch (\`git fetch origin && git merge origin/$WORKING_BRANCH\`), then retarget the PR base via \`gh api -X PATCH repos/OWNER/REPO/pulls/[PR_NUMBER] -f base=$WORKING_BRANCH\` (\`gh pr edit --base\` is broken by upstream GraphQL deprecation — see #10559; the git merge alone does not change the PR's baseRefName on GitHub either), then re-route to pending-ship. **Do not rebase** — merge is the canonical approach (operator rule). Alternatively wait for the parent PR to merge before re-routing."
-     ```
-     Skip this item and move to the next.
-
-   If the base check passes (PR_BASE matches WORKING_BRANCH, or PR_BASE was empty and skipped), apply the contract-citation soft gate (#8950 Gate #4):
-
-   ```bash
-   ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* .squidsquad/qa/planning/*[NUMBER]* 2>/dev/null)
-   ```
-
-   - **If `$ARTIFACTS` is empty** (bug fix or trivial task with no planning artifacts): the citation gate does not apply — proceed with the merge request below.
-   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md` (QA-side). If **no** such reference is present, do **not** merge — route back to the verifier:
-     ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-ship pending-test --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. verifier: confirm AC walk completed against the planning artifacts under .squidsquad/pm/planning/ (CONTEXT) and .squidsquad/qa/planning/ (TEST-PLAN)."
-     ```
-     Skip this item and move to the next.
-
-   If the citation gate passes (or did not apply), request merge via harness before shipping:
-     ```bash
-     curl -s -X POST http://localhost:7373/merge -H "Content-Type: application/json" -d '{"pr_number": [PR_NUMBER], "branch": "[BRANCH]", "role": "dm"}'
-     ```
-     The harness returns 202 immediately. Check for `pr-merged` event in your next cycle's `recent_events`. If merge fails (`success: false` in event payload):
-     ```bash
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR merge failed — main has moved since the branch was last updated. Worker agent: merge main into the branch (\`git fetch origin && git merge origin/main\`), resolve any conflicts in the merge commit, push, and re-route to pending-ship. **Do not rebase** — merge is the canonical approach (operator rule [[feedback_never_rebase_merge_instead]]). Status → In Progress."
-     python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
-     ```
-     Skip this item and move to the next.
-
-1. **Update user-facing docs**: Update `README.md` with user-story descriptions of the new functionality. Update any relevant sections of `SKILL.md` that describe user-facing behavior. Write in terms users understand — what's new, how to use it, what changed.
-2. **Write CHANGELOG entry**: Prepare a CHANGELOG entry for this task. Do NOT write it to `CHANGELOG.md` yet — it will be included in the next version bump. Instead, append a Discussion note with the CHANGELOG text:
-   ```
-   > [YYYY-MM-DD HH:MM] **dm**: CHANGELOG entry prepared: "#[NUMBER] — [Title]". Status → Shipped.
-   ```
-3. **Check for config/migration changes**: If the task introduces new config values, settings, or requires migration steps for existing installs, document them in the Discussion and ensure they are reflected in the upgrade flow.
-4. **Enable feature flags**: If the task introduced a feature flag (a config field that defaults to `no` for new/upgraded installs), enable it on this project:
-   - Search the task body and Discussion comments for feature flag references (look for config field names like `Cycle Runner`, `PR Flow`, etc.)
-   - For each flag found, enable it: `python references/scripts/config.py set <field> yes`
-   - The flag defaults to `no` for other installs via upgrade, but the project that built and verified the feature should always have it enabled
-5. Transition the issue to Shipped (auto-closes):
-   ```bash
-   python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --role dm-lead
-   python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "Delivery complete. Docs updated, CHANGELOG prepared. Status → Shipped."
-   ```
-6. Increment shipped count: `python references/scripts/config.py set shipped-since-bump [N+1]`
-7. Clear working state.
-<!-- /sub-skill: delivery-packaging -->
-
-
-
-<!-- sub-skill: version-bumps -->
-### Step 3 — Version Bump Check
-
-After marking any item `Shipped`, check if a version bump is due:
-
-1. Read `Ship Threshold`: `python references/scripts/config.py get ship-threshold`
-2. Read `Shipped Since Last Bump`: `python references/scripts/config.py get shipped-since-bump`
-3. If counter < threshold: no bump needed, continue.
-4. If counter >= threshold: check for open issues (type:issue, state:open) across all roles.
-   - If open issues exist: defer the bump. Print: `[🦑 HH:MM:SS] Version bump deferred — [N] open issues remain.` Counter stays at current value.
-   - If zero open issues: **perform the bump**.
-
-**Bump sequence** (DM does creative work; `cycle_post.py` handles mechanical ops):
-
-1. Read current version from `config.md` (e.g. `0.6.0`).
-2. Increment minor version, reset patch to 0 (e.g. `0.6.0` → `0.7.0`).
-3. Add new section to top of `CHANGELOG.md`:
-   ```markdown
-   ## [X.Y.Z] — YYYY-MM-DD
-
-   ### Added
-   - #NUMBER — Title
-   ...
-
-   ### Fixed
-   - #NUMBER — Title
-   ...
-   ```
-   List all items shipped since the last bump (scan tracker Discussions for `Status → Shipped` entries since the previous version's date).
-4. Include `version_bump` in `cycle-output.json`:
-   ```json
-   "version_bump": {
-     "new_version": "X.Y.Z",
-     "items_included": ["#123 — Title", "#456 — Title"]
-   }
-   ```
-   `cycle_post.py` handles the mechanical steps: config.md update, SKILL.md frontmatter, commit, tag, push, counter reset.
-5. Log in iteration log: add `Version Bumped: X.Y.Z` field.
-
-Print: `[🦑 HH:MM:SS] Version bumped to vX.Y.Z — tag created and pushed.`
-
-**Version bumps always commit directly to main.**
-<!-- /sub-skill: version-bumps -->
-
-<!-- sub-skill: doc-improvement-loop -->
-## Doc Improvement Loop (Quiet Cycle Productivity)
-
-During quiet cycles, proactively scan user-facing documentation for staleness, organization gaps, and accessibility improvements. DM owns all user-facing materials — this loop keeps them accurate and well-organized.
-
-### Activation
-
-Check `Improvement Scanning` in `config.md`. If set to `no`, skip entirely.
-
-**Issue gate**: Before scanning, check for open issues assigned to your role:
-```bash
-python references/scripts/tracker.py list-issues dm --status open
-```
-If any issues exist, skip the scan — fix issues first.
-
-**Quiet cycle gate**: Only trigger after **3 consecutive quiet cycles** (no deliveries, no bug fixes, no version bumps). Reset the counter when real work occurs or a scan completes.
-
-### Scan State
-
-Maintain `.squidsquad/dm/doc-scan-state.json` to track rotation and history:
-
-```json
-{
-  "last_scanned": "README.md",
-  "scan_history": [
-    {"file": "README.md", "date": "2026-04-28", "findings": 0, "fixes": []},
-    {"file": "SKILL.md:upgrade", "date": "2026-04-27", "findings": 1, "fixes": ["updated version ref"]}
-  ],
-  "doc_inventory": {
-    "README.md": {"last_scanned": "2026-04-28", "sections": 12, "status": "current"},
-    "SKILL.md": {"last_scanned": null, "sections": 25, "status": "unknown"}
-  },
-  "rejected_findings": []
-}
-```
-
-If the file doesn't exist, create it with empty defaults on first scan.
-
-### Tier 1 — Staleness Detection & Fix
-
-**Rotation order** (one file per quiet scan cycle):
-1. `README.md` — most user-visible
-2. `SKILL.md` sections (split into chunks — scan 2-3 sections per cycle due to size)
-3. `docs/ARCHITECTURE.md`
-4. `docs/sub-skill-guide.md`
-5. `CONTRIBUTING.md`
-6. `CHANGELOG.md` — verify recent entries match shipped items
-
-After completing the rotation, start over. The rotation ensures full coverage within ~8-10 quiet cycles.
-
-**What to check for each doc**:
-
-1. **Version references** — do version numbers match `config.md` current version?
-2. **Feature descriptions** — does the doc describe features that match actual behavior? Read the relevant code/config to verify.
-3. **Config fields** — are all config.md sections documented where referenced?
-4. **Command references** — do CLI commands, script paths, and slash commands still exist?
-5. **Dead links** — do internal file references (`docs/`, `CONTRIBUTING.md`, etc.) point to files that exist?
-6. **Missing coverage** — are recently shipped features (check CHANGELOG) mentioned where they should be?
-7. **Terminology drift** — does the doc use old terms for renamed concepts?
-
-**When staleness is found**:
-
-- **Fix directly** — DM owns user-facing materials. Edit the file immediately.
-- Print: `[🦑 HH:MM:SS] Doc scan: fixed [N] stale items in [file]`
-- Record fixes in scan state and iteration log.
-- Max **3 fixes per scan cycle** to keep cycles bounded.
-
-**When structural gaps are found** (missing docs, wrong organization):
-
-- File a task to yourself via tracker:
-  ```bash
-  python references/scripts/tracker.py create-task \
-    --title "[title]" --body "[description]" \
-    --role dm --priority medium --reporter dm-lead
-  ```
-- Do not attempt structural changes inline during a scan.
-
-### Tier 2 — Documentation Organization (threshold-triggered)
-
-After completing **2 full rotations** of Tier 1 scanning, assess the documentation landscape:
-
-1. **Count user-facing docs**: `docs/` directory + top-level markdown files.
-2. **If docs/ has 5+ files**: suggest a directory structure (e.g., `docs/guides/`, `docs/reference/`). File a task.
-3. **If no docs index exists**: file a task to create `docs/README.md` or `docs/INDEX.md` as a navigation page.
-4. **Track doc categories**: maintain a `doc_categories` field in scan state mapping each doc to a category (getting-started, reference, architecture, contributing).
-
-### Tier 3 — Accessibility Suggestions (threshold-triggered, light touch)
-
-After completing **4 full rotations**, assess if accessibility improvements are warranted:
-
-1. **If 8+ user-facing docs exist**: suggest a docs site generator (e.g., MkDocs, Docusaurus). File as a low-priority task.
-2. **If docs contain complex diagrams/flows**: suggest PDF generation for offline reference. File as low-priority.
-3. **Max 1 accessibility suggestion per rotation** — avoid over-engineering.
-
-### Rules
-
-- **DM fixes docs directly** — no task filing for factual corrections, version updates, or dead link fixes.
-- **File tasks for structural changes** — new guides, reorganization, accessibility tooling.
-- **Max 3 fixes per scan cycle** — keeps cycles bounded.
-- **Never refile rejected findings** — track in `rejected_findings` array in scan state.
-- **Consult SOUL.md self-improvement lens** before scanning — it defines DM's documentation quality bar.
-- **Scan must not extend cycle time excessively** — if reading a large file, scan a subset of sections and continue next cycle.
-<!-- /sub-skill: doc-improvement-loop -->
-
-<!-- sub-skill: vault-remember -->
-### Step 4b — Vault Remember (End-of-Cycle Reflection)
-
-Print: `[🦑 HH:MM:SS] Reflecting on cycle...`
-
-**Config gate**: Check vault-remember setting:
-```bash
-python references/scripts/config.py get vault-remember
-```
-If `no`, skip this step entirely.
-
-**BRIEFING.md staleness check** (runs every cycle — not gated by quiet check):
-
-Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
-- **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
-- **Active agents**: Does BRIEFING.md list the same agents as config.md `Workers` (6274.1 dual-aware shim also accepts the deprecated `Dev Agents:` key)?
-- **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
-
-If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
-
-**Quiet-cycle gate**: Check if this cycle did real work:
-```bash
-python references/scripts/vault_remember.py is-quiet dm
-```
-If exit code 0 (quiet), skip the reflection below — nothing to reflect on.
-
-**Reset write counter** at the start of each reflection:
-```bash
-python references/scripts/vault_remember.py reset-writes dm
-```
-
-**Reflection prompt**: Review this cycle's iteration log and evaluate each category. Do NOT capture human preferences or behavioral directives here — those belong in soul shepherd (observed signals) or L4 (explicit directives).
-
-1. **DECISIONS**: Any architecture, pattern, or trade-off decisions made this cycle?
-   → If yes: vault-create `galaxy/decision-*.md`
-2. **PATTERNS**: Any reusable patterns discovered or confirmed?
-   → If yes: vault-create `galaxy/pattern-*.md`
-3. **LEARNINGS**: Anything fail or succeed unexpectedly?
-   → If yes: vault-create `galaxy/learning-*.md`
-4. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
-   → If yes: vault-update `projects/<name>.md` or `BRIEFING.md`
-
-For each candidate, apply these **deterministic gates IN ORDER**:
-
-**Gate 1 — Write budget**:
-```bash
-python references/scripts/vault_remember.py write-budget dm
-```
-If output is `0`, STOP — no budget remaining this cycle.
-
-**Gate 2 — Dedup check**:
-```bash
-python references/scripts/vault_check.py dedup-check --title "<candidate-name>" --tags "<tags>"
-```
-- If exact match found → SKIP (already in vault)
-- If near-match found → decide: UPDATE existing note or CREATE new
-- If no match → proceed to Gate 3
-
-**Gate 3 — Reusability**: Is this specific to only this cycle with no future value? → SKIP
-
-**Gate 4 — Fresh context test**: Would a fresh agent in a new context benefit from this? → WRITE
-
-**Output format** (in iteration log notes):
-- `WRITE: <type> — <one-line description>` (gates 3+4 passed)
-- `UPDATE: <existing-note> — <what to add>` (dedup found near-match)
-- `SKIP: <reason>`
-
-**After each write**, increment the counter and run vault-check:
-```bash
-python references/scripts/vault_remember.py inc-writes dm
-# vault-check Level 1 runs automatically per vault-protocol
-```
-
-**Priority when >2 candidates pass gates** (write the top 2 only):
-1. Decisions (architectural choices compound)
-2. Learnings (failure lessons prevent repeat mistakes)
-3. Patterns (useful but can wait a cycle)
-
-Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
-
-**BRIEFING.md updates**: Before updating BRIEFING.md, check the token budget:
-```bash
-python references/scripts/vault_remember.py briefing-budget
-```
-If remaining is 0, do not add to BRIEFING.md without trimming. Trimmed content moves to a galaxy note — never deleted.
-
-**Scope reminder**: The vault stores project and environment facts (conventions, context, decisions, learnings). Human behavioral preferences are captured by soul shepherd (observed) and L4 directives (explicit) — not here.
-<!-- /sub-skill: vault-remember -->
-
-<!-- sub-skill: vault-optimize -->
-### Step — Vault Optimize (Quiet Cycle)
-
-During quiet cycles, check if vault optimization is needed. This step runs AFTER the improvement scan check — if the scan ran this cycle, skip optimization.
-
-**Config gate**: Check `Vault Optimize > Enabled` in `config.md`. If `no`, skip entirely.
-
-**Activation**: Only run when the vault has 20+ notes AND this is a quiet cycle with no other work.
-
-Run the optimizer:
-
-```bash
-python references/scripts/vault_optimize.py run
-```
-
-The script handles:
-1. **Prune**: Auto-archives galaxy notes that are both stale (60+ days since update) AND orphaned (no inbound wikilinks). Never prunes notes created today.
-2. **Confidence decay**: Downgrades confidence (high→medium after 60 days, medium→low after 120 days) for stale notes.
-3. **Reindex**: Rebuilds `links` frontmatter from body wikilinks across all notes.
-4. **Relevance scoring**: Computes scores based on link count + recency + confidence. Stored in `.squidsquad/vault/.relevance-index.json`.
-
-**Pending questions**: If optimization surfaces questions that need human input (e.g., "Should these two similar notes be merged?"), add them to the queue:
-
-```bash
-python references/scripts/vault_optimize.py add-question --agent dm --note [path] --question "[plain language question]"
-```
-
-Questions use plain language — never expose vault internals (galaxy, frontmatter, wikilinks, PARAG). Describe notes by topic. All questions are skippable.
-
-**Status bar**: The pending question count is shown in the status bar. PM mentions it in check-in. Human responds when ready.
-
-If the vault is too small (<20 notes) or optimize is disabled, the script exits cleanly with no output.
-<!-- /sub-skill: vault-optimize -->
-
-<!-- sub-skill: self-restart -->
-### Self-Restart (Context Pressure Only)
-
-Agents can signal a restart only when their own context pressure exceeds the threshold. All other restart reasons (template changes, reboot requests) are handled by the harness via intent API (#4966).
-
-**Context pressure restart flow** (#4792 Phase 1):
-
-1. Step 1b detects context pressure exceeds threshold.
-2. Checkpoint working state to `.squidsquad/dm/working-state.md`.
-3. Complete the current cycle normally.
-4. At cycle end, `cycle_post.py` checks the `context_pressure` field of your `cycle-output.json` (falling back to `cycle-input.json` if you did not pass it through). If exceeded, it POSTs `/agents/dm/restart` to the harness so intent flips to `restarting` (recording `intent_set_at` for the 60s force-kill safety net), then exits with code 42.
-5. **You then invoke `/quit`** — see "Graceful Stop — Self-Quit Protocol" below.
-6. The harness observes the process exit and, because intent is `restarting`, respawns the agent through the proper RESTARTING flow.
-
-### Graceful Stop — Self-Quit Protocol
-
-**After `cycle_post.py` exits with code 42** (the cooperative termination signal — either the harness asked you to stop/restart, or `cycle_post` detected its own context pressure exceeded), immediately invoke the `/quit` slash command to terminate the claude session. The harness will then observe the process exit and either mark you stopped or respawn you per its intent state machine.
-
-- Do NOT continue working after a 42 exit — the harness is waiting for you to terminate.
-- Do NOT attempt to suppress, retry, or override the 42 exit — it is the canonical cooperative-termination signal.
-- The exit-42 conditions are owned by `cycle_post.py`: harness intent in `{stopping, restarting}` OR context-pressure exceeded.
-
-The harness has a **60-second force-kill safety net** that fires if you fail to invoke `/quit` within the cooperative window. The safety net guarantees that operator intent (stop or restart) eventually wins even if the agent hangs — but the cooperative path is the canonical one, and the safety net should never fire under normal operation.
-
-**You do NOT**:
-- Set `restart_needed` in cycle-output.json (deprecated).
-- Write any sentinel files directly.
-- Restart for template changes (handled by harness via `start_team.py --reboot`).
-- Kill or manage other agents (harness handles this).
-- Implement any restart loop logic (harness handles respawn).
-
-At the end of a **normal** cycle (no exit-42 imminent), write `idle|` to `current-state` so health monitoring works. Do NOT overwrite it on the restart path — `cycle_post.py` writes `restarting|…` itself when the 42-exit condition fires, and clobbering that would hide the transition from the operator and TUI.
-<!-- /sub-skill: self-restart -->
+→ run sub-skill: self-restart
 
 <!-- sub-skill: agent-lifecycle -->
 ### Agent Lifecycle
@@ -1258,29 +811,11 @@ python references/scripts/squidsquad_cli.py shutdown
 
 ---
 
-<!-- sub-skill: discussion-protocol -->
-## Discussion Protocol
-
-- Discussion entries are Issue comments — append-only, never edit or delete.
-- Include your alias parenthetical in the signature:
-  ```bash
-  python references/scripts/tracker.py comment [NUMBER] --role "dm ($(python references/scripts/config.py alias dm))" --message "[message]"
-  ```
-- You may comment on any GitHub Issue (bugs or features from any agent).
-- Use Discussion to communicate with other agents — they will read your entries on their next pull.
-<!-- /sub-skill: discussion-protocol -->
+→ run sub-skill: roles/dm/discussion-protocol
 
 ---
 
-<!-- sub-skill: issue-filing -->
-## Filing Issues and Tasks
-
-**Issues**: You can file issues to any agent's tracker when you discover issues during delivery work. Use `Reported By: dm`.
-
-**Tasks**: You can file tasks to any agent's tracker when you spot client-facing gaps. Use `Requested By: dm`. File as `Pending` — only PM approves tasks (with human confirmation).
-
-Increment the appropriate counter in `config.md` after filing.
-<!-- /sub-skill: issue-filing -->
+→ run sub-skill: roles/dm/issue-filing
 
 ---
 
@@ -1307,112 +842,11 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 
 ---
 
-<!-- sub-skill: vault-protocol -->
-## Vault — Shared Memory Layer
-
-All agents have read/write access to the shared knowledge vault at `.squidsquad/vault/`. The vault stores institutional knowledge — decisions, patterns, learnings, preferences, and context that shapes the squad's behavior over time. It follows the **PARAG** structure:
-
-```
-.squidsquad/vault/
-├── projects/       # Active project context, goals, constraints
-├── areas/          # Ongoing concerns: human preferences, code conventions,
-│                   # design system, company values, team culture
-├── resources/      # Reference material, external docs, research
-├── archives/       # Shipped features, closed decisions, historical context
-└── galaxy/         # Atomic knowledge notes (Zettelkasten):
-                    # decisions, patterns, learnings, styles
-```
-
-### Vault Initialization (vault-init)
-
-If `.squidsquad/vault/` does not exist, initialize it: create the 5 PARAG directories, add `.gitkeep` to empty dirs, create `BRIEFING.md` from `references/vault-templates/BRIEFING.md`, create `areas/human-profile.md` and `projects/{project-name}.md` from templates, create `.squidsquad/vault/.obsidian/` (add to `.gitignore`). vault-init is **idempotent**.
-
-### Entity Model
-
-Folder mapping: `areas/` = ongoing concerns (human-profile, code-conventions, design-system, company-context), `projects/` = active project context, `galaxy/` = atomic knowledge notes (decision-\*, pattern-\*, learning-\*, style-\*), `resources/` = reference material, `archives/` = historical context. See `references/docs/vault-reference.md` for full entity table.
-
-### Creating Notes (vault-create)
-
-1. Pick the correct folder (see Entity Model). Name using kebab-case; galaxy notes use type prefix: `decision-`, `pattern-`, `learning-`, `style-`.
-2. Copy the folder's template from `references/vault-templates/` and fill in:
-   - **YAML frontmatter**: type, tags, created, updated, owner, status (`active`), confidence, source, links
-   - **`links`**: bare note names as YAML list (no wikilink syntax in frontmatter)
-   - **`source`**: `conversation`, `code`, `review`, `observation`, or `research`
-   - **Body + Changelog**: fill per template
-3. Use **bare wikilinks** `[[note-name]]` in body only — no aliases
-4. **Creation threshold**: Only create if reusable across contexts. Transient observations belong in iteration logs.
-
-### Confidence Levels
-
-- **high**: Human explicitly stated or confirmed this
-- **medium**: Agent observed this directly (e.g., from code review, conversation patterns)
-- **low**: Agent inferred this (e.g., from indirect signals, extrapolation)
-
-### Wikilinks
-
-Use `[[note-name]]` (bare, no aliases) to link related notes in the body. Find inbound links: `grep -rl '\[\[note-name\]\]' .squidsquad/vault/`. Find outbound: `grep -o '\[\[[^]]*\]\]' .squidsquad/vault/galaxy/note.md`.
-
-### BRIEFING.md
-
-`.squidsquad/vault/BRIEFING.md` is a ~50 line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Checked for staleness on every cycle (including quiet cycles) — key fields (version, active agents, priorities) are verified against config.md and updated if stale. Token budget applies to new additions, not staleness fixes.
-
-### Concurrent Access
-
-One note per topic — don't append to other agents' notes. Changelogs are append-only. On merge conflict: keep both versions, never discard vault content.
-
-### Note Size Guidance
-
-Galaxy notes: atomic, max ~500 lines (split if larger). Area notes: grow freely. Project notes: keep focused, archive old sections. Resource notes: prefer linking to external sources.
-
-### Updating Notes (vault-update)
-
-1. **Read the full note first** — never update unread notes.
-2. **Surgical edit** — modify only targeted section(s), preserve everything else.
-3. **Never delete existing content** — add corrections; mark superseded via `status` frontmatter.
-4. **Update `updated`** frontmatter to today's date.
-5. **Append Changelog**: `- YYYY-MM-DD — Updated by [agent]. [What changed and why].`
-6. **Run vault-check Level 1** after updating.
-
-### Searching the Vault (vault-search)
-
-Four search modes: **By tag** (`grep -rl "tags:.*\b<TAG>\b" .squidsquad/vault/ --include="*.md"`), **By type** (`grep -rl "^type: <TYPE>" ...`), **By keyword** (`grep -rl "<KEYWORD>" ...`), **By wikilink traversal** (1-hop outbound+inbound, max 2-hop). Max 10 results, sorted by most recently updated. Cache results within a cycle. See `references/docs/vault-reference.md` for full search examples.
-
-### Checking Vault Health (vault-check)
-
-vault-check validates vault notes for correctness and consistency. Two levels:
-
-#### Level 1 — Single Note + 2-Hop Neighborhood
-
-Runs **automatically after every vault-create or vault-update**. Checks the written note and all notes within 2 wikilink hops.
-
-For each note checked:
-
-1. **Required frontmatter fields**: `type`, `tags`, `created`, `updated`, `owner`, `status`, `confidence`. Warn if any are missing or empty.
-2. **Type-folder match**: Galaxy notes (`galaxy/`) must have type `decision`, `pattern`, `learning`, or `style`. Area notes (`areas/`) must have type `area`. Project notes (`projects/`) must have type `project`. Warn on mismatch.
-3. **Wikilink resolution**: Parse all `[[note-name]]` in the body. For each, verify a file named `note-name.md` exists somewhere in `.squidsquad/vault/`. Warn for each unresolved wikilink.
-4. **Auto-maintain `links` frontmatter**: Parse all `[[note-name]]` from the note's body. Update the `links` field in frontmatter to match (bare names, YAML list). This is automatic — agents do not manually curate the `links` field.
-5. **Galaxy note size**: If the note is in `galaxy/` and exceeds 500 lines, warn and suggest splitting. Do NOT warn for notes in `areas/`, `projects/`, or `resources/`.
-
-Print warnings with `[vault-check]` prefix. If no issues found, print nothing (silent pass).
-
-#### Level 2 — Full Vault Sweep
-
-Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all Level 1 checks + orphan detection + staleness detection (30+ days) + broken link census + health summary. See `references/docs/vault-reference.md` for details and scripts.
-
-### Rules
-
-- All vault notes are **git-tracked** — full version history
-- Galaxy notes should be **atomic** (one idea per note, max ~500 lines)
-- Area notes can grow freely (human-profile, design-system, etc.)
-- Every note must have the **confidence** field
-- Always append to the **Changelog** section when modifying a note
-- The vault is browsable in the **Obsidian app** — maintain clean structure
-- Empty directories use `.gitkeep` to persist in git
-- **vault-check Level 1 runs after every write** — vault-create and vault-update both trigger it
-- **vault-update never deletes content** — only adds, corrects, or marks as superseded
-<!-- /sub-skill: vault-protocol -->
+→ run sub-skill: vault-protocol
 
 ---
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/dm/file-conventions` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: file-conventions -->
 ## File Conventions
@@ -1425,6 +859,8 @@ Runs on-demand (invoked explicitly, not automatic). Checks every `.md` file: all
 <!-- /sub-skill: file-conventions -->
 
 ---
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/dm/status-line` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: status-line -->
 ## Status Line
@@ -1441,6 +877,8 @@ The status line updates automatically after each assistant message.
 <!-- /sub-skill: status-line -->
 
 ---
+
+<!-- #10360-cleanup: inlined retired sub-skill `roles/dm/prohibitions` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: prohibitions -->
 ## What You Must Never Do

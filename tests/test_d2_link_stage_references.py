@@ -143,16 +143,69 @@ def test_collect_sources_for_validation_drops_sub_skill_instructions(tmp_path):
 _MANDATORY_ROLES = sorted(compose.MANDATORY_ROLES | {"worker"})
 
 
-@pytest.mark.parametrize("role", _MANDATORY_ROLES)
-def test_live_v2_has_no_inlined_sub_skill_markers(role):
-    """Live-tree v2 emission contains NO ``<!-- sub-skill: ... -->`` markers.
+# PM Path A (#11049 spec clarification, cycle 1597): the 10 mandatory
+# sub-skills must stay inlined in the composite because every-cycle / at-
+# boot invocation can't wait for Skill-tool runtime resolution (#9968).
+# The remaining cataloged sub-skills become ``→ run sub-skill:`` references.
+# D2's filter still applies to the sub-skill DIRECTORY walk path (sub-skill
+# files under ``references/sub-skills/`` are not picked up by the link-stage
+# walker); these tests pin the source-side migration outcome instead.
+_MANDATORY_INLINE = frozenset({
+    "boot-bootstrap",
+    "cycle-runner",
+    "context-pressure",
+    "resume-working-state",
+    "task-pickup",
+    "working-state",
+    "git-commit",
+    "agent-lifecycle",
+    "improvement-scan-slim",
+    "status-line",
+})
 
-    Sub-skill body files start with that marker line right after their
-    frontmatter; spotting it in v2 output is a deterministic regression
-    indicator that the D2 filter has been bypassed.
+# PM Path A D1: retired sub-skills whose content is queued for #10360
+# inlining into Identity / Responsibility slots are inlined verbatim at
+# the orchestrator source with a marker, so the bodies survive the link-
+# stage walk. Permitted in the composite pending #10360.
+_D1_RETIRED_INLINE = frozenset({
+    "agent-boundaries",
+    "discussion-protocol",
+    "file-conventions",
+    "prohibitions",
+    "responsibility",
+})
+
+# L3 domain-context sub-skills are inlined verbatim into their host L3
+# instructions.md (per the cycle-1591 pass that PM endorsed). Each L3
+# variant has its own ``domain-context.md`` and the marker uses the bare
+# stem, so a single allowed name covers all 20.
+_DOMAIN_CONTEXT_INLINE = frozenset({"domain-context"})
+
+_EXPECTED_INLINED_MARKERS = (
+    _MANDATORY_INLINE | _D1_RETIRED_INLINE | _DOMAIN_CONTEXT_INLINE
+)
+
+
+@pytest.mark.parametrize("role", _MANDATORY_ROLES)
+def test_live_v2_inlined_markers_are_intentional_only(role):
+    """Only the intentionally-inlined sub-skill markers (mandatory + D1
+    retired + domain-context) may appear in v2 output; every other
+    ``<!-- sub-skill: ... -->`` marker is a D2-filter bypass.
+
+    Post-#11049 PM Path A: the mandatory set is inlined at the L1/L2
+    orchestrator source so the bodies survive the link-stage walk; D1
+    retired and domain-context inlines also survive; everything else is
+    referenced via ``→ run sub-skill: <name>`` and its body stays out.
     """
+    import re as _re
     out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
-    assert "<!-- sub-skill:" not in out
+    marker_pat = _re.compile(r"<!-- /?sub-skill: ([a-z][a-z0-9-]+) -->")
+    seen = set(marker_pat.findall(out))
+    leaked = seen - _EXPECTED_INLINED_MARKERS
+    assert not leaked, (
+        f"role={role}: D2-filter bypass — non-intentional sub-skill "
+        f"bodies appearing inline: {sorted(leaked)}"
+    )
 
 
 @pytest.mark.parametrize("role", _MANDATORY_ROLES)
@@ -160,22 +213,25 @@ def test_live_v2_emits_sub_skill_references(role):
     """At least one ``→ run sub-skill: <name>`` reference present per role.
 
     The reference grammar is authored directly in the orchestrator
-    instructions files; D2's filter only DROPS sub-skill bodies — it must
-    NOT also drop the reference text.
+    instructions files for situational sub-skills; D2's filter drops
+    those sub-skill bodies — it must NOT also drop the reference text.
     """
     out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
     assert "→ run sub-skill: " in out
 
 
-def test_live_v2_boot_block_not_inlined_when_role_uses_boot_bootstrap():
-    """The Boot block (``## Boot — Mode Detection``) lives in the
-    boot-bootstrap sub-skill body and must NOT be inlined in v2 output
-    for any role that references boot-bootstrap.
+def test_live_v2_boot_block_inlined_per_path_a():
+    """Post-#11049 PM Path A: ``boot-bootstrap`` is mandatory-inline, so the
+    Boot block (``## Boot — Mode Detection``) MUST appear in v2 output for
+    every role that consumes it. The pre-#11049 contract (boot block
+    referenced not inlined) is retired pending #9968 runtime resolution.
     """
     for role in _MANDATORY_ROLES:
         out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
-        assert "## Boot — Mode Detection" not in out, (
-            f"role={role}: Boot block prose was inlined; D2 filter bypassed."
+        assert "## Boot — Mode Detection" in out, (
+            f"role={role}: Boot block prose missing — boot-bootstrap is "
+            f"mandatory-inline per #11049 Path A and must survive the "
+            f"link-stage walk into the composite."
         )
 
 

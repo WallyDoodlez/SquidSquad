@@ -1,5 +1,8 @@
-# Compose Conflict Report — pm
-Generated: 2026-06-05T01:46:27+00:00
-Compose run: <unknown>
-Assemble model: sonnet
-Total conflicts resolved: 0
+# Assemble conflicts
+
+- role_class: pm
+- model_id: <unknown>
+- commit_sha: <unknown>
+- generated_at: <unset>
+
+No conflict records — every canonical slot is verbatim (`_VERBATIM_SLOTS` = all 6) so no LLM dispatch or resolver pass runs. See atomic_emit module docstring for reinstatement.

@@ -1,50 +1,49 @@
 # Working State
 
-- **Task**: cycle 2143 — #11049 AC3 ruling (Path A composite-size ceilings revised)
-- **Status**: PR #11069 pending-test; spec call resolved
+- **Task**: cycle 2145 — #11044 PR conflict; filed #11083 systemic fix
+- **Status**: skill draining well; new structural bug filed; PM coordination-only
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
 ## Cycle work
 
-- **#11049 AC3 ruling**: skill cycle 1597 shipped Path A migration on PR #11069 (-4179 LOC, 137 directives processed: 77 references + 19 mandatory inline + 20 domain-context + 21 D1-retired inline). Composites dropped ~50% (pm 2196→1066, dm 1568→1006, qa 1789→1008, skill 1964→1268). Skill flagged AC3: original body said pm/qa/skill ≤700, dm ≤800 — pre-Path-A D2 numbers that assumed pure references.
-- **Ruling filed on #11049**: revised AC3 to tiered ceiling — L2 base roles ≤1100, L3-specialized (skill) ≤1300. Rationale: Path A mandatory-inline budget (~503 lines/role) is a structural floor that didn't exist when D2 measured 22-29%. All four roles PASS revised AC3. Future #9968 (runtime sub-skill resolution) is the path to lower ceilings.
-- Issue body AC3 updated to match the ruling so QA's TEST-PLAN reads the correct contract.
-- BRIEFING.md updated: moved #11042+#11066 from pending-ship to shipped; reflected #11049 status change to pending-test; logged AC3 ruling in Recent Decisions.
+- **#11045 SHIPPED** since cycle 2144 (PR #11081 merged, QA verified 71/4 passed)
+- **#11047 at pending-test** on PR #11082 (skill picked up, root cause was actually FileNotFoundError on consolidated `docs/EVENT-BUS-ARCHITECTURE.md`, not 8-char ref staleness as body suggested)
+- **#11044 PR #11080 routed back** by DM (R1) — conflict on `.squidsquad/vault/BRIEFING.md` (my cycle 2144 ext edit collides with skill's branch). Also config.md in PR scope.
+- **PM call**: option C (tactical + structural). Tactical = drop BRIEFING.md + config.md from #11080 scope to unblock. Filed **#11083** for structural fix (don't auto-commit operational state files when on feature branch — parallel to #11065 .backlog-cache fix). Same merge-spiral pattern; same shape of solution.
 
-## Pipeline (post-skill cycle 1597, DM cycle 1350)
+## Pipeline
 
 - pending_ship: 0
-- pending_test: 2 (#10855 deferred — PR #10952; **#11049 fresh — PR #11069 awaiting QA**)
-- in-progress: none
-- Approved queue: #11053 (gated on #11049), #10686 (E7 unblocked), #10690 (gated on E7), #10836+#10838 (PM-ready), #10837+#10839 (PM, awaiting DS re-audit)
-- Open PRs: 2 (#10952 deferred; **#11069 draft, AC3-cleared, QA's lane**)
+- pending_test: 2 (#10855 deferred; #11047 fresh on PR #11082)
+- in-progress: #11044 (skill — needs scope-trim), #11053 (PM — awaiting operator §9)
+- Approved queue: #11083 (new structural), #10686 (E7), #10690 (gated), 4 TRD PRDs
+- Open PRs: 3 (#10952 deferred; #11080 needs scope-trim; #11082 ready for QA)
 
 ## v2 stabilization work map
 
 | Surface | Status | Owner |
 |---|---|---|
-| 1. References only, no inline (v1 {{include:}} → Path A hybrid) | **pending-test** (PR #11069) | #11049 skill → QA |
-| 2. Sub-skill code bundling | deferred | #11051 closed |
-| 3. Claude Skills audit | decided against | #11052 + #10781 closed |
-| 4. Agent-spawn assemble | approved, gated on #11049 | #11053 pm |
-| Cleanup (API-assemble prune) | shipped | #11050 closed |
-| E6 v2 cutover | shipped 2026-06-04 | #10685 closed |
-| E7 smoke | unblocked, awaiting skill | #10686 skill |
+| 1. References only, no inline | SHIPPED | #11049 closed |
+| 4. Agent-spawn assemble | Phase 1 v1 done, op review | #11053 pm |
+| Cleanup | shipped | #11050 closed |
+| E6 v2 cutover | shipped | #10685 closed |
+| E7 smoke | unblocked | #10686 skill |
 | Tracker hygiene (.backlog-cache) | shipped | #11065 closed |
-| Pytest suite stabilization | shipped 2026-06-05 | #11042 closed |
-| L4 corrupt test alignment | shipped 2026-06-05 | #11066 closed |
-| Runtime sub-skill resolution (lower L2 ceiling) | not started | #9968 future PRD |
+| **Tracker hygiene (state files on feature branches)** | NEW | #11083 skill |
+| Pytest stabilization clusters | 4 of 4 in flight/shipped | #11042+45+47 mostly closed, #11044 trim-pending |
+| docs/COMPOSE-ARCHITECTURE.md §4.6 prose refresh | pending Phase 2.x of #11053 | future |
 
-## TRD-alignment PRD queue (post-E6, unblocked)
+## Operator asks (still pending on #11053)
 
-- #10836 INSTALLER-ARCH (HIGH, Direction A pre-locked) — PM can pick up
-- #10838 VAULT-ARCH (medium) — PM can pick up
-- #10837 HARNESS-ARCH (HIGH) — needs DS re-audit before PM pickup
-- #10839 Cross-TRD rename (medium) — needs DS re-audit before PM pickup
+1. Subagent type: register `assemble` or `general-purpose`?
+2. sonnet default + per-slot override?
+3. AC6 retry count: 0 or 1?
+4. Tier B audit timeout: 60s or 120s?
+5. Sixth artifact `CLAUDE.assemble-log.md`?
 
-## Session ship tally: 38 (+2 since cycle 2142: #11042 + #11066 shipped by DM batch)
+## Session ship tally: 40 (+1 since cycle 2144: #11045 shipped)
 
 ## Context
 
-healthy (~85%).
+healthy (~78%).
