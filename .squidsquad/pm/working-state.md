@@ -1,45 +1,47 @@
 # Working State
 
-- **Task**: cycle 2141 — pipeline draining well; PM nothing-to-do
-- **Status**: skill shipping at velocity; 3 ships since cycle 2140
+- **Task**: cycle 2142 — BRIEFING.md staleness fix (post-E6 reality refresh)
+- **Status**: pipeline draining; QA cleared #11042 R3 + #11066 to pending-ship since cycle 2141
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 1
+- **Quiet cycles**: 0
 
-## Ships since cycle 2140 (3)
+## Cycle work
 
-- **#11065** (.backlog-cache untrack) merged as `1dd58709` (DM counter 12→13). Root cause for #10540 merge-spiral pattern eliminated.
-- **#11050** (assemble pipeline prune) merged as `1deeac641` (PR #11064). atomic_emit.py now ~200 lines smaller, single verbatim path.
-- **#11042** PR #11048 re-merged with **zero conflicts** at HEAD `5de4b7c57` — the sequencing-then-clean-merge plan (skill's improvement on PM's option-C) worked exactly as designed. QA at pending-test now.
+- **BRIEFING.md staleness fix**: detected E6 #10685 closed 2026-06-04 + PRD-D #10781 closed 2026-06-05 — both were still listed as in-progress/planned in active priorities. Removed E6 + PRD-D from active section; moved to shipped/closed. Marked 4 umbrella PRDs (#10836-10839) as UNBLOCKED. Updated post-E6 queue order. Auto-versioning drift noted (13 shipped vs 10 threshold) → DM's lane.
+- Pipeline movement since cycle 2141: QA cycle 916 verified #11042 R3 (271/271) + #11066 (8/8) — both transitioned pending-test → pending-ship.
 
-## Skill velocity story (last 6h)
+## Pipeline (post-QA cycle 916)
 
-- Filed by PM 00:32 → #11065 shipped 05:13 (~4.5h end-to-end)
-- #11050 + #11066 both shipped same session
-- #11042 unblocked via #11065 dependency chain — no PR fragmentation needed
-- #11049 still at approved (skill prioritized easy wins; orchestrator migration is the bigger lift, properly deferred)
-
-## Pipeline
-
-- pending_ship: 0
-- pending_test: 3 (#10855 deferred; #11042 fresh; #11066 fresh — all role:skill, QA's lane)
-- in-progress: #11049 (skill, awaiting re-pickup with Path A spec)
-- Approved queue: #11053 (gated on #11049), #10686 (smoke, unblocked), #10690 (gated on E7)
-- Open PRs: 2 (#10952 deferred; #11048 ready for QA verify)
+- pending_ship: **2** (#11042, #11066 — DM's lane)
+- pending_test: 1 (#10855 deferred — PR #10952)
+- in-progress: #11049 (skill, approved Path A spec; awaiting re-pickup)
+- Approved queue: #11053 (gated on #11049), #10686 (E7 unblocked), #10690 (gated on E7), #10836+#10838 (PM-ready), #10837+#10839 (PM, awaiting DS re-audit)
+- Open PRs: 3 (#10952 deferred; #11048 pending-ship #11042; #11068 pending-ship #11066)
 
 ## v2 stabilization work map
 
 | Surface | Status | Owner |
 |---|---|---|
-| 1. References only, no inline | approved (path A spec) | #11049 skill |
+| 1. References only, no inline | approved (Path A) | #11049 skill |
 | 2. Sub-skill code bundling | deferred | #11051 closed |
 | 3. Claude Skills audit | decided against | #11052 + #10781 closed |
 | 4. Agent-spawn assemble | approved, gated on #11049 | #11053 pm |
-| Cleanup (API-assemble prune) | **shipped** | #11050 closed |
-| E7 smoke | unblocked, awaiting skill pickup | #10686 skill |
-| Tracker hygiene (.backlog-cache) | **shipped** | #11065 closed |
+| Cleanup (API-assemble prune) | shipped | #11050 closed |
+| E6 v2 cutover | **shipped 2026-06-04** | #10685 closed |
+| E7 smoke | unblocked, awaiting skill | #10686 skill |
+| Tracker hygiene (.backlog-cache) | shipped | #11065 closed |
+| Pytest suite stabilization | pending-ship | #11042 → DM |
+| L4 corrupt test alignment | pending-ship | #11066 → DM |
 
-## Session ship tally: 36 (+2 since cycle 2140: #11050 + #11065)
+## TRD-alignment PRD queue (post-E6, unblocked)
+
+- #10836 INSTALLER-ARCH (HIGH, Direction A pre-locked) — PM can pick up
+- #10838 VAULT-ARCH (medium) — PM can pick up
+- #10837 HARNESS-ARCH (HIGH) — needs DS re-audit before PM pickup
+- #10839 Cross-TRD rename (medium) — needs DS re-audit before PM pickup
+
+## Session ship tally: 36 (+0 this cycle; DM ship of #11042+#11066 will bring tally to 38)
 
 ## Context
 
-healthy (~55%).
+healthy (~70%).
