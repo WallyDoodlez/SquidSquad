@@ -59,7 +59,7 @@ The alternative (spawn from `compose.py` after `assemble_and_emit` returns) woul
 
 ### 1.3 Forced-verbatim slots
 
-Two slots will NEVER be opted into LLM rewrite:
+Two slots will NEVER receive LLM rewrite:
 
 - **`project-context`**: this is operator-authored L4 content. The operator wrote it as the override of record; LLM rewrite would defeat the L4 contract.
 - **`vault`**: boilerplate-shaped composed-state pointer (~29 lines, identical across roles). Nothing to dedupe; no contradictions possible.
@@ -73,7 +73,7 @@ from anthropic_subagent import Agent  # pseudo-import; actual API per Claude Cod
 
 result = Agent({
     "description": f"assemble-{slot}",
-    "subagent_type": "general-purpose",  # or a new "assemble" type if we register one
+    "subagent_type": "assemble",  # LOCKED per §9 Q1; .claude/agents/assemble.md with tools: Read
     "prompt": _build_prompt(slot, linked_slot_body, repo_root),
     "model": _model_for_slot(slot),  # default sonnet; pm config override
 })
@@ -121,7 +121,7 @@ For sonnet, conservative budget: 64K tokens prompt + ~16K tokens response. With 
 - Linked slot body: per measurements above, max ~985 lines × ~80 chars = ~79KB = ~20K tokens (skill instructions)
 - Total: ~21K tokens prompt → comfortably under budget for every slot.
 
-Identity at 7-9 lines fits in ~2.5KB. No budget concern for the first opt-in.
+Identity at 7-9 lines fits in ~2.5KB. No budget concern.
 
 ### 2.3 What the prompt does NOT include
 
@@ -131,9 +131,9 @@ Identity at 7-9 lines fits in ~2.5KB. No budget concern for the first opt-in.
 - Sub-skill bodies (they live elsewhere, agent doesn't need them to rewrite the slot)
 - The conflicts report from prior runs (each invocation is stateless)
 
-### 2.4 Worked example — PM identity slot (first opt-in candidate)
+### 2.4 Worked example — PM identity slot (smallest spawning slot — used as the worked-example anchor throughout this document)
 
-Concrete input the subagent sees for `compose.py deploy pm` when `identity` is opted in. This is what the freshly-deployed PM composite produces at slot=identity (cycle 2143 measurement):
+Concrete input the subagent sees for `compose.py deploy pm` at the `identity` slot. This is what the freshly-deployed PM composite produces at slot=identity (cycle 2143 measurement):
 
 ```
 ### append
@@ -377,7 +377,7 @@ If Tier A fails → revert to verbatim immediately, log under §6.
 
 **Tier B — subagent audit (semantic check)** runs only if Tier A passes:
 
-A second Agent spawn (`subagent_type: "general-purpose"`) gets a prompt:
+A second Agent spawn (`subagent_type: "assemble"` — same custom type as the primary spawn; the Read-only tool constraint applies equally to the audit pass, since the audit subagent should not introduce external context either) gets a prompt:
 
 > You are auditing a rewritten H2 slot of a SquidSquad composed CLAUDE.md. Compare the rewritten body to the original linked body. Answer two questions:
 >
@@ -391,17 +391,17 @@ If Tier B verdict = FAIL → revert to verbatim, log Tier B's specific findings 
 
 ### 7.2 Audit cost
 
-Per-deploy cost: N spawns for assemble + N spawns for Tier B audit = 2N total, where N = opted-in slots. For the recommended first-opt-in (`identity` only), that's 2 spawns per `deploy <alias>`, 8 spawns per `deploy-all` (4 aliases). Acceptable.
+Per-deploy cost: N spawns for assemble + N spawns for Tier B audit = 2N total, where N = non-forced-verbatim slots (today: 4 — identity, responsibility, soul, instructions). That's 8 spawns per `deploy <alias>`, 32 spawns per `deploy-all` (4 aliases). Tier B is cache-eligible per §1.1 caching contract, so steady-state cost drops substantially after the first compose run on a given source tree.
 
 ---
 
 ## 8. Phased rollout
 
 1. **Phase 2.1 (skill task)**: implement `_FORCED_VERBATIM_SLOTS` + `parse_assemble_slots` config + `_agent_spawn_assemble` stub that just returns verbatim. Ship. Validates the plumbing.
-2. **Phase 2.2 (skill task)**: implement full `_agent_spawn_assemble` for `identity` slot only. Implement Tier A audit. Ship. Operator can now opt `identity` in via config.
+2. **Phase 2.2 (skill task)**: implement full `_agent_spawn_assemble` covering all four non-forced-verbatim slots (identity, responsibility, soul, instructions). Implement Tier A audit. Ship. Identity is the smallest slot and the natural first opt-in for any ad-hoc operator testing during this phase, but the implementation covers all four because the assemble pass is unconditional per the TRD.
 3. **Phase 2.3 (skill task)**: implement Tier B subagent audit. Ship. Closes AC7.
-4. **Phase 2.4 (operator)**: opt `identity` in for one role, eyeball the result, iterate on the prompt template.
-5. **Phase 2.5+**: opt subsequent slots in (responsibility, then soul) once identity proves stable.
+4. **Phase 2.4 (operator)**: run `compose.py deploy <alias>` on one role, eyeball the `identity` slot first (smallest, easiest to read end-to-end), iterate on the prompt template if findings emerge.
+5. **Phase 2.5+**: review the larger slots (responsibility, then soul, then instructions) once identity reads cleanly; iterate prompt template per slot if needed. All four slots ship in 2.2; this phase is observation + prompt refinement, not gated activation.
 
 `instructions` slot stays verbatim indefinitely (highest preservation surface; lowest ROI).
 
@@ -423,7 +423,7 @@ Per-deploy cost: N spawns for assemble + N spawns for Tier B audit = 2N total, w
 
 ## 10. What Phase 2 implementation scopes (handoff to skill)
 
-When operator confirms this design, file as one umbrella task (or three, per the phasing above) to skill. Skill writes the code. PM stays in coordination — answers config-validation questions, picks the first opt-in slot, signs off on Phase 2.2 ship.
+When operator confirms this design, file as one umbrella task (or three, per the phasing above) to skill. Skill writes the code. PM stays in coordination — answers config-validation questions, signs off on Phase 2.2 ship, drives prompt-template refinement in Phase 2.4+.
 
 Phase 1 deliverable (this document) does NOT include:
 - Code changes (skill's lane)

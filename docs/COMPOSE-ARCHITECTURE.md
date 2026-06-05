@@ -666,6 +666,7 @@ Generated: <ISO-8601 timestamp>
 Compose run: <commit SHA of the source tree>
 Assemble model: <model-id>
 Total conflicts resolved: <N>
+Total unresolvable fragments: <M>
 
 ## CONFLICT-001 — slot: <slot> — precedence: L<winner> > L<loser>
 - **L<loser> source**: `<path>` (ordinal <N>)
@@ -674,9 +675,16 @@ Total conflicts resolved: <N>
   > <verbatim quote from L<winner>, max 200 chars + ellipsis>
 - **Why this is a conflict**: <one-sentence assembler explanation>
 - **Resolution in assembled output**: <one-sentence description of what the assembled prose says>
+- **Justification citation**: <justification_citation — verbatim from subagent's JSON output; MUST contain the precedence-rule clause "Layer precedence (highest to lowest): L4 > L3 > L2 > L1" per AC6>
 
 ## CONFLICT-002 — slot: ...
 ...
+
+## UNRESOLVABLE-U001 — slot: <slot>
+- **Fragment A**: > <fragment A verbatim>
+- **Fragment B**: > <fragment B verbatim>
+- **Why unresolvable**: <one-sentence explanation>
+- **Resolution in assembled output**: both fragments preserved verbatim in the slot body
 ```
 
 If zero conflicts were detected during the run, the report file is still emitted with `Total conflicts resolved: 0` and no CONFLICT sections — its presence confirms the assembler ran cleanly. The report is git-tracked alongside `CLAUDE.md` and `CLAUDE.linked.md`; PR review against an L4 change inspects this file to confirm overrides land as intended.
@@ -704,7 +712,7 @@ If any check fails, **compose aborts with a diagnostic**. There is no fallback t
 - Cache store: `.squidsquad/<alias>/.assemble-cache/` (git-tracked alongside the assembled output, so re-deploys on the same commit are free).
 - Cache invalidation is automatic via the hash — any change to the linked body, the slot's purpose statement (from this spec), the model, or the prompt produces a new key.
 
-**Model.** `sonnet` default (cost/quality balance for goal-bounded prose reconciliation). The default is a compose-time constant. **Per-slot override** is available via the install's `assemble-slots:` config entry — e.g., an install whose `soul` slot consistently produces low-quality reconciliations may set `soul: { model: opus }`; an install with an unusually short `identity` slot may set `identity: { model: haiku }`. Temperature ≤ 0.3 to reduce first-run drift. The default is shipped behaviour; per-slot overrides are operator-configurable; `_FORCED_VERBATIM_SLOTS` (`project-context`, `vault`) accept no model setting because they never spawn.
+**Model.** `sonnet` default (cost/quality balance for goal-bounded prose reconciliation). The default is a compose-time constant. **Per-slot override** is available via the install's `assemble-slots:` config entry using the flat `<slot>-model: <tier>` key form — e.g., an install whose `soul` slot consistently produces low-quality reconciliations may set `soul-model: opus`; an install with an unusually short `identity` slot may set `identity-model: haiku`. Temperature ≤ 0.3 to reduce first-run drift. The default is shipped behaviour; per-slot overrides are operator-configurable; `_FORCED_VERBATIM_SLOTS` (`project-context`, `vault`) accept no `<slot>-model:` entry — naming one is a compose-time error.
 
 **Audit artifacts.** Compose emits three outputs to `.squidsquad/<alias>/`:
 
