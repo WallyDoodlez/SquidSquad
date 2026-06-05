@@ -3,13 +3,13 @@
 - **Task**: none
 - **Status**: idle
 - **Last Processed Event ID**: 55f645cecd099ad2
-- **Quiet Cycle Counter**: 13
+- **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 1375)
+## Session Context (checkpoint at cycle 1376)
 - Version: v0.43.0
-- Shipped count: 23/10 — bump deferred (6 open type:issue: 3 open, 1 pending-test, 2 pending). Blocking bugs (open/in-progress): #10955 high (skill OOM open), #10540 medium (DM batch-ship open), #9969 low (pm manifest open). 1 high-sev still blocking.
+- Shipped count: **25/10** — bump deferred (6 open type:issue: 3 open, 1 pending-test, 2 pending). Blocking bugs (open/in-progress): #10955 high (skill OOM open), #10540 medium (DM batch-ship open), #9969 low (pm manifest open). 1 high-sev still blocking.
 - Last bump: cycle 1271 (v0.43.0, 10 items)
-- Recent ships since last bump: #9939, #9941, #9926, #9925, #9946, #6274.1, #9967, #10820, #10987, #10999, #11011, #11050, #11065, #11066, #11042, **#11049 (-4179 LOC v1→v2 includes migration)**
+- Recent ships since last bump: …#11042, #11049, #11050, #11065/#11066/#11083 (structural), #11044/#11045/#11046/#11047 (#11042 follow-ups), #10750, #11087, **#11091, #11093**
 - Harness: reachable
 - Pending approval (DM tracker): #8702, #7447, #9933 (+ ~7 more low-priority all awaiting PM)
 - Session cron 30m (job cc5cded7)
