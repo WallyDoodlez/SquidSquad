@@ -1,24 +1,33 @@
 # Working State
 
-- **Task**: none
+- **Task**: bump deferred on 5 open issues (#10955 #10954 #10750 skill, #10540 dm-stuck, #9969 pm); queue clear
 - **Status**: idle
 - **Last Processed Event ID**: 55f645cecd099ad2
-- **Quiet Cycle Counter**: 1
+- **Quiet Cycle Counter**: 4
 
-## Session Context (checkpoint at cycle 1385)
-- Version: v0.43.0 (auto-healed from 0.29.0 regression this cycle via #5136)
-- Shipped count: 6/10 (auto-healed from config=0 this cycle via #9772; my prior "8/10" was inaccurate — git-derived count is authoritative)
-- Open issues blocking bump: 2 (non-DM, pre-existing)
-- Last bump: cycle 1271 (v0.43.0, 10 items)
-- Harness: reachable
-- Doc scan: R59 scan-6 (docs/sub-skill-guide.md) done. Counter 1/3 toward R59 scan-7 (CONTRIBUTING.md).
-- Pending approval (DM tracker): #8702, #7447, #9933 (+ ~7 more low-priority all awaiting PM)
-- Session cron 30m (job 1fb54ba3)
-- **In flight**: nothing
-- **Operator note**: 10 pre-v0.41.0 items remain in closed+pending-ship status — needs PM/operator triage
-- **Stale-file note** (not cleaning): `.squidsquad/dm/working-state.md` on main leftover from cycle 1340 manual recovery.
-- **Self-heal note (this cycle)**: cycle_pre auto-fixed config regression — version 0.29.0→0.43.0 (#5136) and shipped-since-bump 0→6 (#9772). Likely caused by stale-base squash-merge or interleaved config.md write. Both heals authoritative; no action needed.
-- **doc-scan-state.json size note**: 85KB / 297 entries.
-- **#9970 status**: open, no PM response yet (filed cycle 1315)
-- **Cosmetic note** (not filed): wizard._flag_label produces 'Pr Flow' for pr_flow key (wizard.py:830).
-- **Config-state note** (not filed): this project's config.md is Architecture Version 1 with partial v2 sections.
+## Session Context (checkpoint at cycle 1868)
+- Version: v0.43.0
+- Shipped count: **61/10** (bump_due, deferred on open issues)
+- Harness: HEALTHY on 7373
+- Session cron 30m (job 4930bd69)
+- Doc scan: streak gate met but blocked by #10540 status:open.
+- **Stuck bug**: #10540 (DM batch ship dispatch) — DM-prohibited, parked at PM. **38h30m+ parked.**
+- **#10820 fix on origin/main** but not active in THIS clone.
+- **#10855** at status:pending-test +blocked:human-action.
+- **#10981 + #10987 SHIPPED**: both bundled into #10685 cutover branch.
+- **CHANGELOG queue for v0.44.0** (~55 items): last added #10987 c1864.
+
+## Recent cycle log (last 5 cycles)
+- **Cycle 1868**: Quiet. No state change. Quiet counter 3→4.
+- **Cycle 1867**: Quiet. Pool 6→5 (#10998 transitioned).
+- **Cycle 1866**: Quiet. No state change.
+- **Cycle 1865**: Quiet. Counter 61 persisted.
+- **Cycle 1864**: Active. Shipped #10987 (L4 parser, bundled). Counter 60→61.
+
+## Earlier session highlights (cycles 1719-1863, compacted)
+- 61 ships this session. Pattern: serialized merge dispatch + bundled-in-cutover-branch (c1862, c1864). Post-merge UNKNOWN→DIRTY route-backs via merge-from-main (not rebase) per feedback memory.
+- R74 rotation complete cycle 1780 (2 fixes — still stranded as of c1868). R75 in progress (scans 1-4 complete, all re-verification 0 findings).
+- Milestones: 30 ships (c1755), 40 ships (c1782), 50 ships (c1793), 60 ships (c1862).
+- #10355 (status:pending role:dm) — dev/qa→worker/verifier sub-skill-guide sweep; awaiting PM approval.
+- c1818 saved feedback memory: shipped-since-bump increment is manual at ship-time (applied c1830, c1833, c1837, c1854, c1862, c1864).
+- Branch-name drift cycles 1781-1784 — cycle_pre branch-correction handled it.
