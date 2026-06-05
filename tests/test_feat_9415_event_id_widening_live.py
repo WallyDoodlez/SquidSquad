@@ -120,7 +120,12 @@ def test_tc_06_event_poll_treats_ids_as_opaque_strings():
 
 # TC-7
 def test_tc_07_docs_event_bus_no_stale_8_char_references():
-    doc = (DOCS_DIR / "EVENT-BUS-ARCHITECTURE.md").read_text(encoding="utf-8")
+    """#11047: ``docs/EVENT-BUS-ARCHITECTURE.md`` was consolidated into
+    ``docs/AGENT-RUNTIME.md`` by commit 4012500fc ("pm: consolidate
+    event/runtime docs"); this test was missed in that move. Re-point
+    at the surviving document and keep the same #9415 invariants.
+    """
+    doc = (DOCS_DIR / "AGENT-RUNTIME.md").read_text(encoding="utf-8")
     # No "8 hex char" / "8-char" / "32-bit" claims about event ids.
     forbidden = [
         r"\b8[- ]?hex[- ]?(char|character|digit)",
@@ -132,12 +137,12 @@ def test_tc_07_docs_event_bus_no_stale_8_char_references():
     for pat in forbidden:
         m = re.search(pat, doc, re.IGNORECASE)
         assert m is None, (
-            f"EVENT-BUS-ARCHITECTURE.md contains stale 8-char reference "
+            f"AGENT-RUNTIME.md contains stale 8-char reference "
             f"matching /{pat}/: {m.group(0) if m else ''!r}"
         )
     # Positive marker: the new width or nonce should be reflected.
     assert ("16" in doc and "hex" in doc.lower()) or "nonce" in doc.lower(), (
-        "EVENT-BUS-ARCHITECTURE.md should reference 16-char width or nonce "
+        "AGENT-RUNTIME.md should reference 16-char width or nonce "
         "after #9415 widening"
     )
 

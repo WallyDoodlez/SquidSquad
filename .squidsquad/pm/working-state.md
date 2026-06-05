@@ -1,53 +1,47 @@
 # Working State
 
-- **Task**: cycle 2144 — quiet; light scan + BRIEFING terminology fix
-- **Status**: pipeline draining; #11053 awaiting operator review
+- **Task**: cycle 2146 — quiet; observation only
+- **Status**: pipeline draining well; PM coordination-only
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 1
 
-## Cycle work (light)
+## Cycle work (observation only)
 
-- Improvement scan found **`docs/COMPOSE-ARCHITECTURE.md` §4.6 substrate prose is stale** (still describes retired `sonnet` model lock, `.assemble-cache/`, model_router routing). Not actionable until #11053 design approved — will land as part of Phase 2.x.
-- Fixed BRIEFING.md terminology drift: "v3 per-slot polish" → "v2 §4.6 substrate" (harness PM's cycle 2143 wording predated my cycle 2137 ext correction).
-- Skill self-cycling on spinoffs #11044, #11045 — both at pending-test, QA's lane. PR #11080 (against #11044) open.
+Skill velocity since cycle 2145:
+- **#11047 SHIPPED** (PR #11082 merged)
+- **#11083 at pending-test** on PR #11084 — filed last cycle, picked up + shipped within minutes. Branch-guard on `commit_role_scoped`: when current branch ≠ working-branch, skip staging (file stays on disk for next on-working-branch cycle). Both AC pattern from #11065 applied successfully.
+- **#11044 re-verified** at pending-test (option C tactical: scope trimmed to 2 test files, operational state files restored to main).
+
+Both structural fixes (#11065 .backlog-cache, #11083 operational state on feature branches) now address the #10540 merge-spiral pattern systemically.
 
 ## Pipeline
 
 - pending_ship: 0
-- pending_test: 3 (#10855 deferred; #11044 fresh; #11045 fresh — all role:skill QA's lane)
-- in-progress: #11053 (PM, awaiting operator §9 review)
+- pending_test: 3 (#10855 deferred; **#11083 fresh** + **#11044 re-verified**)
+- in-progress: #11053 (PM, awaiting operator §9)
 - Approved queue: #10686 (E7), #10690 (gated), 4 TRD PRDs
-- Open PRs: 2 (#10952 deferred; #11080 fresh for #11044)
+- Open PRs: 2 (#10952 deferred; #11080 trimmed for QA; — PR #11084 was bundled with #11083 sweep)
 
-## v2 stabilization work map
+## v2 stabilization work map (largely settled)
 
 | Surface | Status | Owner |
 |---|---|---|
 | 1. References only, no inline | SHIPPED | #11049 closed |
-| 2. Sub-skill code bundling | deferred | #11051 closed |
-| 3. Claude Skills audit | decided against | #11052 + #10781 closed |
-| 4. Agent-spawn assemble | Phase 1 v1 done, op review | #11053 pm in-progress |
-| Cleanup (API-assemble prune) | shipped | #11050 closed |
+| 4. Agent-spawn assemble | Phase 1 v1, op review | #11053 pm |
+| Cleanup | shipped | #11050 closed |
 | E6 v2 cutover | shipped | #10685 closed |
 | E7 smoke | unblocked | #10686 skill |
 | Tracker hygiene (.backlog-cache) | shipped | #11065 closed |
-| Pytest stabilization | shipped | #11042 closed |
-| L4 corrupt test alignment | shipped | #11066 closed |
-| docs/COMPOSE-ARCHITECTURE.md §4.6 prose refresh | **pending Phase 2.x of #11053** | future |
-| Runtime sub-skill resolution | not started | #9968 future |
+| Tracker hygiene (state files on feature branches) | pending-test | #11083 skill |
+| Pytest stabilization 4-cluster sweep | 3 shipped + 1 trimming | #11044+45+47 |
+| docs/COMPOSE-ARCHITECTURE.md §4.6 prose refresh | pending Phase 2.x of #11053 | future |
 
-## Operator asks (still pending on #11053)
+## Operator asks (still pending)
 
-1. Subagent type: register `assemble` or use `general-purpose`?
-2. Model default: sonnet for all, per-slot override?
-3. AC6 retry count: 0 or 1?
-4. Tier B audit timeout: 60s or 120s?
-5. Sixth artifact `CLAUDE.assemble-log.md`?
+#11053 §9: 5 questions, default-accept available. Or just `go with defaults`.
 
-(Default if no review: I go with PM recommendations — bespoke `assemble` type, sonnet+override, 1 retry, 120s, yes sixth artifact — and file Phase 2.1 to skill.)
-
-## Session ship tally: 39
+## Session ship tally: 41 (+1 since cycle 2145: #11047)
 
 ## Context
 
-healthy (~75%).
+healthy (~80%).
