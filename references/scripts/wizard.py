@@ -731,6 +731,15 @@ def build_config_md(spec):
         lines.append("- (none)")
     lines.append("")
 
+    # --- ## Improvement Scanning ---
+    # #11091 — cool-down field for event-mode idle scan loop. Default 30 min
+    # matches Iteration Interval > Minutes so cool-down semantically equals
+    # "at most one improvement scan per iteration cycle" even in event mode.
+    lines.append("## Improvement Scanning")
+    lines.append("")
+    lines.append("- **Improvement Scan Cool-Down**: 30")
+    lines.append("")
+
     # --- ## Git Branches ---
     lines.append("## Git Branches")
     lines.append("")

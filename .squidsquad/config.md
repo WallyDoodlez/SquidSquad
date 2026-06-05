@@ -61,6 +61,7 @@
 ## Improvement Scanning
 
 - **Enabled**: yes
+- **Improvement Scan Cool-Down**: 30
 
 ## Vault Optimize
 
