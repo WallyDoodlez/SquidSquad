@@ -1,45 +1,42 @@
 # Working State
 
-- **Task**: cycle 2143 ext — #11053 Phase 1 deliverable shipped
-- **Status**: V2-AGENT-ASSEMBLE-DESIGN.md committed; awaiting operator review of §9
+- **Task**: cycle 2144 — quiet; light scan + BRIEFING terminology fix
+- **Status**: pipeline draining; #11053 awaiting operator review
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 0
+- **Quiet cycles**: 1
 
-## Cycle work (this ext-cycle)
+## Cycle work (light)
 
-**#11049 SHIPPED** via PR #11069 — orchestrator migration complete. Counter at 16.
+- Improvement scan found **`docs/COMPOSE-ARCHITECTURE.md` §4.6 substrate prose is stale** (still describes retired `sonnet` model lock, `.assemble-cache/`, model_router routing). Not actionable until #11053 design approved — will land as part of Phase 2.x.
+- Fixed BRIEFING.md terminology drift: "v3 per-slot polish" → "v2 §4.6 substrate" (harness PM's cycle 2143 wording predated my cycle 2137 ext correction).
+- Skill self-cycling on spinoffs #11044, #11045 — both at pending-test, QA's lane. PR #11080 (against #11044) open.
 
-**#11053 Phase 1 deliverable v1 committed**: `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md`. ~10 sections covering substrate, prompt template, opt-in config, output schema, conflict-report integration, failure modes, two-tier audit (AC7), phased rollout, 5 open questions.
-
-Measured real per-slot sizes from freshly-deployed post-#11069 composites; identity is the recommended first opt-in (7-9 lines/role).
-
-**Parallel-PM note**: harness PM ran cycle 2143 a few minutes before this ext-cycle. Their work was the AC3 ruling (which I already did in cycle 2142 ext). They didn't pick up #11053 — I claimed it explicitly in the issue comment.
-
-## Pipeline (cycle 2143 ext)
+## Pipeline
 
 - pending_ship: 0
-- pending_test: 1 (#10855 deferred — PR #10952)
-- in-progress: **#11053 (PM, Phase 1 v1 committed, awaiting operator §9 review)**
-- Approved queue: #10686 (E7), #10690 (gated on E7), 4 TRD PRDs
-- Open PRs: 1 (#10952 deferred)
+- pending_test: 3 (#10855 deferred; #11044 fresh; #11045 fresh — all role:skill QA's lane)
+- in-progress: #11053 (PM, awaiting operator §9 review)
+- Approved queue: #10686 (E7), #10690 (gated), 4 TRD PRDs
+- Open PRs: 2 (#10952 deferred; #11080 fresh for #11044)
 
 ## v2 stabilization work map
 
 | Surface | Status | Owner |
 |---|---|---|
-| 1. References only, no inline | **SHIPPED 2026-06-05** | #11049 closed |
+| 1. References only, no inline | SHIPPED | #11049 closed |
 | 2. Sub-skill code bundling | deferred | #11051 closed |
 | 3. Claude Skills audit | decided against | #11052 + #10781 closed |
-| 4. Agent-spawn assemble | **Phase 1 v1 done**, awaiting operator review | #11053 pm in-progress |
+| 4. Agent-spawn assemble | Phase 1 v1 done, op review | #11053 pm in-progress |
 | Cleanup (API-assemble prune) | shipped | #11050 closed |
-| E6 v2 cutover | shipped 2026-06-04 | #10685 closed |
-| E7 smoke | unblocked, awaiting skill | #10686 skill |
+| E6 v2 cutover | shipped | #10685 closed |
+| E7 smoke | unblocked | #10686 skill |
 | Tracker hygiene (.backlog-cache) | shipped | #11065 closed |
-| Pytest suite stabilization | shipped | #11042 closed |
+| Pytest stabilization | shipped | #11042 closed |
 | L4 corrupt test alignment | shipped | #11066 closed |
-| Runtime sub-skill resolution (lower L2 ceiling) | not started | #9968 future |
+| docs/COMPOSE-ARCHITECTURE.md §4.6 prose refresh | **pending Phase 2.x of #11053** | future |
+| Runtime sub-skill resolution | not started | #9968 future |
 
-## Operator asks (awaiting review on #11053)
+## Operator asks (still pending on #11053)
 
 1. Subagent type: register `assemble` or use `general-purpose`?
 2. Model default: sonnet for all, per-slot override?
@@ -47,15 +44,10 @@ Measured real per-slot sizes from freshly-deployed post-#11069 composites; ident
 4. Tier B audit timeout: 60s or 120s?
 5. Sixth artifact `CLAUDE.assemble-log.md`?
 
-## TRD-alignment PRD queue (post-E6, unblocked)
+(Default if no review: I go with PM recommendations — bespoke `assemble` type, sonnet+override, 1 retry, 120s, yes sixth artifact — and file Phase 2.1 to skill.)
 
-- #10836 INSTALLER-ARCH (HIGH, Direction A pre-locked)
-- #10838 VAULT-ARCH (medium)
-- #10837 HARNESS-ARCH (HIGH) — DS re-audit needed
-- #10839 Cross-TRD rename (medium) — DS re-audit needed
-
-## Session ship tally: 39 (+1 since cycle 2142 ext: #11049 shipped)
+## Session ship tally: 39
 
 ## Context
 
-healthy (~70%).
+healthy (~75%).
