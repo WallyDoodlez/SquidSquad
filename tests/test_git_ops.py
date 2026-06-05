@@ -711,19 +711,28 @@ class TestCommitRoleScoped:
 
     @patch("git_ops.push", return_value=True)
     @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     def test_pm_stages_only_own_files_skips_foreign(
-        self, mock_run, mock_run_list, mock_commit, mock_push, capsys
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_commit, mock_push, capsys,
     ):
         """The exact scenario from the bug report: PM commit + foreign code/tests."""
-        mock_run.return_value = _mock_result(stdout=(
-            " M .squidsquad/pm/working-state.md\n"
-            " M .squidsquad/.backlog-cache\n"
-            " M .squidsquad/skill/CLAUDE.md\n"
-            " M references/scripts/thin_launcher.py\n"
-            " M tests/test_thin_launcher.py\n"
-        ))
+        # #11083: commit_role_scoped now checks current branch first; mock the
+        # branch-show-current call to return the working branch, and the
+        # porcelain status call to return the file list.
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                return _mock_result(stdout="main\n")
+            return _mock_result(stdout=(
+                " M .squidsquad/pm/working-state.md\n"
+                " M .squidsquad/.backlog-cache\n"
+                " M .squidsquad/skill/CLAUDE.md\n"
+                " M references/scripts/thin_launcher.py\n"
+                " M tests/test_thin_launcher.py\n"
+            ))
+        mock_run.side_effect = _run_side
         mock_run_list.return_value = _mock_result()
 
         result = git_ops.commit_role_scoped("pm", "cycle 1494")
@@ -749,17 +758,61 @@ class TestCommitRoleScoped:
 
     @patch("git_ops.push", return_value=True)
     @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_skips_when_not_on_working_branch(
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_commit, mock_push, capsys,
+    ):
+        """#11083: when the current branch is a feature branch (not the
+        configured working branch), commit_role_scoped refuses to stage any
+        files. This prevents PM's cycle commits from landing on a sibling
+        agent's feature branch during a task-begin/task-end checkout race
+        — the root cause of PR #11080's BRIEFING.md merge-spiral.
+        """
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                # Simulate a feature branch checkout (e.g., skill's task-begin)
+                return _mock_result(stdout="squidsquad/skill/11044-pollution\n")
+            return _mock_result(stdout=" M .squidsquad/pm/working-state.md\n")
+        mock_run.side_effect = _run_side
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("pm", "cycle 9999")
+
+        # No commit attempted, no files staged.
+        assert result is False
+        assert mock_commit.call_count == 0
+        assert mock_push.call_count == 0
+        add_calls = [c for c in mock_run_list.call_args_list
+                     if c[0][0][:2] == ["git", "add"]]
+        assert add_calls == []
+
+        err = capsys.readouterr().err
+        assert "not the configured working branch" in err
+        assert "squidsquad/skill/11044-pollution" in err
+        assert "#11083" in err
+
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     def test_dm_can_stage_readme_and_changelog(
-        self, mock_run, mock_run_list, mock_commit, mock_push
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_commit, mock_push,
     ):
-        mock_run.return_value = _mock_result(stdout=(
-            " M README.md\n"
-            " M CHANGELOG.md\n"
-            " M docs/release-notes.md\n"
-            " M .squidsquad/dm/working-state.md\n"
-        ))
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                return _mock_result(stdout="main\n")
+            return _mock_result(stdout=(
+                " M README.md\n"
+                " M CHANGELOG.md\n"
+                " M docs/release-notes.md\n"
+                " M .squidsquad/dm/working-state.md\n"
+            ))
+        mock_run.side_effect = _run_side
         mock_run_list.return_value = _mock_result()
 
         result = git_ops.commit_role_scoped("dm", "delivery cycle")
@@ -774,21 +827,27 @@ class TestCommitRoleScoped:
 
     @patch("git_ops.push", return_value=True)
     @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     def test_dm_stages_skill_md_and_config_md(
-        self, mock_run, mock_run_list, mock_commit, mock_push
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_commit, mock_push,
     ):
         """#9474 regression: DM's cycle commit must include SKILL.md
         (doc-improvement-loop) and .squidsquad/config.md (Shipped Since
         Last Bump counter + feature-flag toggles). Before the fix these
         files were treated as foreign and either rotted in the working
         tree across cycles or got overwritten by sibling commits."""
-        mock_run.return_value = _mock_result(stdout=(
-            " M SKILL.md\n"
-            " M .squidsquad/config.md\n"
-            " M .squidsquad/dm/working-state.md\n"
-        ))
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                return _mock_result(stdout="main\n")
+            return _mock_result(stdout=(
+                " M SKILL.md\n"
+                " M .squidsquad/config.md\n"
+                " M .squidsquad/dm/working-state.md\n"
+            ))
+        mock_run.side_effect = _run_side
         mock_run_list.return_value = _mock_result()
 
         result = git_ops.commit_role_scoped("dm", "dm: ship #9474 + counter")
@@ -816,16 +875,22 @@ class TestCommitRoleScoped:
 
     @patch("git_ops.commit", return_value=True)
     @patch("git_ops.push", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     def test_qa_cannot_stage_config_md(
-        self, mock_run, mock_run_list, mock_push, mock_commit, capsys
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_push, mock_commit, capsys,
     ):
         """QA must not pick up PM-domain config.md changes."""
-        mock_run.return_value = _mock_result(stdout=(
-            " M .squidsquad/qa/working-state.md\n"
-            " M .squidsquad/config.md\n"
-        ))
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                return _mock_result(stdout="main\n")
+            return _mock_result(stdout=(
+                " M .squidsquad/qa/working-state.md\n"
+                " M .squidsquad/config.md\n"
+            ))
+        mock_run.side_effect = _run_side
         mock_run_list.return_value = _mock_result()
 
         git_ops.commit_role_scoped("qa", "qa cycle")
@@ -866,15 +931,21 @@ class TestCommitRoleScoped:
 
     @patch("git_ops.push", return_value=True)
     @patch("git_ops.commit", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
     @patch("git_ops._run_list")
     @patch("git_ops._run")
     def test_warning_truncates_long_foreign_list(
-        self, mock_run, mock_run_list, mock_commit, mock_push, capsys
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_commit, mock_push, capsys,
     ):
         # 25 foreign files; warning should mention "... and 5 more"
         lines = [" M .squidsquad/pm/own.md"]
         lines += [f" M references/scripts/foreign_{i}.py" for i in range(25)]
-        mock_run.return_value = _mock_result(stdout="\n".join(lines) + "\n")
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                return _mock_result(stdout="main\n")
+            return _mock_result(stdout="\n".join(lines) + "\n")
+        mock_run.side_effect = _run_side
         mock_run_list.return_value = _mock_result()
 
         git_ops.commit_role_scoped("pm", "msg")
