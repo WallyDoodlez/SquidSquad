@@ -4,9 +4,30 @@ PM Phase 1 for [#11000](https://github.com/WallyDoodlez/SquidSquad/issues/11000)
 
 Companion: [CONTEXT-11000.md](CONTEXT-11000.md) (verbatim issue body).
 
-## TL;DR
+## TL;DR (corrected after empirical validation)
 
-**The "65% sub-skill bloat" framing is most likely a stale-file artifact, not a current-pipeline behavior.** The four cutover bugs are real and block regeneration. Once they're fixed and a fresh `deploy-all` runs, the inlining "problem" likely disappears on its own — the v2 pipeline was designed (and previously shown — PR #10691 measured 24.9% avg) to emit thin composites. The structural Findings A–C in the issue body need to be re-measured against a successfully-regenerated CLAUDE.md before any architectural decision lands.
+**The "65% sub-skill bloat" framing is REAL and reproducible on freshly-regenerated post-cutover composites. The initial Phase 1 hypothesis below — that D2's filter would produce thin output once the 4 cutover bugs were fixed — was WRONG.** Empirical evidence from the cutover-unblock cycle (commit `8da22e25` / merged `07696bc5`):
+
+| alias | linked.md lines | inlined `<!-- sub-skill: -->` markers |
+|---|---|---|
+| pm    | 2227 | 28 |
+| dm    | ~1560 | similar |
+| qa    | ~1780 | similar |
+| skill | ~1960 | similar |
+
+PM's 2227 lines exactly matches the operator's debug-session measurement in the issue body. D2's filter IS working at the link-stage walk path — `emit_v2_linked` alone for pm produces 741 lines with zero markers. But `compose.py:1184` then calls `_resolve_includes_v2(body)` which expands v1-era `{{include: <path>}}` directives in the orchestrator files (35 in `references/roles/pm/instructions.md`) into full inlined sub-skill bodies, BYPASSING D2's filter entirely. D2 only addressed the link-stage walk path; the include-expansion path is the unfixed surface.
+
+**The fix is content migration in orchestrator files, not code in the compose pipeline.** See #11049 (Phase 2.1).
+
+---
+
+## Original Phase 1 hypothesis (preserved for history; superseded by empirical evidence above)
+
+> The "65% sub-skill bloat" framing is most likely a stale-file artifact, not a current-pipeline behavior. The four cutover bugs are real and block regeneration. Once they're fixed and a fresh `deploy-all` runs, the inlining "problem" likely disappears on its own — the v2 pipeline was designed (and previously shown — PR #10691 measured 24.9% avg) to emit thin composites. The structural Findings A–C in the issue body need to be re-measured against a successfully-regenerated CLAUDE.md before any architectural decision lands.
+
+The hypothesis was disproved when I patched the 4 bugs (via `_VERBATIM_SLOTS` expansion in `8da22e25`) and ran `deploy-all`. The composites came out at 1500-2200 lines, not the predicted ~500-700. Tracing the discrepancy to `_resolve_includes_v2` was the corrective insight.
+
+---
 
 This research re-orders the operator's recommended Phase 1 scope: **Q1 (cutover bugs) is the unblock; Q2–Q5 (structural findings) should re-measure first, decide second**.
 
@@ -143,3 +164,59 @@ Role: skill
 Priority: high
 ACs: AC1-AC4 above (Anthropic provider manifest; claude-branch route() shell-out; soul splitter regex; preservation verifier comment-strip).
 Blocks: #11000 Phase 2 measurement (cannot regenerate without these fixes).
+
+---
+
+## Phase 1 outcome + Phase 2 entry (2026-06-05)
+
+Cutover unblock did NOT follow the originally-proposed 4-bug fix path. Instead, commit `8da22e25` (operator-prioritized session, PM as dev) made two surgical changes to `atomic_emit.py`:
+
+1. `_VERBATIM_SLOTS` expanded to cover all six canonical slots — retired the LLM assemble pass entirely. Bugs 1, 2, 4 mooted (no LLM dispatch occurs).
+2. `_split_linked_into_slots` regex anchored on canonical slot display names only — Bug 3 fixed.
+
+`compose.py deploy-all` succeeds from a clean shell:
+- dm: 1568 lines
+- pm: 2196 lines
+- qa: 1789 lines
+- skill: 1964 lines
+
+These are the **first successful post-cutover regenerations** of any role's CLAUDE.md. They match the operator's debug-session measurements within +20 lines (drift from intervening content changes).
+
+### TL;DR correction (already applied above)
+
+The 65% bloat IS real. The original Phase 1 hypothesis that D2's filter would deliver thin composites was wrong. Tracing the discrepancy revealed the actual cause: `compose.py:1184` calls `_resolve_includes_v2(body)` which expands v1-era `{{include: <path>}}` directives in orchestrator files (35 in `references/roles/pm/instructions.md`) into full inlined sub-skill bodies. D2's filter only addressed the link-stage walk path; the include-expansion path was the unfixed surface.
+
+### Phase 2 work filed
+
+- **#11049** (high priority, role:skill, approved): migrate `{{include:}}` → `→ run sub-skill:` in 4 orchestrator instructions.md + L3 domain variants. ACs target the 22-29% size band PR #10691 promised (pm ≤700, dm ≤800, qa ≤700, skill ≤700). **Resolves Finding A.**
+- **#11050** (medium priority, role:skill, approved): prune dead assemble pipeline modules (`assemble_pass`, `assemble_verifier`, `conflict_detector`, `conflict_resolver`, `assemble_adapter`) + the `task_type == "assemble"` branch in `model_router.py`. **Resolves Q5.**
+
+Both can run in parallel (no shared file surface).
+
+### Findings resolved this session
+
+- **Finding A** (sub-skill double-include): REAL. Fix in flight via #11049. Was misdiagnosed in Phase 1 as a stale-file artifact; now correctly traced to `_resolve_includes_v2`.
+- **Finding B** (procedural sub-skills as runbooks): independent merit, separate PRD if/when prioritized. No change.
+- **Finding C** (instructions slot too large for reliable LLM rewrite): EFFECTIVELY RESOLVED by Q5's answer — assemble pass retired, so slot size no longer matters for stochastic compliance.
+- **Q5** (assemble pass scope): DECIDED — retired this session. All 6 slots verbatim. Re-enable per-slot by removing from `_VERBATIM_SLOTS` if a future story scopes LLM polish to a small slot like `identity`.
+
+### What changed architecturally vs. stayed implementation
+
+| Decision | Type | Status |
+|---|---|---|
+| Retire LLM assemble pass | **Arch change** | Shipped in `8da22e25` (verbatim path). Cleanup in #11050. |
+| Migrate `{{include:}}` to `→ run sub-skill:` | Implementation / content migration | Filed as #11049, in-progress with skill |
+| Six-slot composite, link-stage walk, D2 filter, catalog gate, deterministic post-link passes | Unchanged — sound as designed | Stays |
+
+### #11000 closes when
+
+- #11049 lands → I re-measure composites against AC3 size targets
+- If sizes hit the 22-29% band, Finding A is closed empirically → #11000 transitions planning → in-progress → shipped (or closed as Phase 1+2 delivered)
+- If sizes miss the band, deepen Phase 2 with skill to find the remaining inlining path
+
+### Open questions resurfaced
+
+- D-Q1 (was deploy-all ever successful?): answered indirectly — apparently no prior post-cutover success. Operator's debug session with hand-patches was the closest.
+- D-Q2 (Anthropic provider deliberate or oversight?): de facto resolved — provider not needed post-#11050 (assemble retired).
+- D-Q3: see partial answer above (one qa regen via v1 deploy_role).
+- D-Q4 (audit cycle 2121 env): not investigated further; low priority now that the cutover works without env tricks.

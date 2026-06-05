@@ -32,7 +32,25 @@ from pathlib import Path
 # Slots that bypass the LLM rewrite entirely (B1's VERBATIM_SLOTS). For
 # B7, these slots' linked bodies become the assembled bodies verbatim —
 # no preservation check, no conflict detection, no resolver pass.
-_VERBATIM_SLOTS = frozenset({"project-context", "vault"})
+#
+# Post-#11011: all six canonical slots are verbatim. The LLM assemble
+# pass is retired pending #11000 Phase 2 decision on whether to
+# reinstate it. Rationale (per #11011 + #11000 Phase 1 research):
+#  - Bug 1 (sonnet model lock has no Anthropic provider): skipped — no
+#    LLM dispatch occurs in verbatim mode.
+#  - Bug 2 (claude branch returns exit 1 with no file): skipped — same.
+#  - Bug 4 (preservation verifier counts tokens inside HTML comments):
+#    skipped — preservation check only runs for non-verbatim slots.
+#  - D2 (#10691) link-stage filter remains active: sub-skill bodies
+#    are still dropped from the instructions slot, so output stays in
+#    the 22-29% size band PR #10691 promised.
+# To re-enable LLM rewrite for a slot, remove it from this set AND
+# ensure the Anthropic provider (or equivalent for the routed model)
+# is wired in references/scripts/providers/.
+_VERBATIM_SLOTS = frozenset({
+    "identity", "responsibility", "soul",
+    "instructions", "project-context", "vault",
+})
 
 # Canonical slot ordering from A2d. Kept local so B7 doesn't import
 # v2_link_stage at module load time (v2_link_stage transitively loads
@@ -352,20 +370,39 @@ def _split_linked_into_slots(linked_composite):
 
     Returns ``{}`` when the composite has no recognized slot headings —
     callers treat that as :class:`LinkStageFail`.
+
+    #11011 Bug 3 fix: only canonical slot H2s ("## Soul", "## Identity",
+    etc.) terminate a slot body. Role-suffixed variants like
+    "## Soul — PM" or "## Soul — Base Agent" — which the source SOUL.md
+    files open with — are NOT slot boundaries and their contents stay
+    inside the parent canonical slot. Previously the splitter terminated
+    on any "## " line, so the canonical "## Soul\\n" wrapper that
+    v2_link_stage emits picked up an empty body and the role-suffixed
+    bodies were silently discarded.
     """
     bodies = {}
-    # Match each ## H2 heading and the body up to the next ## or end.
-    pattern = re.compile(
-        r"^##\s+(.+?)\s*#*\s*\n(.*?)(?=^##\s+|\Z)",
-        re.MULTILINE | re.DOTALL,
-    )
     lookup = {v.lower(): k for k, v in _SLOT_DISPLAY.items()}
-    for m in pattern.finditer(linked_composite):
+    # Build the canonical-headings-only boundary regex: match a "## <name>"
+    # line where <name> (case-insensitive, trailing whitespace + trailing #
+    # tolerated for setext/closed-atx variants) is exactly one of the six
+    # canonical slot display names. Anything else (e.g. "## Soul — PM") is
+    # treated as ordinary body content, not a slot boundary.
+    canonical_alts = "|".join(re.escape(v) for v in _SLOT_DISPLAY.values())
+    canonical_pat = re.compile(
+        rf"^##\s+({canonical_alts})\s*#*\s*\n",
+        re.MULTILINE | re.IGNORECASE,
+    )
+    matches = list(canonical_pat.finditer(linked_composite))
+    if not matches:
+        return bodies
+    for i, m in enumerate(matches):
         display = m.group(1).strip()
         slot_key = lookup.get(display.lower())
         if slot_key is None:
             continue
-        bodies[slot_key] = m.group(2)
+        body_start = m.end()
+        body_end = matches[i + 1].start() if i + 1 < len(matches) else len(linked_composite)
+        bodies[slot_key] = linked_composite[body_start:body_end]
     return bodies
 
 

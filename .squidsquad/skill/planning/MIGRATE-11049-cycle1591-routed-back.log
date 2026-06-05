@@ -1,0 +1,187 @@
+#11049 migration log
+137 directives processed across 24 files
+
+[FILE] references/roles/dm/android/instructions.md
+  references/roles/dm/android/instructions.md: roles/dm/android/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/dm/fullstack/instructions.md
+  references/roles/dm/fullstack/instructions.md: roles/dm/fullstack/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/dm/instructions.md
+  references/roles/dm/instructions.md: common/agent-boundaries -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/dm/instructions.md: roles/dm/responsibility -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/dm/instructions.md: common/boot-bootstrap -> → run sub-skill: boot-bootstrap
+  references/roles/dm/instructions.md: common/capability-check -> → run sub-skill: capability-check
+  references/roles/dm/instructions.md: roles/dm/ralph-loop-overview -> → run sub-skill: roles/dm/ralph-loop-overview
+  references/roles/dm/instructions.md: common/cycle-runner -> → run sub-skill: cycle-runner
+  references/roles/dm/instructions.md: common-events/event-driven-workflow -> → run sub-skill: event-driven-workflow
+  references/roles/dm/instructions.md: common-events/l1-base -> → run sub-skill: l1-base
+  references/roles/dm/instructions.md: common-events/cursor-management -> → run sub-skill: cursor-management
+  references/roles/dm/instructions.md: common-events/forge-read-pattern -> → run sub-skill: forge-read-pattern
+  references/roles/dm/instructions.md: common-events/idle-cooldown-loop -> → run sub-skill: idle-cooldown-loop
+  references/roles/dm/instructions.md: common-events/comment-handling -> → run sub-skill: comment-handling
+  references/roles/dm/instructions.md: common/context-pressure -> → run sub-skill: context-pressure
+  references/roles/dm/instructions.md: roles/dm/issue-triage -> → run sub-skill: issue-triage
+  references/roles/dm/instructions.md: roles/dm/delivery-packaging -> → run sub-skill: delivery-packaging
+  references/roles/dm/instructions.md: roles/dm/events/pr-merge-wait -> → run sub-skill: roles/dm/events/pr-merge-wait
+  references/roles/dm/instructions.md: roles/dm/version-bumps -> → run sub-skill: version-bumps
+  references/roles/dm/instructions.md: roles/dm/doc-improvement-loop -> → run sub-skill: doc-improvement-loop
+  references/roles/dm/instructions.md: common/vault-remember -> → run sub-skill: vault-remember
+  references/roles/dm/instructions.md: common/vault-optimize -> → run sub-skill: vault-optimize
+  references/roles/dm/instructions.md: common/self-restart -> → run sub-skill: self-restart
+  references/roles/dm/instructions.md: common/agent-lifecycle -> → run sub-skill: agent-lifecycle
+  references/roles/dm/instructions.md: roles/dm/discussion-protocol -> → run sub-skill: roles/dm/discussion-protocol
+  references/roles/dm/instructions.md: roles/dm/issue-filing -> → run sub-skill: roles/dm/issue-filing
+  references/roles/dm/instructions.md: common/vault-protocol -> → run sub-skill: vault-protocol
+  references/roles/dm/instructions.md: roles/dm/file-conventions -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/dm/instructions.md: roles/dm/status-line -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/dm/instructions.md: roles/dm/prohibitions -> DROPPED (retired, no catalog entry; queued for #10360)
+
+[FILE] references/roles/dm/ios/instructions.md
+  references/roles/dm/ios/instructions.md: roles/dm/ios/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/dm/skill/instructions.md
+  references/roles/dm/skill/instructions.md: roles/dm/skill/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/dm/web/instructions.md
+  references/roles/dm/web/instructions.md: roles/dm/web/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/pm/android/instructions.md
+  references/roles/pm/android/instructions.md: roles/pm/android/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/pm/fullstack/instructions.md
+  references/roles/pm/fullstack/instructions.md: roles/pm/fullstack/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/pm/instructions.md
+  references/roles/pm/instructions.md: common/agent-boundaries -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/pm/instructions.md: roles/pm/responsibility -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/pm/instructions.md: common/boot-bootstrap -> → run sub-skill: boot-bootstrap
+  references/roles/pm/instructions.md: roles/pm/ralph-loop-overview -> → run sub-skill: roles/pm/ralph-loop-overview
+  references/roles/pm/instructions.md: common/cycle-runner -> → run sub-skill: cycle-runner
+  references/roles/pm/instructions.md: common-events/event-driven-workflow -> → run sub-skill: event-driven-workflow
+  references/roles/pm/instructions.md: common-events/l1-base -> → run sub-skill: l1-base
+  references/roles/pm/instructions.md: common-events/cursor-management -> → run sub-skill: cursor-management
+  references/roles/pm/instructions.md: common-events/forge-read-pattern -> → run sub-skill: forge-read-pattern
+  references/roles/pm/instructions.md: common-events/idle-cooldown-loop -> → run sub-skill: idle-cooldown-loop
+  references/roles/pm/instructions.md: common-events/comment-handling -> → run sub-skill: comment-handling
+  references/roles/pm/instructions.md: common/context-pressure -> → run sub-skill: context-pressure
+  references/roles/pm/instructions.md: roles/pm/checkin -> → run sub-skill: checkin
+  references/roles/pm/instructions.md: roles/pm/testing-and-verification -> → run sub-skill: testing-and-verification
+  references/roles/pm/instructions.md: roles/pm/delivery -> → run sub-skill: delivery
+  references/roles/pm/instructions.md: roles/pm/pipeline-sentinel -> → run sub-skill: pipeline-sentinel
+  references/roles/pm/instructions.md: roles/pm/own-domain-autofix -> → run sub-skill: own-domain-autofix
+  references/roles/pm/instructions.md: roles/pm/health-check -> → run sub-skill: health-check
+  references/roles/pm/instructions.md: roles/pm/github-issues -> → run sub-skill: github-issues
+  references/roles/pm/instructions.md: common/boot-remote-agents -> → run sub-skill: boot-remote-agents
+  references/roles/pm/instructions.md: roles/pm/soul-shepherd -> → run sub-skill: soul-shepherd
+  references/roles/pm/instructions.md: roles/pm/improvement-scan -> → run sub-skill: roles/pm/improvement-scan
+  references/roles/pm/instructions.md: common/vault-remember -> → run sub-skill: vault-remember
+  references/roles/pm/instructions.md: common/vault-optimize -> → run sub-skill: vault-optimize
+  references/roles/pm/instructions.md: roles/pm/vault-synthesis -> → run sub-skill: vault-synthesis
+  references/roles/pm/instructions.md: common/self-restart -> → run sub-skill: self-restart
+  references/roles/pm/instructions.md: common/agent-lifecycle -> → run sub-skill: agent-lifecycle
+  references/roles/pm/instructions.md: roles/pm/issue-filing -> → run sub-skill: roles/pm/issue-filing
+  references/roles/pm/instructions.md: roles/pm/task-intake -> → run sub-skill: task-intake
+  references/roles/pm/instructions.md: roles/pm/task-approval -> → run sub-skill: task-approval
+  references/roles/pm/instructions.md: roles/pm/discussion-protocol -> → run sub-skill: roles/pm/discussion-protocol
+  references/roles/pm/instructions.md: common/vault-protocol -> → run sub-skill: vault-protocol
+  references/roles/pm/instructions.md: roles/pm/file-conventions -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/pm/instructions.md: roles/pm/status-line -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/pm/instructions.md: roles/pm/prohibitions -> DROPPED (retired, no catalog entry; queued for #10360)
+
+[FILE] references/roles/pm/ios/instructions.md
+  references/roles/pm/ios/instructions.md: roles/pm/ios/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/pm/skill/instructions.md
+  references/roles/pm/skill/instructions.md: roles/pm/skill/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/pm/web/instructions.md
+  references/roles/pm/web/instructions.md: roles/pm/web/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/verifier/android/instructions.md
+  references/roles/verifier/android/instructions.md: roles/verifier/android/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/verifier/fullstack/instructions.md
+  references/roles/verifier/fullstack/instructions.md: roles/verifier/fullstack/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/verifier/instructions.md
+  references/roles/verifier/instructions.md: common/agent-boundaries -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/verifier/instructions.md: roles/verifier/responsibility -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/verifier/instructions.md: common/boot-bootstrap -> → run sub-skill: boot-bootstrap
+  references/roles/verifier/instructions.md: roles/verifier/ralph-loop-overview -> → run sub-skill: roles/verifier/ralph-loop-overview
+  references/roles/verifier/instructions.md: common/cycle-runner -> → run sub-skill: cycle-runner
+  references/roles/verifier/instructions.md: common-events/event-driven-workflow -> → run sub-skill: event-driven-workflow
+  references/roles/verifier/instructions.md: common-events/l1-base -> → run sub-skill: l1-base
+  references/roles/verifier/instructions.md: common-events/cursor-management -> → run sub-skill: cursor-management
+  references/roles/verifier/instructions.md: common-events/forge-read-pattern -> → run sub-skill: forge-read-pattern
+  references/roles/verifier/instructions.md: common-events/idle-cooldown-loop -> → run sub-skill: idle-cooldown-loop
+  references/roles/verifier/instructions.md: common-events/comment-handling -> → run sub-skill: comment-handling
+  references/roles/verifier/instructions.md: common/context-pressure -> → run sub-skill: context-pressure
+  references/roles/verifier/instructions.md: roles/verifier/verification -> → run sub-skill: verification
+  references/roles/verifier/instructions.md: common/improvement-scan -> → run sub-skill: improvement-scan
+  references/roles/verifier/instructions.md: common/vault-remember -> → run sub-skill: vault-remember
+  references/roles/verifier/instructions.md: common/vault-optimize -> → run sub-skill: vault-optimize
+  references/roles/verifier/instructions.md: common/self-restart -> → run sub-skill: self-restart
+  references/roles/verifier/instructions.md: common/agent-lifecycle -> → run sub-skill: agent-lifecycle
+  references/roles/verifier/instructions.md: roles/verifier/issue-filing -> → run sub-skill: roles/verifier/issue-filing
+  references/roles/verifier/instructions.md: roles/verifier/discussion-protocol -> → run sub-skill: roles/verifier/discussion-protocol
+  references/roles/verifier/instructions.md: common/vault-protocol -> → run sub-skill: vault-protocol
+  references/roles/verifier/instructions.md: roles/verifier/file-conventions -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/verifier/instructions.md: roles/verifier/status-line -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/verifier/instructions.md: roles/verifier/prohibitions -> DROPPED (retired, no catalog entry; queued for #10360)
+
+[FILE] references/roles/verifier/ios/instructions.md
+  references/roles/verifier/ios/instructions.md: roles/verifier/ios/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/verifier/skill/instructions.md
+  references/roles/verifier/skill/instructions.md: roles/verifier/skill/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/verifier/web/instructions.md
+  references/roles/verifier/web/instructions.md: roles/verifier/web/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/worker/android/instructions.md
+  references/roles/worker/android/instructions.md: roles/worker/android/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/worker/fullstack/instructions.md
+  references/roles/worker/fullstack/instructions.md: roles/worker/fullstack/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/worker/instructions.md
+  references/roles/worker/instructions.md: common/agent-boundaries -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/worker/instructions.md: roles/worker/responsibility -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/worker/instructions.md: common/boot-bootstrap -> → run sub-skill: boot-bootstrap
+  references/roles/worker/instructions.md: roles/worker/ralph-loop-overview -> → run sub-skill: roles/worker/ralph-loop-overview
+  references/roles/worker/instructions.md: common/cycle-runner -> → run sub-skill: cycle-runner
+  references/roles/worker/instructions.md: common-events/event-driven-workflow -> → run sub-skill: event-driven-workflow
+  references/roles/worker/instructions.md: common-events/l1-base -> → run sub-skill: l1-base
+  references/roles/worker/instructions.md: common-events/cursor-management -> → run sub-skill: cursor-management
+  references/roles/worker/instructions.md: common-events/forge-read-pattern -> → run sub-skill: forge-read-pattern
+  references/roles/worker/instructions.md: common-events/idle-cooldown-loop -> → run sub-skill: idle-cooldown-loop
+  references/roles/worker/instructions.md: common-events/comment-handling -> → run sub-skill: comment-handling
+  references/roles/worker/instructions.md: common/context-pressure -> → run sub-skill: context-pressure
+  references/roles/worker/instructions.md: common/resume-working-state -> → run sub-skill: resume-working-state
+  references/roles/worker/instructions.md: common/interval-sync -> → run sub-skill: interval-sync
+  references/roles/worker/instructions.md: roles/worker/triage-issues -> → run sub-skill: triage-issues
+  references/roles/worker/instructions.md: roles/worker/implement-tasks -> → run sub-skill: implement-tasks
+  references/roles/worker/instructions.md: common/pickup-comment-fidelity -> → run sub-skill: pickup-comment-fidelity
+  references/roles/worker/instructions.md: common/improvement-scan -> → run sub-skill: improvement-scan
+  references/roles/worker/instructions.md: common/vault-remember -> → run sub-skill: vault-remember
+  references/roles/worker/instructions.md: common/vault-optimize -> → run sub-skill: vault-optimize
+  references/roles/worker/instructions.md: common/git-commit -> → run sub-skill: git-commit
+  references/roles/worker/instructions.md: common/self-restart -> → run sub-skill: self-restart
+  references/roles/worker/instructions.md: common/agent-lifecycle -> → run sub-skill: agent-lifecycle
+  references/roles/worker/instructions.md: common/discussion-protocol -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/worker/instructions.md: common/issue-filing -> → run sub-skill: issue-filing
+  references/roles/worker/instructions.md: common/working-state -> → run sub-skill: working-state
+  references/roles/worker/instructions.md: common/vault-protocol -> → run sub-skill: vault-protocol
+  references/roles/worker/instructions.md: common/file-conventions -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/worker/instructions.md: common/status-line -> DROPPED (retired, no catalog entry; queued for #10360)
+  references/roles/worker/instructions.md: common/prohibitions -> DROPPED (retired, no catalog entry; queued for #10360)
+
+[FILE] references/roles/worker/ios/instructions.md
+  references/roles/worker/ios/instructions.md: roles/worker/ios/domain-context -> INLINED (10 lines)
+
+[FILE] references/roles/worker/skill/instructions.md
+  references/roles/worker/skill/instructions.md: roles/worker/skill/domain-context -> INLINED (37 lines)
+
+[FILE] references/roles/worker/web/instructions.md
+  references/roles/worker/web/instructions.md: roles/worker/web/domain-context -> INLINED (10 lines)

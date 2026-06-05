@@ -1,33 +1,42 @@
 # Working State
 
-- **Task**: #11000 Phase 2 gated on #11011 ship (skill-owned)
-- **Status**: quiet cycle; awaiting skill pickup of #11011
+- **Task**: cycle 2137 — #11052 self-correction (DRY claim retracted)
+- **Status**: in-progress on #11052; awaiting operator review of 4 open questions
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 1
+- **Quiet cycles**: 0
 
-## Blocker note (informational, not actionable by PM)
+## Cycle work (active, light)
 
-Skill is dead in this clone (`.squidsquad/skill/current-state` mtime May 26; `iter-437.md` is the latest local iter, from Apr 28). Skill's real clone is `../SquidSquad-2` (per `.squidsquad/.local-config`). `.squidsquad/.harness-state.json` only contains test artifacts (`test-bootup`, `test-stop-req`) — no real agent registrations. This is the same harness-state inconsistency noted in #10855's QA comment, now in worse shape (skill entry is also gone). #11011 sits in skill's approved queue until the operator boots skill OR the harness-state is repaired.
+Self-correction on #11052 Phase 1 deliverable: the "24 role-norm duplicate" claim was wrong. Those 24 files are L2 role-layers (ordinal 20, `roles:` filter) intentionally adding role-tailored rules on top of common L1 norms. Same H2 heading is a cosmetic verbatim-default symptom that #11053 agent-spawn assemble resolves.
 
-PR #10952 (the #10855 fix) is the upstream solution. Until #10952 merges + operator boots, skill cannot pick up #11011, and #11000 Phase 2 cannot proceed.
+Updated CLAUDE-SKILL-CANDIDATES.md inline (retraction + corrected §Always-on norms description). Comment on #11052 explaining the correction. No separate cleanup task filed.
 
-## Pipeline
+Good catch on my part: a wrong-task to skill would have lost role-specific content.
 
-- pending_ship: 0
-- pending_test: 1 (#10855 human-blocked on harness-state repair)
-- pending_test_tasks: 0
-- Approved queue: 15 (#11011 high priority + 14 others)
-  - Skill queue (3): #11011, #10690, #10686
-- Open PRs: 1 (#10952 for #10855, human-blocked)
-- **#11000 status: planning** (gated on #11011)
-- **#11011 status: approved** (skill queue, awaiting boot)
+## Pipeline (unchanged since cycle 2136)
 
-## Phase 1 outstanding (deferred)
+- pending_ship: 1 (#11011 — DM closes)
+- pending_test: 1 (#10855 deferred)
+- in-progress: #11049 (skill — re-pickup with Path A spec), #11052 (pm — awaiting operator)
+- Approved queue: #11050, #11053, skill spinoffs #11044-47
+- Open PRs: 2 (#10952 deferred; #11048 draft)
 
-D-Q1-D-Q4 in RESEARCH-11000.md §Open. D-Q3 partially answered (no post-cutover composite exists). D-Q4: audit cycle 2121 ran `deploy_alias_v2` through "full resolver chain" per `.squidsquad-state/pm/iterations/iter-2121.md`, but env vars (override / API keys) not recorded in iter log. Defer to skill at #11011 pickup.
+## v3 work map (unchanged)
 
-## Session ship tally: 32
+| Principle | Status | Owner |
+|---|---|---|
+| 1. References only, no inline | re-spec'd Path A | #11049 skill |
+| 2. Sub-skill code bundling | deferred (#11051 closed) | — |
+| 3. Claude Skills audit | Phase 1 delivered + self-corrected | #11052 pm |
+| 4. Agent-spawn assemble | approved, gated on #11049 | #11053 pm |
+| Cleanup | approved | #11050 skill |
+
+## Operator asks (still pending)
+
+For #11052: 4 questions on Tier 3 disposition + .claude/skills/ location + multi-agent invocation + #10781 close.
+
+## Session ship tally: 33
 
 ## Context
 
-healthy.
+healthy (~38%).
