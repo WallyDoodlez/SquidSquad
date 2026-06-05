@@ -1,5 +1,12 @@
 # QA Improvement Scan History
 
+## Scan — 2026-06-04 21:24
+
+- **Files scanned**: full `tests/` collection (excl. `tests/integration`); sampled tracebacks from `test_installer_wiring`, `test_feat_2495_upgrade_rewrite`, `test_feat_3663_pr_conflict_check`, `test_feat_6126_harness_merge`; cross-checked `references/installer-files.txt` against on-disk paths; git log on the orphan prune commit 811a4060
+- **Findings**: #11042 — pytest suite red (installer-files.txt stale by 40+ paths, 4+ test files reference removed sub-skills, suite cannot finish within 10 min, and live `.squidsquad/config.md` is mutated by tests)
+- **Auto-fixed**: restored `.squidsquad/config.md` to HEAD (Version `0.43.0`) — file was polluted to `0.29.0` mid-scan by an unidentified test runner
+- **Items rejected by human**: none
+
 ## Scan — 2026-04-13 15:05
 
 - **Files scanned**: references/scripts/health_check.py, references/scripts/cycle.py, references/scripts/vault_check.py, references/scripts/vault_remember.py, references/scripts/diagnostics.py
