@@ -1,21 +1,19 @@
 # Working State
 
-- **Task**: cycle 2152 — quiet observation
-- **Status**: skill self-cycled #11087 (PR #11088); 3 operator asks still pending
+- **Task**: cycle 2153 — quiet observation
+- **Status**: skill R2 on #11087; harness PM refreshed BRIEFING; 3 operator asks still pending
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 7
+- **Quiet cycles**: 8
 
 ## Cycle work
 
-None. Skill self-cycled their own #11087 (low-severity orphan file cleanup, 38 files deleted, byte-identical composites verified) to PR #11088 pending-test. QA's lane.
+None. Skill cycled R2 on #11087 (QA caught installer-files.txt + includes.yml regressions; skill resolved both, back at pending-test). Harness PM refreshed BRIEFING.md post-cycle-2152 ships.
 
-## Pipeline
+## Pipeline (unchanged)
 
-- pending_ship: 0
-- pending_test: 2 (#10855 deferred; #11087 fresh on PR #11088)
-- in-progress: #11053 (PM, awaiting operator §9 — 7 cycles)
-- Approved queue: #10686 (E7), #10690 (gated), 4 TRD PRDs
-- Open PRs: 1 (#10952 deferred)
+- pending_test: 2 (#10855 deferred; #11087 R2 fresh)
+- in-progress: #11053 (PM, awaiting §9 — 8 cycles)
+- Open PRs: 1 (#10952 deferred; #11088 in QA)
 
 ## Operator asks (3 outstanding)
 
@@ -27,4 +25,4 @@ None. Skill self-cycled their own #11087 (low-severity orphan file cleanup, 38 f
 
 ## Context
 
-healthy (~94%).
+healthy (~95%).
