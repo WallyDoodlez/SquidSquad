@@ -477,20 +477,7 @@ class TestGitOpsNoEmit:
                 assert False, f"Line {i+1} still has _emit('pr-merge'): {stripped}"
 
 
-class TestEventReactionsTable:
-    """Verify event-reactions.md includes new event types."""
-
-    def test_pr_merged_in_table(self):
-        path = REPO_ROOT / "references" / "sub-skills" / "common" / "event-reactions.md"
-        content = path.read_text(encoding="utf-8")
-        assert "pr-merged" in content
-
-    def test_compose_completed_in_table(self):
-        path = REPO_ROOT / "references" / "sub-skills" / "common" / "event-reactions.md"
-        content = path.read_text(encoding="utf-8")
-        assert "compose-completed" in content
-
-    def test_request_merge_in_table(self):
-        path = REPO_ROOT / "references" / "sub-skills" / "common" / "event-reactions.md"
-        content = path.read_text(encoding="utf-8")
-        assert "request-merge" in content
+# TestEventReactionsTable removed 2026-06-04 (#11042): the file it asserted
+# against — references/sub-skills/common/event-reactions.md — was intentionally
+# pruned in 811a4060 (2026-05-27) as "creative-phase guidance never wired".
+# The table-presence assertions were doc-only, not behaviour-bearing.

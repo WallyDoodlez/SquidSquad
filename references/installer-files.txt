@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 258 files
+# Total: 219 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -129,18 +129,6 @@ references/roles/verifier/web/includes.yml
 references/roles/verifier/web/instructions.md
 references/roles/verifier/web/SOUL.md
 references/roles/SOUL.md
-references/sub-skills/capabilities/figma/manifest.yaml
-references/sub-skills/capabilities/figma/setup.md
-references/sub-skills/capabilities/figma/sub-skill.md
-references/sub-skills/capabilities/google_stitch/manifest.yaml
-references/sub-skills/capabilities/google_stitch/setup.md
-references/sub-skills/capabilities/google_stitch/sub-skill.md
-references/sub-skills/capabilities/local_delivery/manifest.yaml
-references/sub-skills/capabilities/local_delivery/setup.md
-references/sub-skills/capabilities/local_delivery/sub-skill.md
-references/sub-skills/capabilities/local_html/manifest.yaml
-references/sub-skills/capabilities/local_html/setup.md
-references/sub-skills/capabilities/local_html/sub-skill.md
 references/sub-skills/common/agent-lifecycle.md
 references/sub-skills/common/boot-remote-agents.md
 references/sub-skills/common/capability-check.md
@@ -155,10 +143,8 @@ references/sub-skills/common/improvement-scan-slim.md
 references/sub-skills/common/improvement-scan.md
 references/sub-skills/common/interval-sync.md
 references/sub-skills/common/issue-filing.md
-references/sub-skills/common/iteration-log.md
 references/sub-skills/common/mention-protocol.md
 references/sub-skills/common/prohibitions.md
-references/sub-skills/common/pull-latest.md
 references/sub-skills/common/resume-working-state.md
 references/sub-skills/common/self-restart.md
 references/sub-skills/common/status-line.md
@@ -181,11 +167,9 @@ references/sub-skills/roles/dm/discussion-protocol.md
 references/sub-skills/roles/dm/doc-improvement-loop.md
 references/sub-skills/roles/dm/file-conventions.md
 references/sub-skills/roles/dm/fullstack/domain-context.md
-references/sub-skills/roles/dm/git-commit.md
 references/sub-skills/roles/dm/ios/domain-context.md
 references/sub-skills/roles/dm/issue-filing.md
 references/sub-skills/roles/dm/issue-triage.md
-references/sub-skills/roles/dm/iteration-log.md
 references/sub-skills/roles/dm/task-pickup.md
 references/sub-skills/roles/dm/prohibitions.md
 references/sub-skills/roles/dm/skill/domain-context.md
@@ -220,10 +204,8 @@ references/sub-skills/roles/verifier/android/domain-context.md
 references/sub-skills/roles/verifier/discussion-protocol.md
 references/sub-skills/roles/verifier/file-conventions.md
 references/sub-skills/roles/verifier/fullstack/domain-context.md
-references/sub-skills/roles/verifier/git-commit.md
 references/sub-skills/roles/verifier/ios/domain-context.md
 references/sub-skills/roles/verifier/issue-filing.md
-references/sub-skills/roles/verifier/iteration-log.md
 references/sub-skills/roles/verifier/prohibitions.md
 references/sub-skills/roles/verifier/skill/domain-context.md
 references/sub-skills/roles/verifier/status-line.md
@@ -244,7 +226,6 @@ references/hints-dm.txt
 references/hints-pm.txt
 references/hints-verifier.txt
 references/statusline.sh
-references/agent-instructions.md
 references/prompts/discussion-prep.md.j2
 references/prompts/improvement-scan.md.j2
 references/prompts/research.md.j2
@@ -263,23 +244,3 @@ references/sub-skills/roles/worker/ralph-loop-overview.md
 references/sub-skills/roles/verifier/ralph-loop-overview.md
 references/sub-skills/roles/pm/ralph-loop-overview.md
 references/sub-skills/roles/dm/ralph-loop-overview.md
-references/roles/worker/skill/responsibility.md
-references/roles/worker/android/responsibility.md
-references/roles/worker/ios/responsibility.md
-references/roles/worker/web/responsibility.md
-references/roles/worker/fullstack/responsibility.md
-references/roles/verifier/skill/responsibility.md
-references/roles/verifier/android/responsibility.md
-references/roles/verifier/ios/responsibility.md
-references/roles/verifier/web/responsibility.md
-references/roles/verifier/fullstack/responsibility.md
-references/roles/pm/skill/responsibility.md
-references/roles/pm/android/responsibility.md
-references/roles/pm/ios/responsibility.md
-references/roles/pm/web/responsibility.md
-references/roles/pm/fullstack/responsibility.md
-references/roles/dm/skill/responsibility.md
-references/roles/dm/android/responsibility.md
-references/roles/dm/ios/responsibility.md
-references/roles/dm/web/responsibility.md
-references/roles/dm/fullstack/responsibility.md

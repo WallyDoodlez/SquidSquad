@@ -1,4 +1,4 @@
-"""Live-system pytest for #9747 — eliminate [ROLE] placeholder in dev polling fragment.
+"""Live-system pytest for #9747 — eliminate [ROLE] placeholder in worker polling fragment.
 
 AC: "Either polling fragments no longer contain placeholders needing runtime
 LLM substitution, OR documented as accepted technical debt with a follow-up
@@ -6,11 +6,15 @@ issue." PR took option (a): eliminate the placeholder via a script helper
 that reads SQUIDSQUAD_ROLE.
 
 TC mapping:
-  TC-1 → polling fragments have ZERO [ROLE] placeholders (dev + pm + qa + dm)
+  TC-1 → polling fragments have ZERO [ROLE] placeholders (worker + pm + verifier + dm)
   TC-2 → cycle.py exposes `status-bar-self` subcommand
   TC-3 → status_bar_self() reads SQUIDSQUAD_ROLE env and writes current-state
   TC-4 → status_bar_self() fails loudly when SQUIDSQUAD_ROLE is missing/empty
-  TC-5 → dev's tests/test_cycle.py 24/24 PASS
+  TC-5 → worker's tests/test_cycle.py 24/24 PASS
+
+Role-name update 2026-06-04 (#11042): the original parametrize list used the
+pre-rename role names dev/qa. The team is now worker/verifier so those two
+fragments live at worker/ and verifier/.
 """
 
 from __future__ import annotations
@@ -41,7 +45,7 @@ import cycle  # noqa: E402
 
 
 # TC-1
-@pytest.mark.parametrize("role", ["dev", "pm", "qa", "dm"])
+@pytest.mark.parametrize("role", ["worker", "pm", "verifier", "dm"])
 def test_tc_01_polling_fragment_has_no_role_placeholder(role):
     text = (SUB_SKILLS / "roles" / role / "ralph-loop-overview.md").read_text(
         encoding="utf-8"
