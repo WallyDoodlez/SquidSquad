@@ -413,17 +413,17 @@ Per-deploy cost: N spawns for assemble + N spawns for Tier B audit = 2N total, w
 
 ---
 
-## 9. Open questions for operator decision
+## 9. Open questions — LOCKED 2026-06-05 (operator decision)
 
-1. **Subagent type**: use `general-purpose`, or register a new `subagent_type: "assemble"` with constrained tool access (Read only — no Write/Edit needed since the subagent's output IS the result)? Lean: register a new type to enforce the contract.
+1. **Subagent type**: **LOCKED — register new `subagent_type: "assemble"`** with Read-only tool access. Implementation: add `.claude/agents/assemble.md` with frontmatter `tools: Read` + model default per Q2 + description naming this design as the contract. Replaces line 76's `"general-purpose"` placeholder with `"assemble"` once the agent definition lands.
 
-2. **Model default**: sonnet across the board, or per-slot defaults (opus for soul because it's harder; haiku for vault because it's small)? Lean: sonnet for all, per-slot override available in config.
+2. **Model default**: **LOCKED — sonnet across the board**, per-slot override available via `assemble-slots:` config (see §3.2). Opus/haiku tuning deferred to Phase 2 observed-data review.
 
-3. **AC6 retry count**: one retry on AC6 violation, or zero (fail fast)? Lean: one retry — subagents sometimes self-correct.
+3. **AC6 retry count**: **LOCKED — 1 retry.** Retry prompt structure: short, names the violating conflict IDs, demands `justification_citation` quote §4.6 verbatim, keeps `assembled_body` identical. If retry also fails AC6, fall back to verbatim for the slot and log per §6.
 
-4. **Audit timeout**: Tier B's audit subagent timeout — same 120s as assemble, or tighter (60s)? Lean: 120s same (audit task is similar complexity).
+4. **Audit timeout**: **LOCKED — 120s** (symmetric with assemble). Revisit after 100 production audits if observed P99 is well under 60s.
 
-5. **`CLAUDE.assemble-log.md`**: do we add a sixth artifact alongside CLAUDE.md / CLAUDE.linked.md / CLAUDE.conflicts.md to log per-slot assemble outcomes (verbatim / assembled / failed-fellback / audit-failed)? Lean: yes, but defer to Phase 2 implementation.
+5. **`CLAUDE.assemble-log.md`**: **LOCKED — yes on the data, file vs. section format deferred to Phase 2.1 implementation.** Skill chooses whether to extend `CLAUDE.conflicts.md` with a per-slot status header table OR emit a separate sixth artifact — both produce the same operator signal. Default toward the sixth file if `conflicts.md` would balloon past ~50 lines on zero-conflict runs.
 
 ---
 
@@ -438,10 +438,10 @@ Phase 1 deliverable (this document) does NOT include:
 
 ---
 
-## Status (cycle 2143 ext, 2026-06-05)
+## Status (cycle 2158, 2026-06-05)
 
-- Phase 1 deliverable v1 committed
-- #11053 transitioned approved → in-progress
-- **Awaiting operator review of §9 open questions** before any Phase 2 work files
+- Phase 1 deliverable v1 committed (cycle 2143 ext)
+- §9 LOCKED 2026-06-05 by operator (this cycle): assemble subagent type, sonnet default, 1 retry on AC6, 120s audit timeout, sixth-artifact-or-section TBD by skill
+- #11053 status: in-progress
 
-Next PM cycle: refine §2 prompt template based on §9 answers; possibly file Phase 2.1 task to skill.
+Next PM cycle: file Phase 2 task breakdown to skill (one umbrella OR three sub-phases per §7 phasing). Skill writes the code starting from §1–§8 of this document as the contract.
