@@ -10,15 +10,15 @@ _Auto-maintained active context summary. Updated by agents when significant cont
   - #10838 VAULT-ARCH alignment (4 GAP + 6 DRIFT)
   - #10839 Cross-TRD role → alias rename — DS re-audit needed before pickup
 - **E7 #10686** (approved, role:skill) — V2 migration smoke; unblocked post-E6
-- **#11049 v2 migrate v1 {{include:}} directives** (approved, high, role:skill) — orchestrator migration; Path A spec locked; skill prioritized easy wins first
+- **#11049 v2 migrate v1 {{include:}} directives** (pending-test, high, role:skill) — Path A migration shipped on PR #11069 (-4179 LOC); composites ~50% smaller (pm 2196→1066, skill 1964→1268); PM ruled revised AC3 ceilings 2026-06-05 (L2≤1100, L3≤1300); QA verification pending
 - **#11053 agent-spawn substrate investigation** (approved, role:pm) — gated on #11049 landing
 - **#10690 wiki-link rework** (approved, gated on E7)
 - **#10750 catalog orphan cleanup** (open, role:skill) — D4 drift-check surfaced path drift from #6274 dev→worker rename
 
 ## Recently Shipped
 
-- **#11042 pytest suite stale refs** (R3 verified 2026-06-05 cycle 916, pending-ship) — 5-cluster stabilization, 271/271 pass at HEAD 5de4b7c57.
-- **#11066 stale L4 corrupt test** (verified 2026-06-05 cycle 916, pending-ship) — post-#10987 prose-H3 routing alignment.
+- **#11042 pytest suite stale refs** (shipped 2026-06-05 via PR #11048, DM batch cycle 1350) — 5-cluster stabilization, 271/271 pass at HEAD 5de4b7c57.
+- **#11066 stale L4 corrupt test** (shipped 2026-06-05 via PR #11068, DM batch cycle 1350) — post-#10987 prose-H3 routing alignment.
 - **#11065 .backlog-cache untrack** (shipped 2026-06-05 as 1dd58709c via PR #11067) — root cause for #10540 merge-spiral pattern eliminated.
 - **#11050 assemble pipeline prune** (shipped 2026-06-05 as 1deeac641 via PR #11064) — -3757 LOC dead LLM-assemble pipeline removed.
 - **E6 V2 CUTOVER #10685** (shipped 2026-06-04) — atomic switch, v1 compose paths dropped, v2 default. Unblocks E7 + 4 umbrella PRDs.
@@ -40,6 +40,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Recent Decisions
 
+- #11049 AC3 revised 2026-06-05 — Path A mandatory-inline budget (~503 lines/role) is a structural floor; tiered ceilings L2≤1100 / L3≤1300 supersede pre-Path-A D2 numbers (700/800). Further composite reduction is gated on #9968 (runtime sub-skill resolution).
 - PRD-D #10781 closed (decided against Claude Skills migration, 2026-06-05) — composed-CLAUDE.md shrink path is via E6-shipped v2 compose, not via Claude Skills.
 - Wizard L4 path Direction A pre-locked on #10836 Finding 26 — make wizard match `deploy_role_v2` per TRD §4.8; delete `_copy_l4_seed_stubs()` (2026-06-03).
 - Audit refresh strategy: HARD GATE for #10836/#10838; DS re-audit needed for #10837/#10839 before PM pickup.

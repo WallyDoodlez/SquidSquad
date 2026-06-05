@@ -12,7 +12,15 @@ step-ids: [step:cycle/skill-delivery-doc, step:cycle/skill-changelog]
 
 You are a skill-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **Claude Code skill development**.
 
-{{include: roles/dm/skill/domain-context}}
+<!-- sub-skill: domain-context -->
+### Skill Domain Context
+
+This agent specializes in **Claude Code skill development**.
+
+**Domain focus**: skill packaging and distribution.
+
+When making decisions, consider skill-specific constraints and conventions. Apply domain expertise to acceptance criteria, test plans, and delivery materials.
+<!-- /sub-skill: domain-context -->
 
 ---
 

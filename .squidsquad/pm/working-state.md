@@ -1,53 +1,50 @@
 # Working State
 
-- **Task**: cycle 2142 ext — AC3 call on #11049 + parallel-PM acknowledgment
-- **Status**: pipeline draining at high velocity; #11049 at pending-test on PR #11069
+- **Task**: cycle 2143 — #11049 AC3 ruling (Path A composite-size ceilings revised)
+- **Status**: PR #11069 pending-test; spec call resolved
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
-## Note on parallel PM sessions
+## Cycle work
 
-Harness-spawned PM (in this clone) also ran cycle 2142 ~minutes before this manual cycle. Their working-state update was correct as of when they wrote it but already stale by the time this cycle started — #11042 and #11066 had shipped (not just pending-ship). Avoided duplicating their BRIEFING.md staleness fix work; this cycle adds only the #11049 AC3 call.
+- **#11049 AC3 ruling**: skill cycle 1597 shipped Path A migration on PR #11069 (-4179 LOC, 137 directives processed: 77 references + 19 mandatory inline + 20 domain-context + 21 D1-retired inline). Composites dropped ~50% (pm 2196→1066, dm 1568→1006, qa 1789→1008, skill 1964→1268). Skill flagged AC3: original body said pm/qa/skill ≤700, dm ≤800 — pre-Path-A D2 numbers that assumed pure references.
+- **Ruling filed on #11049**: revised AC3 to tiered ceiling — L2 base roles ≤1100, L3-specialized (skill) ≤1300. Rationale: Path A mandatory-inline budget (~503 lines/role) is a structural floor that didn't exist when D2 measured 22-29%. All four roles PASS revised AC3. Future #9968 (runtime sub-skill resolution) is the path to lower ceilings.
+- Issue body AC3 updated to match the ruling so QA's TEST-PLAN reads the correct contract.
+- BRIEFING.md updated: moved #11042+#11066 from pending-ship to shipped; reflected #11049 status change to pending-test; logged AC3 ruling in Recent Decisions.
 
-## Cycle work (this ext-cycle)
-
-- **Verified harness PM's pipeline claims**: #11042 SHIPPED `4bd9d6e9`; #11066 SHIPPED `faebbf86`. Counter 14 (threshold 10 → DM version bump pending).
-- **#11049 AC3 call**: skill hit dm 1006 / pm 1066 / qa 1008 / **skill 1268** (vs ≤1200 target). PM call: accept 1268 as legitimate L3-specialization overhead; revise AC3 to ≤ 1300 across all roles. Net reduction 35-46% per role from pre-migration sizes — the win.
-- **#11053 hard-gate clears when #11069 merges** — I pick up Phase 1 (agent-spawn assemble design) right after.
-
-## Pipeline (cycle 2142 ext)
+## Pipeline (post-skill cycle 1597, DM cycle 1350)
 
 - pending_ship: 0
-- pending_test: 2 (#10855 deferred — PR #10952; **#11049 fresh — PR #11069**)
+- pending_test: 2 (#10855 deferred — PR #10952; **#11049 fresh — PR #11069 awaiting QA**)
 - in-progress: none
-- Approved queue: #11053 (gated → unblocks at #11069 ship), #10686 (E7), #10690 (gated)
-- Open PRs: 2 (#10952 deferred; #11069 ready for QA)
+- Approved queue: #11053 (gated on #11049), #10686 (E7 unblocked), #10690 (gated on E7), #10836+#10838 (PM-ready), #10837+#10839 (PM, awaiting DS re-audit)
+- Open PRs: 2 (#10952 deferred; **#11069 draft, AC3-cleared, QA's lane**)
 
 ## v2 stabilization work map
 
 | Surface | Status | Owner |
 |---|---|---|
-| 1. References only, no inline | **pending-test on #11069** | #11049 skill |
+| 1. References only, no inline (v1 {{include:}} → Path A hybrid) | **pending-test** (PR #11069) | #11049 skill → QA |
 | 2. Sub-skill code bundling | deferred | #11051 closed |
 | 3. Claude Skills audit | decided against | #11052 + #10781 closed |
-| 4. Agent-spawn assemble | gate clears at #11069 ship | #11053 pm |
+| 4. Agent-spawn assemble | approved, gated on #11049 | #11053 pm |
 | Cleanup (API-assemble prune) | shipped | #11050 closed |
-| E6 v2 cutover | shipped | #10685 closed |
-| E7 smoke | unblocked | #10686 skill |
+| E6 v2 cutover | shipped 2026-06-04 | #10685 closed |
+| E7 smoke | unblocked, awaiting skill | #10686 skill |
 | Tracker hygiene (.backlog-cache) | shipped | #11065 closed |
-| Pytest suite stabilization | SHIPPED | #11042 closed |
-| L4 corrupt test alignment | SHIPPED | #11066 closed |
+| Pytest suite stabilization | shipped 2026-06-05 | #11042 closed |
+| L4 corrupt test alignment | shipped 2026-06-05 | #11066 closed |
+| Runtime sub-skill resolution (lower L2 ceiling) | not started | #9968 future PRD |
 
 ## TRD-alignment PRD queue (post-E6, unblocked)
 
-(Harness PM's note retained:)
 - #10836 INSTALLER-ARCH (HIGH, Direction A pre-locked) — PM can pick up
 - #10838 VAULT-ARCH (medium) — PM can pick up
-- #10837 HARNESS-ARCH (HIGH) — needs DS re-audit
-- #10839 Cross-TRD rename (medium) — needs DS re-audit
+- #10837 HARNESS-ARCH (HIGH) — needs DS re-audit before PM pickup
+- #10839 Cross-TRD rename (medium) — needs DS re-audit before PM pickup
 
-## Session ship tally: 38 (+2 since cycle 2141: #11042, #11066)
+## Session ship tally: 38 (+2 since cycle 2142: #11042 + #11066 shipped by DM batch)
 
 ## Context
 
-healthy (~58%).
+healthy (~85%).
