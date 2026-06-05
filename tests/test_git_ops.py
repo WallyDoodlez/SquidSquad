@@ -643,9 +643,19 @@ class TestRoleOwnedPatterns:
         for role in ("pm", "qa", "dm", "skill"):
             pats = git_ops._role_owned_patterns(role)
             assert f".squidsquad/{role}/" in pats
-            assert ".squidsquad/.backlog-cache" in pats
             assert ".squidsquad/.event-state.json" in pats
             assert ".squidsquad/vault/" in pats
+
+    def test_backlog_cache_not_in_allowlist(self):
+        """#11065: `.squidsquad/.backlog-cache` is gitignored and must NOT
+        appear in any role's commit-domain allowlist. Tracked-and-allowlisted
+        was the merge-spiral root cause behind #11042's PR #11048."""
+        for role in ("pm", "qa", "dm", "skill"):
+            pats = git_ops._role_owned_patterns(role)
+            assert ".squidsquad/.backlog-cache" not in pats, (
+                f"{role}: .backlog-cache resurrected in allowlist — "
+                f"merge-spiral pattern will return"
+            )
 
     def test_pm_extras(self):
         pats = git_ops._role_owned_patterns("pm")
@@ -723,7 +733,9 @@ class TestCommitRoleScoped:
                      if c[0][0][:2] == ["git", "add"]]
         staged = [c[0][0][-1] for c in add_calls]
         assert ".squidsquad/pm/working-state.md" in staged
-        assert ".squidsquad/.backlog-cache" in staged
+        # #11065: .backlog-cache no longer staged — it's gitignored, not in
+        # the allowlist, and explicitly skipped per the new contract.
+        assert ".squidsquad/.backlog-cache" not in staged
         assert ".squidsquad/skill/CLAUDE.md" not in staged
         assert "references/scripts/thin_launcher.py" not in staged
         assert "tests/test_thin_launcher.py" not in staged
@@ -732,6 +744,8 @@ class TestCommitRoleScoped:
         assert "outside 'pm' domain" in err
         assert "references/scripts/thin_launcher.py" in err
         assert ".squidsquad/skill/CLAUDE.md" in err
+        # #11065: .backlog-cache should also be listed as skipped.
+        assert ".squidsquad/.backlog-cache" in err
 
     @patch("git_ops.push", return_value=True)
     @patch("git_ops.commit", return_value=True)
