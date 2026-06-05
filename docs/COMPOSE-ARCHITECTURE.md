@@ -569,6 +569,16 @@ After the link stage produces a per-slot linked composite, each non-skipped slot
 
 **Motivation.** The slot+ops model in §4.2 is expressive: an L4 author can `replace` a step, `insert-before` to add a precondition, `insert-after` to add a follow-up, and `append` to extend the slot. After all ops land, the linked composite for a slot can look like: original step → "but first check Y (insert-before)" → original body → "and afterward Z (insert-after)" → "but only when W (append)". A runtime agent reading this has to mentally resolve "what does this slot actually tell me to do?" on every cycle. The assemble pass does that reconciliation **once at deploy time** and writes the resolved prose to disk.
 
+**Orchestrator-content rule.** The assemble pass is only tractable — and only "unconditional" per §3.0 — because the L1-L4 source layers stay small and goal-shaped. The rule, applied uniformly to every step entry in every layer file:
+
+1. **Step header** (e.g., `### step:cycle/<name>`).
+2. **Zero, one, or more `→ run sub-skill: <name>` markers**, each one declaring a procedure being invoked at this step. Multiple markers per step are fine; a step with no markers (a goal-only step) is also fine.
+3. **A brief goal statement** — the *state* the agent must reach by the end of this step. NO mechanical action. NO "how." Goals only.
+
+**Marker-first ordering.** Within a step the marker(s) come **before** the goal statement. The agent encounters "there is a procedure I may need to load" before "here is the state I am trying to reach from it" — an efficient reading flow that lets the agent preload or check its own context before evaluating the goal. Inverting this (goal first, marker last) would force the agent to re-read once it learns a sub-skill is involved.
+
+**Authoring discipline.** If you find yourself writing procedure in a layer file — step-by-step mechanics, command invocations, branching logic — the content belongs in a sub-skill, not in the orchestrator. Layer files declare intent; sub-skills carry mechanics. This separation is the load-bearing constraint that keeps composed slots in the per-slot subagent's bounded-reconciliation regime (the assemble pass rewrites *prose at the goal layer*; it does not author procedures). When the rule is violated — when a layer file inlines mechanics — slots bloat, the assemble subagent's per-slot work shifts from "reconcile goal statements" to "reconcile mixed goals + procedures," and the §3.0 unconditional-assemble premise no longer holds.
+
 **When it runs.** Compose-time only, after all ops are applied and after sub-skill reference resolution (§4.5) validates the linked composite. The assemble pass never runs at agent runtime — the runtime artifact (`CLAUDE.md`) is the assembled output.
 
 **Per-slot scope.**
