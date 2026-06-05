@@ -173,7 +173,7 @@ The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `wo
 
 → run sub-skill: cycle-runner
 
-Goal: the cycle is structured per the install's wake-mode contract — `cycle_pre.py` has populated `cycle-input.json` with pull result, context pressure, working-state snapshot, and queue state; the agent's creative work has been read against that input; `cycle_post.py` will durably commit results and propagate status transitions. Hard precondition for any per-step work this cycle.
+Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
 
 → run sub-skill: event-driven-workflow
 
