@@ -1,5 +1,19 @@
 # QA Log
 
+## QA Scan — 2026-06-04 21:28
+
+- **Result**: Quiet — #11042 still OPEN (filed prior cycle, no comments yet, untouched), no other pending-test for `role:qa`
+- **Tests Run**: 0 (heavy scan already run prior cycle; redundant repeat skipped)
+- **Failures**: n/a
+- **Notes**: Cycle 642. Pulled `origin/main` — diverged from remote QA agent (their iter-127 was a no-op cycle 641 from 21:22 EDT, before my finding). Merged via `git merge` per `feedback_never_rebase_merge_instead`. Queues remain quiet across all roles; #10855 still `blocked:human-action`. Skill has not yet picked up #11042.
+
+## QA Scan — 2026-06-04 21:24
+
+- **Result**: Filed #11042 (high) — pytest suite red post 811a4060 orphan prune
+- **Tests Run**: ~56% of `tests/` reached before 10-min cap; 14 confirmed FAILED + 11 ERROR in sampled subset
+- **Failures**: installer-files.txt lists 40+ missing paths; `references/sub-skills/common/event-reactions.md` missing (3 cases in `test_feat_6126_harness_merge`); `test_feat_3663_pr_conflict_check` (4 cases); `test_feat_2495_upgrade_rewrite` (6 TCs); plus uncounted Fs/Es in `9415/9588/9747/git_ops`
+- **Notes**: Quiet QA queue (0 pending-test for qa role). Used cycle for improvement scan. Independent finding: full pytest run mutated `.squidsquad/config.md` (Version `0.43.0` → `0.29.0`); restored from HEAD via `git checkout`. Pollution path likely wizard.py invoked from a test without cwd isolation. Both findings bundled in #11042 (skill, high). E6 cutover (#10999) itself is NOT the cause — these failures predate it (811a4060 on 2026-05-27).
+
 ## Agent Health — 2026-06-02 18:36
 
 - **skill**: ⚠️ no progress (E6 branch HEAD at `250c9e20` since 16:34 EDT, **~2h unchanged**; heartbeat file long-stale per known infra divergence, but commit-based liveness is the canonical signal here)
