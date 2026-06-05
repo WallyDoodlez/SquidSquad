@@ -189,6 +189,47 @@ class TestGetField:
 
 
 # ---------------------------------------------------------------------------
+# Improvement Scan Cool-Down field default (#11091)
+# ---------------------------------------------------------------------------
+
+class TestImprovementScanCoolDownDefault:
+    """#11091 — `improvement-scan-cool-down` falls back to '30' when absent."""
+
+    def test_default_when_field_absent(self, tmp_path):
+        # Section exists with only Enabled; cool-down field omitted (pre-#11091 install)
+        text = (
+            "## Improvement Scanning\n\n"
+            "- **Enabled**: yes\n"
+        )
+        f = tmp_path / "config.md"
+        f.write_text(text, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", f):
+            assert config.get_field("improvement-scan-cool-down") == "30"
+
+    def test_default_when_section_absent(self, tmp_path):
+        # Entire section missing (truly minimal install)
+        f = tmp_path / "config.md"
+        f.write_text("# Config\n\n- **SquidSquad Version**: 0.0.0\n", encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", f):
+            assert config.get_field("improvement-scan-cool-down") == "30"
+
+    def test_explicit_value_overrides_default(self, tmp_path):
+        text = (
+            "## Improvement Scanning\n\n"
+            "- **Enabled**: yes\n"
+            "- **Improvement Scan Cool-Down**: 45\n"
+        )
+        f = tmp_path / "config.md"
+        f.write_text(text, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", f):
+            assert config.get_field("improvement-scan-cool-down") == "45"
+
+    def test_field_in_defaults_registry(self):
+        # Lock the contract — _FIELD_DEFAULTS must carry the cool-down key
+        assert config._FIELD_DEFAULTS["improvement-scan-cool-down"] == "30"
+
+
+# ---------------------------------------------------------------------------
 # set_field — happy path (#4879)
 # ---------------------------------------------------------------------------
 

@@ -63,6 +63,7 @@ FIELD_MAP = {
     "context-threshold": ("Context Pressure", "Threshold"),
     "pr-flow": ("PR Flow", "Enabled"),
     "improvement-scanning": ("Improvement Scanning", "Enabled"),
+    "improvement-scan-cool-down": ("Improvement Scanning", "Improvement Scan Cool-Down"),  # #11091
     "ship-threshold": ("Auto Versioning", "Ship Threshold"),
     "shipped-since-bump": ("Auto Versioning", "Shipped Since Last Bump"),
     "alias-skill": ("Aliases", "skill"),
@@ -165,6 +166,8 @@ def _parse_all(text):
 # Fields that default to a value when absent from config.md (rather than exiting)
 _FIELD_DEFAULTS = {
     "event-driven": "no",
+    # #11091 — minutes between idle improvement-scans (event-mode cool-down loop)
+    "improvement-scan-cool-down": "30",
 }
 
 

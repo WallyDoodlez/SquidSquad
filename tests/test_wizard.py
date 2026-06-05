@@ -600,10 +600,17 @@ class TestBuildConfigMdStructure:
             "## Tools",
             "## Loop",
             "## Flags",
+            "## Improvement Scanning",  # #11091
             "## Git Branches",
             "## Forge Backend",
             "## Model Routing",
         ]
+
+    def test_improvement_scanning_section_carries_cool_down(self):
+        """#11091 — wizard emits cool-down field with 30-min default."""
+        text = wizard.build_config_md(_minimal_spec())
+        assert "## Improvement Scanning" in text
+        assert "- **Improvement Scan Cool-Down**: 30" in text
 
     def test_header_includes_version_and_architecture(self):
         text = wizard.build_config_md(_minimal_spec())
