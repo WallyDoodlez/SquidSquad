@@ -128,18 +128,26 @@ def test_fixture_worker_fe_has_l3_subtree():
 # ---------------------------------------------------------------------------
 
 def test_corrupted_l4_aborts_with_parse_error(tmp_path):
-    """AC: 'corrupted L4 op → compose aborts (does not silently produce drift)'."""
+    """AC: 'corrupted L4 op → compose aborts (does not silently produce drift)'.
+
+    #11066: post-#10987 the parser routes non-op-like H3 headings into the
+    prose-append path (so doc-style sub-headings like ``### Worker``
+    survive a link-stage build instead of erroring). The corrupted L4
+    fixture must use an *op-like-but-malformed* H3 to still exercise
+    the parse-error path. ``### replace garbage`` matches the op-keyword
+    grammar at ``_OP_LIKE_RE`` but fails the full ``_OP_RE`` parse at
+    ``l4_parser.py:_parse_h3_op``, which raises ``L4ParseError`` — the
+    aborts-on-corruption semantics the test was written to guard.
+    """
     # Copy the pm fixture into a tmp tree so we can mutate it safely.
     src = FIXTURES / "pm"
     shutil.copytree(src, tmp_path / "pm")
     bad_root = tmp_path / "pm"
     l4_path = bad_root / ".squidsquad" / "project" / "pm.md"
-    # Corrupt: introduce an H3 line that does NOT match any legal op
-    # grammar. A2b's parser rejects this with L4ParseError.
     l4_path.write_text(
         "## Instructions\n\n"
-        "### frobnicate step:cycle/work\n\n"
-        "Not a legal op heading.\n",
+        "### replace garbage\n\n"
+        "Not a legal op heading — `replace` is op-like but the rest is malformed.\n",
         encoding="utf-8",
     )
     with pytest.raises(L4ParseError):
