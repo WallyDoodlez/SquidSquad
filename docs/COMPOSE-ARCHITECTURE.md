@@ -714,23 +714,31 @@ If any check fails, **compose aborts with a diagnostic**. There is no fallback t
 
 PR review compares the two when an L4 op lands; if the assembled output drops or distorts an op's intent, the reviewer catches it before merge. The assemble pass is not a black box.
 
-**Failure mode summary.** Any failure during compose aborts — there is no degraded-output path. The assembler runs inside the agent session that started compose; if the agent's LLM is unavailable, compose itself doesn't start, so there is no "agent partially works" state to fall back from. If the assembler runs but its output fails a preservation check, the linked body is **not** silently published as the runtime artifact — that would ship inconsistent prose to the agent on every cycle. Better to fail loud and have the operator re-run.
+**Failure mode summary.** Failures split into two categories under the Agent-tool substrate. **Per-slot subagent failures** (timeout, refusal, JSON parse failure, AC6 violation after retry, preservation-token drop, over-budget unresolvables) **fall back to verbatim for the affected slot** — `atomic_emit` emits the slot's linked body unchanged in the assembled output, logs the fallback under the slot's section in `CLAUDE.conflicts.md`, and continues with the remaining slots. The compose run succeeds; the operator inspects `CLAUDE.conflicts.md` to see which slots fell back. **Structural contract violations** (preservation-set inequality, length-floor breach, forced-verbatim opt-in, precedence-rule violation, link-stage failure) abort the whole compose run — these indicate the source tree or config is in a state the assemble contract cannot honour, so producing any output would be a contract failure worse than emitting nothing.
 
-| Failure | Result | Compose succeeds? |
-|---|---|---|
-| LLM call errors (timeout, rate limit, network) during the assemble pass | Abort with diagnostic; no `CLAUDE.md` written | **No** |
-| Sub-skill ref set inequality (assembled ≠ linked) | Abort with diagnostic | **No** |
-| Step ID set inequality (assembled ≠ linked) | Abort with diagnostic | **No** |
-| Length below floor | Abort with diagnostic | **No** |
-| Code-block parity check fails | Abort with diagnostic | **No** |
-| Cache corruption | Re-run LLM call once; if that also fails, abort | **No** |
-| Conflict report write fails (disk full, permission) | Abort with diagnostic | **No** |
-| Conflict resolution violates precedence (assembler picks lower L) | Abort with diagnostic — this is a hard contract bug | **No** |
-| Link stage (§4.1–§4.5) fails | Abort with diagnostic; no assemble pass attempted | **No** |
+| Failure | Detection | Result | Compose succeeds? |
+|---|---|---|---|
+| Agent-tool timeout (>120s) | Agent tool returns timeout | Fall back to verbatim for this slot; log timeout in conflicts.md | **Yes** (slot fell back, not whole compose) |
+| Agent-tool refusal / empty response | Empty / refusal in tool result | Same as timeout | **Yes** (slot fell back) |
+| JSON parse failure on subagent response | `json.loads` raises | One retry; if retry fails, fall back to verbatim for this slot | **Yes** (slot fell back) |
+| AC6 violation (no §4.6 citation) | `_parse_assemble_response` rejects conflict missing valid `justification_citation` | One retry; if retry fails, fall back to verbatim for this slot | **Yes** (slot fell back) |
+| Preservation token dropped | Post-parse multiset equality check fails | Fall back to verbatim for this slot; log preservation diff in conflicts.md | **Yes** (slot fell back) |
+| `unresolvable_fragments` over-budget (>3 per slot) | Post-parse count check | Fall back to verbatim entire slot — too many unresolvables means subagent didn't internalize the precedence rule | **Yes** (slot fell back) |
+| Sub-skill ref set inequality (assembled ≠ linked) | Post-parse preservation check | Abort whole compose — structural contract violation | **No** |
+| Step ID set inequality (assembled ≠ linked) | Post-parse preservation check | Abort whole compose | **No** |
+| Length below floor | Post-parse preservation check | Abort whole compose | **No** |
+| Code-block parity fails | Post-parse preservation check | Abort whole compose | **No** |
+| Forced-verbatim slot opted in via `assemble-slots:` | Compose-time config validation | Compose-time error before any spawn | **No** |
+| Conflict resolution violates precedence (assembler picks lower L despite passing AC6) | Post-parse precedence check | Abort whole compose — hard contract bug | **No** |
+| Cache corruption | Cache read raises or mismatches schema | Re-run Agent spawn once for the affected slot; if retry fails, fall back to verbatim for that slot | **Yes** (slot fell back) |
+| Conflict report write fails (disk full, permission) | I/O error during emit | Abort whole compose — atomic-emit guarantee depends on the triple landing together | **No** |
+| Link stage (§4.1–§4.5) fails | §4.1–§4.5 abort | No assemble pass attempted; abort whole compose | **No** |
 
-When compose aborts on an assemble-side failure, the previously-written `CLAUDE.md` (from the prior successful compose run, if any) is **left untouched** on disk — the operator's running agents continue reading the last good output until compose succeeds. The current compose run produces no partial artifacts: no half-written `CLAUDE.md`, no `CLAUDE.linked.md` orphan, no `CLAUDE.conflicts.md` from the aborted run. The audit-artifact triple (`CLAUDE.md` + `CLAUDE.linked.md` + `CLAUDE.conflicts.md`) is emitted **atomically** on success or not at all.
+When compose aborts on a structural contract violation, the previously-written `CLAUDE.md` (from the prior successful compose run, if any) is **left untouched** on disk — the operator's running agents continue reading the last good output until compose succeeds. The current compose run produces no partial artifacts: no half-written `CLAUDE.md`, no orphan `CLAUDE.linked.md`, no `CLAUDE.conflicts.md` from the aborted run. The audit-artifact triple (`CLAUDE.md` + `CLAUDE.linked.md` + `CLAUDE.conflicts.md`) is emitted **atomically** on success or not at all.
 
-The link stage and the assemble stage are both load-bearing under this contract; **the assemble pass is unconditional** (no `config.md` opt-out). `CLAUDE.linked.md` is an audit/debug artifact, NOT a runtime fallback — runtime always reads the assembled `CLAUDE.md`.
+When a compose run completes with **per-slot fallbacks**, the run succeeds and the triple lands atomically; the emitted `CLAUDE.md` contains the assembled prose for slots whose Agent spawn returned cleanly and the linked-verbatim prose for slots that fell back. `CLAUDE.conflicts.md` enumerates which slots fell back and why, so the operator can decide whether to re-deploy after a transient failure or live with the verbatim slot until a model/prompt fix lands. Per-slot fallback is the design's **soft-degrade** path; only structural contract violations are hard-stops.
+
+The link stage and the assemble stage are both load-bearing under this contract; **the assemble pass is unconditional** (no `config.md` opt-out at the slot level — see §3.0). `CLAUDE.linked.md` is an audit/debug artifact, NOT a runtime fallback — runtime always reads the assembled `CLAUDE.md`.
 
 **LLM dependency is not a new constraint.** The assemble pass calls the LLM gateway. SquidSquad's agents are themselves LLM sessions; if the gateway is unreachable, the agents cannot run, so adding assemble's gateway dependency at compose time does not introduce a new failure surface — installs that cannot reach the gateway were already non-functional.
 
