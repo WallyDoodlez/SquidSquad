@@ -1,49 +1,47 @@
 # Working State
 
-- **Task**: cycle 2145 — #11044 PR conflict; filed #11083 systemic fix
-- **Status**: skill draining well; new structural bug filed; PM coordination-only
+- **Task**: cycle 2146 — quiet; observation only
+- **Status**: pipeline draining well; PM coordination-only
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 0
+- **Quiet cycles**: 1
 
-## Cycle work
+## Cycle work (observation only)
 
-- **#11045 SHIPPED** since cycle 2144 (PR #11081 merged, QA verified 71/4 passed)
-- **#11047 at pending-test** on PR #11082 (skill picked up, root cause was actually FileNotFoundError on consolidated `docs/EVENT-BUS-ARCHITECTURE.md`, not 8-char ref staleness as body suggested)
-- **#11044 PR #11080 routed back** by DM (R1) — conflict on `.squidsquad/vault/BRIEFING.md` (my cycle 2144 ext edit collides with skill's branch). Also config.md in PR scope.
-- **PM call**: option C (tactical + structural). Tactical = drop BRIEFING.md + config.md from #11080 scope to unblock. Filed **#11083** for structural fix (don't auto-commit operational state files when on feature branch — parallel to #11065 .backlog-cache fix). Same merge-spiral pattern; same shape of solution.
+Skill velocity since cycle 2145:
+- **#11047 SHIPPED** (PR #11082 merged)
+- **#11083 at pending-test** on PR #11084 — filed last cycle, picked up + shipped within minutes. Branch-guard on `commit_role_scoped`: when current branch ≠ working-branch, skip staging (file stays on disk for next on-working-branch cycle). Both AC pattern from #11065 applied successfully.
+- **#11044 re-verified** at pending-test (option C tactical: scope trimmed to 2 test files, operational state files restored to main).
+
+Both structural fixes (#11065 .backlog-cache, #11083 operational state on feature branches) now address the #10540 merge-spiral pattern systemically.
 
 ## Pipeline
 
 - pending_ship: 0
-- pending_test: 2 (#10855 deferred; #11047 fresh on PR #11082)
-- in-progress: #11044 (skill — needs scope-trim), #11053 (PM — awaiting operator §9)
-- Approved queue: #11083 (new structural), #10686 (E7), #10690 (gated), 4 TRD PRDs
-- Open PRs: 3 (#10952 deferred; #11080 needs scope-trim; #11082 ready for QA)
+- pending_test: 3 (#10855 deferred; **#11083 fresh** + **#11044 re-verified**)
+- in-progress: #11053 (PM, awaiting operator §9)
+- Approved queue: #10686 (E7), #10690 (gated), 4 TRD PRDs
+- Open PRs: 2 (#10952 deferred; #11080 trimmed for QA; — PR #11084 was bundled with #11083 sweep)
 
-## v2 stabilization work map
+## v2 stabilization work map (largely settled)
 
 | Surface | Status | Owner |
 |---|---|---|
 | 1. References only, no inline | SHIPPED | #11049 closed |
-| 4. Agent-spawn assemble | Phase 1 v1 done, op review | #11053 pm |
+| 4. Agent-spawn assemble | Phase 1 v1, op review | #11053 pm |
 | Cleanup | shipped | #11050 closed |
 | E6 v2 cutover | shipped | #10685 closed |
 | E7 smoke | unblocked | #10686 skill |
 | Tracker hygiene (.backlog-cache) | shipped | #11065 closed |
-| **Tracker hygiene (state files on feature branches)** | NEW | #11083 skill |
-| Pytest stabilization clusters | 4 of 4 in flight/shipped | #11042+45+47 mostly closed, #11044 trim-pending |
+| Tracker hygiene (state files on feature branches) | pending-test | #11083 skill |
+| Pytest stabilization 4-cluster sweep | 3 shipped + 1 trimming | #11044+45+47 |
 | docs/COMPOSE-ARCHITECTURE.md §4.6 prose refresh | pending Phase 2.x of #11053 | future |
 
-## Operator asks (still pending on #11053)
+## Operator asks (still pending)
 
-1. Subagent type: register `assemble` or `general-purpose`?
-2. sonnet default + per-slot override?
-3. AC6 retry count: 0 or 1?
-4. Tier B audit timeout: 60s or 120s?
-5. Sixth artifact `CLAUDE.assemble-log.md`?
+#11053 §9: 5 questions, default-accept available. Or just `go with defaults`.
 
-## Session ship tally: 40 (+1 since cycle 2144: #11045 shipped)
+## Session ship tally: 41 (+1 since cycle 2145: #11047)
 
 ## Context
 
-healthy (~78%).
+healthy (~80%).
