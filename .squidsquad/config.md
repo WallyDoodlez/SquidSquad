@@ -112,7 +112,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 17
+- **Shipped Since Last Bump**: 18
 
 ## Agent Effort
 
