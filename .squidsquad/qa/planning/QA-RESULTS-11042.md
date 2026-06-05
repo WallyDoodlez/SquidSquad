@@ -33,3 +33,17 @@ The issue body has no explicit AC block; the "Expected" section is the contract.
 The four follow-ups (#11044 config.md pollution + test_feat_2495, #11045 test_feat_9588 internal-pinning, #11046 test_event_mode_fragments missing manifests, #11047 test_feat_9415 stale event_id refs) are appropriately scoped out and remain tracked separately. PR #11048 is honest about its partial-fix scope.
 
 PR ready-for-review action taken alongside the transition.
+
+---
+
+## Round 2 — Post-merge re-verification (cycle 913, 2026-06-05)
+
+**Trigger**: DM routed back at 02:13 UTC for merge conflict on `.squidsquad/.backlog-cache` (deleted by PR via `git rm --cached`; modified on main by PM cycle). Skill merged `origin/main` into the PR branch, kept the deletion (gitignored per TestGitignoreVolatileFiles), pushed merge commit `e4feee9bd`, re-transitioned to pending-test.
+
+**Re-ran the same 7-suite sweep at `e4feee9bd`**:
+- `python -m pytest tests/test_installer_wiring.py tests/test_feat_6126_harness_merge.py tests/test_feat_3663_pr_conflict_check.py tests/test_feat_9747_role_placeholder_elimination_live.py tests/test_git_ops.py tests/test_compose.py tests/test_manifest.py -q` → **270 passed in 3.33s** (identical to round 1).
+- `installer-files.txt`: 234 non-comment entries, 0 missing on disk (unchanged from round 1).
+- `git status --short` clean after the run — no `.squidsquad/`/`references/` mutation.
+
+All five clusters carry through the merge intact. **Verdict unchanged: PASS. Transition `pending-test → pending-ship`.**
+
