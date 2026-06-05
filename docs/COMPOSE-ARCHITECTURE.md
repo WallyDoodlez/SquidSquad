@@ -744,6 +744,8 @@ The link stage and the assemble stage are both load-bearing under this contract;
 
 **First-run determinism note.** The first uncached assemble run for a given linked-body hash is stochastic — two operators composing the same source tree from scratch may get prose that differs in wording. After the first run, the cache (§above) is committed to git and subsequent deploys reuse it; the system is deterministic from that point forward for those inputs. This is the irreducible trade-off for collapsing layered linked output into a single coherent voice. It is accepted by design: compose runs because inputs changed, so the new prose is the new contract; bit-stability across same-input re-deploys is provided by the cache, not by skipping assemble.
 
+**Implementation substrate breakdown.** The per-substep specs — call-site internals, prompt template structure, JSON output schema, per-slot prompt budget, retry semantics, conflict-report integration, failure-mode handling — are maintained in `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md` (PM-owned planning artifact). **This TRD section is the contract; the planning artifact is the implementation breakdown.** When the two disagree, the resolution path is to update this section first and propagate to the planning artifact, never the reverse. Phase 2 implementation work on #11053 refines the planning artifact's substep specs against the contract here — it does not re-open the contract.
+
 ---
 
 ## 5. Composed-output structure
