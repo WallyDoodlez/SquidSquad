@@ -114,7 +114,7 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `discussion` | Append-only tracker comment format — the inter-agent communication channel named in [COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity) (renamed from `discussion-protocol` at #10360) | all roles (per-role overrides retire at #10360) |
+| ~~`discussion`~~ | Append-only tracker comment format — the inter-agent communication channel named in [COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity) (renamed from `discussion-protocol` at #10360 — strike-through pending the file rename which lands as part of #10360) | all roles (per-role overrides retire at #10360) |
 | `issue-filing` | Self-file and cross-file bug templates | all roles (per-role overrides retire at #10360) |
 | `working-state` | Working-state file format and update rules | worker |
 | `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | worker |
@@ -141,7 +141,7 @@ Reusable across multiple roles.
 | `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | QA |
 | `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; removal paired with the broader capability-framework retirement per [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md), not this PR) |
 | `l4-curation` | Elicitation dialog for runtime L4 writes — detect customization request, scope bucket + rationale, walk the §7.2 decision tree (replace / insert-before / insert-after / append), run the three §7.4 safety gates (DeepSeek audit / mini-CQ / compose dry-run), produce a well-formed H3 op-block for `.squidsquad/project/<role-class>.md`. Reactively invoked; not part of any cycle step. One-off requests and feature requests are explicitly NOT routed through this sub-skill. Authored in PRD-C/C1 (#10650); wired into pm/dm/verifier/worker L2 instructions.md in PRD-C/C2 (#10651) via the standard `→ run sub-skill: l4-curation` reference (NOT inlined via any role's `includes.yml` — wiring is v2-path only per C2 AC4). | every role-class (pm/dm/verifier/worker) — reactive (no cycle step); §7 of [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) |
-| `compose-output-review` | Sub-procedure for reviewing composed CLAUDE.md output for source-output drift — invoked during code review | dev (planned per COMPOSE-ARCHITECTURE.md §9; implementation pending) |
+| ~~`compose-output-review`~~ | Sub-procedure for reviewing composed CLAUDE.md output for source-output drift — invoked during code review (planned per COMPOSE-ARCHITECTURE.md §9; implementation pending — strike-through until the source file lands) | dev (planned) |
 
 ### Chat & coordination (deferred — chat-integration roadmap)
 
@@ -222,7 +222,7 @@ Role-specific event extras:
 | `roles/verifier/discussion-protocol` | Verifier's comment format (→ retires; common/`discussion` is the canonical) — slash-bearing per #10743 |
 | `roles/verifier/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
 | Domain context | Per-stack verifier notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
-| `skill/finding-categories` | Skill-domain finding taxonomy for verifier reports |
+| `roles/verifier/skill/finding-categories` | Skill-domain finding taxonomy for verifier reports — slash-bearing per #10743; resolves to `references/sub-skills/roles/verifier/skill/finding-categories.md` |
 
 ### DM (`roles/dm/`)
 
