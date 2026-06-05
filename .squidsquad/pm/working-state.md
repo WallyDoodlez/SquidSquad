@@ -1,50 +1,45 @@
 # Working State
 
-- **Task**: cycle 2147 — quiet; observation only
-- **Status**: pipeline draining; #11053 still awaiting op review
+- **Task**: cycle 2148 — quiet; observation only
+- **Status**: pipeline drained to PM-blocked + skill-queued-low-priority
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 2
+- **Quiet cycles**: 3
 
-## Ships since cycle 2146 (+2 → tally 43)
+## Ships since cycle 2147 (+1 → tally 44)
 
-- **#11083 SHIPPED** (PR #11084 merged) — operational-state branch-guard. Same shape as #11065. Pattern complete.
-- **#11044 SHIPPED** (PR #11080 merged) — test pollution fix, +54/-2 lines, 110/110 PASS at trimmed scope.
-
-**Both merge-spiral root causes (#10540 pattern) permanently fixed.**
+- **#10750 SHIPPED** (catalog orphan cleanup, PR #11085 merged)
 
 ## New activity
 
-- **#10750 at pending-test** on PR #11085 — skill picked up catalog orphan cleanup (3 orphans resolved; 40+ orphan source files are #10360 intermediate state, out of scope per PM framing).
+- **#11046 at pending-test** on PR #11086 — skill self-resolved the architectural call (event-mode runtime concept stays active; only the `includes-events.yml` FILE was retired in E6, test was checking for a file that's intentionally gone).
 
 ## Pipeline
 
 - pending_ship: 0
-- pending_test: 2 (#10855 deferred; #10750 fresh)
-- in-progress: #11053 (PM, awaiting operator §9)
-- Approved queue: #10686 (E7), #10690 (gated on E7), 4 TRD PRDs
+- pending_test: 2 (#10855 deferred; **#11046 fresh — last pytest spinoff**)
+- in-progress: #11053 (PM, awaiting operator §9 — **3 cycles now**)
+- Approved queue: #10686 (E7), #10690 (gated on E7), 4 TRD PRDs (parked)
 - Open PRs: 1 (#10952 deferred)
 
-## v2 stabilization work map (mostly settled)
+## v2 stabilization work map (settled except #11053 op review)
 
-| Surface | Status | Owner |
-|---|---|---|
-| 1. References only, no inline | SHIPPED | #11049 closed |
-| 4. Agent-spawn assemble | Phase 1 v1, op review | #11053 pm |
-| Cleanup (API-assemble prune) | shipped | #11050 closed |
-| E6 v2 cutover | shipped | #10685 closed |
-| E7 smoke | unblocked, awaiting skill | #10686 skill |
-| Tracker hygiene (.backlog-cache) | shipped | #11065 closed |
-| Tracker hygiene (state files on feature branches) | shipped | #11083 closed |
-| Pytest stabilization sweep | all 4 clusters shipped | #11042+44+45+47 |
-| Catalog orphan cleanup | pending-test | #10750 |
-| docs/COMPOSE-ARCHITECTURE.md §4.6 prose refresh | Phase 2.x of #11053 | future |
+All shipped except:
+- **#11053** — Phase 1 v1 awaiting operator §9 review (3 cycles, ~1.5h wait)
+- #10686 — E7 smoke; skill's queue, low-priority pickup
+- #10690 — wiki-link rework; gated on E7
+- 4 TRD PRDs — parked, PM-ready but unscoped this session
 
-## Operator asks (still pending)
+## Operator asks (3 cycles outstanding)
 
-#11053 §9: 5 questions, or `go with defaults`.
+#11053 §9 questions — answer or `go with defaults`:
+1. Subagent type: register `assemble` or use `general-purpose`?
+2. Model default: sonnet + per-slot override?
+3. AC6 retry count: 0 or 1?
+4. Tier B audit timeout: 60s or 120s?
+5. Sixth artifact `CLAUDE.assemble-log.md`?
 
-## Session ship tally: 43 (+2 since cycle 2146: #11083 + #11044)
+## Session ship tally: 44 (+1 since cycle 2147: #10750)
 
 ## Context
 
-healthy (~83%).
+healthy (~85%).
