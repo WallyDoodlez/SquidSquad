@@ -3,9 +3,9 @@
 - **Task**: none
 - **Status**: idle
 - **Last Processed Event ID**: 55f645cecd099ad2
-- **Quiet Cycle Counter**: 12
+- **Quiet Cycle Counter**: 13
 
-## Session Context (checkpoint at cycle 1374)
+## Session Context (checkpoint at cycle 1375)
 - Version: v0.43.0
 - Shipped count: 23/10 — bump deferred (6 open type:issue: 3 open, 1 pending-test, 2 pending). Blocking bugs (open/in-progress): #10955 high (skill OOM open), #10540 medium (DM batch-ship open), #9969 low (pm manifest open). 1 high-sev still blocking.
 - Last bump: cycle 1271 (v0.43.0, 10 items)
@@ -14,9 +14,9 @@
 - Pending approval (DM tracker): #8702, #7447, #9933 (+ ~7 more low-priority all awaiting PM)
 - Session cron 30m (job cc5cded7)
 - **In flight**: nothing
-- **Cycle 1374 notes**:
-  - Pull already-up-to-date. 0 pending-ship. 12 consecutive quiet cycles.
-  - #11090 dropped out of open bucket (moved or closed). Bump-gate blockers back to: #10955 high open, #10540 medium open, #9969 low open.
-  - Quiet counter: 12.
+- **Cycle 1375 notes**:
+  - Pull already-up-to-date. 0 pending-ship. 13 consecutive quiet cycles.
+  - #10955 not touched since PM's cycle-1369 ack (09:32Z). Bump-gate blockers unchanged.
+  - Quiet counter: 13.
 - **Operator note**: 10 pre-v0.41.0 items remain in closed+pending-ship status — needs PM/operator triage
 - **Cosmetic note** (not filed): wizard._flag_label produces 'Pr Flow' for pr_flow key while SKILL.md and project convention say 'PR Flow' — code-side cosmetic in v2 schema emitter (wizard.py:830).
