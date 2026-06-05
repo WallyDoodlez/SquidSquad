@@ -1192,44 +1192,18 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
     header += f"<!-- Regenerate: python references/scripts/compose.py deploy {alias} -->\n\n"
     linked_composite = header + body
 
-    # PRD-B B9 (#10763): assemble pipeline. atomic_emit owns the
-    # triple write (CLAUDE.md + CLAUDE.linked.md + CLAUDE.conflicts.md
-    # post-E6 cutover #10685) so the linked composite lands alongside
-    # the assembled + conflict-report artifacts — completing PRD-B SC1's
-    # "runs unconditionally after link stage" contract. The pipeline
-    # used to be dead code: B1-B7 modules existed but no caller invoked
-    # them (filed as #10752 / #10754; B9 is the wiring story PM scoped
-    # in response).
-    #
-    # Cache is wired via assemble_adapter.make_b6_cache_adapter — the
-    # bridge between B7's slot-shaped seam and B6's key-shaped API.
-    # Without it the pipeline runs cache-disabled (no hit logging, no
-    # second-run speed-up).
+    # atomic_emit owns the triple write (CLAUDE.md + CLAUDE.linked.md
+    # + CLAUDE.conflicts.md post-E6 cutover #10685). Post-#11050 the
+    # LLM assemble pipeline + per-slot cache adapter are gone; every
+    # slot is verbatim, so cache_lookup_fn / cache_store_fn no longer
+    # need to be threaded through. filename_suffix defaults to "" —
+    # v2 outputs ARE the canonical CLAUDE.md.
     import atomic_emit as _atomic_emit
-    import assemble_adapter as _adapter
-    cache_lookup_fn, cache_store_fn = _adapter.make_b6_cache_adapter(
-        alias=alias,
-        # Sonnet is locked compose-time per PRD-B SC10 + B9 AC5 —
-        # ``model_router.get_model_for_task("assemble")`` returns
-        # ``"sonnet"`` regardless of config. We pass the same constant
-        # into the cache key so any later swap to a different model
-        # invalidates the cache by design.
-        model_id="sonnet",
-        # Stable until ``assemble_pass``'s prompt prose changes. Bump
-        # this value when the prompt is rewritten in a way that should
-        # invalidate every cached entry.
-        prompt_version="v1",
-    )
     try:
         triple_paths = _atomic_emit.assemble_and_emit(
             linked_composite,
             output_dir,
             role_class=role,
-            model_id="sonnet",
-            cache_lookup_fn=cache_lookup_fn,
-            cache_store_fn=cache_store_fn,
-            # filename_suffix defaults to "" post-E6 cutover (#10685) —
-            # canonical CLAUDE.md paths. v2 outputs ARE the v1 paths now.
         )
     except Exception as e:
         print(
@@ -1437,21 +1411,13 @@ def deploy_role_v2(role_name: str, target_root: Path = None,
     )
     linked_composite = header + body
 
+    # Post-#11050: cache adapter removed (all slots verbatim → cache unused).
     import atomic_emit as _atomic_emit
-    import assemble_adapter as _adapter
-    cache_lookup_fn, cache_store_fn = _adapter.make_b6_cache_adapter(
-        alias=output_name,
-        model_id="sonnet",
-        prompt_version="v1",
-    )
     try:
         triple_paths = _atomic_emit.assemble_and_emit(
             linked_composite,
             output_dir,
             role_class=role_class,
-            model_id="sonnet",
-            cache_lookup_fn=cache_lookup_fn,
-            cache_store_fn=cache_store_fn,
         )
     except Exception as e:
         print(

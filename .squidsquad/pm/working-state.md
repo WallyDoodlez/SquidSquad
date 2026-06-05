@@ -1,42 +1,43 @@
 # Working State
 
-- **Task**: cycle 2137 — #11052 self-correction (DRY claim retracted)
-- **Status**: in-progress on #11052; awaiting operator review of 4 open questions
+- **Task**: cycle 2140 — pipeline draining well; PM coordination-only
+- **Status**: skill turnaround on #11065 was minutes; #11050 + #11067 shipped today
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
 ## Cycle work (active, light)
 
-Self-correction on #11052 Phase 1 deliverable: the "24 role-norm duplicate" claim was wrong. Those 24 files are L2 role-layers (ordinal 20, `roles:` filter) intentionally adding role-tailored rules on top of common L1 norms. Same H2 heading is a cosmetic verbatim-default symptom that #11053 agent-spawn assemble resolves.
+- Endorsed skill's sequencing improvement on #11042: hold #11048 at last-verified HEAD, merge #11067 first → #11048 re-merges cleanly. Cleaner than PM's split-scope recommendation; no PR boundary fragmentation.
+- No-action on #11066 (skill self-filed, low severity, pre-existing test stale)
 
-Updated CLAUDE-SKILL-CANDIDATES.md inline (retraction + corrected §Always-on norms description). Comment on #11052 explaining the correction. No separate cleanup task filed.
+## Skill velocity this cycle (impressive)
 
-Good catch on my part: a wrong-task to skill would have lost role-specific content.
+- #11065 filed by PM at ~00:32 → skill shipped PR #11067 by 04:43 (~4hr turnaround on a 3-file root-cause bug)
+- #11050 (atomic_emit prune of dead LLM pipeline) shipped per system reminder
+- #11066 self-found during #11050 verification (low-priority follow-up)
 
-## Pipeline (unchanged since cycle 2136)
+## Pipeline
 
-- pending_ship: 1 (#11011 — DM closes)
-- pending_test: 1 (#10855 deferred)
-- in-progress: #11049 (skill — re-pickup with Path A spec), #11052 (pm — awaiting operator)
-- Approved queue: #11050, #11053, skill spinoffs #11044-47
-- Open PRs: 2 (#10952 deferred; #11048 draft)
+- pending_ship: 0
+- pending_test: 2 (#10855 deferred; **#11065 awaiting QA verify on #11067**)
+- in-progress: #11049 (skill), #11042 (skill — holding for #11067)
+- Approved queue: #11053 (gated), #10686 (smoke), #10690 (gated)
+- Open PRs: 3 (#10952 deferred; #11048 holding; **#11067 ready for QA**)
 
-## v3 work map (unchanged)
+## v2 stabilization work map
 
-| Principle | Status | Owner |
+| Surface | Status | Owner |
 |---|---|---|
-| 1. References only, no inline | re-spec'd Path A | #11049 skill |
-| 2. Sub-skill code bundling | deferred (#11051 closed) | — |
-| 3. Claude Skills audit | Phase 1 delivered + self-corrected | #11052 pm |
+| 1. References only, no inline | in-progress (Path A) | #11049 skill |
+| 2. Sub-skill code bundling | deferred | #11051 closed |
+| 3. Claude Skills audit | decided against | #11052 + #10781 closed |
 | 4. Agent-spawn assemble | approved, gated on #11049 | #11053 pm |
-| Cleanup | approved | #11050 skill |
+| Cleanup (API-assemble prune) | **shipped this cycle** | #11050 closed |
+| E7 smoke | unblocked, awaiting skill pickup | #10686 skill |
+| Tracker hygiene (.backlog-cache) | pending-test on PR #11067 | #11065 skill |
 
-## Operator asks (still pending)
-
-For #11052: 4 questions on Tier 3 disposition + .claude/skills/ location + multi-agent invocation + #10781 close.
-
-## Session ship tally: 33
+## Session ship tally: 35 (#11050 ships counts when DM closes)
 
 ## Context
 
-healthy (~38%).
+healthy (~52%).

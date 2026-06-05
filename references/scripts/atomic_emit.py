@@ -1,26 +1,23 @@
-"""Atomic emit + abort semantics for the assemble pass (#10447, PRD-B B7).
+"""Atomic emit of the verbatim §4.6 triple (post-#11011 / #11050).
 
-Wraps the whole assemble pipeline. On success: write the §4.6 triple
-(``CLAUDE.md`` + ``CLAUDE.linked.md`` + ``CLAUDE.conflicts.md``)
-atomically. On any failure: raise an :class:`AssembleError` subclass;
-the prior successful triple (if any) on disk is left untouched, and the
-current run produces zero partial artifacts.
+Wraps what used to be the LLM assemble pipeline. The pipeline was
+retired by commit ``8da22e25`` (#11011 cutover unblock) which expanded
+``_VERBATIM_SLOTS`` to cover all six canonical slots; #11050 then
+pruned the dead LLM / verifier / conflict / cache modules along with
+their injection seams.
 
-Failure modes from the TRD §4.6 table (per issue body AC):
+What remains: split the linked composite into canonical slots, pass
+each through verbatim, write ``CLAUDE.md`` + ``CLAUDE.linked.md`` +
+``CLAUDE.conflicts.md`` (the latter is an empty header — there are no
+conflicts in verbatim mode) atomically. On any write failure raise
+:class:`AssembleError` (or :class:`ConflictReportWriteFail` for the
+conflicts artifact); the output dir is left as it was on failure.
 
-- LLM error → :class:`LLMError`
-- Preservation fail (B2) → :class:`PreservationFail`
-- Floor / parity fail (B3) → :class:`FloorParityFail`
-- Cache corruption → :class:`CacheCorruption` (after one LLM retry)
-- Conflict-report-write fail → :class:`ConflictReportWriteFail`
-- Precedence violation (resolver picked lower L) → :class:`PrecedenceViolation`
-- Link-stage fail → no assemble attempted (caller's lane; we raise
-  :class:`LinkStageFail` if a malformed linked composite reaches us)
-
-Per the AC: "On any abort: prior successful triple untouched; current
-run produces zero partial artifacts." This is enforced by writing all
-three artifacts to ``.tmp`` files first, verifying every write succeeded
-before any rename, then ``os.replace``-ing each into place.
+Reinstating LLM rewrite on a per-slot basis is a future opt-in: remove
+the slot from ``_VERBATIM_SLOTS`` AND wire the dispatcher / verifier /
+resolver back into ``assemble_and_emit``. The cache key contract that
+folded ``model_id`` into a SHA256 is gone with the rest of the
+pipeline; a re-introduction needs to revisit that design.
 """
 
 import os
@@ -74,35 +71,15 @@ _SLOT_DISPLAY = {
 
 
 class AssembleError(Exception):
-    """Base class for assemble-pass failures that trigger §4.6 abort."""
+    """Base class for atomic-write failures (post-#11050: LLM-pipeline subclasses removed)."""
 
     def __init__(self, message, *, slot=None):
         super().__init__(message)
         self.slot = slot  # optional, names the offending slot
 
 
-class LLMError(AssembleError):
-    """The LLM dispatch failed (model_router non-zero / no output / etc.)."""
-
-
-class PreservationFail(AssembleError):
-    """B2 preservation check failed on the assembled body."""
-
-
-class FloorParityFail(AssembleError):
-    """B3 length-floor or code-block-parity failed on the assembled body."""
-
-
-class CacheCorruption(AssembleError):
-    """The cached assembled body failed preservation; re-run also failed."""
-
-
 class ConflictReportWriteFail(AssembleError):
     """Writing CLAUDE.conflicts.md failed (disk-full / permission / etc.)."""
-
-
-class PrecedenceViolation(AssembleError):
-    """B5 detected the resolver picked the lower-L position."""
 
 
 class LinkStageFail(AssembleError):
@@ -128,105 +105,41 @@ def assemble_and_emit(
     generated_at=None,
     # PRD-B B9 (#10763 AC3): filename family selector. Post-E6 cutover
     # (#10685) the default is "" — v2 outputs land at the canonical
-    # CLAUDE.md / linked.md / conflicts.md filenames. Pre-cutover the
-    # default was ".v2.md" to keep §9a coexistence with v1; the cutover
-    # retires that requirement so the default flips.
+    # CLAUDE.md / linked.md / conflicts.md filenames. The ".v2.md"
+    # value is retained for legacy callers / coexistence-era tests.
     filename_suffix="",
-    # Injection seams for tests:
-    assemble_slot_fn=None,
-    parse_output_fn=None,
-    resolve_fn=None,
-    emit_report_fn=None,
-    cache_lookup_fn=None,
-    cache_store_fn=None,
 ):
-    """Run the full assemble pass + atomic write of the §4.6 triple.
+    """Atomic write of the §4.6 verbatim triple.
 
-    Returns the on-disk paths ``(claude_md, claude_linked_md, claude_conflicts_md)``
-    on success. Raises an :class:`AssembleError` subclass on any failure
-    mode; the output directory is NOT modified on failure (any ``.tmp``
-    files are cleaned up before re-raising).
+    Returns ``(claude_md, claude_linked_md, claude_conflicts_md)`` on-disk
+    paths. Raises :class:`LinkStageFail` if ``linked_composite`` has no
+    canonical ``## <Slot>`` headings; raises :class:`AssembleError` or
+    :class:`ConflictReportWriteFail` on write failure. On any failure no
+    artifacts are produced — ``.tmp`` files are unlinked before re-raise.
 
-    ``linked_composite`` is the full string from ``emit_v2_linked``
-    (A2d). It must contain exactly the six canonical ``## <Slot>``
-    headings — anything else raises :class:`LinkStageFail`.
+    ``linked_composite`` is the full string from ``v2_link_stage.emit_v2_linked``.
+    ``output_dir`` is typically ``.squidsquad/<alias>/``.
 
-    ``output_dir`` is typically ``.squidsquad/<alias>/`` (the same dir
-    A6/A2f's v2 deploy writes to). The three files are written into
-    that dir; the dir itself is created lazily.
-
-    ``cache_lookup_fn(slot, linked_slot_body) -> str | None`` and
-    ``cache_store_fn(slot, linked_slot_body, assembled_llm_output)``
-    integrate B6's per-slot cache. A cache hit whose body fails
-    verification is treated as cache-corruption: the LLM is re-run
-    ONCE; if the re-run also fails verification, :class:`CacheCorruption`
-    is raised (per the §4.6 failure-mode table). A cache miss runs the
-    LLM normally; verification failures on a fresh (no-cache) run raise
-    :class:`PreservationFail` / :class:`FloorParityFail` /
-    :class:`PrecedenceViolation` directly — no retry. Both seams default
-    to no-op (cache-disabled mode) so tests and the v2-without-cache
-    path keep working unchanged.
-
-    Injection seams take the real modules' callables by default. Tests
-    pass stubs to exercise each failure mode without a live LLM.
+    Post-#11050: every slot is verbatim, so there is no LLM dispatch,
+    no preservation/floor/parity check, and no per-slot cache. The
+    conflicts artifact is always an empty-header marker (no conflict
+    records to report).
     """
-    if assemble_slot_fn is None or parse_output_fn is None \
-            or resolve_fn is None or emit_report_fn is None:
-        # Lazy-import the real implementations only when defaults are
-        # requested. Tests can supply all four without any of these
-        # being importable, which keeps the failure-path test suite
-        # tight and fast.
-        from assemble_pass import assemble_slot as _assemble_slot
-        from conflict_detector import (
-            parse_assemble_output as _parse_assemble_output,
-            emit_conflict_report as _emit_conflict_report,
-        )
-        from conflict_resolver import resolve as _resolve
-        assemble_slot_fn = assemble_slot_fn or _assemble_slot
-        parse_output_fn = parse_output_fn or _parse_assemble_output
-        resolve_fn = resolve_fn or _resolve
-        emit_report_fn = emit_report_fn or _emit_conflict_report
-
     slot_inputs = _split_linked_into_slots(linked_composite)
     if not slot_inputs:
         raise LinkStageFail(
             "Linked composite contains no canonical `## <Slot>` headings — "
             "the link stage produced an unusable output. Aborting before "
-            "any assemble dispatch."
+            "the triple write."
         )
 
-    assembled_per_slot = {}
-    conflicts_per_slot = {}
+    assembled_per_slot = {
+        slot: slot_inputs.get(slot, "") for slot in _CANONICAL_SLOTS
+    }
 
-    for slot in _CANONICAL_SLOTS:
-        linked_slot_body = slot_inputs.get(slot, "")
-
-        if slot in _VERBATIM_SLOTS:
-            # B1 contract: project-context + vault pass through verbatim.
-            # No preservation, no conflict, no resolver.
-            assembled_per_slot[slot] = linked_slot_body
-            conflicts_per_slot[slot] = []
-            continue
-
-        body, conflicts = _assemble_one_slot(
-            slot, linked_slot_body,
-            assemble_slot_fn=assemble_slot_fn,
-            parse_output_fn=parse_output_fn,
-            resolve_fn=resolve_fn,
-            cache_lookup_fn=cache_lookup_fn,
-            cache_store_fn=cache_store_fn,
-        )
-        assembled_per_slot[slot] = body
-        conflicts_per_slot[slot] = conflicts
-
-    # Build the three artifacts.
     claude_md = _build_claude_md(assembled_per_slot)
     claude_linked_md = linked_composite
-    all_conflicts = [
-        c for slot in _CANONICAL_SLOTS for c in conflicts_per_slot.get(slot, [])
-    ]
-    claude_conflicts_md = emit_report_fn(
-        all_conflicts,
+    claude_conflicts_md = _empty_conflicts_report(
         role_class=role_class,
         model_id=model_id,
         commit_sha=commit_sha,
@@ -244,125 +157,24 @@ def assemble_and_emit(
     )
 
 
-def _assemble_one_slot(slot, linked_slot_body, *,
-                       assemble_slot_fn, parse_output_fn, resolve_fn,
-                       cache_lookup_fn=None, cache_store_fn=None):
-    """Produce ``(body, conflicts)`` for one non-verbatim slot.
+def _empty_conflicts_report(*, role_class, model_id, commit_sha, generated_at):
+    """Empty-conflicts CLAUDE.conflicts.md (post-#11050 verbatim mode).
 
-    Implements the §4.6 cache flow: cache hit + valid → return; cache
-    hit + corrupt → re-run LLM once, raise :class:`CacheCorruption` if
-    the retry also fails; cache miss → run LLM, raise the per-mode
-    exception on verification fail (no retry); store on success.
+    Replaces ``conflict_detector.emit_conflict_report`` for the always-zero
+    case. Format kept compact and self-describing so an operator opening
+    the file sees why it's empty.
     """
-    cached_output = None
-    if cache_lookup_fn is not None:
-        try:
-            cached_output = cache_lookup_fn(slot, linked_slot_body)
-        except Exception:  # noqa: BLE001 — a cache backend error is treated as miss
-            cached_output = None
-
-    if cached_output is not None:
-        # Verify the cached output. Verification covers parse + resolve;
-        # a cached body that parses cleanly AND passes B2/B3/B5 is good.
-        if _try_verify(cached_output, linked_slot_body,
-                       parse_output_fn=parse_output_fn,
-                       resolve_fn=resolve_fn) is not None:
-            body, conflicts = parse_output_fn(cached_output)
-            return body, conflicts
-        # Cache corruption: re-run LLM once.
-        try:
-            retry_output = assemble_slot_fn(slot, linked_slot_body)
-        except Exception as e:  # noqa: BLE001
-            raise LLMError(
-                f"assemble_slot raised on slot `{slot}` during cache-corruption retry: {e}",
-                slot=slot,
-            ) from e
-        verify_result = _try_verify(retry_output, linked_slot_body,
-                                    parse_output_fn=parse_output_fn,
-                                    resolve_fn=resolve_fn)
-        if verify_result is None:
-            raise CacheCorruption(
-                f"Cached assembled body failed verification on slot `{slot}` "
-                f"AND the one-shot LLM retry also failed verification. "
-                f"Aborting per §4.6 cache-corruption table entry.",
-                slot=slot,
-            )
-        # Retry passed — persist the new body and use it.
-        if cache_store_fn is not None:
-            try:
-                cache_store_fn(slot, linked_slot_body, retry_output)
-            except Exception:  # noqa: BLE001 — store failure does not invalidate the run
-                pass
-        body, conflicts = verify_result
-        return body, conflicts
-
-    # Cache miss (or cache disabled): run LLM fresh.
-    try:
-        llm_output = assemble_slot_fn(slot, linked_slot_body)
-    except Exception as e:  # noqa: BLE001
-        raise LLMError(
-            f"assemble_slot raised on slot `{slot}`: {e}",
-            slot=slot,
-        ) from e
-    try:
-        body, conflicts = parse_output_fn(llm_output)
-    except Exception as e:  # noqa: BLE001
-        raise LLMError(
-            f"parse_assemble_output failed on slot `{slot}`: {e}",
-            slot=slot,
-        ) from e
-    issues, reverify = resolve_fn(body, conflicts, linked_slot_body)
-    if issues:
-        raise PrecedenceViolation(
-            f"Higher-L-wins violation in slot `{slot}`: "
-            f"CONFLICT-{issues[0].conflict_index:03d} "
-            f"({issues[0].winner_layer}>{issues[0].loser_layer}): "
-            f"{issues[0].detail}",
-            slot=slot,
-        )
-    if not reverify.preservation_ok:
-        raise PreservationFail(
-            f"Preservation check (B2) failed on slot `{slot}`: "
-            f"missing_sub_skills={reverify.preservation.missing_sub_skills}, "
-            f"extra_sub_skills={reverify.preservation.extra_sub_skills}, "
-            f"missing_step_ids={reverify.preservation.missing_step_ids}, "
-            f"extra_step_ids={reverify.preservation.extra_step_ids}",
-            slot=slot,
-        )
-    if not reverify.length_floor_ok or not reverify.code_block_parity_ok:
-        raise FloorParityFail(
-            f"Length-floor/code-block-parity (B3) failed on slot `{slot}`: "
-            f"length_floor_ok={reverify.length_floor_ok}, "
-            f"code_block_parity_ok={reverify.code_block_parity_ok}",
-            slot=slot,
-        )
-    if cache_store_fn is not None:
-        try:
-            cache_store_fn(slot, linked_slot_body, llm_output)
-        except Exception:  # noqa: BLE001
-            pass
-    return body, conflicts
-
-
-def _try_verify(llm_output, linked_slot_body, *, parse_output_fn, resolve_fn):
-    """Internal: verify an LLM output. Returns ``(body, conflicts)`` on
-    success or ``None`` on any failure (parse-error, precedence violation,
-    B2/B3 fail). Used by the cache-corruption path which needs to know
-    whether the body is acceptable WITHOUT raising — the caller decides
-    whether to retry or abort based on the answer.
-    """
-    try:
-        body, conflicts = parse_output_fn(llm_output)
-    except Exception:  # noqa: BLE001
-        return None
-    issues, reverify = resolve_fn(body, conflicts, linked_slot_body)
-    if issues:
-        return None
-    if not reverify.preservation_ok:
-        return None
-    if not reverify.length_floor_ok or not reverify.code_block_parity_ok:
-        return None
-    return body, conflicts
+    stamp = generated_at if generated_at is not None else "<unset>"
+    return (
+        "# Assemble conflicts\n\n"
+        f"- role_class: {role_class}\n"
+        f"- model_id: {model_id}\n"
+        f"- commit_sha: {commit_sha}\n"
+        f"- generated_at: {stamp}\n\n"
+        "No conflict records — every canonical slot is verbatim "
+        "(`_VERBATIM_SLOTS` = all 6) so no LLM dispatch or resolver "
+        "pass runs. See atomic_emit module docstring for reinstatement.\n"
+    )
 
 
 def _split_linked_into_slots(linked_composite):
