@@ -415,7 +415,7 @@ Compose is a **two-stage compiler**: **link** then **assemble**.
 | **Link** (§4.1–§4.5) | Gather L1-L4 sources by slot, filter by role-class, sort by `(slot_index, ordinal)`, apply L4 ops (replace / insert-before / insert-after / append), validate sub-skill references. Produces the raw **linked** composite per slot. | Deterministic — given `(role-class, source-tree-hash, L4-tree-hash)`, the linked output is bit-stable. Compose is wake-mode-blind (per §3.0 and §6.5), so wake-mode is not a determinism input. |
 | **Assemble** (§4.6) | Each linked slot body is rewritten by an agent into a single coherent voice — eliminates contradictions, conditional negations, awkward insertions left over from op layering. Produces the final agent-consumable **assembled** prose. | Stochastic on first run; cached by `(linked-body, slot-purpose, model-id)` hash, so deterministic from the caller's POV across re-deploys with unchanged inputs. |
 
-Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). The **linked** output is preserved as a sibling artifact (`.squidsquad/<alias>/CLAUDE.linked.md`) for audit, debugging, and fallback when the assemble pass fails. Both are git-tracked.
+Runtime agents read the **assembled** output (`.squidsquad/<alias>/CLAUDE.md`). The **linked** output is preserved as a sibling artifact (`.squidsquad/<alias>/CLAUDE.linked.md`) for audit and debugging only — runtime agents never read it, and per-slot subagent failures do not fall back to the linked file at runtime. Per-slot fallback semantics are defined in §4.6 (failure modes table); the runtime always reads the assembled `CLAUDE.md`. Both files are git-tracked.
 
 **Why two stages**: the slot+ops model is expressive at authoring time but composes a body that can carry contradictions, conditional negations of prior content, and inserts in awkward positions. A runtime agent reading the linked output would have to mentally reconcile all of that on every cycle — wasting context and creating ambiguity. The assemble pass collapses the layered linked output into a single coherent voice once at deploy time, so the runtime cost is zero.
 
@@ -484,20 +484,22 @@ flowchart TB
   L4Apply --> Validate{Validate:<br/>L4 targets resolve?<br/>DRY ok? no orphans?}
   Validate -->|fail| Abort([Abort with diagnostic<br/>no output written])
   Validate -->|pass| EmitLinked["Emit linked composite<br/>(per-slot bodies in memory only)"]
-  EmitLinked --> Assemble{{"§4.6 — Assemble pass<br/>(per slot)"}}
+  EmitLinked --> Assemble{{"§4.6 — Assemble pass<br/>(per slot, unconditional<br/>for non-forced-verbatim slots)"}}
   Assemble --> Cache{Cache hit on<br/>hash(linked, slot, model)?}
   Cache -->|hit| FromCache[Reuse cached<br/>assembled body]
-  Cache -->|miss| LLM[Agent rewrites linked body<br/>into coherent voice]
-  LLM -->|LLM error| AbortAsm([Abort with diagnostic<br/>no output written])
-  LLM --> AsmValidate{Preservation check:<br/>sub-skill refs +<br/>step IDs preserved?<br/>length ≥ floor?<br/>code-block parity?}
-  AsmValidate -->|fail| AbortAsm
+  Cache -->|miss| LLM["Agent-tool spawn<br/>(subagent_type: assemble)<br/>rewrites linked body<br/>into coherent voice"]
+  LLM -->|"per-slot soft failure<br/>(timeout / refusal /<br/>JSON parse / AC6 after retry /<br/>per-slot preservation drop)"| Verbatim["Fall back to verbatim<br/>for this slot;<br/>log fallback reason in<br/>CLAUDE.conflicts.md"]
+  LLM -->|success| AsmValidate{Structural preservation:<br/>sub-skill ref set ≡ linked?<br/>step ID set ≡ linked?<br/>length ≥ floor?<br/>code-block parity?}
+  AsmValidate -->|"structural<br/>violation"| AbortAsm([Abort whole compose<br/>with diagnostic<br/>no triple written])
   AsmValidate -->|pass| StoreCache[Store in cache]
   FromCache --> WriteAtomic
   StoreCache --> WriteAtomic
-  WriteAtomic{{"Atomic write:<br/>CLAUDE.md + CLAUDE.linked.md +<br/>CLAUDE.conflicts.md"}}
+  Verbatim --> WriteAtomic
+  WriteAtomic{{"Atomic write:<br/>CLAUDE.md + CLAUDE.linked.md +<br/>CLAUDE.conflicts.md<br/>(triple lands together or<br/>not at all — partial-assemble<br/>runs still emit atomically)"}}
   WriteAtomic --> Done([Done — agents read CLAUDE.md])
   style Abort fill:#fdd
   style AbortAsm fill:#fdd
+  style Verbatim fill:#fef
   style Done fill:#dfd
 ```
 
