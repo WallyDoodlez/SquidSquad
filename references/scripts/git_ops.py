@@ -654,7 +654,14 @@ def _role_owned_patterns(role):
     """
     common = [
         f".squidsquad/{role}/",
-        ".squidsquad/.backlog-cache",
+        # ``.squidsquad/.backlog-cache`` removed 2026-06-05 (#11065): the
+        # file is gitignored (`.gitignore:13-14`) so it has no business
+        # in the state-commit allowlist. Leaving it here caused every
+        # cycle to re-stage the tracked file and 3-way conflict against
+        # any open PR that ``git rm --cached``d it (see #11042's two
+        # route-backs on PR #11048 for the symptom). The file still
+        # gets written locally for whatever in-cycle scripts read it,
+        # but it never enters the index again.
         ".squidsquad/.event-state.json",
         ".squidsquad/vault/",
     ]
