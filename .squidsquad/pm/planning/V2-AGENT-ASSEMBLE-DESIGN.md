@@ -174,6 +174,52 @@ The active dev agents on this project are listed in `.squidsquad/config.md` (Wor
 
 This worked example is what Phase 2.4 operator-driven prompt tuning iterates on. The prompt template in §2.1 should produce something close to the sketch on the first run.
 
+### 2.5 Worked example — PM responsibility slot (the boring case)
+
+Counter-example: a slot where the assemble subagent should produce output that is nearly identical to the input. This documents that "no rewrite needed" is a legal output state.
+
+PM responsibility slot has two source files:
+- L4 `references/sub-skills/project/pm-responsibility.md` ordinal 10 — currently a stub ("No install-specific responsibility additions for pm at this time.")
+- L2 `references/roles/pm/responsibility.md` ordinal 20 — the full role-specific content (3 H3 sections, ~24 lines)
+
+The linked input the subagent sees:
+
+```
+# pm — Install-specific responsibility additions (L4)
+
+No install-specific responsibility additions for pm at this time.
+
+To add: replace this stub with directives in the same shape as L2 ...
+
+## Responsibility
+
+### What this role does
+
+- Coordinates the squad: investigates the pipeline state every cycle, ...
+- Interfaces with the human each cycle: captures new requirements, ...
+[...continues with full role content...]
+```
+
+**Expected output**: drop the L4 stub (it's literally "no additions"), keep the L2 content verbatim. The subagent should recognize the L4 stub as non-content and emit:
+
+```
+## Responsibility
+
+### What this role does
+
+- Coordinates the squad: investigates the pipeline state every cycle, ...
+- Interfaces with the human each cycle: captures new requirements, ...
+[...continues with full role content verbatim...]
+```
+
+**Conflicts**: zero. The L4 stub doesn't contradict L2; it's an empty placeholder.
+
+**Justification cited**: none needed. No overrides applied. The conflicts.md entry for this slot is: `Total conflicts resolved: 0`.
+
+**What this example teaches**: the subagent's value is in conflict resolution, not unconditional rewriting. Most slot rewrites with default L4 content (stubs everywhere) should be near-verbatim. Phase 2.4 tuning includes a "don't rewrite unnecessarily" instruction so the subagent doesn't paraphrase coherent prose just because it can.
+
+This pattern (L4 stub + L2 full) is the COMMON case for responsibility / instructions / soul slots in a fresh install. Identity is the exception — its L4 typically has real content because project naming is install-specific.
+
 ---
 
 ## 3. Opt-in config surface
