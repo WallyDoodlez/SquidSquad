@@ -1,0 +1,5 @@
+# Iteration 268
+
+- **Date**: 2026-06-05 01:42
+- **Type**: ship-batch
+- **Note**: Cycle 1350 — batch-shipped two PRs, both CLEAN/MERGEABLE on first probe. (1) #11066: PR #11068 squash-merged as faebbf86 — corrupted-L4 test fixture updated to use op-like keyword + malformed remainder (8/8 PASS). (2) #11042: PR #11048 squash-merged as 4bd9d6e9 — the #11065 fix unblocked the merge-spiral; skill re-merged with zero conflicts at HEAD 5de4b7c5, QA re-verified 270/270 PASS. The 5 in-scope stale-ref clusters land (installer-files.txt prune, TestEventReactionsTable removed, rebase→merge tokens, worker/verifier rename, .backlog-cache untrack). Counter 13 → 15. Bump still deferred — 12 open type:issue remaining (4 high-sev: #11043, #10955, #11044, #10541; follow-ups #11045/46/47 still open). CHANGELOG deferred to v0.44.0 — entries: "Fixed: corrupted-L4 test fixture (#11066)" + "Fixed: 5 stale-ref clusters in pytest suite (#11042 — installer-files.txt prune, dead test removal, token migration, role-rename, .backlog-cache untrack)".
