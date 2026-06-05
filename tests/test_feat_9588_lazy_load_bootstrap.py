@@ -254,12 +254,19 @@ def test_tc_11_changed_area_test_suites_green():
     the live AC walk (TCs 1-10, 12-14) plus the changed-area suites
     enumerated below — every test module touched or directly related to
     the lazy-load contract.
+
+    #11045: dropped ``tests/test_event_mode_fragments.py`` from the suite
+    list. That module's failures (4 errors on missing
+    ``references/roles/<role>/includes-events.yml`` per the post-cutover
+    event-mode retirement) are tracked separately as #11046 — they
+    cascade into TC-11 but are orthogonal to #9588's bootstrap lazy-load
+    contract. TC-11 should fail when bootstrap or compose breaks, not
+    when an unrelated event-mode manifest gap exists.
     """
     suites = [
         "tests/test_compose.py",
         "tests/test_compose_9588.py",
         "tests/test_manifest.py",
-        "tests/test_event_mode_fragments.py",
     ]
     r = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "--tb=short", *suites],
@@ -318,6 +325,19 @@ def test_tc_13_manifest_no_runtime_read_entries(role, manifest_file):
 
 # TC-14
 def test_tc_14_compose_runtime_read_frozenset_present():
+    """RUNTIME_READ_FRAGMENTS frozenset is present in compose.py with the
+    expected runtime-loaded entries, and the short-circuit drops each
+    matching include directive before further expansion.
+
+    #11045: post-E6 V2 cutover (#10999 / commit 1050bfe0) deleted the v1
+    ``_resolve_includes`` chain that owned the variant-resolution heuristic
+    (``m_base.startswith(base + "-") or base.startswith(m_base + "-")``);
+    v2's ``_resolve_includes_v2`` (compose.py:131) iterates ``{{include:}}``
+    matches with a regex callback and uses the local variable ``path``
+    rather than ``include_path``. The short-circuit there is the only
+    runtime-fragment check left in compose, so this test just pins its
+    presence (no ordering comparison against a since-deleted heuristic).
+    """
     src = (SCRIPTS_DIR / "compose.py").read_text(encoding="utf-8")
     assert "RUNTIME_READ_FRAGMENTS = frozenset" in src
     required = [
@@ -337,16 +357,9 @@ def test_tc_14_compose_runtime_read_frozenset_present():
         assert f'"{entry}"' in src, (
             f"RUNTIME_READ_FRAGMENTS missing {entry!r}"
         )
-    # Short-circuit check: the `if include_path in RUNTIME_READ_FRAGMENTS: continue`
-    # must precede the variant-resolution heuristic. Match the actual code
-    # line (not the comment that also mentions m_base.startswith).
-    short_circuit_idx = src.find("if include_path in RUNTIME_READ_FRAGMENTS")
-    variant_idx = src.find(
-        'if m_base.startswith(base + "-") or base.startswith(m_base + "-"):'
-    )
-    assert short_circuit_idx != -1, "Missing RUNTIME_READ_FRAGMENTS short-circuit"
-    assert variant_idx != -1, "Missing variant-resolution heuristic code line"
-    assert short_circuit_idx < variant_idx, (
-        f"RUNTIME_READ_FRAGMENTS short-circuit (byte {short_circuit_idx}) must "
-        f"run BEFORE variant heuristic (byte {variant_idx})"
+    # Post-V2-cutover: the short-circuit lives inside _resolve_includes_v2
+    # as `if path in RUNTIME_READ_FRAGMENTS:`. The pre-cutover variant
+    # heuristic that this ordering check compared against is gone.
+    assert "if path in RUNTIME_READ_FRAGMENTS" in src, (
+        "Missing RUNTIME_READ_FRAGMENTS short-circuit in _resolve_includes_v2"
     )
