@@ -726,8 +726,29 @@ def commit_role_scoped(role, message):
     `_role_owned_patterns`). Foreign files are left in the working tree and
     surfaced as a stderr warning so the investigator can route them.
 
+    #11083: refuses to stage when the current branch is not the configured
+    working branch. Role-state commits belong on `main` (or whatever
+    `working-branch` resolves to), not on a feature branch — landing them
+    on a sibling agent's feature branch was the root cause of PR #11080's
+    `BRIEFING.md` merge-spiral (PM's cycle hit a task-begin/task-end race
+    while skill held the checkout). On a non-working branch, write-on-disk
+    cycle behavior is unchanged; the staged commit is skipped and the
+    files wait for the next cycle that lands on the working branch.
+
     Returns True if a commit (and push) succeeded, False otherwise.
     """
+    working = _get_working_branch()
+    current = _run("git branch --show-current").stdout.strip()
+    if current != working:
+        print(
+            f"WARNING: cycle commit skipped — current branch '{current}' "
+            f"is not the configured working branch '{working}'. Role-state "
+            f"files stay on disk; the next cycle on '{working}' will commit "
+            f"them. (#11083)",
+            file=sys.stderr,
+        )
+        return False
+
     result = _run("git status --porcelain", check=False)
     if not result.stdout.strip():
         print("Nothing to commit")
