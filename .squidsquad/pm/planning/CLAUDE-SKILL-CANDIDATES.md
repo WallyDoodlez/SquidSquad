@@ -13,7 +13,7 @@ Companion: [`docs/COMPOSE-ARCHITECTURE.md`](../../../docs/COMPOSE-ARCHITECTURE.m
 
 **Headline recommendation**: promote the 18 Tier 1 sub-skills to Claude Skills under `.claude/skills/<name>/SKILL.md`. They're discrete, user-invocable capabilities with self-contained input/output contracts. Keep the 91 Tier 2 sub-skills as composed content (cycle-loop infra, always-on norms, L4 templates, per-domain inline). Resolve the 7 Tier 3 hybrids with operator — most likely answer is "both" (composed cycle-tick + invocable on demand), needing a new pattern that doesn't exist today.
 
-**Critical DRY finding (out of scope but flagged)**: 24 role-specific sub-skill files duplicate the 9 `common/` norm files (e.g., `roles/pm/prohibitions.md` mirrors `common/prohibitions.md`). This is a real `feedback_compose_dry` violation independent of the Claude Skill question. Should be filed as a separate cleanup task after this classification lands.
+**Earlier "DRY violation" claim retracted (cycle 2137)**: I previously flagged 24 role-specific norm files as duplicates of 9 `common/` norms. On inspection that's wrong — they're L2 role-specific layers (different `ordinal: 20`, `roles: [pm]` filter) intentionally adding role-tailored rules on top of common L1 base. Same H2 heading IS the real problem (composed output has two `## What You Must Never Do` sections — one from common, one from role-specific). That's exactly what §4.6 assemble was designed to merge into a single coherent voice. The "duplication" smell is the cost of the verbatim-default that we picked when retiring the API-based assemble. Resolution path: agent-spawn assemble per #11053 (covers this case automatically); no DRY cleanup task needed.
 
 ---
 
@@ -67,15 +67,15 @@ Already specified in [#11049](https://github.com/WallyDoodlez/SquidSquad/issues/
 
 These are runtime-Read by `boot-bootstrap.md` Step 3 (event-mode contract). They're not composed but also not Claude Skills — they're mode-conditional instruction fragments the agent reads at boot before any tool use.
 
-### Always-on norms (33: 9 common + 24 role-duplicates)
+### Always-on norms (33: 9 common L1 + 24 role-specific L2)
 
-**common/ (9)**: `agent-boundaries`, `chat-etiquette`, `consensus-protocol`, `discussion-protocol`, `file-conventions`, `interval-sync`, `mention-protocol`, `pickup-comment-fidelity`, `prohibitions`.
+**common/ (9)**: `agent-boundaries`, `chat-etiquette`, `consensus-protocol`, `discussion-protocol`, `file-conventions`, `interval-sync`, `mention-protocol`, `pickup-comment-fidelity`, `prohibitions`. These are L1 base (no `roles:` filter, `ordinal: 10`) — apply to every role.
 
-**roles/{dm,pm,verifier,worker}/ (24 duplicates)**: per-role copies of `discussion-protocol`, `file-conventions`, `issue-filing`, `prohibitions`, `ralph-loop-overview`, `responsibility`, `status-line`, `task-pickup` for each of 3-4 roles. (Note: `issue-filing` appears here per role even though common has its own; the role-specific variant adds role-routing rules to the common base.)
+**roles/{dm,pm,verifier,worker}/ (24 L2 role-layers)**: per-role variants of `discussion-protocol`, `file-conventions`, `issue-filing`, `prohibitions`, `ralph-loop-overview`, `responsibility`, `status-line`, `task-pickup` for each of 3-4 roles. These have `ordinal: 20` + `roles: [<role>]` and intentionally add role-specific rules under the same H2 heading as the L1 base (e.g., `roles/pm/prohibitions.md` adds PM-specific "Never approve a task without explicit human confirmation" under the same `## What You Must Never Do` as `common/prohibitions.md`).
 
-These govern how the agent behaves at all times (e.g., `prohibitions` enumerates what each role MUST NOT do; `discussion-protocol` defines comment formatting). Cannot be on-demand because they don't have an "invoke me" trigger — they're constraints, not actions.
+These govern how the agent behaves at all times. Cannot be on-demand because they don't have an "invoke me" trigger — they're constraints, not actions.
 
-**DRY violation flagged** (separate task): 24 role-duplicates often re-state the common norm with a thin role layer. Either (a) extract the role-layer into L2 instructions.md and reference common via `→ run sub-skill:`, or (b) the include-resolver in `compose.py` was meant to handle this via L1-then-L2 layering but currently produces both inlined. Out of scope for #11052 itself; surface to operator.
+**Same-H2-heading layering is by design** (§3.2 slot + ordinal). Composed output today has both L1 and L2 H2 sections back-to-back (`## What You Must Never Do` from L1, then `## What You Must Never Do` from L2). §4.6 assemble was designed to merge these into a single coherent voice. With assemble currently verbatim, the duplicate H2 stays in the composed output — cosmetic noise, not a content bug. Resolution: agent-spawn assemble per #11053 handles this case automatically when operator opts the `instructions` slot in.
 
 ### L4 templates / project-customization seeds (16)
 
@@ -117,7 +117,7 @@ Each runs as a cycle-phase activity AND could plausibly be invoked on demand. Pe
 
 ## Cross-cutting concerns surfaced during classification
 
-1. **Role-norm DRY violation** (24 duplicate norm files): real `feedback_compose_dry` violation independent of Claude Skill question. File separate cleanup task after this classification lands.
+1. ~~**Role-norm DRY violation** (24 duplicate norm files)~~ — **retracted** (see updated §Tier 2 Always-on norms above). This is L1+L2 layering working as designed; the duplicate H2 in composed output is a cosmetic side-effect of verbatim default, resolved by #11053 agent-spawn assemble when operator opts the `instructions` slot in.
 
 2. **`improvement-scan` vs `improvement-scan-slim`**: the slim version is in mandatory inline (per #11049 spec); the full version is Tier 1 candidate. Naming suggests this was the original intent — slim for cycle gate, full for on-demand. Confirms the Tier 3 "cycle-tick invokes skill" pattern is workable for at least one case.
 
