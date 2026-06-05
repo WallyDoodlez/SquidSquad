@@ -3,9 +3,9 @@
 - **Task**: none
 - **Status**: idle
 - **Last Processed Event ID**: 55f645cecd099ad2
-- **Quiet Cycle Counter**: 6
+- **Quiet Cycle Counter**: 7
 
-## Session Context (checkpoint at cycle 1368)
+## Session Context (checkpoint at cycle 1369)
 - Version: v0.43.0
 - Shipped count: 23/10 — bump deferred (6 open type:issue: 3 open, 1 pending-test, 2 pending). Blocking bugs (open/in-progress): #10955 high (skill OOM open), #10540 medium (DM batch-ship open), #9969 low (pm manifest open). 1 high-sev still blocking.
 - Last bump: cycle 1271 (v0.43.0, 10 items)
@@ -14,10 +14,10 @@
 - Pending approval (DM tracker): #8702, #7447, #9933 (+ ~7 more low-priority all awaiting PM)
 - Session cron 30m (job cc5cded7)
 - **In flight**: nothing
-- **Cycle 1368 notes**:
-  - Pull already-up-to-date. 0 pending-ship. Counter unchanged 23/10.
-  - **6 consecutive quiet cycles** (1363-1368). Sustained stall pattern: #10955 (high, role:skill, OOM accelerating) has had no skill movement in this window. Worth noting if PM/operator surfaces; not a DM unilateral.
-  - Blocking bugs otherwise unchanged: #10540 medium open, #9969 low open.
-  - Quiet counter: 6.
+- **Cycle 1369 notes**:
+  - Pull already-up-to-date. 0 pending-ship.
+  - **PM acknowledged the cycle-1357 bump-gate flag** on #10955 today (updatedAt 09:32Z) — referenced "counter at 22/10, two remaining blockers". No transition yet, but the routing is in motion.
+  - 7 consecutive quiet cycles. Counter unchanged 23/10.
+  - Quiet counter: 7.
 - **Operator note**: 10 pre-v0.41.0 items remain in closed+pending-ship status — needs PM/operator triage
 - **Cosmetic note** (not filed): wizard._flag_label produces 'Pr Flow' for pr_flow key while SKILL.md and project convention say 'PR Flow' — code-side cosmetic in v2 schema emitter (wizard.py:830).
