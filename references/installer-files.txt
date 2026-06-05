@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 219 files
+# Total: 182 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -136,81 +136,48 @@ references/sub-skills/common/chat-etiquette.md
 references/sub-skills/common/consensus-protocol.md
 references/sub-skills/common/context-pressure.md
 references/sub-skills/common/cycle-runner.md
-references/sub-skills/common/discussion-protocol.md
-references/sub-skills/common/file-conventions.md
 references/sub-skills/common/git-commit.md
 references/sub-skills/common/improvement-scan-slim.md
 references/sub-skills/common/improvement-scan.md
 references/sub-skills/common/interval-sync.md
 references/sub-skills/common/issue-filing.md
 references/sub-skills/common/mention-protocol.md
-references/sub-skills/common/prohibitions.md
 references/sub-skills/common/resume-working-state.md
 references/sub-skills/common/self-restart.md
-references/sub-skills/common/status-line.md
 references/sub-skills/common/vault-optimize.md
 references/sub-skills/common/vault-protocol-slim.md
 references/sub-skills/common/vault-protocol.md
 references/sub-skills/common/vault-remember.md
 references/sub-skills/common/working-state.md
 references/sub-skills/manifest.md
-references/sub-skills/roles/worker/android/domain-context.md
-references/sub-skills/roles/worker/fullstack/domain-context.md
 references/sub-skills/roles/worker/implement-tasks.md
-references/sub-skills/roles/worker/ios/domain-context.md
-references/sub-skills/roles/worker/skill/domain-context.md
 references/sub-skills/roles/worker/triage-issues.md
-references/sub-skills/roles/worker/web/domain-context.md
-references/sub-skills/roles/dm/android/domain-context.md
 references/sub-skills/roles/dm/delivery-packaging.md
 references/sub-skills/roles/dm/discussion-protocol.md
 references/sub-skills/roles/dm/doc-improvement-loop.md
-references/sub-skills/roles/dm/file-conventions.md
-references/sub-skills/roles/dm/fullstack/domain-context.md
-references/sub-skills/roles/dm/ios/domain-context.md
 references/sub-skills/roles/dm/issue-filing.md
 references/sub-skills/roles/dm/issue-triage.md
 references/sub-skills/roles/dm/task-pickup.md
-references/sub-skills/roles/dm/prohibitions.md
-references/sub-skills/roles/dm/skill/domain-context.md
-references/sub-skills/roles/dm/status-line.md
 references/sub-skills/roles/dm/version-bumps.md
-references/sub-skills/roles/dm/web/domain-context.md
 references/sub-skills/project/shared-instructions.md
 references/sub-skills/project/shared-soul-directives.md
-references/sub-skills/roles/pm/android/domain-context.md
 references/sub-skills/roles/pm/checkin.md
 references/sub-skills/roles/pm/delivery.md
 references/sub-skills/roles/pm/discussion-protocol.md
-references/sub-skills/roles/pm/file-conventions.md
-references/sub-skills/roles/pm/fullstack/domain-context.md
 references/sub-skills/roles/pm/github-issues.md
 references/sub-skills/roles/pm/health-check.md
 references/sub-skills/roles/pm/improvement-scan.md
-references/sub-skills/roles/pm/ios/domain-context.md
 references/sub-skills/roles/pm/issue-filing.md
 references/sub-skills/roles/pm/own-domain-autofix.md
 references/sub-skills/roles/pm/pipeline-sentinel.md
-references/sub-skills/roles/pm/prohibitions.md
-references/sub-skills/roles/pm/skill/domain-context.md
 references/sub-skills/roles/pm/soul-shepherd.md
-references/sub-skills/roles/pm/status-line.md
 references/sub-skills/roles/pm/task-approval.md
 references/sub-skills/roles/pm/task-intake.md
 references/sub-skills/roles/pm/testing-and-verification.md
 references/sub-skills/roles/pm/vault-synthesis.md
-references/sub-skills/roles/pm/web/domain-context.md
-references/sub-skills/roles/verifier/android/domain-context.md
 references/sub-skills/roles/verifier/discussion-protocol.md
-references/sub-skills/roles/verifier/file-conventions.md
-references/sub-skills/roles/verifier/fullstack/domain-context.md
-references/sub-skills/roles/verifier/ios/domain-context.md
 references/sub-skills/roles/verifier/issue-filing.md
-references/sub-skills/roles/verifier/prohibitions.md
-references/sub-skills/roles/verifier/skill/domain-context.md
-references/sub-skills/roles/verifier/status-line.md
 references/sub-skills/roles/verifier/verification.md
-references/sub-skills/roles/verifier/web/domain-context.md
 references/presets/design/manifest.yaml
 references/presets/software-dev/manifest.yaml
 references/templates/forgejo-compose.yaml
@@ -236,10 +203,6 @@ references/docs/vault-reference.md
 # Added per AC2.2(c) DS-finding 4 (cycle 1301): L2 + L3 stubs were referenced by
 # includes.yml manifests but missing from the installer manifest. Some pre-date
 # 6274; treating their inclusion as part of the same routing-keys sweep.
-references/sub-skills/roles/worker/responsibility.md
-references/sub-skills/roles/verifier/responsibility.md
-references/sub-skills/roles/pm/responsibility.md
-references/sub-skills/roles/dm/responsibility.md
 references/sub-skills/roles/worker/ralph-loop-overview.md
 references/sub-skills/roles/verifier/ralph-loop-overview.md
 references/sub-skills/roles/pm/ralph-loop-overview.md

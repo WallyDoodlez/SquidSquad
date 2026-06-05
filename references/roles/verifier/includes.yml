@@ -22,10 +22,10 @@ includes:
   - roles/verifier/issue-filing
   - roles/verifier/discussion-protocol
   - common/vault-protocol-slim
-  - roles/verifier/file-conventions
-  - roles/verifier/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - roles/verifier/prohibitions
-  - common/agent-boundaries
-  - roles/verifier/responsibility
+  # Removed in #11087 (post-#11049 D1-inlined; content lives in
+  # references/roles/verifier/instructions.md with #10360-cleanup markers):
+  #   roles/verifier/file-conventions, roles/verifier/status-line,
+  #   roles/verifier/prohibitions, common/agent-boundaries,
+  #   roles/verifier/responsibility.

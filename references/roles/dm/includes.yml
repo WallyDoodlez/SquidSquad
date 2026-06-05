@@ -27,10 +27,10 @@ includes:
   - roles/dm/discussion-protocol
   - roles/dm/issue-filing
   - common/vault-protocol-slim
-  - roles/dm/file-conventions
-  - roles/dm/status-line
   - common/self-restart
   - common/agent-lifecycle
-  - roles/dm/prohibitions
-  - common/agent-boundaries
-  - roles/dm/responsibility
+  # Removed in #11087 (post-#11049 D1-inlined; content lives in
+  # references/roles/dm/instructions.md with #10360-cleanup markers):
+  #   roles/dm/file-conventions, roles/dm/status-line,
+  #   roles/dm/prohibitions, common/agent-boundaries,
+  #   roles/dm/responsibility.
