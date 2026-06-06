@@ -132,4 +132,52 @@ I've applied this convention in the C3 fix but the doc gap remains.
 | 22 | 916820106 | Fix C4: promote `check-gh` to a new pre-Step-1 "Step 0" so both event and polling boot paths gate on GitHub access; renumber 4b→4a, 4c→4b across all 4 L2 files | landed |
 | 23 | 4c9efc1a9 | C5 fix: Goal text of `step:cycle/exit` rewritten to cover BOTH event-mode (re-enter Monitor / ack-stop) and loop-fallback (exit cleanly). M1: typo cleanup in PM SOUL.md ("swtiched"→"switched", "throrough"→"thorough", "- almost that"→"— almost as if"). | landed |
 | 24 | a22550af0 | Iter 7 propagation: strip legacy standalone-doc preamble from dm/verifier/worker L2 instructions.md (parallel to the PM pilot in Iter 7). dm: -79 lines, qa: -84, skill: -78. Also M4: strip `<!-- #10360-cleanup ... -->` author TODO comments (19 occurrences across 4 L2 files). | landed |
-| 25 | _committing_ | Iter 19 propagation to L4: drop "You are the X for SquidSquad" openers from dm/verifier/worker L4 project files (PM L4 already done in Iter 19). | composing |
+| 25 | be8b03e2f | Iter 19 propagation to L4: drop "You are the X for SquidSquad" openers from dm/verifier/worker L4 project files (PM L4 already done in Iter 19). | landed |
+
+---
+
+## Morning summary
+
+Six iterations landed overnight (Iter 20–25):
+
+**User-raised concerns addressed**:
+- Concern 2 (`#9588` noise) → **Iter 20** stripped four refs (`#9588`/`#9580`/`CONTEXT-9588`) from the Boot — Mode Detection H2 + Step 1/2/4b prose across all four L2 instruction files.
+- Concern 3 (Boot — Mode Detection consolidation question) → **G3** in doc-gap log; not auto-applied. Block sits at line ~444 of PM with the "FIRST instruction" claim still self-contradictory (audit C1). Scope warrants morning alignment.
+- Concern 1 (QA vs verifier terminology) → **G1** + **G2** in doc-gap log; verified this install's verifier IS aliased "qa" but most composed `QA` references are pre-#6274 class-name drift. Systematic replace deferred for morning spot-review.
+
+**Audit C-series closed**:
+- C3 — `[ROLE]-lead` substitution gave PM-level auth to worker agents → **Iter 21** changed source to literal `<role>-lead`.
+- C4 — event mode skipped `tracker.py check-gh` → **Iter 22** promoted check-gh to a universal Step 0.
+- C5 — `step:cycle/exit` Goal text was polling-only → **Iter 23** rewrote to cover both modes.
+
+**Audit M-series closed**:
+- M1 — Three typos in PM SOUL.md ("swtiched", "throrough", "- almost that") → **Iter 23**.
+- M4 — 19 `<!-- #10360-cleanup ... -->` author TODO comments → **Iter 24**.
+
+**Queued propagations applied**:
+- Iter 7 preamble strip (PM pilot) → propagated to dm/verifier/worker L2 instructions.md in **Iter 24** (−241 lines total: dm −79, qa −84, skill −78).
+- Iter 19 "You are the X" L4 dedupe → propagated to dm/verifier/worker L4 project files in **Iter 25**.
+
+**Doc-gap questions awaiting decision** (G1–G6 above):
+- G1 — Systematic `QA` (drift) → `verifier` rename across 40 occurrences in 17 source files
+- G2 — File-naming conventions (`qa-log.md`, `QA-RESULTS-<N>.md`, `.squidsquad/qa/planning/`) — alias-tracked or class-named?
+- G3 — Boot — Mode Detection consolidation into Agent Functions (closes audit C1 + your concern #3)
+- G4 — Document `[ROLE]` vs `<role>` substitution convention in COMPOSE-ARCHITECTURE or sub-skill-guide
+- G5 — Step 1c / Step 1d legacy numbering rename (tangled with Iter 11b step-ID restructure)
+- G6 — PM Soul "When verifying pending-test items" — stale prose or spec-compliance check (not test execution)?
+
+**Audit C-series still open** (not auto-applied):
+- C1 — "FIRST instruction" placement contradiction (tied to G3 consolidation)
+- C2 — Orphan Step 1c (tied to G5)
+- C6 — Per-step mode self-detection (minor, prose pattern)
+
+**Composed lines after night**:
+- dm: 856 → 777 (-79)
+- pm: 832 → 826 (-6 from M4 strip + minor)
+- qa: 858 → 774 (-84)
+- skill: 970 → 892 (-78)
+
+Total: -247 lines across the four roles since Iter 19, mostly from the dm/verifier/worker preamble strip propagation.
+
+Branch HEAD: `be8b03e2f` (Iter 25).
+PM CLAUDE.md: https://github.com/WallyDoodlez/SquidSquad/blob/squidsquad/skill/compose-polish-session/.squidsquad/pm/CLAUDE.md
