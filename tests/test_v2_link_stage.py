@@ -74,12 +74,14 @@ def test_emit_v2_linked_emits_exactly_six_h2_sections_in_canonical_order(tmp_pat
     _make_minimal_fixture(tmp_path)
     out = v2.emit_v2_linked("worker", None, repo_root=tmp_path)
     h2_lines = [ln for ln in out.splitlines() if ln.startswith("## ")]
+    # #11144 G12: project-context moved before soul/instructions so a
+    # reader gets project framing before diving into soul + operations.
     assert h2_lines == [
         "## Identity",
         "## Responsibility",
+        "## Project Context",
         "## Soul",
         "## Agent Functions",
-        "## Project Context",
         "## Vault",
     ]
 
@@ -98,10 +100,11 @@ def test_emit_v2_linked_emits_empty_section_for_absent_slot(tmp_path):
 def test_emit_v2_linked_groups_by_slot(tmp_path):
     _make_minimal_fixture(tmp_path)
     out = v2.emit_v2_linked("worker", None, repo_root=tmp_path)
-    # The two instructions-slot sources are in the Instructions section.
+    # The two instructions-slot sources are in the Agent Functions section.
+    # #11144 G12: Agent Functions is between Soul and Vault (post-slot-reorder).
     idx_instructions = out.index("## Agent Functions")
-    idx_project_ctx = out.index("## Project Context")
-    instructions_block = out[idx_instructions:idx_project_ctx]
+    idx_vault = out.index("## Vault")
+    instructions_block = out[idx_instructions:idx_vault]
     assert "### step:cycle/boot" in instructions_block
     assert "### step:cycle/work" in instructions_block
 
