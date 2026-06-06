@@ -448,20 +448,25 @@ The harness must be reachable for event-mode to be used. Probe in this order:
 If the probe succeeds → **EVENT mode confirmed**, proceed to Step 3.
 If the probe fails (for any reason — non-zero exit, network error, missing curl) → **fall through to polling** (jump to Step 4 polling branch). This fallback is intentional: until the harness is proven stable across all failure modes, agents fall back to `/loop` polling rather than the bespoke event-mode degraded path.
 
-### Step 3 — EVENT mode: Read event fragments and follow them
+### Step 3 — EVENT mode: load the event-mode contract
 
-Use the Read tool to read each of the following files **in order** and treat their concatenated content as your active wake-mode contract for this session:
+Run the sub-skills below **in order**; their concatenated content is your active wake-mode contract for this session.
 
-1. `references/sub-skills/common-events/event-driven-workflow.md`
-2. `references/sub-skills/common-events/event-mode-contract.md`
-3. `references/sub-skills/common-events/cursor-management.md`
-4. `references/sub-skills/common-events/forge-read-pattern.md`
-5. `references/sub-skills/common-events/idle-cooldown-loop.md`
-6. `references/sub-skills/common-events/comment-handling.md`
+→ run sub-skill: `event-driven-workflow`. Brief orientation: the agent reacts to one event at a time, consults the forge as the source of truth, and lets `event_poll.py` advance the cursor automatically.
 
-**Role-specific extras** — if your role is `dm`, ALSO Read `references/sub-skills/roles/dm/events/pr-merge-wait.md` as a seventh file. If your role is not `dm`, skip this extra file (no other roles currently have events extras).
+→ run sub-skill: `event-mode-contract`. The full agent contract: boot sequence (Case A — read working-state, branch on state, drain initial events, advance cursor, emit `bootup-complete`), event reactions (Cases B–E — idle, after-work, mid-task, special events), Monitor invocation, working-state ownership discipline, harness-loss recovery.
 
-After reading, the boot sequence and event-listening loop described in those fragments take effect immediately. Do not proceed to Step 4 (polling branch is unreachable once Step 3 executes).
+→ run sub-skill: `cursor-management`. Atomic `.tmp` + `mv` cursor write protocol; per-event advance; gap handling for in-stream lag and eviction.
+
+→ run sub-skill: `forge-read-pattern`. Why the forge is the source of truth and how to read it before acting on any event.
+
+→ run sub-skill: `idle-cooldown-loop`. What an event-mode agent does when `work_queue()` is empty — the improvement-scan cool-down loop.
+
+→ run sub-skill: `comment-handling`. Bare comments do NOT wake any agent; DM end-of-task re-read exception; transition-on-handoff rule.
+
+**Role-specific extra** — if your role is `dm`, ALSO → run sub-skill: `roles/dm/events/pr-merge-wait`. DM-only behavior across the `pending-ship` PR-merge wait — bounded periodic forge-read, not real-time comment polling. Other roles skip.
+
+The event-mode wake contract is now loaded. Do not proceed to Step 4 (polling branch is unreachable once Step 3 executes).
 
 ### Step 4 — POLLING mode: schedule `/loop`, then Read the polling fragment
 
@@ -517,18 +522,6 @@ The bespoke "degraded mode" in `common-events/event-mode-contract.md` (sleep 60s
 → run sub-skill: cycle-runner
 
 Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
-
-→ run sub-skill: event-driven-workflow
-
-→ run sub-skill: event-mode-contract
-
-→ run sub-skill: cursor-management
-
-→ run sub-skill: forge-read-pattern
-
-→ run sub-skill: idle-cooldown-loop
-
-→ run sub-skill: comment-handling
 
 ### step:cycle/context-pressure
 
