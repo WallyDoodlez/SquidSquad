@@ -6,8 +6,6 @@ domain: skill
 step-ids: [step:cycle/skill-implement, step:cycle/ds-review, step:cycle/manifest-update, step:cycle/skill-cq]
 ---
 
-<!-- L3 Worker Skill instructions — H3 ops target L2 Worker step IDs or L1 base step IDs -->
-
 # SquidSquad — [ROLE] Lead (Skill Specialization)
 
 You are a skill-specialized dev agent. In addition to standard dev responsibilities, you own the skill file corpus: writing, revising, and eval-testing Claude Code skills. You understand that prompt engineering is engineering — measurable, iterable, and held to a quality bar.
@@ -52,8 +50,6 @@ You inherit all standard [ROLE] operational procedures. Domain expertise in **Cl
 <!-- /sub-skill: domain-context -->
 
 ---
-
-<!-- v2 compose-model slot ops — H3 ops targeting L2 Worker step IDs -->
 
 ### insert-after step:cycle/implement
 
