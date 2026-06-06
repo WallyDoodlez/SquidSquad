@@ -26,7 +26,7 @@ PM Phase 2 deliverable for [#11092](https://github.com/WallyDoodlez/SquidSquad/i
 
 **Why not C**: half-measure. The thin dispatch path for operator-interrupt would still require the same idempotency + ack semantics as full dispatch, with most of the same failure surface. If we're going to pay the complexity, we should commit; if we're not, pure pull is cleaner.
 
-**Operator confirmation**: ⬜ pending
+**Operator confirmation**: ✅ confirmed 2026-06-05 cycle 2184 (operator: "follow what we have in the agent run time doc is fine, basically harness issues a nudge, but the agents will poll after a nudge, agent use forge as source of truth for any work"). Authority: `docs/AGENT-RUNTIME.md` §2 (Two triggering modes), §3.1 (System overview), §7.1 (per-event sequence). The nudge-and-poll model is canonical; #11092 ratifies it by removing the dead dispatch path that contradicted it.
 
 ---
 
@@ -62,7 +62,7 @@ PM Phase 2 deliverable for [#11092](https://github.com/WallyDoodlez/SquidSquad/i
 | Thread-startup at harness.py:1404 (`_timeout_scanner` start) | Delete |
 | Persistence schema version in `.event-state.json` | Bump major version; old persisted state with the four fields is ignored on load |
 
-**Operator confirmation**: ⬜ pending
+**Operator confirmation**: ✅ confirmed 2026-06-05 cycle 2184 (operator: "follow what we have in the agent run time doc is fine, basically harness issues a nudge, but the agents will poll after a nudge, agent use forge as source of truth for any work"). Authority: `docs/AGENT-RUNTIME.md` §2 (Two triggering modes), §3.1 (System overview), §7.1 (per-event sequence). The nudge-and-poll model is canonical; #11092 ratifies it by removing the dead dispatch path that contradicted it.
 
 ---
 
@@ -87,7 +87,7 @@ PM Phase 2 deliverable for [#11092](https://github.com/WallyDoodlez/SquidSquad/i
 | Task-mode docstring (cycle_pre.py:9, 13) | Delete or update |
 | `task_id` variable + `if task_id:` branch (cycle_pre.py:1379-1387) | Delete; always run `ROLE_BUILDERS[role](role)` |
 
-**Operator confirmation**: ⬜ pending
+**Operator confirmation**: ✅ confirmed 2026-06-05 cycle 2184 (operator: "follow what we have in the agent run time doc is fine, basically harness issues a nudge, but the agents will poll after a nudge, agent use forge as source of truth for any work"). Authority: `docs/AGENT-RUNTIME.md` §2 (Two triggering modes), §3.1 (System overview), §7.1 (per-event sequence). The nudge-and-poll model is canonical; #11092 ratifies it by removing the dead dispatch path that contradicted it.
 
 ---
 
@@ -109,7 +109,7 @@ PM Phase 2 deliverable for [#11092](https://github.com/WallyDoodlez/SquidSquad/i
 
 **Implementation note**: the `_get_role_wake_mode()` function stays in the codebase for other call sites (boot-bootstrap reads it to choose polling vs event-driven runtime fragments per AGENT-RUNTIME). Only its use in `cycle_post.py:155` for REQUIRED_FIELDS selection is removed.
 
-**Operator confirmation**: ⬜ pending
+**Operator confirmation**: ✅ confirmed 2026-06-05 cycle 2184 (operator: "follow what we have in the agent run time doc is fine, basically harness issues a nudge, but the agents will poll after a nudge, agent use forge as source of truth for any work"). Authority: `docs/AGENT-RUNTIME.md` §2 (Two triggering modes), §3.1 (System overview), §7.1 (per-event sequence). The nudge-and-poll model is canonical; #11092 ratifies it by removing the dead dispatch path that contradicted it.
 
 ---
 
@@ -129,7 +129,7 @@ PM Phase 2 deliverable for [#11092](https://github.com/WallyDoodlez/SquidSquad/i
 - A no-write path (Option C) breaks the harness's heartbeat tracking — cycle_post is what writes the current-state idle marker per cycle. Skipping it for quiet cycles breaks PM's stall sentinel.
 - Reusing the existing `"quiet"` cycle_type is consistent with the rest of the cycle-output schema; skill agents already know how to emit it.
 
-**Operator confirmation**: ⬜ pending
+**Operator confirmation**: ✅ confirmed 2026-06-05 cycle 2184 (operator: "follow what we have in the agent run time doc is fine, basically harness issues a nudge, but the agents will poll after a nudge, agent use forge as source of truth for any work"). Authority: `docs/AGENT-RUNTIME.md` §2 (Two triggering modes), §3.1 (System overview), §7.1 (per-event sequence). The nudge-and-poll model is canonical; #11092 ratifies it by removing the dead dispatch path that contradicted it.
 
 ---
 
