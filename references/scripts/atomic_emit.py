@@ -64,7 +64,8 @@ _SLOT_DISPLAY = {
     "identity": "Identity",
     "responsibility": "Responsibility",
     "soul": "Soul",
-    "instructions": "Instructions",
+    # #11144 Finding 5b: kept in sync with v2_link_stage.SLOT_DISPLAY.
+    "instructions": "Agent Functions",
     "project-context": "Project Context",
     "vault": "Vault",
 }

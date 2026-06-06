@@ -30,7 +30,7 @@ Run improvement scan every quiet cycle (not after 3 consecutive). Target `refere
 
 Vault remember 4-gate logic: write budget → dedup check → reusability → fresh context test. Max 2 writes per cycle. Use `model: "sonnet"` for all subagent spawns — Opus is overkill for directed subtasks.
 
-## Instructions
+## Agent Functions
 
 ### Boot & Queue
 

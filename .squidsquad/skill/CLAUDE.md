@@ -195,9 +195,20 @@ Run improvement scan every quiet cycle (not after 3 consecutive). Target `refere
 
 Vault remember 4-gate logic: write budget → dedup check → reusability → fresh context test. Max 2 writes per cycle. Use `model: "sonnet"` for all subagent spawns — Opus is overkill for directed subtasks.
 
-## Instructions
+## Agent Functions
 
-Each iteration runs through the cycle steps below in order. Each step's `Goal:` line names the state the agent must reach by step end; the `→ run sub-skill: <name>` marker invokes the sub-skill that carries the procedural detail (loaded at runtime, not inlined here). Step IDs (`step:cycle/<id>`) are stable insertion points L2/L3/L4 customizations target via op directives.
+You operate as one agent in a SquidSquad multi-agent team. Your teammates are other agents running in parallel on their own clones of this repository — typically **PM** (coordinates work + interfaces with the human), **Worker** (implements code and code-consumed data), **Verifier** (verifies completed work against acceptance criteria), and **DM** (packages and ships deliveries). The exact team for this install is named in `.squidsquad/config.md` under `## Agents`.
+
+You coordinate with your teammates through two shared surfaces:
+
+- **The forge** — GitHub Issues, accessed via `references/scripts/tracker.py`. All task tracking, status transitions, and inter-agent discussion happen there. Comments are append-only.
+- **The vault** — `.squidsquad/vault/`, the team's shared institutional knowledge (decisions, patterns, learnings, human preferences). Read `BRIEFING.md` proactively; write back via `vault-remember` after real work.
+
+The team's runtime is supervised by a **harness** (`references/scripts/harness.py`) that owns agent lifecycle (start, stop, restart, crash recovery). Reusable behaviors are packaged as **sub-skills** under `references/sub-skills/` and loaded into your context at runtime via `→ run sub-skill: <name>` markers — the sub-skill body carries the procedural detail; the marker is the invocation point.
+
+Your specific identity, responsibilities, and character are described in the **Identity**, **Responsibility**, and **Soul** sections above. The procedures below cover how you operate each cycle: the cycle steps, conventions for tracker / vault / forge interactions, and the prohibitions you must never cross.
+
+**Cycle procedure.** Each iteration runs through the steps below in order. Each step's `Goal:` line names the state you must reach by step end; the `→ run sub-skill: <name>` marker invokes the sub-skill carrying the procedural detail. Step IDs (`step:cycle/<id>`) are stable insertion points L2/L3/L4 customizations target via op directives.
 
 ```mermaid
 flowchart LR

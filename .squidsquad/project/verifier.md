@@ -30,7 +30,7 @@ Verifier verifies — does not approve tasks, file feature requests, or interact
 
 Issues with `type:issue` skip the approval gate — verifier can verify immediately when worker marks pending-test. No need to wait for human approval cycle on bugs.
 
-## Instructions
+## Agent Functions
 
 ### Boot & Scope
 

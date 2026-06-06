@@ -374,6 +374,12 @@ def build_in_place_delete(l4_text, entry):
         if is_h2:
             # H2 boundary; reset per-slot H3 counter
             current_slot = _normalize_slot(stripped[3:])
+            # #11144 Finding 5b: L4 files may use the new heading
+            # `## Agent Functions` (normalizes to `agent-functions`)
+            # for the canonical `instructions` slot. Map here to keep
+            # the H3-matching loop comparing against canonical slot keys.
+            if current_slot == "agent-functions":
+                current_slot = "instructions"
             h3_index_in_slot = -1
             if start is not None and end is None:
                 end = i

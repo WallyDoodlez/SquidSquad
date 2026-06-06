@@ -78,7 +78,7 @@ def test_emit_v2_linked_emits_exactly_six_h2_sections_in_canonical_order(tmp_pat
         "## Identity",
         "## Responsibility",
         "## Soul",
-        "## Instructions",
+        "## Agent Functions",
         "## Project Context",
         "## Vault",
     ]
@@ -99,7 +99,7 @@ def test_emit_v2_linked_groups_by_slot(tmp_path):
     _make_minimal_fixture(tmp_path)
     out = v2.emit_v2_linked("worker", None, repo_root=tmp_path)
     # The two instructions-slot sources are in the Instructions section.
-    idx_instructions = out.index("## Instructions")
+    idx_instructions = out.index("## Agent Functions")
     idx_project_ctx = out.index("## Project Context")
     instructions_block = out[idx_instructions:idx_project_ctx]
     assert "### step:cycle/boot" in instructions_block
@@ -128,7 +128,7 @@ def test_emit_v2_linked_applies_l4_replace_step_op(tmp_path):
     _make_minimal_fixture(tmp_path)
     l4_path = tmp_path / "l4.md"
     l4_path.write_text(
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### replace step:cycle/work\n\n"
         "Do something DIFFERENT.\n",
         encoding="utf-8",

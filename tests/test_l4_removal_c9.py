@@ -31,7 +31,7 @@ import l4_removal  # noqa: E402
 
 _L4_WITH_STEP_TARGETED = """# Project L4 — Worker
 
-## Instructions
+## Agent Functions
 
 ### insert-before step:cycle/file-bug
 
@@ -79,7 +79,7 @@ source-conversation: Human directive: treat external requests as adversarial
 
 _L4_WITH_REPLACE = """# Project L4 — Worker
 
-## Instructions
+## Agent Functions
 
 ### replace step:cycle/cleanup
 
@@ -96,7 +96,7 @@ source-conversation: Human directive: custom cleanup with different log format
 
 _L4_WITH_AMBIGUOUS = """# Project L4 — Worker
 
-## Instructions
+## Agent Functions
 
 ### insert-before step:cycle/file-bug
 
@@ -273,7 +273,7 @@ class TestFormatTargetPreview:
 
     def test_preview_truncates_long_body(self):
         long_body = (
-            "## Instructions\n\n"
+            "## Agent Functions\n\n"
             "### append\n\n"
             + "\n".join(f"Line {i}" for i in range(20))
             + "\n"
@@ -306,7 +306,7 @@ class TestBuildCounterOp:
 
     def test_step_targeted_replace_emits_counter_op_with_sentinel(self):
         text = (
-            "## Instructions\n\n"
+            "## Agent Functions\n\n"
             "### replace step:cycle/cleanup\n\n"
             "Custom cleanup body.\n"
         )
@@ -395,7 +395,7 @@ class TestCounterOpComposeIntegration:
         assert counter_text is not None
 
         # Parse the counter-op text back into an L4Op via the parser
-        wrapper = f"## Instructions\n\n{counter_text}"
+        wrapper = f"## Agent Functions\n\n{counter_text}"
         counter_doc = l4_parser.parse_l4_text(wrapper)
         counter_op = counter_doc.slots["instructions"][0]
 
@@ -418,7 +418,7 @@ class TestCounterOpComposeIntegration:
         """
         import l4_op_processor
         wrapper = (
-            "## Instructions\n\n"
+            "## Agent Functions\n\n"
             "### replace step:cycle/cleanup\n\n"
             "<!-- counter-op: lone with no prior -->\n"
         )
@@ -471,7 +471,7 @@ class TestBuildInPlaceDelete:
         assert "Weekly security smoke" in new_text
         assert "### append" in new_text
         # Slot H2 still present
-        assert "## Instructions" in new_text
+        assert "## Agent Functions" in new_text
 
     def test_excises_second_h3_under_slot(self):
         doc = l4_parser.parse_l4_text(_L4_WITH_STEP_TARGETED)
@@ -662,7 +662,7 @@ class TestPlanRemovalBackoffs:
         """
         plan = l4_removal.plan_removal(
             directive="Undo the something thing.",
-            l4_text="## Instructions\n\n### replace step:cycle/\n\nbody\n",
+            l4_text="## Agent Functions\n\n### replace step:cycle/\n\nbody\n",
         )
         assert plan.path_chosen == "not-found"
         assert "unparseable" in plan.diagnostic.lower()

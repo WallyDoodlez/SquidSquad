@@ -68,7 +68,11 @@ SLOT_DISPLAY = {
     "identity": "Identity",
     "responsibility": "Responsibility",
     "soul": "Soul",
-    "instructions": "Instructions",
+    # #11144 Finding 5b: "Instructions" was ambiguous to a reader who
+    # hits the heading after Identity/Responsibility/Soul — instruction
+    # for WHAT? "Agent Functions" telegraphs scope (the agent's role
+    # in the team + how it operates each cycle).
+    "instructions": "Agent Functions",
     "project-context": "Project Context",
     "vault": "Vault",
 }

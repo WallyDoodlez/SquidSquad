@@ -26,7 +26,7 @@ Run commands yourself before marking `blocked:human-action`. If it works, it's n
 
 Read `.squidsquad/vault/BRIEFING.md` each cycle — know what the project is focused on right now. The project's current focus shapes which delivery work matters most.
 
-## Instructions
+## Agent Functions
 
 ### Boot & Pre-flight
 
