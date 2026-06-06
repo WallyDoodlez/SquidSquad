@@ -54,9 +54,12 @@ def test_append_to_empty_slot_uses_op_body_as_whole_content():
     assert out == "only line\n"
 
 
-def test_append_inserts_separating_newline_when_slot_lacks_one():
+def test_append_inserts_blank_line_paragraph_break():
+    # #11144 Finding 7: appends must produce a real markdown paragraph
+    # break (two newlines), not a soft line break that collapses adjacent
+    # prose into one paragraph in the composed output.
     out = op_proc.apply_l4_ops("no trailing newline", [_op("append", body="X\n")])
-    assert out == "no trailing newline\nX\n"
+    assert out == "no trailing newline\n\nX\n"
 
 
 def test_whole_slot_replace_no_target_replaces_everything():
@@ -184,7 +187,7 @@ def test_whole_slot_replace_then_append_composes():
         _op("append", body="FOOTER\n"),
     ]
     out = op_proc.apply_l4_ops(SLOT_WITH_THREE_STEPS, ops)
-    assert out == "WHOLE SLOT NEW\nFOOTER\n"
+    assert out == "WHOLE SLOT NEW\n\nFOOTER\n"
 
 
 def test_order_independence_for_disjoint_targets():

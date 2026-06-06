@@ -88,12 +88,16 @@ def apply_l4_ops(slot_content, l4_ops):
 
 
 def _apply_append(content, body):
-    """Append ``body`` to end of slot. Adds a separating newline if needed."""
+    """Append ``body`` to end of slot with a blank-line paragraph break.
+
+    Markdown requires two consecutive newlines for a paragraph break; a
+    single newline collapses adjacent prose into one paragraph (#11144
+    Finding 7). Normalize the join: strip trailing newlines from
+    ``content`` and emit exactly one blank line before ``body``.
+    """
     if not content:
         return body
-    if not content.endswith("\n"):
-        content = content + "\n"
-    return content + body
+    return content.rstrip("\n") + "\n\n" + body
 
 
 def _find_step_region(content, step_id):
