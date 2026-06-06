@@ -48,7 +48,7 @@ from source_frontmatter import (  # noqa: E402
     LEGAL_SLOTS,
     parse_source_frontmatter_text,
 )
-from l4_parser import L4Document, parse_l4_file  # noqa: E402
+from l4_parser import L4Document, L4Op, parse_l4_file  # noqa: E402
 from l4_op_processor import apply_l4_ops  # noqa: E402
 from link_stage_validator import LinkStageSource  # noqa: E402
 
@@ -130,9 +130,20 @@ def emit_v2_linked(role_class, l3_domain, *, repo_root=None, l4_path=None):
     # stage shouldn't crash on if it happens.
     parsed.sort(key=lambda r: (r[0], r[1], r[2]))
 
+    # #11227: inline op extraction. Each L1-L3 source body may contain
+    # L4-style op directives (### insert-after step:cycle/<id>, ### replace
+    # step:cycle/<id>, etc.). Extract them so they apply the same way
+    # L4 ops do — same grammar, same anchor model, same processor.
+    # Sources that author no op directives produce empty ops lists; their
+    # body flows through verbatim. Ops accumulate per-slot in source-layer
+    # sort order (set above by parsed.sort), and apply BEFORE L4 file ops.
     slot_bodies = {slot: [] for slot in CANONICAL_SLOT_ORDER}
+    inline_ops = {slot: [] for slot in CANONICAL_SLOT_ORDER}
     for slot_idx, _ordinal, _path, body in parsed:
-        slot_bodies[CANONICAL_SLOT_ORDER[slot_idx]].append(body)
+        slot_key = CANONICAL_SLOT_ORDER[slot_idx]
+        cleaned_body, source_ops = _extract_inline_ops(body)
+        slot_bodies[slot_key].append(cleaned_body)
+        inline_ops[slot_key].extend(source_ops)
 
     if Path(l4_path).is_file():
         l4_doc = parse_l4_file(l4_path)
@@ -142,14 +153,101 @@ def emit_v2_linked(role_class, l3_domain, *, repo_root=None, l4_path=None):
     out_chunks = []
     for slot in CANONICAL_SLOT_ORDER:
         combined = _join_bodies(slot_bodies[slot])
-        ops = l4_doc.slots.get(slot, [])
-        if ops:
-            combined = apply_l4_ops(combined, ops)
+        # Apply ops in source-layer order: L1-L3 inline ops first, then
+        # L4 file ops. Both speak the same grammar and run through the
+        # same processor.
+        all_ops = inline_ops[slot] + l4_doc.slots.get(slot, [])
+        if all_ops:
+            combined = apply_l4_ops(combined, all_ops)
         # Every H2 section starts with the canonical heading and a blank
         # line. If the slot is empty, the section is still emitted to
         # satisfy the "exactly six H2 sections" AC.
         out_chunks.append(f"## {SLOT_DISPLAY[slot]}\n\n{combined}".rstrip() + "\n")
     return "\n".join(out_chunks)
+
+
+# Inline op directive grammar — mirrors l4_parser._OP_RE exactly so the
+# two parsers stay in lockstep. The wrapping group captures the full
+# directive for easy dispatch; inner groups capture step IDs.
+_INLINE_OP_DIRECTIVE_RE = re.compile(
+    r"^###\s+"
+    r"(append$"
+    r"|replace$"
+    r"|replace\s+step:cycle/([A-Za-z0-9_-]+)$"
+    r"|insert-before\s+step:cycle/([A-Za-z0-9_-]+)$"
+    r"|insert-after\s+step:cycle/([A-Za-z0-9_-]+)$)"
+)
+
+
+def _extract_inline_ops(body):
+    """Extract L4-style op directives embedded in a source body.
+
+    Returns ``(cleaned_body, ops_list)``. The cleaned body is the
+    source's non-op content (everything BEFORE the first op directive,
+    plus any non-op H3 sub-headings that appear before an op); ops_list
+    is the explicit op H3s in source order with their bodies, ready to
+    feed to ``apply_l4_ops``.
+
+    Grammar matched here matches ``l4_parser._OP_RE`` exactly:
+      ### append
+      ### replace
+      ### replace step:cycle/<id>
+      ### insert-before step:cycle/<id>
+      ### insert-after step:cycle/<id>
+
+    Sources that author no op directives produce no ops; their full
+    body flows through as ``cleaned_body``. Most L1 / common sub-skill
+    sources hit this fast path.
+    """
+    if not body:
+        return ("", [])
+
+    lines = body.splitlines(keepends=True)
+    pre_op_lines = []
+    ops = []
+    current_op = None  # tuple (L4Op record, list of body lines)
+
+    for line in lines:
+        m = _INLINE_OP_DIRECTIVE_RE.match(line.rstrip("\n"))
+        if m is None:
+            if current_op is None:
+                pre_op_lines.append(line)
+            else:
+                current_op[1].append(line)
+            continue
+
+        # Commit the pending op (if any) before starting a new one.
+        if current_op is not None:
+            op_record, body_lines = current_op
+            op_record.body_text = "".join(body_lines).strip("\n")
+            ops.append(op_record)
+
+        directive = m.group(1)
+        if directive == "append":
+            op_type, target = "append", None
+        elif directive == "replace":
+            op_type, target = "replace", None
+        elif directive.startswith("replace "):
+            op_type, target = "replace", m.group(2)
+        elif directive.startswith("insert-before "):
+            op_type, target = "insert-before", m.group(3)
+        elif directive.startswith("insert-after "):
+            op_type, target = "insert-after", m.group(4)
+        else:  # defensive — regex above is exhaustive
+            continue
+
+        current_op = (
+            L4Op(op_type=op_type, target_step_id=target, body_text="", metadata={}),
+            [],
+        )
+
+    # Commit the final op (if any).
+    if current_op is not None:
+        op_record, body_lines = current_op
+        op_record.body_text = "".join(body_lines).strip("\n")
+        ops.append(op_record)
+
+    return ("".join(pre_op_lines), ops)
 
 
 def _parse_all_applicable_sources(repo_root, role_class, l3_domain):

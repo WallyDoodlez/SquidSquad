@@ -42,11 +42,21 @@ class L4OpTargetNotFound(KeyError):
     """Raised when a step-targeted op names a step_id not in slot content."""
 
 
-# A step heading is ``### step:cycle/<id>`` at line start, where <id> is
-# the same alphanumeric+``_-`` grammar enforced by l4_parser._OP_RE. The
-# heading consumes its trailing newline so slicing leaves the body clean.
+# A step heading is ``### step:cycle/<id>`` (or H4/H5/H6 — see #11227)
+# at line start, where <id> is the same alphanumeric+``_-`` grammar
+# enforced by l4_parser._OP_RE. The heading consumes its trailing
+# newline so slicing leaves the body clean.
+#
+# #11227 multi-level anchor support: L1 cycle steps live at H3 (top-level
+# cycle anchors). L2 step extensions sit at H4 as sub-steps under their
+# L1 parent. L3 extensions sit at H5 under L2. The op processor needs
+# to find step IDs regardless of nesting depth, so the regex accepts
+# H3-H6. The op DIRECTIVES (the ``### insert-after step:cycle/<id>``
+# lines that get extracted by ``l4_parser`` / ``v2_link_stage``) are
+# always H3 — that's the grammar contract; only the TARGET step heading
+# that the op anchors to may live at any depth.
 _STEP_HEADING_RE = re.compile(
-    r"^### step:cycle/([A-Za-z0-9_-]+)\s*$", re.MULTILINE
+    r"^#{3,6} step:cycle/([A-Za-z0-9_-]+)\s*$", re.MULTILINE
 )
 
 

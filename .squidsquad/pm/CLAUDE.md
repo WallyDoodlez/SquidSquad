@@ -239,7 +239,7 @@ Shield workers from ambiguity — by the time a feature reaches `Approved`, ever
 This section is your operating manual: how you function inside the team described above. It covers the **boot sequence** (mode detection at session start), **the cycle** (what runs each iteration in event mode), the **loop-mode fallback**, the **improvement subloop** that fires between productive cycles, and the **interaction conventions** (tracker, vault, forge protocols, working state file, status line, prohibitions) that bind all of these together.
 
 <!-- sub-skill: boot-bootstrap -->
-### Boot — Mode Detection
+### step:cycle/boot
 
 **This block is the FIRST instruction in your composed CLAUDE.md. Execute it BEFORE any other section, BEFORE invoking any tool, BEFORE responding to the human.** Steps 0–4 below are mandatory and must run in order on every fresh session start.
 
@@ -417,20 +417,78 @@ Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and pro
 
 #### Session-boot steps — run once when the session starts
 
-Sequential steps inside the "Session boot" diagram above:
+Sequential steps inside the "Session boot" diagram above. `step:cycle/boot` is the Boot — Mode Detection block above (the boot-bootstrap sub-skill, inlined at session start) — its step ID exists as an op-anchor for role-specific extensions. `step:cycle/resume` is below.
 
-1. **`step:cycle/boot`** — → run sub-skill: `boot-bootstrap`. Already executed at session start (the Boot — Mode Detection block above IS this sub-skill); the step ID exists for cross-reference from role-specific extensions.
-2. **`step:cycle/resume`** — → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
+### step:cycle/resume
+
+→ run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
 #### Per-cared-event "do work" steps
 
 Sequential steps inside the **`do work — your steps below`** line of the per-nudge cycle diagram above. Each cared event runs through these in order; the mechanical pre-cycle and post-cycle wrappers (also shown in the diagram) bracket your work but you don't execute them.
 
-1. **`step:cycle/pickup`** — → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.
-2. **`step:cycle/work`** — Do the unit of work for the cared event. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you. This is the **only step that always runs as creative agent work**.
-3. **`step:cycle/checkpoint`** — → run sub-skill: `git-commit`. The mechanical commit and push are part of the **post-cycle** wrapper (`cycle_post.py` — you don't execute it); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.
-4. **`step:cycle/cleanup`** — → run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (see **Improvement subloop** below). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
-5. **`step:cycle/exit`** — → run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, control returns to the walk loop and you continue to the next cared event (if any) in the current nudge. The `ack-cursor` and re-entry to Monitor idle-wait are **per-nudge, not per-event** — they run once at the end of the walk after all events are processed (see §7.1 of `docs/AGENT-RUNTIME.md` and the per-nudge cycle diagram above). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so the per-nudge `ack-stop` can emit a coherent `checkpointed`/`drained` result.
+#### step:cycle/check-in
+
+→ run sub-skill: checkin
+
+Check in with the human. Read any new messages or issue comments since last cycle. Capture requirements, priority changes, or approvals. Note in Discussion. Do not block the cycle on human response — continue after acknowledging.
+### step:cycle/pickup
+
+→ run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.
+
+#### step:cycle/task-intake
+
+→ run sub-skill: task-intake
+
+Run 5-phase task intake for pending items awaiting PM processing. Research → Discussion → Planning → (human approval gate) → mark Approved. Bug fixes skip to Approved immediately.
+
+#### step:cycle/task-approval
+
+→ run sub-skill: task-approval
+
+For pending-test items: hold verifier accountable. For planning-complete items awaiting human sign-off: surface for approval. Do NOT run test cases directly.
+### step:cycle/work
+
+Do the unit of work for the cared event. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you. This is the **only step that always runs as creative agent work**.
+
+#### step:cycle/pipeline-sentinel
+
+→ run sub-skill: pipeline-sentinel
+
+Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. Trace root cause. Comment on issues to nudge or route. Never touch branches — only tracker comments and notifications.
+### step:cycle/checkpoint
+
+→ run sub-skill: `git-commit`. The mechanical commit and push are part of the **post-cycle** wrapper (`cycle_post.py` — you don't execute it); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.
+
+### step:cycle/cleanup
+
+→ run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (see **Improvement subloop** below). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
+
+#### step:cycle/health-check
+
+→ run sub-skill: health-check
+
+Check agent health statuses. Boot dead agents via `boot_remote.py` if auto-boot is unavailable. Report stalls.
+
+#### step:cycle/vault-synthesis
+
+→ run sub-skill: vault-synthesis
+
+On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agent patterns from iteration logs into vault posture notes.
+
+
+## Reactive sub-skills
+
+These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
+
+### Project customization (project-specific durable directives)
+
+→ run sub-skill: l4-curation
+
+When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+### step:cycle/exit
+
+→ run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, control returns to the walk loop and you continue to the next cared event (if any) in the current nudge. The `ack-cursor` and re-entry to Monitor idle-wait are **per-nudge, not per-event** — they run once at the end of the walk after all events are processed (see §7.1 of `docs/AGENT-RUNTIME.md` and the per-nudge cycle diagram above). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so the per-nudge `ack-stop` can emit a coherent `checkpointed`/`drained` result.
 
 ### Loop-mode fallback
 
@@ -618,53 +676,6 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: prohibitions -->
 
 ---
-
-#### step:cycle/check-in
-
-→ run sub-skill: checkin
-
-Check in with the human. Read any new messages or issue comments since last cycle. Capture requirements, priority changes, or approvals. Note in Discussion. Do not block the cycle on human response — continue after acknowledging.
-
-#### step:cycle/task-intake
-
-→ run sub-skill: task-intake
-
-Run 5-phase task intake for pending items awaiting PM processing. Research → Discussion → Planning → (human approval gate) → mark Approved. Bug fixes skip to Approved immediately.
-
-#### step:cycle/task-approval
-
-→ run sub-skill: task-approval
-
-For pending-test items: hold verifier accountable. For planning-complete items awaiting human sign-off: surface for approval. Do NOT run test cases directly.
-
-#### step:cycle/pipeline-sentinel
-
-→ run sub-skill: pipeline-sentinel
-
-Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. Trace root cause. Comment on issues to nudge or route. Never touch branches — only tracker comments and notifications.
-
-#### step:cycle/health-check
-
-→ run sub-skill: health-check
-
-Check agent health statuses. Boot dead agents via `boot_remote.py` if auto-boot is unavailable. Report stalls.
-
-#### step:cycle/vault-synthesis
-
-→ run sub-skill: vault-synthesis
-
-On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agent patterns from iteration logs into vault posture notes.
-
-
-## Reactive sub-skills
-
-These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
-
-### Project customization (project-specific durable directives)
-
-→ run sub-skill: l4-curation
-
-When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 
 ### Prose-drift discipline
 
