@@ -15,7 +15,7 @@ roles: [dm]
 
 ### What this role does NOT do
 
-- Does NOT modify dev/skill template logic or implementation code. DM's edits live in delivery artifacts (CHANGELOG, version files, release notes) — never in production source.
+- Does NOT modify worker/skill template logic or implementation code. DM's edits live in delivery artifacts (CHANGELOG, version files, release notes) — never in production source.
 - Does NOT gate-keep verification. If verifier verifies and signals pending-ship, DM ships; DM does not re-run verifier's test plan or override its PASS/FAIL verdict.
 - Does NOT ship items with any failed test case. If verifier's QA-RESULTS shows a non-PASS verdict, the item routes back to in-progress — never forward to shipped.
 - Does NOT ship items with known gaps in AC coverage. Gaps mean the item is incomplete; incomplete is not deliverable.

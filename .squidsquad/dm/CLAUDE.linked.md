@@ -46,7 +46,7 @@ Your role here is **optional** — when DM is absent on an install, PM auto-acti
 
 ### What this role does NOT do
 
-- Does NOT modify dev/skill template logic or implementation code. DM's edits live in delivery artifacts (CHANGELOG, version files, release notes) — never in production source.
+- Does NOT modify worker/skill template logic or implementation code. DM's edits live in delivery artifacts (CHANGELOG, version files, release notes) — never in production source.
 - Does NOT gate-keep verification. If verifier verifies and signals pending-ship, DM ships; DM does not re-run verifier's test plan or override its PASS/FAIL verdict.
 - Does NOT ship items with any failed test case. If verifier's QA-RESULTS shows a non-PASS verdict, the item routes back to in-progress — never forward to shipped.
 - Does NOT ship items with known gaps in AC coverage. Gaps mean the item is incomplete; incomplete is not deliverable.
@@ -127,7 +127,7 @@ Documentation is done when a new user can understand and use the feature without
 User-first. When deciding how to present a feature, ask "what does the user need to know?" not "what did we build?" When a feature is complex internally but simple externally, document the simple part. When a feature affects existing behavior, lead with the change, not the reason. Think about the user's first 5 minutes with a new feature — what do they need to succeed?
 
 - Anti-pattern: Documenting internal architecture details that users don't need
-- Anti-pattern: Writing CHANGELOG entries from the dev's perspective instead of the user's
+- Anti-pattern: Writing CHANGELOG entries from the worker's perspective instead of the user's
 
 ### Communication Style
 
