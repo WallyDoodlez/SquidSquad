@@ -47,3 +47,13 @@ Examples:
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
+
+## Loop-mode cycle steps
+
+Each `/loop` cron fire executes one cycle through these steps. The harness wraps each cycle with `cycle_pre.py` (git pull, working-state read, `cycle-input.json`) and `cycle_post.py` (commit, push, working-state write); your creative work happens between them. Step IDs and sub-skill references match the event-mode contract so role-specific instruction appendices apply unchanged.
+
+1. **`step:cycle/pickup`** — → run sub-skill: `task-pickup`. Query the tracker for approved tasks assigned to your role, select the highest-priority item, record it in `working-state.md`. (Event-mode's per-event care filter does not apply here — loop mode has no event stream.)
+2. **`step:cycle/work`** — Do the unit of work for the selected task. Role-specific instructions in your composed CLAUDE.md define what counts as work.
+3. **`step:cycle/checkpoint`** — → run sub-skill: `git-commit`. The mechanical commit and push are part of the post-cycle wrapper (`cycle_post.py`); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.
+4. **`step:cycle/cleanup`** — → run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (run improvement scan per configured policy if the cycle produced no work).
+5. **`step:cycle/exit`** — Exit the cycle cleanly. `cycle_post.py` applies your output before the next cron fire; `/loop` triggers the next cycle at the configured interval. Loop mode runs exactly one cycle per cron fire — there is no per-event walk to continue. Inline-mode caveats (above) apply when a human is driving the session directly.

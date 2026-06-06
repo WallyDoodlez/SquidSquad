@@ -264,15 +264,17 @@ Sequential steps inside the "Session boot" diagram above:
 1. **`step:cycle/boot`** — → run sub-skill: `boot-bootstrap`. Verify tracker access, read `.squidsquad/config.md`, read `cycle-input.json` for the tracker snapshot the harness derived for you. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit.
 2. **`step:cycle/resume`** — → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
-## Per-cared-event "do work" steps — run once per cared event
+## Per-cared-event "do work" steps — event mode
 
 Sequential steps inside the **`do work — your steps below`** line of the per-nudge cycle diagram above. Each cared event runs through these in order; the mechanical pre-cycle and post-cycle wrappers (also shown in the diagram) bracket your work but you don't execute them.
 
-1. **`step:cycle/pickup`** — → run sub-skill: `task-pickup`. In event mode, the per-event **care filter** (above) is your pickup — the event identifies the work for you, and this step is largely a no-op. In loop-mode fallback this step queries the tracker for approved tasks assigned to your role, selects the highest-priority item, and records it in `working-state.md`.
-2. **`step:cycle/work`** — Do the unit of work for the cared event (event mode) or selected task (loop fallback). The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you. This is the **only step that always runs as creative agent work**, regardless of mode.
-3. **`step:cycle/checkpoint`** — → run sub-skill: `git-commit`. In event mode this is part of the mechanical **post-cycle** wrapper (`cycle_post.py` commits and pushes — you don't execute it). In loop fallback you commit interim progress here yourself, update `working-state.md`, and emit your statusline.
-4. **`step:cycle/cleanup`** — → run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (run the improvement scan per configured policy if the event walk produced no work). In event mode the working-state and commit pieces are part of mechanical post-cycle.
-5. **`step:cycle/exit`** — → run sub-skill: `agent-lifecycle`. In event mode this is **not a per-cycle exit** — after the post-cycle wrapper you ack your cursor and re-enter idle wait; your session continues across many nudges until the operator stops you. Check the stop signal: if `intent=stopping`, finish your current event walk and emit `ack-stop`. In loop fallback, exit cleanly so `cycle_post.py` can apply your output before the next cron fire.
+> **Loop-mode fallback**: this section describes the event-mode contract only. When boot mode detection selects loop mode (harness unreachable), the cycle contract you follow is in `references/sub-skills/roles/<your-role>/ralph-loop-overview.md` — Step 4b of boot mode detection has already routed you there. Do not interleave the two contracts.
+
+1. **`step:cycle/pickup`** — → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.
+2. **`step:cycle/work`** — Do the unit of work for the cared event. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you. This is the **only step that always runs as creative agent work**.
+3. **`step:cycle/checkpoint`** — → run sub-skill: `git-commit`. The mechanical commit and push are part of the **post-cycle** wrapper (`cycle_post.py` — you don't execute it); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.
+4. **`step:cycle/cleanup`** — → run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (run the improvement scan per configured policy if the event walk produced no work). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
+5. **`step:cycle/exit`** — → run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, control returns to the walk loop and you continue to the next cared event (if any) in the current nudge. The `ack-cursor` and re-entry to Monitor idle-wait are **per-nudge, not per-event** — they run once at the end of the walk after all events are processed (see §7.1 of `docs/AGENT-RUNTIME.md` and the per-nudge cycle diagram above). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so the per-nudge `ack-stop` can emit a coherent `checkpointed`/`drained` result.
 
 ---
 
@@ -568,7 +570,7 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 → run sub-skill: agent-lifecycle
 
-Goal: the agent has checked for a graceful-stop signal from the harness. In event mode, the session re-enters Monitor idle wait if no stop is pending, or emits `ack-stop` and exits if `intent=stopping`. In loop fallback, the cycle exits cleanly so `cycle_post.py` can apply the output before the next cron fire. The harness owns lifecycle; the agent only honors it.
+Goal: the agent has checked for a graceful-stop signal from the harness. After all cared events in the current nudge are processed, the per-nudge wrapper emits `ack-cursor` and the session re-enters Monitor idle wait — unless `intent=stopping` was observed, in which case the wrapper emits `ack-stop` and exits. The harness owns lifecycle; the agent only honors it. (Loop-mode lifecycle is documented in `roles/<your-role>/ralph-loop-overview`.)
 
 ---
 
