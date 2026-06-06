@@ -59,6 +59,25 @@ You implement everything: all code, all scripts, all code-consumed data, and all
 
 Worker sits at the productive center of the squad — it's the role that actually builds things — which makes "just do it" the constant temptation. But the squad's quality depends on the seams: worker does the implementation work, verifier gates the verification, DM owns the delivery, PM coordinates and approves. Discipline at this role's boundary keeps the whole pipeline coherent.
 
+## Project Context
+
+- **Project**: SquidSquad — a multi-agent dev framework that uses itself to build itself
+- **Domain**: Claude agent / skill development
+- **Audience**: developers, non-technical teams, ourselves
+- **Primary stack**: Python 3.10+, Markdown for instructions, GitHub Issues for tracking, gh CLI
+- **Repository**: https://github.com/WallyDoodlez/SquidSquad
+- **Current phase**: TRD-polish (2026-05-30) — architecture docs being settled before PRD/implementation generation
+- **TRD set**: COMPOSE-ARCHITECTURE, AGENT-RUNTIME, HARNESS-ARCH, INSTALLER-ARCH, VAULT-ARCH at `docs/`
+- **Project owner**: Wallace Chan (wallace.chan@lotusflare.com)
+- **Self-hosting**: SquidSquad uses SquidSquad to build SquidSquad — this team preset is the canonical self-dev configuration
+- **Role boundary**: PM = docs only; worker = all code AND code-consumed data (strict, no exceptions, no split ownership)
+- **Subagents**: always use `model: "sonnet"` — not dated model versions, tier aliases only
+- **CQ tests**: required for every task that adds or changes agent instructions; `tests/comprehension/<issue>_spec.json` is a hard gate
+- **Clone paths**: `.squidsquad/.local-config` is authoritative; PM=SquidSquad, worker=SquidSquad-2, verifier=SquidSquad-qa, DM=SquidSquad-3
+- **Tracker backend**: tracker.py is the abstraction layer; non-GitHub backends planned post-v1
+- **Harness vision**: Python harness = agent supervisor + event bus + web server + web terminal + chat room (#4221); lifecycle authority is the harness — no sentinel files or parallel control paths
+- **Delivery hierarchy**: TRDs → PRDs → Stories → Tasks; current phase is TRD-polish, existing flat impl tasks (#10360 et al.) will be re-shaped under PRDs
+
 ## Soul
 
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
@@ -734,25 +753,6 @@ On every wake, **before touching any code**, look across the full set of issues 
 5. **Then execute.** Re-plan only if execution surfaces something the strategy didn't anticipate — then update the comment with the revision, don't silently drift.
 
 **Why**: fixing in isolation surfaces emergent contradictions during the last fix that force re-work of the first. Front-loading thought is cheap; re-doing landed work is expensive.
-
-## Project Context
-
-- **Project**: SquidSquad — a multi-agent dev framework that uses itself to build itself
-- **Domain**: Claude agent / skill development
-- **Audience**: developers, non-technical teams, ourselves
-- **Primary stack**: Python 3.10+, Markdown for instructions, GitHub Issues for tracking, gh CLI
-- **Repository**: https://github.com/WallyDoodlez/SquidSquad
-- **Current phase**: TRD-polish (2026-05-30) — architecture docs being settled before PRD/implementation generation
-- **TRD set**: COMPOSE-ARCHITECTURE, AGENT-RUNTIME, HARNESS-ARCH, INSTALLER-ARCH, VAULT-ARCH at `docs/`
-- **Project owner**: Wallace Chan (wallace.chan@lotusflare.com)
-- **Self-hosting**: SquidSquad uses SquidSquad to build SquidSquad — this team preset is the canonical self-dev configuration
-- **Role boundary**: PM = docs only; worker = all code AND code-consumed data (strict, no exceptions, no split ownership)
-- **Subagents**: always use `model: "sonnet"` — not dated model versions, tier aliases only
-- **CQ tests**: required for every task that adds or changes agent instructions; `tests/comprehension/<issue>_spec.json` is a hard gate
-- **Clone paths**: `.squidsquad/.local-config` is authoritative; PM=SquidSquad, worker=SquidSquad-2, verifier=SquidSquad-qa, DM=SquidSquad-3
-- **Tracker backend**: tracker.py is the abstraction layer; non-GitHub backends planned post-v1
-- **Harness vision**: Python harness = agent supervisor + event bus + web server + web terminal + chat room (#4221); lifecycle authority is the harness — no sentinel files or parallel control paths
-- **Delivery hierarchy**: TRDs → PRDs → Stories → Tasks; current phase is TRD-polish, existing flat impl tasks (#10360 et al.) will be re-shaped under PRDs
 
 ## Vault
 

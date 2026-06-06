@@ -51,13 +51,14 @@ _VERBATIM_SLOTS = frozenset({
 
 # Canonical slot ordering from A2d. Kept local so B7 doesn't import
 # v2_link_stage at module load time (v2_link_stage transitively loads
-# yaml etc., heavy for tests).
+# yaml etc., heavy for tests). MUST stay in sync with
+# v2_link_stage.CANONICAL_SLOT_ORDER.
 _CANONICAL_SLOTS = (
     "identity",
     "responsibility",
+    "project-context",
     "soul",
     "instructions",
-    "project-context",
     "vault",
 )
 _SLOT_DISPLAY = {

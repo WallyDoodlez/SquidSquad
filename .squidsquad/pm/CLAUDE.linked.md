@@ -59,6 +59,21 @@ SquidSquad is the framework that builds itself. Every process decision you make 
 
 PM is the seam between the human and the autonomous worker team. Every cycle PM either reinforces the seams (route correctly, hold the right role accountable for the right work) or erodes them (verify the verifier's job, write code "to help out", proxy bugs). The discipline below keeps the squad from collapsing into a single agent doing everyone's work badly.
 
+## Project Context
+
+- **Project**: SquidSquad — a multi-agent dev framework that uses itself to build itself.
+- **Domain**: Claude agent / skill development; the deliverable IS an agent-skill team that produces agent skills.
+- **Audience**: developers, non-technical teams, ourselves.
+- **Primary stack**: Python 3.10+, Markdown for instructions, GitHub Issues for tracking, `gh` CLI, DeepSeek for doc audits.
+- **Repository**: https://github.com/WallyDoodlez/SquidSquad
+- **Project owner**: Wallace Chan (wallace.chan@lotusflare.com).
+- **Self-hosting**: SquidSquad uses SquidSquad to build SquidSquad. Every framework change affects the team running on the framework; recursive awareness is required at every layer.
+- **Prose-heavy work product**: a large portion of the codebase is `.md` files (specs, role instructions, sub-skills, planning artifacts, architecture docs). Drift between these documents is the primary quality risk on this project, and deterministic tests cannot catch most of it — see "Prose-drift discipline" in Instructions.
+- **Architecture docs (TRDs)**: `docs/COMPOSE-ARCHITECTURE.md`, `docs/AGENT-RUNTIME.md`, `docs/HARNESS-ARCH.md`, `docs/INSTALLER-ARCH.md`, `docs/VAULT-ARCH.md`. PRDs decompose these.
+- **Harness vision**: the Python harness is the supervisor + event bus + HTTP server + (eventually) web terminal + chat room (#4221). It must ship before v1.0.0.
+- **Clone isolation**: each agent runs in its own clone at a project-local path registered in `.squidsquad/.local-config`; never global `~/.squidsquad/clones/`.
+- **Tracker abstraction**: `tracker.py` is the abstraction layer over the forge; non-GitHub backends are planned post-v1.
+
 ## Soul
 
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
@@ -678,21 +693,6 @@ ACs that only check file existence without checking compose-pipeline consumption
 ### Delivery hierarchy
 
 This project uses four-tier **TRD → PRD → Stories → Tasks**. TRDs are architecture docs at `docs/*-ARCH.md`. PRDs decompose individual TRDs into shippable phases. Stories are user-flow units within a PRD. Tasks are individual work items. PM produces TRDs and PRDs; worker breaks PRDs into Stories + Tasks during implementation planning.
-
-## Project Context
-
-- **Project**: SquidSquad — a multi-agent dev framework that uses itself to build itself.
-- **Domain**: Claude agent / skill development; the deliverable IS an agent-skill team that produces agent skills.
-- **Audience**: developers, non-technical teams, ourselves.
-- **Primary stack**: Python 3.10+, Markdown for instructions, GitHub Issues for tracking, `gh` CLI, DeepSeek for doc audits.
-- **Repository**: https://github.com/WallyDoodlez/SquidSquad
-- **Project owner**: Wallace Chan (wallace.chan@lotusflare.com).
-- **Self-hosting**: SquidSquad uses SquidSquad to build SquidSquad. Every framework change affects the team running on the framework; recursive awareness is required at every layer.
-- **Prose-heavy work product**: a large portion of the codebase is `.md` files (specs, role instructions, sub-skills, planning artifacts, architecture docs). Drift between these documents is the primary quality risk on this project, and deterministic tests cannot catch most of it — see "Prose-drift discipline" in Instructions.
-- **Architecture docs (TRDs)**: `docs/COMPOSE-ARCHITECTURE.md`, `docs/AGENT-RUNTIME.md`, `docs/HARNESS-ARCH.md`, `docs/INSTALLER-ARCH.md`, `docs/VAULT-ARCH.md`. PRDs decompose these.
-- **Harness vision**: the Python harness is the supervisor + event bus + HTTP server + (eventually) web terminal + chat room (#4221). It must ship before v1.0.0.
-- **Clone isolation**: each agent runs in its own clone at a project-local path registered in `.squidsquad/.local-config`; never global `~/.squidsquad/clones/`.
-- **Tracker abstraction**: `tracker.py` is the abstraction layer over the forge; non-GitHub backends are planned post-v1.
 
 ## Vault
 

@@ -59,9 +59,9 @@ from link_stage_validator import LinkStageSource  # noqa: E402
 CANONICAL_SLOT_ORDER = (
     "identity",
     "responsibility",
+    "project-context",
     "soul",
     "instructions",
-    "project-context",
     "vault",
 )
 SLOT_DISPLAY = {

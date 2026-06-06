@@ -280,11 +280,14 @@ def test_canonical_slot_order_is_six():
 
 
 def test_canonical_slot_order_matches_trd():
+    # #11144 G12: project-context moved before soul/instructions so a
+    # reader gets project framing before diving into the agent's soul +
+    # operating manual. Order is asserted here as the contract.
     assert v2.CANONICAL_SLOT_ORDER == (
         "identity",
         "responsibility",
+        "project-context",
         "soul",
         "instructions",
-        "project-context",
         "vault",
     )
