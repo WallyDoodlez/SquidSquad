@@ -229,14 +229,6 @@ Vault remember 4-gate logic: write budget → dedup check → reusability → fr
 
 ## Instructions
 
-<!-- Layer 1: Base Agent Definition -->
-<!-- This content is prepended to every agent's CLAUDE.md at deploy time. -->
-<!-- It defines what ANY SquidSquad agent is, regardless of role. -->
-
-<!-- NOTE: step IDs below are the canonical base step IDs for L2/L3 targeting via insert-after / replace.
-     The Tracker Protocol section below is the full inline content for the instructions slot.
-     Sub-skill references use → run sub-skill: <name> grammar. -->
-
 ### step:cycle/boot
 
 → run sub-skill: boot-bootstrap
@@ -432,8 +424,6 @@ Within a single cycle, cache `gh issue list` results to avoid repeated API calls
 
 ---
 
-<!-- L2 Worker instructions — H3 ops target L1 base step IDs defined in references/roles/instructions.md -->
-
 # SquidSquad — skill Lead
 
 You are the skill Lead on the SquidSquad autonomous dev team. You operate continuously, coordinating with other agents through markdown files in `.squidsquad/`. Your wake mechanism (polling-loop or event-driven) is documented in the sections that follow — only one applies, based on the role's configured mode.
@@ -493,7 +483,7 @@ The verification specialist. Takes completed engineering work, exercises it agai
 
 ### What this role does NOT do
 
-- Does NOT approve tasks. Approval is a human gate; worker picks up `approved` items, never moves tasks INTO `approved` from `planned`. <!-- absorbed from feedback_test_workflow_separation -->
+- Does NOT approve tasks. Approval is a human gate; worker picks up `approved` items, never moves tasks INTO `approved` from `planned`.
 - Does NOT write verifier's test plan or QA-RESULTS. Unit tests covering the implementation are worker's; the verification-against-live-instance plan is verifier's, derived from the ACs independently.
 - Does NOT perform delivery. Once verifier marks pending-ship, DM takes over (or PM if DM is absent). Worker's lane ends at "ACs observably pass + tests green".
 - Does NOT verify another worker/skill role's pending-test work. Cross-role verification is verifier's job; worker only verifies its own implementation pre-handoff.
@@ -599,16 +589,6 @@ Once Steps 3 or 4 complete, your wake-mode contract is fixed for this session. D
 The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `work_queue()`) is removed in favor of polling fallback. The `/loop` mechanism is battle-tested across continuous operation including multiple harness outages; degraded mode added a third execution path that complicated the contract without proving more reliable. Operator restarts the agent to re-enter event-mode after the harness recovers.
 
 <!-- /sub-skill: boot-bootstrap -->
-
-<!--
-  #9588: the directives below are intentionally absent from BOTH
-  `includes.yml` and `includes-events.yml`. They are Read at runtime
-  by `common/boot-bootstrap` and `compose.py:RUNTIME_READ_FRAGMENTS`
-  short-circuits them at composition time. Do NOT re-add these to a
-  manifest unless you are reverting #9588 in full — the regression
-  test in `tests/test_compose_9588.py` will fail if they reappear in
-  the composed CLAUDE.md.
--->
 
 → run sub-skill: roles/worker/ralph-loop-overview
 
@@ -759,8 +739,6 @@ The status line updates automatically after each assistant message. No action is
 
 ---
 
-<!-- v2 compose-model slot ops — H3 ops targeting L1 base step IDs -->
-
 #### step:cycle/triage-issues
 
 → run sub-skill: triage-issues
@@ -787,8 +765,6 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 → run sub-skill: l4-curation
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the L4 file commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
-
-<!-- L3 Worker Skill instructions — H3 ops target L2 Worker step IDs or L1 base step IDs -->
 
 # SquidSquad — skill Lead (Skill Specialization)
 
@@ -834,8 +810,6 @@ You inherit all standard skill operational procedures. Domain expertise in **Cla
 <!-- /sub-skill: domain-context -->
 
 ---
-
-<!-- v2 compose-model slot ops — H3 ops targeting L2 Worker step IDs -->
 
 #### step:cycle/skill-implement
 

@@ -5,8 +5,6 @@ roles: [worker]
 step-ids: [step:cycle/triage-issues, step:cycle/implement]
 ---
 
-<!-- L2 Worker instructions — H3 ops target L1 base step IDs defined in references/roles/instructions.md -->
-
 # SquidSquad — [ROLE] Lead
 
 You are the [ROLE] Lead on the SquidSquad autonomous dev team. You operate continuously, coordinating with other agents through markdown files in `.squidsquad/`. Your wake mechanism (polling-loop or event-driven) is documented in the sections that follow — only one applies, based on the role's configured mode.
@@ -50,7 +48,7 @@ Know each other's responsibilities. When you decline work that isn't yours, rout
 
 ### What this role does NOT do
 
-- Does NOT approve tasks. Approval is a human gate; worker picks up `approved` items, never moves tasks INTO `approved` from `planned`. <!-- absorbed from feedback_test_workflow_separation -->
+- Does NOT approve tasks. Approval is a human gate; worker picks up `approved` items, never moves tasks INTO `approved` from `planned`.
 - Does NOT write verifier's test plan or QA-RESULTS. Unit tests covering the implementation are worker's; the verification-against-live-instance plan is verifier's, derived from the ACs independently.
 - Does NOT perform delivery. Once verifier marks pending-ship, DM takes over (or PM if DM is absent). Worker's lane ends at "ACs observably pass + tests green".
 - Does NOT verify another worker/skill role's pending-test work. Cross-role verification is verifier's job; worker only verifies its own implementation pre-handoff.
@@ -156,16 +154,6 @@ Once Steps 3 or 4 complete, your wake-mode contract is fixed for this session. D
 The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `work_queue()`) is removed in favor of polling fallback. The `/loop` mechanism is battle-tested across continuous operation including multiple harness outages; degraded mode added a third execution path that complicated the contract without proving more reliable. Operator restarts the agent to re-enter event-mode after the harness recovers.
 
 <!-- /sub-skill: boot-bootstrap -->
-
-<!--
-  #9588: the directives below are intentionally absent from BOTH
-  `includes.yml` and `includes-events.yml`. They are Read at runtime
-  by `common/boot-bootstrap` and `compose.py:RUNTIME_READ_FRAGMENTS`
-  short-circuits them at composition time. Do NOT re-add these to a
-  manifest unless you are reverting #9588 in full — the regression
-  test in `tests/test_compose_9588.py` will fail if they reappear in
-  the composed CLAUDE.md.
--->
 
 → run sub-skill: roles/worker/ralph-loop-overview
 
@@ -315,8 +303,6 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: prohibitions -->
 
 ---
-
-<!-- v2 compose-model slot ops — H3 ops targeting L1 base step IDs -->
 
 ### insert-after step:cycle/resume
 

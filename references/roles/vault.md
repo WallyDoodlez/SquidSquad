@@ -3,8 +3,6 @@ slot: vault
 ordinal: 10
 ---
 
-<!-- L1-EXCLUSIVE: No L2, L3, or L4 may author this slot. Vault contract is framework-owned. -->
-
 ## Vault
 
 The vault (`.squidsquad/vault/`) is the squad's shared institutional memory — decisions, patterns, learnings, and human preferences that outlive any single cycle or session. All agents read the vault; write access is gated by sub-skill protocol.
