@@ -244,14 +244,14 @@ One unconditional rule from those fragments matters at this level: **if `Monitor
 
 Each step below names the sub-skill (loaded at runtime via the `→ run sub-skill: <name>` marker) that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The IDs are scheduled to be re-anchored to the session-boot vs. per-event-cycle shape in a follow-up iteration; until then, the steps are split into two groups by **when they actually run**.
 
-### Session-boot steps — run once when the session starts
+## Session-boot steps — run once when the session starts
 
 Sequential steps inside the "Session boot" diagram above:
 
 1. **`step:cycle/boot`** — → run sub-skill: `boot-bootstrap`. Verify tracker access, read `.squidsquad/config.md`, read `cycle-input.json` for the tracker snapshot the harness derived for you. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit.
 2. **`step:cycle/resume`** — → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
-### Per-cared-event "do work" steps — run once per cared event
+## Per-cared-event "do work" steps — run once per cared event
 
 Sequential steps inside the **`do work — your steps below`** line of the per-nudge cycle diagram above. Each cared event runs through these in order; the mechanical pre-cycle and post-cycle wrappers (also shown in the diagram) bracket your work but you don't execute them.
 
@@ -374,25 +374,6 @@ python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "
 ```
 
 Comments are append-only — never edit or delete previous comments.
-
-### Design Field (replaces **Design**: field in markdown)
-
-Design status is tracked via labels. Use `gh issue edit` for design labels (these are not status transitions):
-
-```bash
-# PM sets design needed
-gh issue edit [NUMBER] --add-label "design:needed"
-
-# Designer picks up
-gh issue edit [NUMBER] --remove-label "design:needed" --add-label "design:in-progress"
-
-# Designer completes
-gh issue edit [NUMBER] --remove-label "design:in-progress" --add-label "design:complete"
-```
-
-Note: Design label changes are NOT status transitions — they are metadata additions. Use `gh issue edit` directly for these (tracker.py handles status labels only).
-
-Dev agents skip issues with `design:needed` or `design:in-progress` labels.
 
 ### Working State References
 
