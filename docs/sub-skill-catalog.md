@@ -114,6 +114,7 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
+| `tracker-protocol` | Full mechanical contract for tracker.py — timestamps, check-gh gate, list/read/create flows, legal status transitions matrix + per-role authority, Discussion entries, planning-artifact paths, per-cycle caching | all roles |
 | ~~`discussion`~~ | Append-only tracker comment format — the inter-agent communication channel named in [COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity) (renamed from `discussion-protocol` at #10360 — strike-through pending the file rename which lands as part of #10360) | all roles (per-role overrides retire at #10360) |
 | `issue-filing` | Self-file and cross-file bug templates | all roles (per-role overrides retire at #10360) |
 | `working-state` | Working-state file format and update rules | worker |
