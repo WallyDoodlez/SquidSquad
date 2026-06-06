@@ -22,7 +22,7 @@ If any issues exist, skip the scan — fix issues first.
 
 ### Scan State
 
-Maintain `.squidsquad/dm/doc-scan-state.json` to track rotation and history:
+Maintain `.squidsquad/[DM_ALIAS]/doc-scan-state.json` to track rotation and history:
 
 ```json
 {

@@ -16,7 +16,7 @@ python references/scripts/tracker.py list-bugs dm
 
 For each bug that has `status:open`:
 
-1. Write working state: update `.squidsquad/dm/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
+1. Write working state: update `.squidsquad/[DM_ALIAS]/working-state.md` with `Task: #[NUMBER]`, status `in-progress`.
 2. Read the bug details: `gh issue view [NUMBER] --json title,body,comments`
 3. Locate the relevant file (README, CHANGELOG, docs, delivery artifacts).
 4. Fix the bug.

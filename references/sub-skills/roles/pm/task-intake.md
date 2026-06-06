@@ -8,7 +8,7 @@ roles: [pm]
 
 When the human suggests a new task, do NOT immediately file it. Run the full 5-phase lifecycle. Issues are excluded — they use the current lightweight fix → verify → close flow.
 
-**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Worker writes their own unit tests as part of the implementation PR. Verifier writes the test plan in `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by the verifier, not PM.
+**PM produces no test artifacts** (#9184). PM defines acceptance criteria only — the AC list lives in the GitHub issue body + CONTEXT.md. Worker writes their own unit tests as part of the implementation PR. Verifier writes the test plan in `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` (derived independently from the AC list) and executes it against a real live instance. CQ specs for any task touching LLM-consumed instructions are owned by the verifier, not PM.
 
 **Light mode**: For trivial/cosmetic tasks (typo fixes, config tweaks, doc-only changes), skip Phase 1 (Research) and Phase 2A (prep), abbreviate Phase 2. Phase 3 (AC + issue body) still runs. Verification is handled by the verifier per `qa/verification.md` (install-coupled path — wizard D4 renames to verifier/verification.md) regardless of mode. Use your judgment: if the task touches behavior or user-facing systems, use the full flow.
 
@@ -26,13 +26,13 @@ Before starting each planning phase, check if its output artifact already exists
    - If changes found: ask the user via `AskUserQuestion`: "RESEARCH.md exists from a previous session but code has changed since. Re-research or reuse?" Options: `["Re-research (recommended)", "Reuse existing"]`.
 3. **File doesn't exist**: Run the phase normally.
 
-Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONTEXT.md` (Phase 2). PM no longer produces `TEST-PLAN.md` — that artifact is owned by the verifier under `.squidsquad/qa/planning/` (#9184).
+Apply this logic to: `RESEARCH.md` (Phase 1), `PHASE2-PREP.md` (Phase 2A), `CONTEXT.md` (Phase 2). PM no longer produces `TEST-PLAN.md` — that artifact is owned by the verifier under `.squidsquad/[VERIFIER_ALIAS]/planning/` (#9184).
 
 ### Phase 1 — Research
 
 Write current state: `python references/scripts/cycle.py status-bar [ROLE] researching "Researching FEAT-[ROLE_UPPER]-XXX..."`
 
-**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: researching FEAT-[ROLE_UPPER]-XXX` so that cron-triggered cycles are suppressed during this phase.
+**Set planning phase flag**: Update `.squidsquad/[PM_ALIAS]/working-state.md` to include `- **Phase**: researching FEAT-[ROLE_UPPER]-XXX` so that cron-triggered cycles are suppressed during this phase.
 
 **Check artifact resume** (see above) for `FEAT-[ROLE_UPPER]-XXX-RESEARCH.md`. If skipping, proceed to Phase 2A.
 
@@ -124,13 +124,13 @@ The agent writes its findings to `.squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-
 
 **Open in editor**: After RESEARCH.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
-**Clear planning phase flag**: Remove the `**Phase**:` line from `.squidsquad/pm/working-state.md` (the artifact has been written, so suppression is no longer needed for this phase).
+**Clear planning phase flag**: Remove the `**Phase**:` line from `.squidsquad/[PM_ALIAS]/working-state.md` (the artifact has been written, so suppression is no longer needed for this phase).
 
 ### Phase 2A — Discussion Prep (Subagent)
 
 Write current state: `python references/scripts/cycle.py status-bar [ROLE] discussing "Discussion prep for FEAT-[ROLE_UPPER]-XXX..."`
 
-**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: discussing FEAT-[ROLE_UPPER]-XXX`.
+**Set planning phase flag**: Update `.squidsquad/[PM_ALIAS]/working-state.md` to include `- **Phase**: discussing FEAT-[ROLE_UPPER]-XXX`.
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-PHASE2-PREP.md`. If skipping, proceed to Phase 2.
 
@@ -156,7 +156,7 @@ Light-mode tasks skip Phase 2A entirely.
 
 Write current state: `python references/scripts/cycle.py status-bar [ROLE] discussing "Discussion for FEAT-[ROLE_UPPER]-XXX..."`
 
-**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: discussing FEAT-[ROLE_UPPER]-XXX`.
+**Set planning phase flag**: Update `.squidsquad/[PM_ALIAS]/working-state.md` to include `- **Phase**: discussing FEAT-[ROLE_UPPER]-XXX`.
 
 **Check artifact resume** for `FEAT-[ROLE_UPPER]-XXX-CONTEXT.md`. If skipping, proceed to Phase 3.
 
@@ -220,7 +220,7 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 Every issue body that has a planning artifact MUST lead with an **AUTHORITATIVE SCOPE banner** pointing at the locked planning file:
 
 ```
-> **AUTHORITATIVE SCOPE: `.squidsquad/pm/planning/CONTEXT.md §5.X` (or `CONTEXT-<NUMBER>.md`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
+> **AUTHORITATIVE SCOPE: `.squidsquad/[PM_ALIAS]/planning/CONTEXT.md §5.X` (or `CONTEXT-<NUMBER>.md`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
 ```
 
 The banner is required on every issue with a CONTEXT file — at issue creation time (Phase 3 §A below), and on every Phase 2 scope rewrite thereafter.
@@ -244,7 +244,7 @@ question: "Phase 2 complete. Here are the locked decisions:\n\n[list each locked
 options: ["Approve — proceed to Planned", "More discussion needed", "Reject this task"]
 ```
 
-- **"Approve"**: Continue to Phase 3 (AC drafting + issue filing). PM does NOT produce a test plan — Verifier will write `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list when picking up verification (#9184).
+- **"Approve"**: Continue to Phase 3 (AC drafting + issue filing). PM does NOT produce a test plan — Verifier will write `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` from the AC list when picking up verification (#9184).
 - **"More discussion needed"**: Ask the human what they want to revisit. Re-open the relevant question(s), update CONTEXT.md with revised decisions, then re-present the gate.
 - **"Reject"**: Set task status to `Rejected`. Append Discussion entry with reason. Stop the intake process.
 
@@ -280,9 +280,9 @@ After Phase 2 approval and before Phase 3, compare CONTEXT.md locked decisions a
 
 Write current state: `python references/scripts/cycle.py status-bar [ROLE] planning "Filing FEAT-[ROLE_UPPER]-XXX..."`
 
-**Set planning phase flag**: Update `.squidsquad/pm/working-state.md` to include `- **Phase**: planning FEAT-[ROLE_UPPER]-XXX`.
+**Set planning phase flag**: Update `.squidsquad/[PM_ALIAS]/working-state.md` to include `- **Phase**: planning FEAT-[ROLE_UPPER]-XXX`.
 
-PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both worker and verifier. Worker writes their own unit tests against the AC list. Verifier writes its own `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
+PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no test cases, no comprehension questions. The AC list lives in the GitHub issue body and is the contract for both worker and verifier. Worker writes their own unit tests against the AC list. Verifier writes its own `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` derived independently from the AC list and executes it against a real live instance.
 
 **AC Integration Check** — before writing acceptance criteria, run this mental checklist:
 
@@ -300,7 +300,7 @@ If any answer is unclear, the AC is incomplete — refine before filing.
 
 - AUTHORITATIVE SCOPE banner at the start of the body (#8917 Change 3): when the task has a `CONTEXT.md` (bundle `§5.X #<NUMBER>`) or `CONTEXT-<NUMBER>.md`, the body passed to `create-task` MUST start with the banner pointing at that locked planning file. Format:
   ```
-  > **AUTHORITATIVE SCOPE: `.squidsquad/pm/planning/CONTEXT-<NUMBER>.md` (or `CONTEXT.md §5.X`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
+  > **AUTHORITATIVE SCOPE: `.squidsquad/[PM_ALIAS]/planning/CONTEXT-<NUMBER>.md` (or `CONTEXT.md §5.X`). Read that artifact in full. The bullets below are a summary; the planning artifact is the contract.**
   ```
   Phase 2 (above) keeps the banner + body bullets in sync on every later scope rewrite; this rule places the banner from the start.
 - Description includes research-informed constraints.
@@ -308,7 +308,7 @@ If any answer is unclear, the AC is incomplete — refine before filing.
 - ACs include edge-case handling and side-effect mitigations from RESEARCH.md / CONTEXT.md.
 - Links to RESEARCH.md and CONTEXT.md.
 
-**No PM-side TEST-PLAN.md** — Phase 3 ends when the issue is filed. Verifier will produce `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` when picking up verification (see `qa/verification.md`).
+**No PM-side TEST-PLAN.md** — Phase 3 ends when the issue is filed. Verifier will produce `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` when picking up verification (see `qa/verification.md`).
 
 **Clear planning phase flag** after the issue is filed. Normal PM cycling auto-resumes.
 
@@ -326,7 +326,7 @@ After Phase 3 (AC drafting + issue filing) completes:
    ```bash
    git push -u origin [BRANCH]
    python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title] (planning review)" \
-     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n\nVerifier will produce \`.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nPending human review — approve via PR comments."
+     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n\nVerifier will produce \`.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nPending human review — approve via PR comments."
    ```
 4. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Planning artifacts committed. PR [URL] ready for review."`
 5. **Return to working branch**: `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]`
@@ -343,7 +343,7 @@ _(Handled by the worker agent — see worker template Step 2b. Worker implements
 
 ### Phase 5 — Verification (Verifier)
 
-_(Handled by the verifier — see `qa/verification.md`. Verifier derives `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn verifier subagents from this template (#9184).)_
+_(Handled by the verifier — see `qa/verification.md`. Verifier derives `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` from the AC list in the issue body, then executes it against a real live instance. PM does NOT spawn verifier subagents from this template (#9184).)_
 
 PM's only role in verification is **holding the verifier accountable**: if a task stalls at `pending-test` past the stall window, nudge the verifier via the pipeline sentinel. PM does not run test cases, does not produce QA-RESULTS.md, and does not perform the AC walk.
 

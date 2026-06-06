@@ -22,7 +22,7 @@ in `implement-tasks`; the parallel step in `triage-issues` is Step 7b-bis.
 1. **State-file filter (`commit_code` drops `.squidsquad/` and `.claude/`).**
    `references/scripts/git_ops.py:commit_code` stages only files that are
    NOT under `.squidsquad/` or `.claude/`. Anything you edit beneath those
-   prefixes — `.squidsquad/pm/planning/CONTEXT-*.md`,
+   prefixes — `.squidsquad/[PM_ALIAS]/planning/CONTEXT-*.md`,
    `.squidsquad/project/*.md`, `.squidsquad/vault/...`, `.claude/*` — does
    NOT appear in your feature-branch PR. Those edits will land on `main`
    via the next `cycle_post` state commit (or have already landed in a

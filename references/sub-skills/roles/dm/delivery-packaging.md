@@ -16,7 +16,7 @@ python references/scripts/tracker.py list-by-labels "status:pending-ship"
 
 Pick the highest-priority item first. When picking up an item, print: `[🦑 HH:MM:SS] Delivering #[NUMBER]...`
 
-1. Write working state: update `.squidsquad/dm/working-state.md` with the task ID, status `in-progress`, and planned delivery steps.
+1. Write working state: update `.squidsquad/[DM_ALIAS]/working-state.md` with the task ID, status `in-progress`, and planned delivery steps.
 2. Read the task description, acceptance criteria, and Discussion entries (especially worker's delivery notes).
 
 ### Step 2b — Check for delivery:skip
@@ -65,14 +65,14 @@ For each Pending Ship task that is NOT skipped:
    If the base check passes (PR_BASE matches WORKING_BRANCH, or PR_BASE was empty and skipped), apply the contract-citation soft gate (#8950 Gate #4):
 
    ```bash
-   ARTIFACTS=$(ls .squidsquad/pm/planning/*[NUMBER]* .squidsquad/qa/planning/*[NUMBER]* 2>/dev/null)
+   ARTIFACTS=$(ls .squidsquad/[PM_ALIAS]/planning/*[NUMBER]* .squidsquad/[VERIFIER_ALIAS]/planning/*[NUMBER]* 2>/dev/null)
    ```
 
    - **If `$ARTIFACTS` is empty** (bug fix or trivial task with no planning artifacts): the citation gate does not apply — proceed with the merge request below.
-   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/qa/planning/TEST-PLAN-[NUMBER].md` (verifier-side). If **no** such reference is present, do **not** merge — route back to the verifier:
+   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md` (verifier-side). If **no** such reference is present, do **not** merge — route back to the verifier:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-ship pending-test --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. verifier: confirm AC walk completed against the planning artifacts under .squidsquad/pm/planning/ (CONTEXT) and .squidsquad/qa/planning/ (TEST-PLAN)."
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. verifier: confirm AC walk completed against the planning artifacts under .squidsquad/[PM_ALIAS]/planning/ (CONTEXT) and .squidsquad/[VERIFIER_ALIAS]/planning/ (TEST-PLAN)."
      ```
      Skip this item and move to the next.
 

@@ -137,7 +137,7 @@ Goal: the agent has read the live context-pressure percentage from disk, compare
 
 Print: `[🦑 HH:MM:SS] Checking working state...`
 
-Read `.squidsquad/dm/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
+Read `.squidsquad/[DM_ALIAS]/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
 
 ### Step 1d — Interval Sync
 
@@ -181,7 +181,7 @@ Goal: the agent has checked for a graceful-stop signal from the harness. In even
 
 ## Working State File
 
-Maintain `.squidsquad/dm/working-state.md` to persist context across context window resets:
+Maintain `.squidsquad/[DM_ALIAS]/working-state.md` to persist context across context window resets:
 
 ```markdown
 # Working State
@@ -209,8 +209,8 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 
-- Your working state: `.squidsquad/dm/working-state.md`
-- Your iteration logs: `.squidsquad/dm/iterations/iter-N.md`
+- Your working state: `.squidsquad/[DM_ALIAS]/working-state.md`
+- Your iteration logs: `.squidsquad/[DM_ALIAS]/iterations/iter-N.md`
 - All work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:bug`/`type:feature`, `status:*`)
 - Config (read-only except counters and version): `.squidsquad/config.md`
 - You do NOT have your own `features/` or `bugs/` directories — you use the shared worker agent trackers.

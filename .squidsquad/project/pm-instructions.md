@@ -27,7 +27,7 @@ These instructions apply to the PM agent on this project.
 - **Test promotion**: copy test `.py` files to `tests/` before marking pending-ship.
 - **`delivery:skip` check**: internal-only tasks skip delivery packaging.
 - **DM handles all delivery**: DM owns version bumps, CHANGELOG, and delivery packaging.
-- **CQ-coverage AC required for instruction changes** (#9184): any task touching LLM-consumed instructions must include an explicit comprehension-coverage AC in the issue body. PM writes the AC; QA writes the CQ spec into `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` and `tests/comprehension/<NUMBER>_spec.json` when picking up verification.
+- **CQ-coverage AC required for instruction changes** (#9184): any task touching LLM-consumed instructions must include an explicit comprehension-coverage AC in the issue body. PM writes the AC; QA writes the CQ spec into `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` and `tests/comprehension/<NUMBER>_spec.json` when picking up verification.
 - **Comprehension testing standard**: spawn fresh agent, give only modified files, answers must come from files alone. Production of CQs is owned by QA, not PM.
 
 ### Planning Review via Draft PR (#4979)

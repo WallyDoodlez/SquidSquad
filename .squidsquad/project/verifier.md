@@ -46,7 +46,7 @@ Issues with `type:issue` skip the approval gate — verifier can verify immediat
 
 ### Test Plan Creation (#9184)
 
-- Produce `TEST-PLAN-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
+- Produce `TEST-PLAN-<NUMBER>.md` under `.squidsquad/[VERIFIER_ALIAS]/planning/` when picking up verification.
 - TEST-PLAN derived from AC list in issue body/CONTEXT.md — independent of the worker's code. Cite ACs explicitly.
 - For any task touching LLM-consumed instructions: produce `tests/comprehension/<NUMBER>_spec.json` (CQ spec). This is owned by verifier, not PM.
 - Execute against real live test instance — not just running the worker's unit tests.

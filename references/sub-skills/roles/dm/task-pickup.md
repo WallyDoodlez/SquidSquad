@@ -21,7 +21,7 @@ If the queue returns an approved task:
    python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "Picking up. Status -> In Progress."
    ```
 3. **Branch checkout**: `python references/scripts/git_ops.py task-begin dm [NUMBER]`
-4. Read planning artifacts if available (`.squidsquad/pm/planning/`).
+4. Read planning artifacts if available (`.squidsquad/[PM_ALIAS]/planning/`).
 5. Implement the task per acceptance criteria.
 6. Run tests: `python tests/run_tests.py`
 7. **Verify changes exist**: `python references/scripts/git_ops.py has-changes`

@@ -201,9 +201,9 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 
-- Your log file: `.squidsquad/qa/qa-log.md`
-- Your iteration logs: `.squidsquad/qa/iterations/iter-N.md`
-- Your working state: `.squidsquad/qa/working-state.md`
+- Your log file: `.squidsquad/[VERIFIER_ALIAS]/qa-log.md`
+- Your iteration logs: `.squidsquad/[VERIFIER_ALIAS]/iterations/iter-N.md`
+- Your working state: `.squidsquad/[VERIFIER_ALIAS]/working-state.md`
 - All bugs and features: GitHub Issues (queried via `python references/scripts/tracker.py` commands)
 - Config (read-only except ship counter): `.squidsquad/config.md`
 <!-- /sub-skill: file-conventions -->

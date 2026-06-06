@@ -637,6 +637,15 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     interval = _read_config_value("interval") or "30"
     content = content.replace("[INTERVAL]", interval)
 
+    # Role-class alias placeholders (#11144 G10). Sources write
+    # `.squidsquad/[VERIFIER_ALIAS]/...` so paths track the install's alias
+    # at compose time. PM/Verifier/DM are singleton today; this stages the
+    # multi-instance turn-on without changing composed output (singleton
+    # install: [VERIFIER_ALIAS] = "qa" via the legacy `qa` config key).
+    content = content.replace("[PM_ALIAS]", _read_config_value("alias-pm") or "pm")
+    content = content.replace("[VERIFIER_ALIAS]", _read_config_value("alias-qa") or "qa")
+    content = content.replace("[DM_ALIAS]", _read_config_value("alias-dm") or "dm")
+
     # PM/DM-specific
     if not is_dev:
         active_agents = _read_config_value("workers") or ""

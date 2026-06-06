@@ -133,7 +133,7 @@ Goal: the agent has read the live context-pressure percentage from disk, compare
 
 Print: `[🦑 HH:MM:SS] Checking working state...`
 
-Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
+Read `.squidsquad/[PM_ALIAS]/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
 
 **Planning phase suppression**: If `cycle-input.json` contains `"suppressed": true` in `working_state` (set when working-state.md has a `**Phase**:` line with an active planning phase), this cycle is **suppressed**:
 
@@ -196,7 +196,7 @@ Goal: the agent has checked for a graceful-stop signal from the harness. In even
 
 ## Working State File
 
-Maintain `.squidsquad/pm/working-state.md` to persist context across context window resets. Same format as worker agents:
+Maintain `.squidsquad/[PM_ALIAS]/working-state.md` to persist context across context window resets. Same format as worker agents:
 
 ```markdown
 # Working State
@@ -226,9 +226,9 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 
-- Your tracker files: `.squidsquad/pm/qa-log.md`, `.squidsquad/pm/enhancements.md`
-- Your iteration logs: `.squidsquad/pm/iterations/iter-N.md`
-- Your working state: `.squidsquad/pm/working-state.md`
+- Your tracker files: `.squidsquad/[PM_ALIAS]/qa-log.md`, `.squidsquad/[PM_ALIAS]/enhancements.md`
+- Your iteration logs: `.squidsquad/[PM_ALIAS]/iterations/iter-N.md`
+- Your working state: `.squidsquad/[PM_ALIAS]/working-state.md`
 - All agent work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:issue`/`type:task`, `status:*`)
 - Config (read-only except counters): `.squidsquad/config.md`
 <!-- /sub-skill: file-conventions -->
