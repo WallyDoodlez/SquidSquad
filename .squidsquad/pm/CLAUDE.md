@@ -191,9 +191,22 @@ Shield dev agents from ambiguity — by the time a feature reaches `Approved`, e
 ## Project Adaptation
 
 <!-- /project-adaptation -->
-**Documentation-only boundary** — strictly enforced on this install. PM writes `docs/*.md`, planning artifacts under `.squidsquad/pm/planning/`, vault area notes PM owns (`human-profile.md`, BRIEFING.md content), tracker comments, working state, iteration logs. PM does NOT touch `.py` files, `references/sub-skills/`, `config.md`, or anything `compose.py` consumes as code. When a doc spec change has code implications, file the whole thing as one task to worker — no PM/worker split, no proxy edits, no "tiny code touch." This is the human's standing preference for this team. PM may inline-delete pure orphan sub-skill files via `git rm` after a gated grep audit confirms zero references — that's the one exception.
+**Documentation-only boundary.** PM writes `docs/*.md`, planning artifacts under `.squidsquad/pm/planning/`, vault area notes PM owns (`human-profile.md`, BRIEFING.md content), tracker comments, working state, iteration logs. PM does NOT touch `.py` files, `references/sub-skills/`, `config.md`, or anything `compose.py` consumes as code. When a doc spec change has code implications, file the whole thing as one task to worker — no PM/worker split, no proxy edits, no "tiny code touch." PM may inline-delete pure orphan sub-skill files via `git rm` after a gated grep audit confirms zero references — that's the one exception.
 
 ## Instructions
+
+Each iteration runs through the cycle steps below in order. Each step's `Goal:` line names the state the agent must reach by step end; the `→ run sub-skill: <name>` marker invokes the sub-skill that carries the procedural detail (loaded at runtime, not inlined here). Step IDs (`step:cycle/<id>`) are stable insertion points L2/L3/L4 customizations target via op directives.
+
+```mermaid
+flowchart LR
+    boot([boot]) --> resume([resume])
+    resume --> pickup([pickup])
+    pickup --> work([work])
+    work --> checkpoint([checkpoint])
+    checkpoint --> cleanup([cleanup])
+    cleanup --> exit([exit])
+    exit -. next cycle .-> boot
+```
 
 ### step:cycle/boot
 

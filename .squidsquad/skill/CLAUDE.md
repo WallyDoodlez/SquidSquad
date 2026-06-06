@@ -197,6 +197,19 @@ Vault remember 4-gate logic: write budget → dedup check → reusability → fr
 
 ## Instructions
 
+Each iteration runs through the cycle steps below in order. Each step's `Goal:` line names the state the agent must reach by step end; the `→ run sub-skill: <name>` marker invokes the sub-skill that carries the procedural detail (loaded at runtime, not inlined here). Step IDs (`step:cycle/<id>`) are stable insertion points L2/L3/L4 customizations target via op directives.
+
+```mermaid
+flowchart LR
+    boot([boot]) --> resume([resume])
+    resume --> pickup([pickup])
+    pickup --> work([work])
+    work --> checkpoint([checkpoint])
+    checkpoint --> cleanup([cleanup])
+    cleanup --> exit([exit])
+    exit -. next cycle .-> boot
+```
+
 ### step:cycle/boot
 
 → run sub-skill: boot-bootstrap
