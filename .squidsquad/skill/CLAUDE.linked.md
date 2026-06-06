@@ -253,7 +253,7 @@ sequenceDiagram
     Note over A: drain initial walk, then idle-wait
 ```
 
-The boot-mode probe selects your wake mechanism for this session: if the harness responds, you stay in event mode and the rest of the session-boot sequence above runs; if the probe fails (timeout, non-200, port-file missing), you fall back to loop mode for this session, skip the rest of the event-mode handshake, and schedule a `/loop` cron instead. Mode selection is per-session — once a probe resolves, you don't re-detect until the next session restart.
+The boot-mode probe selects your wake mechanism for this session: if the harness responds, you stay in event mode and the rest of the session-boot sequence above runs; if the probe fails (timeout, non-200, port-file missing), you fall back to **loop mode** for this session — skip the rest of the event-mode handshake, schedule a `/loop` cron, and Read `roles/<your-role>/ralph-loop-overview` (see the sub-skill catalog at `docs/sub-skill-catalog.md`) for the polling-mode cycle contract that replaces the per-nudge cycle below. Mode selection is per-session — once a probe resolves, you don't re-detect until the next session restart.
 
 #### Per-nudge cycle — repeats indefinitely
 
@@ -290,7 +290,17 @@ The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--targ
 
 One unconditional rule from those fragments matters at this level: **if `Monitor` exits for any reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — end your session immediately** (#9742). Do not retry `Monitor`, do not wait for the harness to recover, do not pivot to polling mid-session. The harness's auto-respawn path owns recovery; your exit IS the signal that recovery is needed.
 
-Each step below names the sub-skill (loaded at runtime via the `→ run sub-skill: <name>` marker) that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The IDs are scheduled to be re-anchored to the session-boot vs. per-event-cycle shape in a follow-up iteration; until then, the steps are split into two groups by **when they actually run**.
+#### How `→ run sub-skill` markers work
+
+The steps below — and many other actions throughout this document — name a **sub-skill** via the `→ run sub-skill: <name>` marker. A sub-skill is a self-contained unit of agent procedural detail (boot bootstrap, vault writes, git commits, etc.) that lives in its own markdown file under `references/sub-skills/`. Sub-skill bodies are **not inlined** into this composed CLAUDE.md — when you reach a `→ run sub-skill: <name>` marker, you Read the source file at that moment and follow its instructions.
+
+To resolve `<name>` to a source path, consult the sub-skill catalog at `docs/sub-skill-catalog.md`. Names come in two shapes:
+- **Bare names** like `boot-bootstrap` or `vault-remember` — the catalog maps these to their source path (typically under `references/sub-skills/common/` or `references/sub-skills/common-events/`).
+- **Slash-bearing names** like `roles/pm/improvement-scan` — the name IS the source path under `references/sub-skills/` (so `roles/pm/improvement-scan` → `references/sub-skills/roles/pm/improvement-scan.md`).
+
+Either way, the catalog is the source of truth; if a marker's name isn't in the catalog, the marker is stale and you should ignore it rather than guess.
+
+Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The IDs are scheduled to be re-anchored to the session-boot vs. per-event-cycle shape in a follow-up iteration; until then, the steps are split into two groups by **when they actually run**.
 
 ## Session-boot steps — run once when the session starts
 
