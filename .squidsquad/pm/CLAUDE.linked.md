@@ -399,7 +399,7 @@ python references/scripts/tracker.py transition [NUMBER] in-progress pending-tes
 python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --role dm-lead
 ```
 
-Pass your own role — PM uses `--role pm-lead`, QA uses `--role verifier-lead`, DM uses `--role dm-lead`, designer uses `--role designer-lead`, dev agents use `--role pm-lead` (e.g. `skill-lead`). The script rejects:
+Pass your own role-class — PM uses `--role pm-lead`, verifier agents use `--role verifier-lead`, DM uses `--role dm-lead`, worker agents use `--role <role>-lead` where `<role>` is your alias (e.g. `skill-lead`). The script rejects:
 
 - **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
 - **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM or QA only). Use `--force` only as a human override.
