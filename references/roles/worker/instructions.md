@@ -215,7 +215,7 @@ Goal: the cycle's work is durably checkpointed in git — code changes on the fe
 
 → run sub-skill: agent-lifecycle
 
-Goal: the agent has checked for a graceful-stop signal from the harness and either scheduled the next cycle or exited cleanly per the stop intent. The harness owns lifecycle; the agent only honors it.
+Goal: the agent has checked for a graceful-stop signal from the harness. In event mode, the session re-enters Monitor idle wait if no stop is pending, or emits `ack-stop` and exits if `intent=stopping`. In loop fallback, the cycle exits cleanly so `cycle_post.py` can apply the output before the next cron fire. The harness owns lifecycle; the agent only honors it.
 
 ---
 

@@ -71,6 +71,46 @@ In the meantime I've stripped the issue-ref noise (`#9588`/`#9580`/`CONTEXT-9588
 
 ---
 
+### G5 — Step 1c / Step 1d legacy numbering
+
+Audit C2: `### Step 1c — Resume From Working State` appears mid-doc with no Step 1a / Step 1b context (pm, dm, verifier). DM and verifier also carry `### Step 1d — Interval Sync`. These are L2 instruction blocks whose body content does PM/DM/QA-specific resume-time and interval-sync checks.
+
+The "Step 1c" / "Step 1d" naming is NOT orphan-confusion — it's a system-wide convention used in `references/sub-skills/common/resume-working-state.md` and `references/sub-skills/common/interval-sync.md` (the H3s in those sub-skill bodies are titled `### Step 1c —` and `### Step 1d —`) and documented in `references/sub-skills/manifest.md` lines 64-65 + 193-194:
+
+```
+4. `common/resume-working-state` — Step 1c: resume from working state
+5. `common/interval-sync` — Step 1d: interval sync
+```
+
+So Step 1a/1b/1c/1d was the original numbered cycle layout — Step 1a and 1b have since been retired or folded elsewhere, but 1c and 1d survive in both the sub-skill bodies and the L2 instruction files that inline them.
+
+**Need user decision**: rename 1c/1d → modern `step:cycle/<id>` shape (proper anchor IDs, cleaner reading for the agent), or keep as legacy and address only the cosmetic surrounding ("PM's resume-time extension" prose framing). Either way, this is tangled with the Iter 11b step-ID restructure and should be planned together.
+
+For tonight I've left the prose alone.
+
+---
+
+### G6 — PM Soul "When verifying pending-test items" contradicts PM Responsibility
+
+Audit M2 surfaced this. PM SOUL.md line 27-32:
+
+> "When verifying pending-test items, check ALL of the following:
+> - All acceptance criteria pass
+> - New code has corresponding unit tests — no shipping untested code
+> - All tests pass (run the full test suite)
+> - Bug fixes include regression tests that would have caught the original bug
+> - If any of these fail, back to in-progress with specific gaps listed"
+
+Conflicts directly with `references/roles/pm/responsibility.md` ("Does NOT verify pending-test work. Verification is the verifier's lane") and L1 Boundaries ("PM = docs only. Verifier = testing only.").
+
+Two readings:
+- **(a) Stale prose** — pre-#10685 PM ran verification; post-rename verifier owns it. The Soul block is leftover and should be deleted.
+- **(b) Spec-compliance check, not test execution** — PM reads QA's test outcomes (not runs them) and decides whether to send pending-test → pending-ship or pending-test → in-progress. The bullet "All tests pass (run the full test suite)" is misleading — should read "verify QA's report shows all tests pass".
+
+I lean (b) per PM's existing `pending-test → pending-ship | in-progress — PM or QA` role in the status transition table, but **need your call**. Logging and not editing tonight.
+
+---
+
 ### G4 — AGENT-RUNTIME doc gap: `[ROLE]` substitution semantics for advice prose
 
 The C3 fix (Iter 21) exposed a structural gap: when a sentence in L1 instructions.md gives advice **about other agents** (e.g., "dev agents use `--role <role>-lead`") and contains `[ROLE]`, the `_substitute_placeholders` machinery rewrites `[ROLE]` to the **reading agent's** role — turning generic advice into self-targeted nonsense ("dev agents use `--role pm-lead`" appearing in PM's deployed CLAUDE.md).
@@ -89,4 +129,5 @@ I've applied this convention in the C3 fix but the doc gap remains.
 | --- | --- | --- | --- |
 | 20 | fe592806f | Strip `#9588`/`#9580`/`CONTEXT-9588` from Boot — Mode Detection H2 + Step 1/2/4b prose, all four L2 files | landed |
 | 21 | 451ed7f7a | Fix C3: `[ROLE]-lead` → `<role>-lead` (worker-flavored advice survives composition) + log G1/G2/G3/G4 | landed |
-| 22 | _committing_ | Fix C4: promote `check-gh` to a new pre-Step-1 "Step 0" so both event and polling boot paths gate on GitHub access; renumber 4b→4a, 4c→4b across all 4 L2 files | composing |
+| 22 | 916820106 | Fix C4: promote `check-gh` to a new pre-Step-1 "Step 0" so both event and polling boot paths gate on GitHub access; renumber 4b→4a, 4c→4b across all 4 L2 files | landed |
+| 23 | _committing_ | C5 fix: Goal text of `step:cycle/exit` rewritten to cover BOTH event-mode (re-enter Monitor / ack-stop) and loop-fallback (exit cleanly). M1: typo cleanup in PM SOUL.md ("swtiched"→"switched", "throrough"→"thorough", "- almost that"→"— almost as if"). | composing |
