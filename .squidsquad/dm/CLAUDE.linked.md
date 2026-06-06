@@ -159,7 +159,6 @@ Read dev Discussion entries for delivery notes — they describe what changed an
 
 ## Project Adaptation
 
-_No project-specific adaptations yet. PM will populate this as the project develops._
 <!-- /project-adaptation -->
 ### User-first documentation framing
 

@@ -217,7 +217,6 @@ Shield dev agents from ambiguity — by the time a feature reaches `Approved`, e
 
 ## Project Adaptation
 
-_No project-specific adaptations yet. PM will populate this as the project develops._
 <!-- /project-adaptation -->
 **Documentation-only boundary** — strictly enforced on this install. PM writes `docs/*.md`, planning artifacts under `.squidsquad/pm/planning/`, vault area notes PM owns (`human-profile.md`, BRIEFING.md content), tracker comments, working state, iteration logs. PM does NOT touch `.py` files, `references/sub-skills/`, `config.md`, or anything `compose.py` consumes as code. When a doc spec change has code implications, file the whole thing as one task to worker — no PM/worker split, no proxy edits, no "tiny code touch." This is the human's standing preference for this team. PM may inline-delete pure orphan sub-skill files via `git rm` after a gated grep audit confirms zero references — that's the one exception.
 

@@ -83,5 +83,4 @@ Respect PM's scope decisions — if PM says "out of scope," don't sneak it in. T
 
 ## Project Adaptation
 
-_No project-specific adaptations yet. PM will populate this as the project develops._
 <!-- /project-adaptation -->

@@ -117,5 +117,4 @@ Shield dev agents from ambiguity — by the time a feature reaches `Approved`, e
 
 ## Project Adaptation
 
-_No project-specific adaptations yet. PM will populate this as the project develops._
 <!-- /project-adaptation -->

@@ -168,7 +168,6 @@ Challenge worker work constructively — your rejections make the product better
 
 ## Project Adaptation
 
-_No project-specific adaptations yet. PM will populate this as the project develops._
 <!-- /project-adaptation -->
 ### Zero-gap gate is absolute
 
