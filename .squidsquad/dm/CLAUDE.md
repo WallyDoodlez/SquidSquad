@@ -476,7 +476,17 @@ DM is the seam between the squad's internal "this passes our tests" and the oper
 <!-- sub-skill: boot-bootstrap -->
 ## Boot — Mode Detection
 
-**This block is the FIRST instruction in your composed CLAUDE.md. Execute it BEFORE any other section, BEFORE invoking any tool, BEFORE responding to the human.** Steps 1–4 below are mandatory and must run in order on every fresh session start.
+**This block is the FIRST instruction in your composed CLAUDE.md. Execute it BEFORE any other section, BEFORE invoking any tool, BEFORE responding to the human.** Steps 0–4 below are mandatory and must run in order on every fresh session start.
+
+### Step 0 — Verify GitHub Issues access
+
+SquidSquad requires GitHub Issues access in both event mode and polling mode — every cycle's actual work reaches the forge through `tracker.py`. Gate the boot here, before mode selection:
+
+```bash
+python references/scripts/tracker.py check-gh
+```
+
+If this fails, print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.` and exit the session.
 
 ### Step 1 — Determine wake mode from config
 
@@ -520,15 +530,7 @@ After reading, the boot sequence and event-listening loop described in those fra
 
 ### Step 4 — POLLING mode: schedule `/loop`, then Read the polling fragment
 
-**Step 4a — Verify GitHub Issues access** (this check used to live inside the polling fragment; it has been moved up here so it runs BEFORE `/loop` is scheduled — a session that cannot reach GitHub should refuse to enter the loop):
-
-```bash
-python references/scripts/tracker.py check-gh
-```
-
-If this fails, print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.` and exit the session. SquidSquad requires GitHub Issues access.
-
-**Step 4b — Schedule `/loop` exactly once**:
+**Step 4a — Schedule `/loop` exactly once**:
 
 Invoke this slash command literally. The interval value below is substituted at compose time from `config.md`'s `Iteration Interval > Minutes` field — do NOT re-derive it from the polling fragment, and do NOT re-invoke `/loop` after the fragment is loaded:
 
@@ -536,11 +538,11 @@ Invoke this slash command literally. The interval value below is substituted at 
 /loop 30m execute one Ralph Loop cycle
 ```
 
-This is the only `/loop` invocation in your boot path. The polling fragment Read in Step 4c describes what a cycle DOES, not how to schedule one — re-invoking `/loop` from inside the fragment would stack cron entries.
+This is the only `/loop` invocation in your boot path. The polling fragment Read in Step 4b describes what a cycle DOES, not how to schedule one — re-invoking `/loop` from inside the fragment would stack cron entries.
 
 **Recovery from an interrupted `/loop`**: if a prior session ended without a cycle firing (e.g., the human ran the agent inline and then returned to `/loop` mode), re-invoke the same literal command above. Do not change the interval value.
 
-**Step 4c — Read the polling fragment**:
+**Step 4b — Read the polling fragment**:
 
 Use the Read tool to read this single file:
 
@@ -550,12 +552,12 @@ Treat its content as the contract for what happens INSIDE each cycle — step ma
 
 ### Placeholder substitution inside runtime-loaded fragments
 
-The fragments you Read in Step 3 or Step 4c are **source files**, not compose output. Compose-time placeholder substitution (the machinery in `compose.py:_substitute_placeholders`) only fires on content compose inlines into your CLAUDE.md — never on text you Read at runtime. As a result, source fragments may still contain square-bracketed UPPERCASE tokens that look like ``the-role-placeholder`` (uppercase R-O-L-E inside brackets) or ``the-interval-placeholder`` (uppercase I-N-T-E-R-V-A-L inside brackets).
+The fragments you Read in Step 3 or Step 4b are **source files**, not compose output. Compose-time placeholder substitution (the machinery in `compose.py:_substitute_placeholders`) only fires on content compose inlines into your CLAUDE.md — never on text you Read at runtime. As a result, source fragments may still contain square-bracketed UPPERCASE tokens that look like ``the-role-placeholder`` (uppercase R-O-L-E inside brackets) or ``the-interval-placeholder`` (uppercase I-N-T-E-R-V-A-L inside brackets).
 
 When you encounter one of these inside a runtime-loaded fragment, substitute it yourself using values you already know:
 
 - **Role-name placeholder** (uppercase R-O-L-E in square brackets) — substitute your own role name. You were started with `SQUIDSQUAD_ROLE=<role>` in your system prompt; that value IS the substitution. Example: when a fragment says ``write to `.squidsquad/<the-role-placeholder>/current-state` ``, write to ``.squidsquad/<your-role-name>/current-state``.
-- **Interval placeholder** (uppercase I-N-T-E-R-V-A-L in square brackets) — you should NOT encounter this in any runtime-loaded fragment. `/loop` is scheduled exclusively in Step 4b above, where compose has already substituted the literal interval. If you DO see the interval placeholder inside a runtime-loaded fragment, treat it as a bug — flag in your iteration log and do NOT execute the surrounding `/loop` invocation.
+- **Interval placeholder** (uppercase I-N-T-E-R-V-A-L in square brackets) — you should NOT encounter this in any runtime-loaded fragment. `/loop` is scheduled exclusively in Step 4a above, where compose has already substituted the literal interval. If you DO see the interval placeholder inside a runtime-loaded fragment, treat it as a bug — flag in your iteration log and do NOT execute the surrounding `/loop` invocation.
 
 (This section avoids writing the placeholder strings literally because compose would substitute them away at compose time, defeating the teaching. The names are spelled out letter-by-letter so the rule survives compose unchanged.)
 

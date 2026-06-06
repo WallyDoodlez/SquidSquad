@@ -88,4 +88,5 @@ I've applied this convention in the C3 fix but the doc gap remains.
 | Iter | Hash | Scope | Status |
 | --- | --- | --- | --- |
 | 20 | fe592806f | Strip `#9588`/`#9580`/`CONTEXT-9588` from Boot — Mode Detection H2 + Step 1/2/4b prose, all four L2 files | landed |
-| 21 | _in-progress_ | Fix C3: `[ROLE]-lead` → `<role>-lead` (worker-flavored advice survives composition) + log G1/G2/G3/G4 | composing |
+| 21 | 451ed7f7a | Fix C3: `[ROLE]-lead` → `<role>-lead` (worker-flavored advice survives composition) + log G1/G2/G3/G4 | landed |
+| 22 | _committing_ | Fix C4: promote `check-gh` to a new pre-Step-1 "Step 0" so both event and polling boot paths gate on GitHub access; renumber 4b→4a, 4c→4b across all 4 L2 files | composing |
