@@ -497,7 +497,7 @@ Verifier is the squad's accuracy gate. The temptation to "just fix the small thi
 <!-- /sub-skill: responsibility -->
 
 <!-- sub-skill: boot-bootstrap -->
-## Boot — Mode Detection (#9588)
+## Boot — Mode Detection
 
 **This block is the FIRST instruction in your composed CLAUDE.md. Execute it BEFORE any other section, BEFORE invoking any tool, BEFORE responding to the human.** Steps 1–4 below are mandatory and must run in order on every fresh session start.
 
@@ -505,7 +505,7 @@ Verifier is the squad's accuracy gate. The temptation to "just fix the small thi
 
 Read `.squidsquad/config.md` and find the active wake mode:
 
-- **If `.squidsquad/config.md` does not exist or cannot be read** (Read tool error, file absent, empty file) → **POLLING mode confirmed**, skip Step 2 and jump to Step 4. Defaulting to polling here honors CONTEXT-9588 D3: the safe fallback for any uncertainty is polling.
+- **If `.squidsquad/config.md` does not exist or cannot be read** (Read tool error, file absent, empty file) → **POLLING mode confirmed**, skip Step 2 and jump to Step 4. Defaulting to polling here is intentional: the safe fallback for any uncertainty is polling.
 - Else if `event-driven-qa: yes` is present (per-role override) → event-mode candidate.
 - Else if `event-driven: yes` is present (global default) → event-mode candidate.
 - Else (field absent, set to `no`, or unparseable) → **POLLING mode confirmed**, skip Step 2 and jump to Step 4 (polling branch).
@@ -524,7 +524,7 @@ The harness must be reachable for event-mode to be used. Probe in this order:
    The `-s` flag silences progress output and `-f` makes curl exit non-zero on any HTTP error response — no shell redirect is needed (older versions of this instruction used `> /dev/null`, which fails on native Windows shells and would force a permanent polling fallback). Inspect the exit code only: 0 = harness reachable; any non-zero exit (curl error, connection refused, timeout, HTTP non-2xx, curl missing from PATH) = **harness unreachable**.
 
 If the probe succeeds → **EVENT mode confirmed**, proceed to Step 3.
-If the probe fails (for any reason — non-zero exit, network error, missing curl) → **fall through to polling** (jump to Step 4 polling branch). This fallback is intentional per #9580/#9588: until the harness is proven stable across all failure modes, agents fall back to `/loop` polling rather than the bespoke event-mode degraded path.
+If the probe fails (for any reason — non-zero exit, network error, missing curl) → **fall through to polling** (jump to Step 4 polling branch). This fallback is intentional: until the harness is proven stable across all failure modes, agents fall back to `/loop` polling rather than the bespoke event-mode degraded path.
 
 ### Step 3 — EVENT mode: Read event fragments and follow them
 
@@ -551,7 +551,7 @@ python references/scripts/tracker.py check-gh
 
 If this fails, print: `[🦑 HH:MM:SS] ERROR: GitHub Issues permission check failed. Run "gh auth refresh" with "repo" scope, or ensure gh CLI is installed and authenticated.` and exit the session. SquidSquad requires GitHub Issues access.
 
-**Step 4b — Schedule `/loop` exactly once** (#9588 BLOCKER fix):
+**Step 4b — Schedule `/loop` exactly once**:
 
 Invoke this slash command literally. The interval value below is substituted at compose time from `config.md`'s `Iteration Interval > Minutes` field — do NOT re-derive it from the polling fragment, and do NOT re-invoke `/loop` after the fragment is loaded:
 
