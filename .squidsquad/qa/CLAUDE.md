@@ -590,99 +590,11 @@ The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `wo
 
 → run sub-skill: roles/verifier/ralph-loop-overview
 
-<!-- sub-skill: cycle-runner -->
-## Cycle Runner (Transport Layer)
+### step:cycle/run
 
-The Ralph Loop uses a 3-phase flow: mechanical pre-cycle → creative work → mechanical post-cycle. All mechanical operations (git pull, commit, push, triage queries, iteration logging) are handled by deterministic scripts. You focus on creative work only.
+→ run sub-skill: cycle-runner
 
-### Phase 1 — Pre-Cycle (Mechanical)
-
-```bash
-python references/scripts/cycle_pre.py qa
-```
-
-This script handles all mechanical operations: git pull, context pressure check, working state read, triage/queue queries, branch enforcement (ensures correct branch before pull), and writes `.squidsquad/qa/cycle-input.json`.
-
-Read the output:
-
-```bash
-cat .squidsquad/qa/cycle-input.json
-```
-
-The JSON contains everything you need: `role`, `cycle_number`, `timestamp`, `pull_result`, `context_pressure`, `working_state`, `recent_events`, `mechanical_reactions`, and role-specific fields (work queue, verification queue, etc.).
-
-`recent_events` (#5622): list of event bus events since your last processed cursor. Each event has `id`, `event_type`, `role`, `timestamp`, `payload`, `received_at`. Filtered to your role's relevant event types. Empty list if harness unreachable or no new events.
-
-`mechanical_reactions` (#5622): list of actions the mechanical layer took based on high-confidence event patterns (e.g., PR merge detected, rework needed). Informational — the reaction already executed; this tells you what happened.
-
-### Phase 2 — Creative Work (Agent)
-
-This is your core work. Start by **reading cycle-input.json critically**:
-
-1. **Examine the pipeline state** — don't just scan for your own work items. Look at the full picture: what's stalled, what's been rejected, what's blocked, what claims don't add up. Apply your SOUL.md personality to the data.
-2. **Investigate anomalies** — if an item has been at the same status for multiple cycles, if an agent claims something is blocked without evidence, if shipped-since-bump is over threshold — these are problems to investigate, not ignore.
-3. **Do your role's core work** — reasoning, code analysis, code writing, verification, human interaction, planning, or whatever your role requires.
-
-You still have full bash access for:
-- Running tests
-- Reading code
-- Spawning subagents
-- Running verification commands
-- Any creative work that requires shell access
-
-Do NOT use bash for mechanical operations that cycle_pre/post handles (git pull, git commit, git push, status bar writes, tracker transitions, iteration logging).
-
-### Phase 3 — Post-Cycle (Mechanical)
-
-Write your results to `.squidsquad/qa/cycle-output.json`:
-
-```json
-{
-  "role": "qa",
-  "cycle_number": N,
-  "cycle_type": "active" | "quiet" | "suppressed",
-  "status_transitions": [
-    {"number": 123, "from": "approved", "to": "in-progress"}
-  ],
-  "tracker_comments": [
-    {"number": 123, "message": "Picking up. Status → In Progress."}
-  ],
-  "iteration_summary": "Brief description of work done",
-  "commit_message": "qa: cycle N — brief description",
-  "working_state_update": "# Working State\n\n- **Task**: none\n..."
-}
-```
-
-Then run:
-
-```bash
-python references/scripts/cycle_post.py qa
-```
-
-The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), and status bar cleanup. Context pressure exit is detected mechanically — `cycle_post.py` exits with code 42 when pressure exceeds threshold, and the harness respawns the agent (#4966).
-
-### Role-Specific Fields
-
-**Skill** cycle-output extras:
-- `code_commit`: `{branch, message, pr_needed, pr_title, pr_body}` — feature-branch commit + PR creation block (#9478)
-- `state_commit_message`: separate message for main branch state commit
-- `improvement_scan`: `{files_scanned, findings}` — if scan ran
-
-**PM** cycle-output extras:
-- `human_input_processed`: summary of human input handled
-- `issues_filed`, `issues_verified`, `tasks_verified`, `tasks_shipped`
-- `external_issues_triaged`, `health_alerts`, `vault_writes`
-- `version_bump`: `{new_version, items_included}` — deprecated (DM always present)
-
-**Verifier** cycle-output extras:
-- `e2e_log`: `{result, tests_run, failures}`
-- `issues_filed`, `issues_verified`, `tasks_verified`
-- `pr_actions`: `[{pr_number, action, comment}]`
-
-**DM** cycle-output extras:
-- `bugs_fixed`, `deliveries`
-- `version_bump`: `{new_version, items_included}`
-<!-- /sub-skill: cycle-runner -->
+Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
 
 → run sub-skill: event-driven-workflow
 
@@ -696,28 +608,11 @@ The script handles: status transitions, tracker comments, iteration logging, git
 
 → run sub-skill: comment-handling
 
-<!-- sub-skill: context-pressure -->
-### Step 1b — Context Pressure Check
+### step:cycle/context-pressure
 
-Print: `[🦑 HH:MM:SS] Checking context pressure...`
+→ run sub-skill: context-pressure
 
-Read the real context pressure from disk. The statusline hook writes the actual `used_percentage` to `.squidsquad/qa/context-pressure` after every assistant message — agents should **read** this file, not fabricate values.
-
-```bash
-CTX_PCT=$(cat .squidsquad/qa/context-pressure 2>/dev/null || echo "0")
-python references/scripts/config.py get context-threshold
-```
-
-Compare `CTX_PCT` against the threshold. If the file doesn't exist yet (first cycle, statusline not running), default to `0` and continue normally.
-
-If context usage **exceeds the threshold**:
-1. Compact your current working state into `.squidsquad/qa/working-state.md` (see Working State File below). This is a checkpoint — if the session crashes or is interrupted, the next session can resume from working state.
-2. Commit and push all pending work.
-3. Print: `[🦑 HH:MM:SS] Context pressure at [X]% — working state checkpointed. Continuing normally.`
-4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. At cycle end, `cycle_post.py` detects the exceeded threshold from `cycle-input.json` and exits with code 42, triggering a harness respawn.
-
-If context usage is below threshold, continue normally.
-<!-- /sub-skill: context-pressure -->
+Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally.
 
 ### Step 1c — Resume From Working State
 
@@ -743,52 +638,11 @@ Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs 
 
 → run sub-skill: self-restart
 
-<!-- sub-skill: agent-lifecycle -->
-### Agent Lifecycle
+### step:cycle/exit
 
-Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). Agents do not manage their own or other agents' processes directly during normal operation. **Stall-recovery exception (#9272)**: PM may invoke `python references/scripts/boot_remote.py --role <name>` directly to spawn a stalled agent when the harness is unreachable (#9242) or when an agent stays dead despite auto-boot — see the `boot-remote-agents` sub-skill for the full policy. No other role boots agents directly.
+→ run sub-skill: agent-lifecycle
 
-**Three guarantees**:
-1. **Singleton**: Only one instance per role runs at a time (harness process table).
-2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
-3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
-
-**Health monitoring**: Harness monitors agent liveness via PID monitoring through `.claude-pid` (sole liveness signal). The harness polls every 5 seconds.
-
-**Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
-- `running` — agent should be alive; auto-reboot on death
-- `stopping` — graceful stop; do NOT reboot after death
-- `restarting` — graceful restart; reboot after death
-- `stopped` — agent died as requested
-
-**Lifecycle interface** (`squidsquad_cli.py` is canonical; `start_team.py <args>` remains as a backward-compatible shim):
-```bash
-# Start harness + all agents
-python references/scripts/squidsquad_cli.py start
-
-# Start a single agent (harness auto-spawns if needed)
-python references/scripts/squidsquad_cli.py start <role>
-
-# Graceful restart — harness sets intent=restarting
-python references/scripts/squidsquad_cli.py restart <role>
-
-# Stop a single agent — harness sets intent=stopping
-python references/scripts/squidsquad_cli.py stop <role>
-
-# Stop all agents
-python references/scripts/squidsquad_cli.py stop
-
-# Stop all agents and exit the harness
-python references/scripts/squidsquad_cli.py shutdown
-```
-
-**Crash recovery**: Harness persists state to `.squidsquad/.harness-state.json`. On restart, reads the file, checks which PIDs are alive, and resumes monitoring.
-
-**Ctrl+C escalation** (at harness terminal):
-- 1st Ctrl+C: graceful stop (set all agents intent=stopping, wait for cycle end)
-- 2nd Ctrl+C within 5s: warn about force exit
-- 3rd Ctrl+C: exit harness (agents survive in their terminals)
-<!-- /sub-skill: agent-lifecycle -->
+Goal: the agent has checked for a graceful-stop signal from the harness and either scheduled the next cycle or exited cleanly per the stop intent. The harness owns lifecycle; the agent only honors it.
 
 ---
 
