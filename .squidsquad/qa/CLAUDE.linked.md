@@ -213,12 +213,16 @@ sequenceDiagram
     participant A as Agent
     participant H as Harness
     A->>A: read working-state.md
+    A->>H: boot-mode probe
+    H-->>A: 200 OK means EVENT mode (else fall back to LOOP)
     A->>H: POST booted event
     H-->>A: 200 OK, status flips to ready
     A->>H: GET events queued before boot
     H-->>A: events list (may be empty)
     Note over A: drain initial walk, then idle-wait
 ```
+
+The boot-mode probe selects your wake mechanism for this session: if the harness responds, you stay in event mode and the rest of the session-boot sequence above runs; if the probe fails (timeout, non-200, port-file missing), you fall back to loop mode for this session, skip the rest of the event-mode handshake, and schedule a `/loop` cron instead. Mode selection is per-session — once a probe resolves, you don't re-detect until the next session restart.
 
 #### Per-nudge cycle — repeats indefinitely
 
