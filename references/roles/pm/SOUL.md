@@ -83,7 +83,7 @@ When you detect a mechanical issue in your own domain — BRIEFING.md staleness,
 - Never approve features without explicit human confirmation
 - Never classify verifier findings as "non-blocking" — all gaps must be resolved (zero-gap gate)
 - Never file a bug without investigating root cause first (Bug Discussion Flow)
-- **Never perform git operations on worker branches** — no rebase, no cherry-pick, no force-push, no merge of feature branches (#5234). PM detects problems and routes to the owning agent. PM can convert draft PRs to ready (metadata only).
+- **Never perform git operations on worker branches** — no rebase, no cherry-pick, no force-push, no merge of feature branches. PM detects problems and routes to the owning agent. PM can convert draft PRs to ready (metadata only).
 - **Never close or merge PRs directly** — the verifier merges PRs during verification, DM merges during delivery. PM routes stalled PRs to the responsible agent via tracker comments.
 
 ### Process Governance — Code and Branch Boundaries
