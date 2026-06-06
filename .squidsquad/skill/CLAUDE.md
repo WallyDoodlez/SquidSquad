@@ -223,33 +223,30 @@ Vault remember 4-gate logic: write budget → dedup check → reusability → fr
 
 This section is your operating manual: how you function inside the team described above. It covers the **cycle procedure** (what runs each iteration), **interaction conventions** (tracker, vault, forge protocols, working state file, status line), and the **prohibitions** you must never cross.
 
-### The cycle
+### Your cycle
 
-Every iteration is one Ralph Loop cycle with three phases — two mechanical bookends and your creative work in the middle. The mechanical phases are deterministic scripts (`cycle_pre.py` before, `cycle_post.py` after) that run without your involvement; you only execute Phase 2. The phases communicate through two state files: `cycle_pre.py` writes `cycle-input.json` for you to read, you write `cycle-output.json` for `cycle_post.py` to apply.
+Each time the harness wakes you, you run one cycle — seven chronological steps from boot through exit. The wake mechanism depends on your runtime mode (cron-triggered in loop mode, nudge-triggered in event mode — selected at boot, see `docs/AGENT-RUNTIME.md §2`), but the cycle itself is identical in both modes.
+
+Before each wake the harness runs `cycle_pre.py` for you — it pulls the latest code, reads working-state, queries the tracker, and leaves `cycle-input.json` for you to read at boot. After you exit, the harness runs `cycle_post.py` — it applies your status transitions, posts the tracker comments you queued, writes the iteration log, and commits + pushes. Both bookends are deterministic scripts you don't execute; your work is what happens between them.
 
 ```mermaid
-flowchart TB
-    boot([Boot — once at session start<br/>read vault/BRIEFING.md])
-    boot --> p1
-    p1["Phase 1 — cycle_pre.py (mechanical)<br/>git pull · read working-state · query tracker<br/>derive mechanical reactions · build cycle-input.json"]
-    p1 --> p2
-    p2["Phase 2 — creative work (you)<br/>read cycle-input.json · investigate · decide · act<br/>vault touchpoints inline · write cycle-output.json"]
-    p2 --> p3
-    p3["Phase 3 — cycle_post.py (mechanical)<br/>apply transitions · post tracker comments<br/>iteration log · commit + push · context check"]
-    p3 -. /loop 30m fire (or event nudge) .-> p1
+flowchart LR
+    boot([boot]) --> resume([resume])
+    resume --> pickup([pickup])
+    pickup --> work([work])
+    work --> checkpoint([checkpoint])
+    checkpoint --> cleanup([cleanup])
+    cleanup --> exit([exit])
+    exit -. next wake .-> boot
 ```
 
-See `docs/AGENT-RUNTIME.md §6` for the full architecture; the per-step procedural detail lives in sub-skills loaded at runtime via the `→ run sub-skill: <name>` markers below.
-
-### Phase 2 — your work, step by step
-
-Each step's `→ run sub-skill: <name>` marker invokes the sub-skill that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior.
+Each step below names the sub-skill (loaded at runtime via the `→ run sub-skill: <name>` marker) that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior.
 
 #### step:cycle/boot
 
 → run sub-skill: boot-bootstrap
 
-Verify tracker access, read `.squidsquad/config.md` for interval and mode, check cron schedule. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit. (Phase 1 of `cycle_pre.py` has already pulled and built `cycle-input.json` by the time you reach here.)
+Verify tracker access, read `.squidsquad/config.md`, read `cycle-input.json` for the tracker snapshot and mechanical reactions the harness derived for you. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit.
 
 #### step:cycle/resume
 
@@ -287,7 +284,7 @@ If cycle was quiet (no task picked up), run improvement scan per configured poli
 
 → run sub-skill: agent-lifecycle
 
-Check stop signal. If stop requested, emit final statusline and exit. Otherwise schedule next cycle. (Phase 3 of `cycle_post.py` runs after you exit — applies status transitions, posts tracker comments, commits and pushes, runs the context-pressure check.)
+Check stop signal. If stop requested, emit final statusline and exit. Otherwise write `cycle-output.json` and exit cleanly — `cycle_post.py` will apply your output before the next wake.
 
 ---
 
