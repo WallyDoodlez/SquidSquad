@@ -215,7 +215,17 @@ def _split_linked_into_slots(linked_composite):
             continue
         body_start = m.end()
         body_end = matches[i + 1].start() if i + 1 < len(matches) else len(linked_composite)
-        bodies[slot_key] = linked_composite[body_start:body_end]
+        # #11144 Finding 1 Shape D fix: when L1 base + L2 role + (rarely)
+        # L3 source files each author themselves with the canonical
+        # ``## <Slot>`` H2, the linked composite carries multiple
+        # matching boundaries for the same slot. Pre-fix, this loop
+        # OVERWROTE the bodies dict and silently dropped earlier
+        # contributions — the L1 base body for Identity disappeared
+        # from the deployed CLAUDE.md even though it was present in
+        # the linked intermediate. Accumulate now; the duplicate
+        # ``## <Slot>`` headings still inside each body segment are
+        # stripped at link-stage by `_strip_redundant_slot_headers`.
+        bodies[slot_key] = bodies.get(slot_key, "") + linked_composite[body_start:body_end]
     return bodies
 
 

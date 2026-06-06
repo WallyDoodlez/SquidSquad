@@ -386,15 +386,28 @@ def _strip_l4_op_headers(body):
 # _assemble_soul path is unaffected; this strip is scoped to the v2
 # link-stage join only.
 _REDUNDANT_SLOT_HEADER_RE = re.compile(
-    r"^## (?:Soul|Identity|Responsibility|Instructions|Project Context|Vault) — [^\n]*\n(?:\n)?",
+    # Shape A: layer-discriminating slot headings like
+    # ``## Soul — Base Agent``, ``## Soul — PM``, etc.
+    # Shape D companion: bare canonical slot headings like ``## Identity``
+    # or ``## Soul`` (#11144 Finding 1 Shape D): L1/L2/L3 source files
+    # author themselves with the canonical slot heading, but the SLOT_DISPLAY
+    # emit step already prepends the canonical heading — the body's copy
+    # duplicates it. Strip both shapes here so each composed slot ends up
+    # with exactly ONE canonical heading at the top.
+    r"^## (?:Soul|Identity|Responsibility|Instructions|"
+    r"Agent Functions|Project Context|Vault)"
+    r"(?: — [^\n]*)?\n(?:\n)?",
     re.MULTILINE,
 )
 
 
 def _strip_redundant_slot_headers(body):
-    """Remove layer-discriminating slot headings like ``## Soul — Base Agent``
-    or ``## Soul — PM`` from an L1-L3 source body. See #11144 Finding 1
-    Shape A. Idempotent."""
+    """Remove redundant slot headings from an L1-L3 source body. See #11144
+    Finding 1 Shapes A + D. Two patterns handled:
+    - Layer-discriminating: ``## Soul — Base Agent``, ``## Soul — PM``
+    - Bare canonical duplicate: ``## Identity`` (the SLOT_DISPLAY emit
+      step adds this; the source-body copy is redundant)
+    Idempotent."""
     return _REDUNDANT_SLOT_HEADER_RE.sub("", body)
 
 
