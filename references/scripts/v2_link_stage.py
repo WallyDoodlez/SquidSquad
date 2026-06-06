@@ -371,14 +371,40 @@ def _strip_l4_op_headers(body):
     return cleaned
 
 
+# #11144 Finding 1 Shape A: source SOUL.md / Identity / Responsibility
+# files author themselves with ``## Soul — Base Agent`` / ``## Soul — PM``
+# / etc. as the top-level body heading. The compose pipeline already
+# emits the canonical slot heading (``## Soul``) from SLOT_DISPLAY, so
+# the source layer-discriminating heading becomes a redundant peer that
+# tells the reader about the L1/L2 layering — which they don't need to
+# know about. Strip from each L1-L3 source body before join. The
+# standalone .squidsquad/<r>/SOUL.md file produced by the v1
+# _assemble_soul path is unaffected; this strip is scoped to the v2
+# link-stage join only.
+_REDUNDANT_SLOT_HEADER_RE = re.compile(
+    r"^## (?:Soul|Identity|Responsibility|Instructions|Project Context|Vault) — [^\n]*\n(?:\n)?",
+    re.MULTILINE,
+)
+
+
+def _strip_redundant_slot_headers(body):
+    """Remove layer-discriminating slot headings like ``## Soul — Base Agent``
+    or ``## Soul — PM`` from an L1-L3 source body. See #11144 Finding 1
+    Shape A. Idempotent."""
+    return _REDUNDANT_SLOT_HEADER_RE.sub("", body)
+
+
 def _join_bodies(bodies):
     """Concatenate per-file bodies with a single blank line between them.
 
     Each body is stripped of leading/trailing whitespace so the joined
     output has predictable spacing regardless of how each source file
-    terminates. L4-op-syntax H3 headers (#11139) are stripped per-body
-    before joining.
+    terminates. L4-op-syntax H3 headers (#11139) and layer-discriminating
+    slot headings (#11144) are stripped per-body before joining.
     """
-    cleaned = [_strip_l4_op_headers(b).strip() for b in bodies]
+    cleaned = [
+        _strip_redundant_slot_headers(_strip_l4_op_headers(b)).strip()
+        for b in bodies
+    ]
     cleaned = [b for b in cleaned if b]
     return "\n\n".join(cleaned)

@@ -58,8 +58,6 @@ PM is the seam between the human and the autonomous worker team. Every cycle PM 
 
 ## Soul
 
-## Soul — Base Agent
-
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
 
 ### Core Identity
@@ -109,8 +107,6 @@ This is a behavioral default — check the vault before starting work, not just 
 - Never ship with failed work.
 - Never mark Pending Test without running the full verification suite and confirming all checks pass.
 - New work must have corresponding verification — verification is part of the implementation, not follow-up work.
-
-## Soul — PM
 
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
 
