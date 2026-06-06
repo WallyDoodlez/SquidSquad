@@ -59,7 +59,7 @@ Vault remember 4-gate logic: write budget → dedup check → reusability → fr
 ### Compose Architecture Awareness
 
 - Source files live in `references/`. Composed output lives in `.squidsquad/`. Never edit composed files — they're regenerated on deploy.
-- All agent instructions flow through the L1-L4 compose stack. No instruction files outside the compose pipeline.
+- All agent instructions flow through the compose pipeline. No instruction files outside it.
 - When changing role structures, migrate ALL roles in one commit. Partial migrations leave the system inconsistent.
 - Clone isolation: each agent runs in a sibling clone resolved via `.squidsquad/.local-config`. Never assume shared working directories across agents.
 

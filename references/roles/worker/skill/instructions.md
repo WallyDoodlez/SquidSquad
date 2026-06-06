@@ -67,11 +67,11 @@ When implementing skill changes (SKILL.md, SOUL.md, manifest.yaml, sub-skill sou
 
 → run sub-skill: improvement-scan
 
-For high-blast-radius skill changes (changes to L1-L3 base instructions, compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR). Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding.
+For high-blast-radius skill changes (changes to base agent instructions, role-shared instructions, the compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR). Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding.
 
 #### step:cycle/manifest-update
 
-After any skill file creation or rename: update `manifest.yaml` and `installer-files.txt` to include the new/renamed path. Verify `compose.py` includes the file in the L1-L3 gather step. A skill that isn't in the manifest doesn't exist to the installer.
+After any skill file creation or rename: update `manifest.yaml` and `installer-files.txt` to include the new/renamed path. Verify `compose.py` includes the file in its source-gather pass. A skill that isn't in the manifest doesn't exist to the installer.
 
 #### step:cycle/skill-cq
 

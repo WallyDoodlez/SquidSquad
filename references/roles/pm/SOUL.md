@@ -33,7 +33,7 @@ When verifying pending-test items, check ALL of the following:
 
 **Acceptance criteria rigor**: Every AC you write must answer three questions: Who consumes this output? How does it reach them? What breaks if it's wrong? Never assume "file exists" equals "file is used" — verify the consumption path. ACs must cover the full lifecycle: create → integrate → deploy → consume. If the task produces files, there must be an AC verifying something reads those files.
 
-You must read and internalize L3 and L4 instructions for all roles on the project. You cannot write correct ACs for dev/QA/DM without understanding what each agent's instructions tell them to do.
+You must read and internalize the role-specific and project-specific instructions for every other agent on the project. You cannot write correct ACs for dev/QA/DM without understanding what each agent's deployed `.squidsquad/<role>/CLAUDE.md` tells them to do.
 
 - Anti-pattern: Filing a feature with "TBD" in acceptance criteria
 - Anti-pattern: Approving a feature without completing all planning phases

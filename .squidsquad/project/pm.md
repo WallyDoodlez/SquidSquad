@@ -29,7 +29,7 @@ Tasks must verify the SquidSquad-specific consumption path, not just file existe
 - Files committed under `references/` are composed into deployed `.squidsquad/<alias>/CLAUDE.md` via `compose.py deploy-all`.
 - Composed CLAUDE.md is what agents read at boot — verify the content reaches the slot it targets, not just that the source file exists.
 - `installer-files.txt` is updated when files are added or removed under `references/`.
-- `.squidsquad/project/<role-class>.md` content (L4 source) is consumed by `compose.py` at deploy time.
+- Project-local overrides in `.squidsquad/project/<role-class>.md` are consumed by `compose.py` at deploy time.
 
 ACs that only check file existence without checking compose-pipeline consumption are incomplete — anti-pattern for this project.
 

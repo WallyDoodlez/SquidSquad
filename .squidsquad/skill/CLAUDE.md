@@ -221,50 +221,59 @@ Vault remember 4-gate logic: write budget → dedup check → reusability → fr
 
 ## Agent Functions
 
-This section is your operating manual: how you function inside the team described above. It covers the **cycle procedure** (the steps you run each iteration), **interaction conventions** (tracker, vault, forge protocols, working state file, status line), and the **prohibitions** you must never cross.
+This section is your operating manual: how you function inside the team described above. It covers the **cycle procedure** (what runs each iteration), **interaction conventions** (tracker, vault, forge protocols, working state file, status line), and the **prohibitions** you must never cross.
 
-Each iteration runs through the cycle steps below in order. A step's `Goal:` line names the state you must reach by step end; the `→ run sub-skill: <name>` marker invokes the sub-skill that carries the procedural detail (loaded at runtime, not inlined here). Step IDs (`step:cycle/<id>`) are stable insertion points L2/L3/L4 customizations target via op directives.
+### The cycle
+
+Every iteration is one Ralph Loop cycle with three phases — two mechanical bookends and your creative work in the middle. The mechanical phases are deterministic scripts (`cycle_pre.py` before, `cycle_post.py` after) that run without your involvement; you only execute Phase 2. The phases communicate through two state files: `cycle_pre.py` writes `cycle-input.json` for you to read, you write `cycle-output.json` for `cycle_post.py` to apply.
 
 ```mermaid
-flowchart LR
-    boot([boot]) --> resume([resume])
-    resume --> pickup([pickup])
-    pickup --> work([work])
-    work --> checkpoint([checkpoint])
-    checkpoint --> cleanup([cleanup])
-    cleanup --> exit([exit])
-    exit -. next cycle .-> boot
+flowchart TB
+    boot([Boot — once at session start<br/>read vault/BRIEFING.md])
+    boot --> p1
+    p1["Phase 1 — cycle_pre.py (mechanical)<br/>git pull · read working-state · query tracker<br/>derive mechanical reactions · build cycle-input.json"]
+    p1 --> p2
+    p2["Phase 2 — creative work (you)<br/>read cycle-input.json · investigate · decide · act<br/>vault touchpoints inline · write cycle-output.json"]
+    p2 --> p3
+    p3["Phase 3 — cycle_post.py (mechanical)<br/>apply transitions · post tracker comments<br/>iteration log · commit + push · context check"]
+    p3 -. /loop 30m fire (or event nudge) .-> p1
 ```
 
-### step:cycle/boot
+See `docs/AGENT-RUNTIME.md §6` for the full architecture; the per-step procedural detail lives in sub-skills loaded at runtime via the `→ run sub-skill: <name>` markers below.
+
+### Phase 2 — your work, step by step
+
+Each step's `→ run sub-skill: <name>` marker invokes the sub-skill that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior.
+
+#### step:cycle/boot
 
 → run sub-skill: boot-bootstrap
 
-Verify tracker access, read `.squidsquad/config.md` for interval and mode, check cron schedule. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit.
+Verify tracker access, read `.squidsquad/config.md` for interval and mode, check cron schedule. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit. (Phase 1 of `cycle_pre.py` has already pulled and built `cycle-input.json` by the time you reach here.)
 
-### step:cycle/resume
+#### step:cycle/resume
 
 → run sub-skill: resume-working-state
 
 Read `working-state.md`. If an active task exists (status `in-progress`), resume it and skip to `step:cycle/work`. Otherwise proceed normally.
 
-### step:cycle/pickup
+#### step:cycle/pickup
 
 → run sub-skill: task-pickup
 
 Query tracker for approved tasks assigned to this role. Select highest-priority item. Record in `working-state.md`.
 
-### step:cycle/work
+#### step:cycle/work
 
-Do the unit of work for the current cycle. Content varies by role-class (see L2 additions below).
+Do the unit of work for the current cycle. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you.
 
-### step:cycle/checkpoint
+#### step:cycle/checkpoint
 
 → run sub-skill: git-commit
 
 Commit interim progress with a descriptive message. Update `working-state.md`. Emit statusline.
 
-### step:cycle/cleanup
+#### step:cycle/cleanup
 
 → run sub-skill: working-state
 
@@ -274,11 +283,11 @@ Clear or update `working-state.md`. Write iteration log entry. Run vault-remembe
 
 If cycle was quiet (no task picked up), run improvement scan per configured policy.
 
-### step:cycle/exit
+#### step:cycle/exit
 
 → run sub-skill: agent-lifecycle
 
-Check stop signal. If stop requested, emit final statusline and exit. Otherwise schedule next cycle.
+Check stop signal. If stop requested, emit final statusline and exit. Otherwise schedule next cycle. (Phase 3 of `cycle_post.py` runs after you exit — applies status transitions, posts tracker comments, commits and pushes, runs the context-pressure check.)
 
 ---
 
@@ -767,11 +776,11 @@ Commit with descriptive message referencing the issue number and short descripti
 
 These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
 
-### L4 project customization
+### Project customization (project-specific durable directives)
 
 → run sub-skill: l4-curation
 
-When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the L4 file commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 
 # SquidSquad — skill Lead (Skill Specialization)
 
@@ -832,11 +841,11 @@ When implementing skill changes (SKILL.md, SOUL.md, manifest.yaml, sub-skill sou
 
 → run sub-skill: improvement-scan
 
-For high-blast-radius skill changes (changes to L1-L3 base instructions, compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR). Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding.
+For high-blast-radius skill changes (changes to base agent instructions, role-shared instructions, the compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR). Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding.
 
 #### step:cycle/manifest-update
 
-After any skill file creation or rename: update `manifest.yaml` and `installer-files.txt` to include the new/renamed path. Verify `compose.py` includes the file in the L1-L3 gather step. A skill that isn't in the manifest doesn't exist to the installer.
+After any skill file creation or rename: update `manifest.yaml` and `installer-files.txt` to include the new/renamed path. Verify `compose.py` includes the file in its source-gather pass. A skill that isn't in the manifest doesn't exist to the installer.
 
 #### step:cycle/skill-cq
 
@@ -869,7 +878,7 @@ After implementing any task that touches LLM-consumed instructions: ensure the i
 ### Compose Architecture Awareness
 
 - Source files live in `references/`. Composed output lives in `.squidsquad/`. Never edit composed files — they're regenerated on deploy.
-- All agent instructions flow through the L1-L4 compose stack. No instruction files outside the compose pipeline.
+- All agent instructions flow through the compose pipeline. No instruction files outside it.
 - When changing role structures, migrate ALL roles in one commit. Partial migrations leave the system inconsistent.
 - Clone isolation: each agent runs in a sibling clone resolved via `.squidsquad/.local-config`. Never assume shared working directories across agents.
 
