@@ -204,23 +204,23 @@ You're an event-driven agent. You have two communication surfaces:
 - The **forge** — the tracker (GitHub Issues + PRs and their comments). This is the single channel for every inter-agent message; all durable state lives here.
 - The **event bus** — a wake mechanism, not a message channel. Events carry no semantic payload; they're nudges that tell you "something changed for you on the forge; consider waking now."
 
-You wake when the harness sends you a nudge (or, in loop-mode fallback when the harness is unreachable at boot, when a `/loop` cron fires). The harness wraps every cared event with a mechanical pre-cycle (`git pull`, working-state read, `cycle-input.json`) and post-cycle (commit, push, working-state write); your work happens between them. See `docs/AGENT-RUNTIME.md §7` for the canonical architecture and §2/§8.4 for the loop-mode fallback.
+You wake when the harness sends you a nudge (or, in loop-mode fallback when the harness is unreachable at boot, when a `/loop` cron fires). The harness wraps every cared event with a mechanical pre-cycle (`git pull`, working-state read, `cycle-input.json`) and post-cycle (commit, push, working-state write); your work happens between them.
 
-#### Session boot — once per session (per §7.2)
+#### Session boot — once per session
 
 ```mermaid
 sequenceDiagram
     participant A as Agent
     participant H as Harness
-    A->>A: read working-state.md<br/>(crash-recovery context)
-    A->>H: POST /events {type: booted,<br/>role, pid, clone_path, version}
-    H-->>A: 200 OK<br/>(status flips: booting → ready)
-    A->>H: GET /events/for/{role}?since=null
-    H-->>A: [queued events from before boot]
-    Note over A: drain the initial walk,<br/>then idle-wait for nudges
+    A->>A: read working-state.md
+    A->>H: POST booted event
+    H-->>A: 200 OK, status flips to ready
+    A->>H: GET events queued before boot
+    H-->>A: events list (may be empty)
+    Note over A: drain initial walk, then idle-wait
 ```
 
-#### Per-nudge cycle — repeats indefinitely (per §7.1)
+#### Per-nudge cycle — repeats indefinitely
 
 ```mermaid
 sequenceDiagram
@@ -228,21 +228,21 @@ sequenceDiagram
     participant A as Agent
     participant H as Harness
     participant F as Forge
-    EP->>A: NUDGE\n on Monitor stdin
-    A->>H: GET /events/cursor/{role}
-    H-->>A: cursor=X
-    A->>H: GET /events/for/{role}?since=X
-    H-->>A: [e1, e2, e3]
+    EP->>A: NUDGE on Monitor stdin
+    A->>H: GET current cursor
+    H-->>A: cursor X
+    A->>H: GET events since X
+    H-->>A: events list
     loop for each event
-        A->>A: care filter (§7.4)
+        A->>A: care filter
         alt cared
             A->>A: pre-cycle (mechanical)
-            A->>F: do work — your steps below
+            A->>F: do work (steps below)
             A->>A: post-cycle (mechanical)
         end
     end
-    A->>H: POST /events ack-cursor<br/>{event_id: last_tended, role}
-    Note over A: re-enter idle wait<br/>until next nudge
+    A->>H: POST ack-cursor (last_tended)
+    Note over A: re-enter idle wait
 ```
 
 A nudge wakes you. You fetch new events past your cursor, walk them, and act on the ones that pass your care filter. For each cared event the harness wraps your creative work with mechanical pre/post-cycle scripts. After the walk you ack the cursor with the last event you tended and re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change.
@@ -255,7 +255,7 @@ The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--targ
 
 One unconditional rule from those fragments matters at this level: **if `Monitor` exits for any reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — end your session immediately** (#9742). Do not retry `Monitor`, do not wait for the harness to recover, do not pivot to polling mid-session. The harness's auto-respawn path owns recovery; your exit IS the signal that recovery is needed.
 
-Each step below names the sub-skill (loaded at runtime via the `→ run sub-skill: <name>` marker) that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The IDs are scheduled to be re-anchored to match §7's session-boot vs. per-event-cycle shape in a follow-up iteration; until then, the steps are split into two groups by **when they actually run**.
+Each step below names the sub-skill (loaded at runtime via the `→ run sub-skill: <name>` marker) that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The IDs are scheduled to be re-anchored to the session-boot vs. per-event-cycle shape in a follow-up iteration; until then, the steps are split into two groups by **when they actually run**.
 
 ### Session-boot steps — run once when the session starts
 
