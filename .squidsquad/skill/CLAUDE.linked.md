@@ -292,7 +292,7 @@ A nudge wakes you. You fetch new events past your cursor, walk them, and act on 
 
 The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each `NUDGE\n` line that arrives wakes you and starts one per-nudge cycle.
 
-The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/l1-base.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
+The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
 
 One unconditional rule from those fragments matters at this level: **if `Monitor` exits for any reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — end your session immediately** (#9742). Do not retry `Monitor`, do not wait for the harness to recover, do not pivot to polling mid-session. The harness's auto-respawn path owns recovery; your exit IS the signal that recovery is needed.
 
@@ -504,7 +504,7 @@ If the probe fails (for any reason — non-zero exit, network error, missing cur
 Use the Read tool to read each of the following files **in order** and treat their concatenated content as your active wake-mode contract for this session:
 
 1. `references/sub-skills/common-events/event-driven-workflow.md`
-2. `references/sub-skills/common-events/l1-base.md`
+2. `references/sub-skills/common-events/event-mode-contract.md`
 3. `references/sub-skills/common-events/cursor-management.md`
 4. `references/sub-skills/common-events/forge-read-pattern.md`
 5. `references/sub-skills/common-events/idle-cooldown-loop.md`
@@ -553,7 +553,7 @@ Once Steps 3 or 4 complete, your wake-mode contract is fixed for this session. D
 
 ### Why polling is the harness-down fallback
 
-The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `work_queue()`) is removed in favor of polling fallback. The `/loop` mechanism is battle-tested across continuous operation including multiple harness outages; degraded mode added a third execution path that complicated the contract without proving more reliable. Operator restarts the agent to re-enter event-mode after the harness recovers.
+The bespoke "degraded mode" in `common-events/event-mode-contract.md` (sleep 60s + retry `work_queue()`) is removed in favor of polling fallback. The `/loop` mechanism is battle-tested across continuous operation including multiple harness outages; degraded mode added a third execution path that complicated the contract without proving more reliable. Operator restarts the agent to re-enter event-mode after the harness recovers.
 
 <!-- /sub-skill: boot-bootstrap -->
 
@@ -567,7 +567,7 @@ Goal: the cycle's input state has been captured (pull result, context pressure, 
 
 → run sub-skill: event-driven-workflow
 
-→ run sub-skill: l1-base
+→ run sub-skill: event-mode-contract
 
 → run sub-skill: cursor-management
 

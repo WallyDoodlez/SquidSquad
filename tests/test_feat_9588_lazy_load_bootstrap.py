@@ -38,7 +38,7 @@ ROLE_TO_ENTRY = {"skill": "worker", "pm": "pm", "qa": "verifier", "dm": "dm"}
 MODE_SPECIFIC_MARKERS = [
     "<!-- sub-skill: ralph-loop-overview -->",
     "<!-- sub-skill: event-driven-workflow -->",
-    "<!-- sub-skill: l1-base -->",
+    "<!-- sub-skill: event-mode-contract -->",
     "<!-- sub-skill: cursor-management -->",
     "<!-- sub-skill: forge-read-pattern -->",
     "<!-- sub-skill: idle-cooldown-loop -->",
@@ -48,7 +48,7 @@ MODE_SPECIFIC_MARKERS = [
 
 EVENT_FRAGMENTS = [
     "common-events/event-driven-workflow",
-    "common-events/l1-base",
+    "common-events/event-mode-contract",
     "common-events/cursor-management",
     "common-events/forge-read-pattern",
     "common-events/idle-cooldown-loop",
@@ -153,8 +153,8 @@ def test_tc_05_bootstrap_uses_127_0_0_1_and_no_dev_null():
 
 
 # TC-6
-def test_tc_06_l1_base_degraded_branch_removed():
-    src = (SUB_SKILLS / "common-events" / "l1-base.md").read_text(encoding="utf-8")
+def test_tc_06_event_mode_contract_degraded_branch_removed():
+    src = (SUB_SKILLS / "common-events" / "event-mode-contract.md").read_text(encoding="utf-8")
     assert "proceed to degraded-mode operation" not in src
     assert "### Degraded-Mode Glossary" not in src
 
@@ -346,7 +346,7 @@ def test_tc_14_compose_runtime_read_frozenset_present():
         "roles/verifier/ralph-loop-overview",
         "roles/dm/ralph-loop-overview",
         "common-events/event-driven-workflow",
-        "common-events/l1-base",
+        "common-events/event-mode-contract",
         "common-events/cursor-management",
         "common-events/forge-read-pattern",
         "common-events/idle-cooldown-loop",

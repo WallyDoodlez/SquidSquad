@@ -90,7 +90,7 @@ except Exception as _e:  # pragma: no cover — surface, don't hide
 class TestStopRequestedAtomicity(unittest.TestCase):
     """§4.8 IT-StopRequested — stop-requested mid-task atomicity rule.
 
-    The L1 base contract (l1-base.md Case D, comment-handling.md):
+    The L1 base contract (event-mode-contract.md Case D, comment-handling.md):
 
     1. Event-mode agent is mid-task (working-state in-progress).
     2. ``stop-requested`` event arrives on the bus.

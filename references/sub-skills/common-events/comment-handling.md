@@ -11,7 +11,7 @@ This rule is the single most important consequence of the thin-broadcast harness
 
 ### The Rule
 
-When you forge-read an issue (Case B in [[l1-base]], or at task pickup), you read **all comments since you last touched the item**. New information from comments is absorbed as part of that read. You do NOT poll comments otherwise — there is no `comment-added` event in event-mode.
+When you forge-read an issue (Case B in [[event-mode-contract]], or at task pickup), you read **all comments since you last touched the item**. New information from comments is absorbed as part of that read. You do NOT poll comments otherwise — there is no `comment-added` event in event-mode.
 
 ### DM Exception — End-Of-Task Re-Read
 

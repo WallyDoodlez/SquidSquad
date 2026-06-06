@@ -30,7 +30,7 @@ COMMON_EVENTS_FRAGMENTS = [
     # Cycle 1136 — common-events L1 base fragments. AC-5 prohibits
     # mode-conditional language inside these (they are the always-on
     # event-mode contract).
-    "common-events/l1-base.md",
+    "common-events/event-mode-contract.md",
     "common-events/cursor-management.md",
     "common-events/forge-read-pattern.md",
     "common-events/idle-cooldown-loop.md",
@@ -103,7 +103,7 @@ class TestAc5NoModeConditional:
 
 class TestAc6NoStandaloneBootFragment:
     """AC-6 M-6.1: no `l1-boot.md` file exists; the boot sequence lives
-    inside `l1-base.md`."""
+    inside `event-mode-contract.md`."""
 
     def test_no_l1_boot_fragment_anywhere(self):
         matches = list(REPO_ROOT.glob("references/sub-skills/**/l1-boot.md"))
@@ -111,12 +111,12 @@ class TestAc6NoStandaloneBootFragment:
             f"l1-boot.md must not exist; found: {matches}"
         )
 
-    def test_l1_base_contains_boot_sequence_header(self, fragment_texts):
+    def test_event_mode_contract_contains_boot_sequence_header(self, fragment_texts):
         # AC-6 M-6.2: the boot sequence text appears inside the L1 base
         # fragment, not a standalone l1-boot.md.
-        text = fragment_texts["common-events/l1-base.md"]
+        text = fragment_texts["common-events/event-mode-contract.md"]
         assert re.search(r"(?im)^\s*###?\s+Boot Sequence", text), (
-            "l1-base.md must contain a 'Boot Sequence' section header"
+            "event-mode-contract.md must contain a 'Boot Sequence' section header"
         )
 
 
@@ -126,12 +126,12 @@ class TestAc7TopicCoverage:
 
     @pytest.mark.parametrize("topic_regex,where", [
         # (case-insensitive regex matched against headers, fragment name)
-        (r"boot sequence", "common-events/l1-base.md"),
-        (r"how you listen|event poll", "common-events/l1-base.md"),
-        (r"case b\b", "common-events/l1-base.md"),
-        (r"case c\b", "common-events/l1-base.md"),
-        (r"case d\b", "common-events/l1-base.md"),
-        (r"case e\b", "common-events/l1-base.md"),
+        (r"boot sequence", "common-events/event-mode-contract.md"),
+        (r"how you listen|event poll", "common-events/event-mode-contract.md"),
+        (r"case b\b", "common-events/event-mode-contract.md"),
+        (r"case c\b", "common-events/event-mode-contract.md"),
+        (r"case d\b", "common-events/event-mode-contract.md"),
+        (r"case e\b", "common-events/event-mode-contract.md"),
         (r"atomic update protocol", "common-events/cursor-management.md"),
         (r"per-event advance|per-batch", "common-events/cursor-management.md"),
         (r"gap scenarios", "common-events/cursor-management.md"),
@@ -180,7 +180,7 @@ class TestAc6M62ManifestWiring:
     """
 
     REQUIRED_COMMON_EVENTS = [
-        "common-events/l1-base",
+        "common-events/event-mode-contract",
         "common-events/cursor-management",
         "common-events/forge-read-pattern",
         "common-events/idle-cooldown-loop",

@@ -233,7 +233,7 @@ If the probe fails (for any reason — non-zero exit, network error, missing cur
 Use the Read tool to read each of the following files **in order** and treat their concatenated content as your active wake-mode contract for this session:
 
 1. `references/sub-skills/common-events/event-driven-workflow.md`
-2. `references/sub-skills/common-events/l1-base.md`
+2. `references/sub-skills/common-events/event-mode-contract.md`
 3. `references/sub-skills/common-events/cursor-management.md`
 4. `references/sub-skills/common-events/forge-read-pattern.md`
 5. `references/sub-skills/common-events/idle-cooldown-loop.md`
@@ -290,7 +290,7 @@ Once Steps 3 or 4 complete, your wake-mode contract is fixed for this session. D
 
 ### Why polling is the harness-down fallback
 
-The bespoke "degraded mode" in `common-events/l1-base.md` (sleep 60s + retry `work_queue()`) is removed in favor of polling fallback. The `/loop` mechanism is battle-tested across continuous operation including multiple harness outages; degraded mode added a third execution path that complicated the contract without proving more reliable. Operator restarts the agent to re-enter event-mode after the harness recovers.
+The bespoke "degraded mode" in `common-events/event-mode-contract.md` (sleep 60s + retry `work_queue()`) is removed in favor of polling fallback. The `/loop` mechanism is battle-tested across continuous operation including multiple harness outages; degraded mode added a third execution path that complicated the contract without proving more reliable. Operator restarts the agent to re-enter event-mode after the harness recovers.
 
 <!-- /sub-skill: boot-bootstrap -->
 

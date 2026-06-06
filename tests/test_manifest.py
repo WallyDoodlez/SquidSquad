@@ -349,7 +349,7 @@ class TestIncludesYml:
             # them up at runtime.
             mode_specific_runtime_loaded = {
                 "common-events/event-driven-workflow",
-                "common-events/l1-base",
+                "common-events/event-mode-contract",
                 "common-events/cursor-management",
                 "common-events/forge-read-pattern",
                 "common-events/idle-cooldown-loop",

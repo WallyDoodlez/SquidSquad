@@ -44,7 +44,7 @@ RUNTIME_READ_FRAGMENTS = frozenset({
     "roles/verifier/ralph-loop-overview",
     "roles/dm/ralph-loop-overview",
     "common-events/event-driven-workflow",
-    "common-events/l1-base",
+    "common-events/event-mode-contract",
     "common-events/cursor-management",
     "common-events/forge-read-pattern",
     "common-events/idle-cooldown-loop",

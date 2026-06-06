@@ -9,7 +9,7 @@ You are a persistent agent session driven by events from the harness. You react 
 
 This fragment is a brief orientation. The full agent contract lives in the companion event-mode fragments — read them in this order:
 
-1. **[[l1-base]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline. Harness-loss recovery is handled by `common/boot-bootstrap.md` (polling-mode fallback at boot, #9588), not inline degraded mode.
+1. **[[event-mode-contract]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline. Harness-loss recovery is handled by `common/boot-bootstrap.md` (polling-mode fallback at boot, #9588), not inline degraded mode.
 2. **[[cursor-management]]** — atomic `.tmp` + `mv` protocol, per-event advance, gap handling (in-stream, long lag, eviction).
 3. **[[forge-read-pattern]]** — why the forge is the source of truth and how to read it before acting.
 4. **[[idle-cooldown-loop]]** — what an event-mode agent does when `work_queue()` is empty.
@@ -32,4 +32,4 @@ If the harness becomes unreachable mid-session, the agent does NOT pivot to forg
 
 ### Context pressure
 
-The harness monitors agent context pressure files and emits `stop-requested` when a restart is needed. Honor `stop-requested` at the next task boundary (see Case E in [[l1-base]]); the harness handles the respawn.
+The harness monitors agent context pressure files and emits `stop-requested` when a restart is needed. Honor `stop-requested` at the next task boundary (see Case E in [[event-mode-contract]]); the harness handles the respawn.

@@ -60,7 +60,7 @@ BOOT_BOOTSTRAP_HEADING = "## Boot — Mode Detection (#9588)"
 MODE_SPECIFIC_MARKERS = [
     "<!-- sub-skill: ralph-loop-overview -->",
     "<!-- sub-skill: event-driven-workflow -->",
-    "<!-- sub-skill: l1-base -->",
+    "<!-- sub-skill: event-mode-contract -->",
     "<!-- sub-skill: cursor-management -->",
     "<!-- sub-skill: forge-read-pattern -->",
     "<!-- sub-skill: idle-cooldown-loop -->",
@@ -245,18 +245,18 @@ def test_bootstrap_documents_role_runtime_substitution():
         )
 
 
-def test_l1_base_unreachable_branch_removed():
-    """l1-base.md §3 no longer carries the bespoke degraded-mode block."""
-    text = (SUB_SKILLS / "common-events" / "l1-base.md").read_text(encoding="utf-8")
+def test_event_mode_contract_unreachable_branch_removed():
+    """event-mode-contract.md §3 no longer carries the bespoke degraded-mode block."""
+    text = (SUB_SKILLS / "common-events" / "event-mode-contract.md").read_text(encoding="utf-8")
     # The old block had this distinctive sequence — its presence would mean
     # we re-introduced the unreachable branch the bootstrap now subsumes.
     assert "proceed to degraded-mode operation" not in text, (
-        "l1-base.md still contains the legacy degraded-mode block; #9588 "
+        "event-mode-contract.md still contains the legacy degraded-mode block; #9588 "
         "deletes it because the boot bootstrap routes harness-unreachable "
-        "to polling-mode before l1-base is ever Read."
+        "to polling-mode before event-mode-contract is ever Read."
     )
     # Also: the Degraded-Mode Glossary section is gone.
     assert "### Degraded-Mode Glossary" not in text, (
-        "l1-base.md still has the Degraded-Mode Glossary section — replace "
+        "event-mode-contract.md still has the Degraded-Mode Glossary section — replace "
         "it with the Harness-Loss Recovery block per CONTEXT §2.6."
     )

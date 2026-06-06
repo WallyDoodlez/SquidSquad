@@ -163,7 +163,7 @@ Referenced by the single mode-agnostic `references/roles/<role>/includes.yml` ma
 
 | Sub-skill | One-liner |
 |---|---|
-| `l1-base` | Event-mode base contract (replaces polling base for that session) |
+| `event-mode-contract` | Event-mode base contract (replaces polling base for that session) |
 | `event-driven-workflow` | The event-listen / react / commit loop |
 | `cursor-management` | Advance `last_processed_event_id`; recover from missed events |
 | `forge-read-pattern` | How to read the tracker when prompted by an event vs polling |

@@ -23,7 +23,7 @@ The cursor advances automatically as `event_poll.py` emits each event line — t
 - Events can be **stale, duplicated, or out-of-order**. The forge is consistent.
 - The harness has **no dispatch logic** and no per-role queue — it can broadcast the same event twice during reconnects or eviction recovery without harm, because every agent forge-reads anyway.
 - **Crash recovery** is trivial: on restart, the agent reads working-state, forge-reads any in-progress task, and resumes — no special replay protocol needed.
-- **Mid-task events** (Case D in [[l1-base]]) are absorbed by the next forge-read at task completion. The agent never needs an in-memory event queue.
+- **Mid-task events** (Case D in [[event-mode-contract]]) are absorbed by the next forge-read at task completion. The agent never needs an in-memory event queue.
 
 ### `work_queue()` Semantics
 
