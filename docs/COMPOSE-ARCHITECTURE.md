@@ -43,7 +43,7 @@ flowchart LR
 
     subgraph COMPOSE["compose.py — two-stage compiler"]
         direction TB
-        Link["<b>Link</b> (§4.1–§4.5)<br/>gather → group by slot → sort by ordinal<br/>→ apply L4 ops → validate sub-skill refs<br/><i>deterministic</i>"]
+        Link["<b>Link</b> (§4.1–§4.5)<br/>gather → group by slot → sort by ordinal<br/>→ apply L2-L4 ops → validate sub-skill refs<br/><i>deterministic</i>"]
         Assemble["<b>Assemble</b> (§4.6)<br/>per-slot agent rewrite into coherent voice<br/>higher L wins on conflict<br/><i>stochastic, cached</i>"]
         Link --> Assemble
     end
@@ -190,7 +190,7 @@ When extension is needed across layers, the *lower* layer extracts a referenceab
 
 ### 3.2 Slot + ordinal contract (L1-L3)
 
-**Mental model first.** A layer is *not* a single file — it's a **collection of source files spread across multiple slots**. A slot is a section of the composed output (the six sections in §5). Each source file declares one slot via frontmatter (`slot:`) and a position within it (`ordinal:`). For a target role, `compose.py` gathers every L1-L4 file that applies, groups by slot, sorts each group by ordinal, applies L4 ops on top, and emits the result into the composed `CLAUDE.md`'s six H2 sections.
+**Mental model first.** A layer is *not* a single file — it's a **collection of source files spread across multiple slots**. A slot is a section of the composed output (the six sections in §5). Each source file declares one slot via frontmatter (`slot:`) and a position within it (`ordinal:`). For a target role, `compose.py` gathers every L1-L4 file that applies, groups by slot, sorts each group by ordinal, applies layer ops (L2-L3 inline ops first, then L4 file ops — same grammar throughout, per §3.3), and emits the result into the composed `CLAUDE.md`'s six H2 sections.
 
 ```mermaid
 flowchart LR
@@ -214,7 +214,7 @@ flowchart LR
         L4A["one file, multiple<br/>H2 sections — each<br/>declares an op against<br/>one slot (§3.3)"]
     end
 
-    Gather{{"<b>Link</b> (§4.1–§4.5)<br/><br/>1. Gather all L1-L4 files for target role-class<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Validate sub-skill refs"}}
+    Gather{{"<b>Link</b> (§4.1–§4.5)<br/><br/>1. Gather all L1-L4 files for target role-class<br/>2. Group by slot<br/>3. Sort each group by ordinal<br/>4. Apply L2-L4 ops<br/>&nbsp;&nbsp;&nbsp;(append / insert-before /<br/>&nbsp;&nbsp;&nbsp;insert-after / replace)<br/>5. Validate sub-skill refs"}}
 
     L1A & L1B & L1C --> Gather
     L2A & L2B & L2C --> Gather
@@ -243,7 +243,7 @@ flowchart LR
     style OUT fill:#dfd
 ```
 
-**Read this diagram from left to right**: each layer holds *many* files; each file declares one slot via frontmatter; compose gathers + groups + sorts, applies L4 ops, and the result lands in one of six composed sections. The same composed section is fed by files from multiple layers — Identity in the composed output is the concatenation of every `slot: identity` file from L1 + L2 + L3 (in ordinal order), then any L4 op applied on top.
+**Read this diagram from left to right**: each layer holds *many* files; each file declares one slot via frontmatter; compose gathers + groups + sorts, applies L2-L4 ops, and the result lands in one of six composed sections. The same composed section is fed by files from multiple layers — Identity in the composed output is the concatenation of every `slot: identity` file from L1 + L2 + L3 (in ordinal order), then any L2-L4 ops applied on top (L2-L3 inline ops first, then L4 file ops; same grammar — see §3.3).
 
 **Why this model** — sub-skills, role-class-specific fragments, and cross-cutting content can each live in their own source file with their own frontmatter, but still land in the right composed section. L4 ops target slots + step IDs (not source filenames), so reorganizing L1-L3 files doesn't break L4 customizations.
 
@@ -275,7 +275,11 @@ Ordinals are integers, non-dense (gaps allowed). Authors use gaps of 10 (e.g. 10
 
 > **Important** — The `instructions/cycle` sub-slot uses **one mode-agnostic manifest** per role-class (`references/roles/<role>/includes.yml`). Compose is wake-mode-blind; the composed cycle sub-tree is event-shaped and carries bus-failure fallback paths the cycle body invokes at runtime. The boot-time harness probe binds the wake mechanism per session; see §6.5 + AGENT-RUNTIME §8.3.
 
-### 3.3 L4 operations (creative overlay)
+### 3.3 Layer operations (L2-L4 creative overlay)
+
+> **#11227 — uniform op grammar across L2-L4.** The op grammar described in this section was originally L4-only. As of #11227 (2026-06), L2 and L3 source files (`references/roles/<role-class>/instructions.md`, `references/roles/<role-class>/<domain>/instructions.md`, etc.) may author the same op directives inline in their body — the link stage extracts them and applies them through the same processor (`l4_op_processor.apply_l4_ops`) that handles L4 file ops. Application order is source-layer order: L1-L3 inline ops first (sorted by ordinal/path), then L4 file ops. L1 sources continue to contribute pure base content — they don't author ops by convention (though the grammar would permit it). Below, "L4 op" / "L4 file" terminology is preserved for clarity around the original L4-only use case; the same syntax and semantics apply at L2-L3.
+
+#### 3.3.1 L4 file (the original use case)
 
 **There is exactly one L4 file per L2 role-class** in an install: `.squidsquad/project/<role-class>.md` where `<role-class>` is one of the four categorical L2 classes (`pm`, `worker`, `verifier`, `dm`). **L3 specialization does NOT differentiate L4 files** — all worker-class instances (FE-flavored, BE-flavored, iOS-flavored, etc.) share `worker.md`; same for verifier. Maximum 4 L4 files per install. Rationale: L4 is project-specific overlay, and the project's policies about "what a worker does" don't change based on which technical domain a given worker is in. Per-domain content lives in L3 source files, not L4.
 
