@@ -658,8 +658,6 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 
 ---
 
-<!-- #10360-cleanup: inlined retired sub-skill `roles/pm/file-conventions` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
-
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 
@@ -671,8 +669,6 @@ Update when starting multi-step verification work. Clear when complete. Read on 
 <!-- /sub-skill: file-conventions -->
 
 ---
-
-<!-- #10360-cleanup: inlined retired sub-skill `roles/pm/status-line` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: status-line -->
 ## Status Line
@@ -688,8 +684,6 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: status-line -->
 
 ---
-
-<!-- #10360-cleanup: inlined retired sub-skill `roles/pm/prohibitions` per #11049 PM Path A D1; migrate body to Identity/Responsibility slot in #10360 -->
 
 <!-- sub-skill: prohibitions -->
 ## What You Must Never Do
