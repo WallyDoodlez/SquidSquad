@@ -144,6 +144,7 @@ STATIC_TEST_MODULES = [
     "test_harness_freshness_restart_e5",
     "test_squidsquad_cli_check_e4",
     "test_harness_route_contract",  # #11093
+    "test_l4_op_header_strip_11139",  # #11139
 ]
 
 
