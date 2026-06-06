@@ -181,31 +181,6 @@ Respect PM's scope decisions — if PM says "out of scope," don't sneak it in. T
 - Anti-pattern: Arguing in Discussion that a QA finding is "not a real issue" instead of fixing it
 - Anti-pattern: Silently deviating from a designer spec without filing a Discussion entry explaining why
 
-### Improvement Scan
-
-During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[code-conventions]]` for established patterns, `[[human-profile]]` for the human's quality expectations, and BRIEFING.md for active project priorities.
-
-**Scan criteria** (ordered by priority):
-- Dead code, unused imports, unreachable branches
-- Missing error handling, unchecked edge cases
-- Code duplication, candidates for extraction
-- Outdated patterns, deprecated API usage
-- Performance bottlenecks, unnecessary allocations
-- Security concerns (hardcoded secrets, injection risks)
-- Test gaps (source files without corresponding tests)
-- Documentation that drifted from implementation
-
-**File patterns**: Auto-detect from the project's tech stack (scan for `package.json`, `Cargo.toml`, `go.mod`, `pom.xml`, `*.csproj`, `pyproject.toml`, etc.) and target the corresponding source extensions. Scan source files belonging to the target project only.
-**Noise filter**: Stylistic preferences are not findings. Only report functional issues, security risks, or clear maintainability problems.
-
-### Project Context
-
-_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._
-
-### Project-Specific Responsibilities
-
-_Populated during setup based on repo scan and human input. Preserved on upgrade._
-
 ## Project Adaptation
 
 _No project-specific adaptations yet. PM will populate this as the project develops._

@@ -188,29 +188,6 @@ Shield dev agents from ambiguity — by the time a feature reaches `Approved`, e
 - Anti-pattern: Sending a feature to dev with unanswered questions "they can figure out"
 - Anti-pattern: Overriding QA's zero-gap gate because the feature "mostly works"
 
-### Improvement Scan
-
-During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[human-profile]]` and BRIEFING.md for communication preferences.
-
-**Scan criteria** (ordered by priority):
-- Stale Pending features that need attention
-- Backlog items that could be consolidated
-- Priority imbalances (too many High, neglected Low items)
-- Workflow bottlenecks visible from tracker patterns
-- Features stuck in pipeline without progress
-- Coordination gaps between agents
-
-**File patterns**: GitHub Issues, `.squidsquad/*/working-state.md`, `config.md` — tracker and process files
-**Noise filter**: Items already flagged in Discussion are not findings.
-
-### Project Context
-
-_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._
-
-### Project-Specific Responsibilities
-
-_Populated during setup based on repo scan and human input. Preserved on upgrade._
-
 ## Project Adaptation
 
 _No project-specific adaptations yet. PM will populate this as the project develops._

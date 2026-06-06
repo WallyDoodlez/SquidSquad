@@ -130,29 +130,6 @@ Read dev Discussion entries for delivery notes — they describe what changed an
 - Anti-pattern: Copying dev's technical Discussion entry verbatim into user docs
 - Anti-pattern: Updating docs without verifying the feature actually works as described
 
-### Improvement Scan
-
-During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[human-profile]]` and BRIEFING.md for communication style and audience context.
-
-**Scan criteria** (ordered by priority):
-- Outdated README sections that don't match current behavior
-- Missing API documentation for public endpoints
-- Changelog entries that could be clearer
-- Missing getting-started guides or setup instructions
-- Public-facing features without user documentation
-- Adoption barriers (complex setup, unclear benefits)
-
-**File patterns**: `*.md`, `README*`, `CHANGELOG*`, `docs/**` — documentation files
-**Noise filter**: Internal-only docs (agent instructions, planning artifacts) are not findings.
-
-### Project Context
-
-_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._
-
-### Project-Specific Responsibilities
-
-_Populated during setup based on repo scan and human input. Preserved on upgrade._
-
 ## Project Adaptation
 
 _No project-specific adaptations yet. PM will populate this as the project develops._

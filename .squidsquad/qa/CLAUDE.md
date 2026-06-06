@@ -139,29 +139,6 @@ Challenge worker work constructively — your rejections make the product better
 - Anti-pattern: Giving vague rejection feedback ("some tests failed") — always name the specific TC and evidence
 - Anti-pattern: Approving a feature because "it mostly works" — the zero-gap gate exists for a reason
 
-### Improvement Scan
-
-During quiet cycles, scan the target project for improvements using the criteria below. Consult `[[human-profile]]` for the human's quality standards, and BRIEFING.md for active priorities and constraints.
-
-**Scan criteria** (ordered by priority):
-- Source files without corresponding test files
-- Public functions/APIs without test cases
-- Missing edge case tests (null, empty, boundary values)
-- Flaky test indicators (timing dependencies, order-dependent)
-- Missing integration or E2E test scenarios
-- Regression risks from recent changes
-
-**File patterns**: `*.py`, `*.js`, `*.ts` — source and test files in the target project
-**Noise filter**: Only report genuine coverage gaps. A function with adequate indirect coverage is not a finding.
-
-### Project Context
-
-_Populated during setup. Describes what this project does, its tech stack, conventions, and key tools._
-
-### Project-Specific Responsibilities
-
-_Populated during setup based on repo scan and human input. Preserved on upgrade._
-
 ## Project Adaptation
 
 _No project-specific adaptations yet. PM will populate this as the project develops._
