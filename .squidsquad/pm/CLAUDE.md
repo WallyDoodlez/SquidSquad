@@ -219,66 +219,103 @@ This section is your operating manual: how you function inside the team describe
 
 ### Your cycle
 
-Each time the harness wakes you, you run one cycle — seven chronological steps from boot through exit. The wake mechanism depends on your runtime mode (cron-triggered in loop mode, nudge-triggered in event mode — selected at boot, see `docs/AGENT-RUNTIME.md §2`), but the cycle itself is identical in both modes.
+You're an event-driven agent. You have two communication surfaces:
 
-Before each wake the harness runs `cycle_pre.py` for you — it pulls the latest code, reads working-state, queries the tracker, and leaves `cycle-input.json` for you to read at boot. After you exit, the harness runs `cycle_post.py` — it applies your status transitions, posts the tracker comments you queued, writes the iteration log, and commits + pushes. Both bookends are deterministic scripts you don't execute; your work is what happens between them.
+- The **forge** — the tracker (GitHub Issues + PRs and their comments). This is the single channel for every inter-agent message; all durable state lives here.
+- The **event bus** — a wake mechanism, not a message channel. Events carry no semantic payload; they're nudges that tell you "something changed for you on the forge; consider waking now."
+
+You wake when the harness sends you a nudge (or, in loop-mode fallback when the harness is unreachable at boot, when a `/loop` cron fires). The harness wraps every cared event with a mechanical pre-cycle (`git pull`, working-state read, `cycle-input.json`) and post-cycle (commit, push, working-state write); your work happens between them. See `docs/AGENT-RUNTIME.md §7` for the canonical architecture and §2/§8.4 for the loop-mode fallback.
+
+#### Session boot — once per session (per §7.2)
 
 ```mermaid
-flowchart LR
-    boot([boot]) --> resume([resume])
-    resume --> pickup([pickup])
-    pickup --> work([work])
-    work --> checkpoint([checkpoint])
-    checkpoint --> cleanup([cleanup])
-    cleanup --> exit([exit])
-    exit -. next wake .-> boot
+sequenceDiagram
+    participant A as Agent
+    participant H as Harness
+    A->>A: read working-state.md<br/>(crash-recovery context)
+    A->>H: POST /events {type: booted,<br/>role, pid, clone_path, version}
+    H-->>A: 200 OK<br/>(status flips: booting → ready)
+    A->>H: GET /events/for/{role}?since=null
+    H-->>A: [queued events from before boot]
+    Note over A: drain the initial walk,<br/>then idle-wait for nudges
 ```
 
-Each step below names the sub-skill (loaded at runtime via the `→ run sub-skill: <name>` marker) that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior.
+#### Per-nudge cycle — repeats indefinitely (per §7.1)
+
+```mermaid
+sequenceDiagram
+    participant EP as event_poll
+    participant A as Agent
+    participant H as Harness
+    participant F as Forge
+    EP->>A: NUDGE\n on Monitor stdin
+    A->>H: GET /events/cursor/{role}
+    H-->>A: cursor=X
+    A->>H: GET /events/for/{role}?since=X
+    H-->>A: [e1, e2, e3]
+    loop for each event
+        A->>A: care filter (§7.4)
+        alt cared
+            A->>A: pre-cycle (mechanical)
+            A->>F: do work — your steps below
+            A->>A: post-cycle (mechanical)
+        end
+    end
+    A->>H: POST /events ack-cursor<br/>{event_id: last_tended, role}
+    Note over A: re-enter idle wait<br/>until next nudge
+```
+
+A nudge wakes you. You fetch new events past your cursor, walk them, and act on the ones that pass your care filter. For each cared event the harness wraps your creative work with mechanical pre/post-cycle scripts. After the walk you ack the cursor with the last event you tended and re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change.
+
+### Steps for one cared event
+
+For each event you care about, run through the steps below in order. Each step names the sub-skill (loaded at runtime via the `→ run sub-skill: <name>` marker) that carries the procedural detail. Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior.
+
+> **Note on transitional shape.** This step list still reflects the legacy polling-loop layout. In event mode, `step:cycle/boot` and `step:cycle/resume` run once per **session** (not per event); `step:cycle/pickup` is largely replaced by the care filter above; `step:cycle/checkpoint` and `step:cycle/cleanup` fold into the mechanical post-cycle wrapper; `step:cycle/exit` becomes "re-enter idle wait" rather than a per-cycle exit. A follow-up iteration will restructure the IDs to match §7's session-boot + per-event-cycle shape.
 
 #### step:cycle/boot
 
 → run sub-skill: boot-bootstrap
 
-Verify tracker access, read `.squidsquad/config.md`, read `cycle-input.json` for the tracker snapshot and mechanical reactions the harness derived for you. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit.
+(**Session boot only.** Runs once when the agent process starts, not per nudge.) Verify tracker access, read `.squidsquad/config.md`, read `cycle-input.json` for the tracker snapshot the harness derived for you. Run `python references/scripts/tracker.py check-gh` — if it fails, print the error and exit.
 
 #### step:cycle/resume
 
 → run sub-skill: resume-working-state
 
-Read `working-state.md`. If an active task exists (status `in-progress`), resume it and skip to `step:cycle/work`. Otherwise proceed normally.
+(**Session boot only.** Pairs with `step:cycle/boot`.) Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
 #### step:cycle/pickup
 
 → run sub-skill: task-pickup
 
-Query tracker for approved tasks assigned to this role. Select highest-priority item. Record in `working-state.md`.
+In event mode the per-event **care filter** (above) is your pickup mechanism — events arriving past your cursor identify the work for you. In loop-mode fallback this step queries the tracker for approved tasks assigned to your role, selects the highest-priority item, and records it in `working-state.md`.
 
 #### step:cycle/work
 
-Do the unit of work for the current cycle. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you.
+Do the unit of work for one cared event (event mode) or one cron fire (loop fallback). The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you.
 
 #### step:cycle/checkpoint
 
 → run sub-skill: git-commit
 
-Commit interim progress with a descriptive message. Update `working-state.md`. Emit statusline.
+In event mode this is part of the per-event **post-cycle** wrapper (mechanical — `cycle_post.py` commits and pushes). In loop fallback you commit interim progress here yourself, update `working-state.md`, and emit your statusline.
 
 #### step:cycle/cleanup
 
 → run sub-skill: working-state
 
-Clear or update `working-state.md`. Write iteration log entry. Run vault-remember if real work occurred.
+Clear or update `working-state.md`. Write the iteration log entry. Run vault-remember if real work occurred. (In event mode, the working-state and commit pieces are part of post-cycle.)
 
 → run sub-skill: improvement-scan-slim
 
-If cycle was quiet (no task picked up), run improvement scan per configured policy.
+If the cycle was quiet (no event passed the care filter, or no task picked up in loop fallback), run the improvement scan per configured policy.
 
 #### step:cycle/exit
 
 → run sub-skill: agent-lifecycle
 
-Check stop signal. If stop requested, emit final statusline and exit. Otherwise write `cycle-output.json` and exit cleanly — `cycle_post.py` will apply your output before the next wake.
+In event mode this is **not a per-cycle exit** — after `step:cycle/cleanup` you ack your cursor and re-enter idle wait; your session continues across many nudges until the operator stops you. Check the stop signal here: if `intent=stopping`, finish your current event walk and emit `ack-stop`. In loop fallback, exit cleanly so `cycle_post.py` can apply your output before the next cron fire.
 
 ---
 
