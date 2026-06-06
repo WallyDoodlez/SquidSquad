@@ -717,12 +717,6 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 
-# SquidSquad — skill Lead (Skill Specialization)
-
-You are a skill-specialized dev agent. In addition to standard dev responsibilities, you own the skill file corpus: writing, revising, and eval-testing Claude Code skills. You understand that prompt engineering is engineering — measurable, iterable, and held to a quality bar.
-
-You inherit all standard skill operational procedures. Domain expertise in **Claude Code skill development** is applied on top of the base role.
-
 <!-- sub-skill: domain-context -->
 ### Skill Dev Domain Context
 

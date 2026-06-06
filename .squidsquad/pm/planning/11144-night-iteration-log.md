@@ -152,6 +152,36 @@ May be appropriately deferred to runtime fragments (`event-driven-workflow.md`, 
 
 ---
 
+### G9 — Inactive L3 specialization files carry the same legacy preamble
+
+After fixing the active `worker/skill/instructions.md` in Iter 27, I grepped for the same pattern across all 20 L3 specialization files (`references/roles/<role-class>/<domain>/instructions.md` for the 5 domains × 4 role-classes):
+
+```
+references/roles/dm/skill/instructions.md       references/roles/worker/skill/instructions.md  ← fixed Iter 27
+references/roles/pm/skill/instructions.md       references/roles/worker/web/instructions.md
+references/roles/verifier/skill/instructions.md references/roles/worker/ios/instructions.md
+references/roles/dm/web/instructions.md         references/roles/worker/android/instructions.md
+references/roles/pm/web/instructions.md         references/roles/worker/fullstack/instructions.md
+references/roles/verifier/web/instructions.md
+references/roles/dm/ios/instructions.md
+references/roles/pm/ios/instructions.md
+references/roles/verifier/ios/instructions.md
+references/roles/dm/android/instructions.md
+references/roles/pm/android/instructions.md
+references/roles/verifier/android/instructions.md
+references/roles/dm/fullstack/instructions.md
+references/roles/pm/fullstack/instructions.md
+references/roles/verifier/fullstack/instructions.md
+```
+
+All 20 carry the H1 `# SquidSquad — [ROLE] Lead (<Domain> Specialization)` + "You are a <domain>-specialized..." opener pattern. None compose into this install's roles (we only run pm + dm + qa + skill aliases, so only `worker/skill/` is active).
+
+**Recommendation**: bulk-strip the H1 + opener from all 19 inactive files in one commit. Same pattern as Iter 7/24/27. Zero behavior impact on this install (the files aren't composed); preempts the issue on any future install that activates a different specialization (e.g., a web-flavored worker, an ios-flavored verifier).
+
+Not auto-applied tonight — flagging because the inactive scope is wider (19 files) and you might prefer to inspect one or two before bulk-applying.
+
+---
+
 ### G4 — AGENT-RUNTIME doc gap: `[ROLE]` substitution semantics for advice prose
 
 The C3 fix (Iter 21) exposed a structural gap: when a sentence in L1 instructions.md gives advice **about other agents** (e.g., "dev agents use `--role <role>-lead`") and contains `[ROLE]`, the `_substitute_placeholders` machinery rewrites `[ROLE]` to the **reading agent's** role — turning generic advice into self-targeted nonsense ("dev agents use `--role pm-lead`" appearing in PM's deployed CLAUDE.md).
@@ -174,7 +204,8 @@ I've applied this convention in the C3 fix but the doc gap remains.
 | 23 | 4c9efc1a9 | C5 fix: Goal text of `step:cycle/exit` rewritten to cover BOTH event-mode (re-enter Monitor / ack-stop) and loop-fallback (exit cleanly). M1: typo cleanup in PM SOUL.md ("swtiched"→"switched", "throrough"→"thorough", "- almost that"→"— almost as if"). | landed |
 | 24 | a22550af0 | Iter 7 propagation: strip legacy standalone-doc preamble from dm/verifier/worker L2 instructions.md (parallel to the PM pilot in Iter 7). dm: -79 lines, qa: -84, skill: -78. Also M4: strip `<!-- #10360-cleanup ... -->` author TODO comments (19 occurrences across 4 L2 files). | landed |
 | 25 | be8b03e2f | Iter 19 propagation to L4: drop "You are the X for SquidSquad" openers from dm/verifier/worker L4 project files (PM L4 already done in Iter 19). | landed |
-| 26 | _logging_  | Fresh-Claude audit of qa CLAUDE.md vs AGENT-RUNTIME §7. Surfaced G7 (config-gated Step 1 contradicts §2 "harness-probe is the sole wake-mode decider") and G8 (§7.5 nudge-while-busy not in composed doc). Both substantive enough to need your call. | logging only |
+| 26 | 1ceb36b84 | Fresh-Claude audit of qa CLAUDE.md vs AGENT-RUNTIME §7. Surfaced G7 (config-gated Step 1 contradicts §2 "harness-probe is the sole wake-mode decider") and G8 (§7.5 nudge-while-busy not in composed doc). Both substantive enough to need your call. | logging only — landed |
+| 27 | _committing_ | L3 mid-doc H1 finding: `references/roles/worker/skill/instructions.md` carries `# SquidSquad — [ROLE] Lead (Skill Specialization)` + standalone-doc opener, same pattern as Iter 7/24 found at L2. Stripped from the active worker/skill (skill alias on this install). Inactive L3 files (pm/skill, dm/skill, verifier/skill + */web, */ios, */android, */fullstack — 19 more) carry the same shape — logged as G9. | composing |
 
 ---
 
