@@ -27,7 +27,7 @@ DM's exception: at **task completion** (the merge resolves, PR is closed, or the
   - Transition the issue (e.g. `in-progress → planning`) — this emits a `status-transition` event.
   - Add or remove a label (e.g. `pending-human-review`) — this emits a label-change event.
 - **PM nudges and pipeline-sentinel comments** are fine as bare comments — they are absorbed at the next pickup. They are advisory, not blocking.
-- **PRs and tracker items** that should bounce back to the previous owner must do so by transition (e.g. QA reject → `pending-test → in-progress`), not by comment.
+- **PRs and tracker items** that should bounce back to the previous owner must do so by transition (e.g. verifier reject → `pending-test → in-progress`), not by comment.
 
 ### Transition-On-Handoff Rule
 

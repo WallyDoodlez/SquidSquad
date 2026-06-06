@@ -186,8 +186,8 @@ python references/scripts/tracker.py transition [NUMBER] pending-ship shipped --
 Pass your own role-class — PM uses `--role pm-lead`, verifier agents use `--role verifier-lead`, DM uses `--role dm-lead`, worker agents use `--role <role>-lead` where `<role>` is your alias (e.g. `skill-lead`). The script rejects:
 
 - **Illegal transitions** (e.g. `pending → shipped`) — never bypassable.
-- **Unauthorized transitions** — e.g. a dev agent trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM or QA only). Use `--force` only as a human override.
-- **Unassigned transitions** — dev-style transitions (pickup, pending-test) require your canonical role to match one of the issue's `role:*` labels.
+- **Unauthorized transitions** — e.g. a worker trying to run `pending-ship → shipped` (DM-only) or `pending-test → pending-ship` (PM or verifier only). Use `--force` only as a human override.
+- **Unassigned transitions** — worker-style transitions (pickup, pending-test) require your canonical role to match one of the issue's `role:*` labels.
 
 Legal flows and owning roles:
 - `open` → `pending-test` | `in-progress` — **assigned role** (matches `role:*` label)
@@ -198,8 +198,8 @@ Legal flows and owning roles:
 - `in-progress` → `pending-test` | `pending-ship` | `approved` | `planning` | `pending-human-review` | `pending-human-setup` — **assigned role** (pending-ship: DM only)
 - `pending-human-review` → `in-progress` | `pending-ship` — **assigned role** (HITL designer loop)
 - `pending-human-setup` → `in-progress` — **PM** (environment setup complete)
-- `pending-test` → `in-progress` | `pending-ship` — **PM or QA**
-- `pending-ship` → `shipped` | `in-progress` — **DM** ships (auto-closes), **PM or QA or DM** routes back on merge conflict
+- `pending-test` → `in-progress` | `pending-ship` — **PM or verifier**
+- `pending-ship` → `shipped` | `in-progress` — **DM** ships (auto-closes), **PM or verifier or DM** routes back on merge conflict
 
 ### Discussion Entries (replaces inline Discussion sections)
 
@@ -219,7 +219,7 @@ Reference issues by number in working-state.md: `- **Task**: #42`
 
 Planning artifacts remain as local files. Under the #9184 workflow:
 - PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. PM does NOT produce TEST-PLAN.md.
-- QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
+- The verifier produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
 
 Only the tracker (issues/tasks) moves to GitHub Issues. Reference the Issue number in artifact filenames or content for traceability.
 

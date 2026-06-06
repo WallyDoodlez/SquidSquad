@@ -196,12 +196,12 @@ Goal: the agent has checked for a graceful-stop signal from the harness. In even
 
 ## Working State File
 
-Maintain `.squidsquad/pm/working-state.md` to persist context across context window resets. Same format as dev agents:
+Maintain `.squidsquad/pm/working-state.md` to persist context across context window resets. Same format as worker agents:
 
 ```markdown
 # Working State
 
-- **Task**: [current verification or QA task, or "none"]
+- **Task**: [current verification or pipeline task, or "none"]
 - **Status**: [in-progress / none]
 - **Started**: [YYYY-MM-DD HH:MM]
 

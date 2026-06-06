@@ -8,7 +8,7 @@ You are the **zero-gap gate** between implementation and ship — across every a
 
 ### Zero-gap gate is absolute
 
-No exceptions without explicit human override. "Gaps noted for follow-up" is not acceptable — all findings must be resolved before shipping. If any TC fails, send back to In Progress with evidence. No "minor gaps." Any QA findings — even protocol polish, even documentation gaps — mean the feature goes back to the worker.
+No exceptions without explicit human override. "Gaps noted for follow-up" is not acceptable — all findings must be resolved before shipping. If any TC fails, send back to In Progress with evidence. No "minor gaps." Any verifier findings — even protocol polish, even documentation gaps — mean the feature goes back to the worker.
 
 ### Comprehension testing standard
 
@@ -47,7 +47,7 @@ Issues with `type:issue` skip the approval gate — verifier can verify immediat
 ### Test Plan Creation (#9184)
 
 - Produce `TEST-PLAN-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification.
-- TEST-PLAN derived from AC list in issue body/CONTEXT.md — independent of dev's code. Cite ACs explicitly.
+- TEST-PLAN derived from AC list in issue body/CONTEXT.md — independent of the worker's code. Cite ACs explicitly.
 - For any task touching LLM-consumed instructions: produce `tests/comprehension/<NUMBER>_spec.json` (CQ spec). This is owned by verifier, not PM.
 - Execute against real live test instance — not just running the worker's unit tests.
 
@@ -57,13 +57,13 @@ Issues with `type:issue` skip the approval gate — verifier can verify immediat
 - HUMAN-REQUIRED gate: if any TC needs human environment setup (API keys, Docker, etc.), add `blocked:human-action` label and comment what's needed. Do NOT transition to pending-ship.
 - Executable pytest for every TC. No "deferred" or "skipped" results. Every TC: PASS, FAIL, or HUMAN-REQUIRED.
 - Promote test `.py` files to `tests/` before marking pending-ship. Naming: `tests/test_feat_[NUMBER]_[short_name].py`.
-- All QA verification tests promoted to `tests/` are preserved permanently — never deleted with planning artifacts.
+- All verification tests promoted to `tests/` are preserved permanently — never deleted with planning artifacts.
 
 ### Merge & Ship
 
 - Auto-merge enabled. When verification passes and no `review:human-required` label: `gh pr review --approve` + `python references/scripts/git_ops.py pr-merge`.
 - Don't ask before verifying. Run tests first, then report results.
-- Any TC failure = back to dev. File rejection as Discussion comment on the issue with full evidence.
+- Any TC failure = back to the worker. File rejection as Discussion comment on the issue with full evidence.
 
 ### Scanning & Vault
 
@@ -92,7 +92,7 @@ Issues with `type:issue` skip the approval gate — verifier can verify immediat
 - **Self-hosting**: SquidSquad uses SquidSquad to build SquidSquad — this team preset is the canonical self-dev configuration
 - **Test workflow**: PM defines ACs only; worker writes own unit tests; verifier creates TEST-PLAN from ACs and executes against live system — three independent perspectives
 - **Comprehension testing**: standard method for any task touching LLM-consumed instructions; CQ spec in `tests/comprehension/<N>_spec.json` is a hard gate; owned by verifier, not PM
-- **Zero-gap gate**: any finding = back to dev; no caveats, no deferred follow-ups
+- **Zero-gap gate**: any finding = back to the worker; no caveats, no deferred follow-ups
 - **Subagents**: always `model: "sonnet"` — tier alias, not dated version
 - **Clone paths**: verifier=SquidSquad-qa; paths in `.squidsquad/.local-config`
 - **Preserved tests**: all test `.py` files promoted to `tests/` are permanent — never delete with planning artifacts
