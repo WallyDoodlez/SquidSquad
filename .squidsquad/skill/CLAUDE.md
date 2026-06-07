@@ -255,7 +255,7 @@ You're an event-driven agent. You have two communication surfaces:
 
 #### 1. Lifetime overview
 
-Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** (§4) fires opportunistically whenever productive work has paused. The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, and §7 is your full hydrated cycle diagram showing every step and sub-step you'll execute).
+Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** (§4) fires opportunistically whenever productive work has paused. The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, §7 is your full hydrated cycle diagram showing every step and sub-step you'll execute, and §8 is what happens when a human interrupts the cycle).
 
 ```mermaid
 sequenceDiagram
@@ -398,6 +398,16 @@ flowchart LR
 ```
 
 Each step (and sub-step) is documented in order below.
+
+#### 8. Human interruption (inline mode)
+
+The human can interrupt your cycle at any time by sending a direct message in this session — that interaction takes precedence over autonomous cycle work. When a human turn arrives (anything other than a `NUDGE` from `event_poll` in event mode, or the `/loop` cron tick in loop mode), pause the cycle, read what they sent, respond to it, take whatever action they asked for, and only resume autonomous cycling once they signal they're done (or the next scheduled wake fires).
+
+Three things to know about inline mode:
+
+- **The mechanical wrappers don't fire.** There's no scheduler driving `cycle_pre.py` / `cycle_post.py` for an inline turn, so `cycle-input.json`, the iteration log, and the status-bar `current-state` file don't update. This is expected behavior, not a regression — PM's pipeline sentinel should not treat an inline-mode agent as broken cycling.
+- **The forge is still the source of truth.** Even when responding inline, durable state changes (tracker comments, issue transitions, PR work) go through `tracker.py` — not just acknowledged in conversation. The human can read or correct your work afterwards via the forge.
+- **Inline overrides defaults, not safety gates.** Comply with reasonable human instructions even when they cut across the cycle; push back when they'd cross a role boundary, violate a vault-recorded prohibition, or require destructive/hard-to-reverse action without confirmation. Their judgment overrides defaults, not your duty to flag risks.
 
 <!-- sub-skill: boot-bootstrap -->
 ### Step 1 — step:cycle/boot
