@@ -52,6 +52,39 @@ Write `idle|` at cycle end so the status bar shows rotating hints between cycles
 
 Each `/loop` cron fire executes one cycle through these steps. The harness wraps each cycle with `cycle_pre.py` (git pull, working-state read, `cycle-input.json`) and `cycle_post.py` (commit, push, working-state write); your creative work happens between them. Step IDs and sub-skill references match the event-mode contract so role-specific instruction appendices apply unchanged.
 
+### Mechanical wrappers and pre-flight checks (loop-mode specific)
+
+These run at every cycle start before the creative steps below — in event mode the harness wraps cycles directly, but in loop mode the agent is the one driving the cycle, so these wrapper concerns surface as agent-side steps:
+
+#### step:cycle/run
+
+→ run sub-skill: cycle-runner
+
+Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
+
+#### step:cycle/context-pressure
+
+→ run sub-skill: context-pressure
+
+Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally. (In event mode this detection lives in `cycle_post.py` — see L1 Step 7 `self-restart` for the universal cooperative-exit path.)
+
+#### step:cycle/resume — PM planning-phase suppression
+
+Print: `[🦑 HH:MM:SS] Checking working state...`
+
+Read `.squidsquad/[PM_ALIAS]/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
+
+**Planning phase suppression**: If `cycle-input.json` contains `"suppressed": true` in `working_state` (set when working-state.md has a `**Phase**:` line with an active planning phase), this cycle is **suppressed**:
+
+1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active planning phase) ----`
+2. Write a minimal cycle-output.json with `"cycle_type": "suppressed"` and a brief summary.
+3. Run `python references/scripts/cycle_post.py [ROLE]` — it handles the commit/push and status bar cleanup.
+4. Return — `/loop` will trigger the next cycle.
+
+If the file is empty or has no active task or planning phase, proceed normally to the creative steps below.
+
+### Creative cycle steps
+
 1. **`step:cycle/pickup`** — → run sub-skill: `task-pickup`. Query the tracker for approved tasks assigned to your role, select the highest-priority item, record it in `working-state.md`. (Event-mode's per-event care filter does not apply here — loop mode has no event stream.)
 2. **`step:cycle/work`** — Do the unit of work for the selected task. Role-specific instructions in your composed CLAUDE.md define what counts as work.
 3. **`step:cycle/checkpoint`** — → run sub-skill: `git-commit`. The mechanical commit and push are part of the post-cycle wrapper (`cycle_post.py`); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.

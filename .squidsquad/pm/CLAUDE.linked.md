@@ -475,6 +475,12 @@ Once the EVENT or POLLING block above completes, your wake-mode contract is fixe
 
 Check in with the human. Read any new messages or issue comments since last cycle. Capture requirements, priority changes, or approvals. Note in Discussion. Do not block the cycle on human response — continue after acknowledging.
 
+#### step:cycle/triage-external
+
+→ run sub-skill: github-issues
+
+Triage any open issues that lack SquidSquad labels — they were filed by humans or external contributors, not by agents. Classify (issue vs task), route to the owning role, label, comment. Skip if no untriaged externals exist.
+
 ### Step 3 — step:cycle/pickup
 
 → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.
@@ -513,7 +519,31 @@ Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. 
 
 → run sub-skill: health-check
 
-Check agent health statuses. Boot dead agents via `boot_remote.py` if auto-boot is unavailable. Report stalls.
+Check agent health statuses. Report stalls.
+
+#### step:cycle/boot-remote-agents
+
+→ run sub-skill: boot-remote-agents
+
+Read `boot_results` from `cycle-input.json` and report any agents the harness auto-spawned this cycle. Silent if all agents alive or stopped. When auto-boot is unavailable (harness down) or insufficient (an agent stays dead despite auto-boot), PM may invoke `boot_remote.py --role <name>` directly — reserved for stall recovery, not pre-emptive booting.
+
+#### step:cycle/own-domain-autofix
+
+→ run sub-skill: own-domain-autofix
+
+When PM detects an issue in PM's own domain (BRIEFING.md staleness, config counters drifting, stale tracker references, stale PM planning artifacts, vault area notes PM owns) during any cycle step, fix it immediately in the same cycle. Do not file a bug against yourself; own-domain housekeeping is inline.
+
+#### step:cycle/soul-shepherd
+
+→ run sub-skill: soul-shepherd
+
+For each new task or bug processed this cycle, evaluate against the 5-category character-signal checklist (deliverable-type, tech-stack, domain-vocabulary, quality-preference, user-persona). If a new signal appears that isn't already in the role adaptations, flag for human in check-in (if contradicting) or add it silently (if non-contradicting).
+
+#### step:cycle/vault-optimize
+
+→ run sub-skill: vault-optimize
+
+On quiet cycles (no task picked up) when the vault has 20+ notes AND no improvement scan ran this cycle: run `vault_optimize.py` to prune, decay confidence on stale notes, reindex links, and score relevance. Config-gated via `Vault Optimize > Enabled` in `config.md`.
 
 #### step:cycle/vault-synthesis
 
@@ -524,6 +554,8 @@ On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agen
 ### Step 7 — step:cycle/exit
 
 → run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, control returns to the walk loop and you continue to the next cared event (if any) in the current nudge. The `ack-cursor` and re-entry to Monitor idle-wait are **per-nudge, not per-event** — they run once at the end of the walk after all events are processed (see §7.1 of `docs/AGENT-RUNTIME.md` and the per-nudge cycle diagram above). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so the per-nudge `ack-stop` can emit a coherent `checkpointed`/`drained` result.
+
+→ run sub-skill: `self-restart`. The cooperative exit-42 protocol — when the post-cycle wrapper (`cycle_post.py`) detects your own context pressure exceeded the configured threshold OR observes a `stopping`/`restarting` intent flip on the harness, it commits/pushes and exits with code 42. Your job is to immediately invoke `/quit` so the harness can respawn you (or mark you stopped) per the intent state machine. Universal across all roles; see `docs/HARNESS-ARCH.md` §7.4 for the full state machine.
 
 ### Loop-mode fallback
 
@@ -540,79 +572,6 @@ If the boot-mode probe in the harness-reachability check in step:cycle/boot abov
 All issues and tasks are tracked as GitHub Issues with structured labels — that's the forge. Every read, write, transition, and comment goes through `references/scripts/tracker.py` (encodes label formats, enforces legal transitions and role authority, auto-closes on shipped). Never construct `gh issue edit` label commands manually.
 
 → run sub-skill: `tracker-protocol`. Timestamps (use `cycle.py timestamp-short`/`timestamp`); startup `check-gh` permission gate; list/read/create flows; legal status transitions matrix and per-role authority; Discussion entry conventions; working-state references; planning-artifact paths; per-cycle `gh issue list` caching.
-
----
-
-→ run sub-skill: roles/pm/ralph-loop-overview
-
-### step:cycle/run
-
-→ run sub-skill: cycle-runner
-
-Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
-
-### step:cycle/context-pressure
-
-→ run sub-skill: context-pressure
-
-Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally.
-
-### Step 1c — Resume From Working State
-
-Print: `[🦑 HH:MM:SS] Checking working state...`
-
-Read `.squidsquad/pm/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
-
-**Planning phase suppression**: If `cycle-input.json` contains `"suppressed": true` in `working_state` (set when working-state.md has a `**Phase**:` line with an active planning phase), this cycle is **suppressed**:
-
-1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active planning phase) ----`
-2. Write a minimal cycle-output.json with `"cycle_type": "suppressed"` and a brief summary.
-3. Run `python references/scripts/cycle_post.py pm` — it handles the commit/push and status bar cleanup.
-4. Return — `/loop` will trigger the next cycle.
-
-If the file is empty or has no active task or planning phase, proceed normally to Step 2.
-
-→ run sub-skill: checkin
-
-→ run sub-skill: testing-and-verification
-
-→ run sub-skill: delivery
-
-→ run sub-skill: pipeline-sentinel
-
-→ run sub-skill: own-domain-autofix
-
-→ run sub-skill: health-check
-
-→ run sub-skill: github-issues
-
-→ run sub-skill: boot-remote-agents
-
-→ run sub-skill: soul-shepherd
-
-→ run sub-skill: roles/pm/improvement-scan
-
-→ run sub-skill: vault-remember
-
-→ run sub-skill: vault-optimize
-
-→ run sub-skill: vault-synthesis
-
-→ run sub-skill: self-restart
-
----
-
-→ run sub-skill: roles/pm/issue-filing
-
----
-
-→ run sub-skill: task-intake
-
-→ run sub-skill: task-approval
-
----
-
-→ run sub-skill: roles/pm/discussion-protocol
 
 ---
 
@@ -706,6 +665,18 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 → run sub-skill: l4-curation
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+
+### Issue filing (when a bug or task surfaces during the cycle)
+
+→ run sub-skill: roles/pm/issue-filing
+
+When the cycle surfaces a new bug or task that isn't already tracked — whether from a check-in message, a pipeline-sentinel finding, an own-domain-autofix discovery, or a soul-shepherd contradiction — file it via `tracker.py create-issue` / `create-task` with the right role, severity/priority, and labels. Do not file duplicates against existing open items.
+
+### Discussion comment routing
+
+→ run sub-skill: roles/pm/discussion-protocol
+
+When you need to respond to or relay an agent's Discussion comment, follow the PM-side discussion protocol (alias prefix, append-only, route by `role:*` label, no editing prior comments). Invoked anytime a comment thread needs PM action — not on a per-cycle schedule.
 
 ### Prose-drift discipline
 
