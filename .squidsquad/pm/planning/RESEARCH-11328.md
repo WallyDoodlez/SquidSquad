@@ -2,8 +2,16 @@
 
 **Task**: #11328 (Doc-codify eager event-loop + per-event ack-cursor in AGENT-RUNTIME.md + sub-skills)
 **Scope**: doc-only (AC1 + AC2 of the rescoped PRD). Runtime migration is split to #11329.
-**Validation target**: `docs/AGENT-RUNTIME.md` @ HEAD (lines 1-1272) + four sub-skill files named in AC2.
+**Validation target**: `docs/AGENT-RUNTIME.md` + four sub-skill files named in AC2.
 **Goal**: confirm every line/section reference in the PRD body is accurate; flag discrepancies before Phase 2 Discussion.
+
+## §0. Branch-basis note (locked 2026-06-07)
+
+**All line numbers in this research reference `origin/squidsquad/skill/compose-polish-session` HEAD**, not `origin/main`. The polish branch adds **§2.3 Inline mode** (16 lines, polish-branch lines 109-125) that has not yet merged to main; everything after shifts +16 on polish branch vs main. The PRD body's line refs (e.g., `§4.3 line 269`, `§7.1 pseudocode 800-815`, `§10.4 revision log`) were written against polish-branch state, so this research is internally consistent with the PRD and skill's editing target.
+
+**Ordering decision (operator-locked 2026-06-07)**: Skill works #11328 on **a branch based off `compose-polish-session`** (not off main). Net effect: `#11144` polish + `#11328` doc-codify ship as one super-bundle when polish merges. This keeps line numbers correct throughout the work without forcing a -16 recompute against main.
+
+PRD body's "Dependencies and ordering" section needs amendment to reflect this — current text says `"#11328 ships first → polish branch pulls main third"`, which contradicts the line-number basis. New ordering: **polish + #11328 ship together (one bundle) → #11329 ships second → no separate polish pull-down needed**.
 
 ---
 
