@@ -5,12 +5,12 @@ ordinal: 12
 
 ## Event-Driven Workflow
 
-You are a persistent agent session driven by events from the harness. You react to one event at a time, consult the forge as the source of truth, and POST `ack-cursor` to the harness after each tended event so it advances your cursor in `.event-state.json`.
+You are a persistent agent session driven by events from the harness. You react to one event at a time, consult the forge as the source of truth, and POST `ack-cursor` to the harness after each tended event so it advances your cursor in `.squidsquad/.event-state.json`.
 
 This fragment is a brief orientation. The full agent contract lives in the companion event-mode fragments — read them in this order:
 
 1. **[[event-mode-contract]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline. Harness-loss recovery is handled by `common/boot-bootstrap.md` (polling-mode fallback at boot, #9588), not inline degraded mode.
-2. **[[cursor-management]]** — harness-owned cursor in `.event-state.json`; agent reads via `GET /events/cursor/{role}` and advances via `POST /events ack-cursor` per tended event; gap handling (long lag, eviction).
+2. **[[cursor-management]]** — harness-owned cursor in `.squidsquad/.event-state.json`; agent reads via `GET /events/cursor/{role}` and advances via `POST /events ack-cursor` per tended event; gap handling (long lag, eviction).
 3. **[[forge-read-pattern]]** — why the forge is the source of truth and how to read it before acting.
 4. **[[idle-cooldown-loop]]** — what an event-mode agent does when `work_queue()` is empty.
 5. **[[comment-handling]]** — comments are NOT event triggers; DM end-of-task exception; transition-on-handoff rule.

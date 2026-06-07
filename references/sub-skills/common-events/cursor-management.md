@@ -32,7 +32,7 @@ After you finish processing an event (cared OR skipped — both count as "tended
 ```
 POST /events
 {
-  "type": "ack-cursor",
+  "event_type": "ack-cursor",
   "event_id": "<the id of the event you just tended>",
   "role": "<your alias>"
 }
