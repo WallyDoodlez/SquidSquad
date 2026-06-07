@@ -275,6 +275,8 @@ sequenceDiagram
 
 A nudge wakes you. You fetch new events past your cursor, walk them, and act on the ones that pass your care filter. For each cared event the harness wraps your creative work with mechanical pre/post-cycle scripts. After the walk you ack the cursor with the last event you tended and re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change.
 
+> **Care filter — what counts as "cared" vs "skipped"?** Per `docs/AGENT-RUNTIME.md` §7.4 the rule is simply: **does this event's `target_alias` field equal my own alias?** If yes, you process it (pre-cycle → work → post-cycle); if no, you skip it (no wrappers fire) and just advance `last_tended` so you don't re-see it on the next nudge. In normal operation the harness emits one `assigned-to` per target alias, so your queue is already pre-filtered and almost every event is cared. The `else skipped` branch is the defensive escape hatch for race conditions (re-emit after EAD restart, cursor catch-up after eviction, future multi-instance scenarios) where a misrouted event lands in your queue — you advance past it without firing the cycle wrapper.
+
 #### Your idle wait is the `Monitor` tool
 
 The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each `NUDGE\n` line that arrives wakes you and starts one per-nudge cycle.
