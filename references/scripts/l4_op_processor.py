@@ -55,8 +55,20 @@ class L4OpTargetNotFound(KeyError):
 # lines that get extracted by ``l4_parser`` / ``v2_link_stage``) are
 # always H3 — that's the grammar contract; only the TARGET step heading
 # that the op anchors to may live at any depth.
+#
+# #11144 indexed step headings: agents read better with numbered step
+# headings ("### Step 1 — step:cycle/boot"). The regex accepts an
+# optional indexing prefix BEFORE the step ID — either ``Step N — ``
+# (em-dash, en-dash, or hyphen separator) or ``N. ``. Op directives
+# (``insert-after``, ``insert-before``, ``replace`` keywords) do not
+# match this prefix grammar so there's no collision; the
+# ``_INLINE_OP_DIRECTIVE_RE`` in v2_link_stage still uniquely identifies
+# them.
 _STEP_HEADING_RE = re.compile(
-    r"^#{3,6} step:cycle/([A-Za-z0-9_-]+)\s*$", re.MULTILINE
+    r"^#{3,6}\s+"
+    r"(?:Step\s+\d+\s*[—–-]\s+|\d+\.\s+)?"
+    r"step:cycle/([A-Za-z0-9_-]+)\s*$",
+    re.MULTILINE,
 )
 
 

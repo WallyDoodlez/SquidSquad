@@ -267,3 +267,55 @@ def test_unknown_op_type_raises():
     bad_op = L4Op(op_type="frobnicate", target_step_id=None, body_text="x")
     with pytest.raises(ValueError, match="unknown L4 op_type"):
         op_proc.apply_l4_ops("content\n", [bad_op])
+
+
+# ---------------------------------------------------------------------------
+# #11144: indexed step headings (Step N — step:cycle/<id>)
+# ---------------------------------------------------------------------------
+
+def test_step_heading_regex_matches_bare_form():
+    """The regex still matches the original `### step:cycle/<id>` form."""
+    import re
+    assert op_proc._STEP_HEADING_RE.search("### step:cycle/pickup\n")
+
+
+def test_step_heading_regex_matches_step_n_prefix():
+    """`### Step 3 — step:cycle/pickup` matches; captures `pickup`."""
+    m = op_proc._STEP_HEADING_RE.search("### Step 3 — step:cycle/pickup\n")
+    assert m
+    assert m.group(1) == "pickup"
+
+
+def test_step_heading_regex_matches_numbered_list_prefix():
+    """`### 3. step:cycle/pickup` matches; captures `pickup`."""
+    m = op_proc._STEP_HEADING_RE.search("### 3. step:cycle/pickup\n")
+    assert m
+    assert m.group(1) == "pickup"
+
+
+def test_step_heading_regex_does_not_match_op_directives():
+    """Op directives like `### insert-after step:cycle/X` must NOT match
+    the anchor regex — otherwise the op processor would try to use
+    the directive line itself as an anchor target."""
+    assert not op_proc._STEP_HEADING_RE.search("### insert-after step:cycle/pickup\n")
+    assert not op_proc._STEP_HEADING_RE.search("### insert-before step:cycle/pickup\n")
+    assert not op_proc._STEP_HEADING_RE.search("### replace step:cycle/pickup\n")
+
+
+def test_insert_after_anchors_to_indexed_heading():
+    """Indexed heading (`### Step 3 — step:cycle/pickup`) is a valid op anchor."""
+    content = (
+        "### Step 2 — step:cycle/resume\n"
+        "resume body\n"
+        "\n"
+        "### Step 3 — step:cycle/pickup\n"
+        "pickup body\n"
+        "\n"
+        "### Step 4 — step:cycle/work\n"
+        "work body\n"
+    )
+    out = op_proc.apply_l4_ops(
+        content, [_op("insert-after", target="pickup", body="POST-PICKUP\n")]
+    )
+    # Insert-after lands between pickup body and the next step heading.
+    assert "pickup body\n\nPOST-PICKUP\n\n### Step 4 — step:cycle/work\n" in out

@@ -285,10 +285,28 @@ To resolve `<name>` to a source path, consult the sub-skill catalog at `docs/sub
 
 Either way, the catalog is the source of truth; if a marker's name isn't in the catalog, the marker is stale and you should ignore it rather than guess.
 
-Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. What follows is the canonical step sequence — boot + resume run once at session start; pickup → work → checkpoint → cleanup → exit run per cared event during the walk.
+Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The canonical sequence is **seven steps**: boot + resume run **once** at session start; pickup → work → checkpoint → cleanup → exit run **per cared event** during each nudge-walk.
+
+#### The seven canonical cycle steps
+
+```mermaid
+flowchart LR
+    subgraph SessionBoot["Session boot (once per session)"]
+        S1["1. step:cycle/boot"] --> S2["2. step:cycle/resume"]
+    end
+    subgraph WalkLoop["Per cared event (repeats per nudge)"]
+        S3["3. step:cycle/pickup"] --> S4["4. step:cycle/work"]
+        S4 --> S5["5. step:cycle/checkpoint"]
+        S5 --> S6["6. step:cycle/cleanup"]
+        S6 --> S7["7. step:cycle/exit"]
+    end
+    SessionBoot --> WalkLoop
+```
+
+Each step is documented in order below. Role-specific extensions anchor to these steps via L2/L3 ops (`### insert-after step:cycle/<id>` etc., per `docs/COMPOSE-ARCHITECTURE.md` §3.3) — those extensions appear nested under the relevant L1 step heading in this composed CLAUDE.md.
 
 <!-- sub-skill: boot-bootstrap -->
-### step:cycle/boot
+### Step 1 — step:cycle/boot
 
 **This block is the FIRST instruction in your composed CLAUDE.md. Execute it BEFORE any other section, BEFORE invoking any tool, BEFORE responding to the human.** Steps 0–4 below are mandatory and must run in order on every fresh session start.
 
@@ -390,7 +408,7 @@ The bespoke "degraded mode" in `common-events/event-mode-contract.md` (sleep 60s
 
 <!-- /sub-skill: boot-bootstrap -->
 
-### step:cycle/resume
+### Step 2 — step:cycle/resume
 
 → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
@@ -400,23 +418,23 @@ The bespoke "degraded mode" in `common-events/event-mode-contract.md` (sleep 60s
 
 If E2E / integration test command is configured in `.squidsquad/config.md`, run it. Triage failures to the correct role via tracker comments. Do not fix failures yourself.
 
-### step:cycle/pickup
+### Step 3 — step:cycle/pickup
 
 → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.
 
-### step:cycle/work
+### Step 4 — step:cycle/work
 
 Do the unit of work for the cared event. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you. This is the **only step that always runs as creative agent work**.
 
-### step:cycle/checkpoint
+### Step 5 — step:cycle/checkpoint
 
 → run sub-skill: `git-commit`. The mechanical commit and push are part of the **post-cycle** wrapper (`cycle_post.py` — you don't execute it); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.
 
-### step:cycle/cleanup
+### Step 6 — step:cycle/cleanup
 
 → run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (see **Improvement subloop** below). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
 
-### step:cycle/exit
+### Step 7 — step:cycle/exit
 
 → run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, control returns to the walk loop and you continue to the next cared event (if any) in the current nudge. The `ack-cursor` and re-entry to Monitor idle-wait are **per-nudge, not per-event** — they run once at the end of the walk after all events are processed (see §7.1 of `docs/AGENT-RUNTIME.md` and the per-nudge cycle diagram above). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so the per-nudge `ack-stop` can emit a coherent `checkpointed`/`drained` result.
 
