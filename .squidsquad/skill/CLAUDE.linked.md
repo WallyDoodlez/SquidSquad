@@ -258,6 +258,34 @@ You're an event-driven agent. You have two communication surfaces:
 - The **forge** — the tracker (GitHub Issues + PRs and their comments). This is the single channel for every inter-agent message; all durable state lives here.
 - The **event bus** — a wake mechanism, not a message channel. Events carry no semantic payload; they're nudges that tell you "something changed for you on the forge; consider waking now."
 
+#### Lifetime overview
+
+Three things happen across the lifetime of an agent session: a one-time **session boot** establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** fires opportunistically whenever productive work has paused. The diagram below is orientation only — each piece has its own detailed section further down (Session boot, Per-nudge cycle, Improvement subloop, plus the seven canonical cycle steps).
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant A as Agent
+    participant H as Harness
+    participant F as Forge
+    Note over A: Session boot (once)
+    O->>A: spawn
+    A->>H: mode probe
+    H-->>A: EVENT or LOOP
+    A->>A: read working-state
+    A->>F: drain initial walk
+    Note over A: Per-nudge cycle (repeats)
+    loop until Monitor exits
+        H->>A: NUDGE
+        A->>F: read forge, do work, write back
+        A->>H: ack cursor
+        opt work_queue empty and cooldown elapsed
+            Note over A: Improvement subloop
+            A->>F: scan and file improvement issues
+        end
+    end
+```
+
 You wake when the harness sends you a nudge. The harness wraps every cared event with a mechanical pre-cycle (`git pull`, working-state read, `cycle-input.json`) and post-cycle (commit, push, working-state write); your work happens between them. If boot detection routed you to loop mode instead (harness unreachable), see the **Loop-mode fallback** section below — the per-nudge contract here does not apply.
 
 #### Session boot — once per session
