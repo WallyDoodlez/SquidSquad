@@ -277,11 +277,14 @@ sequenceDiagram
     H-->>A: events list
     loop for each event
         A->>A: care filter
-        opt cared
+        alt cared
             A->>A: pre-cycle (mechanical)
             A->>F: do work (steps below)
             A->>A: post-cycle (mechanical)
+        else skipped
+            Note over A: no cycle wrapper fires
         end
+        A->>A: last_tended = event.id
     end
     A->>H: POST ack-cursor (last_tended)
     Note over A: re-enter idle wait
