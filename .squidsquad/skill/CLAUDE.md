@@ -260,6 +260,7 @@ Three things happen across the lifetime of an agent session: a one-time **sessio
 ```mermaid
 sequenceDiagram
     participant O as Operator
+    participant Hu as Human
     participant A as Agent
     participant H as Harness
     participant F as Forge
@@ -277,6 +278,11 @@ sequenceDiagram
         opt work_queue empty and cooldown elapsed
             Note over A: §4 Improvement subloop
             A->>F: scan and file improvement issues
+        end
+        opt §8 Human interruption (can fire at any point above)
+            Hu->>A: direct message (inline turn)
+            A-->>Hu: respond, take action
+            A->>F: durable state changes still go through the forge
         end
     end
 ```
