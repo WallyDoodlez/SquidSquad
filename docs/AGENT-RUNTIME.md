@@ -120,7 +120,7 @@ Concrete consequences for an inline turn:
 
 **Override discipline.** Human instructions delivered inline take precedence over autonomous cycle work. They do NOT override safety gates: instructions that would cross a role boundary, violate a vault-recorded prohibition, or require destructive / hard-to-reverse action without confirmation must still be flagged before action.
 
-**Resuming autonomous mode after an inline session.** Re-invoke `/loop` (loop mode) or re-arm the Monitor tool (event mode) per the boot-bootstrap recovery directive. The session's wake mode itself does NOT change — it stays whichever was selected at boot (§8.3).
+**Resuming autonomous mode after an inline session.** In **loop mode**, re-invoke `/loop` per the recovery directive in `references/sub-skills/common/boot-bootstrap.md` (POLLING block). In **event mode**, no action is required: the Monitor tool is invoked with `persistent: true` (per `references/sub-skills/common-events/event-mode-contract.md`) so it stays active across inline turns — the next nudge after the inline interaction wakes the agent automatically. **Do not re-invoke Monitor manually** — `event-mode-contract.md` explicitly forbids it (a Monitor exit is the signal that the harness owns recovery). The session's wake mode itself does NOT change — it stays whichever was selected at boot (§8.3 establishes mode-stickiness for the session).
 
 ---
 
