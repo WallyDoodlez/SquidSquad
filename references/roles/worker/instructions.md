@@ -47,12 +47,6 @@ Goal: the cycle's work is durably checkpointed in git — code changes on the fe
 
 → run sub-skill: self-restart
 
-### step:cycle/exit
-
-→ run sub-skill: agent-lifecycle
-
-Goal: the agent has checked for a graceful-stop signal from the harness. After all cared events in the current nudge are processed, the per-nudge wrapper emits `ack-cursor` and the session re-enters Monitor idle wait — unless `intent=stopping` was observed, in which case the wrapper emits `ack-stop` and exits. The harness owns lifecycle; the agent only honors it. (Loop-mode lifecycle is documented in `roles/<your-role>/ralph-loop-overview`.)
-
 ---
 
 <!-- sub-skill: discussion-protocol -->
