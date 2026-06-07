@@ -210,7 +210,7 @@ You're an event-driven agent. You have two communication surfaces:
 
 #### 1. Lifetime overview
 
-Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** (§4) fires opportunistically whenever productive work has paused. The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, and §7 enumerates the seven canonical cycle steps).
+Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** (§4) fires opportunistically whenever productive work has paused. The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, and §7 carries the compose-generated hydrated cycle diagram with your role's actual step hierarchy).
 
 ```mermaid
 sequenceDiagram
@@ -317,23 +317,40 @@ Either way, the catalog is the source of truth; if a marker's name isn't in the 
 
 Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The canonical sequence is **seven steps**: boot + resume run **once** at session start; pickup → work → checkpoint → cleanup → exit run **per cared event** during each nudge-walk.
 
-#### 7. The seven canonical cycle steps
+#### 7. Your cycle, hydrated
+
+The diagram below is **generated at compose time** from your actual step hierarchy — the seven L1 canonical steps with whatever L2 / L3 / L4 sub-steps your role's source files anchored under each parent. Sub-step numbers (`2.1`, `6.3`, etc.) are assigned by the compose pipeline based on op insertion order; if a sub-step gets reordered or a new one is anchored, the diagram regenerates to match. There is no separate "L1 contract" diagram and "hydrated" diagram — what you see here is the only cycle you'll execute.
 
 ```mermaid
 flowchart LR
     subgraph SessionBoot["Session boot (once per session)"]
-        S1["1. step:cycle/boot"] --> S2["2. step:cycle/resume"]
+        S1["1. step:cycle/boot"]
+        S2["2. step:cycle/resume"]
+        S2_1["2.1 issue-triage"]
     end
     subgraph WalkLoop["Per cared event (repeats per nudge)"]
-        S3["3. step:cycle/pickup"] --> S4["4. step:cycle/work"]
-        S4 --> S5["5. step:cycle/checkpoint"]
-        S5 --> S6["6. step:cycle/cleanup"]
-        S6 --> S7["7. step:cycle/exit"]
+        S3["3. step:cycle/pickup"]
+        S4["4. step:cycle/work"]
+        S5["5. step:cycle/checkpoint"]
+        S6["6. step:cycle/cleanup"]
+        S7["7. step:cycle/exit"]
+        S7_1["7.1 delivery-packaging"]
+        S7_2["7.2 version-bump"]
+        S7_3["7.3 doc-improvement"]
     end
+    S1 --> S2
+    S2 --> S2_1
+    S3 --> S4
+    S4 --> S5
+    S5 --> S6
+    S6 --> S7
+    S7 --> S7_1
+    S7_1 --> S7_2
+    S7_2 --> S7_3
     SessionBoot --> WalkLoop
 ```
 
-Each step is documented in order below. Role-specific extensions anchor to these steps via L2/L3 ops (`### insert-after step:cycle/<id>` etc., per `docs/COMPOSE-ARCHITECTURE.md` §3.3) — those extensions appear nested under the relevant L1 step heading in this composed CLAUDE.md.
+Each step (and sub-step) is documented in order below.
 
 <!-- sub-skill: boot-bootstrap -->
 ### Step 1 — step:cycle/boot

@@ -135,6 +135,11 @@ def apply_l4_ops(slot_content, l4_ops):
     # their L1 parent step. Runs AFTER all ops are applied so the final
     # sub-step ordering (including L4 customizations) drives the numbers.
     content = _apply_hierarchical_step_numbering(content)
+    # Render the hydrated cycle diagram from the (now-numbered) step
+    # hierarchy. The agent only ever sees ONE cycle diagram — the
+    # generated one — so the L1 source can't carry a stale hand-authored
+    # variant alongside it.
+    content = _render_hydrated_cycle_diagram(content)
     return content
 
 
@@ -342,6 +347,140 @@ def _ensure_trailing_newline(text):
     if text.endswith("\n"):
         return text
     return text + "\n"
+
+
+# Marker the L1 source carries in place of a hand-authored cycle diagram.
+# Compose replaces it with a generated mermaid flowchart whose contents
+# reflect the actual hydrated step hierarchy (L1 parents + their L2/L3
+# sub-steps in insertion order).
+_HYDRATED_DIAGRAM_MARKER = "<!-- compose:hydrated-cycle-diagram -->"
+
+# Boot-phase parent step IDs land in the SessionBoot subgraph; everything
+# else lands in the WalkLoop subgraph. Per L1: boot + resume run ONCE at
+# session start; pickup → work → checkpoint → cleanup → exit run per
+# cared event during the nudge walk.
+_SESSION_BOOT_STEP_IDS = ("boot", "resume")
+
+
+def _render_hydrated_cycle_diagram(content):
+    """Replace ``_HYDRATED_DIAGRAM_MARKER`` with a generated mermaid
+    flowchart of the actual step hierarchy in ``content``.
+
+    Walks the (already-numbered) step headings and emits one node per
+    parent step and one per sub-step, edges linking them in document
+    order. Parents whose ID is in ``_SESSION_BOOT_STEP_IDS`` go into the
+    SessionBoot subgraph; the rest go into WalkLoop.
+
+    No-op if the marker isn't present (e.g. on slots that aren't the
+    instructions slot, or on legacy L1 source that still carries a
+    hand-authored diagram).
+    """
+    if _HYDRATED_DIAGRAM_MARKER not in content:
+        return content
+
+    parents = [
+        (m.end(), int(m.group(1)), m.group(2))
+        for m in _L1_PARENT_STEP_RE.finditer(content)
+    ]
+    if not parents:
+        # Marker present but no parents found — leave the marker so the
+        # composed output makes the gap visible rather than silently
+        # emitting an empty diagram.
+        return content
+
+    # Build the (parent, [sub_id...]) list in document order.
+    hierarchy = []
+    for i, (parent_end, parent_n, parent_id) in enumerate(parents):
+        range_end = parents[i + 1][0] if i + 1 < len(parents) else len(content)
+        # _L1_PARENT_STEP_RE.match yields parent_end at end of line; need
+        # to slice from there to next parent's start for the sub-step
+        # scan. The next parent's start is one char before its end (the
+        # start of its `###`), but we already have parent_end of THIS
+        # parent — sub-steps live between this parent and the next.
+        section_start = parent_end
+        # Recover the next-parent start position to bound the scan.
+        if i + 1 < len(parents):
+            # parent[i+1][0] is end-of-line of next parent heading; back
+            # off to the start of that heading line by re-searching.
+            section_end_match = _L1_PARENT_STEP_RE.search(
+                content, section_start
+            )
+            section_end = section_end_match.start() if section_end_match else len(content)
+        else:
+            section_end = len(content)
+        section = content[section_start:section_end]
+        sub_ids = [m.group(1) for m in _L2_SUBSTEP_HEADING_RE.finditer(section)]
+        hierarchy.append((parent_n, parent_id, sub_ids))
+
+    diagram = _emit_mermaid_flowchart(hierarchy)
+    return content.replace(_HYDRATED_DIAGRAM_MARKER, diagram, 1)
+
+
+def _emit_mermaid_flowchart(hierarchy):
+    """Render a mermaid flowchart string from a ``[(parent_n, parent_id, sub_ids)]`` list.
+
+    Edges connect each node to its successor in document order so the
+    rendered diagram reads as a single linear cycle. Sub-graph membership
+    is driven by ``_SESSION_BOOT_STEP_IDS`` — boot-phase parents and
+    their sub-steps live in the SessionBoot subgraph; the rest live in
+    WalkLoop.
+    """
+    boot_nodes = []
+    walk_nodes = []
+    all_nodes = []  # (node_id, label, is_boot) — flat order for edge chain
+
+    for parent_n, parent_id, sub_ids in hierarchy:
+        is_boot = parent_id in _SESSION_BOOT_STEP_IDS
+        node_id = f"S{parent_n}"
+        label = f"{parent_n}. step:cycle/{parent_id}"
+        all_nodes.append((node_id, label, is_boot))
+        (boot_nodes if is_boot else walk_nodes).append((node_id, label))
+        for sub_idx, sub_id in enumerate(sub_ids, start=1):
+            sub_node_id = f"S{parent_n}_{sub_idx}"
+            sub_label = f"{parent_n}.{sub_idx} {sub_id}"
+            all_nodes.append((sub_node_id, sub_label, is_boot))
+            (boot_nodes if is_boot else walk_nodes).append((sub_node_id, sub_label))
+
+    def _render_subgraph(name, title, nodes):
+        if not nodes:
+            return ""
+        lines = [f'    subgraph {name}["{title}"]']
+        for node_id, label in nodes:
+            lines.append(f'        {node_id}["{label}"]')
+        lines.append("    end")
+        return "\n".join(lines)
+
+    parts = ["```mermaid", "flowchart LR"]
+    boot_block = _render_subgraph(
+        "SessionBoot", "Session boot (once per session)", boot_nodes
+    )
+    walk_block = _render_subgraph(
+        "WalkLoop", "Per cared event (repeats per nudge)", walk_nodes
+    )
+    if boot_block:
+        parts.append(boot_block)
+    if walk_block:
+        parts.append(walk_block)
+
+    # Edges: connect each node to its successor across the full sequence,
+    # then bridge SessionBoot → WalkLoop at the transition point.
+    last_boot_node = None
+    first_walk_node = None
+    for i in range(len(all_nodes) - 1):
+        cur_id, _, cur_is_boot = all_nodes[i]
+        next_id, _, next_is_boot = all_nodes[i + 1]
+        if cur_is_boot and not next_is_boot:
+            # Boundary handled by the subgraph-level edge below.
+            last_boot_node = cur_id
+            first_walk_node = next_id
+            continue
+        parts.append(f"    {cur_id} --> {next_id}")
+
+    if boot_block and walk_block:
+        parts.append("    SessionBoot --> WalkLoop")
+
+    parts.append("```")
+    return "\n".join(parts)
 
 
 def _ensure_paragraph_break(text):

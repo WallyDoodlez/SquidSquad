@@ -244,7 +244,7 @@ You're an event-driven agent. You have two communication surfaces:
 
 #### 1. Lifetime overview
 
-Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** (§4) fires opportunistically whenever productive work has paused. The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, and §7 enumerates the seven canonical cycle steps).
+Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** (§4) fires opportunistically whenever productive work has paused. The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, and §7 carries the compose-generated hydrated cycle diagram with your role's actual step hierarchy).
 
 ```mermaid
 sequenceDiagram
@@ -351,56 +351,56 @@ Either way, the catalog is the source of truth; if a marker's name isn't in the 
 
 Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The canonical sequence is **seven steps**: boot + resume run **once** at session start; pickup → work → checkpoint → cleanup → exit run **per cared event** during each nudge-walk.
 
-#### 7. The seven canonical cycle steps
+#### 7. Your cycle, hydrated
+
+The diagram below is **generated at compose time** from your actual step hierarchy — the seven L1 canonical steps with whatever L2 / L3 / L4 sub-steps your role's source files anchored under each parent. Sub-step numbers (`2.1`, `6.3`, etc.) are assigned by the compose pipeline based on op insertion order; if a sub-step gets reordered or a new one is anchored, the diagram regenerates to match. There is no separate "L1 contract" diagram and "hydrated" diagram — what you see here is the only cycle you'll execute.
 
 ```mermaid
 flowchart LR
     subgraph SessionBoot["Session boot (once per session)"]
-        S1["1. step:cycle/boot"] --> S2["2. step:cycle/resume"]
+        S1["1. step:cycle/boot"]
+        S2["2. step:cycle/resume"]
+        S2_1["2.1 check-in"]
+        S2_2["2.2 triage-external"]
     end
     subgraph WalkLoop["Per cared event (repeats per nudge)"]
-        S3["3. step:cycle/pickup"] --> S4["4. step:cycle/work"]
-        S4 --> S5["5. step:cycle/checkpoint"]
-        S5 --> S6["6. step:cycle/cleanup"]
-        S6 --> S7["7. step:cycle/exit"]
+        S3["3. step:cycle/pickup"]
+        S3_1["3.1 task-intake"]
+        S3_2["3.2 task-approval"]
+        S4["4. step:cycle/work"]
+        S4_1["4.1 pipeline-sentinel"]
+        S5["5. step:cycle/checkpoint"]
+        S6["6. step:cycle/cleanup"]
+        S6_1["6.1 health-check"]
+        S6_2["6.2 boot-remote-agents"]
+        S6_3["6.3 own-domain-autofix"]
+        S6_4["6.4 soul-shepherd"]
+        S6_5["6.5 vault-optimize"]
+        S6_6["6.6 vault-synthesis"]
+        S7["7. step:cycle/exit"]
     end
+    S1 --> S2
+    S2 --> S2_1
+    S2_1 --> S2_2
+    S3 --> S3_1
+    S3_1 --> S3_2
+    S3_2 --> S4
+    S4 --> S4_1
+    S4_1 --> S5
+    S5 --> S6
+    S6 --> S6_1
+    S6_1 --> S6_2
+    S6_2 --> S6_3
+    S6_3 --> S6_4
+    S6_4 --> S6_5
+    S6_5 --> S6_6
+    S6_6 --> S7
     SessionBoot --> WalkLoop
 ```
 
-Each step is documented in order below. Role-specific extensions anchor to these steps via L2/L3 ops (`### insert-after step:cycle/<id>` etc., per `docs/COMPOSE-ARCHITECTURE.md` §3.3) — those extensions appear nested under the relevant L1 step heading in this composed CLAUDE.md.
+Each step (and sub-step) is documented in order below.
 
 <!-- sub-skill: boot-bootstrap -->
-#### PM cycle hydrated
-
-The seven-canonical-steps diagram above shows the L1 contract — what every role does each cycle. The diagram below shows PM's **hydrated** cycle: the same seven L1 steps with PM's L2 sub-steps nested under each parent. Sub-step numbers (`2.1`, `2.2`, `6.1` … `6.6`) are auto-assigned by the compose pipeline based on op insertion order, so reordering an L2 op renumbers automatically — never hand-maintained.
-
-```mermaid
-flowchart LR
-    subgraph SessionBoot["Session boot (once per session)"]
-        S1["1. step:cycle/boot"] --> S2["2. step:cycle/resume"]
-        S2 --> S2_1["2.1 check-in"]
-        S2_1 --> S2_2["2.2 triage-external"]
-    end
-    subgraph WalkLoop["Per cared event (repeats per nudge)"]
-        S3["3. step:cycle/pickup"] --> S3_1["3.1 task-intake"]
-        S3_1 --> S3_2["3.2 task-approval"]
-        S3_2 --> S4["4. step:cycle/work"]
-        S4 --> S4_1["4.1 pipeline-sentinel"]
-        S4_1 --> S5["5. step:cycle/checkpoint"]
-        S5 --> S6["6. step:cycle/cleanup"]
-        S6 --> S6_1["6.1 health-check"]
-        S6_1 --> S6_2["6.2 boot-remote-agents"]
-        S6_2 --> S6_3["6.3 own-domain-autofix"]
-        S6_3 --> S6_4["6.4 soul-shepherd"]
-        S6_4 --> S6_5["6.5 vault-optimize"]
-        S6_5 --> S6_6["6.6 vault-synthesis"]
-        S6_6 --> S7["7. step:cycle/exit"]
-    end
-    SessionBoot --> WalkLoop
-```
-
-Each L2 sub-step is documented inline under its L1 parent below. **Reactive sub-skills** (issue-filing, discussion-protocol, l4-curation) fire on trigger conditions outside the cycle and are listed in their own section near the bottom of this document.
-
 ### Step 1 — step:cycle/boot
 
 **This block is the FIRST instruction in your composed CLAUDE.md. Execute it BEFORE any other section, BEFORE invoking any tool, BEFORE responding to the human.** Steps 0–4 below are mandatory and must run in order on every fresh session start.

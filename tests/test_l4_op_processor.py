@@ -437,6 +437,90 @@ def test_renumbering_noop_when_no_l1_parent_headings_present():
     assert out == content
 
 
+def test_hydrated_diagram_marker_replaced_with_mermaid_block():
+    """The L1 source carries `<!-- compose:hydrated-cycle-diagram -->`. Compose
+    replaces it with a generated mermaid block reflecting the step hierarchy.
+    """
+    content = (
+        "intro line\n\n"
+        "<!-- compose:hydrated-cycle-diagram -->\n\n"
+        "### Step 1 — step:cycle/boot\n"
+        "boot body\n\n"
+        "### Step 2 — step:cycle/resume\n"
+        "resume body\n\n"
+        "### Step 3 — step:cycle/pickup\n"
+        "pickup body\n"
+    )
+    out = op_proc.apply_l4_ops(content, [])
+    assert "<!-- compose:hydrated-cycle-diagram -->" not in out
+    assert "```mermaid\nflowchart LR\n" in out
+    assert "1. step:cycle/boot" in out
+    assert "2. step:cycle/resume" in out
+    assert "3. step:cycle/pickup" in out
+
+
+def test_hydrated_diagram_includes_substeps_with_dotted_labels():
+    """Sub-steps anchored under a parent step appear in the rendered diagram
+    with their auto-numbered `N.M` labels, in document order.
+    """
+    content = (
+        "<!-- compose:hydrated-cycle-diagram -->\n\n"
+        "### Step 2 — step:cycle/resume\n"
+        "\n"
+        "#### step:cycle/check-in\n"
+        "\n"
+        "#### step:cycle/triage-external\n"
+        "\n"
+        "### Step 3 — step:cycle/pickup\n"
+    )
+    out = op_proc.apply_l4_ops(content, [])
+    assert "2.1 check-in" in out
+    assert "2.2 triage-external" in out
+    # Sub-steps should be wired up as edges in the chain
+    assert "S2 --> S2_1" in out
+    assert "S2_1 --> S2_2" in out
+
+
+def test_hydrated_diagram_partitions_boot_phase_into_session_boot_subgraph():
+    """Parents matching boot-phase step IDs (boot, resume) and their
+    sub-steps go into the SessionBoot subgraph; later steps go into WalkLoop.
+    """
+    content = (
+        "<!-- compose:hydrated-cycle-diagram -->\n\n"
+        "### Step 1 — step:cycle/boot\n"
+        "\n"
+        "### Step 2 — step:cycle/resume\n"
+        "\n"
+        "### Step 3 — step:cycle/pickup\n"
+        "\n"
+        "### Step 7 — step:cycle/exit\n"
+    )
+    out = op_proc.apply_l4_ops(content, [])
+    assert 'subgraph SessionBoot["Session boot (once per session)"]' in out
+    assert 'subgraph WalkLoop["Per cared event (repeats per nudge)"]' in out
+    # SessionBoot → WalkLoop transition edge exists
+    assert "SessionBoot --> WalkLoop" in out
+
+
+def test_hydrated_diagram_marker_absent_is_noop():
+    """If the marker isn't present in the slot content (e.g. non-instructions
+    slots), the diagram render is a no-op and content passes through unchanged.
+    """
+    content = "## Identity\nsome body\n"
+    out = op_proc.apply_l4_ops(content, [])
+    assert out == content
+
+
+def test_hydrated_diagram_marker_with_no_parents_leaves_marker():
+    """If the marker is present but the slot has no L1 parent step headings
+    (malformed content), leave the marker in place so the gap is visible
+    rather than silently emitting an empty diagram.
+    """
+    content = "<!-- compose:hydrated-cycle-diagram -->\n\nno steps here\n"
+    out = op_proc.apply_l4_ops(content, [])
+    assert "<!-- compose:hydrated-cycle-diagram -->" in out
+
+
 def test_renumbering_applies_after_l4_ops_so_inserted_substeps_are_indexed():
     """L4 insert-after ops that add a new sub-step are picked up by the
     renumbering pass and indexed in their final position. The compose-time
