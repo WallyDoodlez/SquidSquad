@@ -405,25 +405,17 @@ The event-mode wake contract is now loaded. Do not proceed to the POLLING mode b
 
 #### POLLING mode — schedule `/loop`, then Read the polling fragment
 
-**Schedule `/loop` exactly once**:
+The loop-mode contract (what a cycle does, why this mode exists, when control returns to event mode) is described in the **Loop-mode fallback** section below. This block only carries out the two boot-time actions.
 
-Invoke this slash command literally. The interval value below is substituted at compose time from `config.md`'s `Iteration Interval > Minutes` field — do NOT re-derive it from the polling fragment, and do NOT re-invoke `/loop` after the fragment is loaded:
+**Schedule `/loop` exactly once** — invoke this slash command literally; the interval is substituted at compose time from `config.md`'s `Iteration Interval > Minutes` field:
 
 ```
 /loop 30m execute one Ralph Loop cycle
 ```
 
-This is the only `/loop` invocation in your boot path. The polling fragment Read in the polling fragment describes what a cycle DOES, not how to schedule one — re-invoking `/loop` from inside the fragment would stack cron entries.
+This is the only `/loop` invocation in your boot path — do NOT re-invoke from inside the fragment (it would stack cron entries). If a prior session ended without a cycle firing, re-invoke the same literal command above.
 
-**Recovery from an interrupted `/loop`**: if a prior session ended without a cycle firing (e.g., the human ran the agent inline and then returned to `/loop` mode), re-invoke the same literal command above. Do not change the interval value.
-
-**Read the polling fragment**:
-
-Use the Read tool to read this single file:
-
-- `references/sub-skills/roles/worker/ralph-loop-overview.md`
-
-Treat its content as the contract for what happens INSIDE each cycle — step markers, status bar writes, work-queue pickup, commits, etc. The **Loop-mode fallback** section below has the per-cycle step contract; the fragment provides role-flavored details on top.
+**Read the polling fragment** at `references/sub-skills/roles/worker/ralph-loop-overview.md` — its content is the per-cycle contract (step markers, status-bar writes, work-queue pickup, commits) that the Loop-mode fallback section points to.
 
 #### Placeholder substitution inside runtime-loaded fragments
 
@@ -438,11 +430,7 @@ When you encounter one of these inside a runtime-loaded fragment, substitute it 
 
 #### Loaded mode is sticky
 
-Once Steps 3 or 4 complete, your wake-mode contract is fixed for this session. Do **not** re-check mode mid-session. Mode flips (`config.md` `event-driven:` value changed by an operator) take effect on the next agent restart — not mid-cycle.
-
-#### Why polling is the harness-down fallback
-
-The bespoke "degraded mode" in `common-events/event-mode-contract.md` (sleep 60s + retry `work_queue()`) is removed in favor of polling fallback. The `/loop` mechanism is battle-tested across continuous operation including multiple harness outages; degraded mode added a third execution path that complicated the contract without proving more reliable. Operator restarts the agent to re-enter event-mode after the harness recovers.
+Once the EVENT or POLLING block above completes, your wake-mode contract is fixed for this session. Do **not** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.
 
 <!-- /sub-skill: boot-bootstrap -->
 
