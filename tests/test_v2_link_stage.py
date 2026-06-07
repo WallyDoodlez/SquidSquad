@@ -463,3 +463,35 @@ def test_emit_v2_linked_applies_l2_insert_after_step_op(tmp_path):
     checkin_idx = result.index("#### step:cycle/check-in")
     assert work_idx < checkin_idx
     assert "PM-only check-in content." in result
+
+
+def test_extract_inline_ops_h2_boundary_terminates_op_body():
+    """An H2 heading terminates the current op body — the H2 + content
+    after it flow as cleaned_body, NOT as part of the op.
+
+    Regression: L2 PM's `### insert-after step:cycle/cleanup` op was
+    sucking in the subsequent `## Reactive sub-skills` section.
+    """
+    body = (
+        "### insert-after step:cycle/cleanup\n"
+        "\n"
+        "#### step:cycle/health-check\n"
+        "→ run sub-skill: health-check\n"
+        "Check agent health.\n"
+        "\n"
+        "## Reactive sub-skills\n"
+        "\n"
+        "These are invoked reactively.\n"
+        "\n"
+        "### Project customization\n"
+        "→ run sub-skill: l4-curation\n"
+    )
+    cleaned, ops = v2._extract_inline_ops(body)
+    assert len(ops) == 1
+    assert ops[0].op_type == "insert-after"
+    assert ops[0].target_step_id == "cleanup"
+    assert "#### step:cycle/health-check" in ops[0].body_text
+    assert "Check agent health." in ops[0].body_text
+    assert "## Reactive sub-skills" not in ops[0].body_text
+    assert "## Reactive sub-skills" in cleaned
+    assert "Project customization" in cleaned

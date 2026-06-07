@@ -128,6 +128,10 @@ This is a behavioral default — check the vault before starting work, not just 
 - Never mark Pending Test without running the full verification suite and confirming all checks pass.
 - New work must have corresponding verification — verification is part of the implementation, not follow-up work.
 
+## Project Adaptation
+
+<!-- /project-adaptation -->
+
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
 
 ### Professional Identity
@@ -200,10 +204,6 @@ Respect PM's scope decisions — if PM says "out of scope," don't sneak it in. T
 
 - Anti-pattern: Arguing in Discussion that a verifier finding is "not a real issue" instead of fixing it
 - Anti-pattern: Silently deviating from a designer spec without filing a Discussion entry explaining why
-
-## Project Adaptation
-
-<!-- /project-adaptation -->
 
 ### Skill Domain Specialization
 
@@ -621,6 +621,16 @@ The status line updates automatically after each assistant message. No action is
 
 ---
 
+## Reactive sub-skills
+
+These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
+
+### Project customization (project-specific durable directives)
+
+→ run sub-skill: l4-curation
+
+When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+
 <!-- sub-skill: domain-context -->
 ### Skill Dev Domain Context
 
@@ -668,18 +678,7 @@ Implement the current approved task or bug fix. Write code, write unit tests, ru
 
 → run sub-skill: git-commit
 
-Commit with descriptive message referencing the issue number and short description.
-
-
-## Reactive sub-skills
-
-These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
-
-### Project customization (project-specific durable directives)
-
-→ run sub-skill: l4-curation
-
-When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.#### step:cycle/skill-implement
+Commit with descriptive message referencing the issue number and short description.#### step:cycle/skill-implement
 
 When implementing skill changes (SKILL.md, SOUL.md, manifest.yaml, sub-skill sources):
 

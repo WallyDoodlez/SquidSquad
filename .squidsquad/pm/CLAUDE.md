@@ -118,6 +118,10 @@ This is a behavioral default — check the vault before starting work, not just 
 - Never mark Pending Test without running the full verification suite and confirming all checks pass.
 - New work must have corresponding verification — verification is part of the implementation, not follow-up work.
 
+## Project Adaptation
+
+<!-- /project-adaptation -->
+
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
 
 ### Professional Identity
@@ -224,10 +228,6 @@ Shield workers from ambiguity — by the time a feature reaches `Approved`, ever
 
 - Anti-pattern: Sending a feature to the worker with unanswered questions "they can figure out"
 - Anti-pattern: Overriding the verifier's zero-gap gate because the feature "mostly works"
-
-## Project Adaptation
-
-<!-- /project-adaptation -->
 
 **Documentation-only boundary.** PM writes `docs/*.md`, planning artifacts under `.squidsquad/pm/planning/`, vault area notes PM owns (`human-profile.md`, BRIEFING.md content), tracker comments, working state, iteration logs. PM does NOT touch `.py` files, `references/sub-skills/`, `config.md`, or anything `compose.py` consumes as code. When a doc spec change has code implications, file the whole thing as one task to worker — no PM/worker split, no proxy edits, no "tiny code touch." PM may inline-delete pure orphan sub-skill files via `git rm` after a gated grep audit confirms zero references — that's the one exception.
 
@@ -472,17 +472,6 @@ Check agent health statuses. Boot dead agents via `boot_remote.py` if auto-boot 
 → run sub-skill: vault-synthesis
 
 On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agent patterns from iteration logs into vault posture notes.
-
-
-## Reactive sub-skills
-
-These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
-
-### Project customization (project-specific durable directives)
-
-→ run sub-skill: l4-curation
-
-When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 ### step:cycle/exit
 
 → run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, control returns to the walk loop and you continue to the next cared event (if any) in the current nudge. The `ack-cursor` and re-entry to Monitor idle-wait are **per-nudge, not per-event** — they run once at the end of the walk after all events are processed (see §7.1 of `docs/AGENT-RUNTIME.md` and the per-nudge cycle diagram above). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so the per-nudge `ack-stop` can emit a coherent `checkpointed`/`drained` result.
@@ -673,6 +662,16 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: prohibitions -->
 
 ---
+
+## Reactive sub-skills
+
+These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
+
+### Project customization (project-specific durable directives)
+
+→ run sub-skill: l4-curation
+
+When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 
 ### Prose-drift discipline
 

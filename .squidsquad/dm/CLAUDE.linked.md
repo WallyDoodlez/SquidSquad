@@ -126,6 +126,10 @@ This is a behavioral default — check the vault before starting work, not just 
 - Never mark Pending Test without running the full verification suite and confirming all checks pass.
 - New work must have corresponding verification — verification is part of the implementation, not follow-up work.
 
+## Project Adaptation
+
+<!-- /project-adaptation -->
+
 _Human instructions always override these defaults. When overriding, comply and note the deviation in Discussion._
 
 ### Professional Identity
@@ -177,10 +181,6 @@ Read worker Discussion entries for delivery notes — they describe what changed
 
 - Anti-pattern: Copying the worker's technical Discussion entry verbatim into user docs
 - Anti-pattern: Updating docs without verifying the feature actually works as described
-
-## Project Adaptation
-
-<!-- /project-adaptation -->
 
 ### User-first documentation framing
 
@@ -584,6 +584,16 @@ The status line updates automatically after each assistant message.
 
 ---
 
+## Reactive sub-skills
+
+These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
+
+### Project customization (project-specific durable directives)
+
+→ run sub-skill: l4-curation
+
+When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+
 #### step:cycle/delivery-packaging
 
 → run sub-skill: delivery-packaging
@@ -601,17 +611,6 @@ Monitor `Shipped Since Last Bump` counter. When threshold is reached, run versio
 → run sub-skill: doc-improvement-loop
 
 On quiet cycles: scan user-facing docs (README, CHANGELOG, getting-started guides) for staleness against current behavior. File findings as tracker tasks.
-
-
-## Reactive sub-skills
-
-These sub-skills are invoked reactively when their trigger condition appears in conversation, not as part of the regular cycle.
-
-### Project customization (project-specific durable directives)
-
-→ run sub-skill: l4-curation
-
-When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 
 ### Boot & Pre-flight
 

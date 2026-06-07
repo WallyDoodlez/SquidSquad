@@ -210,6 +210,22 @@ def _extract_inline_ops(body):
     for line in lines:
         m = _INLINE_OP_DIRECTIVE_RE.match(line.rstrip("\n"))
         if m is None:
+            # An H2 boundary (`## Heading`) terminates the current op's
+            # body and the H2 + everything after flows as plain content
+            # (cleaned_body). Without this terminator the extractor was
+            # too greedy — it sucked H2-rooted sub-sections into the op
+            # body, which then got `insert-after` injected at the step
+            # anchor and ended up in the wrong place in composed output.
+            # H3 non-op headings (e.g. `### Some Heading`) continue to
+            # flow into the op body — only H2 is a hard structural
+            # boundary inside a single-slot source.
+            if current_op is not None and line.startswith("## ") and not line.startswith("### "):
+                op_record, body_lines = current_op
+                op_record.body_text = "".join(body_lines).strip("\n")
+                ops.append(op_record)
+                current_op = None
+                pre_op_lines.append(line)
+                continue
             if current_op is None:
                 pre_op_lines.append(line)
             else:
