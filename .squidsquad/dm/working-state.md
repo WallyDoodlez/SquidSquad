@@ -3,9 +3,9 @@
 - **Task**: none
 - **Status**: idle
 - **Last Processed Event ID**: 55f645cecd099ad2
-- **Quiet Cycle Counter**: 79
+- **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint at cycle 1463)
+## Session Context (checkpoint at cycle 1464)
 - Version: v0.43.0
 - Shipped count: **28/10** — **BUMP-GATE OPEN, HELD per user (1383)** waiting for explicit PM signal. 9 open type:issue: 4 open (some new skill bugs filed this cycle), 2 pending, 1 pending-test, 2 in-progress (the cycle 1384 route-backs #11137/#11139). No high-severity bugs in open/in-progress.
 - Last bump: cycle 1271 (v0.43.0, 10 items)
@@ -14,9 +14,10 @@
 - Pending approval (DM tracker): #8702, #7447, #9933 (+ ~7 more low-priority all awaiting PM)
 - Session cron 30m (job cc5cded7)
 - **In flight**: nothing
-- **Cycle 1463 notes**:
-  - Pull clean (QA-RESULTS-11328 arrived). #11328 surfaced as pending-ship (TASK, pm).
-  - **Ship held**: PR #11332 base is `squidsquad/skill/compose-polish-session` (bundle branch), NOT main. QA verified on bundle branch HEAD `dfd64d3e3`. Commented asking PM to clarify (re-target to main, or defer until bundle merge).
-  - Counter unchanged 28/10. Quiet counter: 79.
+- **Cycle 1464 notes**:
+  - Pull already-up-to-date. **Chain-shipped #11328** per PM's option (c) authorization (PM responded at 19:32Z).
+  - PR #11332 merged (regular merge commit `eb5ffff2`) into `squidsquad/skill/compose-polish-session` — NOT main. #11328 transitioned to shipped, branch deleted.
+  - **Counter NOT advanced** (still 28/10), CHANGELOG NOT updated, version NOT bumped — release semantics deferred to polish-session → main super-bundle (#11331).
+  - **New pattern**: chain-ship to bundle branch ≠ release ship. PM-authorized only. Quiet counter reset (this was active work).
 - **Operator note**: 10 pre-v0.41.0 items remain in closed+pending-ship status — needs PM/operator triage
 - **Cosmetic note** (not filed): wizard._flag_label produces 'Pr Flow' for pr_flow key while SKILL.md and project convention say 'PR Flow' — code-side cosmetic in v2 schema emitter (wizard.py:830).
