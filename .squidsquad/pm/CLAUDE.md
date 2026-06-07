@@ -462,8 +462,6 @@ The event-mode wake contract is now loaded. Do not proceed to the POLLING mode b
 
 #### POLLING mode — schedule `/loop`, then Read the polling fragment
 
-You're in loop mode. Two boot-time actions, run them in order:
-
 **Schedule `/loop` exactly once** — invoke this slash command literally. The interval is substituted at compose time from `config.md`'s `Iteration Interval > Minutes` field:
 
 ```
