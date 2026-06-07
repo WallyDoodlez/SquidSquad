@@ -251,6 +251,80 @@ Vault remember 4-gate logic: write budget → dedup check → reusability → fr
 
 This section is your operating manual: how you function inside the team described above. It covers the **boot sequence** (mode detection at session start), **the cycle** (what runs each iteration in event mode), the **loop-mode fallback**, the **improvement subloop** that fires between productive cycles, and the **interaction conventions** (tracker, vault, forge protocols, working state file, status line, prohibitions) that bind all of these together.
 
+### Your cycle (event mode)
+
+You're an event-driven agent. You have two communication surfaces:
+
+- The **forge** — the tracker (GitHub Issues + PRs and their comments). This is the single channel for every inter-agent message; all durable state lives here.
+- The **event bus** — a wake mechanism, not a message channel. Events carry no semantic payload; they're nudges that tell you "something changed for you on the forge; consider waking now."
+
+You wake when the harness sends you a nudge. The harness wraps every cared event with a mechanical pre-cycle (`git pull`, working-state read, `cycle-input.json`) and post-cycle (commit, push, working-state write); your work happens between them. If boot detection routed you to loop mode instead (harness unreachable), see the **Loop-mode fallback** section below — the per-nudge contract here does not apply.
+
+#### Session boot — once per session
+
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant H as Harness
+    A->>A: read working-state.md
+    A->>H: boot-mode probe
+    H-->>A: 200 OK means EVENT mode (else fall back to LOOP)
+    A->>H: POST booted event
+    H-->>A: 200 OK, status flips to ready
+    A->>H: GET events queued before boot
+    H-->>A: events list (may be empty)
+    Note over A: drain initial walk, then idle-wait
+```
+
+The boot-mode probe (executed in Step 2 of `step:cycle/boot` below) selects the wake mechanism for this session: if the harness responds, the session stays in event mode and the rest of the session-boot sequence runs; if the probe failed, the session is now in loop mode and the per-nudge cycle below does not apply (see **Loop-mode fallback**). Mode selection is per-session — once a probe resolves, you don't re-detect until the next session restart.
+
+#### Per-nudge cycle — repeats indefinitely
+
+```mermaid
+sequenceDiagram
+    participant EP as event_poll
+    participant A as Agent
+    participant H as Harness
+    participant F as Forge
+    EP->>A: NUDGE on Monitor stdin
+    A->>H: GET current cursor
+    H-->>A: cursor X
+    A->>H: GET events since X
+    H-->>A: events list
+    loop for each event
+        A->>A: care filter
+        alt cared
+            A->>A: pre-cycle (mechanical)
+            A->>F: do work (steps below)
+            A->>A: post-cycle (mechanical)
+        end
+    end
+    A->>H: POST ack-cursor (last_tended)
+    Note over A: re-enter idle wait
+```
+
+A nudge wakes you. You fetch new events past your cursor, walk them, and act on the ones that pass your care filter. For each cared event the harness wraps your creative work with mechanical pre/post-cycle scripts. After the walk you ack the cursor with the last event you tended and re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change.
+
+#### Your idle wait is the `Monitor` tool
+
+The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each `NUDGE\n` line that arrives wakes you and starts one per-nudge cycle.
+
+The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
+
+One unconditional rule from those fragments matters at this level: **if `Monitor` exits for any reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — end your session immediately**. Do not retry `Monitor`, do not wait for the harness to recover, do not pivot to polling mid-session. The harness's auto-respawn path owns recovery; your exit IS the signal that recovery is needed.
+
+#### How `→ run sub-skill` markers work
+
+The steps below — and many other actions throughout this document — name a **sub-skill** via the `→ run sub-skill: <name>` marker. A sub-skill is a self-contained unit of agent procedural detail (vault writes, git commits, etc.) that lives in its own markdown file under `references/sub-skills/`. Sub-skill bodies are **not inlined** into this composed CLAUDE.md — when you reach a `→ run sub-skill: <name>` marker, you Read the source file at that moment and follow its instructions.
+
+To resolve `<name>` to a source path, consult the sub-skill catalog at `docs/sub-skill-catalog.md`. Names come in two shapes:
+- **Bare names** like `vault-remember` or `git-commit` — the catalog maps these to their source path (typically under `references/sub-skills/common/` or `references/sub-skills/common-events/`).
+- **Slash-bearing names** like `roles/pm/improvement-scan` — the name IS the source path under `references/sub-skills/` (so `roles/pm/improvement-scan` → `references/sub-skills/roles/pm/improvement-scan.md`).
+
+Either way, the catalog is the source of truth; if a marker's name isn't in the catalog, the marker is stale and you should ignore it rather than guess.
+
+Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. What follows is the canonical step sequence — boot + resume run once at session start; pickup → work → checkpoint → cleanup → exit run per cared event during the walk.
+
 <!-- sub-skill: boot-bootstrap -->
 ### step:cycle/boot
 
@@ -354,91 +428,9 @@ The bespoke "degraded mode" in `common-events/event-mode-contract.md` (sleep 60s
 
 <!-- /sub-skill: boot-bootstrap -->
 
-### Your cycle (event mode)
-
-You're an event-driven agent. You have two communication surfaces:
-
-- The **forge** — the tracker (GitHub Issues + PRs and their comments). This is the single channel for every inter-agent message; all durable state lives here.
-- The **event bus** — a wake mechanism, not a message channel. Events carry no semantic payload; they're nudges that tell you "something changed for you on the forge; consider waking now."
-
-You wake when the harness sends you a nudge. The harness wraps every cared event with a mechanical pre-cycle (`git pull`, working-state read, `cycle-input.json`) and post-cycle (commit, push, working-state write); your work happens between them. If boot detection routed you to loop mode instead (harness unreachable), see the **Loop-mode fallback** section below — the per-nudge contract here does not apply.
-
-#### Session boot — once per session
-
-```mermaid
-sequenceDiagram
-    participant A as Agent
-    participant H as Harness
-    A->>A: read working-state.md
-    A->>H: boot-mode probe
-    H-->>A: 200 OK means EVENT mode (else fall back to LOOP)
-    A->>H: POST booted event
-    H-->>A: 200 OK, status flips to ready
-    A->>H: GET events queued before boot
-    H-->>A: events list (may be empty)
-    Note over A: drain initial walk, then idle-wait
-```
-
-The boot-mode probe (already executed in Step 2 of Boot — Mode Detection above) selects the wake mechanism for this session: if the harness responds, the session stays in event mode and the rest of the session-boot sequence runs; if the probe failed, the session is now in loop mode and the per-nudge cycle below does not apply (see **Loop-mode fallback**). Mode selection is per-session — once a probe resolves, you don't re-detect until the next session restart.
-
-#### Per-nudge cycle — repeats indefinitely
-
-```mermaid
-sequenceDiagram
-    participant EP as event_poll
-    participant A as Agent
-    participant H as Harness
-    participant F as Forge
-    EP->>A: NUDGE on Monitor stdin
-    A->>H: GET current cursor
-    H-->>A: cursor X
-    A->>H: GET events since X
-    H-->>A: events list
-    loop for each event
-        A->>A: care filter
-        alt cared
-            A->>A: pre-cycle (mechanical)
-            A->>F: do work (steps below)
-            A->>A: post-cycle (mechanical)
-        end
-    end
-    A->>H: POST ack-cursor (last_tended)
-    Note over A: re-enter idle wait
-```
-
-A nudge wakes you. You fetch new events past your cursor, walk them, and act on the ones that pass your care filter. For each cared event the harness wraps your creative work with mechanical pre/post-cycle scripts. After the walk you ack the cursor with the last event you tended and re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change.
-
-#### Your idle wait is the `Monitor` tool
-
-The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each `NUDGE\n` line that arrives wakes you and starts one per-nudge cycle.
-
-The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
-
-One unconditional rule from those fragments matters at this level: **if `Monitor` exits for any reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — end your session immediately**. Do not retry `Monitor`, do not wait for the harness to recover, do not pivot to polling mid-session. The harness's auto-respawn path owns recovery; your exit IS the signal that recovery is needed.
-
-#### How `→ run sub-skill` markers work
-
-The steps below — and many other actions throughout this document — name a **sub-skill** via the `→ run sub-skill: <name>` marker. A sub-skill is a self-contained unit of agent procedural detail (vault writes, git commits, etc.) that lives in its own markdown file under `references/sub-skills/`. Sub-skill bodies are **not inlined** into this composed CLAUDE.md — when you reach a `→ run sub-skill: <name>` marker, you Read the source file at that moment and follow its instructions.
-
-To resolve `<name>` to a source path, consult the sub-skill catalog at `docs/sub-skill-catalog.md`. Names come in two shapes:
-- **Bare names** like `vault-remember` or `git-commit` — the catalog maps these to their source path (typically under `references/sub-skills/common/` or `references/sub-skills/common-events/`).
-- **Slash-bearing names** like `roles/pm/improvement-scan` — the name IS the source path under `references/sub-skills/` (so `roles/pm/improvement-scan` → `references/sub-skills/roles/pm/improvement-scan.md`).
-
-Either way, the catalog is the source of truth; if a marker's name isn't in the catalog, the marker is stale and you should ignore it rather than guess.
-
-Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and project-specific instructions add per-role behavior. The IDs are scheduled to be re-anchored to the session-boot vs. per-event-cycle shape in a follow-up iteration; until then, the steps are split into two groups by **when they actually run**.
-
-#### Session-boot steps — run once when the session starts
-
-Sequential steps inside the "Session boot" diagram above. `step:cycle/boot` is the Boot — Mode Detection block above (the boot-bootstrap sub-skill, inlined at session start) — its step ID exists as an op-anchor for role-specific extensions. `step:cycle/resume` is below.
-
 ### step:cycle/resume
 
 → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
-
-#### Per-cared-event "do work" steps
-
-Sequential steps inside the **`do work — your steps below`** line of the per-nudge cycle diagram above. Each cared event runs through these in order; the mechanical pre-cycle and post-cycle wrappers (also shown in the diagram) bracket your work but you don't execute them.
 
 #### step:cycle/triage-issues
 
@@ -468,9 +460,9 @@ Do the unit of work for the cared event. The shape of this work depends on your 
 
 ### Loop-mode fallback
 
-If the boot-mode probe in Step 2 of Boot — Mode Detection above failed, this session runs in **loop mode** instead of event mode. The per-nudge cycle described in "Your cycle (event mode)" does NOT apply. Instead:
+If the boot-mode probe in Step 2 of `step:cycle/boot` above failed, this session runs in **loop mode** instead of event mode. The per-nudge cycle described in "Your cycle (event mode)" does NOT apply. Instead:
 
-- `/loop` was scheduled by Step 4a of Boot — Mode Detection and fires the cycle at the configured interval.
+- `/loop` was scheduled by Step 4a of `step:cycle/boot` and fires the cycle at the configured interval.
 - The per-cycle contract (what each cycle does — step markers, status bar writes, work-queue pickup, commits) lives in the loop-mode fragment your boot Step 4b loaded: `references/sub-skills/roles/<your-role>/ralph-loop-overview.md`. That fragment contains the loop-mode `step:cycle/*` sequence (pickup → work → checkpoint → cleanup → exit) and the role-flavored work description.
 - Do **not** interleave the two contracts. Event mode is canonical; loop mode is a degraded path that runs until the operator restarts the agent (the harness recovery is owned by the operator).
 
@@ -478,8 +470,8 @@ If the boot-mode probe in Step 2 of Boot — Mode Detection above failed, this s
 
 The improvement scan runs as a background concern whenever productive work has paused. It is not a separate cycle — it's a reactive subloop that fires under both wake modes:
 
-- **In event mode**, the `idle-cooldown-loop` sub-skill (loaded by Step 3 of Boot — Mode Detection above) drives the scan during idle periods between nudges. When `work_queue()` is empty and the cool-down timer reaches its threshold, the scan fires. If a nudge arrives mid-scan, the scan defers and the agent handles the event; the cool-down timer keeps running and the scan resumes on the next idle window.
-- **In loop mode**, the scan fires at `step:cycle/cleanup` if the cycle produced no other work — `→ run sub-skill: improvement-scan-slim` is the marker (see step 4 of Per-cared-event steps above and the loop fragment).
+- **In event mode**, the `idle-cooldown-loop` sub-skill (loaded by Step 3 of `step:cycle/boot` above) drives the scan during idle periods between nudges. When `work_queue()` is empty and the cool-down timer reaches its threshold, the scan fires. If a nudge arrives mid-scan, the scan defers and the agent handles the event; the cool-down timer keeps running and the scan resumes on the next idle window.
+- **In loop mode**, the scan fires at `step:cycle/cleanup` if the cycle produced no other work — `→ run sub-skill: improvement-scan-slim` is the marker (see step `step:cycle/cleanup` above and the loop fragment).
 
 Both paths share the same output gate: findings are filed via the role's `improvement-scan` sub-skill (e.g. `roles/pm/improvement-scan`), never auto-fixed. The cap on findings per scan and the targeting rules are role-specific — see your project-adaptation appendix.
 
