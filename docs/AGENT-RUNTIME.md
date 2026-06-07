@@ -61,7 +61,7 @@ Event mode is the unconditional architecture. The wake mechanism is selected **a
 | **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | Boot-time harness probe succeeds (HTTP `GET /status` returns 200 within 5s) | **Emit + consume** — agents subscribe with a cursor; nudges + per-event reactions originate from the bus. |
 | **Loop (polling) fallback** | Cron timer (e.g. `/loop 30m execute one Ralph Loop cycle` — interval per-install, see §6.2) | Boot-time harness probe fails (port file missing, port unreachable, timeout, or non-200 response) | **Best-effort emit; tracker-derived reactions** — agents try the bus and silently no-op on connection error; reactions fall through to tracker state diffs. No cursor maintained while in fallback. |
 
-The cycle wrapper (pre → creative → post) is the same regardless. Only *what initiates the wrapper* differs (`/loop` cron vs. nudge), plus *where reactions come from* when the bus is unreachable (tracker-state diff instead of bus reads). In event mode the wrapper fires once **per cared event** during a nudge-walk; a single nudge can produce multiple cycle wrappers (one per cared event) or zero (if every event in the batch is filtered out by the care filter). See §7.1 for the per-event sequence.
+The cycle wrapper (pre → creative → post) is the same regardless. Only *what initiates the wrapper* differs (`/loop` cron vs. nudge), plus *where reactions come from* when the bus is unreachable (tracker-state diff instead of bus reads). In event mode the wrapper fires once **per cared event** as the §7.1 eager loop drains events past the cursor; a single nudge can produce multiple cycle wrappers (one per cared event the loop tends before reaching empty) or zero (if every event past the cursor is filtered out by the care filter). See §7.1 for the per-event sequence.
 
 **Mode selection is per-session.** Once a boot probe resolves, the agent stays in the selected mode for its entire session — no per-cycle re-detection, no mid-session flip. On the next session restart (operator restart, harness restart, exit-42 respawn), the probe re-runs and the new session picks again.
 
@@ -180,6 +180,8 @@ flowchart TB
     EAD <-->|watches state changes| Forge
 ```
 
+`.event-state.json` shown in the harness host above persists the per-alias **event-tending cursor** — what it represents and when it advances are defined in §4.3.
+
 ### 3.2 Per-agent subprocess tree (zoomed)
 
 ```mermaid
@@ -247,12 +249,12 @@ The event bus is the harness HTTP API at port `7373` (default). Both modes use i
 
 ### 4.1 Architectural commitments (locked principles)
 
-From `decision-event-bus-architecture-redesign` vault note (locked cycles 1541–1542):
+From `decision-event-bus-architecture-redesign` vault note (locked cycles 1541–1542); Principles 1 and 4 refined by #11328 D1/D4 as noted inline:
 
-1. **Harness is a transport bus, not an orchestrator.** It moves signals between producers and consumers. It does NOT track work completion, ticket state, or workflow status.
+1. **Harness is a transport bus, not an orchestrator.** It moves signals between producers and consumers. It does NOT track *forge-level* work state — status labels, ticket state, workflow status all live on the forge. (Per #11328 D1, the harness DOES own the per-alias **event-tending cursor** in `.event-state.json` — the cursor is the work-completed indicator at event-delivery granularity, not forge-level workflow tracking. See §4.3.)
 2. **Forge (GitHub Issues) is the source of truth for work state.** Status labels, comments, PR merges = the project's institutional state. Harness has no opinion on whether work is done.
 3. **Agent owns work completion.** The agent acts on signals; what it does with them is between the agent and the forge.
-4. **Ack = receipt confirmation, NOT completion confirmation.** "Ack" means "the signal was delivered to the agent's session." It does NOT mean "the agent finished processing."
+4. **Ack-cursor is event-tending confirmation; ack-stop is lifecycle confirmation.** Per #11328 D4, these are operationally separate state machines (see §4.2). `ack-cursor` fires after the agent has finished processing an event (cared or skipped) — i.e., it carries *event-completion* semantics; the cursor advance IS the completion signal. `ack-stop` is lifecycle progress on a stop intent (delivery of the stop accepted + checkpoint result). The pre-D1 framing of "ack = receipt confirmation, NOT completion confirmation" still applies to the lifecycle ack; for `ack-cursor` specifically, D1 supersedes — finishing the event IS the cursor commit.
 5. **No `POST /events/{id}/complete` endpoint.** Reject any design that adds endpoints for completion state. The bus uses events, not RPC, for state transitions.
 
 ### 4.2 Signal catalog
@@ -263,10 +265,10 @@ In v2 the catalog collapses to **3 signal concepts / 4 catalog entries**:
 |---|---|---|---|
 | **`booted`** | agent → harness | First action after the agent's Claude session boots | `{role, pid, clone_path, version}` |
 | **`assigned-to`** | harness → agent (queue entry) | Harness detects work exists for the named agent | `{issue_number, target_alias, event_context, payload}` (EAD populates `payload.title` from the forge issue; `/work/assign` callers may pass it through the `payload` object) |
-| **`ack-cursor`** | agent → harness | Agent has received a delivered signal; advances harness cursor | `{event_id, role}` |
+| **`ack-cursor`** | agent → harness | Agent has finished processing this event (cared or skipped); cursor advances | `{event_id, role}` |
 | **`ack-stop`** | agent → harness | Agent has accepted a stop intent and is checkpointing | `{event_id, result}` where `result` is one of `'checkpointed'` (working-state.md flushed; safe to SIGTERM), `'aborted'` (graceful stop failed; harness should escalate), `'drained'` (no in-flight work; exiting clean) |
 
-`ack-cursor` and `ack-stop` are sub-types of one concept (receipt confirmation) — shipped in `#9873-A`. Three signal concepts, four catalog entries.
+`ack-cursor` and `ack-stop` are **operationally separate state machines** — delivery vs lifecycle — that share the `ack-` naming. `ack-cursor` advances the delivery cursor per event; `ack-stop` signals lifecycle progress on a stop intent. They were shipped together in `#9873-A` but should be reasoned about as distinct concerns. Three signal concepts, four catalog entries.
 
 > **Naming note**: The `role` field in `booted` / `ack-cursor` payloads is the agent's **alias** value, preserved under the field-name `role` for code-compat with the wire format. Same pattern as `{role}` in HTTP path parameters (see §4.3). Field rename to `alias` is in the same family as #10358. `ack-stop.result` enum values are tracked as §9 Q11.
 
@@ -376,9 +378,13 @@ The endpoints throughout this section use `{role}` in path parameters (e.g., `GE
 
 #### Cursor model
 
+The cursor IS the canonical work-completed indicator. Single source of truth for "events this alias has tended." It advances only after the agent has finished processing an event — whether the event was acted on (cared) or skipped via the care filter (§7.4). Either way, finishing the event IS the cursor commit; there is no separate "I received this" signal. The §4.2 catalog row for `ack-cursor` reflects this directly: the ack fires *after* processing, not on delivery.
+
+**Mechanics**:
+
 - Per-alias, owned by harness. Persisted in `.squidsquad/.event-state.json`. Agents observe the cursor only through the harness API; they never write it directly.
 - `null` at first boot → agent reads from the head of the deque.
-- Advances via `ack-cursor` consumed by the ack consumer task.
+- Advances via `ack-cursor` consumed by the ack consumer task — one ack per tended event (see §7.1 for the canonical agent loop).
 - Cursor-regression attempts rejected (CONTEXT-9873-A D15).
 - `GET /events/cursor/{role}` returns `{cursor: <event_id> | null, role}`, HTTP 200 always.
 
@@ -386,34 +392,19 @@ The endpoints throughout this section use `{role}` in path parameters (e.g., `GE
 
 ```mermaid
 sequenceDiagram
-    participant ES as .event-state.json<br/>(harness-owned)
-    participant CP as event_poll (event mode) /<br/>cycle_pre.py (event mode only)
+    participant A as Agent
     participant H as Harness
-    participant CPO as cycle_post.py / agent ack
+    participant ES as .event-state.json<br/>(harness-owned)
 
-    Note over ES: cursor for role: a1b2c3d4
-
-    CP->>H: GET /events/cursor/{role}
-    H->>ES: read cursor
-    ES-->>H: a1b2c3d4
-    H-->>CP: {cursor: "a1b2c3d4"}
-    CP->>H: GET /events/for/{role}?since=cursor
-    H-->>CP: Events e5, f6, g7
-    CP->>CP: filter + react / write cycle-input.json
-
-    Note over CP: Agent does creative work
-
-    alt success
-        CPO->>H: POST /events {ack-cursor, event_id=g7}
-        H->>ES: cursor advances to g7
-    else crash mid-cycle
-        Note over ES: Cursor stays<br/>Same events re-delivered
-    end
+    A->>H: POST /events {ack-cursor, event_id, role}
+    H->>ES: write cursor = event_id
+    ES-->>H: persisted
+    H-->>A: 200 OK
 ```
 
-The cursor is harness-owned, persisted in `.squidsquad/.event-state.json`. The agent never writes the cursor directly — it acknowledges progress via the harness API and the harness updates the file. `working-state.md` carries the agent's current-work checkpoint only (see §5); it does not store event-delivery state.
+The diagram shows the cursor-advance mechanism only — see §7.1 for how the agent's loop calls it (AC1.2 of #11328 rewrites §7.1 to the canonical per-event eager-loop form). `working-state.md` carries the agent's current-work checkpoint only (see §5); it does not store event-delivery state.
 
-At-least-once delivery: cursor advances only after a successful ack. Crashed agents re-process the same events on restart.
+At-least-once delivery: cursor advances only after a successful ack. Crashed agents re-process the same events on restart — the cursor sits at the last successfully-acked event, so any events past it (including the in-flight event at crash time) re-deliver on the next §7.1 loop iteration's GET.
 
 #### Role-based filtering
 
@@ -788,33 +779,42 @@ Nudge format is literal `NUDGE\n` with no payload — the agent always does `GET
 **Initial-queue ordering invariant** (resolves the race between `event_poll` polls and the agent's boot sequence):
 
 1. The harness returns **empty** `GET /events/for/{alias}` responses to `event_poll`'s polls **while `status=booting`** — regardless of whether events are queued for that alias. No nudges fire during this window.
-2. Once the agent emits `booted` and the harness transitions `status: booting → ready`, the agent's boot step 4 (`GET /events/for/{alias}?since=null`, §7.2) runs **inline in the agent's main thread** and drains any queued events synchronously. The agent processes these as the initial event walk before returning to idle.
+2. Once the agent emits `booted` and the harness transitions `status: booting → ready`, the agent enters the §7.1 eager main loop per §7.2 step 4. The loop's first iteration GET (`GET /events/for/{alias}?since=null`) runs **inline in the agent's main thread** and the loop drains queued events synchronously, processing them per-event with per-event acks before reaching the empty-queue branch and idling.
 3. From the moment step 4 returns, `event_poll`'s normal poll cycle (5s active / 30s idle, §7.0 cadence) handles all subsequent wake-ups. Any nudge `event_poll` writes between step 4's completion and the agent's `return-to-idle` is delivered via Monitor's stdin reader and queued behind the agent's current action — Monitor never preempts a mid-action read.
 
 There is no race where queued events are lost; there is no double-processing because the harness only releases queued events to `event_poll` after `status=ready`, and step 4's drain runs *before* the agent returns control to Monitor's wake-on-nudge loop. The boot-step initial drain is the canonical mechanism for catching boot-time-arrival events; `event_poll` is the mechanism for ongoing wake-ups thereafter.
 
 ### 7.1 The nudge contract
 
-Per `#9892`:
+Per `#9892`, refined by #11328 D2 to the eager per-event loop below:
 
 ```
-on each nudge:
-    cursor = GET /events/cursor/{role}
-    events = GET /events/for/{role}?since=cursor
-
-    last_tended = cursor
-    for event in events:
+loop forever:
+    event = next event past cursor   # GET /events/for/{role}?since=cursor → first item
+    if event:
         if event passes my role's care filter:
-            run_pre_cycle()    # mechanical: git pull, working-state read, etc.
-            do_work(event)     # the agent's creative work
-            run_post_cycle()   # mechanical: commit, push, working-state write
+            run_pre_cycle()                                # mechanical: git pull, working-state read, etc.
+            do_work(event)                                 # the agent's creative work
+            run_post_cycle()                               # mechanical: commit, push, working-state write
         # if skipped, no cycle wrapper fires
-        last_tended = event.id
+        POST /events  ack-cursor {event_id: event.id, role}  # per-event ack — cursor advances NOW
+        continue                                           # re-check for the next event immediately (drain to empty)
 
-    POST /events  ack-cursor {event_id: last_tended, role}
+    # No events past cursor — queue is drained.
+    if improvement_cooldown_elapsed():
+        run_one_improvement_subloop_task()                 # see §7.6 for throttle + role-class detail
+        continue
+
+    idle_wait_for_next_nudge()                             # Monitor blocks here until event_poll writes another NUDGE
 ```
 
-Pre/post-cycle wraps EACH cared event individually. Skipped events do not trigger cycle wrappers. The batched ack at the end signals "I've handled or skipped everything up to last_tended; advance my cursor."
+Three things to notice compared to the pre-D2 batched walk:
+
+- **Per-event `ack-cursor`** — the ack fires inside the loop, immediately after processing each event (cared or skipped). No batching at the end of a walk.
+- **Drain-to-empty outer loop** — after each ack the loop re-checks for the next event past the cursor before idling. Any events that arrived during processing get picked up in the same wake-up without waiting for a second nudge.
+- **Improvement subloop is a branch of the main loop** — when the queue is drained AND the time-throttle is elapsed, one bounded improvement task fires before returning to idle. See §7.6 for the throttle mechanism, role-class subloop catalog, and `.subloop-last-run` discipline.
+
+The pre/post-cycle wrappers still apply per cared event individually. Skipped events advance the cursor with no wrapper fire (the `ack-cursor` POST still happens — finishing the event by deciding not to act on it IS the cursor commit, per D1). The per-event ack signals "I've tended this event" individually; the cursor is the canonical record of which events have been processed (see §4.3).
 
 ```mermaid
 sequenceDiagram
@@ -827,27 +827,35 @@ sequenceDiagram
 
     EP->>M: nudge line on stdout<br/>literal "NUDGE\n" (no payload)
     M->>A: wake session
-    A->>H: GET /events/cursor/{role}
-    H-->>A: cursor=event_id_X
-    A->>H: GET /events/for/{role}?since=event_id_X
-    H-->>A: [e1, e2, e3]
 
-    loop for each event
-        A->>A: care filter (target_alias == my_alias?)
-        alt cared
-            A->>A: run pre-cycle (git pull, state read)
-            A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
-            A->>A: run post-cycle (commit, push, state write)
-        else skipped
-            Note over A: no cycle wrapper fires
+    loop forever (eager main loop)
+        A->>H: GET /events/for/{role}?since=cursor
+        alt event past cursor
+            H-->>A: event e
+            A->>A: care filter (target_alias == my_alias?)
+            alt cared
+                A->>A: run pre-cycle (git pull, state read)
+                A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
+                A->>A: run post-cycle (commit, push, state write)
+            else skipped
+                Note over A: no cycle wrapper fires
+            end
+            A->>H: POST /events {type:ack-cursor,<br/>event_id:e.id, role}
+            H->>H: advance cursor to e.id
+            H-->>A: 200 OK
+            Note over A: loop continues — re-check for next event
+        else queue drained
+            H-->>A: []
+            alt improvement cooldown elapsed
+                Note over A: §7.6 — run one bounded<br/>improvement subloop task
+                Note over A: loop continues — re-check (other agents may have<br/>assigned work during subloop; subloop forge writes<br/>can trigger EAD-emitted assigned-to for this alias)
+            else cooldown not elapsed
+                Note over A: idle wait<br/>(Monitor blocks until next NUDGE)
+                EP->>M: next NUDGE
+                M->>A: wake — loop continues
+            end
         end
-        A->>A: last_tended = event_id
     end
-
-    A->>H: POST /events {type:ack-cursor,<br/>event_id:last_tended, role}
-    H->>H: advance cursor past last_tended
-    H-->>A: 200 OK
-    Note over A: re-enter idle wait<br/>(no /loop sleep)
 ```
 
 ### 7.2 Boot sequence
@@ -865,8 +873,7 @@ These move independently. The operator sets `intent`; the harness updates `statu
 1. Read the composed `CLAUDE.md` (already on disk in the agent's clone dir at boot — written by the compose pipeline).
 2. Read `.squidsquad/<alias>/working-state.md` for crash-recovery context (active task, key decisions).
 3. Emit `booted` event (`POST /events {type: booted, role, pid, clone_path, version}`) — this is the cursor-clean handshake. The harness transitions `status: booting → ready` on receipt.
-4. Read events at cursor (`GET /events/for/{role}?since=cursor`) or wait for nudge if queue is empty.
-5. Enter ready state — process queued events per §7.1 walk, then idle-wait for next nudge.
+4. Enter §7.1 eager main loop. Its first iteration's `GET /events/for/{role}?since=cursor` performs the initial drain: if events are queued they're processed per-event with their acks; if the queue is empty the loop falls through to the improvement-subloop check and then to idle-wait. No separate boot-time GET or branch is needed — §7.1 handles both cases natively.
 
 #### Agent state machine
 
@@ -1022,7 +1029,7 @@ sequenceDiagram
     EAD->>H: append assigned-to(target_alias=verifier,...)
     EAD->>EAD: persist last-seen forge id
 
-    Note over V: Same delivery as §7.3<br/>(event_poll → nudge → Monitor → walk)
+    Note over V: Same delivery as §7.3<br/>(event_poll → nudge → Monitor → §7.1 loop)
     H-->>V: assigned-to flows through<br/>same nudge path
 ```
 
@@ -1034,48 +1041,49 @@ Each agent's care filter is "events with `target_alias == my_alias`." Future ref
 
 ### 7.5 Nudge handling while busy (context-only, no state mutation)
 
-If a nudge arrives while the agent is mid-cycle:
+If a nudge arrives while the agent is mid-cycle: **note it in conversation context only. No file write, no queue, no flag. Take no other action.** The §7.1 eager main loop's next iteration picks up new events naturally — every per-event ack is followed by another `GET /events/for/{role}?since=cursor`, so any events that arrived during the in-progress work are delivered on the next loop iteration without needing an explicit "I noticed the nudge" state.
 
-1. Agent notes the nudge in conversation context — no file write, no queue, no flag.
-2. Agent continues processing current event uninterrupted. Emits `ack-cursor` for current event.
-3. Post-current, agent enters the §7.1 walk: GETs queue, processes new events in cursor order.
+This is grounded in §9 Q7's lock: *"Queue-while-busy = context-only; no `working-state.md` flag."* D3 of #11328 formalizes the same conclusion in the §7.1 eager-loop terms.
 
 **Why no flag is needed:**
 
-- The harness cursor is canonical. Post-cycle the agent always GETs the queue regardless of whether a nudge was noted.
-- `event_poll` is self-healing — even if conversation context is lost (session crash, mid-window compaction), event_poll's next poll within 5–60s (active/idle adaptive) will see events past cursor and re-emit a nudge.
+- The §7.1 eager loop ends every event with a fresh GET, so a noticed nudge has no decision to make — the loop already re-checks before idling.
+- `event_poll` is self-healing — even if conversation context is lost (session crash, mid-window compaction), `event_poll`'s next poll within 5–60s (active/idle adaptive) sees events past cursor and re-emits a nudge.
 - Monotonic-forward cursor prevents double-processing.
 
 **Crash-safety:**
 
 | Crash point | Recovery |
 |---|---|
-| Mid-current-event | Restart reads `.squidsquad/<alias>/working-state.md`, resumes. Post-completion walk catches up. |
-| Between ack and walk | Restart sees no current work, enters idle. Original mid-cycle nudge is "lost" from context, but `event_poll`'s next poll re-detects past-cursor events and re-nudges. |
-| Multiple nudges arrived; agent crashed pre-walk | Any single fresh post-restart nudge triggers the walk that processes all queued events in order. |
+| Mid-current-event (before per-event ack-cursor) | Restart reads `.squidsquad/<alias>/working-state.md` (§7.2 step 2), resumes the work; the cursor sits at the *previous* event's id, so when the agent enters §7.1 via §7.2 step 4 the initial-drain GET re-delivers the unacked in-progress event and processes it again (consumers are idempotent). |
+| Crash after ack-cursor emitted, before next iteration's GET fires | Cursor sits at the just-acked `event_id`; on restart the agent re-enters §7.1 via §7.2 step 4. The initial-drain GET returns any events past the acked id, including events that arrived during the crash window. No state loss. |
+| Multiple nudges arrived; agent crashed before responding to any | On restart the agent enters the §7.1 eager loop via §7.2 step 4; the initial-drain iteration's GET returns every queued event past the cursor and the loop's drain-to-empty behavior processes them in cursor order. No nudge is required for the initial drain — any nudges that arrive *after* it completes wake the agent from idle as usual. |
 
 Honors the locked principle: forge owns work state, harness owns delivery state (cursor), agent owns ONLY its current work.
 
 ### 7.6 Improvement subloop (cursor-at-head)
 
-In loop mode, agents run improvement scans on quiet cycles. In event mode there are no cycles — agents wake only on nudges. If we did nothing else, an agent that handles all its events would never run improvement work.
+The improvement subloop is the **drained-queue branch of the §7.1 main loop**. When the eager loop's `GET /events/for/{role}?since=cursor` returns `[]` (no events past cursor), the agent has finished tending everything assigned to its alias for now. Without this branch the agent would simply idle-wait until the next nudge; with it, the agent uses the otherwise-idle window to run one bounded improvement task before idling. Loop mode reaches the same outcome on quiet cycles via §6.4 — same role-class subloops, different trigger surface; this section is the event-mode side of that pair.
 
-The improvement subloop fires when the agent's queue is observably drained — `GET /events/for/{role}?since=cursor` returned `[]` on the last walk (no events past cursor). There is no harness endpoint for "am I at deque head?"; the agent infers drained-state from an empty GET response.
+The branch fires only when the queue is observably drained — there is no harness endpoint for "am I at deque head?"; the agent infers drained-state from an empty GET response on the current eager-loop iteration. See §7.1 for the surrounding loop structure and how the subloop fits into it as a branch.
 
 ```mermaid
 flowchart TD
-    Start(["nudge processed, ack-cursor emitted"])
+    Start(["per-event ack just emitted;<br/>top of §7.1 eager loop"])
     QEmpty{"GET returns empty?<br/>no events past cursor"}
     Throttle{"cooldown elapsed?<br/>time-based throttle"}
     Subloop["run improvement subloop:<br/>one bounded task"]
     Idle["idle wait for next nudge"]
+    Process["process next event<br/>(§7.1 inner loop body)"]
 
     Start --> QEmpty
-    QEmpty -->|"no — more events past cursor"| Idle
+    QEmpty -->|"no — more events past cursor"| Process
+    Process --> Start
     QEmpty -->|"yes — drained"| Throttle
     Throttle -->|"recent subloop ran<br/>within throttle window"| Idle
     Throttle -->|"cooldown elapsed"| Subloop
-    Subloop --> Idle
+    Subloop --> Start
+    Idle -->|"NUDGE wakes agent"| Start
 ```
 
 **Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
@@ -1269,4 +1277,14 @@ PM agents recognize this set as their care-filter; new values added in future re
   - **Initial `role:*` label** — PM owns initial label management; sets `role:<alias>` at the `planned → approved` transition. All subsequent rewrites are harness-side via `/work/assign` (per rev 13). §7.3 expanded with explicit label-lifecycle bullets.
   - **`event_poll` vs `booted` race resolved** — boot step 4 (the agent's `GET /events/for/<alias>?since=null` immediately after emitting `booted`) is the canonical initial-queue drain; the harness returns empty to `event_poll`'s polls while `status=booting` so no nudges fire prematurely; from `status=ready` onward `event_poll` handles wake-ups normally. §7.0 expanded to call this out.
   - **`last_cycle_timestamp` format locked** — ISO 8601 UTC with seconds precision (e.g. `2026-05-30T17:42:00Z`), written at the end of `cycle_post.py` into `working-state.md`'s YAML frontmatter as `last_cycle_timestamp:`. §6.3 expanded with format spec.
+- **2026-06-07 (rev 16) — #11328 D1-D4: cursor = work-completed indicator; eager per-event ack-cursor loop; mid-cycle nudge = no action; ack-cursor / ack-stop as separate state machines.** Operator-locked architectural shift ("the future is now") sharpening the cursor and nudge contracts:
+  - **D1 (cursor semantics)** — the cursor IS the canonical work-completed indicator at event-delivery granularity. It advances only after the agent has finished processing an event (cared OR skipped via care filter — either way, "tended"). The act of finishing the event IS the cursor commit; there is no separate "I received this" signal. §4.3 cursor-model section rewritten to lead with this framing; §4.2 catalog row for `ack-cursor` refined ("Agent has finished processing this event (cared or skipped); cursor advances"); §4.3 mermaid sequence diagram simplified to show generic ack-advance (no cycle-boundary commitment — §7.1 carries the per-event detail).
+  - **D2 (§7.1 eager per-event loop)** — replaces the pre-D2 batched-walk model (for-each then single batched POST `ack-cursor` at end of nudge). §7.1 pseudocode is now `loop forever` with per-event `ack-cursor` inside the walk, `continue` after each ack for drain-to-empty behavior, improvement-subloop as a branch when queue is drained AND cooldown elapsed, and idle-wait as the only blocking exit. §7.1 sequence diagram redrawn with outer "loop forever (eager main loop)" frame; post-event, post-subloop, and post-idle-wake all flow back to the top of the loop. §7.2 boot steps 4+5 consolidated — agent enters §7.1 directly (its first iteration's GET handles the initial drain; no separate boot-time GET branch).
+  - **D3 (mid-cycle nudge = no action)** — §7.5 collapsed to a single instruction: "note the nudge in conversation context only — no file write, no queue, no flag. Main loop's next iteration picks up new events naturally." The "no flag needed" rationale is grounded in §9 Q7's already-locked policy ("Queue-while-busy = context-only"). §7.5 crash-safety table rewritten in eager-loop terms with all three rows citing §7.2 step 4 for the boot-direct §7.1 entry path that handles already-queued events without needing a fresh nudge.
+  - **D4 (separate state machines)** — `ack-cursor` and `ack-stop` are operationally separate state machines (delivery vs lifecycle), not "sub-types of receipt confirmation." §4.2 line 269 sentence reframed; §4.1 Principle 4 rewritten to split per-event `ack-cursor` (event-completion semantics, D1) from `ack-stop` (lifecycle receipt — pre-D1 framing still applies); §4.1 Principle 1 refined to clarify the harness owns the per-alias event-tending cursor without contradicting "harness ≠ forge-level workflow tracker." §4.3 cursor-model sub-bullets reflect the same split.
+  - **§7.6 reframing** — improvement subloop lead paragraph now opens with "the drained-queue branch of the §7.1 main loop"; throttle + role-class subloop catalog + `.subloop-last-run` discipline unchanged. §7.6 flowchart updated: start node reads "per-event ack just emitted; top of §7.1 eager loop"; added Process node; subloop and idle paths both flow back to Start (matches §7.1's `continue` semantics).
+  - **Collateral vocab cleanup** — stale batched-walk vocabulary removed from §2.2 ("nudge-walk"/"batch" → "§7.1 eager loop drains events past the cursor"), §4.3 ("next walk" → "next §7.1 loop iteration's GET"), §7.0 ("initial event walk" → "§7.1 eager main loop per §7.2 step 4"), §7.4 EAD-diagram note ("Monitor → walk" → "Monitor → §7.1 loop").
+  - **§3.1 cross-ref** — added one sentence after the system-overview diagram pointing readers to §4.3 for cursor semantics; §3.1's `.event-state.json` mention now anchors the cursor concept's source-of-truth pointer.
+  - **Out of scope for #11328** (handled in separate tasks): sub-skill alignment (`cursor-management.md`, `event-mode-contract.md`, `event-driven-workflow.md`) tracked in **#11330**; runtime code migration (`event_poll.py` swap to per-event `ack-cursor`, `working-state.md` schema cleanup, regression tests, migration safety) tracked in **#11329**. All three tasks ride the `#11144` polish-session bundle into main.
+  - **DS audit trail** — AC1.1 R1→R3 (3 passes), AC1.2 R1→R4 (4 passes, load-bearing), AC1.3 R1→R3 (3 passes — R2 used Claude subagent fallback per `feedback_model_router_auto_fallback` after model_router returned "output below minimum length"), AC1.4 R1→R? (this revision). Artifacts at `.squidsquad/pm/planning/DS-AUDIT-11328-ac1.*.md`. Phase 1 research at `RESEARCH-11328.md`; Phase 2 D-Locks at `CONTEXT-11328.md`.
 
