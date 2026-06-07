@@ -33,10 +33,15 @@ After you finish processing an event (cared OR skipped — both count as "tended
 POST /events
 {
   "event_type": "ack-cursor",
-  "event_id": "<the id of the event you just tended>",
-  "role": "<your alias>"
+  "role": "<your alias>",
+  "payload": {
+    "event_id": "<the id of the event you just tended>",
+    "role": "<your alias>"
+  }
 }
 ```
+
+The `event_id` lives **inside `payload`** — the harness reads it via `body.get("payload").get("event_id")` (`harness.py:2023-2026`). A top-level `event_id` is ignored: the POST returns 200 but the cursor does NOT advance. `role` appears at both top level (the routing identity required by the receive-event handler) and inside `payload` (the canonical event_bus emit pattern, per `event_bus.py:186`).
 
 The harness's ack consumer task picks up the post, writes the new cursor value to `.event-state.json`, and returns `200 OK`. **One ack per tended event** — this is the canonical agent loop documented in `docs/AGENT-RUNTIME.md` §7.1. There is no batched end-of-walk ack.
 
@@ -47,7 +52,7 @@ Cursor-regression attempts (ack for an event id earlier than the current cursor)
 Two kinds of cursor gap can appear:
 
 - **Long lag.** Your cursor is hundreds or thousands of events behind. Walk each event individually through the canonical §7.1 loop — do not jump straight to latest. Each event passes through the same care-filter + per-event-ack discipline as a normal walk: cared events still fire the cycle wrapper (though the wrapper's work is typically a no-op because the forge already reflects the post-event state); skipped events advance the cursor with no wrapper.
-- **Eviction gap.** Your cursor predates the oldest retained event in the harness deque. `GET /events/for/{role}?since=<old>` returns `HTTP 410 Gone` with body `{"cursor_evicted": true, "current_head": "<event_id>"}`. Recovery: read the forge for current state, emit a single `ack-cursor(current_head)` to fast-forward the cursor, then re-enter idle. Do NOT crash, do NOT walk the evicted range — those events are unrecoverable from the bus by design.
+- **Eviction gap.** Your cursor predates the oldest retained event in the harness deque. `GET /events/for/{role}?since=<old>` returns `HTTP 200 OK` with `"evicted": true`, `"oldest_id": "<oldest retained event id>"`, and `"evicted_count_hint": <count>` in the response body (per `harness.py:2203-2208`). Recovery: read the forge for current state, emit a single `ack-cursor` POST with `event_id = oldest_id` (the inner payload field — see the POST example above) to fast-forward the cursor past the evicted range, then re-enter idle. Do NOT crash, do NOT walk the evicted range — those events are unrecoverable from the bus by design.
 
 > **Dropped scenario (#9265)**: a third "in-stream gap" scenario (missing event between two retained ids) was specified in the original CONTEXT-8694 draft and dropped. The current broadcast model is a single in-process `collections.deque` populated by `POST /events`; `GET /events/for/{role}?since=<cursor>` does a linear scan over that deque, so two retained events cannot have a missing event between them by construction. The scenario would only become reachable if the harness ever moved to a multi-process pipeline with intermediate acks — at that point this section should be updated.
 
