@@ -61,7 +61,7 @@ Event mode is the unconditional architecture. The wake mechanism is selected **a
 | **Event-driven (nudge)** | A nudge from the harness, delivered via the Claude Monitor tool's stdin | Boot-time harness probe succeeds (HTTP `GET /status` returns 200 within 5s) | **Emit + consume** — agents subscribe with a cursor; nudges + per-event reactions originate from the bus. |
 | **Loop (polling) fallback** | Cron timer (e.g. `/loop 30m execute one Ralph Loop cycle` — interval per-install, see §6.2) | Boot-time harness probe fails (port file missing, port unreachable, timeout, or non-200 response) | **Best-effort emit; tracker-derived reactions** — agents try the bus and silently no-op on connection error; reactions fall through to tracker state diffs. No cursor maintained while in fallback. |
 
-The cycle wrapper (pre → creative → post) is the same regardless. Only *what initiates the wrapper* differs (`/loop` cron vs. nudge), plus *where reactions come from* when the bus is unreachable (tracker-state diff instead of bus reads). In event mode the wrapper fires once **per cared event** during a nudge-walk; a single nudge can produce multiple cycle wrappers (one per cared event) or zero (if every event in the batch is filtered out by the care filter). See §7.1 for the per-event sequence.
+The cycle wrapper (pre → creative → post) is the same regardless. Only *what initiates the wrapper* differs (`/loop` cron vs. nudge), plus *where reactions come from* when the bus is unreachable (tracker-state diff instead of bus reads). In event mode the wrapper fires once **per cared event** as the §7.1 eager loop drains events past the cursor; a single nudge can produce multiple cycle wrappers (one per cared event the loop tends before reaching empty) or zero (if every event past the cursor is filtered out by the care filter). See §7.1 for the per-event sequence.
 
 **Mode selection is per-session.** Once a boot probe resolves, the agent stays in the selected mode for its entire session — no per-cycle re-detection, no mid-session flip. On the next session restart (operator restart, harness restart, exit-42 respawn), the probe re-runs and the new session picks again.
 
@@ -402,7 +402,7 @@ sequenceDiagram
 
 The diagram shows the cursor-advance mechanism only — see §7.1 for how the agent's loop calls it (AC1.2 of #11328 rewrites §7.1 to the canonical per-event eager-loop form). `working-state.md` carries the agent's current-work checkpoint only (see §5); it does not store event-delivery state.
 
-At-least-once delivery: cursor advances only after a successful ack. Crashed agents re-process the same events on restart — the cursor sits at the last successfully-acked event, so any events past it (including the in-flight event at crash time) re-deliver on the next walk.
+At-least-once delivery: cursor advances only after a successful ack. Crashed agents re-process the same events on restart — the cursor sits at the last successfully-acked event, so any events past it (including the in-flight event at crash time) re-deliver on the next §7.1 loop iteration's GET.
 
 #### Role-based filtering
 
@@ -777,7 +777,7 @@ Nudge format is literal `NUDGE\n` with no payload — the agent always does `GET
 **Initial-queue ordering invariant** (resolves the race between `event_poll` polls and the agent's boot sequence):
 
 1. The harness returns **empty** `GET /events/for/{alias}` responses to `event_poll`'s polls **while `status=booting`** — regardless of whether events are queued for that alias. No nudges fire during this window.
-2. Once the agent emits `booted` and the harness transitions `status: booting → ready`, the agent's boot step 4 (`GET /events/for/{alias}?since=null`, §7.2) runs **inline in the agent's main thread** and drains any queued events synchronously. The agent processes these as the initial event walk before returning to idle.
+2. Once the agent emits `booted` and the harness transitions `status: booting → ready`, the agent enters the §7.1 eager main loop per §7.2 step 4. The loop's first iteration GET (`GET /events/for/{alias}?since=null`) runs **inline in the agent's main thread** and the loop drains queued events synchronously, processing them per-event with per-event acks before reaching the empty-queue branch and idling.
 3. From the moment step 4 returns, `event_poll`'s normal poll cycle (5s active / 30s idle, §7.0 cadence) handles all subsequent wake-ups. Any nudge `event_poll` writes between step 4's completion and the agent's `return-to-idle` is delivered via Monitor's stdin reader and queued behind the agent's current action — Monitor never preempts a mid-action read.
 
 There is no race where queued events are lost; there is no double-processing because the harness only releases queued events to `event_poll` after `status=ready`, and step 4's drain runs *before* the agent returns control to Monitor's wake-on-nudge loop. The boot-step initial drain is the canonical mechanism for catching boot-time-arrival events; `event_poll` is the mechanism for ongoing wake-ups thereafter.
@@ -1027,7 +1027,7 @@ sequenceDiagram
     EAD->>H: append assigned-to(target_alias=verifier,...)
     EAD->>EAD: persist last-seen forge id
 
-    Note over V: Same delivery as §7.3<br/>(event_poll → nudge → Monitor → walk)
+    Note over V: Same delivery as §7.3<br/>(event_poll → nudge → Monitor → §7.1 loop)
     H-->>V: assigned-to flows through<br/>same nudge path
 ```
 
@@ -1039,25 +1039,23 @@ Each agent's care filter is "events with `target_alias == my_alias`." Future ref
 
 ### 7.5 Nudge handling while busy (context-only, no state mutation)
 
-If a nudge arrives while the agent is mid-cycle:
+If a nudge arrives while the agent is mid-cycle: **note it in conversation context only. No file write, no queue, no flag. Take no other action.** The §7.1 eager main loop's next iteration picks up new events naturally — every per-event ack is followed by another `GET /events/for/{role}?since=cursor`, so any events that arrived during the in-progress work are delivered on the next loop iteration without needing an explicit "I noticed the nudge" state.
 
-1. Agent notes the nudge in conversation context — no file write, no queue, no flag.
-2. Agent continues processing current event uninterrupted. Emits `ack-cursor` for current event.
-3. Post-current, agent enters the §7.1 walk: GETs queue, processes new events in cursor order.
+This is grounded in §9 Q7's lock: *"Queue-while-busy = context-only; no `working-state.md` flag."* D3 of #11328 formalizes the same conclusion in the §7.1 eager-loop terms.
 
 **Why no flag is needed:**
 
-- The harness cursor is canonical. Post-cycle the agent always GETs the queue regardless of whether a nudge was noted.
-- `event_poll` is self-healing — even if conversation context is lost (session crash, mid-window compaction), event_poll's next poll within 5–60s (active/idle adaptive) will see events past cursor and re-emit a nudge.
+- The §7.1 eager loop ends every event with a fresh GET, so a noticed nudge has no decision to make — the loop already re-checks before idling.
+- `event_poll` is self-healing — even if conversation context is lost (session crash, mid-window compaction), `event_poll`'s next poll within 5–60s (active/idle adaptive) sees events past cursor and re-emits a nudge.
 - Monotonic-forward cursor prevents double-processing.
 
 **Crash-safety:**
 
 | Crash point | Recovery |
 |---|---|
-| Mid-current-event | Restart reads `.squidsquad/<alias>/working-state.md`, resumes. Post-completion walk catches up. |
-| Between ack and walk | Restart sees no current work, enters idle. Original mid-cycle nudge is "lost" from context, but `event_poll`'s next poll re-detects past-cursor events and re-nudges. |
-| Multiple nudges arrived; agent crashed pre-walk | Any single fresh post-restart nudge triggers the walk that processes all queued events in order. |
+| Mid-current-event (before per-event ack-cursor) | Restart reads `.squidsquad/<alias>/working-state.md` (§7.2 step 2), resumes the work; the cursor sits at the *previous* event's id, so when the agent enters §7.1 via §7.2 step 4 the initial-drain GET re-delivers the unacked in-progress event and processes it again (consumers are idempotent). |
+| Crash after ack-cursor emitted, before next iteration's GET fires | Cursor sits at the just-acked `event_id`; on restart the agent re-enters §7.1 via §7.2 step 4. The initial-drain GET returns any events past the acked id, including events that arrived during the crash window. No state loss. |
+| Multiple nudges arrived; agent crashed before responding to any | On restart the agent enters the §7.1 eager loop via §7.2 step 4; the initial-drain iteration's GET returns every queued event past the cursor and the loop's drain-to-empty behavior processes them in cursor order. No nudge is required for the initial drain — any nudges that arrive *after* it completes wake the agent from idle as usual. |
 
 Honors the locked principle: forge owns work state, harness owns delivery state (cursor), agent owns ONLY its current work.
 
