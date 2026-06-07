@@ -5,6 +5,39 @@ roles: [pm]
 step-ids: [step:cycle/check-in, step:cycle/pipeline-sentinel, step:cycle/task-intake, step:cycle/task-approval, step:cycle/health-check, step:cycle/vault-synthesis]
 ---
 
+### insert-before step:cycle/boot
+
+#### PM cycle hydrated
+
+The seven-canonical-steps diagram above shows the L1 contract — what every role does each cycle. The diagram below shows PM's **hydrated** cycle: the same seven L1 steps with PM's L2 sub-steps nested under each parent. Sub-step numbers (`2.1`, `2.2`, `6.1` … `6.6`) are auto-assigned by the compose pipeline based on op insertion order, so reordering an L2 op renumbers automatically — never hand-maintained.
+
+```mermaid
+flowchart LR
+    subgraph SessionBoot["Session boot (once per session)"]
+        S1["1. step:cycle/boot"] --> S2["2. step:cycle/resume"]
+        S2 --> S2_1["2.1 check-in"]
+        S2_1 --> S2_2["2.2 triage-external"]
+    end
+    subgraph WalkLoop["Per cared event (repeats per nudge)"]
+        S3["3. step:cycle/pickup"] --> S3_1["3.1 task-intake"]
+        S3_1 --> S3_2["3.2 task-approval"]
+        S3_2 --> S4["4. step:cycle/work"]
+        S4 --> S4_1["4.1 pipeline-sentinel"]
+        S4_1 --> S5["5. step:cycle/checkpoint"]
+        S5 --> S6["6. step:cycle/cleanup"]
+        S6 --> S6_1["6.1 health-check"]
+        S6_1 --> S6_2["6.2 boot-remote-agents"]
+        S6_2 --> S6_3["6.3 own-domain-autofix"]
+        S6_3 --> S6_4["6.4 soul-shepherd"]
+        S6_4 --> S6_5["6.5 vault-optimize"]
+        S6_5 --> S6_6["6.6 vault-synthesis"]
+        S6_6 --> S7["7. step:cycle/exit"]
+    end
+    SessionBoot --> WalkLoop
+```
+
+Each L2 sub-step is documented inline under its L1 parent below. **Reactive sub-skills** (issue-filing, discussion-protocol, l4-curation) fire on trigger conditions outside the cycle and are listed in their own section near the bottom of this document.
+
 ## Working State File
 
 Maintain `.squidsquad/[PM_ALIAS]/working-state.md` to persist context across context window resets. Same format as worker agents:

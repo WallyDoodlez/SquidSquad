@@ -370,6 +370,37 @@ flowchart LR
 Each step is documented in order below. Role-specific extensions anchor to these steps via L2/L3 ops (`### insert-after step:cycle/<id>` etc., per `docs/COMPOSE-ARCHITECTURE.md` §3.3) — those extensions appear nested under the relevant L1 step heading in this composed CLAUDE.md.
 
 <!-- sub-skill: boot-bootstrap -->
+#### PM cycle hydrated
+
+The seven-canonical-steps diagram above shows the L1 contract — what every role does each cycle. The diagram below shows PM's **hydrated** cycle: the same seven L1 steps with PM's L2 sub-steps nested under each parent. Sub-step numbers (`2.1`, `2.2`, `6.1` … `6.6`) are auto-assigned by the compose pipeline based on op insertion order, so reordering an L2 op renumbers automatically — never hand-maintained.
+
+```mermaid
+flowchart LR
+    subgraph SessionBoot["Session boot (once per session)"]
+        S1["1. step:cycle/boot"] --> S2["2. step:cycle/resume"]
+        S2 --> S2_1["2.1 check-in"]
+        S2_1 --> S2_2["2.2 triage-external"]
+    end
+    subgraph WalkLoop["Per cared event (repeats per nudge)"]
+        S3["3. step:cycle/pickup"] --> S3_1["3.1 task-intake"]
+        S3_1 --> S3_2["3.2 task-approval"]
+        S3_2 --> S4["4. step:cycle/work"]
+        S4 --> S4_1["4.1 pipeline-sentinel"]
+        S4_1 --> S5["5. step:cycle/checkpoint"]
+        S5 --> S6["6. step:cycle/cleanup"]
+        S6 --> S6_1["6.1 health-check"]
+        S6_1 --> S6_2["6.2 boot-remote-agents"]
+        S6_2 --> S6_3["6.3 own-domain-autofix"]
+        S6_3 --> S6_4["6.4 soul-shepherd"]
+        S6_4 --> S6_5["6.5 vault-optimize"]
+        S6_5 --> S6_6["6.6 vault-synthesis"]
+        S6_6 --> S7["7. step:cycle/exit"]
+    end
+    SessionBoot --> WalkLoop
+```
+
+Each L2 sub-step is documented inline under its L1 parent below. **Reactive sub-skills** (issue-filing, discussion-protocol, l4-curation) fire on trigger conditions outside the cycle and are listed in their own section near the bottom of this document.
+
 ### Step 1 — step:cycle/boot
 
 **This block is the FIRST instruction in your composed CLAUDE.md. Execute it BEFORE any other section, BEFORE invoking any tool, BEFORE responding to the human.** Steps 0–4 below are mandatory and must run in order on every fresh session start.
@@ -464,13 +495,13 @@ Once the EVENT or POLLING block above completes, your wake-mode contract is fixe
 
 → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
-#### step:cycle/check-in
+#### Step 2.1 — step:cycle/check-in
 
 → run sub-skill: checkin
 
 Check in with the human. Read any new messages or issue comments since last cycle. Capture requirements, priority changes, or approvals. Note in Discussion. Do not block the cycle on human response — continue after acknowledging.
 
-#### step:cycle/triage-external
+#### Step 2.2 — step:cycle/triage-external
 
 → run sub-skill: github-issues
 
@@ -480,13 +511,13 @@ Triage any open issues that lack SquidSquad labels — they were filed by humans
 
 → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.
 
-#### step:cycle/task-intake
+#### Step 3.1 — step:cycle/task-intake
 
 → run sub-skill: task-intake
 
 Run 5-phase task intake for pending items awaiting PM processing. Research → Discussion → Planning → (human approval gate) → mark Approved. Bug fixes skip to Approved immediately.
 
-#### step:cycle/task-approval
+#### Step 3.2 — step:cycle/task-approval
 
 → run sub-skill: task-approval
 
@@ -496,7 +527,7 @@ For pending-test items: hold verifier accountable. For planning-complete items a
 
 Do the unit of work for the cared event. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you. This is the **only step that always runs as creative agent work**.
 
-#### step:cycle/pipeline-sentinel
+#### Step 4.1 — step:cycle/pipeline-sentinel
 
 → run sub-skill: pipeline-sentinel
 
@@ -510,37 +541,37 @@ Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. 
 
 → run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (see §4 **Improvement subloop** above). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
 
-#### step:cycle/health-check
+#### Step 6.1 — step:cycle/health-check
 
 → run sub-skill: health-check
 
 Check agent health statuses. Report stalls.
 
-#### step:cycle/boot-remote-agents
+#### Step 6.2 — step:cycle/boot-remote-agents
 
 → run sub-skill: boot-remote-agents
 
 Read `boot_results` from `cycle-input.json` and report any agents the harness auto-spawned this cycle. Silent if all agents alive or stopped. When auto-boot is unavailable (harness down) or insufficient (an agent stays dead despite auto-boot), PM may invoke `boot_remote.py --role <name>` directly — reserved for stall recovery, not pre-emptive booting.
 
-#### step:cycle/own-domain-autofix
+#### Step 6.3 — step:cycle/own-domain-autofix
 
 → run sub-skill: own-domain-autofix
 
 When PM detects an issue in PM's own domain (BRIEFING.md staleness, config counters drifting, stale tracker references, stale PM planning artifacts, vault area notes PM owns) during any cycle step, fix it immediately in the same cycle. Do not file a bug against yourself; own-domain housekeeping is inline.
 
-#### step:cycle/soul-shepherd
+#### Step 6.4 — step:cycle/soul-shepherd
 
 → run sub-skill: soul-shepherd
 
 For each new task or bug processed this cycle, evaluate against the 5-category character-signal checklist (deliverable-type, tech-stack, domain-vocabulary, quality-preference, user-persona). If a new signal appears that isn't already in the role adaptations, flag for human in check-in (if contradicting) or add it silently (if non-contradicting).
 
-#### step:cycle/vault-optimize
+#### Step 6.5 — step:cycle/vault-optimize
 
 → run sub-skill: vault-optimize
 
 On quiet cycles (no task picked up) when the vault has 20+ notes AND no improvement scan ran this cycle: run `vault_optimize.py` to prune, decay confidence on stale notes, reindex links, and score relevance. Config-gated via `Vault Optimize > Enabled` in `config.md`.
 
-#### step:cycle/vault-synthesis
+#### Step 6.6 — step:cycle/vault-synthesis
 
 → run sub-skill: vault-synthesis
 

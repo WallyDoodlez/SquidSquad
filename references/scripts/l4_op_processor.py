@@ -58,16 +58,41 @@ class L4OpTargetNotFound(KeyError):
 #
 # #11144 indexed step headings: agents read better with numbered step
 # headings ("### Step 1 — step:cycle/boot"). The regex accepts an
-# optional indexing prefix BEFORE the step ID — either ``Step N — ``
-# (em-dash, en-dash, or hyphen separator) or ``N. ``. Op directives
-# (``insert-after``, ``insert-before``, ``replace`` keywords) do not
-# match this prefix grammar so there's no collision; the
+# optional indexing prefix BEFORE the step ID — either ``Step N(.M)? — ``
+# (em-dash, en-dash, or hyphen separator; the optional ``.M`` is the
+# hierarchical sub-step ordinal applied by ``_apply_hierarchical_step_numbering``
+# to L2/L3 sub-steps nested under an L1 parent step) or ``N(.M)?. ``. Op
+# directives (``insert-after``, ``insert-before``, ``replace`` keywords)
+# do not match this prefix grammar so there's no collision; the
 # ``_INLINE_OP_DIRECTIVE_RE`` in v2_link_stage still uniquely identifies
 # them.
 _STEP_HEADING_RE = re.compile(
     r"^#{3,6}\s+"
-    r"(?:Step\s+\d+\s*[—–-]\s+|\d+\.\s+)?"
+    r"(?:Step\s+\d+(?:\.\d+)?\s*[—–-]\s+|\d+(?:\.\d+)?\.\s+)?"
     r"step:cycle/([A-Za-z0-9_-]+)\s*$",
+    re.MULTILINE,
+)
+
+# Match an L1 parent step heading (H3, `Step N — step:cycle/<id>`) and
+# capture the parent ordinal. Used by ``_apply_hierarchical_step_numbering``
+# to find the boundaries of each parent's sub-step block. The trailing
+# bound is ``[ \t]*$`` (horizontal whitespace only) — using ``\s`` would
+# also match the line's terminating ``\n`` and let greedy matching
+# swallow line boundaries, which would corrupt the surrounding content
+# when we rewrite the heading in place.
+_L1_PARENT_STEP_RE = re.compile(
+    r"^###[ \t]+Step[ \t]+(\d+)[ \t]*[—–-][ \t]+step:cycle/([A-Za-z0-9_-]+)[ \t]*$",
+    re.MULTILINE,
+)
+
+# Match an H4 sub-step heading with or without an existing index prefix.
+# Same horizontal-whitespace discipline as above so the trailing newline
+# stays outside the match (``m.end()`` lands at the newline position and
+# the in-place rewrite preserves the line boundary).
+_L2_SUBSTEP_HEADING_RE = re.compile(
+    r"^####[ \t]+"
+    r"(?:Step[ \t]+\d+(?:\.\d+)?[ \t]*[—–-][ \t]+|\d+(?:\.\d+)?\.[ \t]+)?"
+    r"step:cycle/([A-Za-z0-9_-]+)[ \t]*$",
     re.MULTILINE,
 )
 
@@ -106,7 +131,62 @@ def apply_l4_ops(slot_content, l4_ops):
             # here makes a future grammar-extension error loud rather
             # than silently dropping the op.
             raise ValueError(f"unknown L4 op_type: {op_type!r}")
+    # Post-process: renumber L2/L3 sub-step headings hierarchically under
+    # their L1 parent step. Runs AFTER all ops are applied so the final
+    # sub-step ordering (including L4 customizations) drives the numbers.
+    content = _apply_hierarchical_step_numbering(content)
     return content
+
+
+def _apply_hierarchical_step_numbering(content):
+    """Renumber H4 step:cycle sub-step headings as ``Step <parent_N>.<M>``
+    based on their position under each L1 parent step.
+
+    Walks the slot content, finds each ``### Step N — step:cycle/<id>`` L1
+    parent heading, and for the H4 step:cycle sub-step headings between
+    it and the next L1 parent (or slot end), rewrites them as
+    ``#### Step N.M — step:cycle/<sub-id>`` where M is the 1-based
+    insertion-order position of the sub-step under that parent.
+
+    Idempotent: an existing ``Step N.M — `` (or any other prefix) on the
+    sub-step heading is stripped and replaced with the recomputed form.
+    The author's hand-numbering — if any — is overwritten, so L2/L3 ops
+    can reorder freely without manual renumber.
+
+    No-op if there are no L1 parent step headings (e.g. on slots that
+    aren't instructions, or instructions slots where L1 hasn't been
+    numbered yet).
+    """
+    parents = [
+        (m.start(), m.end(), int(m.group(1)), m.group(2))
+        for m in _L1_PARENT_STEP_RE.finditer(content)
+    ]
+    if not parents:
+        return content
+
+    # Walk parents in REVERSE order so earlier indices remain valid as
+    # we rewrite later parts of the content.
+    result = content
+    for i in range(len(parents) - 1, -1, -1):
+        _, parent_end, parent_n, _ = parents[i]
+        if i + 1 < len(parents):
+            range_end = parents[i + 1][0]
+        else:
+            range_end = len(result)
+        section = result[parent_end:range_end]
+        substeps = list(_L2_SUBSTEP_HEADING_RE.finditer(section))
+        if not substeps:
+            continue
+        # Rewrite sub-step headings in REVERSE order within the section
+        # so earlier match offsets stay valid.
+        new_section = section
+        for m_idx in range(len(substeps) - 1, -1, -1):
+            m = substeps[m_idx]
+            sub_id = m.group(1)
+            new_heading = f"#### Step {parent_n}.{m_idx + 1} — step:cycle/{sub_id}"
+            new_section = new_section[: m.start()] + new_heading + new_section[m.end() :]
+        result = result[:parent_end] + new_section + result[range_end:]
+    return result
 
 
 def _apply_append(content, body):
@@ -228,9 +308,16 @@ def _strip_counter_op_pairs(l4_ops):
 
 
 def _apply_insert_before_step(content, step_id, body):
-    """Insert ``body`` before the targeted step's heading line."""
+    """Insert ``body`` before the targeted step's heading line.
+
+    Uses ``_ensure_paragraph_break`` (two trailing newlines) for the same
+    reason ``_apply_insert_after_step`` does: markdown needs a blank line
+    between a paragraph and the heading that follows it; a single ``\\n``
+    visually crams the inserted body's final paragraph into the next
+    heading line (#11144 Finding 7 — same fix here).
+    """
     heading_start, _, _ = _find_step_region(content, step_id)
-    return content[:heading_start] + _ensure_trailing_newline(body) + content[heading_start:]
+    return content[:heading_start] + _ensure_paragraph_break(body) + content[heading_start:]
 
 
 def _apply_insert_after_step(content, step_id, body):

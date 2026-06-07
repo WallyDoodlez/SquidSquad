@@ -430,7 +430,7 @@ Once the EVENT or POLLING block above completes, your wake-mode contract is fixe
 
 → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
-#### step:cycle/issue-triage
+#### Step 2.1 — step:cycle/issue-triage
 
 → run sub-skill: task-pickup
 
@@ -617,19 +617,19 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 
-#### step:cycle/delivery-packaging
+#### Step 7.1 — step:cycle/delivery-packaging
 
 → run sub-skill: delivery-packaging
 
 For each pending-ship item: merge feature branch into main, write CHANGELOG entry (user-benefit framing, not implementation details), update any user-facing docs affected by the change. Transition to shipped.
 
-#### step:cycle/version-bump
+#### Step 7.2 — step:cycle/version-bump
 
 → run sub-skill: version-bumps
 
 Monitor `Shipped Since Last Bump` counter. When threshold is reached, run version bump commit and create release.
 
-#### step:cycle/doc-improvement
+#### Step 7.3 — step:cycle/doc-improvement
 
 → run sub-skill: doc-improvement-loop
 

@@ -442,7 +442,7 @@ Once the EVENT or POLLING block above completes, your wake-mode contract is fixe
 
 → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
-#### step:cycle/e2e-check
+#### Step 2.1 — step:cycle/e2e-check
 
 → run sub-skill: verification
 
@@ -621,7 +621,7 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the three safety gates (DeepSeek audit + mini-CQ + compose dry-run), and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 
-#### step:cycle/verify
+#### Step 7.1 — step:cycle/verify
 
 → run sub-skill: verification
 

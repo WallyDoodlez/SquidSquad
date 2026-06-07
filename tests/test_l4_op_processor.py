@@ -97,8 +97,10 @@ def test_insert_before_step_places_body_before_heading():
     out = op_proc.apply_l4_ops(
         SLOT_WITH_THREE_STEPS, [_op("insert-before", target="pickup", body="PRE-PICKUP\n")]
     )
-    # New body appears right before the pickup heading.
-    assert "PRE-PICKUP\n### step:cycle/pickup\n" in out
+    # New body appears right before the pickup heading with a blank-line
+    # markdown paragraph break (so the inserted body's last paragraph
+    # doesn't collapse into the next heading).
+    assert "PRE-PICKUP\n\n### step:cycle/pickup\n" in out
     # Adjacent steps' bodies untouched.
     assert "### step:cycle/boot\nboot body line 1\nboot body line 2\n" in out
     assert "### step:cycle/work\nwork body\n" in out
@@ -108,7 +110,9 @@ def test_insert_before_first_step_keeps_step_after_inserted_body():
     out = op_proc.apply_l4_ops(
         SLOT_WITH_THREE_STEPS, [_op("insert-before", target="boot", body="HEADER\n")]
     )
-    assert out.startswith("HEADER\n### step:cycle/boot\n")
+    # Paragraph break (\n\n) separates inserted body from the first step
+    # heading — matches the contract _apply_insert_after_step uses.
+    assert out.startswith("HEADER\n\n### step:cycle/boot\n")
 
 
 def test_insert_after_step_places_body_before_next_step():
@@ -180,7 +184,7 @@ def test_insert_before_then_replace_targets_post_insert_content():
         _op("replace", target="work", body="REPLACED WORK\n"),
     ]
     out = op_proc.apply_l4_ops(SLOT_WITH_THREE_STEPS, ops)
-    assert "PREFACE\n### step:cycle/work\nREPLACED WORK\n" in out
+    assert "PREFACE\n\n### step:cycle/work\nREPLACED WORK\n" in out
     assert "work body" not in out
 
 
@@ -319,3 +323,145 @@ def test_insert_after_anchors_to_indexed_heading():
     )
     # Insert-after lands between pickup body and the next step heading.
     assert "pickup body\n\nPOST-PICKUP\n\n### Step 4 — step:cycle/work\n" in out
+
+
+# ---------------------------------------------------------------------------
+# AC: hierarchical sub-step renumbering (#11144 — auto-number L2/L3 sub-steps)
+# ---------------------------------------------------------------------------
+
+
+def test_step_heading_regex_accepts_two_level_index():
+    """The step-heading regex must match `Step N.M — ` hierarchical form so
+    L4 ops can still anchor to renumbered sub-step headings after compose
+    runs the auto-numbering pass.
+    """
+    m = op_proc._STEP_HEADING_RE.search("#### Step 2.1 — step:cycle/check-in\n")
+    assert m is not None
+    assert m.group(1) == "check-in"
+
+
+def test_unprefixed_h4_substep_gets_numbered_under_parent():
+    """A bare `#### step:cycle/<sub>` heading nested under `### Step N — step:cycle/<parent>`
+    is rewritten to `#### Step N.1 — step:cycle/<sub>`.
+    """
+    content = (
+        "### Step 2 — step:cycle/resume\n"
+        "resume body\n"
+        "\n"
+        "#### step:cycle/check-in\n"
+        "check-in body\n"
+        "\n"
+        "### Step 3 — step:cycle/pickup\n"
+        "pickup body\n"
+    )
+    out = op_proc.apply_l4_ops(content, [])
+    assert "#### Step 2.1 — step:cycle/check-in\n" in out
+    assert "#### step:cycle/check-in\n" not in out
+
+
+def test_multiple_substeps_under_same_parent_get_sequential_numbers():
+    """Two sub-steps under the same parent become Step N.1 and Step N.2."""
+    content = (
+        "### Step 6 — step:cycle/cleanup\n"
+        "cleanup body\n"
+        "\n"
+        "#### step:cycle/health-check\n"
+        "hc body\n"
+        "\n"
+        "#### step:cycle/vault-synthesis\n"
+        "vs body\n"
+        "\n"
+        "### Step 7 — step:cycle/exit\n"
+        "exit body\n"
+    )
+    out = op_proc.apply_l4_ops(content, [])
+    assert "#### Step 6.1 — step:cycle/health-check\n" in out
+    assert "#### Step 6.2 — step:cycle/vault-synthesis\n" in out
+
+
+def test_substeps_under_different_parents_get_independent_numbering():
+    """Each parent's sub-steps restart at .1; no cross-parent counter."""
+    content = (
+        "### Step 2 — step:cycle/resume\n"
+        "\n"
+        "#### step:cycle/check-in\n"
+        "\n"
+        "### Step 3 — step:cycle/pickup\n"
+        "\n"
+        "#### step:cycle/task-intake\n"
+        "\n"
+        "### Step 4 — step:cycle/work\n"
+    )
+    out = op_proc.apply_l4_ops(content, [])
+    assert "#### Step 2.1 — step:cycle/check-in\n" in out
+    assert "#### Step 3.1 — step:cycle/task-intake\n" in out
+    # No cross-parent bleed
+    assert "#### Step 3.2" not in out
+    assert "#### Step 2.2" not in out
+
+
+def test_renumbering_is_idempotent_overwrites_existing_prefix():
+    """A heading already carrying `Step N.M — ` is recomputed, not appended
+    to. Authors can hand-number freely; compose owns the canonical numbers.
+    """
+    content = (
+        "### Step 6 — step:cycle/cleanup\n"
+        "\n"
+        "#### Step 6.5 — step:cycle/health-check\n"
+        "hc body\n"
+        "\n"
+        "#### Step 6.9 — step:cycle/vault-synthesis\n"
+        "vs body\n"
+    )
+    out = op_proc.apply_l4_ops(content, [])
+    # The hand-authored .5 / .9 are recomputed to .1 / .2 based on actual order.
+    assert "#### Step 6.1 — step:cycle/health-check\n" in out
+    assert "#### Step 6.2 — step:cycle/vault-synthesis\n" in out
+    assert "#### Step 6.5" not in out
+    assert "#### Step 6.9" not in out
+
+
+def test_renumbering_noop_when_no_l1_parent_headings_present():
+    """Slot content without any `### Step N — step:cycle/<id>` parent headings
+    is returned unchanged — the auto-numbering pass should not invent parents.
+    """
+    content = (
+        "### step:cycle/boot\n"
+        "boot body\n"
+        "\n"
+        "### step:cycle/work\n"
+        "work body\n"
+    )
+    out = op_proc.apply_l4_ops(content, [])
+    # No parent headings present, sub-step numbering should not fire.
+    assert out == content
+
+
+def test_renumbering_applies_after_l4_ops_so_inserted_substeps_are_indexed():
+    """L4 insert-after ops that add a new sub-step are picked up by the
+    renumbering pass and indexed in their final position. The compose-time
+    contract: author L2/L3 sub-steps WITHOUT numbers; the renumber pass
+    indexes them.
+    """
+    content = (
+        "### Step 2 — step:cycle/resume\n"
+        "resume body\n"
+        "\n"
+        "#### step:cycle/check-in\n"
+        "check-in body\n"
+        "\n"
+        "### Step 3 — step:cycle/pickup\n"
+        "pickup body\n"
+    )
+    out = op_proc.apply_l4_ops(
+        content,
+        [
+            _op(
+                "insert-after",
+                target="check-in",
+                body="#### step:cycle/triage-external\n\ntriage body\n",
+            )
+        ],
+    )
+    assert "#### Step 2.1 — step:cycle/check-in\n" in out
+    assert "#### Step 2.2 — step:cycle/triage-external\n" in out

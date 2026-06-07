@@ -475,7 +475,7 @@ Once the EVENT or POLLING block above completes, your wake-mode contract is fixe
 
 → run sub-skill: `resume-working-state`. Read `working-state.md`. If an active task is `in-progress`, queue it as the first thing to handle once nudges start arriving.
 
-#### step:cycle/triage-issues
+#### Step 2.1 — step:cycle/triage-issues
 
 → run sub-skill: triage-issues
 
@@ -693,7 +693,7 @@ When the human gives a project-specific durable customization directive (e.g. "f
 
 ---
 
-#### step:cycle/implement
+#### Step 7.1 — step:cycle/implement
 
 → run sub-skill: implement-tasks
 
@@ -711,17 +711,17 @@ When implementing skill changes (SKILL.md, SOUL.md, manifest.yaml, sub-skill sou
 4. Run a smoke-test pass: invoke the skill manually in a fresh session and verify trigger fires and output matches spec.
 5. Check deterministic/probabilistic seams: any routing logic or file I/O must be in a script, not in agent instructions.
 
-#### step:cycle/ds-review
+#### Step 7.2 — step:cycle/ds-review
 
 → run sub-skill: improvement-scan
 
 For high-blast-radius skill changes (changes to base agent instructions, role-shared instructions, the compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR). Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding.
 
-#### step:cycle/manifest-update
+#### Step 7.3 — step:cycle/manifest-update
 
 After any skill file creation or rename: update `manifest.yaml` and `installer-files.txt` to include the new/renamed path. Verify `compose.py` includes the file in its source-gather pass. A skill that isn't in the manifest doesn't exist to the installer.
 
-#### step:cycle/skill-cq
+#### Step 7.4 — step:cycle/skill-cq
 
 After implementing any task that touches LLM-consumed instructions: ensure the issue body contains a comprehension-coverage AC (PM is responsible for authoring it; if missing, comment on the issue asking PM to add it before pending-test). Do NOT self-generate CQ specs — that is verifier's job per TEST-PLAN.
 
