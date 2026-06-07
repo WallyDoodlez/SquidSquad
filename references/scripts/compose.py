@@ -598,6 +598,37 @@ def _get_entry_file_for_role(role_name: str) -> str:
     return role_name
 
 
+_ROLE_CONDITIONAL_RE = re.compile(
+    r"<!--\s*if\s+role\s*:\s*([A-Za-z0-9_-]+)\s*-->\s*\n?"
+    r"([\s\S]*?)"
+    r"\s*<!--\s*endif\s*-->\s*\n?",
+)
+
+
+def _apply_role_conditionals(content: str, role_name: str) -> str:
+    """Strip ``<!-- if role:<name> --> ... <!-- endif -->`` blocks that
+    don't match the target role.
+
+    Authors wrap content meant for a single role in a conditional block;
+    compose evaluates it at deploy time so the agent only sees content
+    relevant to its own role. Multi-line and single-line blocks both
+    supported. When the role matches, the markers are stripped and the
+    body survives. When it doesn't, the entire block (markers + body)
+    is removed and no trace is left in the composed output.
+
+    Idempotent — content without conditionals is returned unchanged.
+    """
+    def _replace(match):
+        block_role = match.group(1)
+        block_body = match.group(2)
+        if block_role == role_name:
+            # Keep the body, trimmed of leading/trailing newlines so the
+            # surrounding paragraph spacing of the caller controls layout.
+            return block_body.strip("\n") + "\n"
+        return ""
+    return _ROLE_CONDITIONAL_RE.sub(_replace, content)
+
+
 def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> str:
     """Substitute role-specific placeholders in composed content.
 
@@ -607,6 +638,11 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     `is_dev` below accepts both "dev" and "worker" entry_file values).
     """
     is_dev = entry_file in ("dev", "worker")  # #6274 dual-aware
+
+    # First pass: strip role-conditional blocks. Runs before any
+    # placeholder substitution so the substituted values can't accidentally
+    # match the conditional marker grammar.
+    content = _apply_role_conditionals(content, role_name)
 
     # Universal substitution — all roles need [ROLE] for cycle-runner paths
     content = content.replace("[ROLE]", role_name)

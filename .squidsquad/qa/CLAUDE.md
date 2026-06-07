@@ -416,8 +416,6 @@ Run the sub-skills below **in order**; their concatenated content is your active
 
 → run sub-skill: `comment-handling`. Bare comments do NOT wake any agent; DM end-of-task re-read exception; transition-on-handoff rule.
 
-**Role-specific extra** — if your role is `dm`, ALSO → run sub-skill: `roles/dm/events/pr-merge-wait`. DM-only behavior across the `pending-ship` PR-merge wait — bounded periodic forge-read, not real-time comment polling. Other roles skip.
-
 The event-mode wake contract is now loaded. Do not proceed to the POLLING mode block below (polling branch is unreachable once the EVENT-mode contract is loaded).
 
 #### POLLING mode — schedule `/loop`, then Read the polling fragment
