@@ -48,45 +48,37 @@ Examples:
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
 
-## Loop-mode cycle steps
+## What loop mode changes vs. event mode
 
-Each `/loop` cron fire executes one cycle through these steps. The harness wraps each cycle with `cycle_pre.py` (git pull, working-state read, `cycle-input.json`) and `cycle_post.py` (commit, push, working-state write); your creative work happens between them. Step IDs and sub-skill references match the event-mode contract so role-specific instruction appendices apply unchanged.
+The cycle sequence is **the same** as event mode — you still walk the seven canonical steps (boot, resume, pickup, work, checkpoint, cleanup, exit) and your role-specific sub-steps under each. Refer to the hydrated cycle diagram and the Step 1–7 sections in your composed CLAUDE.md for the full sequence; this fragment only describes what's **different** in loop mode.
 
-### Mechanical wrappers and pre-flight checks (loop-mode specific)
+Three differences fire at every cycle start:
 
-These run at every cycle start before the creative steps below — in event mode the harness wraps cycles directly, but in loop mode the agent is the one driving the cycle, so these wrapper concerns surface as agent-side steps:
-
-#### step:cycle/run
+#### step:cycle/run — agent-driven cycle wrapper
 
 → run sub-skill: cycle-runner
 
-Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
+In event mode the harness wraps each cycle with `cycle_pre.py` and `cycle_post.py` automatically. In loop mode the agent is the one driving the cycle, so the pre/post wrapper surfaces as an agent-side step. Goal: the cycle's input state has been captured (pull result, context-pressure snapshot, working-state, queue state); your creative work is aligned against it; outputs are staged for durable commit and status propagation.
 
-#### step:cycle/context-pressure
+#### step:cycle/context-pressure — agent-side context-pressure check
 
 → run sub-skill: context-pressure
 
-Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally. (In event mode this detection lives in `cycle_post.py` — see L1 Step 7 `self-restart` for the universal cooperative-exit path.)
+In event mode this detection lives in `cycle_post.py` and surfaces via the universal cooperative-exit path (see Step 7 `self-restart` in your composed CLAUDE.md). In loop mode the agent checks context pressure itself: read the live percentage from disk, compare to the configured threshold, and (above threshold) checkpoint pending work to `working-state.md` plus push git so a respawn loses nothing. Below threshold this is a no-op.
 
-#### step:cycle/resume — PM planning-phase suppression
+#### step:cycle/resume — planning-phase suppression (PM-only addendum)
 
-Print: `[🦑 HH:MM:SS] Checking working state...`
+In ADDITION to the universal resume behavior already defined in Step 2 (`resume-working-state` — Read `working-state.md`, resume any `in-progress` task), loop-mode PM runs a planning-phase suppression check that does not apply in event mode:
 
-Read `.squidsquad/[PM_ALIAS]/working-state.md`. If it contains an active task (status `in-progress`), resume that work.
-
-**Planning phase suppression**: If `cycle-input.json` contains `"suppressed": true` in `working_state` (set when working-state.md has a `**Phase**:` line with an active planning phase), this cycle is **suppressed**:
+If `cycle-input.json` contains `"suppressed": true` in `working_state` (set when `working-state.md` has a `**Phase**:` line with an active planning phase), this cycle is **suppressed**:
 
 1. Print: `[🦑 HH:MM:SS] ---- cycle N (suppressed — active planning phase) ----`
-2. Write a minimal cycle-output.json with `"cycle_type": "suppressed"` and a brief summary.
-3. Run `python references/scripts/cycle_post.py [ROLE]` — it handles the commit/push and status bar cleanup.
+2. Write a minimal `cycle-output.json` with `"cycle_type": "suppressed"` and a brief summary.
+3. Run `python references/scripts/cycle_post.py pm` — it handles the commit/push and status-bar cleanup.
 4. Return — `/loop` will trigger the next cycle.
 
-If the file is empty or has no active task or planning phase, proceed normally to the creative steps below.
+If working-state has no active task and no active planning phase, proceed normally through the rest of the canonical sequence (Step 3 pickup → Step 7 exit) as documented in your composed CLAUDE.md.
 
-### Creative cycle steps
+#### Loop-mode-specific exit note
 
-1. **`step:cycle/pickup`** — → run sub-skill: `task-pickup`. Query the tracker for approved tasks assigned to your role, select the highest-priority item, record it in `working-state.md`. (Event-mode's per-event care filter does not apply here — loop mode has no event stream.)
-2. **`step:cycle/work`** — Do the unit of work for the selected task. Role-specific instructions in your composed CLAUDE.md define what counts as work.
-3. **`step:cycle/checkpoint`** — → run sub-skill: `git-commit`. The mechanical commit and push are part of the post-cycle wrapper (`cycle_post.py`); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.
-4. **`step:cycle/cleanup`** — → run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (run improvement scan per configured policy if the cycle produced no work).
-5. **`step:cycle/exit`** — Exit the cycle cleanly. `cycle_post.py` applies your output before the next cron fire; `/loop` triggers the next cycle at the configured interval. Loop mode runs exactly one cycle per cron fire — there is no per-event walk to continue. Inline-mode caveats (above) apply when a human is driving the session directly.
+After Step 7 exit, `cycle_post.py` applies your output before the next cron fire and `/loop` triggers the next cycle at the configured interval. Loop mode runs **exactly one cycle per cron fire** — there is no per-event walk to continue. Inline-mode caveats (above) apply when a human is driving the session directly.
