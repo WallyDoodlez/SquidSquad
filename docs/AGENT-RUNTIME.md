@@ -247,12 +247,12 @@ The event bus is the harness HTTP API at port `7373` (default). Both modes use i
 
 ### 4.1 Architectural commitments (locked principles)
 
-From `decision-event-bus-architecture-redesign` vault note (locked cycles 1541–1542):
+From `decision-event-bus-architecture-redesign` vault note (locked cycles 1541–1542); Principles 1 and 4 refined by #11328 D1/D4 as noted inline:
 
-1. **Harness is a transport bus, not an orchestrator.** It moves signals between producers and consumers. It does NOT track work completion, ticket state, or workflow status.
+1. **Harness is a transport bus, not an orchestrator.** It moves signals between producers and consumers. It does NOT track *forge-level* work state — status labels, ticket state, workflow status all live on the forge. (Per #11328 D1, the harness DOES own the per-alias **event-tending cursor** in `.event-state.json` — the cursor is the work-completed indicator at event-delivery granularity, not forge-level workflow tracking. See §4.3.)
 2. **Forge (GitHub Issues) is the source of truth for work state.** Status labels, comments, PR merges = the project's institutional state. Harness has no opinion on whether work is done.
 3. **Agent owns work completion.** The agent acts on signals; what it does with them is between the agent and the forge.
-4. **Ack = receipt confirmation, NOT completion confirmation.** "Ack" means "the signal was delivered to the agent's session." It does NOT mean "the agent finished processing."
+4. **Ack-cursor is event-tending confirmation; ack-stop is lifecycle confirmation.** Per #11328 D4, these are operationally separate state machines (see §4.2). `ack-cursor` fires after the agent has finished processing an event (cared or skipped) — i.e., it carries *event-completion* semantics; the cursor advance IS the completion signal. `ack-stop` is lifecycle progress on a stop intent (delivery of the stop accepted + checkpoint result). The pre-D1 framing of "ack = receipt confirmation, NOT completion confirmation" still applies to the lifecycle ack; for `ack-cursor` specifically, D1 supersedes — finishing the event IS the cursor commit.
 5. **No `POST /events/{id}/complete` endpoint.** Reject any design that adds endpoints for completion state. The bus uses events, not RPC, for state transitions.
 
 ### 4.2 Signal catalog
@@ -263,10 +263,10 @@ In v2 the catalog collapses to **3 signal concepts / 4 catalog entries**:
 |---|---|---|---|
 | **`booted`** | agent → harness | First action after the agent's Claude session boots | `{role, pid, clone_path, version}` |
 | **`assigned-to`** | harness → agent (queue entry) | Harness detects work exists for the named agent | `{issue_number, target_alias, event_context, payload}` (EAD populates `payload.title` from the forge issue; `/work/assign` callers may pass it through the `payload` object) |
-| **`ack-cursor`** | agent → harness | Agent has received a delivered signal; advances harness cursor | `{event_id, role}` |
+| **`ack-cursor`** | agent → harness | Agent has finished processing this event (cared or skipped); cursor advances | `{event_id, role}` |
 | **`ack-stop`** | agent → harness | Agent has accepted a stop intent and is checkpointing | `{event_id, result}` where `result` is one of `'checkpointed'` (working-state.md flushed; safe to SIGTERM), `'aborted'` (graceful stop failed; harness should escalate), `'drained'` (no in-flight work; exiting clean) |
 
-`ack-cursor` and `ack-stop` are sub-types of one concept (receipt confirmation) — shipped in `#9873-A`. Three signal concepts, four catalog entries.
+`ack-cursor` and `ack-stop` are **operationally separate state machines** — delivery vs lifecycle — that share the `ack-` naming. `ack-cursor` advances the delivery cursor per event; `ack-stop` signals lifecycle progress on a stop intent. They were shipped together in `#9873-A` but should be reasoned about as distinct concerns. Three signal concepts, four catalog entries.
 
 > **Naming note**: The `role` field in `booted` / `ack-cursor` payloads is the agent's **alias** value, preserved under the field-name `role` for code-compat with the wire format. Same pattern as `{role}` in HTTP path parameters (see §4.3). Field rename to `alias` is in the same family as #10358. `ack-stop.result` enum values are tracked as §9 Q11.
 
@@ -376,9 +376,13 @@ The endpoints throughout this section use `{role}` in path parameters (e.g., `GE
 
 #### Cursor model
 
+The cursor IS the canonical work-completed indicator. Single source of truth for "events this alias has tended." It advances only after the agent has finished processing an event — whether the event was acted on (cared) or skipped via the care filter (§7.4). Either way, finishing the event IS the cursor commit; there is no separate "I received this" signal. The §4.2 catalog row for `ack-cursor` reflects this directly: the ack fires *after* processing, not on delivery.
+
+**Mechanics**:
+
 - Per-alias, owned by harness. Persisted in `.squidsquad/.event-state.json`. Agents observe the cursor only through the harness API; they never write it directly.
 - `null` at first boot → agent reads from the head of the deque.
-- Advances via `ack-cursor` consumed by the ack consumer task.
+- Advances via `ack-cursor` consumed by the ack consumer task — one ack per tended event (see §7.1 for the canonical agent loop).
 - Cursor-regression attempts rejected (CONTEXT-9873-A D15).
 - `GET /events/cursor/{role}` returns `{cursor: <event_id> | null, role}`, HTTP 200 always.
 
@@ -386,34 +390,19 @@ The endpoints throughout this section use `{role}` in path parameters (e.g., `GE
 
 ```mermaid
 sequenceDiagram
-    participant ES as .event-state.json<br/>(harness-owned)
-    participant CP as event_poll (event mode) /<br/>cycle_pre.py (event mode only)
+    participant A as Agent
     participant H as Harness
-    participant CPO as cycle_post.py / agent ack
+    participant ES as .event-state.json<br/>(harness-owned)
 
-    Note over ES: cursor for role: a1b2c3d4
-
-    CP->>H: GET /events/cursor/{role}
-    H->>ES: read cursor
-    ES-->>H: a1b2c3d4
-    H-->>CP: {cursor: "a1b2c3d4"}
-    CP->>H: GET /events/for/{role}?since=cursor
-    H-->>CP: Events e5, f6, g7
-    CP->>CP: filter + react / write cycle-input.json
-
-    Note over CP: Agent does creative work
-
-    alt success
-        CPO->>H: POST /events {ack-cursor, event_id=g7}
-        H->>ES: cursor advances to g7
-    else crash mid-cycle
-        Note over ES: Cursor stays<br/>Same events re-delivered
-    end
+    A->>H: POST /events {ack-cursor, event_id, role}
+    H->>ES: write cursor = event_id
+    ES-->>H: persisted
+    H-->>A: 200 OK
 ```
 
-The cursor is harness-owned, persisted in `.squidsquad/.event-state.json`. The agent never writes the cursor directly — it acknowledges progress via the harness API and the harness updates the file. `working-state.md` carries the agent's current-work checkpoint only (see §5); it does not store event-delivery state.
+The diagram shows the cursor-advance mechanism only — see §7.1 for how the agent's loop calls it (AC1.2 of #11328 rewrites §7.1 to the canonical per-event eager-loop form). `working-state.md` carries the agent's current-work checkpoint only (see §5); it does not store event-delivery state.
 
-At-least-once delivery: cursor advances only after a successful ack. Crashed agents re-process the same events on restart.
+At-least-once delivery: cursor advances only after a successful ack. Crashed agents re-process the same events on restart — the cursor sits at the last successfully-acked event, so any events past it (including the in-flight event at crash time) re-deliver on the next walk.
 
 #### Role-based filtering
 
