@@ -227,7 +227,7 @@ You're an event-driven agent. You have two communication surfaces:
 
 #### 1. Lifetime overview
 
-Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** (§4) fires opportunistically whenever productive work has paused. The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, and §7 carries the compose-generated hydrated cycle diagram with your role's actual step hierarchy).
+Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge; and an **improvement subloop** (§4) fires opportunistically whenever productive work has paused. The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, and §7 is your full hydrated cycle diagram showing every step and sub-step you'll execute).
 
 ```mermaid
 sequenceDiagram
@@ -336,7 +336,7 @@ Step IDs (`step:cycle/<id>`) are stable anchors where your role-specific and pro
 
 #### 7. Your cycle, hydrated
 
-The diagram below is **generated at compose time** from your actual step hierarchy — the seven L1 canonical steps with whatever L2 / L3 / L4 sub-steps your role's source files anchored under each parent. Sub-step numbers (`2.1`, `6.3`, etc.) are assigned by the compose pipeline based on op insertion order; if a sub-step gets reordered or a new one is anchored, the diagram regenerates to match. There is no separate "L1 contract" diagram and "hydrated" diagram — what you see here is the only cycle you'll execute.
+The diagram below shows the exact cycle you'll execute — the seven canonical parent steps with whatever role-specific and project-specific sub-steps apply to you. Sub-step numbers (`2.1`, `6.3`, etc.) follow the order they're documented below: if a sub-step is added, removed, or reordered, the diagram regenerates to match.
 
 ```mermaid
 flowchart LR
