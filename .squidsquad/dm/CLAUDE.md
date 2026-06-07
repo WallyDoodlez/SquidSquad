@@ -271,28 +271,32 @@ sequenceDiagram
     participant H as Harness
     participant F as Forge
     EP->>A: NUDGE on Monitor stdin
-    A->>H: GET current cursor
-    H-->>A: cursor X
-    A->>H: GET events since X
-    H-->>A: events list
-    loop for each event
-        A->>A: care filter
-        alt cared
-            A->>A: pre-cycle (mechanical)
-            A->>F: do work (steps below)
-            A->>A: post-cycle (mechanical)
-        else skipped
-            Note over A: no cycle wrapper fires
+    loop drain to empty
+        A->>H: GET next event past cursor
+        H-->>A: next event (or none)
+        alt event exists
+            A->>A: care filter
+            alt cared
+                A->>A: pre-cycle (mechanical)
+                A->>F: do work (steps below)
+                A->>A: post-cycle (mechanical)
+            else skipped
+                Note over A: no cycle wrapper fires
+            end
+            A->>H: POST ack-cursor (event.id)
+        else queue drained
+            opt improvement cooldown elapsed
+                Note over A: §4 Improvement subloop fires
+                A->>F: scan and file improvement issues
+            end
+            Note over A: re-enter idle wait
         end
-        A->>A: last_tended = event.id
     end
-    A->>H: POST ack-cursor (last_tended)
-    Note over A: re-enter idle wait
 ```
 
-A nudge wakes you. You fetch new events past your cursor, walk them, and act on the ones that pass your care filter. For each cared event the harness wraps your creative work with mechanical pre/post-cycle scripts. After the walk you ack the cursor with the last event you tended and re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change.
+A nudge wakes you. You then run the canonical eager loop documented in `docs/AGENT-RUNTIME.md` §7.1: fetch the next event past your cursor, apply the care filter, fire the cycle wrapper if cared (skip the wrapper if not), then POST `ack-cursor` for the event you just tended — and immediately re-check for the next event. The cursor advances **per event, not per batch**. When the queue drains, you optionally fire one improvement-subloop task (§4) if the cooldown is elapsed, then re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change.
 
-> **Care filter — what counts as "cared" vs "skipped"?** Per `docs/AGENT-RUNTIME.md` §7.4 the rule is simply: **does this event's `target_alias` field equal my own alias?** If yes, you process it (pre-cycle → work → post-cycle); if no, you skip it (no wrappers fire) and just advance `last_tended` so you don't re-see it on the next nudge. In normal operation the harness emits one `assigned-to` per target alias, so your queue is already pre-filtered and almost every event is cared. The `else skipped` branch is the defensive escape hatch for race conditions (re-emit after EAD restart, cursor catch-up after eviction, future multi-instance scenarios) where a misrouted event lands in your queue — you advance past it without firing the cycle wrapper.
+> **Care filter — what counts as "cared" vs "skipped"?** Per `docs/AGENT-RUNTIME.md` §7.4 the rule is simply: **does this event's `target_alias` field equal my own alias?** If yes, you process it (pre-cycle → work → post-cycle) and POST `ack-cursor` to commit the tend. If no, you skip the cycle wrapper but still POST `ack-cursor` — finishing the event by deciding not to act on it IS the cursor commit (D1; finishing the event in either way advances the cursor). In normal operation the harness emits one `assigned-to` per target alias, so your queue is already pre-filtered and almost every event is cared. The `else skipped` branch is the defensive escape hatch for race conditions (re-emit after EAD restart, cursor catch-up after eviction, future multi-instance scenarios) where a misrouted event lands in your queue — you ack past it without firing the cycle wrapper.
 
 #### 4. Improvement subloop
 
@@ -484,7 +488,7 @@ Do the unit of work for the cared event. The shape of this work depends on your 
 
 ### Step 7 — step:cycle/exit
 
-→ run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, control returns to the walk loop and you continue to the next cared event (if any) in the current nudge. The `ack-cursor` and re-entry to Monitor idle-wait are **per-nudge, not per-event** — they run once at the end of the walk after all events are processed (see §7.1 of `docs/AGENT-RUNTIME.md` and the per-nudge cycle diagram above). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so the per-nudge `ack-stop` can emit a coherent `checkpointed`/`drained` result.
+→ run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, you POST `ack-cursor` (per event — `ack-cursor` IS per-event, not per-nudge; see §7.1 of `docs/AGENT-RUNTIME.md` and the diagram above) and the eager loop immediately checks for the next event past the cursor. Re-entry to Monitor idle-wait fires only when the drain to empty completes (so in practice "once per nudge" because one nudge corresponds to one drain, but the trigger is queue-empty, not per-nudge-counter). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so `ack-stop` can emit a coherent `checkpointed` / `drained` result at the end of your drain.
 
 → run sub-skill: `self-restart`. The cooperative exit-42 protocol — when the post-cycle wrapper (`cycle_post.py`) detects your own context pressure exceeded the configured threshold OR observes a `stopping`/`restarting` intent flip on the harness, it commits/pushes and exits with code 42. Your job is to immediately invoke `/quit` so the harness can respawn you (or mark you stopped) per the intent state machine. Universal across all roles; see `docs/HARNESS-ARCH.md` §7.4 for the full state machine.
 
