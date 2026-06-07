@@ -400,6 +400,7 @@ Sequential steps inside the **`do work — your steps below`** line of the per-n
 → run sub-skill: task-pickup
 
 Scan for pending-ship items. Check `delivery:skip` label before starting packaging — internal-only tasks skip delivery packaging. For each pending-ship item without `delivery:skip`: proceed to delivery-packaging.
+
 ### step:cycle/pickup
 
 → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.

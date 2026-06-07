@@ -115,15 +115,17 @@ def test_insert_after_step_places_body_before_next_step():
     out = op_proc.apply_l4_ops(
         SLOT_WITH_THREE_STEPS, [_op("insert-after", target="pickup", body="POST-PICKUP\n")]
     )
-    # New body appears between pickup body and work heading.
-    assert "pickup body\n\nPOST-PICKUP\n### step:cycle/work\n" in out
+    # New body appears between pickup body and work heading, with a
+    # blank-line paragraph break (#11144: _ensure_paragraph_break).
+    assert "pickup body\n\nPOST-PICKUP\n\n### step:cycle/work\n" in out
 
 
 def test_insert_after_last_step_appends_to_slot_end():
     out = op_proc.apply_l4_ops(
         SLOT_WITH_THREE_STEPS, [_op("insert-after", target="work", body="POST-WORK\n")]
     )
-    assert out.endswith("POST-WORK\n")
+    # Inserts at slot end always end with two newlines (paragraph break).
+    assert out.endswith("POST-WORK\n\n")
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +168,9 @@ def test_insert_after_then_insert_after_stacks_in_source_order():
     # inserts at body_end. After the first op, body_end now sits AFTER
     # "FIRST\n" because that became part of pickup's body region. So the
     # second insertion lands after FIRST — stack order matches source order.
-    assert "pickup body\n\nFIRST\nSECOND\n### step:cycle/work\n" in out
+    # Each insert-after appends a blank-line paragraph break to its body
+    # (#11144: _ensure_paragraph_break). Stack order matches source order.
+    assert "pickup body\n\nFIRST\n\nSECOND\n\n### step:cycle/work\n" in out
 
 
 def test_insert_before_then_replace_targets_post_insert_content():

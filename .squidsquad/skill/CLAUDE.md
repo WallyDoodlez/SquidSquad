@@ -440,6 +440,7 @@ Sequential steps inside the **`do work — your steps below`** line of the per-n
 → run sub-skill: triage-issues
 
 Scan this role's open issues for bug reports. For each: investigate root cause, determine if it's in this domain, file cross-domain if not. Bugs are auto-approved; pick up immediately.
+
 ### step:cycle/pickup
 
 → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.

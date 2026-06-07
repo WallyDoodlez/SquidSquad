@@ -407,6 +407,7 @@ Sequential steps inside the **`do work — your steps below`** line of the per-n
 → run sub-skill: verification
 
 If E2E / integration test command is configured in `.squidsquad/config.md`, run it. Triage failures to the correct role via tracker comments. Do not fix failures yourself.
+
 ### step:cycle/pickup
 
 → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.

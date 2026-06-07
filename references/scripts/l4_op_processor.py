@@ -227,7 +227,12 @@ def _apply_insert_after_step(content, step_id, body):
     # body_end points at the next ``### step:cycle/...`` heading start
     # (or len(content)). Inserting right at body_end places the new
     # content between this step's body and the next step's heading.
-    insertion = _ensure_trailing_newline(body)
+    # We need TWO trailing newlines so there's a blank line between the
+    # inserted body's last paragraph and the next step heading —
+    # markdown collapses single-newline-separated lines into one
+    # paragraph, which produced a visually-crammed cycle in composed
+    # output (#11144: "...vault posture notes.### step:cycle/exit").
+    insertion = _ensure_paragraph_break(body)
     return content[:body_end] + insertion + content[body_end:]
 
 
@@ -238,3 +243,16 @@ def _ensure_trailing_newline(text):
     if text.endswith("\n"):
         return text
     return text + "\n"
+
+
+def _ensure_paragraph_break(text):
+    """Guarantee ``text`` ends with exactly two newlines (a markdown paragraph break).
+
+    Used by `_apply_insert_after_step` so the inserted body has a blank
+    line between its last paragraph and whatever heading follows in the
+    surviving content. Idempotent — a body that already ends with two
+    or more newlines is normalized to exactly two.
+    """
+    if not text:
+        return text
+    return text.rstrip("\n") + "\n\n"

@@ -429,6 +429,7 @@ Sequential steps inside the **`do work — your steps below`** line of the per-n
 → run sub-skill: checkin
 
 Check in with the human. Read any new messages or issue comments since last cycle. Capture requirements, priority changes, or approvals. Note in Discussion. Do not block the cycle on human response — continue after acknowledging.
+
 ### step:cycle/pickup
 
 → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.
@@ -444,6 +445,7 @@ Run 5-phase task intake for pending items awaiting PM processing. Research → D
 → run sub-skill: task-approval
 
 For pending-test items: hold verifier accountable. For planning-complete items awaiting human sign-off: surface for approval. Do NOT run test cases directly.
+
 ### step:cycle/work
 
 Do the unit of work for the cared event. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you. This is the **only step that always runs as creative agent work**.
@@ -453,6 +455,7 @@ Do the unit of work for the cared event. The shape of this work depends on your 
 → run sub-skill: pipeline-sentinel
 
 Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. Trace root cause. Comment on issues to nudge or route. Never touch branches — only tracker comments and notifications.
+
 ### step:cycle/checkpoint
 
 → run sub-skill: `git-commit`. The mechanical commit and push are part of the **post-cycle** wrapper (`cycle_post.py` — you don't execute it); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.
@@ -472,6 +475,7 @@ Check agent health statuses. Boot dead agents via `boot_remote.py` if auto-boot 
 → run sub-skill: vault-synthesis
 
 On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agent patterns from iteration logs into vault posture notes.
+
 ### step:cycle/exit
 
 → run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, control returns to the walk loop and you continue to the next cared event (if any) in the current nudge. The `ack-cursor` and re-entry to Monitor idle-wait are **per-nudge, not per-event** — they run once at the end of the walk after all events are processed (see §7.1 of `docs/AGENT-RUNTIME.md` and the per-nudge cycle diagram above). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so the per-nudge `ack-stop` can emit a coherent `checkpointed`/`drained` result.
