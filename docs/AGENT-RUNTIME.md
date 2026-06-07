@@ -784,26 +784,35 @@ There is no race where queued events are lost; there is no double-processing bec
 
 ### 7.1 The nudge contract
 
-Per `#9892`:
+Per `#9892`, refined by #11328 D2 to the eager per-event loop below:
 
 ```
-on each nudge:
-    cursor = GET /events/cursor/{role}
-    events = GET /events/for/{role}?since=cursor
-
-    last_tended = cursor
-    for event in events:
+loop forever:
+    event = next event past cursor   # GET /events/for/{role}?since=cursor → first item
+    if event:
         if event passes my role's care filter:
-            run_pre_cycle()    # mechanical: git pull, working-state read, etc.
-            do_work(event)     # the agent's creative work
-            run_post_cycle()   # mechanical: commit, push, working-state write
+            run_pre_cycle()                                # mechanical: git pull, working-state read, etc.
+            do_work(event)                                 # the agent's creative work
+            run_post_cycle()                               # mechanical: commit, push, working-state write
         # if skipped, no cycle wrapper fires
-        last_tended = event.id
+        POST /events  ack-cursor {event_id: event.id, role}  # per-event ack — cursor advances NOW
+        continue                                           # re-check for the next event immediately (drain to empty)
 
-    POST /events  ack-cursor {event_id: last_tended, role}
+    # No events past cursor — queue is drained.
+    if improvement_cooldown_elapsed():
+        run_one_improvement_subloop_task()                 # see §7.6 for throttle + role-class detail
+        continue
+
+    idle_wait_for_next_nudge()                             # Monitor blocks here until event_poll writes another NUDGE
 ```
 
-Pre/post-cycle wraps EACH cared event individually. Skipped events do not trigger cycle wrappers. The batched ack at the end signals "I've handled or skipped everything up to last_tended; advance my cursor."
+Three things to notice compared to the pre-D2 batched walk:
+
+- **Per-event `ack-cursor`** — the ack fires inside the loop, immediately after processing each event (cared or skipped). No batching at the end of a walk.
+- **Drain-to-empty outer loop** — after each ack the loop re-checks for the next event past the cursor before idling. Any events that arrived during processing get picked up in the same wake-up without waiting for a second nudge.
+- **Improvement subloop is a branch of the main loop** — when the queue is drained AND the time-throttle is elapsed, one bounded improvement task fires before returning to idle. See §7.6 for the throttle mechanism, role-class subloop catalog, and `.subloop-last-run` discipline.
+
+The pre/post-cycle wrappers still apply per cared event individually. Skipped events advance the cursor with no wrapper fire (the `ack-cursor` POST still happens — finishing the event by deciding not to act on it IS the cursor commit, per D1). The per-event ack signals "I've tended this event" individually; the cursor is the canonical record of which events have been processed (see §4.3).
 
 ```mermaid
 sequenceDiagram
@@ -816,27 +825,35 @@ sequenceDiagram
 
     EP->>M: nudge line on stdout<br/>literal "NUDGE\n" (no payload)
     M->>A: wake session
-    A->>H: GET /events/cursor/{role}
-    H-->>A: cursor=event_id_X
-    A->>H: GET /events/for/{role}?since=event_id_X
-    H-->>A: [e1, e2, e3]
 
-    loop for each event
-        A->>A: care filter (target_alias == my_alias?)
-        alt cared
-            A->>A: run pre-cycle (git pull, state read)
-            A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
-            A->>A: run post-cycle (commit, push, state write)
-        else skipped
-            Note over A: no cycle wrapper fires
+    loop forever (eager main loop)
+        A->>H: GET /events/for/{role}?since=cursor
+        alt event past cursor
+            H-->>A: event e
+            A->>A: care filter (target_alias == my_alias?)
+            alt cared
+                A->>A: run pre-cycle (git pull, state read)
+                A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
+                A->>A: run post-cycle (commit, push, state write)
+            else skipped
+                Note over A: no cycle wrapper fires
+            end
+            A->>H: POST /events {type:ack-cursor,<br/>event_id:e.id, role}
+            H->>H: advance cursor to e.id
+            H-->>A: 200 OK
+            Note over A: loop continues — re-check for next event
+        else queue drained
+            H-->>A: []
+            alt improvement cooldown elapsed
+                Note over A: §7.6 — run one bounded<br/>improvement subloop task
+                Note over A: loop continues — re-check (other agents may have<br/>assigned work during subloop; subloop forge writes<br/>can trigger EAD-emitted assigned-to for this alias)
+            else cooldown not elapsed
+                Note over A: idle wait<br/>(Monitor blocks until next NUDGE)
+                EP->>M: next NUDGE
+                M->>A: wake — loop continues
+            end
         end
-        A->>A: last_tended = event_id
     end
-
-    A->>H: POST /events {type:ack-cursor,<br/>event_id:last_tended, role}
-    H->>H: advance cursor past last_tended
-    H-->>A: 200 OK
-    Note over A: re-enter idle wait<br/>(no /loop sleep)
 ```
 
 ### 7.2 Boot sequence
@@ -854,8 +871,7 @@ These move independently. The operator sets `intent`; the harness updates `statu
 1. Read the composed `CLAUDE.md` (already on disk in the agent's clone dir at boot — written by the compose pipeline).
 2. Read `.squidsquad/<alias>/working-state.md` for crash-recovery context (active task, key decisions).
 3. Emit `booted` event (`POST /events {type: booted, role, pid, clone_path, version}`) — this is the cursor-clean handshake. The harness transitions `status: booting → ready` on receipt.
-4. Read events at cursor (`GET /events/for/{role}?since=cursor`) or wait for nudge if queue is empty.
-5. Enter ready state — process queued events per §7.1 walk, then idle-wait for next nudge.
+4. Enter §7.1 eager main loop. Its first iteration's `GET /events/for/{role}?since=cursor` performs the initial drain: if events are queued they're processed per-event with their acks; if the queue is empty the loop falls through to the improvement-subloop check and then to idle-wait. No separate boot-time GET or branch is needed — §7.1 handles both cases natively.
 
 #### Agent state machine
 
@@ -1049,22 +1065,25 @@ Honors the locked principle: forge owns work state, harness owns delivery state 
 
 In loop mode, agents run improvement scans on quiet cycles. In event mode there are no cycles — agents wake only on nudges. If we did nothing else, an agent that handles all its events would never run improvement work.
 
-The improvement subloop fires when the agent's queue is observably drained — `GET /events/for/{role}?since=cursor` returned `[]` on the last walk (no events past cursor). There is no harness endpoint for "am I at deque head?"; the agent infers drained-state from an empty GET response.
+The improvement subloop fires when the agent's queue is observably drained — `GET /events/for/{role}?since=cursor` returns `[]` (no events past cursor). There is no harness endpoint for "am I at deque head?"; the agent infers drained-state from an empty GET response.
 
 ```mermaid
 flowchart TD
-    Start(["nudge processed, ack-cursor emitted"])
+    Start(["per-event ack just emitted;<br/>top of §7.1 eager loop"])
     QEmpty{"GET returns empty?<br/>no events past cursor"}
     Throttle{"cooldown elapsed?<br/>time-based throttle"}
     Subloop["run improvement subloop:<br/>one bounded task"]
     Idle["idle wait for next nudge"]
+    Process["process next event<br/>(§7.1 inner loop body)"]
 
     Start --> QEmpty
-    QEmpty -->|"no — more events past cursor"| Idle
+    QEmpty -->|"no — more events past cursor"| Process
+    Process --> Start
     QEmpty -->|"yes — drained"| Throttle
     Throttle -->|"recent subloop ran<br/>within throttle window"| Idle
     Throttle -->|"cooldown elapsed"| Subloop
-    Subloop --> Idle
+    Subloop --> Start
+    Idle -->|"NUDGE wakes agent"| Start
 ```
 
 **Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
