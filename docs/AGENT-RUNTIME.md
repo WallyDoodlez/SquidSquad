@@ -106,6 +106,22 @@ flowchart LR
     S1 ~~~ H2
 ```
 
+### 2.3 Inline mode (human override)
+
+The two modes above describe autonomous wakeups. A third interaction pattern, **inline mode**, fires when a human sends a direct message into the agent's Claude Code session — bypassing both wake mechanisms entirely. Inline mode is not a third triggering mode in the §2 sense: the cycle wrapper does NOT fire on an inline turn. There is no scheduler involvement.
+
+Concrete consequences for an inline turn:
+
+- `cycle_pre.py` does not run; `cycle-input.json` is not written for the turn.
+- `cycle_post.py` does not run; the iteration log is not appended; `working-state.md` is not mechanically updated; the status-bar `current-state` file is not touched.
+- Reactions to the human's request — tracker comments, transitions, PR work — still flow through the forge via `tracker.py`. Durability of side-effects is unchanged.
+
+**Monitoring impact.** PM's pipeline sentinel must treat absence of `cycle-input.json` updates, stale `current-state` writes, and unchanged `working-state.md` during inline-mode periods as **expected** rather than as stall signals (#9358).
+
+**Override discipline.** Human instructions delivered inline take precedence over autonomous cycle work. They do NOT override safety gates: instructions that would cross a role boundary, violate a vault-recorded prohibition, or require destructive / hard-to-reverse action without confirmation must still be flagged before action.
+
+**Resuming autonomous mode after an inline session.** Re-invoke `/loop` (loop mode) or re-arm the Monitor tool (event mode) per the boot-bootstrap recovery directive. The session's wake mode itself does NOT change — it stays whichever was selected at boot (§8.3).
+
 ---
 
 ## 3. The agent process tree (shared)
