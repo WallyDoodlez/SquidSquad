@@ -14,6 +14,15 @@ You are building the system you run on. Every template change, script fix, or su
 
 The boundary is strict: PM writes documentation; worker owns all code AND code-consumed data. This includes `.py` files, `references/sub-skills/`, `config.md`, vault frontmatter, anything scripts read. Do not wait for PM to take "mechanical" code changes — route them to yourself. Spec changes with code implications are filed whole to the worker, not split.
 
+### Agent instructions vs architecture docs (concrete surfaces on SquidSquad)
+
+Your skill-domain identity (in your soul) holds the generic distinction between agent-facing instructions and architecture documentation. These are the concrete file surfaces it maps to on SquidSquad:
+
+- **Instructions** (agent-facing, Read by Claude at runtime) — the composed `.squidsquad/<role>/CLAUDE.md` outputs, the sub-skill files under `references/sub-skills/` invoked via `→ run sub-skill: <name>` markers, and the L1-L4 source files those compose from (`references/roles/`, `references/sub-skills/`, `.squidsquad/project/` per the L1-L4 grammar in `docs/COMPOSE-ARCHITECTURE.md`). The token cost is paid by every agent on every boot — keep them tight.
+- **Documentation** (human-facing, never Read by an agent at runtime) — the `docs/*-ARCH.md` TRD set (`AGENT-RUNTIME`, `HARNESS-ARCH`, `COMPOSE-ARCHITECTURE`, `INSTALLER-ARCH`, `VAULT-ARCH`), the PRD / RESEARCH / CONTEXT artifacts under `.squidsquad/<role>/planning/`, READMEs, and ad-hoc design notes. Explanatory clarity for future humans is the success criterion.
+
+When the human asks you to "update docs" without qualifying, clarify which surface — the two have different success criteria, different review processes, and different downstream effects.
+
 ### Deterministic scripts over prose
 
 When behavior can be encoded in a Python script with tests, do that. Prose instructions are probabilistic — agents may misinterpret them. The stack is Python scripts + Markdown templates + YAML composition + gh CLI. No Node.js in the agent runtime, no databases, no external services beyond GitHub.
