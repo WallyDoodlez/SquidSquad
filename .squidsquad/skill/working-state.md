@@ -1,13 +1,15 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
-- **Started**:
+- **Task**: #11334 — Canonicalize forge-usage instructions across sub-skills (tracker.py / git_ops.py / PR merge)
+- **Status**: in-progress
+- **Started**: 2026-06-08 02:12
+- **Branch**: `squidsquad/task/11334` off `compose-polish-session` @ `695475567`
 - **Last Processed Event ID**: 9d7c2489
 - **Quiet Cycle Counter**: 0
 
 ## Completed Steps
 
+- Cycle 1612 (PICKUP — #11334): transitioned approved→in-progress; created task branch `squidsquad/task/11334` off `compose-polish-session` via `git_ops.py task-begin`; published 4-phase strategy plan on tracker (Phase A: AC1 tracker-protocol canonical content; Phase B: AC3+AC4 new pr-protocol.md; Phase C: AC2 mechanical consolidation of 10 surfaces + 3 --reporter fixes + 1 list-bugs fix; Phase D: AC5 single DS pass). RESEARCH-11334 + CONTEXT-11334 in working tree from PM (untracked — PM-owned). 5 D-Locks: pr-protocol.md is canonical home for AC3+AC4; retire common/issue-filing.md; fix all 3 --reporter deviations + list-bugs; one DS pass for AC5. Next cycle: begin Phase A (tracker-protocol.md expansion — reporter lock, legacy-aliases-retired subsection, per-finding-kind one-liners absorbing body-template strings from to-be-retired common/issue-filing.md). PR base = compose-polish-session (chain-merge). On merge, #11144 polish resumes.
 - Cycle 1611 (QUIET — 5th drain cycle in a row, no movement on blocked queue): no code change. Queue identical to cycles 1604/1606/1609/1610 (#10690 gated on #10686 / #10686 operator-manual / #10955 watch-only). Only meaningful unblock signal would be an operator running the E7 V2 migration smoke (#10686) — that frees #10690 (wiki-link rework) and arguably feeds back into PRD-D's PRD-D #10781 which contains the OOM (#10955) structural fix. No improvement-scan output worth filing; the orchestrator markers + manifest hygiene + catalog state are all consistent post-#11087. Open PRs: #10952 (#10855) still blocked:human-action.
 - Cycle 1610 (QUIET — full session backlog cleared): PR #11088 (#11087 R2) **SHIPPED via DM** since cycle 1609 — installer-files.txt pruned 234→209 lines (header 219→182), all 4 includes.yml have common/discussion-protocol + dead metadata removed, both R1 regressions QA flagged are closed. Counter 22→23. Net session arc on #11087 = +1 R2 fixup that closed the deletion-without-metadata-cleanup pattern. Only remaining open PR is #10952 (still blocked:human-action since cycle 1567). Same 3 blocked queue items (#10690 / #10686 / #10955). Audited `#10360-cleanup` markers in orchestrators — references to deleted file names are intentionally preserved as historical breadcrumbs naming WHAT the content was (not asserting the path exists); the "migrate body to Identity/Responsibility slot in #10360" pointer is the load-bearing future-work signal. No improvement-scan output worth filing this cycle.
 - Cycle 1609 (QUIET — queue drained, PR #11088 pending QA R2): no code change. Queue identical to cycle 1604/1606 (#10690 gated on #10686 / #10686 operator-manual / #10955 watch-only). Open PRs: PR #11088 (#11087 R2) CLEAN/MERGEABLE waiting on QA; PR #10952 (#10855) still blocked:human-action. Drift-check on main still shows 38 orphans because #11088 hasn't landed yet — once it merges they go to 0. Broader sweep across 11 touched-area suites (test_installer_wiring + test_manifest + test_catalog_parser_d1 + test_catalog_drift_d4 + test_v2_catalog_gate_d3 + test_compose + test_compose_9588 + test_event_mode_fragments + test_d2_link_stage_references + test_a3_golden_link_stage + test_git_ops): 420/420 PASS on main. All session work is holding.
