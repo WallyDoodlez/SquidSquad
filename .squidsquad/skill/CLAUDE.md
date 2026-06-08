@@ -935,7 +935,9 @@ python references/scripts/squidsquad_cli.py shutdown
 
 ---
 
-→ run sub-skill: issue-filing
+→ run sub-skill: tracker-protocol
+
+Use the per-finding-kind one-liners in `tracker-protocol`'s **Creating Issues** section to self-file or cross-file findings (Bug fix / Improvement-scan / Cross-role shapes). `common/issue-filing.md` was retired in #11334 and its body templates absorbed into `tracker-protocol.md`.
 
 ---
 
