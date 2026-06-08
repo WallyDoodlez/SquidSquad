@@ -426,7 +426,7 @@ The vault is touched at three points in a cycle (boot, creative, post-cycle); pr
 
 ### 9.4 Post-cycle (mechanical wrap)
 
-> Step labels (Step 4a, 4b, …) in this section reference the post-cycle sequence enumerated in [AGENT-RUNTIME.md §6.1](AGENT-RUNTIME.md). This doc only describes the vault-touching steps; non-vault post-cycle steps (status transitions, tracker comments, iteration logs, commits) live there.
+> Step labels (Step 4a, 4b, …) in this section reference the post-cycle sequence enumerated in [AGENT-RUNTIME.md §7.1](AGENT-RUNTIME.md). This doc only describes the vault-touching steps; non-vault post-cycle steps (status transitions, tracker comments, iteration logs, commits) live there.
 
 In order:
 
@@ -621,7 +621,7 @@ Falls under the broader vault-living-memory umbrella (#5855).
 
 ### 11.4 Future gap — event bus integration (vault emits/consumes zero events today)
 
-[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4 documents the event bus and §4.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
+[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5 documents the event bus and §4.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
 
 Consequences for current behavior:
 
@@ -638,7 +638,7 @@ A future integration would add vault-related signal types to the catalog, e.g.:
 - `vault.posture-detected` (payload: `posture-name`, `source-notes`) — emitted by `vault-synthesis`
 - `vault.note-read` (payload: `path`, `reader-role`) — would source the §11.3 impression model
 
-Falls under the broader vault-living-memory umbrella (#5855) and overlaps with the event-driven mode work in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §7.
+Falls under the broader vault-living-memory umbrella (#5855) and overlaps with the event-driven mode work in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §8.
 
 ### 11.5 Implementation gap — heavy sub-skills currently run inline (target: background subagent)
 
@@ -684,7 +684,7 @@ The cross-references above are **accurate but not yet two-way**. Reconciliation 
 
 - **ARCHITECTURE.md §L6 Memory Layer**: Should add a single line pointing to `VAULT-ARCH.md` as the canonical deep-dive. Today's L150-167 content is overview-correct but doesn't reference this doc (it can't — this doc didn't exist before).
 - **COMPOSE-ARCHITECTURE.md §5.6 and §11.2 G4**: §5.6 now references `VAULT-ARCH.md` for the architecture (vs `vault-protocol.md` for the per-cycle usage contract) and declares the slot **L1-exclusive** (no L2/L3/L4 authoring). §11.2 G4 is **CLOSED** as of 2026-05-29 — the "slot contract" gap is settled by the L1-exclusive guardrail (the slot contract is the L1 short-descriptor pattern; nothing else is authorable). Revisit when a concrete customization pattern surfaces.
-- **AGENT-RUNTIME.md §5 state-persistence row**: Should link to `VAULT-ARCH.md` for the "what" (vs the row's "where" + "owner" + "why" data).
+- **AGENT-RUNTIME.md §6 state-persistence row**: Should link to `VAULT-ARCH.md` for the "what" (vs the row's "where" + "owner" + "why" data).
 - **INSTALLER-ARCH.md §3.2 + §5 + §11**: All vault mentions are factual scaffolding/preservation notes. Should cross-reference `VAULT-ARCH.md` once in the file-layout section so a reader knows where to learn what they just installed.
 - **sub-skill-catalog.md "Vault (institutional memory)" subsection**: Should add a header line linking to `VAULT-ARCH.md` for architecture context.
 

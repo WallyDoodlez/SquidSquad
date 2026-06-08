@@ -28,9 +28,9 @@ The boot sequence MUST work even when the harness is unreachable. Forge access i
 
 3. **Harness reachability is guaranteed by the bootstrap (#9588).** If this fragment is being Read, the boot bootstrap (`common/boot-bootstrap.md`) has already verified that the harness is reachable — otherwise the bootstrap would have routed the agent to the polling fragment, not here. Continue to step 4. (If you got here from step 2's empty idle branch, after step 5 enter the improvement-scan cool-down loop — see [[idle-cooldown-loop]].)
 
-4. **Drain events from cursor forward.** Issue `GET /events/for/{role}?since=<cursor>` against the harness (or invoke `event_poll.py --since <cursor>` in single-shot mode) and walk the returned events through the canonical §7.1 loop: care filter → cycle wrapper if cared → POST `ack-cursor` per event. Boot-drain events typically reflect forge state you can also discover via `tracker.py`, so the cycle wrapper's work is usually a no-op for cared events, but the loop discipline still applies — never jump-to-latest. Handle gap scenarios per [[cursor-management]] (long lag, eviction gap). In an eviction gap specifically, the recovery path is a forge-read followed by a single `ack-cursor(oldest_id)` POST to fast-forward — not a walk of the evicted range.
+4. **Drain events from cursor forward.** Issue `GET /events/for/{role}?since=<cursor>` against the harness (or invoke `event_poll.py --since <cursor>` in single-shot mode) and walk the returned events through the canonical §8.1 loop: care filter → cycle wrapper if cared → POST `ack-cursor` per event. Boot-drain events typically reflect forge state you can also discover via `tracker.py`, so the cycle wrapper's work is usually a no-op for cared events, but the loop discipline still applies — never jump-to-latest. Handle gap scenarios per [[cursor-management]] (long lag, eviction gap). In an eviction gap specifically, the recovery path is a forge-read followed by a single `ack-cursor(oldest_id)` POST to fast-forward — not a walk of the evicted range.
 
-5. **Announce listener-active.** Emit `bootup-complete` (POST `/events` with `event_type=bootup-complete`, `role=<role>`, payload `{"listener_active": true}`); enter the event-listening loop via `event_poll.py`. Per-event cursor advances during the boot drain are POSTed via `ack-cursor` exactly as they will be during the steady-state loop (see [[cursor-management]] and the canonical §7.1 loop in `docs/AGENT-RUNTIME.md`).
+5. **Announce listener-active.** Emit `bootup-complete` (POST `/events` with `event_type=bootup-complete`, `role=<role>`, payload `{"listener_active": true}`); enter the event-listening loop via `event_poll.py`. Per-event cursor advances during the boot drain are POSTed via `ack-cursor` exactly as they will be during the steady-state loop (see [[cursor-management]] and the canonical §8.1 loop in `docs/AGENT-RUNTIME.md`).
 
 After boot, processing is dictated by Cases B through E below.
 
@@ -47,13 +47,13 @@ Monitor tool invocation:
   persistent: true
 ```
 
-`event_poll.py` writes one JSON event object per line to stdout (also called a "NUDGE line" in the L1 instructions and §7.1 diagram). Each line wakes you to process exactly one event.
+`event_poll.py` writes one JSON event object per line to stdout (also called a "NUDGE line" in the L1 instructions and §8.1 diagram). Each line wakes you to process exactly one event.
 
 > **Monitor exit ⇒ exit the session immediately (#9742).** If the Monitor tool exits for ANY reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — **end your session right away**. Do NOT attempt to re-invoke Monitor, do NOT wait for the harness to recover, do NOT pivot to forge-direct work or polling-mode fallback mid-session. The harness / `thin_launcher.py` auto-reboot path owns recovery; the agent exiting IS the signal that recovery is needed. This rule is unconditional — it applies whether Monitor exits before or after `bootup-complete` is emitted. `event_poll.py --wait` has a bounded retry ceiling (10 consecutive transient failures per CONTEXT-9742) so a sustained harness outage will cause Monitor to exit on its own; you do not need to enforce the ceiling yourself.
 
 ---
 
-> **Cursor advance is per-event and agent-driven.** For each event delivered by `event_poll.py`, you process it (cared via the care filter → run the cycle wrapper; skipped → no wrapper) and then POST `ack-cursor {event_id, role}` to the harness. The harness writes `.event-state.json` and replies `200 OK`. There is no batched end-of-walk ack — one ack per tended event, inside the §7.1 loop. See [[cursor-management]].
+> **Cursor advance is per-event and agent-driven.** For each event delivered by `event_poll.py`, you process it (cared via the care filter → run the cycle wrapper; skipped → no wrapper) and then POST `ack-cursor {event_id, role}` to the harness. The harness writes `.event-state.json` and replies `200 OK`. There is no batched end-of-walk ack — one ack per tended event, inside the §8.1 loop. See [[cursor-management]].
 
 > **Case precedence.** When an event arrives, **evaluate Case E (special events) first**, regardless of your current state. Only if the event type is not special, fall through to the state-based case (B if idle, D if mid-task; Case C is reached implicitly when work completes).
 
