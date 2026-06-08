@@ -132,8 +132,19 @@ class TestAc7TopicCoverage:
         (r"case c\b", "common-events/event-mode-contract.md"),
         (r"case d\b", "common-events/event-mode-contract.md"),
         (r"case e\b", "common-events/event-mode-contract.md"),
-        (r"atomic update protocol", "common-events/cursor-management.md"),
-        (r"per-event advance|per-batch", "common-events/cursor-management.md"),
+        # #11330 D1-D4 supersede the pre-existing topic headers
+        # ("Atomic Update Protocol", "Per-Event Advance, Not Per-Batch").
+        # Post-#11328 the cursor is harness-owned in .event-state.json —
+        # the agent has no atomic-write protocol of its own, and per-event
+        # advance is the canonical (and only) model so there is no
+        # per-batch contrast to maintain. The two assertions now pin the
+        # new canonical headers covering the same semantic ground:
+        #   - "How to advance the cursor — POST /events ack-cursor" (the
+        #     mechanism that replaces the old agent-side atomic write)
+        #   - "Where the cursor lives" (the harness-owned framing that
+        #     replaces the agent-side .tmp + mv contract)
+        (r"POST.*ack-cursor|how to advance", "common-events/cursor-management.md"),
+        (r"where the cursor lives", "common-events/cursor-management.md"),
         (r"gap scenarios", "common-events/cursor-management.md"),
         (r"forge-read pattern|forge-read", "common-events/forge-read-pattern.md"),
         (r"idle.*improvement.scan.*cool.?down|cool.?down loop",
