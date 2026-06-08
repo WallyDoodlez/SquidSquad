@@ -72,14 +72,18 @@ Two roles can merge a PR; **PM never merges**, and worker never merges its own P
 
 #### Lane A — Verifier auto-merge (on pending-test → pending-ship)
 
-When the verifier transitions a task from `pending-test` to `pending-ship` (verifier authority per `tracker-protocol.md` legal-flow table), and the PR has **no `review:human-required` label**, the verifier auto-merges:
+When the verifier transitions a task from `pending-test` to `pending-ship` (verifier authority per `tracker-protocol.md` legal-flow table), and the PR is eligible for auto-merge, the verifier triggers the merge:
 
 1. Verifier confirms all ACs pass against the live PR.
-2. Verifier calls `git_ops.py pr-merge <PR_NUMBER> --strategy squash` (canonical merge wrapper; do NOT call bare `gh pr merge`).
-3. The status transition to `pending-ship` follows the merge — DM picks up `pending-ship` items from the queue and runs the delivery flow.
-4. If `review:human-required` is present, verifier transitions to `pending-ship` WITHOUT merging — the PR stays open for a human reviewer; DM observes `pending-ship` but skips the merge until the human ready-merges or the verifier removes the label.
+2. Verifier checks the **eligibility gates** named in `references/sub-skills/roles/verifier/verification.md`: `config.py get auto-merge`, the absence of the `review:human-required` label, and (when applicable) PR Flow on/off.
+3. **If eligible, the harness performs the merge.** The canonical flow is: verifier calls `gh pr ready <PR_NUMBER>` to flip the PR out of draft, then posts to the harness merge endpoint (`POST http://127.0.0.1:<harness-port>/merge` with `pr_number` / `branch` / `role`). The harness performs the squash-merge and emits a `pr-merged` event the verifier picks up on the next cycle. See `verification.md` for the exact `curl` invocation and the `pr-merged` event-handling branches.
+4. **`git_ops.py pr-merge <PR_NUMBER> --strategy squash`** is the **non-harness fallback** — a thin `gh pr merge --squash` wrapper for direct CLI use when the harness is unreachable or when verifier is run outside a harness-managed session. It is NOT the path verifier exercises in normal operation. Bare `gh pr merge` is still non-canonical regardless of lane; use the wrapper.
+5. Status transition to `pending-ship` follows successful merge (whether harness-mediated or CLI-fallback). DM then picks up `pending-ship` from the queue and runs the delivery flow.
+6. If `review:human-required` is present OR `auto-merge` is off, verifier transitions to `pending-ship` (or `pending-human-review`) WITHOUT merging — the PR stays open for a human reviewer; DM observes the state but skips the merge until the human ready-merges or the verifier removes the label.
 
-Full verifier-side procedure (eligibility check, ship-comment shape, rollback on merge conflict): see `references/sub-skills/roles/verifier/verification.md`.
+Full verifier-side procedure (eligibility gates, ship-comment shape, `pr-merged` event handling, rollback on merge conflict): see `references/sub-skills/roles/verifier/verification.md`.
+
+This sub-skill is the **canonical interface lock** (which gates apply, which transitions follow which lane, squash strategy is universal); `verification.md` owns the **runtime mechanics** (which endpoint, which event, which curl shape). When the two disagree, the role-side file is the source of truth for the implementation — file a sub-skill update against this file via `→ run sub-skill: tracker-protocol` (improvement-scan finding) to bring this doc back in sync.
 
 #### Lane B — DM ship-pending (on pending-ship → shipped)
 
@@ -101,7 +105,7 @@ PM never runs `git_ops.py pr-merge`. The pipeline-sentinel's role here is **obse
 
 ### Merge strategy lock — squash
 
-All PR merges via `git_ops.py pr-merge` default to `--strategy squash`. Rationale: every merged PR collapses to one commit on the target branch, keeping `git log main --oneline` readable as a sequence of shipped tasks. Merge commits and rebase merges are explicitly avoided per the operator's standing "always merge, never rebase" rule applied at the *branch level* (we merge the branch via squash, never rebase its commits onto main).
+All PR merges land as squash-merges, regardless of which mechanism performs them. The harness merge endpoint squashes by default; `git_ops.py pr-merge` defaults to `--strategy squash`. Rationale: every merged PR collapses to one commit on the target branch, keeping `git log main --oneline` readable as a sequence of shipped tasks. Merge commits and rebase merges are explicitly avoided per the operator's standing "always merge, never rebase" rule applied at the *branch level* (we merge the branch via squash, never rebase its commits onto main).
 
 For chain-merge task branches (e.g. polish-bundle siblings PR'd against `squidsquad/skill/compose-polish-session`), the same squash default applies — when the bundle eventually PRs against `main`, that bundle PR also squashes. The intermediate squash on the bundle branch does NOT lose history; the bundle PR description names every sibling PR by number.
 
@@ -128,7 +132,8 @@ If the conflict is in a machine-regenerated transient file (composed CLAUDE.md, 
 | Open PR (code review) | owning worker | `git_ops.py pr-create "<title>" "<body>"` |
 | Open PR (planning review) | PM | `git_ops.py pr-create "<title>" "<body>"` (planning shape, see `roles/pm/task-intake.md`) |
 | Convert draft → ready | PM (metadata only) | `gh pr ready <NUMBER>` |
-| Merge PR (no human-review) | verifier | `git_ops.py pr-merge <NUMBER> --strategy squash` |
+| Merge PR (no human-review, harness reachable) | verifier | `gh pr ready <NUMBER>` then `curl -X POST http://127.0.0.1:<harness-port>/merge` (canonical; see `verification.md`) |
+| Merge PR (no human-review, harness fallback) | verifier | `git_ops.py pr-merge <NUMBER> --strategy squash` (CLI fallback only) |
 | Merge PR (human-required) | human | manual via GitHub UI; DM observes the merge event |
 | Resolve PR conflict | owning worker | `git merge origin/<BASE>` (NEVER rebase) |
 | Close PR without merge | PM or DM | `gh pr close <NUMBER>` — only on operator instruction or DM rollback after route-back |
