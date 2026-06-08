@@ -138,6 +138,7 @@ Reusable across multiple roles.
 | Sub-skill | One-liner | Used by |
 |---|---|---|
 | `git-commit` | Commit/push protocol with PR flow | dev (DM has its own variant) |
+| `pr-protocol` | PR lifecycle — `git_ops.py pr-create` lock vs bare `gh pr create`; two-lane merge protocol (verifier auto-merge + DM ship-pending; PM observes, never merges); squash-strategy lock; conflict-resolve via merge (never rebase) | all roles (runtime-loaded via `→ run sub-skill: pr-protocol` from `common/git-commit.md`, `roles/pm/task-intake.md`, `roles/verifier/verification.md`, `roles/dm/delivery-packaging.md`, `roles/pm/pipeline-sentinel.md`) |
 | `improvement-scan` | Full proactive scan for process/template gaps | PM, dev |
 | `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | QA |
 | `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; removal paired with the broader capability-framework retirement per [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md), not this PR) |
