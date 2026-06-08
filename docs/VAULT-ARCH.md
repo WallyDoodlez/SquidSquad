@@ -621,7 +621,7 @@ Falls under the broader vault-living-memory umbrella (#5855).
 
 ### 11.4 Future gap — event bus integration (vault emits/consumes zero events today)
 
-[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5 documents the event bus and §4.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
+[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5 documents the event bus and §5.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
 
 Consequences for current behavior:
 
