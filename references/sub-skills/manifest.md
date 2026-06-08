@@ -70,7 +70,6 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 10. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 11. `common/vault-optimize` — Vault optimization on quiet cycles
 12. `common/git-commit` — Step 5: commit/push protocol with PR flow
-14. `common/issue-filing` — Self-file and cross-file bug templates
 15. `common/working-state` — Working State File format
 16. `common/vault-protocol` — Vault operations (full)
 19. `common/self-restart` — Context-pressure self-restart at cycle end
@@ -198,7 +197,6 @@ references/sub-skills/
 │   ├── improvement-scan.md           (Quiet-cycle improvement scanning — shared by all roles)
 │   ├── git-commit.md                 (Step 5 — commit/push + PR flow — shared by dev)
 │   ├── discussion-protocol.md        (Discussion entry format — shared by dev)
-│   ├── issue-filing.md                 (Self-file + cross-file bug templates — shared by dev)
 │   ├── file-conventions.md           (File/directory conventions — shared by dev)
 │   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — PM + dev only)
 │   ├── vault-optimize.md            (Vault optimization on quiet cycles — PM + dev only)

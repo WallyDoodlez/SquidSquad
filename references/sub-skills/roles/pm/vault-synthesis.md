@@ -58,13 +58,19 @@ For each detected posture (max **1 per synthesis cycle**):
    - **Body**: describe the principle, cite the source notes via `[[wikilinks]]`, explain why these converge
    - **Name**: `pattern-posture-<descriptive-name>.md`
 
-2. File a pending task for human review:
-   ```bash
-   python references/scripts/tracker.py create-task \
-     --title "Review posture: [principle name]" \
-     --body "Vault synthesis detected a convergent principle across agent decisions.\n\n**Principle**: [description]\n**Source notes**: [list with wikilinks]\n**Evidence**: [why these converge]\n\nIf approved, this becomes active scan criteria for all agents." \
-     --role pm --priority low --reporter pm-lead
+2. File a pending task for human review.
+
+   → run sub-skill: `tracker-protocol` — use the **Feature task** one-liner shape with title `"Review posture: [principle name]"` and body:
    ```
+   Vault synthesis detected a convergent principle across agent decisions.
+
+   **Principle**: [description]
+   **Source notes**: [list with wikilinks]
+   **Evidence**: [why these converge]
+
+   If approved, this becomes active scan criteria for all agents.
+   ```
+   Set `--role pm`, `--priority low`, `--reporter pm-lead`.
 
 3. Run vault-check Level 1 on the new note.
 

@@ -72,12 +72,10 @@ After completing the rotation, start over. The rotation ensures full coverage wi
 
 **When structural gaps are found** (missing docs, wrong organization):
 
-- File a task to yourself via tracker:
-  ```bash
-  python references/scripts/tracker.py create-task \
-    --title "[title]" --body "[description]" \
-    --role dm --priority medium --reporter dm-lead
-  ```
+- File a task to yourself via tracker.
+
+  → run sub-skill: `tracker-protocol` — use the **Feature task** one-liner shape (Background / Acceptance Criteria / Out-of-scope body). Set `--role dm`, `--priority medium`, `--reporter dm-lead`.
+
 - Do not attempt structural changes inline during a scan.
 
 ### Tier 2 — Documentation Organization (threshold-triggered)

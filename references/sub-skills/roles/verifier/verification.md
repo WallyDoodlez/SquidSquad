@@ -56,9 +56,9 @@ Every finding must include structured evidence:
 ```
 
 - If **objective** (clear pass/fail, crash, error): File immediately with the structured format above.
-  ```bash
-  python references/scripts/tracker.py create-issue --title "[title]" --body "[structured finding]" --role [target-role] --severity [high|medium|low] --reporter verifier
-  ```
+
+  → run sub-skill: `tracker-protocol` — use the **Bug fix** one-liner shape with the structured Finding / Evidence / Category / Routed-to body in place of the bug-fix template. Set `--role [target-role]`, `--severity [high|medium|low]`, `--reporter verifier-lead`.
+
 - If **subjective** (coherence issue, style concern, architectural question): Flag for PM/human review. Do NOT file an issue — PM and human decide.
   ```bash
   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Subjective finding flagged for PM/human review: [structured description]"

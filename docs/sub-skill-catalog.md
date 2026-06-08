@@ -116,7 +116,7 @@ Reusable across multiple roles.
 |---|---|---|
 | `tracker-protocol` | Full mechanical contract for tracker.py — timestamps, check-gh gate, list/read/create flows, legal status transitions matrix + per-role authority, Discussion entries, planning-artifact paths, per-cycle caching | all roles |
 | ~~`discussion`~~ | Append-only tracker comment format — the inter-agent communication channel named in [COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity) (renamed from `discussion-protocol` at #10360 — strike-through pending the file rename which lands as part of #10360) | all roles (per-role overrides retire at #10360) |
-| `issue-filing` | Self-file and cross-file bug templates | all roles (per-role overrides retire at #10360) |
+| ~~`issue-filing`~~ | _retired in #11334_ — body templates absorbed into `tracker-protocol`'s per-finding-kind one-liners (Bug fix / Feature task / Improvement-scan / Cross-role). The bare `issue-filing` name no longer resolves; use `→ run sub-skill: tracker-protocol` for the canonical mechanics. Per-role policy files (`roles/{dm,pm,verifier}/issue-filing.md`) survive separately. | _retired_ |
 | `working-state` | Working-state file format and update rules | worker |
 | `pickup-comment-fidelity` | Pickup comments must accurately reflect tracker state | worker |
 

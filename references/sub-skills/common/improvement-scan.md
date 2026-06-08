@@ -46,22 +46,13 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
 
    Apply these criteria to the selected files. If your SOUL.md lacks an Improvement Scan section, fall back to general code quality checks (dead code, error handling, security).
 
-5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via `python references/scripts/tracker.py create-issue` or `create-task`:
+5. **Report findings to PM**: For each finding (max **2 items per scan**), classify it and file via the canonical tracker shape.
 
    **Classification:**
    - **Issue** (`type:issue`): something broken, wrong, inconsistent, stale, or not working as specified
    - **Task** (`type:task`): something new that doesn't exist yet, enhancement, optimization
 
-   File each finding as a GitHub Issue with labels: the appropriate `type:issue` or `type:task`, `role:[target-role]`, `priority:low`, and `improvement-scan`. Include in the Issue body:
-
-   ```
-   **Found by**: [role]-lead (improvement-scan)
-   **File**: [path]
-   **Finding**: [specific finding]
-   **Recommendation**: [what to do]
-   ```
-
-   Tag all findings with the `improvement-scan` label so PM and human can filter them.
+   → run sub-skill: `tracker-protocol` — use the **Improvement-scan finding** one-liner shape (Observation / Location / Suggested-fix body). Set `--role [target-role]`, `--severity low` for issue findings, `--priority low` for task findings, `--reporter [ROLE]-lead`. Tag every finding with the `improvement-scan` label so PM and human can filter them.
 
 6. **Update scan history**: Record the scan in both the DB and markdown (dual-write):
    ```bash
