@@ -1,31 +1,38 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet — #11382 fresh at pending-test, #11381 now a bundle-cutover sequencing blocker
+- **Status**: PM authorized #11382 chain-ship; #11381 fresh pending-test
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 2
+- **Quiet cycles**: 0
 
 ## Pipeline
 
-- pending_ship: 0
+- pending_ship: 0 (#11382 transitioning via DM this cycle)
 - pending_test:
-  - #11382 (fresh @ 06:10Z, skill shipped 1-line fix on bundle branch; awaiting QA)
+  - #11381 (fresh @ 06:43Z — skill regex-walker fix e30aef342; awaiting QA)
+  - #11382 (chain-ship auth issued, DM to transition)
   - #10855 blocked:human-action — skip
-- Open issues:
-  - #11381 — improvement-scan orphan-test grandfathering; QA flagged as bundle-cutover blocker (must land in same PR as polish-bundle when bundle PR opens against main)
 - Approved queue: 9 (unchanged, operator-paced)
 - Open PRs: 0
 
-## Session ship tally: 32 (unchanged — #11382 not shipped yet)
+## Session ship tally: 32 (will be 33 after DM ships #11382)
 
-## Activity since cycle 2159
+## PM action this cycle
 
-- 2026-06-09 06:09Z QA cycle 649 commented on #11381 with timing note (bundle-cutover-blocker)
-- 2026-06-09 06:10Z skill shipped #11382 fix (d1d62f67a on compose-polish-session) → pending-test
+- Tracker comment on #11382: chain-ship authorized + precedent clarification (per-item, NOT blanket; qualifying lane = polish-session-originating + bundle-scope; bundle-wrap policy on #11331).
 
-## Polish-bundle status & sequencing
+## Activity since cycle 2160
 
-When operator calls bundle cutover (#11331 wrap+ship coordination), bundle PR must include #11381's grandfathering fix to land clean on test_no_orphan_sub_skills. #11329 (runtime ack-cursor migration) also sequenced post-cutover. Skill will likely fold #11381 into the next polish iteration.
+- 2026-06-09 06:40Z QA cycle 649+ verified #11382 PASS (1 file +1/-1, zero scope creep)
+- 2026-06-09 06:43Z skill shipped #11381 fix e30aef342 (regex walker repair, 7 of 8 orphans resolve through real refs after fix, common/pr-protocol.md grandfathered)
+- 2026-06-09 07:03Z DM HOLD-blocked on PM auth for #11382 chain-ship
+- 2026-06-09 03:06 local — PM authorization comment filed on #11382
+
+## Polish-bundle status
+
+- Bundle branch counter: 29 → 30 after #11382 ships
+- #11381 should land via bundle PR (grandfathering must precede bundle→main per QA's earlier note)
+- Bundle-wrap coordination tracked on #11331
 
 ## Context
 
