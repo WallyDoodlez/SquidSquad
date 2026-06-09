@@ -201,7 +201,13 @@ class TestManifestIntegrity:
         # any current role manifest. It's a sub-skill that may be wired in
         # for future event-driven needs; explicitly tolerate its
         # un-referenced state rather than block the build.
-        known_unused = {"common/event-reactions.md"}
+        # #11381: common/pr-protocol.md is reachable at runtime via
+        # common/git-commit.md → pr-protocol marker chain. The directive
+        # walker above only scans references/roles/**/instructions.md, so
+        # transitive references from sub-skill bodies are invisible to it.
+        # Grandfather alongside event-reactions.md until the walker is
+        # taught to traverse sub-skill bodies.
+        known_unused = {"common/event-reactions.md", "common/pr-protocol.md"}
         orphans = all_md - referenced - known_unused
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"
 
@@ -220,7 +226,16 @@ class TestManifestIntegrity:
         roles_dir = REFERENCES_DIR / "roles"
         if not roles_dir.exists():
             return set()
-        directive_re = re.compile(r'→\s*run\s+sub-skill:\s*([A-Za-z0-9][\w-]*)')
+        # #11381: tolerate two lexical surface variants the original regex
+        # missed — (1) backtick-wrapped names (e.g. `→ run sub-skill:
+        # `foo`.`) used stylistically to format identifiers as code, and
+        # (2) slash-bearing path-form names (e.g.
+        # `roles/dm/events/pr-merge-wait`) per the sub-skill-catalog
+        # name-shape spec. Capture the final segment so the downstream
+        # file-stem match works for both bare and slash-bearing forms.
+        directive_re = re.compile(
+            r'→\s*run\s+sub-skill:\s*`?(?:[\w/-]+/)?([A-Za-z0-9][\w-]*)`?'
+        )
         names = set()
         for instr in roles_dir.rglob("instructions.md"):
             text = instr.read_text(encoding="utf-8")
