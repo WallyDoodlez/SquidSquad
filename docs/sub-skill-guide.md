@@ -188,19 +188,6 @@ After includes are resolved, placeholders are substituted with values from `.squ
 
 **Important**: `[ROLE]` and `[ROLE_UPPER]` are substituted for ALL roles (needed by shared sub-skills like `cycle-runner.md`). `[ROLE_TEST_CMD]` and `[OTHER_ROLES]` are dev-only — PM, QA, and DM do not use them.
 
-### `[ROLE]` vs `<role>` — when to use which bracket form
-
-The two bracket forms are NOT interchangeable. Use the one that matches the perspective of the sentence:
-
-| Form | Substitution behavior | Use for |
-|---|---|---|
-| `[ROLE]`, `[ROLE_UPPER]` (square brackets, UPPERCASE) | Rewritten at compose time to the composing role's name | **Self-references**: per-role paths (`.squidsquad/[ROLE]/planning/`), per-role commands (`--role [ROLE]-lead`), per-role file names (`[ROLE]-log.md`) that the reading agent uses on itself |
-| `<role>`, `<your-role>`, `<their-role>` (angle brackets, lowercase) | **Survive composition literally** — no substitution | **References to other agents**: advice that describes what a teammate of class `<role>` might do, e.g. "the assigned worker runs `--role <role>-lead`" or "DM transitions `<role>`-owned tasks at ship time" |
-
-**Why this matters**: if you write `dev agents use --role [ROLE]-lead` inside L1 instructions.md (intended as generic advice about workers), compose will rewrite `[ROLE]` to the composing role's name — so PM's deployed CLAUDE.md sees "dev agents use `--role pm-lead`", which is self-targeted nonsense. The angle-bracket form `<role>` carries the same authorial intent but survives compose so every reading agent sees the generic form.
-
-**Author's check**: ask *"does this sentence describe what THE READING AGENT does, or what SOME OTHER AGENT does?"* Reading-agent-on-itself → square brackets. Other-agent-described → angle brackets.
-
 ---
 
 ## The Manifest and Includes

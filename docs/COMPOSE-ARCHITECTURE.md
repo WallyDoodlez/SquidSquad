@@ -165,6 +165,15 @@ The two axes interact at compose time. Examples:
 
 **Mental model:** L1-L4 is the *content* the install ships; `.squidsquad/config.md` is the install's *parameters*. Both feed compose; neither is a layer of the other.
 
+> **Maintainer convention — `[ROLE]` vs `<role>` bracket form** (applies when editing L1-L4 source under `references/roles/` or `references/sub-skills/`):
+>
+> | Form | Substitution behavior | Use for |
+> |---|---|---|
+> | `[ROLE]`, `[ROLE_UPPER]` (square brackets, UPPERCASE) | Rewritten at compose time to the composing role's name | **Self-references**: per-role paths (`.squidsquad/[ROLE]/planning/`), per-role commands (`--role [ROLE]-lead`), per-role file names (`[ROLE]-log.md`) that the reading agent uses on itself |
+> | `<role>`, `<your-role>`, `<their-role>` (angle brackets, lowercase) | **Survive composition literally** — no substitution | **References to other agents**: advice that describes what a teammate of class `<role>` might do, e.g. "the assigned worker runs `--role <role>-lead`" or "DM transitions `<role>`-owned tasks at ship time" |
+>
+> Why it matters: writing `dev agents use --role [ROLE]-lead` inside L1 instructions.md (intended as generic advice about workers) gets rewritten at compose to "dev agents use `--role pm-lead`" in PM's deployed CLAUDE.md — self-targeted nonsense. The angle-bracket form carries the same authorial intent but survives compose so every reading agent sees the generic form. Author's check: *"does this sentence describe what THE READING AGENT does, or what SOME OTHER AGENT does?"* Reading-agent-on-itself → square brackets. Other-agent-described → angle brackets.
+
 Per-install customization paths therefore split:
 
 - **Project-local content changes** (new instructions, role-boundary additions, soul tweaks, project facts) → L4 file (`.squidsquad/project/<role-class>.md` with H2 slot sections)
