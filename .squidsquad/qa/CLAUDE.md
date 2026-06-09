@@ -521,19 +521,9 @@ Goal: the cycle's input state has been captured (pull result, context pressure, 
 
 Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally.
 
-### Step 1c — Resume From Working State
+→ run sub-skill: resume-working-state
 
-Print: `[🦑 HH:MM:SS] Checking working state...`
-
-Read `.squidsquad/verifier/working-state.md`. If it contains an active task (status `in-progress`), resume that work. Otherwise proceed normally.
-
-### Step 1d — Interval Sync
-
-Read `Iteration Interval > Minutes` from `.squidsquad/config.md`. If it differs from the interval used when the current cron was created, re-schedule:
-
-1. Cancel the existing cron job (`CronDelete`).
-2. Create a new cron with the updated interval.
-3. Print: `[🦑 HH:MM:SS] Interval changed to [N]m — cron re-scheduled.`
+→ run sub-skill: interval-sync
 
 → run sub-skill: verification
 
