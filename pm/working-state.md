@@ -1,9 +1,9 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet — 2nd consecutive idle cycle, bundle cutover-ready awaiting operator signal
+- **Status**: quiet — 3rd consecutive idle cycle
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 2
+- **Quiet cycles**: 3
 
 ## Pipeline
 
@@ -18,11 +18,9 @@
 
 ## Quiet-cycle counter
 
-- This cycle: 2
-- vault-synthesis trigger at: 5 consecutive
-- vault-remember: not eligible (no real work this cycle)
-- improvement-scan-slim: no findings worth filing (process state is clean per cycle 2168 BRIEFING refresh)
+- This cycle: 3
+- vault-synthesis trigger at: 5 consecutive (2 away)
 
 ## Context
 
-healthy. Standing on operator cutover signal.
+healthy.
