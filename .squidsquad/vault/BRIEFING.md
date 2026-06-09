@@ -15,10 +15,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - **#11053 agent-spawn substrate for v2 §4.6 assemble** (in-progress, role:pm) — Phase 1 v1 deliverable committed at `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md` (cycle 2143 ext); 5 operator-review questions in §9 outstanding.
 - **#10690 wiki-link rework** (approved, gated on E7)
 - **Bump-gate** (DM): counter 32/10 within bundle window, **HELD per operator standing direction (c1383)** awaiting #11331 cutover signal. Release path: operator signals cutover → bundle PR merges to main → DM bumps to v0.44.0 with full 35-item CHANGELOG. The #10955/#10541 close-decisions are no longer the binding constraint (superseded by polish-bundle workflow).
-- **Open follow-ups** (not bundle-blocking, can land before or after cutover):
+- **Open follow-ups** (not bundle-blocking, post-cutover queue):
+  - **#11400** (status:pending, role:pm, priority:medium) — Retire `docs/sub-skill-guide.md` + back-reference sweep + migrate maintainer-load-bearing content (per operator decision via #11144 polish session: sub-skill authoring is internal-maintainer only under new arch). **Gated on cutover.** Intake on operator signal.
+  - **#11329** (approved, role:skill) — Runtime per-event ack-cursor + working-state.md cursor cleanup; multi-cycle architectural work, skill correctly deferred mid-/loop pickup, will activate post-cutover fresh-session.
   - #11394 (severity:medium, role:skill) — 37 test_*.py files in tests/ not gated by run_tests.py STATIC_TEST_MODULES; skill self-handles
   - G11 (#11144 standing list) — common/boot-bootstrap.md source divergent from L1 inlining (composed dedups correctly); skill recommends delete-source as deferred structural cleanup
-  - G3-G10 (#11144 standing list) — awaiting operator decision
+  - G3 + G5-G10 (#11144 standing list) — G3 closed Iter 29 (FIRST instruction = execution order clarification); G4 closed Iters 30-31 ([ROLE] vs <role> convention, re-homed to COMPOSE-ARCHITECTURE.md §3 via c80414bf2); remaining G-gaps awaiting operator decision
 
 ## Recently Shipped
 
@@ -53,6 +55,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Recent Decisions
 
+- **Sub-skill authoring scope** (operator decision via #11144 polish session, 2026-06-09) — under the new architecture, sub-skill authoring is **internal-maintainer only**. No user-facing authoring guide. `docs/sub-skill-guide.md` retires post-cutover (#11400). Compose mechanism (`compose.py`, `references/sub-skills/`) keeps working — just no public-facing "how to write a sub-skill" doc. Consistent with [[project_subskills_not_skills]] (sub-skills agent-internal compose-time) and [[project_marketplace]] (no public directory).
 - **Chain-ship to bundle precedent** (#11382 c1876 / reaffirmed on #11381 / #11383) — chain-ship to `compose-polish-session` is **per-item, explicitly PM-authorized — NOT blanket auto-auth**. Qualifying lane: polish-session-originating AND bundle-scope. Scope expansion within the same lane is a positive signal not disqualifier. Broader bundle-wrap policy stays on #11331.
 - **Cutover-PR Path A** (#11383 c-? 2026-06-09) — chain-ship items to bundle inline with their ship transition; defer v0.44.0 release semantics (CHANGELOG + version-bump) to a separate operator-prompted cutover-PR. Path B (inline-trigger v0.44.0 release inside a ship transition) rejected — would violate operator's c1383 bump-hold direction.
 - **Cutover workflow** (#11331 c-? 2026-06-09) — once operator signals: (1) skill creates cutover-PR `compose-polish-session` → `main`; (2) skill transitions #11227 / #11139 / #11137 from in-progress → pending-test (assigned-role authority, brings tracker in line with actual work-on-bundle); (3) QA re-verifies all 3 on polish-HEAD (#11137 / #11139 = re-verify previously-verified on PR #11138 / #11141 before route-back; #11227 = fresh first-time pass); (4) DM ships all 7 (4 chain + 3 stale) via cutover-PR merge.
