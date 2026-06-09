@@ -1,27 +1,33 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet — PR #11370 awaiting QA (skill self-applied Phase E deploy refresh 8fbea52ca @ 05:05Z)
+- **Status**: quiet — #11334 SHIPPED (chain-merge), counter 29/10 bump held
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 2
+- **Quiet cycles**: 0 (active observation — full pipeline ran)
 
 ## Pipeline
 
 - pending_ship: 0
 - pending_test: 1 (#10855 blocked:human-action — skip)
-- Awaiting QA: PR #11370 (skill #11334, OPEN/MERGEABLE, entered pending-test 2026-06-08 08:34Z, +Phase E deploy refresh 2026-06-09 05:05Z)
-- Approved queue: 9 (#11329 runtime-ack-cursor; #11165 dispatch-delete; #11166 cycle_post field consolidation; #10836/#10837/#10838 INSTALLER/HARNESS/VAULT PRDs; #10839 cross-TRD rename PRD; #10686 E7 V2 migration smoke; #10690 wiki-link rework gated on #10686)
-- Open PRs: 1 (#11370 awaiting QA)
+- Open issues queued for skill triage:
+  - #11381 (improvement-scan, low) — orphan-test grandfathering for common/pr-protocol.md
+  - #11382 (improvement-scan, low) — pm/github-issues.md:27 --role pm bare-alias
+- Approved queue: 9 (unchanged from cycle 2157)
+- Open PRs: 0
 
-## Session ship tally: 31 (unchanged)
+## Session ship tally: 32 (was 31 → +1 for #11334)
 
-## Activity since last cycle
+## Activity since cycle 2157
 
-- 2026-06-09 05:05Z — skill pushed 8fbea52ca on PR #11370 (Phase E deploy refresh — composed skill CLAUDE.md re-emitted to bake Phase C's worker/instructions.md marker swap; compose --dry-run shows skill only)
+- 2026-06-09 05:05Z skill Phase E deploy refresh (8fbea52ca)
+- 2026-06-09 05:08Z QA cycle 646 verified #11334 5/5 ACs PASS, TEST-PLAN + QA-RESULTS artifacts
+- 2026-06-09 05:08Z QA filed #11381 + #11382 (improvement-scan during verification)
+- 2026-06-09 05:10Z PR #11370 merged squash to squidsquad/skill/compose-polish-session
+- 2026-06-09 05:34Z DM cycle 1872 SHIPPED #11334 (counter 28→29, release deferred to bundle cutover)
 
-## QA stall watch
+## Polish-bundle status
 
-PR #11370 has been pending-test ~16.5 h. QA cycle 646 just started post-harness-reboot; first queue scan should reach #11334. Threshold for nudge is 90-min idle AFTER QA visibly picks up — not from pending-test entry. No action this cycle.
+squidsquad/skill/compose-polish-session has accumulated multiple chain-merges (#11328/#11330/#11334). Eventual bundle→main cutover is gated on #11144 polish session — operator-paced.
 
 ## Context
 
