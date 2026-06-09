@@ -1,9 +1,9 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet — 3rd consecutive idle cycle
+- **Status**: quiet — 4th consecutive idle cycle
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 3
+- **Quiet cycles**: 4
 
 ## Pipeline
 
@@ -16,10 +16,14 @@
 
 ## Session ship tally: 35 (unchanged)
 
+## Activity since cycle 2171
+
+- 2026-06-09 12:10Z skill posted scope-but-defer note on #11329 (runtime ack-cursor migration; correctly flagged as multi-cycle architectural work not /loop-appropriate; aligns with BRIEFING's operator-sequenced post-cutover status)
+
 ## Quiet-cycle counter
 
-- This cycle: 3
-- vault-synthesis trigger at: 5 consecutive (2 away)
+- This cycle: 4
+- vault-synthesis trigger at: 5 consecutive (1 away — fires next cycle if idle)
 
 ## Context
 
