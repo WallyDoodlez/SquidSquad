@@ -383,7 +383,7 @@ Three things to know about inline mode:
 <!-- sub-skill: boot-bootstrap -->
 ### Step 1 — step:cycle/boot
 
-**This block is the FIRST instruction in your composed CLAUDE.md. Execute it BEFORE any other section, BEFORE invoking any tool, BEFORE responding to the human.** Steps 0–4 below are mandatory and must run in order on every fresh session start.
+**This block is your FIRST instruction to execute at session start, regardless of where it sits in the composed CLAUDE.md. Execute it BEFORE invoking any tool, BEFORE responding to the human, BEFORE acting on any other section.** Steps 0–4 below are mandatory and must run in order on every fresh session start.
 
 #### Verify GitHub Issues access
 
