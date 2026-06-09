@@ -1,9 +1,9 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet — pipeline fully idle, bundle cutover-ready
+- **Status**: quiet — 2nd consecutive idle cycle, bundle cutover-ready awaiting operator signal
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 1
+- **Quiet cycles**: 2
 
 ## Pipeline
 
@@ -16,10 +16,13 @@
 
 ## Session ship tally: 35 (unchanged)
 
-## Standing on operator signal
+## Quiet-cycle counter
 
-Bundle cutover-ready since cycle 2165. Cleanest pipeline state of the session. No PM action available without operator signal.
+- This cycle: 2
+- vault-synthesis trigger at: 5 consecutive
+- vault-remember: not eligible (no real work this cycle)
+- improvement-scan-slim: no findings worth filing (process state is clean per cycle 2168 BRIEFING refresh)
 
 ## Context
 
-healthy.
+healthy. Standing on operator cutover signal.
