@@ -296,7 +296,9 @@ PM produces **acceptance criteria only** in Phase 3 (#9184). No test plan, no te
 
 If any answer is unclear, the AC is incomplete — refine before filing.
 
-**File the GitHub Issue** — create via `python references/scripts/tracker.py create-task` with status `Pending`. The body is the single source of truth for the AC list:
+**File the GitHub Issue** — create via the canonical task shape with status `Pending`. The body is the single source of truth for the AC list.
+
+→ run sub-skill: `tracker-protocol` — use the **Feature task** one-liner shape (Background / Acceptance Criteria / Out-of-scope body), preceded by the AUTHORITATIVE SCOPE banner below. Set `--role [target-role]`, `--priority [high|medium|low]`, `--reporter pm-lead`. The body shape must include:
 
 - AUTHORITATIVE SCOPE banner at the start of the body (#8917 Change 3): when the task has a `CONTEXT.md` (bundle `§5.X #<NUMBER>`) or `CONTEXT-<NUMBER>.md`, the body passed to `create-task` MUST start with the banner pointing at that locked planning file. Format:
   ```
@@ -322,7 +324,12 @@ After Phase 3 (AC drafting + issue filing) completes:
    git add .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-*
    git commit -m "[ROLE]: #[NUMBER] — planning artifacts for [title]"
    ```
-3. **Push and create draft PR** (use the branch name from task-begin):
+3. **Push and create draft PR** (use the branch name from task-begin).
+
+   → run sub-skill: `pr-protocol` for the wire mechanics (`git_ops.py pr-create` is canonical; bare `gh pr create` is non-canonical and skips base-branch and body-shape coordination).
+
+   Planning-review PRs use a distinct title + body shape from code-review PRs (this is the only carve-out from the standard PR body shape in `pr-protocol`):
+
    ```bash
    git push -u origin [BRANCH]
    python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title] (planning review)" \

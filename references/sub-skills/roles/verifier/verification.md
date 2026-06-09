@@ -56,12 +56,12 @@ Every finding must include structured evidence:
 ```
 
 - If **objective** (clear pass/fail, crash, error): File immediately with the structured format above.
-  ```bash
-  python references/scripts/tracker.py create-issue --title "[title]" --body "[structured finding]" --role [target-role] --severity [high|medium|low] --reporter verifier
-  ```
+
+  → run sub-skill: `tracker-protocol` — use the **Bug fix** one-liner shape with the structured Finding / Evidence / Category / Routed-to body in place of the bug-fix template. Set `--role [target-role]`, `--severity [high|medium|low]`, `--reporter verifier-lead`.
+
 - If **subjective** (coherence issue, style concern, architectural question): Flag for PM/human review. Do NOT file an issue — PM and human decide.
   ```bash
-  python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Subjective finding flagged for PM/human review: [structured description]"
+  python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Subjective finding flagged for PM/human review: [structured description]"
   ```
 - If **ownership unclear**: Escalate to PM. PM is always present and owns coordination.
 - If the finding **spans multiple domains**: File to the primary responsible role, cross-reference others in comments.
@@ -116,7 +116,7 @@ For each issue:
    - Transition to pending-ship:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified. Status → Pending Ship."
+     python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified. Status → Pending Ship."
      ```
    - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
 7. If not verified (fix doesn't work, no regression test, or tests fail):
@@ -283,12 +283,12 @@ python references/scripts/git_ops.py task-end [role] [number]
 3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered:
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "FAIL. [list every specific finding]. Back to In Progress."
+   python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "FAIL. [list every specific finding]. Back to In Progress."
    ```
    Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
 4. **Only exception**: The human explicitly says "ship with these gaps" — record the override:
    ```bash
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."
+   python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."
    ```
 5. If all criteria pass with zero gaps:
 
@@ -322,7 +322,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      - **Merge succeeds** (check `pr-merged` event with `success: true`): transition to pending-ship:
        ```bash
        python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-       python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR auto-merged. Status → Pending Ship."
+       python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified — zero gaps. PR auto-merged. Status → Pending Ship."
        ```
      - **Merge conflict**: handle as described in the PR Flow `no` merge conflict section below.
 
@@ -330,7 +330,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      ```bash
      gh pr ready [PR_NUMBER]
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-human-review --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Human Review."
+     python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Human Review."
      ```
 
    **If PR Flow `no`** (or no PR exists):
@@ -363,7 +363,7 @@ python references/scripts/git_ops.py task-end [role] [number]
        git merge --abort
        git checkout [WORKING_BRANCH]
        python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-       python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Worker: resolve conflicts and re-submit."
+       python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Worker: resolve conflicts and re-submit."
        ```
      - **Only .squidsquad/ state file conflicts**: resolve by keeping both versions, then push and merge. State files are always auto-resolvable.
    - **No PR found**: proceed (direct-to-main workflow, no merge needed)
@@ -371,7 +371,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    After successful merge (or no PR):
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR merged. Status → Pending Ship."
+   python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified — zero gaps. PR merged. Status → Pending Ship."
    ```
 
 6. **delivery:skip check**: If the task is internal-only, add `delivery:skip` to the comment message.
@@ -386,7 +386,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    - Transition back to `In Progress`:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "FAIL. [findings]. PR changes requested. Back to In Progress."
+     python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "FAIL. [findings]. PR changes requested. Back to In Progress."
      ```
 
    **If PR Flow `no`**: transition back to `In Progress` with specific failures in the comment.

@@ -92,9 +92,12 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
    **Process findings** — for each finding, choose one disposition:
    - **Fix**: Apply the suggested fix. Re-run tests after fixing.
-   - **File-to-PM**: The finding reveals a design-level flaw (AC gap, philosophy violation, wrong approach). The review loop **exits immediately**. Transition to `planning`:
+   - **File-to-PM**: The finding reveals a design-level flaw (AC gap, philosophy violation, wrong approach). The review loop **exits immediately**. File a cross-role issue to PM, then transition to `planning`.
+
+     → run sub-skill: `tracker-protocol` — use the **Cross-role issue** one-liner shape with title `"[finding summary]"` and the evidence-from-review body. Set `--role pm`, `--severity medium`, `--reporter [ROLE]-lead`.
+
+     Then transition + comment:
      ```bash
-     python references/scripts/tracker.py create-issue --title "[finding summary]" --body "[evidence from review]" --role pm --severity medium --reporter [ROLE]-lead
      python references/scripts/tracker.py transition [NUMBER] in-progress planning --role [ROLE]-lead
      python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "External review found design-level flaw. Filed #[NEW]. Status → Planning for PM to re-plan."
      ```
