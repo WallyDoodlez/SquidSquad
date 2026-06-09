@@ -24,7 +24,7 @@ For each open issue that does NOT have the `squidsquad` label:
    ```
 4. **Comment**: Add a triage comment:
    ```bash
-   python references/scripts/tracker.py comment [NUMBER] --role pm --message "Triaged. Routed to [role]. Priority: Low (human can bump)."
+   python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "Triaged. Routed to [role]. Priority: Low (human can bump)."
    ```
 
 External issues start as `priority:low` by default. The human can bump priority through the normal check-in flow.
