@@ -1,43 +1,53 @@
 # Working State
 
-- **Task**: pipeline sentinel
-- **Status**: quiet — bundle CUTOVER-READY confirmed; pipeline empty pending operator signal
+- **Task**: pipeline sentinel + #11331 wrap-coordination tracking
+- **Status**: bundle composition expanded to 35; intake on #11331 held for operator cutover signal
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 1
+- **Quiet cycles**: 0
 
 ## Pipeline
 
 - pending_ship: 0
 - pending_test: 1 (#10855 blocked:human-action — skip)
 - Open issues: 0
+- pending intake: #11331 (wrap+ship coordination, awaiting operator approval)
 - Approved queue: 9 (unchanged, operator-paced)
 - Open PRs: 0
 
-## Session ship tally: 35 (+1 #11383 shipped this cycle)
+## Session ship tally: 35 (unchanged this cycle)
 
-## ⚠️ BUNDLE CUTOVER-READY (confirmed)
+## ⚠️ BUNDLE COMPOSITION — UPDATED to 35 items
 
-`squidsquad/skill/compose-polish-session` has no remaining known blockers.
+**v0.44.0 carries 35 items via the cutover-PR**:
 
-- **4 chain-shipped to bundle**: #11334 c1872, #11382 c1876, #11381 c1877, #11383 c1879
-- **28 pre-bundle ships** included in cutover release
-- **v0.44.0 carries 32 items total**
-- **Awaiting operator signal on #11331** to unblock cutover-PR (bundle → main) carrying CHANGELOG + version-bump
+| Category | Count | Items |
+|---|---|---|
+| Chain-shipped to bundle | 4 | #11334, #11382, #11381, #11383 |
+| Stale-in-progress on bundle (work landed via route-back lineage) | 3 | #11227, #11139, #11137 |
+| Pre-bundle ships | 28 | (per DM checkpoint) |
+| **Total** | **35** |  |
 
-## Activity since cycle 2164
+## Cutover workflow (filed on #11331 c-?)
 
-- DM cycle 1879 shipped #11383 acting on cycle 2164 Path A auth (counter 31→32 within bundle)
+1. **Skill** creates cutover-PR (`compose-polish-session` → `main`)
+2. **Skill** transitions #11227/#11139/#11137 from in-progress → pending-test (assigned-role authority brings tracker state in line with actual work-on-bundle)
+3. **QA** re-verifies on polish-HEAD:
+   - #11137 + #11139: re-verify (previously verified on PR #11138/#11141 before route-back)
+   - #11227: fresh first-time QA (never had a standalone PR)
+4. **DM** ships all 7 (4 chain + 3 stale) via cutover-PR merge to main
 
-## G-gaps (skill standing list, not bundle-blocking)
+## PM intake on #11331
 
-- G11: common/boot-bootstrap.md source divergent from L1 inlining; skill recommends delete-source Option A as deferred structural cleanup
-- G3, G4, G5, G6, G7, G9, G10: awaiting operator decision per skill's #11144 standing list
+- Status: held at `pending` until operator signals cutover
+- Rationale: feature-class task, v0.44.0 release outside auto-approve bug lane, operator approval gate per role spec
+- RESEARCH+CONTEXT not needed — scope fully enumerated above
+- On operator signal: intake completes immediately → task `approved` → skill picks up cutover-PR work
 
-## Anticipated next cycle
+## Activity since cycle 2165
 
-- If operator signals cutover: PM coordinates cutover-PR mechanics on #11331 (bundle → main, CHANGELOG composition, v0.44.0 bump)
-- If operator holds: continue quiet observation; skill remains in productive-pause; no work for PM
+- 2026-06-09 09:10Z skill posted #11331 c-? state note (3 stale items discovery)
+- 2026-06-09 05:36 local — PM acknowledgement filed on #11331 (expanded composition + cutover workflow)
 
 ## Context
 
-healthy. Cleanest pipeline state of the session.
+healthy. Pre-cutover bookkeeping clean. Standing on operator signal.
