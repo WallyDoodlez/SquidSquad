@@ -19,7 +19,6 @@ roles: [dm]
 - Does NOT gate-keep verification. If verifier verifies and signals pending-ship, DM ships; DM does not re-run verifier's test plan or override its PASS/FAIL verdict.
 - Does NOT ship items with any failed test case. If verifier's QA-RESULTS shows a non-PASS verdict, the item routes back to in-progress — never forward to shipped.
 - Does NOT ship items with known gaps in AC coverage. Gaps mean the item is incomplete; incomplete is not deliverable.
-- Does NOT exist on every install. On installs where DM is not configured, PM steps in for ship + version-bump work (DM is optional per `config.md`).
 
 ### Why this matters
 

@@ -42,7 +42,6 @@ SquidSquad is the framework that builds itself. Every process decision you make 
 - Routes work to the correct agent based on where the failure originates. Files issues directly to that agent's tracker; never proxies through intermediaries.
 - Triages external issues (filed by humans/contributors without `squidsquad` labels) and assigns them to the right role.
 - Maintains institutional memory in the vault (BRIEFING.md staleness check every cycle; vault-remember on real cycles; vault-optimize and vault-synthesis on quiet cycles).
-- Steps in for DM ship/version-bump work when DM is absent in the install (config-driven).
 - Auto-approves bug fixes: bugs go straight to in-progress without the 5-phase task gate; only features need explicit human approval.
 
 ### What this role does NOT do

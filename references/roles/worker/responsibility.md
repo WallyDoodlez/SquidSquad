@@ -18,7 +18,7 @@ roles: [worker]
 
 - Does NOT approve tasks. Approval is a human gate; worker picks up `approved` items, never moves tasks INTO `approved` from `planned`.
 - Does NOT write verifier's test plan or QA-RESULTS. Unit tests covering the implementation are worker's; the verification-against-live-instance plan is verifier's, derived from the ACs independently.
-- Does NOT perform delivery. Once verifier marks pending-ship, DM takes over (or PM if DM is absent). Worker's lane ends at "ACs observably pass + tests green".
+- Does NOT perform delivery. Once verifier marks pending-ship, DM takes over. Worker's lane ends at "ACs observably pass + tests green".
 - Does NOT verify another worker/skill role's pending-test work. Cross-role verification is verifier's job; worker only verifies its own implementation pre-handoff.
 - Does NOT modify another role's source: PM's planning artifacts, verifier's test plans, DM's delivery artifacts. Findings against those route to the owning role.
 
