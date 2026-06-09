@@ -46,12 +46,15 @@ ROLE_TO_ENTRY = {
     "dm": "dm",
 }
 
-# Marker the bootstrap fragment writes at the top of its content. Comes
-# from references/sub-skills/common/boot-bootstrap.md's `## Boot — Mode
-# Detection (#9588)` heading, which compose preserves verbatim under its
-# `<!-- sub-skill: boot-bootstrap -->` wrapper.
+# Marker the bootstrap fragment writes at the top of its content.
+# Post-#11144 Iter 22 polish-restructure the bootstrap content was hoisted
+# into the L1 `references/roles/instructions.md` directly under the
+# `### Step 1 — step:cycle/boot` H3 (the canonical step heading from the
+# cycle's step-ID contract). The legacy H2 `## Boot — Mode Detection (#9588)`
+# heading was retired with the restructure; the marker still wraps the
+# block but the inner heading is now the step-ID form.
 BOOT_BOOTSTRAP_MARKER = "<!-- sub-skill: boot-bootstrap -->"
-BOOT_BOOTSTRAP_HEADING = "## Boot — Mode Detection (#9588)"
+BOOT_BOOTSTRAP_HEADING = "### Step 1 — step:cycle/boot"
 
 # Mode-specific sub-skill markers that MUST NOT appear in composed output
 # after #9588. compose strips the outer markers from the source fragment
@@ -152,8 +155,12 @@ def test_dm_bootstrap_enumerates_pr_merge_wait():
     start = text.find(BOOT_BOOTSTRAP_MARKER)
     end = text.find("<!-- /sub-skill: boot-bootstrap -->", start)
     block = text[start:end]
-    assert "roles/dm/events/pr-merge-wait.md" in block, (
-        "DM's bootstrap must enumerate `pr-merge-wait.md` — it is the only "
+    # Post-#11144 polish: the bootstrap names sub-skills by their bare
+    # `→ run sub-skill:` identifier (no `.md` suffix) rather than by file
+    # path, per the directive grammar canonized in the step-ID contract.
+    # `roles/dm/events/pr-merge-wait` is the slash-bearing identifier form.
+    assert "roles/dm/events/pr-merge-wait" in block, (
+        "DM's bootstrap must enumerate `pr-merge-wait` — it is the only "
         "role-specific events extra in the codebase and the bootstrap is "
         "the sole loader for it after #9588."
     )
