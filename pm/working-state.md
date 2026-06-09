@@ -1,9 +1,9 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet — 7th consecutive idle
+- **Status**: quiet — 8th consecutive idle
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 2
+- **Quiet cycles**: 3
 
 ## Pipeline
 
@@ -13,13 +13,9 @@
 - pending intake: #11331 (awaiting operator cutover signal)
 - Approved queue: 9 (unchanged, operator-paced)
 - Open PRs: 0
+- Harness: unreachable (agents healthy via polling)
 
 ## Session ship tally: 35 (unchanged)
-
-## Harness still unreachable (since cycle 2174 observation)
-
-- Agents healthy via /loop polling fallback
-- No PM action — operator can restart harness at convenience
 
 ## Context
 
