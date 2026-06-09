@@ -1,9 +1,9 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet — 4th consecutive idle cycle
+- **Status**: quiet — 5th consecutive idle, vault-synthesis fired
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 4
+- **Quiet cycles**: 5 (vault-synthesis fired this cycle; counter resets after)
 
 ## Pipeline
 
@@ -16,14 +16,10 @@
 
 ## Session ship tally: 35 (unchanged)
 
-## Activity since cycle 2171
+## Vault-synthesis this cycle
 
-- 2026-06-09 12:10Z skill posted scope-but-defer note on #11329 (runtime ack-cursor migration; correctly flagged as multi-cycle architectural work not /loop-appropriate; aligns with BRIEFING's operator-sequenced post-cutover status)
-
-## Quiet-cycle counter
-
-- This cycle: 4
-- vault-synthesis trigger at: 5 consecutive (1 away — fires next cycle if idle)
+- **Wrote**: `vault/galaxy/pattern-chain-ship-per-item-auth.md` — per-item chain-ship authorization pattern; qualifying-lane criteria; Path A vs Path B release-timing choreography; anti-patterns
+- Single write (budget 2, used 1). No second-write needed — Path A is captured inside the same pattern note; other session learnings (BRIEFING refresh, cycle-2166 stale-status discovery) are either already in BRIEFING or operator-feedback layer.
 
 ## Context
 
