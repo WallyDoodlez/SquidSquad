@@ -1,9 +1,9 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: quiet — 5th consecutive idle, vault-synthesis fired
+- **Status**: quiet — 6th consecutive idle; harness unreachable but agents healthy via polling
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 5 (vault-synthesis fired this cycle; counter resets after)
+- **Quiet cycles**: 1 (vault-synthesis fired cycle 2173, counter reset)
 
 ## Pipeline
 
@@ -16,11 +16,18 @@
 
 ## Session ship tally: 35 (unchanged)
 
-## Vault-synthesis this cycle
+## Health observation
 
-- **Wrote**: `vault/galaxy/pattern-chain-ship-per-item-auth.md` — per-item chain-ship authorization pattern; qualifying-lane criteria; Path A vs Path B release-timing choreography; anti-patterns
-- Single write (budget 2, used 1). No second-write needed — Path A is captured inside the same pattern note; other session learnings (BRIEFING refresh, cycle-2166 stale-status discovery) are either already in BRIEFING or operator-feedback layer.
+- harness_status: unreachable (127.0.0.1:7373 connection-refused on both /agents and /status)
+- Agents healthy via /loop polling fallback (per project_event_mode_default)
+- Recent cycle activity (per git log):
+  - pm: cycle 2173 (this is now 2174 — fine, cycling)
+  - qa: cycle 658 (quiet, latest)
+  - dm: cycle 1879 (post-#11383 ship, no work since because bundle is held)
+  - skill: working-state shows quiet counter 1 (in polish-session hold-pattern)
+- Per role spec: do NOT pre-emptively boot healthy agents (#9272). No PM intervention.
+- Operator can restart harness via squidsquad_cli.py start at convenience.
 
 ## Context
 
-healthy.
+healthy (agent-wise). Harness REST API + event-mode dispatch are down but not blocking work.
