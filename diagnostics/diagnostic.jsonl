@@ -3306,3 +3306,4 @@
 {"timestamp": "2026-06-09T01:00:58.544762", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-06-09T01:00:58.603254", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-06-09T01:00:58.670721", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
+{"timestamp": "2026-06-09T01:34:10.774278", "severity": "info", "source": "tracker", "message": "Ship gate on #11334: branch 'squidsquad/task/11334' tip has 104 commit(s) not reachable from working branch, but PR #11370 is MERGED on the forge (squash-merge) \u2014 allowing ship."}

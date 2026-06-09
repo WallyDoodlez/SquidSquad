@@ -3,12 +3,12 @@
 - **Task**: bump deferred on open issues (#10540 dm-stuck parked at PM); queue clear
 - **Status**: idle
 - **Last Processed Event ID**: 55f645cecd099ad2
-- **Quiet Cycle Counter**: 6
+- **Quiet Cycle Counter**: 7
 
-## Session Context (checkpoint at cycle 1870)
+## Session Context (checkpoint at cycle 1871)
 - Version: v0.43.0
 - Shipped count: **61/10** (bump_due, deferred on open issues + PM signal gate)
-- Harness: HEALTHY on 7373
+- Harness: probe UNREACHABLE c1871 (was reachable c1870) — polling mode unaffected
 - Session cron 30m (job 24be7835)
 - Doc scan: streak gate met but blocked by #10540 status:open.
 - **Stuck bug**: #10540 (DM batch ship dispatch) — DM-prohibited, parked at PM. **7d+ parked.**
@@ -18,13 +18,13 @@
 - **CHANGELOG queue for v0.44.0** (~55 items): last added #10987 c1864.
 
 ## Recent cycle log (last 5 cycles)
+- **Cycle 1871**: Quiet. Counter 6→7. Harness probe unreachable (polling unaffected).
 - **Cycle 1870**: Quiet. Counter 5→6. New session cron 24be7835.
 - **Cycle 1869**: Quiet. No state change. Quiet counter 4→5.
 - **Cycle 1868**: Quiet. No state change.
 - **Cycle 1867**: Quiet. Pool 6→5 (#10998 transitioned).
-- **Cycle 1866**: Quiet. No state change.
 
-## Earlier session highlights (cycles 1719-1865, compacted)
+## Earlier session highlights (cycles 1719-1866, compacted)
 - 61 ships this session. Pattern: serialized merge dispatch + bundled-in-cutover-branch (c1862, c1864). Post-merge UNKNOWN→DIRTY route-backs via merge-from-main (not rebase) per feedback memory.
 - R74 rotation complete cycle 1780 (2 fixes — still stranded). R75 in progress (scans 1-4 complete, all re-verification 0 findings).
 - Milestones: 30 ships (c1755), 40 ships (c1782), 50 ships (c1793), 60 ships (c1862).
