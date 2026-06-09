@@ -89,7 +89,7 @@ Goal: `working-state.md` reflects the cycle's outcome — cleared if a task ship
 - Your working state: `.squidsquad/[ROLE]/working-state.md`
 - Your planning artifacts: `.squidsquad/[ROLE]/planning/`
 - PM planning artifacts (RESEARCH.md, CONTEXT.md): `.squidsquad/[PM_ALIAS]/planning/` — under the #9184 workflow PM no longer produces TEST-PLAN.md
-- QA planning artifacts (TEST-PLAN-<NUMBER>.md, QA-RESULTS-<NUMBER>.md, TEST-<NUMBER>-tests.py): `.squidsquad/[VERIFIER_ALIAS]/planning/` (#9184)
+- Verifier planning artifacts (TEST-PLAN-<NUMBER>.md, QA-RESULTS-<NUMBER>.md, TEST-<NUMBER>-tests.py): `.squidsquad/[VERIFIER_ALIAS]/planning/` (#9184)
 - Config (read-only except ship counter): `.squidsquad/config.md`
 - Cross-filing: create GitHub Issues with `role:[OTHER_ROLE]` label
 <!-- /sub-skill: file-conventions -->

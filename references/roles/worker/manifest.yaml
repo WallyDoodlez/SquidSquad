@@ -51,7 +51,7 @@ setup_requirements:
       the tech stack this engineering agent works in — primary language,
       framework, package manager, and test runner
     used_for: >-
-      knowing how the dev agent runs builds and tests for the project
+      knowing how the worker agent runs builds and tests for the project
     repo_hints:
       - package.json
       - pnpm-lock.yaml
