@@ -1,53 +1,38 @@
 # Working State
 
 - **Task**: pipeline sentinel + #11331 wrap-coordination tracking
-- **Status**: bundle composition expanded to 35; intake on #11331 held for operator cutover signal
+- **Status**: quiet — bundle cutover-ready, awaiting operator signal
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 0
+- **Quiet cycles**: 1
 
 ## Pipeline
 
 - pending_ship: 0
 - pending_test: 1 (#10855 blocked:human-action — skip)
-- Open issues: 0
+- Open issues:
+  - #11394 (severity:medium, role:skill) — 37 test_*.py orphans not in run_tests.py STATIC_TEST_MODULES; NOT bundle-blocking; skill self-handles
 - pending intake: #11331 (wrap+ship coordination, awaiting operator approval)
 - Approved queue: 9 (unchanged, operator-paced)
 - Open PRs: 0
 
-## Session ship tally: 35 (unchanged this cycle)
+## Session ship tally: 35 (unchanged)
 
-## ⚠️ BUNDLE COMPOSITION — UPDATED to 35 items
+## Bundle composition — confirmed 35 items for v0.44.0
 
-**v0.44.0 carries 35 items via the cutover-PR**:
+(unchanged from cycle 2166)
+- 4 chain-shipped: #11334, #11382, #11381, #11383
+- 3 stale-in-progress work-on-bundle: #11227, #11139, #11137
+- 28 pre-bundle ships
 
-| Category | Count | Items |
-|---|---|---|
-| Chain-shipped to bundle | 4 | #11334, #11382, #11381, #11383 |
-| Stale-in-progress on bundle (work landed via route-back lineage) | 3 | #11227, #11139, #11137 |
-| Pre-bundle ships | 28 | (per DM checkpoint) |
-| **Total** | **35** |  |
+## Activity since cycle 2166
 
-## Cutover workflow (filed on #11331 c-?)
+- 2026-06-09 09:37Z my own cycle 2166 PM acknowledgement landed on #11331 (no operator response yet)
+- 2026-06-09 09:40Z skill filed #11394 (test-gating orphan finding, medium, role:skill, not bundle-blocking)
 
-1. **Skill** creates cutover-PR (`compose-polish-session` → `main`)
-2. **Skill** transitions #11227/#11139/#11137 from in-progress → pending-test (assigned-role authority brings tracker state in line with actual work-on-bundle)
-3. **QA** re-verifies on polish-HEAD:
-   - #11137 + #11139: re-verify (previously verified on PR #11138/#11141 before route-back)
-   - #11227: fresh first-time QA (never had a standalone PR)
-4. **DM** ships all 7 (4 chain + 3 stale) via cutover-PR merge to main
+## Standing on operator signal
 
-## PM intake on #11331
-
-- Status: held at `pending` until operator signals cutover
-- Rationale: feature-class task, v0.44.0 release outside auto-approve bug lane, operator approval gate per role spec
-- RESEARCH+CONTEXT not needed — scope fully enumerated above
-- On operator signal: intake completes immediately → task `approved` → skill picks up cutover-PR work
-
-## Activity since cycle 2165
-
-- 2026-06-09 09:10Z skill posted #11331 c-? state note (3 stale items discovery)
-- 2026-06-09 05:36 local — PM acknowledgement filed on #11331 (expanded composition + cutover workflow)
+Bundle cutover-ready since cycle 2165. #11331 intake held; on operator signal: intake completes → approved → skill creates cutover-PR. No PM action otherwise.
 
 ## Context
 
-healthy. Pre-cutover bookkeeping clean. Standing on operator signal.
+healthy.
