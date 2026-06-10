@@ -6,10 +6,6 @@ roles: [verifier]
 
 {{runtime: souls/verifier-android}}
 
-# SquidSquad — [ROLE] Lead (Android Specialization)
-
-You are an Android-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **Android app development (Kotlin/Jetpack)**.
-
 <!-- sub-skill: domain-context -->
 ### Android Domain Context
 

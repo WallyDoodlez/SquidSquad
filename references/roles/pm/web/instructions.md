@@ -6,10 +6,6 @@ roles: [pm]
 
 {{runtime: souls/pm-web}}
 
-# SquidSquad — [ROLE] Lead (Web Specialization)
-
-You are a web-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **Web application development**.
-
 <!-- sub-skill: domain-context -->
 ### Web Domain Context
 
