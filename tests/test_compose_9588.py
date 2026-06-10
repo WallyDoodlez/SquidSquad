@@ -226,15 +226,22 @@ def test_bootstrap_documents_role_runtime_substitution():
     compose would substitute it away at compose time (the very bug we're
     avoiding). So we check for the teaching marker + the role-name guidance.
     """
-    text = (SUB_SKILLS / "common" / "boot-bootstrap.md").read_text(encoding="utf-8")
+    # Post-#11144 G11 close: the boot block is canonical in L1
+    # `references/roles/instructions.md` (Iter 22 hoisted it from the
+    # sub-skill source; Iter 36 deleted `common/boot-bootstrap.md` once
+    # the source had become dead-code-divergent from L1). Validation
+    # targets the L1 source.
+    text = (REPO_ROOT / "references" / "roles" / "instructions.md").read_text(
+        encoding="utf-8"
+    )
     assert "Placeholder substitution inside runtime-loaded fragments" in text, (
-        "boot-bootstrap.md must carry the placeholder-substitution rule so "
+        "L1 instructions.md must carry the placeholder-substitution rule so "
         "the agent knows what to do with role/interval placeholders inside "
         "a runtime-loaded fragment. Without this rule, the literal "
         "placeholder breaks path/arg construction in the polling fragment."
     )
     assert "Role-name placeholder" in text and "SQUIDSQUAD_ROLE" in text, (
-        "boot-bootstrap.md placeholder section must call out the role-name "
+        "L1 instructions.md placeholder section must call out the role-name "
         "placeholder and tell the agent to substitute its own SQUIDSQUAD_ROLE."
     )
     # And critically: the section must survive compose unchanged — i.e., the

@@ -13,7 +13,6 @@
 #
 # Order matters — includes are resolved top-to-bottom.
 includes:
-  - common/boot-bootstrap
   - common/cycle-runner
   - common/context-pressure
   - common/task-pickup

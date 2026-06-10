@@ -15,7 +15,6 @@
 #
 # Order matters — includes are resolved top-to-bottom.
 includes:
-  - common/boot-bootstrap
   - common/capability-check
   - common/cycle-runner
   - common/context-pressure
