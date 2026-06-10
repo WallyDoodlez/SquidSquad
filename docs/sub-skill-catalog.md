@@ -28,7 +28,7 @@ The full picture:
             ▼
 ┌──────────────────────────────────────────────────┐
 │       Composed .squidsquad/<role>/CLAUDE.md      │  ← powers one role agent
-│       (PM / QA / DM / dev)                       │
+│       (PM / verifier / DM / worker)              │
 └──────────────────────────────────────────────────┘
             │ references
             ▼
@@ -45,8 +45,8 @@ How to read this:
 1. **SquidSquad** is the main skill — it ships the L1-L4 source documents, the compose pipeline, the harness, and the install/upgrade flow.
 2. **L1-L4** are documents of varying **specificity of functionality**:
    - **L1** — universal (what *any* SquidSquad agent is; applies to all roles, all installs)
-   - **L2** — role-specific (what a PM / QA / DM / dev does)
-   - **L3** — role variant (e.g. a dev specialized for a particular stack, or a PM with a project-shipped overlay)
+   - **L2** — role-specific (what a PM / verifier / DM / worker does)
+   - **L3** — role variant (e.g. a worker specialized for a particular stack, or a PM with a project-shipped overlay)
    - **L4** — project-local install (lives in `.squidsquad/project/`; authored from human conversation in a deployed install, customizes the agent for that one install)
 3. **Compose** stacks L1 → L2 → L3 → L4 (least → most specific, with later layers refining earlier ones) into a **single composed CLAUDE.md per role agent**.
 4. That composed CLAUDE.md **references sub-skills** — for each unit of functionality (vault writes, pipeline sentinel, cycle runner, etc.) it points at the sub-skill that defines how that functionality works.
@@ -100,14 +100,14 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `boot-bootstrap` | Mode detection on session start (polling vs event); reads the right runtime fragments | PM, QA, DM, dev |
-| `cycle-runner` | 3-phase cycle (pre/creative/post) wired to `cycle_pre.py` and `cycle_post.py` | PM, QA, DM, dev |
-| `context-pressure` | Read `.squidsquad/<role>/context-pressure`; checkpoint and signal exit-42 above threshold | PM, QA, DM, dev |
-| `task-pickup` | Pick up next approved task from the role's tracker query | PM, QA, dev (DM uses role variant) |
-| `resume-working-state` | Resume in-flight work from `.squidsquad/<alias>/working-state.md` on cycle entry | dev |
-| `interval-sync` | Honor the configured cycle interval | dev |
-| `self-restart` | Detect context-pressure exit and let the harness respawn | PM, QA, DM, dev |
-| `agent-lifecycle` | Heartbeat, singleton enforcement, reboot signaling | PM, QA, DM, dev |
+| `boot-bootstrap` | Mode detection on session start (polling vs event); reads the right runtime fragments | PM, verifier, DM, worker |
+| `cycle-runner` | 3-phase cycle (pre/creative/post) wired to `cycle_pre.py` and `cycle_post.py` | PM, verifier, DM, worker |
+| `context-pressure` | Read `.squidsquad/<role>/context-pressure`; checkpoint and signal exit-42 above threshold | PM, verifier, DM, worker |
+| `task-pickup` | Pick up next approved task from the role's tracker query | PM, verifier, worker (DM uses role variant) |
+| `resume-working-state` | Resume in-flight work from `.squidsquad/<alias>/working-state.md` on cycle entry | worker |
+| `interval-sync` | Honor the configured cycle interval | worker |
+| `self-restart` | Detect context-pressure exit and let the harness respawn | PM, verifier, DM, worker |
+| `agent-lifecycle` | Heartbeat, singleton enforcement, reboot signaling | PM, verifier, DM, worker |
 | `boot-remote-agents` | PM-only: spawn stalled agents via `boot_remote.py` when the harness can't | PM |
 
 ### Tracker & coordination
@@ -128,22 +128,22 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `vault-remember` | End-of-cycle reflection; writes to vault when something is worth remembering | PM, dev |
-| `vault-optimize` | On quiet cycles, compact and de-dup vault entries | PM, dev |
-| `vault-protocol` | Full vault R/W protocol | PM, dev |
-| `vault-protocol-slim` | Read-only variant for QA/DM (no vault writes) | QA, DM |
+| `vault-remember` | End-of-cycle reflection; writes to vault when something is worth remembering | PM, worker |
+| `vault-optimize` | On quiet cycles, compact and de-dup vault entries | PM, worker |
+| `vault-protocol` | Full vault R/W protocol | PM, worker |
+| `vault-protocol-slim` | Read-only variant for verifier/DM (no vault writes) | verifier, DM |
 
 ### Quality, git, improvement
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `git-commit` | Commit/push protocol with PR flow | dev (DM has its own variant) |
+| `git-commit` | Commit/push protocol with PR flow | worker (DM has its own variant) |
 | `pr-protocol` | PR lifecycle — `git_ops.py pr-create` lock vs bare `gh pr create`; two-lane merge protocol (verifier auto-merge + DM ship-pending; PM observes, never merges); squash-strategy lock; conflict-resolve via merge (never rebase) | all roles (runtime-loaded via `→ run sub-skill: pr-protocol` from `common/git-commit.md`, `roles/pm/task-intake.md`, `roles/verifier/verification.md`, `roles/dm/delivery-packaging.md`, `roles/pm/pipeline-sentinel.md`) |
-| `improvement-scan` | Full proactive scan for process/template gaps | PM, dev |
-| `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | QA |
+| `improvement-scan` | Full proactive scan for process/template gaps | PM, worker |
+| `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | verifier |
 | `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; removal paired with the broader capability-framework retirement per [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md), not this PR) |
 | `l4-curation` | Elicitation dialog for runtime L4 writes — detect customization request, scope bucket + rationale, walk the §7.2 decision tree (replace / insert-before / insert-after / append), run the three §7.4 safety gates (DeepSeek audit / mini-CQ / compose dry-run), produce a well-formed H3 op-block for `.squidsquad/project/<role-class>.md`. Reactively invoked; not part of any cycle step. One-off requests and feature requests are explicitly NOT routed through this sub-skill. Authored in PRD-C/C1 (#10650); wired into pm/dm/verifier/worker L2 instructions.md in PRD-C/C2 (#10651) via the standard `→ run sub-skill: l4-curation` reference (NOT inlined via any role's `includes.yml` — wiring is v2-path only per C2 AC4). | every role-class (pm/dm/verifier/worker) — reactive (no cycle step); §7 of [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) |
-| ~~`compose-output-review`~~ | Sub-procedure for reviewing composed CLAUDE.md output for source-output drift — invoked during code review (planned per COMPOSE-ARCHITECTURE.md §9; implementation pending — strike-through until the source file lands) | dev (planned) |
+| ~~`compose-output-review`~~ | Sub-procedure for reviewing composed CLAUDE.md output for source-output drift — invoked during code review (planned per COMPOSE-ARCHITECTURE.md §9; implementation pending — strike-through until the source file lands) | worker (planned) |
 
 ### Chat & coordination (deferred — chat-integration roadmap)
 
@@ -190,7 +190,7 @@ Role-specific event extras:
 
 > **Note on `agent-boundaries` — retired entirely (inlined into L1/L2)** — Today's `common/agent-boundaries.md` (5 lines) is two pieces of foundational content: a team-awareness baseline (`{{role-roster}}` + "know your teammates") and a decline-and-route discipline rule. Both are L1/L2 foundational content, not focused how-to. Resolution: inline the team-roster + awareness sentence into each role's Identity slot ([§5.1](COMPOSE-ARCHITECTURE.md#51-identity)); inline the decline-and-route rule into each role's Responsibility slot ([§5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)). The `agent-boundaries` row below stays as the historical authoring location until #10360 ships, then the sub-skill file is deleted.
 
-> **Note on `prohibitions` — retired entirely (inlined into L1/L2)** — 4 files today (`common/prohibitions.md` + per-role overrides in `pm/`, `verifier/`, `dm/`, ~63 lines total). Content is role-boundary content, not focused how-to. Splits cleanly: universal "never do" rules ("never push without pulling", "never edit composed CLAUDE.md", etc.) go to **L1 Identity Boundaries** ([§5.1](COMPOSE-ARCHITECTURE.md#51-identity)); role-specific rules ("PM never verifies", "QA never ships with failed tests") go to **L2 Responsibility "does NOT do"** ([§5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)) — substantially duplicates what's already in each role's responsibility content. The 4 files are deleted at #10360 implementation time.
+> **Note on `prohibitions` — retired entirely (inlined into L1/L2)** — 4 files today (`common/prohibitions.md` + per-role overrides in `pm/`, `verifier/`, `dm/`, ~63 lines total). Content is role-boundary content, not focused how-to. Splits cleanly: universal "never do" rules ("never push without pulling", "never edit composed CLAUDE.md", etc.) go to **L1 Identity Boundaries** ([§5.1](COMPOSE-ARCHITECTURE.md#51-identity)); role-specific rules ("PM never verifies", "verifier never ships with failed tests") go to **L2 Responsibility "does NOT do"** ([§5.2](COMPOSE-ARCHITECTURE.md#52-responsibility)) — substantially duplicates what's already in each role's responsibility content. The 4 files are deleted at #10360 implementation time.
 
 > **Note on `discussion` and `issue-filing` — keep `common/` only, collapse per-role overrides; `discussion-protocol` renames to `discussion`** — Both ARE legitimate sub-skills (focused how-to procedures for tracker comments and bug filing). `discussion` is the procedure for the **inter-agent communication channel** named at L1 Identity ([COMPOSE-ARCHITECTURE.md §5.1](COMPOSE-ARCHITECTURE.md#51-identity)). The per-role overrides in `pm/`, `verifier/`, `dm/` exist only to bake the role name into the bash example instead of using the `[ROLE]` placeholder — pure DRY violations with no functional difference. Resolution: keep `common/discussion.md` (renamed from `discussion-protocol.md` — the "protocol" suffix added no information; L1 Identity references the short name) and `common/issue-filing.md` as the single authoring location, with `[ROLE]` placeholder substitution per the manifest's Placeholder Substitution rules; delete the 6 per-role overrides at #10360.
 
@@ -201,7 +201,7 @@ Role-specific event extras:
 | `checkin` | Step 2 — non-blocking human check-in; issue/task/approval intake |
 | `task-intake` | 5-phase feature lifecycle (Research → Discussion → Planning → human-approve → Execution) |
 | `task-approval` | Feature-approval gate; planned → approved transition |
-| `testing-and-verification` | Steps 3–6 — delegate to QA; PM doesn't verify |
+| `testing-and-verification` | Steps 3–6 — delegate to verifier; PM doesn't verify |
 | `delivery` | Delegate to DM; PM doesn't package |
 | `pipeline-sentinel` | Step 6f — stall, conflict, PR-status, and stuck-state sweep |
 | `own-domain-autofix` | Fix PM-owned mechanical drift inline; don't file bugs for self |
