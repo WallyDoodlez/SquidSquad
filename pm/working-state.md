@@ -1,31 +1,30 @@
 # Working State
 
 - **Task**: pipeline sentinel
-- **Status**: degraded — gh auth 401 persistent; operator action needed (`gh auth refresh` with `repo` scope)
+- **Status**: quiet — auth restored, state confirmed stable since cycle 2188
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 38
+- **Quiet cycles**: 39 (38 prior + this one; many were degraded-auth but state genuinely stable)
 
-## ⚠️ DEGRADED STATE
-
-- `gh auth status` reports logged-in (WallyDoodlez, keyring, repo+workflow+gist+read:org scopes) BUT every API call returns 401
-- tracker.py + direct `gh issue view`/`gh issue list` both fail with HTTP 401 Requires authentication
-- Token cached in keyring is stale relative to what api.github.com/graphql accepts
-- **Operator action**: `gh auth refresh` with `repo` scope to mint a fresh token
-
-## Pipeline (last reliably-observed state — cycle 2188)
+## Pipeline
 
 - pending_ship: 0
 - pending_test: 1 (#10855 blocked:human-action — skip)
 - Open issues: 1 (#11394 — test-gating, skill-owned)
-- pending intake (PM-owned): #11331 (cutover wrap), #11400 (sub-skill-guide retirement)
-- Approved queue: 9 operator-paced
-- Bundle: cutover-ready since cycle 2165
-- Session ship tally: 35
+- pending intake (PM-owned): #11331 (cutover wrap), #11400 (sub-skill-guide retirement) — both status:pending
+- Approved queue: 9 (unchanged, operator-paced)
+- Open PRs: 0
+- Harness: unreachable (agents healthy via polling)
 
-## Cannot verify current state until auth restored
+## Session ship tally: 35 (unchanged)
 
-Bundle cutover-ready, #11400 pending, #11331 pending — these likely still hold but cannot be re-verified until tracker queries work again.
+## ⚠️ DM working-state note
+
+DM's `Session Context (checkpoint at cycle 1491)` block in `.squidsquad/dm/working-state.md` shows stale `Shipped count: 28/10` text. This is a frozen checkpoint paragraph DM hasn't refreshed since cycle 1491; actual bundle counter is 32 per BRIEFING (after #11334/#11382/#11381/#11383 chain-shipped). Cosmetic — DM will refresh on next non-quiet cycle. Not a PM-fix item.
+
+## Standing on operator signal
+
+Bundle cutover-ready since cycle 2165. #11331 + #11400 intake held; on operator signal both proceed.
 
 ## Context
 
-Degraded — git push works (HTTPS credential separate from gh OAuth token), but tracker reads/writes blocked.
+healthy.
