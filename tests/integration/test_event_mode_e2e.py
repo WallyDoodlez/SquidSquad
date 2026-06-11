@@ -186,7 +186,7 @@ def _make_handler(stream, reacts_to=None):
             relevant = reacts_to.get(role, set())
             filtered = []
             for e in events:
-                target = e.get("payload", {}).get("target_role", "")
+                target = e.get("payload", {}).get("target_alias", "")
                 etype = e.get("event_type", "")
                 if target == role:
                     filtered.append(e)

@@ -2372,18 +2372,18 @@ class TestGetEventsForRole(unittest.TestCase):
             self.event_lifecycle._dispatched.clear()
             self.event_lifecycle._dispatch_times.clear()
 
-    def test_filters_by_target_role(self):
+    def test_filters_by_target_alias(self):
         """GET /events/for/skill returns only events targeted at skill."""
         from harness import event_stream
 
         # Add events for different roles
         event_stream.append({
             "id": "e1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         event_stream.append({
             "id": "e2", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "pm", "issue_number": "2"},
+            "payload": {"target_alias": "pm", "issue_number": "2"},
         })
 
         with patch("harness._validate_role"):
@@ -2393,6 +2393,47 @@ class TestGetEventsForRole(unittest.TestCase):
         data = resp.json()
         self.assertEqual(len(data["events"]), 1)
         self.assertEqual(data["events"][0]["id"], "e1")
+
+    def test_target_alias_is_canonical_field_name(self):
+        """Regression guard for #11331 polish-session Iter 63.
+
+        The wire-format field for routing events to a specific alias is
+        ``payload.target_alias`` — per AGENT-RUNTIME.md §8 and per the
+        unification commit that retired the pre-#6274 legacy name
+        ``target_role``. If a future refactor reintroduces ``target_role``
+        in either the EAD emit or the ``/events/for/{role}`` filter, the
+        l4-watcher dropout regression resurfaces (l4_file_watcher.py
+        emits ``target_alias`` only).
+
+        This test pins both halves of the contract by asserting:
+        (a) the filter at ``harness.py:2181`` matches on ``target_alias``;
+        (b) legacy ``target_role`` payload events are NOT matched by the
+            filter (defends against silent dual-acceptance fallbacks).
+        """
+        from harness import event_stream
+
+        # (a) Canonical field name is honored by the filter.
+        event_stream.append({
+            "id": "canon", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_alias": "skill", "issue_number": "100"},
+        })
+        # (b) Legacy field name is NOT silently honored — the unification
+        # is hard, not a permissive alias.
+        event_stream.append({
+            "id": "legacy", "event_type": "assigned-to", "role": "harness",
+            "payload": {"target_role": "skill", "issue_number": "101"},
+        })
+
+        with patch("harness._validate_role"):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        ids = [e["id"] for e in resp.json()["events"]]
+        self.assertIn("canon", ids,
+                      "filter must match payload.target_alias")
+        self.assertNotIn("legacy", ids,
+                         "filter must NOT silently accept payload.target_role "
+                         "(the legacy field was retired in #11331 Iter 63)")
 
     def test_does_not_dispatch(self):
         """#9741: GET /events/for/skill must NOT add events to in-flight.
@@ -2407,7 +2448,7 @@ class TestGetEventsForRole(unittest.TestCase):
 
         event_stream.append({
             "id": "e3", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "3"},
+            "payload": {"target_alias": "skill", "issue_number": "3"},
         })
 
         with patch("harness._validate_role"):
@@ -2422,11 +2463,11 @@ class TestGetEventsForRole(unittest.TestCase):
 
         event_stream.append({
             "id": "old1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill"},
+            "payload": {"target_alias": "skill"},
         })
         event_stream.append({
             "id": "new1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill"},
+            "payload": {"target_alias": "skill"},
         })
 
         with patch("harness._validate_role"):
@@ -2450,7 +2491,7 @@ class TestGetEventsForRole(unittest.TestCase):
 
         event_stream.append({
             "id": "e4", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill"},
+            "payload": {"target_alias": "skill"},
         })
 
         # Pre-dispatch via the lifecycle manager directly (NOT via the endpoint).
@@ -2721,7 +2762,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         state.set_agent("skill", agent)
         event_stream.append({
             "id": "e_nogate_a", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")
@@ -2739,7 +2780,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         state.set_agent("skill", agent)
         event_stream.append({
             "id": "e_unique_1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")
@@ -2769,7 +2810,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         from harness import event_stream
         event_stream.append({
             "id": "e_nogate_1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")

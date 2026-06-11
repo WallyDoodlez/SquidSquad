@@ -2146,11 +2146,17 @@ async def get_events_for_role(
 ):
     """Get events targeted at a specific role (#7630 Phase 4).
 
-    Returns events where payload.target_role matches the given role,
+    Returns events where payload.target_alias matches the given role,
     OR events with event_type in the role's reacts-to list.
     Marks returned events as dispatched in EventLifecycleManager.
 
     This is the primary endpoint for event-driven agents using Monitor tool.
+
+    Field-name note: per AGENT-RUNTIME.md §8, the canonical wire-format
+    field is ``target_alias`` (the per-agent alias from
+    ``.squidsquad/config.md`` ``## Aliases``, NOT the role-class noun).
+    The pre-#6274 legacy field name ``target_role`` was unified into
+    ``target_alias`` in polish-session Iter 63 (#11331).
     """
     _validate_role(role)
 
@@ -2178,7 +2184,7 @@ async def get_events_for_role(
     # Filter: events targeted at this role OR matching the role's reaction types
     filtered = []
     for e in events:
-        target = e.get("payload", {}).get("target_role", "")
+        target = e.get("payload", {}).get("target_alias", "")
         etype = e.get("event_type", "")
         if target == role:
             filtered.append(e)
@@ -3093,17 +3099,22 @@ class ExternalActivityDetector:
             if not (labels & {"status:approved", "status:open"}):
                 continue
 
-            # Determine target role (first role label sorted; multi-role emits for first only)
+            # Determine target alias (first role label sorted; multi-role emits for first only).
+            # In single-instance teams the value following `role:` is the alias;
+            # in multi-instance teams the `role:*` label always carries the
+            # routed alias per AGENT-RUNTIME.md §8.3 (the harness rewrites
+            # `role:*` on every `/work/assign`). Either way the extracted
+            # string IS the alias.
             role_labels = sorted(l for l in labels if l.startswith("role:"))
             if not role_labels:
                 continue
-            target_role = role_labels[0].replace("role:", "")
+            target_alias = role_labels[0].replace("role:", "")
 
             # Emit assigned-to event
             _emit_event("assigned-to", "harness", payload={
                 "issue_number": str(issue_num),
                 "title": issue.get("title", ""),
-                "target_role": target_role,
+                "target_alias": target_alias,
                 "event_context": f"Issue #{issue_num} updated",
             })
             self.mark_emitted(issue_num)
