@@ -1,37 +1,18 @@
-I have thoroughly reviewed all the relevant source files. Here is my analysis:
+After a thorough review of all the changed files (harness.py EAD emit + filter, l4_file_watcher.py, test_harness.py regression test), I find the changes are internally consistent and correct:
 
-## Verification Summary
+**Verification summary:**
 
-### 1. Harness EAD emit + filter rename — internally consistent ✓
+1. **Harness EAD emit → filter consistency**: The EAD emit at `harness.py:3117` writes `"target_alias": target_alias` into the payload. The filter at `harness.py:2187` reads `e.get("payload", {}).get("target_alias", "")`. These match exactly. The `l4_file_watcher.py` emit paths (lines 189, 353) also use `"target_alias"`. All three emit sites produce the same wire shape.
 
-- **Emit side (`harness.py:3114-3118`)**: `ExternalActivityDetector._check_for_changes` emits `payload={"target_alias": target_alias, ...}` — correct.
-- **Filter side (`harness.py:2187`)**: `GET /events/for/{role}` reads `e.get("payload", {}).get("target_alias", "")` — correct.
-- Both use the canonical `target_alias` field name.
+2. **Regression test `test_target_alias_is_canonical_field_name`** (lines 2397–2436): Correctly pins both halves — asserts that an event with `target_alias` IS returned, and a legacy event with `target_role` IS NOT returned. The assertions at lines 2432–2436 have clear failure messages referencing the specific contract.
 
-### 2. Match with `l4_file_watcher.py` — consistent ✓
+3. **No remaining `target_role` call sites**: The only `target_role` references in functional Python code are:
+   - `l4_audit_gate.py` / `l4_conflict_preempt.py`: use `target_role_class` (different concept, out of scope per task)
+   - `test_harness.py` line 2424: the intentional legacy payload in the regression test itself
+   - `harness.py` line 2158: a docstring comment documenting the legacy name
 
-- `l4_file_watcher.py:189` (`emit_results`): emits `"target_alias": r.alias`
-- `l4_file_watcher.py:353` (`make_change_callback` error path): emits `"target_alias": "pm"`
-- Both match the harness filter's expected field name.
+4. **Event catalog** (`event_catalog.py:136`) uses `target_alias`, and `AGENT-RUNTIME.md` consistently uses `target_alias` throughout §8.
 
-### 3. Regression test `test_target_alias_is_canonical_field_name` ✓
+5. **All other tests** in `TestGetEventsForRole` use `target_alias` consistently in their fixture events, and the integration test (`test_event_mode_e2e.py:189`) also uses `target_alias`.
 
-- **`tests/test_harness.py:2397-2436`**: Correctly pins both halves:
-  - (a) `assertIn("canon", ids)` — filter matches `payload.target_alias`
-  - (b) `assertNotIn("legacy", ids)` — filter does NOT silently accept `payload.target_role`
-- The `"legacy"` event fixture at line 2424 uses `"target_role"` (intentionally, to prove rejection).
-
-### 4. No remaining call site emits or reads `target_role` for event payloads ✓
-
-- All Python files searched: the only string-literal `"target_role"` outside of `target_role_class` (which is a different concept) appears in:
-  - `harness.py:2158`: a docstring explaining the rename (informational, not functional)
-  - `tests/test_harness.py:2424`: the regression test fixture (intentionally uses legacy name to prove it's rejected)
-- `l4_audit_gate.py` and `l4_conflict_preempt.py` use `target_role_class` — this is the **role-class noun** (e.g., `"pm"`, `"skill"`), not an event routing alias. Confirmed out of scope and correctly left unchanged.
-- Integration test stub `test_event_mode_e2e.py:189` also reads `target_alias` — consistent with the harness filter.
-- `event_catalog.py:136` lists `target_alias` in the `assigned-to` payload fields — correct.
-
-### 5. No fixture inconsistencies or logic gaps detected ✓
-
-No missed call sites, no stale `target_role` references in emit or filter paths, no inconsistencies between the test stubs and the production code.
-
-NO_FINDINGS
+`NO_FINDINGS`
