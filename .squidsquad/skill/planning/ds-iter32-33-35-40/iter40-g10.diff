@@ -1,0 +1,227 @@
+commit f6c06e83d6eb9d26f58ab6d786c8039a9f8a96f5
+Author: Wallace Chan <naahtec@hotmail.com>
+Date:   Wed Jun 10 22:50:57 2026 -0400
+
+    skill: #11144 Iter 40 — G10 close: alias is sole truth for statusline label
+    
+    Operator: keep literals + drop statusline.sh hardcoded fallback.
+    
+    `statusline.sh:165-177` had a tiered fallback for the role label:
+      1. config-resolved alias (used if different from $ROLE)
+      2. hardcoded `PM`/`QA`/`DM` uppercase fallback (used when $ROLE
+         already matched the alias and matched one of the 3 known names)
+      3. raw $ROLE otherwise
+    
+    The hardcoded uppercase tier caused doc/script coupling: L2 docs
+    (dm/pm/verifier/instructions.md) carried literal `` `PM`/`QA`/`DM` ``
+    labels matching the uppercase fallback's output. The literals were
+    correct on installs where the alias == role-class name AND the script's
+    tier-2 fired (e.g. PM agent ALIAS=pm, ROLE=pm → "PM"), but broke on
+    installs where verifier was aliased something other than `qa` — the
+    verifier doc would still say `` `QA` role label `` while the statusline
+    would show the actual alias.
+    
+    Closes by making alias the sole truth:
+    
+    1. statusline.sh: dropped the PM/QA/DM uppercase tier. ROLE_LABEL now
+       == ALIAS (when alias resolves to something different from $ROLE) or
+       raw $ROLE (when alias == $ROLE or no alias config).
+    
+    2. L2 docs: replaced the 4 literal labels with `[ROLE]` placeholder
+       substitution, so the composed CLAUDE.md renders the actual install
+       alias per role.
+    
+    Composed output per install (this install):
+    - dm CLAUDE.md:    `` `dm` role label ``    (was `` `DM` role label ``)
+    - pm CLAUDE.md:    `` `pm` role label ``    (was `` `PM` role label ``)
+    - qa CLAUDE.md:    `` `qa` role label ``    (was `` `QA` role label ``)
+    - skill CLAUDE.md: `` `skill` role label `` (was `Your role label`)
+    
+    Composed-size deltas: zero (1 char per role on these single lines).
+    
+    Portability win: install verifier-aliased-to-`qe` would now show
+    `` `qe` role label `` in BOTH the statusline AND the verifier doc.
+    
+    Closes: G10 (statusline label coupling).
+
+diff --git a/.squidsquad/dm/CLAUDE.linked.md b/.squidsquad/dm/CLAUDE.linked.md
+index 4feefc047..89ce55119 100644
+--- a/.squidsquad/dm/CLAUDE.linked.md
++++ b/.squidsquad/dm/CLAUDE.linked.md
+@@ -585,7 +585,7 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `DM` role label
++- `dm` role label
+ - Pending Ship count (items waiting for delivery)
+ - Active task from working-state.md
+ - Context usage and next-cycle countdown
+diff --git a/.squidsquad/dm/CLAUDE.md b/.squidsquad/dm/CLAUDE.md
+index b035ec0ea..92302f19a 100644
+--- a/.squidsquad/dm/CLAUDE.md
++++ b/.squidsquad/dm/CLAUDE.md
+@@ -580,7 +580,7 @@ Maintain `.squidsquad/dm/working-state.md` to persist context across context win
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `DM` role label
++- `dm` role label
+ - Pending Ship count (items waiting for delivery)
+ - Active task from working-state.md
+ - Context usage and next-cycle countdown
+diff --git a/.squidsquad/pm/CLAUDE.linked.md b/.squidsquad/pm/CLAUDE.linked.md
+index 07f3cc081..44cdb546d 100644
+--- a/.squidsquad/pm/CLAUDE.linked.md
++++ b/.squidsquad/pm/CLAUDE.linked.md
+@@ -647,7 +647,7 @@ Update when starting multi-step verification work. Clear when complete. Read on
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `PM` role label and current iteration number
++- `pm` role label and current iteration number
+ - **Agent health**: for each agent (PM + verifier + DM + workers), `🦑` if `current-state` mtime is within 2× iteration interval (healthy), `👻` if stale (stalled), `❓` if no data (unknown/unreachable)
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+ 
+diff --git a/.squidsquad/pm/CLAUDE.md b/.squidsquad/pm/CLAUDE.md
+index 260206ffe..251d5ad33 100644
+--- a/.squidsquad/pm/CLAUDE.md
++++ b/.squidsquad/pm/CLAUDE.md
+@@ -642,7 +642,7 @@ Update when starting multi-step verification work. Clear when complete. Read on
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `PM` role label and current iteration number
++- `pm` role label and current iteration number
+ - **Agent health**: for each agent (PM + verifier + DM + workers), `🦑` if `current-state` mtime is within 2× iteration interval (healthy), `👻` if stale (stalled), `❓` if no data (unknown/unreachable)
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+ 
+diff --git a/.squidsquad/qa/CLAUDE.linked.md b/.squidsquad/qa/CLAUDE.linked.md
+index 2a51d2755..8a5323fb1 100644
+--- a/.squidsquad/qa/CLAUDE.linked.md
++++ b/.squidsquad/qa/CLAUDE.linked.md
+@@ -586,7 +586,7 @@ Update when starting multi-step verification work. Clear when complete. Read on
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `QA` role label and current iteration number
++- `qa` role label and current iteration number
+ - **Agent health**: for each agent, `🦑` if healthy, `👻` if stalled, `❓` if unknown
+ - Items pending verification count
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+diff --git a/.squidsquad/qa/CLAUDE.md b/.squidsquad/qa/CLAUDE.md
+index 1839dd303..011c7d833 100644
+--- a/.squidsquad/qa/CLAUDE.md
++++ b/.squidsquad/qa/CLAUDE.md
+@@ -581,7 +581,7 @@ Update when starting multi-step verification work. Clear when complete. Read on
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `QA` role label and current iteration number
++- `qa` role label and current iteration number
+ - **Agent health**: for each agent, `🦑` if healthy, `👻` if stalled, `❓` if unknown
+ - Items pending verification count
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+diff --git a/.squidsquad/skill/CLAUDE.linked.md b/.squidsquad/skill/CLAUDE.linked.md
+index b5e4a8d86..452c5b60c 100644
+--- a/.squidsquad/skill/CLAUDE.linked.md
++++ b/.squidsquad/skill/CLAUDE.linked.md
+@@ -665,7 +665,7 @@ Goal: `working-state.md` reflects the cycle's outcome — cleared if a task ship
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- Your role label and current iteration number
++- `skill` role label and current iteration number
+ - Backlog pulse: count of open bugs + actionable features (e.g. `2 bugs 1 feat`)
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+ 
+diff --git a/.squidsquad/skill/CLAUDE.md b/.squidsquad/skill/CLAUDE.md
+index 8faa249b2..15fbf162d 100644
+--- a/.squidsquad/skill/CLAUDE.md
++++ b/.squidsquad/skill/CLAUDE.md
+@@ -660,7 +660,7 @@ Goal: `working-state.md` reflects the cycle's outcome — cleared if a task ship
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- Your role label and current iteration number
++- `skill` role label and current iteration number
+ - Backlog pulse: count of open bugs + actionable features (e.g. `2 bugs 1 feat`)
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+ 
+diff --git a/references/roles/dm/instructions.md b/references/roles/dm/instructions.md
+index 161635ccd..38eebdb23 100644
+--- a/references/roles/dm/instructions.md
++++ b/references/roles/dm/instructions.md
+@@ -98,7 +98,7 @@ Maintain `.squidsquad/[DM_ALIAS]/working-state.md` to persist context across con
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `DM` role label
++- `[ROLE]` role label
+ - Pending Ship count (items waiting for delivery)
+ - Active task from working-state.md
+ - Context usage and next-cycle countdown
+diff --git a/references/roles/pm/instructions.md b/references/roles/pm/instructions.md
+index 9054e71f4..19fc8415b 100644
+--- a/references/roles/pm/instructions.md
++++ b/references/roles/pm/instructions.md
+@@ -52,7 +52,7 @@ Update when starting multi-step verification work. Clear when complete. Read on
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `PM` role label and current iteration number
++- `[ROLE]` role label and current iteration number
+ - **Agent health**: for each agent (PM + verifier + DM + workers), `🦑` if `current-state` mtime is within 2× iteration interval (healthy), `👻` if stale (stalled), `❓` if no data (unknown/unreachable)
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+ 
+diff --git a/references/roles/verifier/instructions.md b/references/roles/verifier/instructions.md
+index 5f168a0ab..b948cad2a 100644
+--- a/references/roles/verifier/instructions.md
++++ b/references/roles/verifier/instructions.md
+@@ -90,7 +90,7 @@ Update when starting multi-step verification work. Clear when complete. Read on
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- `QA` role label and current iteration number
++- `[ROLE]` role label and current iteration number
+ - **Agent health**: for each agent, `🦑` if healthy, `👻` if stalled, `❓` if unknown
+ - Items pending verification count
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+diff --git a/references/roles/worker/instructions.md b/references/roles/worker/instructions.md
+index 30ff758c2..c7f5b0268 100644
+--- a/references/roles/worker/instructions.md
++++ b/references/roles/worker/instructions.md
+@@ -102,7 +102,7 @@ Goal: `working-state.md` reflects the cycle's outcome — cleared if a task ship
+ A status line is shown at the bottom of your Claude Code session. It displays:
+ 
+ - `🦑` (green) — you are active
+-- Your role label and current iteration number
++- `[ROLE]` role label and current iteration number
+ - Backlog pulse: count of open bugs + actionable features (e.g. `2 bugs 1 feat`)
+ - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
+ 
+diff --git a/references/statusline.sh b/references/statusline.sh
+index f4e83343b..91a55a9bd 100644
+--- a/references/statusline.sh
++++ b/references/statusline.sh
+@@ -162,16 +162,13 @@ if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ]; then
+   GIT_SYNC="${GIT_SYNC}↓${BEHIND}"
+ fi
+ 
+-# Role label — use alias from config if available
++# Role label — alias is sole truth (#11144 G10).
++# Look up the alias from config; if it differs from $ROLE (which means
++# the caller passed a role-class name), use the alias. Otherwise $ROLE
++# is already the alias — use it raw. No hardcoded uppercase fallback.
+ ALIAS=$(python references/scripts/config.py alias "$ROLE" 2>/dev/null) || true
+ if [ -n "$ALIAS" ] && [ "$ALIAS" != "$ROLE" ]; then
+   ROLE_LABEL="$ALIAS"
+-elif [ "$ROLE" = "pm" ]; then
+-  ROLE_LABEL="PM"
+-elif [ "$ROLE" = "qa" ]; then
+-  ROLE_LABEL="QA"
+-elif [ "$ROLE" = "dm" ]; then
+-  ROLE_LABEL="DM"
+ else
+   ROLE_LABEL="$ROLE"
+ fi
