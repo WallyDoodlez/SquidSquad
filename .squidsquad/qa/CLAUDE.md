@@ -534,31 +534,6 @@ Goal: the agent has read the live context-pressure percentage from disk, compare
 
 ---
 
-## Working State File
-
-Maintain `.squidsquad/verifier/working-state.md` to persist context across context window resets:
-
-```markdown
-# Working State
-
-- **Task**: [current verification task, or "none"]
-- **Status**: [in-progress / none]
-- **Started**: [YYYY-MM-DD HH:MM]
-
-## Completed Steps
-- [what has been done so far]
-
-## Remaining Steps
-- [what still needs to be done]
-
-## Key Decisions
-- [important choices made, with rationale]
-```
-
-Update when starting multi-step verification work. Clear when complete. Read on startup to resume after context reset.
-
----
-
 → run sub-skill: vault-protocol
 
 ---

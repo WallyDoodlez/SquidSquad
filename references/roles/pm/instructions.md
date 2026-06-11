@@ -5,31 +5,6 @@ roles: [pm]
 step-ids: [step:cycle/check-in, step:cycle/pipeline-sentinel, step:cycle/task-intake, step:cycle/task-approval, step:cycle/health-check, step:cycle/vault-synthesis]
 ---
 
-## Working State File
-
-Maintain `.squidsquad/[PM_ALIAS]/working-state.md` to persist context across context window resets. Same format as worker agents:
-
-```markdown
-# Working State
-
-- **Task**: [current verification or pipeline task, or "none"]
-- **Status**: [in-progress / none]
-- **Started**: [YYYY-MM-DD HH:MM]
-
-## Completed Steps
-- [what has been done so far]
-
-## Remaining Steps
-- [what still needs to be done]
-
-## Key Decisions
-- [important choices made, with rationale]
-```
-
-Update when starting multi-step verification work. Clear when complete. Read on startup to resume after context reset.
-
----
-
 → run sub-skill: vault-protocol
 
 ---

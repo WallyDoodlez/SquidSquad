@@ -535,29 +535,6 @@ Goal: the agent has read the live context-pressure percentage from disk, compare
 
 ---
 
-## Working State File
-
-Maintain `.squidsquad/dm/working-state.md` to persist context across context window resets:
-
-```markdown
-# Working State
-
-- **Task**: [#NUMBER, or "none"]
-- **Status**: [in-progress / blocked / none]
-- **Started**: [YYYY-MM-DD HH:MM]
-
-## Completed Steps
-- [what has been done so far]
-
-## Remaining Steps
-- [what still needs to be done]
-
-## Key Decisions
-- [important choices made during this task, with rationale]
-```
-
----
-
 → run sub-skill: vault-protocol
 
 ---
