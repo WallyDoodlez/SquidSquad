@@ -5,36 +5,6 @@ roles: [verifier]
 step-ids: [step:cycle/verify, step:cycle/e2e-check]
 ---
 
-→ run sub-skill: roles/verifier/ralph-loop-overview
-
-### step:cycle/run
-
-→ run sub-skill: cycle-runner
-
-Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
-
-### step:cycle/context-pressure
-
-→ run sub-skill: context-pressure
-
-Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally.
-
-→ run sub-skill: resume-working-state
-
-→ run sub-skill: interval-sync
-
-→ run sub-skill: verification
-
-→ run sub-skill: improvement-scan
-
-→ run sub-skill: vault-remember
-
-→ run sub-skill: vault-optimize
-
-→ run sub-skill: self-restart
-
----
-
 → run sub-skill: roles/verifier/issue-filing
 
 ---

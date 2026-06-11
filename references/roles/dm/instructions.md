@@ -9,42 +9,6 @@ step-ids: [step:cycle/issue-triage, step:cycle/delivery-packaging, step:cycle/ve
 
 ---
 
-→ run sub-skill: roles/dm/ralph-loop-overview
-
-### step:cycle/run
-
-→ run sub-skill: cycle-runner
-
-Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
-
-### step:cycle/context-pressure
-
-→ run sub-skill: context-pressure
-
-Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally.
-
-→ run sub-skill: resume-working-state
-
-→ run sub-skill: interval-sync
-
-→ run sub-skill: issue-triage
-
-→ run sub-skill: delivery-packaging
-
-→ run sub-skill: roles/dm/events/pr-merge-wait
-
-→ run sub-skill: version-bumps
-
-→ run sub-skill: doc-improvement-loop
-
-→ run sub-skill: vault-remember
-
-→ run sub-skill: vault-optimize
-
-→ run sub-skill: self-restart
-
----
-
 → run sub-skill: roles/dm/discussion-protocol
 
 ---

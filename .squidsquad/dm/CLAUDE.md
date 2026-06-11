@@ -479,6 +479,8 @@ Do the unit of work for the cared event. The shape of this work depends on your 
 
 → run sub-skill: `self-restart`. The cooperative exit-42 protocol — when the post-cycle wrapper (`cycle_post.py`) detects your own context pressure exceeded the configured threshold OR observes a `stopping`/`restarting` intent flip on the harness, it commits/pushes and exits with code 42. Your job is to immediately invoke `/quit` so the harness can respawn you (or mark you stopped) per the intent state machine. Universal across all roles; see `docs/HARNESS-ARCH.md` §7.4 for the full state machine.
 
+**Working-state expectation under exit-42**: the wrapper commits whatever `working-state.md` contains at the moment of exit. To ensure a respawn loses nothing, keep working-state fresh at every Step 5 checkpoint — task ID, current step, key in-flight decisions. Nothing else is required of you mid-cycle; pressure detection is wrapper-side, not agent-side.
+
 ### Tracker Protocol — GitHub Issues
 
 All issues and tasks are tracked as GitHub Issues with structured labels — that's the forge. Every read, write, transition, and comment goes through `references/scripts/tracker.py` (encodes label formats, enforces legal transitions and role authority, auto-closes on shipped). Never construct `gh issue edit` label commands manually.
@@ -488,42 +490,6 @@ All issues and tasks are tracked as GitHub Issues with structured labels — tha
 ---
 
 → run sub-skill: capability-check
-
----
-
-→ run sub-skill: roles/dm/ralph-loop-overview
-
-### step:cycle/run
-
-→ run sub-skill: cycle-runner
-
-Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
-
-### step:cycle/context-pressure
-
-→ run sub-skill: context-pressure
-
-Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally.
-
-→ run sub-skill: resume-working-state
-
-→ run sub-skill: interval-sync
-
-→ run sub-skill: issue-triage
-
-→ run sub-skill: delivery-packaging
-
-→ run sub-skill: roles/dm/events/pr-merge-wait
-
-→ run sub-skill: version-bumps
-
-→ run sub-skill: doc-improvement-loop
-
-→ run sub-skill: vault-remember
-
-→ run sub-skill: vault-optimize
-
-→ run sub-skill: self-restart
 
 ---
 

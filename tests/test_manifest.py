@@ -155,15 +155,26 @@ class TestManifestIntegrity:
         except Exception:
             pass
 
-        # #9588: mode-specific fragments are Read at runtime by
-        # `common/boot-bootstrap.md` instead of being inlined via manifest.
-        # Treat any fragment whose path appears inside the bootstrap text
-        # as referenced — broken paths there are caught by a dedicated
-        # test in test_compose_9588.py, so duplicating that check here
-        # would just couple the orphan-scan to bootstrap formatting.
-        bootstrap_path = self.sub_skills_dir / "common" / "boot-bootstrap.md"
-        if bootstrap_path.exists():
-            bootstrap_text = bootstrap_path.read_text(encoding="utf-8")
+        # #9588: mode-specific fragments are Read at runtime by the
+        # boot-bootstrap block, which since #11144 lives inline in L1
+        # (`references/roles/instructions.md` between
+        # `<!-- sub-skill: boot-bootstrap -->` and the matching close).
+        # Treat any fragment whose path appears inside that block as
+        # referenced — broken paths are caught by a dedicated test in
+        # test_compose_9588.py, so duplicating the check here would just
+        # couple the orphan-scan to bootstrap formatting.
+        bootstrap_text = ""
+        l1_instructions = self.sub_skills_dir.parent / "roles" / "instructions.md"
+        if l1_instructions.exists():
+            l1_text = l1_instructions.read_text(encoding="utf-8")
+            m = re.search(
+                r"<!-- sub-skill: boot-bootstrap -->(.*?)<!-- /sub-skill: boot-bootstrap -->",
+                l1_text,
+                re.DOTALL,
+            )
+            if m:
+                bootstrap_text = m.group(1)
+        if bootstrap_text:
             for rel_str in re.findall(
                 r"references/sub-skills/([^\s`)]+\.md)", bootstrap_text
             ):

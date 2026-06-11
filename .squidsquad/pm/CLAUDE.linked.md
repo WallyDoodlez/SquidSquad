@@ -592,6 +592,8 @@ On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agen
 
 → run sub-skill: `self-restart`. The cooperative exit-42 protocol — when the post-cycle wrapper (`cycle_post.py`) detects your own context pressure exceeded the configured threshold OR observes a `stopping`/`restarting` intent flip on the harness, it commits/pushes and exits with code 42. Your job is to immediately invoke `/quit` so the harness can respawn you (or mark you stopped) per the intent state machine. Universal across all roles; see `docs/HARNESS-ARCH.md` §7.4 for the full state machine.
 
+**Working-state expectation under exit-42**: the wrapper commits whatever `working-state.md` contains at the moment of exit. To ensure a respawn loses nothing, keep working-state fresh at every Step 5 checkpoint — task ID, current step, key in-flight decisions. Nothing else is required of you mid-cycle; pressure detection is wrapper-side, not agent-side.
+
 ### Tracker Protocol — GitHub Issues
 
 All issues and tasks are tracked as GitHub Issues with structured labels — that's the forge. Every read, write, transition, and comment goes through `references/scripts/tracker.py` (encodes label formats, enforces legal transitions and role authority, auto-closes on shipped). Never construct `gh issue edit` label commands manually.

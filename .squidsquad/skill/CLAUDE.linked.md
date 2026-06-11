@@ -418,6 +418,7 @@ flowchart LR
     end
     subgraph WalkLoop["Per cared event (repeats per nudge)"]
         S3["3. step:cycle/pickup"]
+        S3_1["3.1 pickup-comment-fidelity"]
         S4["4. step:cycle/work"]
         S5["5. step:cycle/checkpoint"]
         S6["6. step:cycle/cleanup"]
@@ -429,7 +430,8 @@ flowchart LR
     end
     S1 --> S2
     S2 --> S2_1
-    S3 --> S4
+    S3 --> S3_1
+    S3_1 --> S4
     S4 --> S5
     S5 --> S6
     S6 --> S7
@@ -542,6 +544,12 @@ Scan this role's open issues for bug reports. For each: investigate root cause, 
 
 → run sub-skill: `task-pickup`. The per-event **care filter** (see the per-nudge diagram above) is your pickup — the event identifies the work for you, and this step is largely a no-op.
 
+#### Step 3.1 — step:cycle/pickup-comment-fidelity
+
+→ run sub-skill: pickup-comment-fidelity
+
+Before starting work on the picked-up task, verify the pickup comment posted on the issue accurately reflects the tracker's current status, the AC list you'll implement against, and any constraints from PM's locked CONTEXT.md. Pickup comments are the cross-agent contract — drift here causes verifier rejections downstream.
+
 ### Step 4 — step:cycle/work
 
 Do the unit of work for the cared event. The shape of this work depends on your role — your role-specific instructions appendix below details what counts as work for you. This is the **only step that always runs as creative agent work**.
@@ -560,55 +568,13 @@ Do the unit of work for the cared event. The shape of this work depends on your 
 
 → run sub-skill: `self-restart`. The cooperative exit-42 protocol — when the post-cycle wrapper (`cycle_post.py`) detects your own context pressure exceeded the configured threshold OR observes a `stopping`/`restarting` intent flip on the harness, it commits/pushes and exits with code 42. Your job is to immediately invoke `/quit` so the harness can respawn you (or mark you stopped) per the intent state machine. Universal across all roles; see `docs/HARNESS-ARCH.md` §7.4 for the full state machine.
 
+**Working-state expectation under exit-42**: the wrapper commits whatever `working-state.md` contains at the moment of exit. To ensure a respawn loses nothing, keep working-state fresh at every Step 5 checkpoint — task ID, current step, key in-flight decisions. Nothing else is required of you mid-cycle; pressure detection is wrapper-side, not agent-side.
+
 ### Tracker Protocol — GitHub Issues
 
 All issues and tasks are tracked as GitHub Issues with structured labels — that's the forge. Every read, write, transition, and comment goes through `references/scripts/tracker.py` (encodes label formats, enforces legal transitions and role authority, auto-closes on shipped). Never construct `gh issue edit` label commands manually.
 
 → run sub-skill: `tracker-protocol`. Timestamps (use `cycle.py timestamp-short`/`timestamp`); startup `check-gh` permission gate; list/read/create flows; legal status transitions matrix and per-role authority; Discussion entry conventions; working-state references; planning-artifact paths; per-cycle `gh issue list` caching.
-
----
-
-→ run sub-skill: roles/worker/ralph-loop-overview
-
-### step:cycle/run
-
-→ run sub-skill: cycle-runner
-
-Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
-
-### step:cycle/context-pressure
-
-→ run sub-skill: context-pressure
-
-Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally.
-
-### step:cycle/resume
-
-→ run sub-skill: resume-working-state
-
-Goal: if a prior session left an active task in `working-state.md`, the agent has resumed it — completed steps, remaining steps, and key decisions trusted as still-current — rather than restarting from a cold tracker pull. If no active task, the cycle proceeds to fresh pickup.
-
-→ run sub-skill: interval-sync
-
-→ run sub-skill: triage-issues
-
-→ run sub-skill: implement-tasks
-
-→ run sub-skill: pickup-comment-fidelity
-
-→ run sub-skill: improvement-scan
-
-→ run sub-skill: vault-remember
-
-→ run sub-skill: vault-optimize
-
-### step:cycle/checkpoint
-
-→ run sub-skill: git-commit
-
-Goal: the cycle's work is durably checkpointed in git — code changes on the feature branch, state changes on the working branch, descriptive commit messages naming the task or issue, pushed if push is configured. Pending Test transitions are gated on this checkpoint.
-
-→ run sub-skill: self-restart
 
 ---
 

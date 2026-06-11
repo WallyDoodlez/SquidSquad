@@ -2,51 +2,7 @@
 slot: instructions
 ordinal: 20
 roles: [worker]
-step-ids: [step:cycle/triage-issues, step:cycle/implement]
----
-
-→ run sub-skill: roles/worker/ralph-loop-overview
-
-### step:cycle/run
-
-→ run sub-skill: cycle-runner
-
-Goal: the cycle's input state has been captured (pull result, context pressure, working-state snapshot, queue state); the agent has aligned its creative work against that input; the cycle's outputs have been staged for durable commit and status propagation.
-
-### step:cycle/context-pressure
-
-→ run sub-skill: context-pressure
-
-Goal: the agent has read the live context-pressure percentage from disk, compared it to the configured threshold, and (above threshold) checkpointed pending work to working-state plus pushed git so a respawn loses nothing. Below threshold this is a no-op and the cycle continues normally.
-
-### step:cycle/resume
-
-→ run sub-skill: resume-working-state
-
-Goal: if a prior session left an active task in `working-state.md`, the agent has resumed it — completed steps, remaining steps, and key decisions trusted as still-current — rather than restarting from a cold tracker pull. If no active task, the cycle proceeds to fresh pickup.
-
-→ run sub-skill: interval-sync
-
-→ run sub-skill: triage-issues
-
-→ run sub-skill: implement-tasks
-
-→ run sub-skill: pickup-comment-fidelity
-
-→ run sub-skill: improvement-scan
-
-→ run sub-skill: vault-remember
-
-→ run sub-skill: vault-optimize
-
-### step:cycle/checkpoint
-
-→ run sub-skill: git-commit
-
-Goal: the cycle's work is durably checkpointed in git — code changes on the feature branch, state changes on the working branch, descriptive commit messages naming the task or issue, pushed if push is configured. Pending Test transitions are gated on this checkpoint.
-
-→ run sub-skill: self-restart
-
+step-ids: [step:cycle/triage-issues, step:cycle/pickup-comment-fidelity, step:cycle/implement]
 ---
 
 <!-- sub-skill: discussion-protocol -->
@@ -118,6 +74,14 @@ Goal: `working-state.md` reflects the cycle's outcome — cleared if a task ship
 → run sub-skill: triage-issues
 
 Scan this role's open issues for bug reports. For each: investigate root cause, determine if it's in this domain, file cross-domain if not. Bugs are auto-approved; pick up immediately.
+
+### insert-after step:cycle/pickup
+
+#### step:cycle/pickup-comment-fidelity
+
+→ run sub-skill: pickup-comment-fidelity
+
+Before starting work on the picked-up task, verify the pickup comment posted on the issue accurately reflects the tracker's current status, the AC list you'll implement against, and any constraints from PM's locked CONTEXT.md. Pickup comments are the cross-agent contract — drift here causes verifier rejections downstream.
 
 ### append
 
