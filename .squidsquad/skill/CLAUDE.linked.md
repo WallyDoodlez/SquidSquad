@@ -709,9 +709,7 @@ When implementing skill changes (SKILL.md, SOUL.md, manifest.yaml, sub-skill sou
 
 #### Step 7.2 — step:cycle/ds-review
 
-→ run sub-skill: improvement-scan
-
-For high-blast-radius skill changes (changes to base agent instructions, role-shared instructions, the compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR). Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding.
+For high-blast-radius skill changes (changes to base agent instructions, role-shared instructions, the compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR) via `python references/scripts/model_router.py code-review`. Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding. On model_router exit code 1/2/3 (deepseek unreachable, route-table miss, transport error), fall back to a Sonnet subagent for the same review prompt.
 
 #### Step 7.3 — step:cycle/manifest-update
 
