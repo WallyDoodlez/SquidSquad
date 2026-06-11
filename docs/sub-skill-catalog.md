@@ -104,8 +104,8 @@ Reusable across multiple roles.
 | `cycle-runner` | 3-phase cycle (pre/creative/post) wired to `cycle_pre.py` and `cycle_post.py` | PM, verifier, DM, worker |
 | `context-pressure` | Read `.squidsquad/<role>/context-pressure`; checkpoint and signal exit-42 above threshold | PM, verifier, DM, worker |
 | `task-pickup` | Pick up next approved task from the role's tracker query | PM, verifier, worker (DM uses role variant) |
-| `resume-working-state` | Resume in-flight work from `.squidsquad/<alias>/working-state.md` on cycle entry | worker |
-| `interval-sync` | Honor the configured cycle interval | worker |
+| `resume-working-state` | Resume in-flight work from `.squidsquad/<alias>/working-state.md` on cycle entry | all roles |
+| `interval-sync` | Honor the configured cycle interval | all roles |
 | `self-restart` | Detect context-pressure exit and let the harness respawn | PM, verifier, DM, worker |
 | `agent-lifecycle` | Heartbeat, singleton enforcement, reboot signaling | PM, verifier, DM, worker |
 | `boot-remote-agents` | PM-only: spawn stalled agents via `boot_remote.py` when the harness can't | PM |

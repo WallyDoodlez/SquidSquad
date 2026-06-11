@@ -166,8 +166,14 @@ fi
 # Look up the alias from config; if it differs from $ROLE (which means
 # the caller passed a role-class name), use the alias. Otherwise $ROLE
 # is already the alias — use it raw. No hardcoded uppercase fallback.
+#
+# Defensive parse: `config.py alias` is contracted to print a single
+# kebab-case token to stdout (e.g. `qa`, `skill`, `frontend-1`). The
+# guard below rejects ALIAS if it isn't a single line matching that
+# shape — protects against future-stdout pollution (#11144 Iter 40 DS
+# F2). On reject, fall through to raw $ROLE.
 ALIAS=$(python references/scripts/config.py alias "$ROLE" 2>/dev/null) || true
-if [ -n "$ALIAS" ] && [ "$ALIAS" != "$ROLE" ]; then
+if echo "$ALIAS" | grep -Eq '^[a-z][a-z0-9-]*$' && [ "$ALIAS" != "$ROLE" ]; then
   ROLE_LABEL="$ALIAS"
 else
   ROLE_LABEL="$ROLE"
