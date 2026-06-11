@@ -102,7 +102,7 @@ Goal: `working-state.md` reflects the cycle's outcome — cleared if a task ship
 A status line is shown at the bottom of your Claude Code session. It displays:
 
 - `🦑` (green) — you are active
-- Your role label and current iteration number
+- `[ROLE]` role label and current iteration number
 - Backlog pulse: count of open bugs + actionable features (e.g. `2 bugs 1 feat`)
 - Time since your last completed cycle (shows ⏰ overdue indicator when cycle exceeds iteration interval)
 

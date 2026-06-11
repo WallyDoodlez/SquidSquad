@@ -98,7 +98,7 @@ Maintain `.squidsquad/[DM_ALIAS]/working-state.md` to persist context across con
 A status line is shown at the bottom of your Claude Code session. It displays:
 
 - `🦑` (green) — you are active
-- `DM` role label
+- `[ROLE]` role label
 - Pending Ship count (items waiting for delivery)
 - Active task from working-state.md
 - Context usage and next-cycle countdown

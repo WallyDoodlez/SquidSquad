@@ -162,16 +162,13 @@ if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ]; then
   GIT_SYNC="${GIT_SYNC}↓${BEHIND}"
 fi
 
-# Role label — use alias from config if available
+# Role label — alias is sole truth (#11144 G10).
+# Look up the alias from config; if it differs from $ROLE (which means
+# the caller passed a role-class name), use the alias. Otherwise $ROLE
+# is already the alias — use it raw. No hardcoded uppercase fallback.
 ALIAS=$(python references/scripts/config.py alias "$ROLE" 2>/dev/null) || true
 if [ -n "$ALIAS" ] && [ "$ALIAS" != "$ROLE" ]; then
   ROLE_LABEL="$ALIAS"
-elif [ "$ROLE" = "pm" ]; then
-  ROLE_LABEL="PM"
-elif [ "$ROLE" = "qa" ]; then
-  ROLE_LABEL="QA"
-elif [ "$ROLE" = "dm" ]; then
-  ROLE_LABEL="DM"
 else
   ROLE_LABEL="$ROLE"
 fi
