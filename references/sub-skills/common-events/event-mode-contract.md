@@ -59,9 +59,9 @@ Monitor tool invocation:
 
 ---
 
-> **Cursor advance is per-event and agent-driven.** For each event delivered by `event_poll.py`, you process it (cared via the care filter → run the cycle wrapper; skipped → no wrapper) and then POST `ack-cursor {event_id, role}` to the harness. The harness writes `.event-state.json` and replies `200 OK`. There is no batched end-of-walk ack — one ack per tended event, inside the §8.1 loop. See [[cursor-management]].
+> **Cursor advance is per-event and agent-driven.** For each event returned by your `GET /events/for/{role}?since=<cursor>`, you process it (cared via the care filter → run the cycle wrapper; skipped → no wrapper) and then POST `ack-cursor {event_id, role}` to the harness. The harness writes `.event-state.json` and replies `200 OK`. There is no batched end-of-walk ack — one ack per tended event, inside the §8.1 loop. See [[cursor-management]].
 
-> **Case precedence.** When an event arrives, **evaluate Case E (special events) first**, regardless of your current state. Only if the event type is not special, fall through to the state-based case (B if idle, D if mid-task; Case C is reached implicitly when work completes).
+> **Case precedence.** For each event you take from your GET response, **evaluate Case E (special events) first**, regardless of your current state. Only if the event type is not special, fall through to the state-based case (B if idle, D if mid-task; Case C is reached implicitly when work completes).
 
 ### Case B — Idle, event arrives
 

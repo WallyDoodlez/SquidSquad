@@ -41,9 +41,9 @@ Three fields, three values:
    ```
    Note: `Next scan after` is **stored**, not derived on the fly — this is the only place the cool-down value is read.
 4a. **Re-check the queue.** Run `work_queue()` immediately after writing the scan-completion fields. A task may have arrived during the scan (or during the crashed-out window if this was a crash-recovery restart). If `work_queue()` returns work, **exit the cool-down loop** — transition the top item to `in-progress`, update the Task field in `working-state.md`, and begin work directly (no need to wait for an event, since you already have the item). Only if `work_queue()` is empty proceed to step 5.
-5. **Wait via the Monitor.** The persistent Monitor (see [[event-mode-contract]] "How You Listen") delivers events at a short fixed cadence; you do not perform a long blocking sleep. After each empty poll interval:
+5. **Wait via the Monitor.** The persistent Monitor (see [[event-mode-contract]] "How You Listen") delivers `NUDGE` wake signals at a short fixed cadence; you do not perform a long blocking sleep. After each empty poll interval:
    - If `now >= Next scan after` → run the next improvement scan (back to step 3).
-   - If a task-relevant event arrives in the meantime → the Monitor wakes Case B in [[event-mode-contract]] (forge-read, possibly pick up new work). The cool-down timer keeps running in the background; when work completes (Case C) and the queue is empty again, return here for the eligibility check.
+   - If a `NUDGE` arrives in the meantime → the Monitor wakes Case B in [[event-mode-contract]] (you `GET /events/for`, forge-read, possibly pick up new work). The cool-down timer keeps running in the background; when work completes (Case C) and the queue is empty again, return here for the eligibility check.
 
 ### Atomicity
 
