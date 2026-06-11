@@ -29,7 +29,7 @@ Use the per-finding-kind one-liners in `tracker-protocol`'s **Creating Issues** 
 
 → run sub-skill: working-state
 
-Goal: `working-state.md` reflects the cycle's outcome — cleared if a task shipped, updated if work continues — with the last-processed event ID preserved across any clear. The iteration log captures the cycle's summary for institutional memory.
+Goal: `working-state.md` reflects the cycle's outcome — cleared if a task shipped, updated if work continues. (The event cursor is harness-owned in `.event-state.json`, not stored in working-state — nothing cursor-related to preserve across a clear; see [[cursor-management]].) The iteration log captures the cycle's summary for institutional memory.
 
 ---
 
