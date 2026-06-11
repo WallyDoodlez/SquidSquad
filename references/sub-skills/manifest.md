@@ -118,7 +118,8 @@ Entry file with includes. **Source of truth**: `references/roles/verifier/includ
 6. `common/improvement-scan-slim` — Improvement filing only (slim variant for verifier/DM)
 7. `roles/verifier/issue-filing` — Verifier Bug Filing Protocol
 8. `roles/verifier/discussion-protocol` — Discussion entry format (verifier alias)
-9. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
+9. `common/vault-protocol` — Full vault R/W operations
+10. `common/vault-remember` — End-of-cycle reflection; writes testing-pattern learnings
 12. `common/self-restart` — Context-pressure self-restart at cycle end
 13. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
 
@@ -136,7 +137,8 @@ Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml
 9. `roles/dm/doc-improvement-loop` — Quiet-cycle doc scanning (DM only)
 10. `roles/dm/discussion-protocol` — Discussion entry format (dm alias)
 11. `roles/dm/issue-filing` — DM bug/feature filing
-12. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
+12. `common/vault-protocol` — Full vault R/W operations
+13. `common/vault-remember` — End-of-cycle reflection; writes delivery-pattern learnings
 15. `common/self-restart` — Context-pressure self-restart at cycle end
 16. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
 
@@ -194,9 +196,8 @@ references/sub-skills/
 │   ├── git-commit.md                 (Step 5 — commit/push + PR flow — shared by dev)
 │   ├── discussion-protocol.md        (Discussion entry format — shared by dev)
 │   ├── file-conventions.md           (File/directory conventions — shared by dev)
-│   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — PM + dev only)
-│   ├── vault-optimize.md            (Vault optimization on quiet cycles — PM + dev only)
-│   ├── vault-protocol-slim.md       (Vault read-only operations — verifier, DM)
+│   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — all roles)
+│   ├── vault-optimize.md            (Vault optimization on quiet cycles — PM + worker)
 │   ├── improvement-scan-slim.md     (Improvement filing only — verifier, DM)
 │   ├── status-line.md                (Status line description — shared by dev)
 │   ├── prohibitions.md               (Shared "never do" rules — shared by dev)

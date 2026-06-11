@@ -128,10 +128,9 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `vault-remember` | End-of-cycle reflection; writes to vault when something is worth remembering | PM, worker |
+| `vault-remember` | End-of-cycle reflection; writes to vault when something is worth remembering — every role contributes patterns from its own lane | all roles |
 | `vault-optimize` | On quiet cycles, compact and de-dup vault entries | PM, worker |
-| `vault-protocol` | Full vault R/W protocol | PM, worker |
-| `vault-protocol-slim` | Read-only variant for verifier/DM (no vault writes) | verifier, DM |
+| `vault-protocol` | Full vault R/W protocol — vault is shared institutional knowledge, all roles write per their lane | all roles |
 
 ### Quality, git, improvement
 
@@ -140,7 +139,7 @@ Reusable across multiple roles.
 | `git-commit` | Commit/push protocol with PR flow | worker (DM has its own variant) |
 | `pr-protocol` | PR lifecycle — `git_ops.py pr-create` lock vs bare `gh pr create`; two-lane merge protocol (verifier auto-merge + DM ship-pending; PM observes, never merges); squash-strategy lock; conflict-resolve via merge (never rebase) | all roles (runtime-loaded via `→ run sub-skill: pr-protocol` from `common/git-commit.md`, `roles/pm/task-intake.md`, `roles/verifier/verification.md`, `roles/dm/delivery-packaging.md`, `roles/pm/pipeline-sentinel.md`) |
 | `improvement-scan` | Full proactive scan for process/template gaps | PM, worker |
-| `improvement-scan-slim` | Filing-only variant (no auto-fix) for read-only roles | verifier |
+| `improvement-scan-slim` | Filing-only variant (no auto-fix) — used by roles whose lane is verifying/delivering, not implementing | verifier, DM |
 | `capability-check` | _deprecated — slated for removal_; was: verify the agent's environment has the tools it expects | DM (currently; removal paired with the broader capability-framework retirement per [INSTALLER-ARCH.md §8](INSTALLER-ARCH.md), not this PR) |
 | `l4-curation` | Elicitation dialog for runtime L4 writes — detect customization request, scope bucket + rationale, walk the §7.2 decision tree (replace / insert-before / insert-after / append), run the three §7.4 safety gates (DeepSeek audit / mini-CQ / compose dry-run), produce a well-formed H3 op-block for `.squidsquad/project/<role-class>.md`. Reactively invoked; not part of any cycle step. One-off requests and feature requests are explicitly NOT routed through this sub-skill. Authored in PRD-C/C1 (#10650); wired into pm/dm/verifier/worker L2 instructions.md in PRD-C/C2 (#10651) via the standard `→ run sub-skill: l4-curation` reference (NOT inlined via any role's `includes.yml` — wiring is v2-path only per C2 AC4). | every role-class (pm/dm/verifier/worker) — reactive (no cycle step); §7 of [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) |
 | ~~`compose-output-review`~~ | Sub-procedure for reviewing composed CLAUDE.md output for source-output drift — invoked during code review (planned per COMPOSE-ARCHITECTURE.md §9; implementation pending — strike-through until the source file lands) | worker (planned) |

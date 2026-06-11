@@ -144,7 +144,6 @@ references/sub-skills/common/mention-protocol.md
 references/sub-skills/common/resume-working-state.md
 references/sub-skills/common/self-restart.md
 references/sub-skills/common/vault-optimize.md
-references/sub-skills/common/vault-protocol-slim.md
 references/sub-skills/common/vault-protocol.md
 references/sub-skills/common/vault-remember.md
 references/sub-skills/common/working-state.md

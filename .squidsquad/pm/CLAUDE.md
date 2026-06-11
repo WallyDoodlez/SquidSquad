@@ -543,7 +543,7 @@ Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. 
 
 ### Step 6 — step:cycle/cleanup
 
-→ run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred *and your role's vault policy permits writes* — see §Vault below). → run sub-skill: `improvement-scan-slim` (see §4 **Improvement subloop** above). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
+→ run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred — see §Vault below for write discipline). → run sub-skill: `improvement-scan-slim` (see §4 **Improvement subloop** above). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
 
 #### Step 6.1 — step:cycle/health-check
 
@@ -716,4 +716,4 @@ The vault uses the **PARAG** taxonomy:
 
 → run sub-skill: vault-protocol
 
-Before starting a task, consult relevant vault notes. After completing real work, use vault-remember to capture durable learnings — *unless your role is configured read-only* (verifier is read-only by default; PM/worker/DM may write per their project-adaptation). When writing: max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).
+Before starting a task, consult relevant vault notes. After completing real work, use vault-remember to capture durable learnings. The vault is shared institutional knowledge for the whole team — every role contributes patterns and learnings from its own lane (PM: coordination/decision patterns; worker: implementation patterns; verifier: testing/verification patterns; DM: delivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).

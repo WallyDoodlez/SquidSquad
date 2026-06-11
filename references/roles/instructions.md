@@ -248,7 +248,7 @@ Do the unit of work for the cared event. The shape of this work depends on your 
 
 ### Step 6 — step:cycle/cleanup
 
-→ run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred *and your role's vault policy permits writes* — see §Vault below). → run sub-skill: `improvement-scan-slim` (see §4 **Improvement subloop** above). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
+→ run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred — see §Vault below for write discipline). → run sub-skill: `improvement-scan-slim` (see §4 **Improvement subloop** above). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
 
 ### Step 7 — step:cycle/exit
 

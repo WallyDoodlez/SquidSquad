@@ -9,7 +9,9 @@
 # wake_mode arg). The legacy v1 split (`includes.yml` polling +
 # `includes-events.yml` events) was retired in E6.
 #
-# Uses slim variants for vault-protocol and improvement-scan (read-only role).
+# Uses slim variant for improvement-scan (max 2 findings/cycle posture).
+# Vault-protocol is full — verifier writes testing-pattern learnings (per L4
+# project adaptation; vault is shared institutional knowledge across all roles).
 #
 # Order matters — includes are resolved top-to-bottom.
 includes:
@@ -20,7 +22,8 @@ includes:
   - common/improvement-scan-slim
   - roles/verifier/issue-filing
   - roles/verifier/discussion-protocol
-  - common/vault-protocol-slim
+  - common/vault-protocol
+  - common/vault-remember
   - common/self-restart
   - common/agent-lifecycle
   # Removed in #11087 (post-#11049 D1-inlined; content lives in

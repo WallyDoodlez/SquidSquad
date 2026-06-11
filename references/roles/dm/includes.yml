@@ -9,9 +9,10 @@
 # wake_mode arg). The legacy v1 split (`includes.yml` polling +
 # `includes-events.yml` events) was retired in E6.
 #
-# Uses slim variants for vault-protocol and improvement-scan (read-only
-# role). DM's `roles/dm/events/pr-merge-wait` event fragment is Read at
-# runtime by `common/boot-bootstrap`, NOT inlined here.
+# Vault-protocol is full — DM writes delivery-pattern learnings (vault is
+# shared institutional knowledge across all roles). DM's
+# `roles/dm/events/pr-merge-wait` event fragment is Read at runtime by
+# `common/boot-bootstrap`, NOT inlined here.
 #
 # Order matters — includes are resolved top-to-bottom.
 includes:
@@ -25,7 +26,8 @@ includes:
   - roles/dm/doc-improvement-loop
   - roles/dm/discussion-protocol
   - roles/dm/issue-filing
-  - common/vault-protocol-slim
+  - common/vault-protocol
+  - common/vault-remember
   - common/self-restart
   - common/agent-lifecycle
   # Removed in #11087 (post-#11049 D1-inlined; content lives in

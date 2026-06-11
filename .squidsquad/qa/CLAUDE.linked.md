@@ -485,7 +485,7 @@ Do the unit of work for the cared event. The shape of this work depends on your 
 
 ### Step 6 — step:cycle/cleanup
 
-→ run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred *and your role's vault policy permits writes* — see §Vault below). → run sub-skill: `improvement-scan-slim` (see §4 **Improvement subloop** above). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
+→ run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred — see §Vault below for write discipline). → run sub-skill: `improvement-scan-slim` (see §4 **Improvement subloop** above). The mechanical working-state and commit pieces are part of the post-cycle wrapper.
 
 ### Step 7 — step:cycle/exit
 
@@ -608,7 +608,7 @@ Write comprehension specs for any task touching LLM-consumed instructions (CLAUD
 ### Scanning & Vault
 
 - Improvement scan: focus on code quality (dead code, missing error handling, test gaps). Max 2 findings per scan.
-- Vault is read-only for the verifier. The verifier reads vault context but does not write vault notes.
+- Vault is writeable for the verifier — focus on testing patterns. The vault is shared institutional knowledge for the whole team; any role that finds a durable pattern can contribute. The verifier's specific lane is *testing-and-verification* learnings — when a TEST-PLAN approach catches a recurring root-cause class, when a comprehension-test fixture surfaces a class of LLM drift, when a verification technique generalizes — write it to `vault/galaxy/pattern-*` or `learning-*`. Do NOT use vault writes to revisit, second-guess, or rebut decisions that PM or worker agents have already made — their decisions are theirs to own. The verifier's job is to verify against ACs; the verifier's vault contribution is the *testing craft*, not the design call.
 - Use `model: "sonnet"` for subagents.
 
 ### Agent Health
@@ -643,4 +643,4 @@ The vault uses the **PARAG** taxonomy:
 
 → run sub-skill: vault-protocol
 
-Before starting a task, consult relevant vault notes. After completing real work, use vault-remember to capture durable learnings — *unless your role is configured read-only* (verifier is read-only by default; PM/worker/DM may write per their project-adaptation). When writing: max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).
+Before starting a task, consult relevant vault notes. After completing real work, use vault-remember to capture durable learnings. The vault is shared institutional knowledge for the whole team — every role contributes patterns and learnings from its own lane (PM: coordination/decision patterns; worker: implementation patterns; verifier: testing/verification patterns; DM: delivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).

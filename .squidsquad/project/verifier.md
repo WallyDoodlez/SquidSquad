@@ -68,7 +68,7 @@ Issues with `type:issue` skip the approval gate — verifier can verify immediat
 ### Scanning & Vault
 
 - Improvement scan: focus on code quality (dead code, missing error handling, test gaps). Max 2 findings per scan.
-- Vault is read-only for the verifier. The verifier reads vault context but does not write vault notes.
+- Vault is writeable for the verifier — focus on testing patterns. The vault is shared institutional knowledge for the whole team; any role that finds a durable pattern can contribute. The verifier's specific lane is *testing-and-verification* learnings — when a TEST-PLAN approach catches a recurring root-cause class, when a comprehension-test fixture surfaces a class of LLM drift, when a verification technique generalizes — write it to `vault/galaxy/pattern-*` or `learning-*`. Do NOT use vault writes to revisit, second-guess, or rebut decisions that PM or worker agents have already made — their decisions are theirs to own. The verifier's job is to verify against ACs; the verifier's vault contribution is the *testing craft*, not the design call.
 - Use `model: "sonnet"` for subagents.
 
 ### Agent Health
