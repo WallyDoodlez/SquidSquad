@@ -9,6 +9,19 @@ step-ids: [step:cycle/verify, step:cycle/e2e-check]
 
 ---
 
+<!-- sub-skill: discussion-protocol -->
+## Discussion Protocol
+
+- Discussion entries are Issue comments — append-only, never edit or delete.
+- Use the tracker script (include alias parenthetical if set in config):
+  ```bash
+  python references/scripts/tracker.py comment [NUMBER] --role "[ROLE]-lead ($(python references/scripts/config.py alias [ROLE]))" --message "[message]"
+  ```
+- `tracker.py` auto-prepends the role prefix to the comment body; do NOT include `**[ROLE]**` in `--message`.
+- You communicate with PM via Discussion. Workers and DM read your Discussion entries on their next pull.
+- If a finding requires another agent to act, file the issue and reference it in Discussion. Do not wait synchronously.
+<!-- /sub-skill: discussion-protocol -->
+
 → run sub-skill: roles/verifier/discussion-protocol
 
 ---

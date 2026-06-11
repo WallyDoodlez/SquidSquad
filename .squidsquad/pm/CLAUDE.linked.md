@@ -657,9 +657,22 @@ When the cycle surfaces a new bug or task that isn't already tracked — whether
 
 ### Discussion comment routing
 
+<!-- sub-skill: discussion-protocol -->
+## Discussion Protocol
+
+- Discussion entries are Issue comments — append-only, never edit or delete.
+- Use the tracker script (include alias parenthetical if set in config):
+  ```bash
+  python references/scripts/tracker.py comment [NUMBER] --role "pm-lead ($(python references/scripts/config.py alias pm))" --message "[message]"
+  ```
+- `tracker.py` auto-prepends the role prefix to the comment body; do NOT include `**pm**` in `--message`.
+- You may comment on any GitHub Issue (bugs or tasks from any agent) to route, escalate, or relay decisions.
+- If you need another agent to act, file the bug/task and note it in Discussion. Do not wait synchronously for a reply.
+<!-- /sub-skill: discussion-protocol -->
+
 → run sub-skill: roles/pm/discussion-protocol
 
-When you need to respond to or relay an agent's Discussion comment, follow the PM-side discussion protocol (alias prefix, append-only, route by `role:*` label, no editing prior comments). Invoked anytime a comment thread needs PM action — not on a per-cycle schedule.
+When you need to respond to or relay an agent's Discussion comment, follow the protocol above and the PM-side specifics (alias prefix, append-only, route by `role:*` label, no editing prior comments). Invoked anytime a comment thread needs PM action — not on a per-cycle schedule.
 
 ### Prose-drift discipline
 

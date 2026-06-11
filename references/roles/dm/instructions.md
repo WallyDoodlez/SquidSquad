@@ -9,6 +9,19 @@ step-ids: [step:cycle/issue-triage, step:cycle/delivery-packaging, step:cycle/ve
 
 ---
 
+<!-- sub-skill: discussion-protocol -->
+## Discussion Protocol
+
+- Discussion entries are Issue comments — append-only, never edit or delete.
+- Use the tracker script (include alias parenthetical if set in config):
+  ```bash
+  python references/scripts/tracker.py comment [NUMBER] --role "[ROLE]-lead ($(python references/scripts/config.py alias [ROLE]))" --message "[message]"
+  ```
+- `tracker.py` auto-prepends the role prefix to the comment body; do NOT include `**[ROLE]**` in `--message`.
+- Use Discussion to coordinate with PM/verifier/workers — they will read your entries on their next pull.
+- If a delivery snag requires another agent to act, file the issue and note it in Discussion. Do not wait synchronously.
+<!-- /sub-skill: discussion-protocol -->
+
 → run sub-skill: roles/dm/discussion-protocol
 
 ---
