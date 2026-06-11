@@ -342,7 +342,7 @@ Both paths share the same output gate: findings are filed via the role's `improv
 
 #### 5. Your idle wait is the `Monitor` tool
 
-The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each `NUDGE\n` line that arrives wakes you and starts one per-nudge cycle.
+The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each line of stdout is one JSON event object (one per `event_poll.py` poll-tick that finds new events on the harness) — that line is your "nudge," and it wakes you and starts one per-nudge cycle. The event payload is a hint only; per [[forge-read-pattern]] you re-query the forge as the source of truth before acting.
 
 The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
 

@@ -16,7 +16,7 @@ Every decision consults the forge before acting. This is the rule that lets the 
 3. **Forge-read.** Query the forge via `tracker.py` for the referenced item (and/or `work_queue(<role>)` for your role's queue). The forge tells you the actual current state.
 4. **Act on what the forge says**, not on what the event payload said. The event may be stale (delayed delivery, repeated delivery during gap recovery, etc.).
 
-The cursor advances automatically as `event_poll.py` emits each event line — there is no separate step you take to advance it (see [[cursor-management]]).
+After you tend each event (steps 1-4 above), you MUST POST `ack-cursor {event_id, role}` to the harness — the cursor does NOT advance automatically. `event_poll.py` writes its own local cursor file before printing the event line, but that is `event_poll.py`'s read-position bookkeeping, not the harness's per-role cursor. The harness cursor advances only when the agent POSTs `ack-cursor` for the event it just finished (see [[cursor-management]] for the wire shape; see [[event-mode-contract]] for the per-event loop). Skipping the POST leaves the cursor stuck at the boot position; every event re-delivers on the next restart.
 
 ### Why
 

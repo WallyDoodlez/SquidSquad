@@ -197,7 +197,7 @@ Legal flows and owning roles:
 - `in-progress` → `pending-test` | `pending-ship` | `approved` | `planning` | `pending-human-review` | `pending-human-setup` — **assigned role** (pending-ship: DM only)
 - `pending-human-review` → `in-progress` | `pending-ship` — **assigned role** (HITL designer loop)
 - `pending-human-setup` → `in-progress` — **PM** (environment setup complete)
-- `pending-test` → `in-progress` | `pending-ship` — **PM or verifier**
+- `pending-test` → `in-progress` | `pending-ship` | `pending-human-review` — **PM or verifier** (pending-human-review = verifier routes to human under PR Flow when `review:human-required` is set)
 - `pending-ship` → `shipped` | `in-progress` — **DM** ships (auto-closes), **PM or verifier or DM** routes back on merge conflict
 
 ### Discussion Entries
