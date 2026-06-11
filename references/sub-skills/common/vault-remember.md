@@ -7,6 +7,9 @@ ordinal: 10
 
 Print: `[🦑 HH:MM:SS] Reflecting on cycle...`
 
+**Per-role write lane** (see [[vault-protocol]] for the full lane discipline). Each role writes patterns from its own lane only: PM = coordination/decision patterns; worker = implementation patterns; **verifier = testing/verification patterns ONLY — never debate PM or worker decisions in vault writes**; DM = delivery patterns. If a candidate learning is outside your lane, file it on the owning role's tracker as a `learning` note request instead of writing it yourself.
+
+
 **Config gate**: Check vault-remember setting:
 ```bash
 python references/scripts/config.py get vault-remember

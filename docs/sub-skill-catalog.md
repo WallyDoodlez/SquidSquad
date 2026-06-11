@@ -229,7 +229,7 @@ Role-specific event extras:
 
 | Sub-skill | One-liner |
 |---|---|
-| `roles/dm/task-pickup` | DM's queue: pending-ship items — slash-bearing per #10743 |
+| `roles/dm/task-pickup` | DM-specific task-pickup body (pending-ship items). Compose-time include via `dm/includes.yml` — NOT a runtime slash-bearing marker. At runtime DM uses bare `task-pickup` (catalog row above at #10743 line); the slash-bearing source path here lets compose inline the DM override before the bare `task-pickup` body. |
 | `issue-triage` | Triage DM-owned bug reports |
 | `delivery-packaging` | The packaging step: docs, CHANGELOG, release notes |
 | `version-bumps` | Bump rules (uses `shipped_since_bump` counter) |

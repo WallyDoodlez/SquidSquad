@@ -28,7 +28,11 @@ Three fields, three values:
 
 1. **Entering idle.** `work_queue()` returned empty. If `Status: running` was already set (from a previous boot interrupted mid-scan), restart the scan — improvement scans are idempotent, a fresh scan subsumes a partial one.
 2. **Eligibility check.** If `Next scan after` is missing (no prior scan) or in the past, the agent is eligible — proceed to step 3. If `Next scan after` is in the future, you are NOT eligible yet — proceed to step 5 (wait).
-3. **Start scan.** Write `Status: running` to working-state (atomic). Run your role's scanning sub-skill.
+3. **Start scan.** Write `Status: running` to working-state (atomic). Then run your role's scanning sub-skill:
+   - **PM**: `→ run sub-skill: roles/pm/improvement-scan`
+   - **Worker (skill / web / ios / android / fullstack)**: `→ run sub-skill: improvement-scan`
+   - **Verifier**: `→ run sub-skill: improvement-scan-slim` (filing-only — verifier never auto-fixes)
+   - **DM**: `→ run sub-skill: improvement-scan-slim` (filing-only)
 4. **Complete scan.** Read the cool-down value from `config.md`. Compute `Next scan after = now + cooldown`. Write under `## Improvement Scan`:
    ```
    Status: idle
