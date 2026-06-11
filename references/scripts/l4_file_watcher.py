@@ -179,6 +179,16 @@ def emit_results(results, *, emit_event):
     fields per the AGENT-RUNTIME §8.5 schema for ``assigned-to``
     (where ``target_alias`` is a top-level field on the event payload
     that the harness uses for the alias-care filter).
+
+    Dual-emit note: the mainstream EAD path in ``harness.py`` currently
+    emits ``payload.target_role`` (legacy field name pre-#6274 dev→worker
+    rename) and the ``/events/for/{role}`` filter at ``harness.py:2181``
+    reads the same legacy field. Until the harness catches up to the
+    canonical ``target_alias`` field name from AGENT-RUNTIME §8 (follow-up
+    tracker issue filed in polish-session), we emit BOTH fields with the
+    same alias value so the harness filter actually picks up our events.
+    Without the dual emit, file-watch ``assigned-to`` events are silently
+    dropped from the per-role filter stream.
     """
     for r in results:
         emit_event(
@@ -187,6 +197,7 @@ def emit_results(results, *, emit_event):
             payload={
                 **r.payload,
                 "target_alias": r.alias,
+                "target_role": r.alias,
                 "event_context": r.event_context,
             },
         )
