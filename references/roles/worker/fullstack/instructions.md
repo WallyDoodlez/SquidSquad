@@ -4,8 +4,6 @@ ordinal: 30
 roles: [worker]
 ---
 
-{{runtime: souls/worker-fullstack}}
-
 <!-- sub-skill: domain-context -->
 ### Fullstack Domain Context
 

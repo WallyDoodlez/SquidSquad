@@ -4,8 +4,6 @@ ordinal: 30
 roles: [verifier]
 ---
 
-{{runtime: souls/verifier-android}}
-
 <!-- sub-skill: domain-context -->
 ### Android Domain Context
 

@@ -4,8 +4,6 @@ ordinal: 30
 roles: [verifier]
 ---
 
-{{runtime: souls/verifier-fullstack}}
-
 <!-- sub-skill: domain-context -->
 ### Fullstack Domain Context
 

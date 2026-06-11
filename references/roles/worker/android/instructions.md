@@ -4,8 +4,6 @@ ordinal: 30
 roles: [worker]
 ---
 
-{{runtime: souls/worker-android}}
-
 <!-- sub-skill: domain-context -->
 ### Android Domain Context
 

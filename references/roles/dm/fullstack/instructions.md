@@ -4,8 +4,6 @@ ordinal: 30
 roles: [dm]
 ---
 
-{{runtime: souls/dm-fullstack}}
-
 <!-- sub-skill: domain-context -->
 ### Fullstack Domain Context
 

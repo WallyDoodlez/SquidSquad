@@ -4,8 +4,6 @@ ordinal: 30
 roles: [dm]
 ---
 
-{{runtime: souls/dm-web}}
-
 <!-- sub-skill: domain-context -->
 ### Web Domain Context
 

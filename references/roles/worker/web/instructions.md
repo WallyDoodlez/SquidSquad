@@ -4,8 +4,6 @@ ordinal: 30
 roles: [worker]
 ---
 
-{{runtime: souls/worker-web}}
-
 <!-- sub-skill: domain-context -->
 ### Web Domain Context
 

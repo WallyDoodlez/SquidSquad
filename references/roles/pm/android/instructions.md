@@ -4,8 +4,6 @@ ordinal: 30
 roles: [pm]
 ---
 
-{{runtime: souls/pm-android}}
-
 <!-- sub-skill: domain-context -->
 ### Android Domain Context
 

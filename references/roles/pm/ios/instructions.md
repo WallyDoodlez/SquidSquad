@@ -4,8 +4,6 @@ ordinal: 30
 roles: [pm]
 ---
 
-{{runtime: souls/pm-ios}}
-
 <!-- sub-skill: domain-context -->
 ### Ios Domain Context
 

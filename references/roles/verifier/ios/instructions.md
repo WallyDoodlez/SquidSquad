@@ -4,8 +4,6 @@ ordinal: 30
 roles: [verifier]
 ---
 
-{{runtime: souls/verifier-ios}}
-
 <!-- sub-skill: domain-context -->
 ### Ios Domain Context
 

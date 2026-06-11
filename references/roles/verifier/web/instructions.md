@@ -4,8 +4,6 @@ ordinal: 30
 roles: [verifier]
 ---
 
-{{runtime: souls/verifier-web}}
-
 <!-- sub-skill: domain-context -->
 ### Web Domain Context
 

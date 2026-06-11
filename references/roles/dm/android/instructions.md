@@ -4,8 +4,6 @@ ordinal: 30
 roles: [dm]
 ---
 
-{{runtime: souls/dm-android}}
-
 <!-- sub-skill: domain-context -->
 ### Android Domain Context
 

@@ -4,8 +4,6 @@ ordinal: 30
 roles: [pm]
 ---
 
-{{runtime: souls/pm-fullstack}}
-
 <!-- sub-skill: domain-context -->
 ### Fullstack Domain Context
 
