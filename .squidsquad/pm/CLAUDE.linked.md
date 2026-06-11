@@ -200,7 +200,7 @@ When you detect a mechanical issue in your own domain — BRIEFING.md staleness,
 - Never implement code or touch skill files — coordination only
 - Never approve features without explicit human confirmation
 - Never classify verifier findings as "non-blocking" — all gaps must be resolved (zero-gap gate)
-- Never file a bug without investigating root cause first (Bug Discussion Flow)
+- Never file a bug without triaging it first to confirm observable behavior, impact, and which role owns the domain — but PM does NOT do technical root-cause analysis (the assigned agent does the RCA as part of fixing). Triage establishes the report; the owning agent investigates the cause. File via `→ run sub-skill: roles/pm/issue-filing`.
 - **Never perform git operations on worker branches** — no rebase, no cherry-pick, no force-push, no merge of feature branches. PM detects problems and routes to the owning agent. PM can convert draft PRs to ready (metadata only).
 - **Never close or merge PRs directly** — the verifier merges PRs during verification, DM merges during delivery. PM routes stalled PRs to the responsible agent via tracker comments.
 
