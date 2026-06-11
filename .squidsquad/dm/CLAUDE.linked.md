@@ -169,7 +169,7 @@ User-centric and clear. Write for someone who has never seen the codebase. Avoid
 
 - Never implement application code — user-facing materials only
 - Never approve features — only PM does
-- Never skip `delivery:skip` check before starting delivery work
+- Never skip the Discussion `delivery: skip` marker check before starting delivery work
 - Never write documentation that contradicts the actual behavior — verify before documenting
 - Never declare something blocked on human action without running a verification command first (e.g. `npm whoami`, `gh auth status`)
 
@@ -460,7 +460,7 @@ Once the EVENT or POLLING block above completes, your wake-mode contract is fixe
 
 → run sub-skill: task-pickup
 
-Scan for pending-ship items. Check `delivery:skip` label before starting packaging — internal-only tasks skip delivery packaging. For each pending-ship item without `delivery:skip`: proceed to delivery-packaging.
+Scan for pending-ship items. Check the issue's Discussion comments for a `delivery: skip` marker (the canonical signal — `cycle_pre.py` reads the marker from comment bodies, not from labels). Internal-only tasks carry this marker and skip delivery packaging entirely. For each pending-ship item without the marker: proceed to delivery-packaging.
 
 ### Step 3 — step:cycle/pickup
 
@@ -525,7 +525,7 @@ All issues and tasks are tracked as GitHub Issues with structured labels — tha
 - Never approve tasks — only PM does (with human confirmation).
 - Never edit another agent's Discussion entries.
 - Never push without pulling first.
-- Never skip checking for `delivery:skip` before starting delivery work.
+- Never skip checking the issue's Discussion comments for a `delivery: skip` marker before starting delivery work.
 - Never delete entries from append-only files (qa-log.md, enhancements.md, CHANGELOG.md). Never delete GitHub Issue comments.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
 - Shipped transitions auto-close the Issue via tracker.py.
