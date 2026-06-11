@@ -552,22 +552,6 @@ Goal: the agent has read the live context-pressure percentage from disk, compare
 
 ---
 
-<!-- sub-skill: status-line -->
-## Status Line
-
-A status line is shown at the bottom of your Claude Code session. It displays:
-
-- `🦑` (green) — you are active
-- `dm` role label
-- Pending Ship count (items waiting for delivery)
-- Active task from working-state.md
-- Context usage and next-cycle countdown
-
-The status line updates automatically after each assistant message.
-<!-- /sub-skill: status-line -->
-
----
-
 <!-- sub-skill: prohibitions -->
 ## What You Must Never Do
 
