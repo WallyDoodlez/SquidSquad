@@ -21,13 +21,13 @@ Each subagent had read-only access to the project and was told to cite `file:lin
 | Severity | Count | Status |
 |---|---|---|
 | BLOCKING | 1 | Fixed in Iter 58 |
-| CRITICAL (real bug) | 1 | Fixed in Iter 59 |
+| CRITICAL (real bug) | 1 | Fixed in Iter 59, properly unified in Iter 63 |
 | MEDIUM | 2 | Fixed in Iter 58 |
 | LOW | 3 | Fixed in Iter 60 |
 | INFO | 1 | Documented as known deferred (capability-check retirement) |
-| Follow-up out of scope | 1 | Filed: harness `target_role` → `target_alias` unification |
+| Follow-up (deferred → shipped) | 1 | Shipped in Iter 63: harness `target_role` → `target_alias` unification |
 
-Total: **7 fixed, 1 deferred, 1 documented**.
+Total: **8 fixed, 0 deferred, 1 documented**.
 
 ## Issue detail
 
@@ -119,36 +119,42 @@ The audits confirmed alignment across these surfaces:
 
 ## Commits
 
-3 audit-driven fix iters landed on `squidsquad/skill/compose-polish-session`:
+4 audit-driven fix iters landed on `squidsquad/skill/compose-polish-session`:
 
 ```
+c0b9f8a69  Iter 63  unify wire-format on target_alias (closes the open follow-up)
 20675bcf0  Iter 60  vault lane framing + idle-scan markers + catalog fix
-037ced0cf  Iter 59  fix l4_file_watcher target_alias dropout
+037ced0cf  Iter 59  fix l4_file_watcher target_alias dropout (transitional)
 8f8f99a94  Iter 58  fix audit-found BLOCKING + MEDIUM sub-skill bugs
 ```
 
-Tests: 196/196 (compose + compose_9588 + manifest + d2_link_stage + catalog_parser + l4_file_watcher_e3).
+Tests after Iter 63: 188/188 harness + 196/196 polish suite = **384/384 green**.
 
-## Open follow-up (post-polish)
+## Open follow-up — RESOLVED in Iter 63
 
-**Harness `target_role` → `target_alias` field-name unification**
+**Harness `target_role` → `target_alias` field-name unification** — *shipped*
 
-The harness mainstream EAD path uses `payload.target_role`; the AGENT-RUNTIME.md §8 spec and l4_file_watcher use `payload.target_alias`. Iter 59 unblocked l4_file_watcher via dual-emit but the underlying naming inconsistency remains. To finish the unification, change all four call sites in a single PR:
+Iter 63 (commit `c0b9f8a69`) landed the rename across all 7 production call sites and reverted the Iter 59 transitionals:
 
-- `references/scripts/harness.py:2181` — `/events/for/{role}` filter reads `payload.target_role` → change to `payload.target_alias`.
-- `references/scripts/harness.py:3106` — ExternalActivityDetector emits `payload.target_role` → change to `payload.target_alias`.
-- `tests/test_harness.py` — multiple fixtures use `target_role` literal strings (test_filters_by_target_role and at least 5 other test methods).
-- `tests/integration/test_event_mode_e2e.py:189` — uses `payload.target_role`.
+- `references/scripts/event_catalog.py:136` — schema documents `target_alias`.
+- `references/scripts/harness.py:2149, 2181` — endpoint docstring + filter use `target_alias`.
+- `references/scripts/harness.py:3100-3106` — ExternalActivityDetector emit uses `target_alias`; local var renamed; added comment explaining why the role-label extraction IS the alias (single-instance: by coincidence; multi-instance: per AGENT-RUNTIME §8.3 harness-writes-role-labels invariant).
+- `tests/test_harness.py` — all 8 fixtures renamed; method `test_filters_by_target_role` → `test_filters_by_target_alias`.
+- `tests/integration/test_event_mode_e2e.py:189` — filter reads `target_alias`.
 
-After unification, remove the dual-emit from `l4_file_watcher.py:emit_results` (revert to emitting `target_alias` only).
+Iter 59 transitionals reverted:
+- `l4_file_watcher.py:emit_results` back to single-emit `target_alias`; docstring kludge note removed.
+- L1 care-filter blockquote back to single-field rule.
 
-The composed CLAUDE.md prose (Iter 59) currently tells agents to check BOTH `target_alias` AND `target_role`. After unification, the prose can drop the legacy fallback.
+New regression test `test_target_alias_is_canonical_field_name` pins both halves of the contract (filter accepts `target_alias`; filter does NOT silently accept legacy `target_role`).
 
-Estimated scope: 1 worker cycle. File as a tracker issue when ready.
+Tests: 188/188 harness + 196/196 polish suite = 384/384 green.
+
+Code review: DS review pass run on the rename diff (see `DS-REVIEW-11331-iter63.md`).
 
 ## Verdict
 
-**All 4 composed CLAUDE.md outputs are production-ready** for autonomous agent runtime against the current `harness.py`. The one CRITICAL real bug (l4_file_watcher events silently dropped) is fixed. The one BLOCKING prose contradiction (forge-read-pattern cursor lie) is fixed. The remaining LOW items are quality improvements rather than defects.
+**All 4 composed CLAUDE.md outputs are production-ready** for autonomous agent runtime against the current `harness.py`. The one CRITICAL real bug (l4_file_watcher events silently dropped) is fully resolved by Iter 63's wire-format unification. The one BLOCKING prose contradiction (forge-read-pattern cursor lie) is fixed. The remaining LOW items are quality improvements rather than defects.
 
 The audit confirmed Iter 49-57's polish-session claim of production readiness, found 4 additional issues the CQ passes had missed (because they tested composed prose internal consistency, not against external scripts), and closed all of them.
 
