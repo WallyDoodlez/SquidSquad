@@ -1,17 +1,16 @@
-"""Unit tests for event_poll.py — agent's event-stream listener (#8915).
+"""Unit tests for event_poll.py — agent's event-stream wake signal (#8915).
 
-Backed by TEST-PLAN-8694.md §3 (Unit Tests). Each test name encodes the
-behavior tested. The harness, port discovery, and filesystem are all
-stubbed; no test reaches real network or touches the repo's
-`.squidsquad/` tree.
+Model B (#11329): event_poll is a pure NUDGE emitter. It does NOT advance
+the cursor (the agent owns ack-cursor) and does NOT emit event payloads —
+it writes a single literal `NUDGE\n` per new batch. The harness, port
+discovery, and filesystem are all stubbed; no test reaches real network or
+touches the repo's `.squidsquad/` tree.
 """
 
-import io
 import json
 import sys
 import urllib.error
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -45,6 +44,7 @@ def _make_urlopen(events_seq, status_seq=None):
 
     `events_seq` items can be:
       - a list[dict]            → 200 with {"events": [...]}
+      - a dict                  → 200 with that exact body (for evicted etc.)
       - an exception instance   → raised
       - a callable              → called (allows custom assertions on req)
     """
@@ -60,6 +60,8 @@ def _make_urlopen(events_seq, status_seq=None):
             raise item
         if callable(item):
             return item(req)
+        if isinstance(item, dict):
+            return _StubResponse(json.dumps(item))
         body = json.dumps({"events": item})
         return _StubResponse(body)
 
@@ -73,103 +75,211 @@ def stub_port(monkeypatch):
 
 
 @pytest.fixture
-def stub_cursor(monkeypatch):
-    """Default: no cursor in working-state (so _resolve_cursor returns '')."""
-    monkeypatch.setattr(event_poll, "_read_cursor_from_working_state",
-                        lambda role: "")
-    return None
-
-
-@pytest.fixture
-def captured_cursor_writes(monkeypatch):
-    writes = []
-
-    def _record(role, cursor):
-        writes.append((role, cursor))
-        return True
-
-    monkeypatch.setattr(event_poll, "_write_cursor_atomic", _record)
-    return writes
-
-
-@pytest.fixture
 def no_sleep():
     def _noop(_):
         pass
     return _noop
 
 
+def _nudge_lines(captured_out):
+    return [ln for ln in captured_out.split("\n") if ln]
+
+
 # ---------------------------------------------------------------------------
-# §3.1 — cursor parsing
+# Nudge emission — the core model-B contract
 # ---------------------------------------------------------------------------
 
 
-class TestCursorParsing:
-    def test_event_poll_cursor_from_arg(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        no_sleep,
+class TestNudgeEmission:
+    def test_event_poll_emits_nudge_not_json(
+        self, monkeypatch, stub_port, capsys, no_sleep,
     ):
-        fake, calls = _make_urlopen([[]])
-        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", since="42", sleep=no_sleep)
-        assert "since=42" in calls["urls"][0]
-        assert "role=skill" in calls["urls"][0]
-
-    def test_event_poll_cursor_from_working_state(
-        self, monkeypatch, stub_port, captured_cursor_writes, no_sleep,
-    ):
-        monkeypatch.setattr(event_poll, "_read_cursor_from_working_state",
-                            lambda role: "abc123")
-        fake, calls = _make_urlopen([[]])
+        """A batch of events produces exactly ONE `NUDGE` line — never the
+        event payloads (model B: the nudge carries no payload)."""
+        events = [{"id": "e1", "n": 1}, {"id": "e2", "n": 2},
+                  {"id": "e3", "n": 3}]
+        fake, _ = _make_urlopen([events])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
         event_poll.poll("skill", sleep=no_sleep)
-        assert "since=abc123" in calls["urls"][0]
+        lines = _nudge_lines(capsys.readouterr().out)
+        assert lines == ["NUDGE"]
+        # No event payload leaked to stdout.
+        assert "e1" not in "".join(lines)
 
-    def test_event_poll_cursor_missing_defaults_to_zero(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        no_sleep, capsys,
+    def test_event_poll_one_nudge_per_batch_regardless_of_count(
+        self, monkeypatch, stub_port, capsys, no_sleep,
     ):
-        fake, calls = _make_urlopen([[]])
+        events = [{"id": f"e{i}"} for i in range(10)]
+        fake, _ = _make_urlopen([events])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
         event_poll.poll("skill", sleep=no_sleep)
-        # No `since=` param when cursor is empty
-        assert "since=" not in calls["urls"][0]
-        captured = capsys.readouterr()
-        assert "WARNING" in captured.err
-        assert "skill" in captured.err
+        assert _nudge_lines(capsys.readouterr().out) == ["NUDGE"]
 
-    def test_read_cursor_from_working_state_parses_line(self, tmp_path,
-                                                        monkeypatch):
-        squid = tmp_path / ".squidsquad"
-        (squid / "skill").mkdir(parents=True)
-        (squid / "skill" / "working-state.md").write_text(
-            "# Working State\n\n- **Task**: none\n"
-            "- **Last Processed Event ID**: 9d7c2489\n",
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
-        assert event_poll._read_cursor_from_working_state("skill") == "9d7c2489"
-
-    def test_read_cursor_from_working_state_returns_empty_when_missing(
-        self, tmp_path, monkeypatch,
+    def test_event_poll_empty_response_yields_no_nudge(
+        self, monkeypatch, stub_port, capsys, no_sleep,
     ):
-        monkeypatch.setattr(event_poll, "SQUID_DIR", tmp_path / ".squidsquad")
-        assert event_poll._read_cursor_from_working_state("skill") == ""
+        fake, _ = _make_urlopen([[]])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        events, next_since = event_poll.poll("skill", sleep=no_sleep)
+        assert capsys.readouterr().out == ""
+        assert events == []
 
-    def test_read_cursor_handles_corrupted_utf8(self, tmp_path, monkeypatch):
-        # Iter-4 review fix: a corrupted working-state.md (non-UTF-8 bytes)
-        # must not crash poll() — return empty so default-zero path runs.
-        squid = tmp_path / ".squidsquad"
-        (squid / "skill").mkdir(parents=True)
-        (squid / "skill" / "working-state.md").write_bytes(
-            b"# Working State\n\xc3\x28 invalid utf-8\n"
-        )
-        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
-        assert event_poll._read_cursor_from_working_state("skill") == ""
+    def test_nudge_is_flushed(
+        self, monkeypatch, stub_port, no_sleep,
+    ):
+        import builtins
+        captured_kwargs = []
+        real_print = builtins.print
+
+        def _spy(*args, **kwargs):
+            captured_kwargs.append((args, kwargs.copy()))
+            return real_print(*args, **kwargs)
+
+        monkeypatch.setattr(builtins, "print", _spy)
+        fake, _ = _make_urlopen([[{"id": "e1"}]])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        event_poll.poll("skill", sleep=no_sleep)
+        nudge_calls = [(a, kw) for a, kw in captured_kwargs
+                       if a and a[0] == "NUDGE"
+                       and kw.get("file") is not sys.stderr]
+        assert len(nudge_calls) == 1
+        assert nudge_calls[0][1].get("flush") is True
 
 
 # ---------------------------------------------------------------------------
-# §3.2 — retry & backoff math
+# Cursor independence — event_poll never touches the cursor
+# ---------------------------------------------------------------------------
+
+
+class TestEventPollDoesNotTouchCursor:
+    """Model B: the harness owns the cursor (advanced by the agent's
+    ack-cursor posts). event_poll must NOT write working-state.md, must NOT
+    POST ack-cursor, and the cursor-writing helpers must no longer exist."""
+
+    def test_no_cursor_write_helpers_remain(self):
+        for gone in ("_write_cursor_atomic", "_read_cursor_from_working_state",
+                     "_resolve_cursor", "_working_state_path",
+                     "_CURSOR_LINE_PREFIX"):
+            assert not hasattr(event_poll, gone), (
+                f"event_poll.{gone} should be removed in the model-B migration"
+            )
+
+    def test_poll_does_not_write_working_state(
+        self, monkeypatch, stub_port, tmp_path, no_sleep,
+    ):
+        squid = tmp_path / ".squidsquad"
+        (squid / "skill").mkdir(parents=True)
+        ws = squid / "skill" / "working-state.md"
+        ws.write_text("# Working State\n\n- **Task**: none\n", encoding="utf-8")
+        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
+        before = ws.read_text(encoding="utf-8")
+
+        fake, _ = _make_urlopen([[{"id": "e1"}, {"id": "e2"}]])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        event_poll.poll("skill", sleep=no_sleep)
+
+        assert ws.read_text(encoding="utf-8") == before
+        assert "Last Processed Event ID" not in ws.read_text(encoding="utf-8")
+
+    def test_poll_makes_no_post_requests(
+        self, monkeypatch, stub_port, no_sleep,
+    ):
+        """event_poll only ever issues GETs — the ack-cursor POST is the
+        agent's job, not the poller's."""
+        methods = []
+
+        def _fake(req, timeout=None):
+            methods.append(req.get_method())
+            return _StubResponse(json.dumps({"events": [{"id": "e1"}]}))
+
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", _fake)
+        event_poll.poll("skill", sleep=no_sleep)
+        assert methods == ["GET"]
+
+
+# ---------------------------------------------------------------------------
+# High-water-mark advancement (local, in-memory — NOT the cursor)
+# ---------------------------------------------------------------------------
+
+
+class TestHighWaterMark:
+    def test_next_since_is_newest_event_id(
+        self, monkeypatch, stub_port, no_sleep,
+    ):
+        fake, _ = _make_urlopen([[{"id": "e1"}, {"id": "e2"}, {"id": "e3"}]])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        _, next_since = event_poll.poll("skill", sleep=no_sleep)
+        assert next_since == "e3"
+
+    def test_next_since_unchanged_when_no_events(
+        self, monkeypatch, stub_port, no_sleep,
+    ):
+        fake, _ = _make_urlopen([[]])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        _, next_since = event_poll.poll("skill", since="seed", sleep=no_sleep)
+        assert next_since == "seed"
+
+    def test_newest_id_skips_idless_trailing_events(self):
+        events = [{"id": "e1"}, {"id": "e2"}, {"no_id": True}]
+        assert event_poll._newest_id(events) == "e2"
+
+    def test_newest_id_empty_when_no_anchorable_id(self):
+        assert event_poll._newest_id([{"no_id": True}, "junk"]) == ""
+
+    def test_wait_loop_advances_since_across_iterations(self, monkeypatch):
+        """--wait passes the previous batch's hwm as the next `since`."""
+        seen_since = []
+
+        def _fake_poll(role, since=None, **kwargs):
+            seen_since.append(since)
+            if len(seen_since) == 1:
+                return [{"id": "e1"}], "e1"
+            if len(seen_since) == 2:
+                return [{"id": "e9"}], "e9"
+            return None  # terminate the loop deterministically
+
+        monkeypatch.setattr(event_poll, "poll", _fake_poll)
+        monkeypatch.setattr(event_poll.time, "sleep", lambda _: None)
+        with pytest.raises(SystemExit):
+            event_poll.main(["skill", "--wait", "5"])
+        assert seen_since == [None, "e1", "e9"]
+
+
+# ---------------------------------------------------------------------------
+# Eviction — event_poll nudges; the AGENT recovers (model B)
+# ---------------------------------------------------------------------------
+
+
+class TestEviction:
+    def test_eviction_empty_batch_still_nudges(
+        self, monkeypatch, stub_port, capsys, no_sleep,
+    ):
+        body = {"events": [], "evicted": True, "oldest_id": "old99",
+                "evicted_count_hint": 42}
+        fake, _ = _make_urlopen([body])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        events, next_since = event_poll.poll("skill", since="stale",
+                                             sleep=no_sleep)
+        out = capsys.readouterr()
+        assert _nudge_lines(out.out) == ["NUDGE"]
+        # hwm advances past the evicted gap so we don't re-nudge it forever.
+        assert next_since == "old99"
+        assert "EVICTION" in out.err
+
+    def test_eviction_with_survivors_anchors_on_newest(
+        self, monkeypatch, stub_port, capsys, no_sleep,
+    ):
+        body = {"events": [{"id": "s1"}, {"id": "s2"}], "evicted": True,
+                "oldest_id": "old99", "evicted_count_hint": 5}
+        fake, _ = _make_urlopen([body])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        events, next_since = event_poll.poll("skill", sleep=no_sleep)
+        assert _nudge_lines(capsys.readouterr().out) == ["NUDGE"]
+        assert next_since == "s2"
+
+
+# ---------------------------------------------------------------------------
+# Retry & backoff math (unchanged from the pre-migration poller)
 # ---------------------------------------------------------------------------
 
 
@@ -179,11 +289,8 @@ class TestRetryAndBackoff:
         assert seq == [1, 2, 4, 8, 16, 32, 64, 128, 256, 300, 300, 300, 300]
 
     def test_event_poll_backoff_resets_on_success(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
+        self, monkeypatch, stub_port,
     ):
-        # Two separate poll() calls: first fails twice then succeeds; second
-        # fails once then succeeds. Second-call's first sleep MUST be 1s (the
-        # backoff counter is poll()-local, so it resets across calls).
         sleeps = []
         fake_err = urllib.error.URLError("boom")
         fake1, _ = _make_urlopen([fake_err, fake_err, []])
@@ -199,9 +306,7 @@ class TestRetryAndBackoff:
         assert first_call_sleeps == [1, 2]
         assert sleeps == [1]
 
-    def test_event_poll_retries_on_5xx(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-    ):
+    def test_event_poll_retries_on_5xx(self, monkeypatch, stub_port):
         sleeps = []
         http_500 = urllib.error.HTTPError(
             "http://x", 500, "boom", hdrs=None, fp=None,
@@ -211,23 +316,20 @@ class TestRetryAndBackoff:
         )
         fake, _ = _make_urlopen([http_500, http_503, [{"id": "e1"}]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        events = event_poll.poll("skill", sleep=sleeps.append)
+        events, _ = event_poll.poll("skill", sleep=sleeps.append)
         assert sleeps == [1, 2]
         assert events and events[0]["id"] == "e1"
 
-    def test_event_poll_retries_on_timeout(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-    ):
+    def test_event_poll_retries_on_timeout(self, monkeypatch, stub_port):
         sleeps = []
         fake, _ = _make_urlopen([TimeoutError("slow"), [{"id": "e1"}]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        events = event_poll.poll("skill", sleep=sleeps.append)
+        events, _ = event_poll.poll("skill", sleep=sleeps.append)
         assert sleeps == [1]
         assert events == [{"id": "e1"}]
 
     def test_event_poll_does_not_retry_on_4xx(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        capsys,
+        self, monkeypatch, stub_port, capsys,
     ):
         sleeps = []
         http_404 = urllib.error.HTTPError(
@@ -235,75 +337,31 @@ class TestRetryAndBackoff:
         )
         fake, calls = _make_urlopen([http_404])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        events = event_poll.poll("skill", sleep=sleeps.append)
-        assert events is None
+        result = event_poll.poll("skill", sleep=sleeps.append)
+        assert result is None
         assert sleeps == []
         assert calls["n"] == 1
         assert "404" in capsys.readouterr().err
 
-
-# ---------------------------------------------------------------------------
-# §3.3 — JSON-line streaming
-# ---------------------------------------------------------------------------
-
-
-class TestJsonLineStreaming:
-    def test_event_poll_one_json_line_per_event(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        capsys, no_sleep,
+    def test_wait_ceiling_returns_none_after_max_failures(
+        self, monkeypatch, stub_port,
     ):
-        events = [{"id": "e1", "n": 1}, {"id": "e2", "n": 2},
-                  {"id": "e3", "n": 3}]
-        fake, _ = _make_urlopen([events])
+        err = urllib.error.URLError("down")
+        fake, _ = _make_urlopen([err] * 20)
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", sleep=no_sleep)
-        captured = capsys.readouterr()
-        lines = [ln for ln in captured.out.split("\n") if ln]
-        assert len(lines) == 3
-        parsed = [json.loads(ln) for ln in lines]
-        assert parsed == events
-
-    def test_event_poll_flushes_per_event(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        no_sleep,
-    ):
-        import builtins
-        captured_kwargs = []
-        real_print = builtins.print
-
-        def _spy(*args, **kwargs):
-            captured_kwargs.append(kwargs.copy())
-            return real_print(*args, **kwargs)
-
-        monkeypatch.setattr(builtins, "print", _spy)
-        fake, _ = _make_urlopen([[{"id": "e1"}, {"id": "e2"}]])
-        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", sleep=no_sleep)
-        # Stdout writes pass flush=True; stderr writes do not
-        flush_calls = [kw for kw in captured_kwargs
-                       if kw.get("flush") is True
-                       and kw.get("file") is not sys.stderr]
-        assert len(flush_calls) == 2
-
-    def test_event_poll_empty_response_yields_no_lines(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        capsys, no_sleep,
-    ):
-        fake, _ = _make_urlopen([[]])
-        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", sleep=no_sleep)
-        captured = capsys.readouterr()
-        assert captured.out == ""
+        result = event_poll.poll("skill", sleep=lambda _: None,
+                                 max_consecutive_failures=10)
+        assert result is None
 
 
 # ---------------------------------------------------------------------------
-# §3.4 — timeout handling
+# Timeout handling
 # ---------------------------------------------------------------------------
 
 
 class TestTimeoutHandling:
     def test_event_poll_wait_flag_translates_to_http_timeout(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
+        self, monkeypatch, stub_port,
     ):
         fake, calls = _make_urlopen([[]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
@@ -311,7 +369,7 @@ class TestTimeoutHandling:
         assert calls["timeouts"][0] == 5.0
 
     def test_event_poll_default_http_timeout_is_two_seconds(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
+        self, monkeypatch, stub_port,
     ):
         fake, calls = _make_urlopen([[]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
@@ -320,101 +378,26 @@ class TestTimeoutHandling:
 
 
 # ---------------------------------------------------------------------------
-# §3.5 — cursor advancement semantics
+# Since seeding + URL building
 # ---------------------------------------------------------------------------
 
 
-class TestCursorAdvancement:
-    def test_event_poll_atomic_cursor_write(self, tmp_path, monkeypatch):
-        squid = tmp_path / ".squidsquad"
-        (squid / "skill").mkdir(parents=True)
-        ws = squid / "skill" / "working-state.md"
-        ws.write_text(
-            "- **Task**: none\n- **Last Processed Event ID**: old\n",
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
-
-        seen_replace = {"called": False, "src": None, "dst": None}
-        real_replace = Path.replace
-
-        def _spy_replace(self, target):
-            seen_replace["called"] = True
-            seen_replace["src"] = str(self)
-            seen_replace["dst"] = str(target)
-            return real_replace(self, target)
-
-        monkeypatch.setattr(Path, "replace", _spy_replace)
-        event_poll._write_cursor_atomic("skill", "new-cursor")
-
-        assert seen_replace["called"] is True
-        assert seen_replace["src"].endswith(".md.tmp")
-        assert seen_replace["dst"].endswith("working-state.md")
-        # Final content has new cursor; old cursor replaced in place
-        text = ws.read_text(encoding="utf-8")
-        assert "Last Processed Event ID**: new-cursor" in text
-        assert "old" not in text
-
-    def test_atomic_cursor_write_appends_when_line_absent(self, tmp_path,
-                                                          monkeypatch):
-        squid = tmp_path / ".squidsquad"
-        (squid / "skill").mkdir(parents=True)
-        ws = squid / "skill" / "working-state.md"
-        ws.write_text("# Working State\n\n- **Task**: none\n",
-                      encoding="utf-8")
-        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
-        event_poll._write_cursor_atomic("skill", "fresh")
-        text = ws.read_text(encoding="utf-8")
-        assert "Last Processed Event ID**: fresh" in text
-
-    def test_atomic_cursor_write_creates_file_when_missing(self, tmp_path,
-                                                            monkeypatch):
-        squid = tmp_path / ".squidsquad"
-        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
-        event_poll._write_cursor_atomic("skill", "brand-new")
-        ws = squid / "skill" / "working-state.md"
-        assert ws.exists()
-        assert "Last Processed Event ID**: brand-new" in ws.read_text(
-            encoding="utf-8")
-
-    def test_event_poll_cursor_advances_per_event_not_per_batch(
-        self, monkeypatch, stub_port, stub_cursor, no_sleep,
+class TestSinceSeeding:
+    def test_since_arg_seeds_first_poll(
+        self, monkeypatch, stub_port, no_sleep,
     ):
-        import builtins
-        ops = []
+        fake, calls = _make_urlopen([[]])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        event_poll.poll("skill", since="42", target_mode=True, sleep=no_sleep)
+        assert "since=42" in calls["urls"][0]
 
-        def _record_write(role, cursor):
-            ops.append(("write", cursor))
-            return True
-
-        def _record_print(*args, **kwargs):
-            if kwargs.get("file") is sys.stderr:
-                return
-            line = args[0] if args else ""
-            try:
-                ops.append(("print", json.loads(line)["id"]))
-            except (ValueError, KeyError, TypeError):
-                pass
-
-        monkeypatch.setattr(event_poll, "_write_cursor_atomic", _record_write)
-        monkeypatch.setattr(builtins, "print", _record_print)
-        fake, _ = _make_urlopen([[{"id": "e1"}, {"id": "e2"}, {"id": "e3"}]])
+    def test_no_since_param_when_unset(
+        self, monkeypatch, stub_port, no_sleep,
+    ):
+        fake, calls = _make_urlopen([[]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
         event_poll.poll("skill", sleep=no_sleep)
-
-        # #9898: emit-before-advance — print e1, write e1, print e2, ...
-        # Per-event interleaving still holds (the cursor advances after each
-        # event, not once per batch); only the within-event order changed.
-        assert ops == [
-            ("print", "e1"), ("write", "e1"),
-            ("print", "e2"), ("write", "e2"),
-            ("print", "e3"), ("write", "e3"),
-        ]
-
-
-# ---------------------------------------------------------------------------
-# URL building + target mode
-# ---------------------------------------------------------------------------
+        assert "since=" not in calls["urls"][0]
 
 
 class TestUrlBuilding:
@@ -429,7 +412,6 @@ class TestUrlBuilding:
         url = event_poll._build_url(9999, "skill", "42", 50, target_mode=True)
         assert "/events/for/skill?" in url
         assert "since=42" in url
-        # role filter not used in target mode (it's in the path)
         assert "role=" not in url
 
     def test_build_url_omits_since_when_empty(self):
@@ -451,175 +433,25 @@ class TestHarnessUnreachable:
 
 
 # ---------------------------------------------------------------------------
-# Review fixes — cursor-write failure handling + --wait validation
+# Malformed payload resilience (unchanged behavior)
 # ---------------------------------------------------------------------------
 
 
-class TestCursorWriteFailureGatesEmission:
-    """Review iter-1 finding 1: silent cursor-write failure caused
-    re-delivery loops. Cursor write must (a) log to stderr and (b) still
-    abort the batch by returning None — but per #9898 the event is now
-    emitted BEFORE the cursor advances, so the first event of a batch IS
-    on stdout when the cursor write fails (at-least-once contract;
-    consumers must dedupe by event id)."""
-
-    def test_write_failure_returns_false_and_logs(self, monkeypatch, tmp_path,
-                                                   capsys):
-        monkeypatch.setattr(event_poll, "SQUID_DIR", tmp_path / ".squidsquad")
-
-        def _boom(self, *args, **kwargs):
-            raise OSError("disk full")
-
-        monkeypatch.setattr(Path, "write_text", _boom)
-        assert event_poll._write_cursor_atomic("skill", "x") is False
-        assert "cursor write failed" in capsys.readouterr().err
-
-    def test_poll_emits_first_event_before_cursor_write_fails(
-        self, monkeypatch, stub_port, stub_cursor, capsys, no_sleep,
-    ):
-        """#9898: emit-before-advance — when cursor write fails for the
-        first event in a batch, that event has already been emitted to
-        stdout. Subsequent events in the batch are NOT emitted because
-        poll() returns None on the cursor failure.
-        """
-        import builtins
-        monkeypatch.setattr(event_poll, "_write_cursor_atomic",
-                            lambda r, c: False)
-        stdout_lines = []
-        real_print = builtins.print
-
-        def _spy(*args, **kwargs):
-            if kwargs.get("file") is not sys.stderr:
-                stdout_lines.append(args[0] if args else "")
-            return real_print(*args, **kwargs)
-
-        monkeypatch.setattr(builtins, "print", _spy)
-        fake, _ = _make_urlopen([[{"id": "e1"}, {"id": "e2"}]])
-        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", sleep=no_sleep)
-        # First event IS emitted (emit-before-advance). Second event is NOT
-        # emitted — poll() returned None on the cursor failure for e1.
-        # Consumer dedupes the re-delivered e1 on the next poll by id.
-        assert len(stdout_lines) == 1
-        assert json.loads(stdout_lines[0])["id"] == "e1"
-
-    def test_poll_returns_none_when_cursor_fails(
-        self, monkeypatch, stub_port, stub_cursor, no_sleep,
-    ):
-        # Iter-2 review fix: persistent cursor-write failure must surface
-        # as fatal (None) so the --wait loop exits with code 2 instead of
-        # tight-looping forever at HTTP rate
-        monkeypatch.setattr(event_poll, "_write_cursor_atomic",
-                            lambda r, c: False)
-        fake, _ = _make_urlopen([[{"id": "e1"}]])
-        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        assert event_poll.poll("skill", sleep=no_sleep) is None
-
-
-class TestEmitBeforeAdvance9898:
-    """#9898: per-event loop emits to stdout BEFORE advancing the cursor.
-
-    The previous order (cursor advance first, then print) was at-most-once
-    with no consumer-side recovery — a crash between the two operations
-    (most plausibly BrokenPipeError on the flushed print) left the cursor
-    past an unemitted event. The new order is at-least-once: a crash
-    between print and cursor-advance means the next poll re-fetches the
-    just-emitted event, which the consumer can dedupe by id.
-    """
-
-    def test_print_called_before_cursor_write(
-        self, monkeypatch, stub_port, stub_cursor, capsys, no_sleep,
-    ):
-        """Capture the call order: each event's print(json.dumps(event))
-        on stdout must happen BEFORE its _write_cursor_atomic call."""
-        import builtins
-        call_log = []
-        real_print = builtins.print
-
-        def _spy_print(*args, **kwargs):
-            if kwargs.get("file") is not sys.stderr:
-                # Stdout emit — record the event id
-                try:
-                    obj = json.loads(args[0])
-                    call_log.append(("emit", obj.get("id")))
-                except (ValueError, TypeError):
-                    pass
-            return real_print(*args, **kwargs)
-
-        def _spy_cursor(role, cursor):
-            call_log.append(("cursor", cursor))
-            return True
-
-        monkeypatch.setattr(builtins, "print", _spy_print)
-        monkeypatch.setattr(event_poll, "_write_cursor_atomic", _spy_cursor)
-        fake, _ = _make_urlopen([[{"id": "e1"}, {"id": "e2"}, {"id": "e3"}]])
-        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", sleep=no_sleep)
-
-        # Each event's emit must come before its cursor advance.
-        assert call_log == [
-            ("emit", "e1"), ("cursor", "e1"),
-            ("emit", "e2"), ("cursor", "e2"),
-            ("emit", "e3"), ("cursor", "e3"),
-        ], call_log
-
-
-class TestEventWithoutId:
-    """Iter-2 review fix: events missing an `id` cannot advance the cursor,
-    so emitting them would cause infinite re-delivery on every poll."""
-
-    def test_event_without_id_is_skipped_with_warning(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        capsys, no_sleep,
-    ):
-        fake, _ = _make_urlopen([[{"no_id_here": True},
-                                  {"id": "e2", "n": 2}]])
-        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", sleep=no_sleep)
-        out = capsys.readouterr()
-        lines = [ln for ln in out.out.split("\n") if ln]
-        # Only the event with an id is emitted
-        assert len(lines) == 1
-        assert json.loads(lines[0])["id"] == "e2"
-        # Warning about the skipped event landed on stderr
-        assert "no id" in out.err
-        # Cursor only advanced for the valid event
-        assert captured_cursor_writes == [("skill", "e2")]
-
-    def test_event_with_empty_id_is_skipped(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        capsys, no_sleep,
-    ):
-        fake, _ = _make_urlopen([[{"id": ""}, {"id": "e2"}]])
-        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", sleep=no_sleep)
-        out = capsys.readouterr()
-        lines = [ln for ln in out.out.split("\n") if ln]
-        assert len(lines) == 1
-        assert json.loads(lines[0])["id"] == "e2"
-        assert captured_cursor_writes == [("skill", "e2")]
-
-
 class TestMalformedHarnessPayload:
-    """Iter-5 review fix: a malformed harness payload (events not a list, or
-    individual events not dicts) must not crash the --wait loop."""
-
-    def test_non_dict_event_is_skipped_with_warning(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        capsys, no_sleep,
+    def test_non_dict_event_skipped_but_batch_still_nudges(
+        self, monkeypatch, stub_port, capsys, no_sleep,
     ):
         fake, _ = _make_urlopen([["not-a-dict", {"id": "e2"}]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        event_poll.poll("skill", sleep=no_sleep)
+        events, next_since = event_poll.poll("skill", sleep=no_sleep)
         out = capsys.readouterr()
-        lines = [ln for ln in out.out.split("\n") if ln]
-        assert len(lines) == 1
-        assert json.loads(lines[0])["id"] == "e2"
+        assert _nudge_lines(out.out) == ["NUDGE"]
         assert "malformed event" in out.err
+        assert events == [{"id": "e2"}]
+        assert next_since == "e2"
 
     def test_events_field_not_a_list_is_fatal(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        capsys, no_sleep,
+        self, monkeypatch, stub_port, capsys, no_sleep,
     ):
         def _bad_events(req):
             return _StubResponse(json.dumps({"events": None}))
@@ -630,8 +462,7 @@ class TestMalformedHarnessPayload:
         assert "events" in capsys.readouterr().err
 
     def test_payload_not_dict_is_fatal(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-        capsys, no_sleep,
+        self, monkeypatch, stub_port, capsys, no_sleep,
     ):
         def _bad_payload(req):
             return _StubResponse(json.dumps(["not-a-dict"]))
@@ -643,57 +474,23 @@ class TestMalformedHarnessPayload:
 
 
 class TestMidBodyConnectionDrop:
-    """Iter-5 review fix: http.client.IncompleteRead (and other
-    HTTPException subclasses) escaped the URLError/OSError except clauses
-    and crashed the --wait loop. Must now be retried."""
-
-    def test_incomplete_read_is_retryable(
-        self, monkeypatch, stub_port, stub_cursor, captured_cursor_writes,
-    ):
+    def test_incomplete_read_is_retryable(self, monkeypatch, stub_port):
         import http.client
         sleeps = []
         boom = http.client.IncompleteRead(b"truncated")
         fake, _ = _make_urlopen([boom, [{"id": "e1"}]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
-        events = event_poll.poll("skill", sleep=sleeps.append)
+        events, _ = event_poll.poll("skill", sleep=sleeps.append)
         assert sleeps == [1]
         assert events == [{"id": "e1"}]
 
 
-class TestSinceWithWaitOneShotSemantics:
-    """Iter-3 review fix: in --wait mode, --since must apply only to the
-    first iteration; subsequent iterations must read the advanced cursor
-    from working-state.md or re-deliver the same events forever."""
-
-    def test_since_resets_to_none_after_first_iteration(self, monkeypatch):
-        # Patch poll() to capture the `since` arg and break out of the
-        # loop after the second call.
-        calls = []
-
-        def _fake_poll(role, since=None, limit=50, target_mode=False,
-                       http_timeout=None, sleep=None,
-                       max_consecutive_failures=None):
-            calls.append(since)
-            if len(calls) >= 2:
-                # Returning None makes main() sys.exit(2), which we
-                # catch below — terminates the test loop deterministically.
-                return None
-            return [{"id": "e1"}]
-
-        monkeypatch.setattr(event_poll, "poll", _fake_poll)
-        monkeypatch.setattr(event_poll.time, "sleep", lambda _: None)
-
-        with pytest.raises(SystemExit):
-            event_poll.main(["skill", "--since", "42", "--wait", "5"])
-
-        # First iteration uses the explicit override; second sees None
-        # (so poll() reads the advanced cursor from working-state.md).
-        assert calls == ["42", None]
+# ---------------------------------------------------------------------------
+# --wait validation + single-shot exit codes
+# ---------------------------------------------------------------------------
 
 
 class TestWaitValidation:
-    """Review iter-1 finding 2: negative --wait crashed time.sleep."""
-
     def test_main_rejects_zero_wait(self, capsys):
         with pytest.raises(SystemExit) as exc:
             event_poll.main(["skill", "--wait", "0"])
@@ -707,79 +504,23 @@ class TestWaitValidation:
         assert "must be positive" in capsys.readouterr().err
 
 
-# ---------------------------------------------------------------------------
-# AC-3 M-3.2 — end-to-end integration via stub harness
-# ---------------------------------------------------------------------------
-
-
-class TestEndToEndStubHarness:
-    """TEST-PLAN-8694.md M-3.2: with a stub harness emitting 3 events,
-    event_poll.py <role> writes exactly 3 JSON lines and the cursor
-    advances per-event atomically against working-state.md."""
-
-    def test_three_events_three_lines_and_cursor_advances_atomically(
-        self, monkeypatch, tmp_path, capsys, no_sleep,
-    ):
-        # Real working-state.md in a tmpdir; real atomic writes; stubbed
-        # urlopen returns a 3-event batch.
-        squid = tmp_path / ".squidsquad"
-        (squid / "skill").mkdir(parents=True)
-        ws = squid / "skill" / "working-state.md"
-        ws.write_text(
-            "# Working State\n\n"
-            "- **Task**: none\n"
-            "- **Last Processed Event ID**: seed\n",
-            encoding="utf-8",
-        )
-        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
-        monkeypatch.setattr(event_poll, "_discover_port", lambda: 9999)
-
-        # Observe os.replace calls so we can confirm atomic writes.
-        replace_calls = []
-        real_replace = Path.replace
-
-        def _spy_replace(self, target):
-            replace_calls.append((str(self), str(target)))
-            return real_replace(self, target)
-
-        monkeypatch.setattr(Path, "replace", _spy_replace)
-
-        events = [
-            {"id": "e1", "event_type": "noop", "n": 1},
-            {"id": "e2", "event_type": "noop", "n": 2},
-            {"id": "e3", "event_type": "noop", "n": 3},
-        ]
-        fake, calls = _make_urlopen([events])
+class TestSingleShotExitCodes:
+    def test_single_shot_exit_zero_when_events(self, monkeypatch, stub_port):
+        fake, _ = _make_urlopen([[{"id": "e1"}]])
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        with pytest.raises(SystemExit) as exc:
+            event_poll.main(["skill"])
+        assert exc.value.code == 0
 
-        result = event_poll.poll("skill", sleep=no_sleep)
+    def test_single_shot_exit_one_when_empty(self, monkeypatch, stub_port):
+        fake, _ = _make_urlopen([[]])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        with pytest.raises(SystemExit) as exc:
+            event_poll.main(["skill"])
+        assert exc.value.code == 1
 
-        assert result == events, "poll() should return the 3-event batch"
-
-        captured = capsys.readouterr()
-        lines = [ln for ln in captured.out.split("\n") if ln]
-        assert len(lines) == 3, f"expected 3 stdout lines, got {lines!r}"
-        for line, event in zip(lines, events):
-            assert json.loads(line) == event
-
-        # Cursor advanced per event, not per batch: 3 atomic .tmp → mv writes.
-        ws_replaces = [(s, d) for s, d in replace_calls
-                       if d.endswith("working-state.md")
-                       and s.endswith("working-state.md.tmp")]
-        assert len(ws_replaces) == 3, (
-            f"expected 3 atomic cursor writes, got {len(ws_replaces)}: "
-            f"{ws_replaces!r}"
-        )
-
-        # Final on-disk cursor reflects the last event in the batch.
-        final_text = ws.read_text(encoding="utf-8")
-        assert "Last Processed Event ID**: e3" in final_text
-        assert "seed" not in final_text  # the original cursor was replaced
-
-        # Other working-state fields were preserved by the R-M-W cycle.
-        assert "- **Task**: none" in final_text
-        assert "# Working State" in final_text
-
-        # Request URL used the seed cursor on the single fetch.
-        assert "since=seed" in calls["urls"][0]
-        assert "role=skill" in calls["urls"][0]
+    def test_single_shot_exit_two_on_fatal(self, monkeypatch):
+        monkeypatch.setattr(event_poll, "_discover_port", lambda: None)
+        with pytest.raises(SystemExit) as exc:
+            event_poll.main(["skill"])
+        assert exc.value.code == 2

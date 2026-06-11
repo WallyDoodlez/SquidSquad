@@ -9,11 +9,12 @@ Two layers:
   has missed). Normal cases — cursor found, or no cursor passed —
   return ``(events, None)``.
 
-- ``event_poll.py`` consumes the ``evicted``/``oldest_id``/
-  ``evicted_count_hint`` keys on the response payload, emits exactly
-  one stderr warning per response naming the anchor + hint, and then
-  proceeds with normal event processing (the first event in the
-  payload IS ``oldest_id``, so cursor advancement happens implicitly).
+- ``event_poll.py`` (model B, #11329) consumes the ``evicted``/
+  ``oldest_id``/``evicted_count_hint`` keys, emits exactly one stderr
+  diagnostic per response naming the recovery anchor + hint, and writes a
+  single ``NUDGE`` so the AGENT wakes to recover. event_poll does NOT emit
+  events and does NOT advance the cursor (harness-owned); it only advances
+  its private high-water-mark past the evicted gap so it stops re-nudging.
 
 Unblocks: #8999 §4.4 IT-EvictionGap.
 """
@@ -202,14 +203,16 @@ class TestGetSinceWithEvictionMarker(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# event_poll.py — eviction warning + cursor advance
+# event_poll.py — eviction diagnostic + NUDGE (model B, #11329)
 # ---------------------------------------------------------------------------
 
 
 @unittest.skipUnless(EVENT_POLL_AVAILABLE, "event_poll module not importable")
 class TestEventPollEvictionWarning(unittest.TestCase):
-    """``poll()`` must emit a single stderr warning when the response
-    carries ``evicted: true``, then process events normally."""
+    """``poll()`` must emit a single stderr diagnostic + one NUDGE when the
+    response carries ``evicted: true``. It does NOT write the cursor (the
+    agent recovers); it only advances its local high-water-mark past the
+    gap so it stops re-nudging the same evicted range."""
 
     def setUp(self):
         # Patch port discovery so poll() doesn't try to read a real
@@ -219,35 +222,14 @@ class TestEventPollEvictionWarning(unittest.TestCase):
         self._port_patch.start()
         self.addCleanup(self._port_patch.stop)
 
-        # Patch cursor read/write to in-memory state for determinism.
-        self._stored_cursor = ""
-
-        def _read_cursor(role, since_arg=None):
-            if since_arg is not None:
-                return str(since_arg)
-            return self._stored_cursor
-
-        def _write_cursor(role, value):
-            self._stored_cursor = str(value)
-            return True
-
-        self._read_patch = mock.patch.object(_ep, "_resolve_cursor",
-                                             side_effect=_read_cursor)
-        self._write_patch = mock.patch.object(_ep, "_write_cursor_atomic",
-                                              side_effect=_write_cursor)
-        self._read_patch.start()
-        self._write_patch.start()
-        self.addCleanup(self._read_patch.stop)
-        self.addCleanup(self._write_patch.stop)
-
-    def _run_poll_with_payload(self, payload: dict) -> tuple[str, str, list]:
+    def _run_poll_with_payload(self, payload: dict):
         """Drive poll() with a single fake harness response.
 
-        Returns (stdout, stderr, events_emitted) for assertions.
+        Returns (stdout, stderr, events, next_since) for assertions.
         """
         captured_stdout = io.StringIO()
         captured_stderr = io.StringIO()
-        emitted = []
+        events, next_since = [], ""
 
         def fake_fetch(url, timeout):
             return payload, False, None
@@ -257,13 +239,15 @@ class TestEventPollEvictionWarning(unittest.TestCase):
              mock.patch("sys.stderr", captured_stderr):
             result = _ep.poll("skill", since="stale-cursor", limit=10)
             if result is not None:
-                emitted = list(result)
-        return captured_stdout.getvalue(), captured_stderr.getvalue(), emitted
+                events, next_since = result
+        return (captured_stdout.getvalue(), captured_stderr.getvalue(),
+                events, next_since)
 
-    def test_eviction_warning_matches_locked_format(self):
-        """CONTEXT-9331 §4 locks the stderr warning text so QA's
-        grep-based assertions remain stable. Any reword must update
-        both this test AND CONTEXT-9331 §4."""
+    def test_eviction_diagnostic_matches_locked_format(self):
+        """CONTEXT-9331 §4 locks the stderr diagnostic text so QA's
+        grep-based assertions remain stable. Model B reworded
+        "advancing to" → "nudging agent to recover past" — any reword
+        must update both this test AND CONTEXT-9331 §4."""
         payload = {
             "events": [
                 {"id": "e7", "event_type": "status-transition", "role": "skill"},
@@ -274,42 +258,46 @@ class TestEventPollEvictionWarning(unittest.TestCase):
             "oldest_id": "e7",
             "evicted_count_hint": 42,
         }
-        stdout, stderr, emitted = self._run_poll_with_payload(payload)
+        stdout, stderr, events, next_since = self._run_poll_with_payload(payload)
 
         expected_line = (
             "[event_poll] EVICTION: cursor predates retained window — "
-            "advancing to e7, ~42 events evicted"
+            "nudging agent to recover past e7, ~42 events evicted"
         )
         self.assertIn(
             expected_line, stderr,
-            msg=f"stderr did not contain the locked warning line.\n"
+            msg=f"stderr did not contain the locked diagnostic line.\n"
                 f"got: {stderr!r}\nexpected substring: {expected_line!r}",
         )
-        # Exactly one warning per response, not once per event.
+        # Exactly one diagnostic per response, not once per event.
         self.assertEqual(stderr.count("EVICTION"), 1)
+        # One bare NUDGE — no event payloads on stdout.
+        self.assertEqual(
+            [ln for ln in stdout.splitlines() if ln.strip()], ["NUDGE"])
+        # poll() returns the filtered events (for hwm) but never emits them.
+        self.assertEqual([e["id"] for e in events], ["e7", "e8"])
+        # Local hwm advanced past last event in the batch.
+        self.assertEqual(next_since, "e8")
 
-        # Events still flow through stdout normally.
-        self.assertEqual([e["id"] for e in emitted], ["e7", "e8"])
-        # Cursor advanced past last event in the batch.
-        self.assertEqual(self._stored_cursor, "e8")
-
-    def test_no_warning_when_payload_lacks_evicted_flag(self):
-        """Normal response — no warning, no spurious noise on stderr."""
+    def test_no_diagnostic_when_payload_lacks_evicted_flag(self):
+        """Normal response — no diagnostic, but still a NUDGE (events
+        pending) and hwm advances."""
         payload = {
             "events": [
                 {"id": "a1", "event_type": "status-transition", "role": "skill"},
             ],
             "total": 1,
         }
-        stdout, stderr, emitted = self._run_poll_with_payload(payload)
+        stdout, stderr, events, next_since = self._run_poll_with_payload(payload)
 
         self.assertNotIn("EVICTION", stderr)
-        self.assertEqual([e["id"] for e in emitted], ["a1"])
-        self.assertEqual(self._stored_cursor, "a1")
+        self.assertEqual(
+            [ln for ln in stdout.splitlines() if ln.strip()], ["NUDGE"])
+        self.assertEqual(next_since, "a1")
 
-    def test_no_warning_when_evicted_explicitly_false(self):
+    def test_no_diagnostic_when_evicted_explicitly_false(self):
         """``evicted: false`` is treated the same as the field being
-        absent — no warning."""
+        absent — no diagnostic."""
         payload = {
             "events": [
                 {"id": "b1", "event_type": "status-transition", "role": "skill"},
@@ -317,14 +305,13 @@ class TestEventPollEvictionWarning(unittest.TestCase):
             "total": 1,
             "evicted": False,
         }
-        stdout, stderr, emitted = self._run_poll_with_payload(payload)
+        stdout, stderr, events, next_since = self._run_poll_with_payload(payload)
         self.assertNotIn("EVICTION", stderr)
 
-    def test_eviction_with_empty_events_still_warns(self):
-        """Harness deque empty + stale cursor → warn but no cursor
-        advance (no anchor available). Operator can see the harness
-        is degraded; the warning repeats on subsequent polls until
-        events start flowing again."""
+    def test_eviction_with_empty_events_still_nudges(self):
+        """Harness deque empty + stale cursor (oldest_id None) → diagnostic
+        + NUDGE so the agent wakes, but no anchor to advance the hwm to, so
+        the hwm holds at the input since (the agent's recovery clears it)."""
         payload = {
             "events": [],
             "total": 0,
@@ -332,22 +319,20 @@ class TestEventPollEvictionWarning(unittest.TestCase):
             "oldest_id": None,
             "evicted_count_hint": 0,
         }
-        stdout, stderr, emitted = self._run_poll_with_payload(payload)
+        stdout, stderr, events, next_since = self._run_poll_with_payload(payload)
         self.assertIn("EVICTION", stderr)
-        self.assertEqual(emitted, [])
-        # Cursor unchanged — nothing to advance to.
-        self.assertEqual(self._stored_cursor, "")
+        self.assertEqual(
+            [ln for ln in stdout.splitlines() if ln.strip()], ["NUDGE"])
+        self.assertEqual(events, [])
+        # No anchor available — hwm holds at the input since.
+        self.assertEqual(next_since, "stale-cursor")
 
-    def test_eviction_re_anchors_when_role_filter_drops_all_events(self):
-        """`/events/for/{role}` can return ``evicted: true`` with an
-        empty events list when the role filter strips every event in
-        the batch — even though the deque is non-empty and
-        ``oldest_id`` is set. Without re-anchoring, the cursor stays
-        on the stale id and the warning loops forever. The fix:
-        advance the cursor to ``oldest_id`` up front whenever the
-        eviction signal is present and an anchor is available, so
-        forward progress is guaranteed regardless of whether the
-        filter kept any events."""
+    def test_eviction_hwm_advances_to_oldest_id_when_filter_drops_all(self):
+        """`/events/for/{role}` can return ``evicted: true`` with an empty
+        events list when the role filter strips every event — even though
+        the deque is non-empty and ``oldest_id`` is set. event_poll advances
+        its local hwm to ``oldest_id`` so it stops re-nudging the same gap.
+        (The agent does the actual ack-cursor(oldest_id) recovery.)"""
         payload = {
             "events": [],
             "total": 0,
@@ -355,22 +340,21 @@ class TestEventPollEvictionWarning(unittest.TestCase):
             "oldest_id": "anchor-id",
             "evicted_count_hint": 17,
         }
-        stdout, stderr, emitted = self._run_poll_with_payload(payload)
+        stdout, stderr, events, next_since = self._run_poll_with_payload(payload)
         self.assertIn("EVICTION", stderr)
-        self.assertEqual(emitted, [])
-        # Cursor re-anchored to oldest_id even though no events flowed.
         self.assertEqual(
-            self._stored_cursor, "anchor-id",
-            msg="cursor must advance to oldest_id when role filter "
-                "drops every event — otherwise the agent loops on the "
-                "same stale cursor and the warning never clears.",
+            [ln for ln in stdout.splitlines() if ln.strip()], ["NUDGE"])
+        self.assertEqual(events, [])
+        self.assertEqual(
+            next_since, "anchor-id",
+            msg="hwm must advance to oldest_id when the role filter drops "
+                "every event — otherwise event_poll re-nudges the same gap "
+                "forever.",
         )
 
-    def test_eviction_re_anchor_then_events_advance_cursor_further(self):
-        """When events DO survive the role filter, the up-front
-        re-anchor to ``oldest_id`` is followed by normal per-event
-        cursor advance. Final cursor = last event id, not
-        ``oldest_id``."""
+    def test_eviction_with_survivors_hwm_anchors_on_newest(self):
+        """When events DO survive the role filter, the hwm anchors on the
+        newest survivor (not oldest_id), so the next poll resumes there."""
         payload = {
             "events": [
                 {"id": "later-1", "event_type": "status-transition", "role": "skill"},
@@ -381,9 +365,9 @@ class TestEventPollEvictionWarning(unittest.TestCase):
             "oldest_id": "anchor-id",
             "evicted_count_hint": 9,
         }
-        stdout, stderr, emitted = self._run_poll_with_payload(payload)
-        self.assertEqual([e["id"] for e in emitted], ["later-1", "later-2"])
-        self.assertEqual(self._stored_cursor, "later-2")
+        stdout, stderr, events, next_since = self._run_poll_with_payload(payload)
+        self.assertEqual([e["id"] for e in events], ["later-1", "later-2"])
+        self.assertEqual(next_since, "later-2")
 
 
 if __name__ == "__main__":

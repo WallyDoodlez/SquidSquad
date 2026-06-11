@@ -25,15 +25,10 @@ def stub_port(monkeypatch):
     monkeypatch.setattr(event_poll, "_discover_port", lambda: 7373)
 
 
-@pytest.fixture
-def stub_cursor(monkeypatch):
-    monkeypatch.setattr(event_poll, "_resolve_cursor", lambda role, since=None: None)
-
-
 class TestRetryCeiling:
     """``poll(max_consecutive_failures=N)`` returns None after N transient errors."""
 
-    def test_returns_none_after_max_consecutive_failures(self, monkeypatch, stub_port, stub_cursor):
+    def test_returns_none_after_max_consecutive_failures(self, monkeypatch, stub_port):
         """10 transient errors in a row ⇒ poll returns None."""
         sleeps = []
         boom = urllib.error.URLError("connection refused")
@@ -50,7 +45,7 @@ class TestRetryCeiling:
         # final ceiling-trigger attempt because we return immediately).
         assert len(sleeps) == 9
 
-    def test_single_success_resets_counter(self, monkeypatch, stub_port, stub_cursor):
+    def test_single_success_resets_counter(self, monkeypatch, stub_port):
         """A successful poll between transient errors does NOT trip the ceiling."""
         # 9 failures, then success, then 9 more failures → poll() succeeds twice.
         boom = urllib.error.URLError("connection refused")
@@ -66,14 +61,14 @@ class TestRetryCeiling:
             return r
 
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake_urlopen)
-        events = event_poll.poll(
+        events, _ = event_poll.poll(
             "skill", sleep=lambda _: None, max_consecutive_failures=10
         )
         # 9 failures + 1 success = 10 calls; 9 retries < 10 = ceiling not hit.
         assert events == []
         assert call_count["n"] == 10
 
-    def test_default_unlimited_retries_preserved(self, monkeypatch, stub_port, stub_cursor):
+    def test_default_unlimited_retries_preserved(self, monkeypatch, stub_port):
         """``max_consecutive_failures=None`` (default) preserves pre-#9742 behavior."""
         boom = urllib.error.URLError("boom")
         # Generate 20 failures then a success — without a ceiling poll() must
@@ -89,7 +84,7 @@ class TestRetryCeiling:
             return r
 
         monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake_urlopen)
-        events = event_poll.poll("skill", sleep=lambda _: None)  # no ceiling
+        events, _ = event_poll.poll("skill", sleep=lambda _: None)  # no ceiling
         assert events == []
         assert call_count["n"] == 21  # 20 failures + 1 success
 
@@ -97,7 +92,7 @@ class TestRetryCeiling:
         """``_WAIT_MAX_CONSECUTIVE_FAILURES`` is 10 per CONTEXT-9742 D2."""
         assert event_poll._WAIT_MAX_CONSECUTIVE_FAILURES == 10
 
-    def test_ceiling_message_includes_failure_count(self, monkeypatch, stub_port, stub_cursor, capsys):
+    def test_ceiling_message_includes_failure_count(self, monkeypatch, stub_port, capsys):
         boom = urllib.error.URLError("connection refused")
         monkeypatch.setattr(event_poll.urllib.request, "urlopen",
                             lambda req, timeout=None: (_ for _ in ()).throw(boom))
@@ -106,7 +101,7 @@ class TestRetryCeiling:
         assert "10 consecutive" in err
         assert "giving up" in err
 
-    def test_non_retryable_error_returns_none_immediately(self, monkeypatch, stub_port, stub_cursor):
+    def test_non_retryable_error_returns_none_immediately(self, monkeypatch, stub_port):
         """A 4xx HTTP error is not retryable — return None before reaching the ceiling."""
         not_retryable = urllib.error.HTTPError(
             "http://x", 404, "Not Found", {}, None,
@@ -148,7 +143,7 @@ class TestMainWaitModePassesCeiling:
 
         def fake_poll(role, **kwargs):
             captured_kwargs.update(kwargs)
-            return []
+            return [], ""
 
         monkeypatch.setattr(event_poll, "poll", fake_poll)
         with pytest.raises(SystemExit) as exc:

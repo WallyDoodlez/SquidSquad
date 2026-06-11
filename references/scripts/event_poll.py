@@ -1,14 +1,32 @@
 #!/usr/bin/env python3
-"""Poll harness event bus and stream events to stdout (#8915 / #7630 2-5).
+"""Poll harness event bus and emit a wake NUDGE to stdout (#8915 / #11329).
 
 Designed for use with the Claude Code Monitor tool. Queries
-`GET /events?since=<cursor>&role=<role>`, writes one JSON object per line
-to stdout, advances the cursor in `.squidsquad/<role>/working-state.md`.
+`GET /events/for/<role>?since=<hwm>` and writes a single literal `NUDGE\n`
+line to stdout whenever new events arrive past its high-water-mark. That
+stdout is wired to the Monitor tool's stdin, waking the Claude session.
 
-Cursor resolution order:
-  1. `--since N` flag (explicit override)
-  2. `Last Processed Event ID: <id>` line in `working-state.md`
-  3. Empty (server defaults to `0`); a warning is written to stderr
+Model B (#11329 — per AGENT-RUNTIME.md §8.0/§8.1): `event_poll` is a pure
+*wake signal*. It does **not** own the cursor and does **not** emit event
+payloads:
+
+  - The cursor is harness-owned in `.squidsquad/.event-state.json` and is
+    advanced by the AGENT posting `ack-cursor` per tended event. `event_poll`
+    never reads or writes it.
+  - The nudge carries no payload. On waking, the agent does its own
+    `GET /events/for/{role}?since=<cursor>` and walks events with per-event
+    `ack-cursor` posts (see `cursor-management.md`).
+
+`event_poll` tracks only a private in-memory **high-water-mark** (the newest
+event id it has seen) so it can edge-trigger one nudge per new batch instead
+of re-nudging the same events every poll. The hwm is NOT the cursor: it is
+unpersisted, resets to empty on `event_poll` restart, and a stale/empty hwm
+only ever produces a harmless extra NUDGE — the agent's GET-since-cursor
+returns `[]` and it idles again (§8.0).
+
+Cursor resolution order for the first poll's `since`:
+  1. `--since N` flag (explicit override — seeds the initial hwm)
+  2. Empty (server returns recent events; a single nudge fires if any exist)
 
 Retry policy on transient errors (`ConnectionError`, `Timeout`, HTTP 5xx):
 exponential backoff `[1, 2, 4, 8, 16, 32, 64, 128, 256, 300, 300, ...]`
@@ -17,12 +35,12 @@ HTTP 4xx responses are treated as caller faults: not retried, non-zero exit.
 
 Usage:
     python event_poll.py <role>                       Poll once, exit
-    python event_poll.py <role> --since 123            Override cursor
+    python event_poll.py <role> --since 123            Seed initial hwm
     python event_poll.py <role> --wait 5               HTTP timeout = 5s, loop forever
     python event_poll.py <role> --target               Use /events/for/<role>
 
-Stdout: clean JSON only (one object per line). Errors go to stderr.
-Exit codes: 0 = events found / loop exit, 1 = no events, 2 = invocation error.
+Stdout: a literal `NUDGE\n` per new batch. Errors/diagnostics go to stderr.
+Exit codes: 0 = nudge emitted / loop exit, 1 = no events, 2 = invocation error.
 """
 
 import argparse
@@ -63,7 +81,7 @@ _BACKOFF_CAP = 300
 # for harness restarts (~15-30s in practice) without leaving Monitor
 # wedged for hours on a genuinely dead harness.
 _WAIT_MAX_CONSECUTIVE_FAILURES = 10
-_CURSOR_LINE_PREFIX = "- **Last Processed Event ID**:"
+_NUDGE_LINE = "NUDGE"
 
 
 def _discover_port():
@@ -76,95 +94,23 @@ def _discover_port():
     return None
 
 
-def _working_state_path(role):
-    return SQUID_DIR / role / "working-state.md"
-
-
-def _read_cursor_from_working_state(role):
-    path = _working_state_path(role)
-    if not path.exists():
-        return ""
-    try:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if line.startswith(_CURSOR_LINE_PREFIX):
-                return line.split(":", 1)[1].strip()
-    except (OSError, UnicodeDecodeError):
-        # Corrupted working-state.md (non-UTF-8 bytes from disk bit-rot or
-        # external mangling) must not crash the long-running poll loop.
-        pass
-    return ""
-
-
-def _resolve_cursor(role, since_arg):
-    """Resolve the cursor following the spec's three-step order."""
-    if since_arg is not None:
-        return str(since_arg)
-    cursor = _read_cursor_from_working_state(role)
-    if cursor:
-        return cursor
-    print(
-        f"WARNING: no cursor for role={role!r} (no --since flag, "
-        f"no 'Last Processed Event ID' in working-state.md); defaulting to 0",
-        file=sys.stderr,
-    )
-    return ""
-
-
-def _write_cursor_atomic(role, cursor):
-    """Update `Last Processed Event ID` in working-state.md atomically.
-
-    Writes to `<path>.tmp` then `os.replace` so a reader never sees a
-    half-written file (CONTEXT.md atomic-update rule). Returns True on
-    success, False on filesystem failure — the caller MUST gate event
-    emission on the result to avoid silent re-delivery on the next poll.
-    """
-    path = _working_state_path(role)
-    new_line = f"{_CURSOR_LINE_PREFIX} {cursor}"
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            text = path.read_text(encoding="utf-8")
-            lines = text.splitlines(keepends=False)
-            replaced = False
-            for i, line in enumerate(lines):
-                if line.startswith(_CURSOR_LINE_PREFIX):
-                    lines[i] = new_line
-                    replaced = True
-                    break
-            if not replaced:
-                lines.append(new_line)
-            body = "\n".join(lines)
-            if text.endswith("\n"):
-                body += "\n"
-        else:
-            body = new_line + "\n"
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(body, encoding="utf-8")
-        tmp.replace(path)
-        return True
-    except (OSError, UnicodeDecodeError) as e:
-        print(f"ERROR: cursor write failed for role={role!r}: {e}",
-              file=sys.stderr)
-        return False
-
-
 def _backoff_seconds(attempt):
     """Capped doubling: 1, 2, 4, 8, 16, 32, 64, 128, 256, 300, 300, ..."""
     return min(2 ** attempt, _BACKOFF_CAP)
 
 
-def _build_url(port, role, cursor, limit, target_mode):
+def _build_url(port, role, since, limit, target_mode):
     if target_mode:
         params = {"limit": limit}
-        if cursor:
-            params["since"] = cursor
+        if since:
+            params["since"] = since
         return (
             f"http://127.0.0.1:{port}/events/for/{urllib.parse.quote(role)}"
             f"?{urllib.parse.urlencode(params)}"
         )
     params = {"role": role, "limit": limit}
-    if cursor:
-        params["since"] = cursor
+    if since:
+        params["since"] = since
     return f"http://127.0.0.1:{port}/events?{urllib.parse.urlencode(params)}"
 
 
@@ -202,16 +148,41 @@ def _fetch_once(url, http_timeout):
         return None, True, f"{type(e).__name__}: {e}"
 
 
+def _newest_id(events):
+    """Return the id of the last event in the batch that carries one.
+
+    Used to advance the local high-water-mark. Events without an id cannot
+    move the hwm (they are still nudge-worthy — finding any event triggers a
+    nudge — but they cannot serve as a `since` anchor). Walk from the end so
+    the hwm lands on the newest anchorable id.
+    """
+    for event in reversed(events):
+        if isinstance(event, dict):
+            eid = event.get("id")
+            if eid:
+                return str(eid)
+    return ""
+
+
 def poll(role, since=None, limit=50, target_mode=False,
          http_timeout=_DEFAULT_HTTP_TIMEOUT, sleep=time.sleep,
          max_consecutive_failures=None):
-    """Poll for new events with retry/backoff.
+    """Poll once for events past ``since``; emit a NUDGE if any are found.
 
-    Returns the list of events (possibly empty) on success, or ``None`` if
-    a fatal (non-retryable) error occurred, OR if ``max_consecutive_failures``
+    Returns ``(events, next_since)`` on success, or ``None`` if a fatal
+    (non-retryable) error occurred, OR if ``max_consecutive_failures``
     transient errors accrue without an intervening success (#9742).
-    Successful response advances the cursor atomically, one write per event
-    (spec §3.5).
+
+    - ``events`` is the filtered batch the harness returned (possibly empty).
+    - ``next_since`` is the local high-water-mark to use on the next poll:
+      the newest event id when events were found, ``oldest_id`` when the
+      harness reported an eviction gap with no surviving events, or the
+      input ``since`` unchanged when nothing new arrived.
+
+    A single literal ``NUDGE\\n`` is written to stdout when the batch is
+    non-empty OR an eviction gap is reported — the agent then does its own
+    ``GET /events/for`` + per-event ``ack-cursor`` (model B, #11329). This
+    function never writes the cursor; the harness owns it.
 
     ``max_consecutive_failures``: optional cap on transient connection
     failures within a single ``poll()`` call. ``None`` (default) preserves
@@ -225,8 +196,7 @@ def poll(role, since=None, limit=50, target_mode=False,
         print("ERROR: harness port not found", file=sys.stderr)
         return None
 
-    cursor = _resolve_cursor(role, since)
-    url = _build_url(port, role, cursor, limit, target_mode)
+    url = _build_url(port, role, since or "", limit, target_mode)
 
     attempt = 0
     consecutive_failures = 0
@@ -238,87 +208,43 @@ def poll(role, since=None, limit=50, target_mode=False,
             oldest_id = payload.get("oldest_id") if evicted else None
             if evicted:
                 # Cursor predates the harness's retained window (#9331).
-                # Warn once per response, naming the safe re-anchor + an
-                # operator-forensic hint on how many events have rolled
-                # off the deque since boot. The cursor re-anchor itself
-                # happens AFTER the per-event loop (#9740) — see the
-                # post-loop guard below.
-                #
-                # Why the warning fires here (pre-loop) but the write
-                # happens post-loop: on the `/events/for/{role}` endpoint
-                # the role filter can strip every event in the batch even
-                # when the deque is non-empty, leaving `events == []`
-                # with the cursor stuck on the (still-evicted) stale id
-                # and the warning repeating every poll. Anchoring to
-                # `oldest_id` after we know whether any events survived
-                # avoids the #9740 race: if some per-event advance fails
-                # mid-batch we leave the cursor at the last successfully
-                # emitted event id (not at `oldest_id`, whose event was
-                # never emitted), so on retry that emitted event is not
-                # skipped. If `events == []`, the post-loop guard writes
-                # `oldest_id` to guarantee forward progress for the next
-                # poll. Warning format locked per CONTEXT-9331 §4.
+                # In model B the AGENT performs the eviction recovery
+                # (forge-read + a single ack-cursor(oldest_id)); event_poll
+                # only nudges so the agent wakes to do it. We still advance
+                # our LOCAL hwm past the gap (to oldest_id when the batch is
+                # empty) so we don't re-nudge the same evicted range forever.
                 hint = payload.get("evicted_count_hint")
                 print(
                     f"[event_poll] EVICTION: cursor predates retained "
-                    f"window — advancing to {oldest_id}, "
+                    f"window — nudging agent to recover past {oldest_id}, "
                     f"~{hint} events evicted",
                     file=sys.stderr,
                 )
+
+            # Drop malformed (non-dict) entries with a warning so a bad
+            # payload can't crash the long-running --wait loop. They do not
+            # block the nudge — any surviving event still wakes the agent.
+            clean = []
             for event in events:
                 if not isinstance(event, dict):
                     print(f"WARNING: malformed event (not an object); "
                           f"skipping: {event!r}", file=sys.stderr)
                     continue
-                event_id = event.get("id")
-                if not event_id:
-                    # No id ⇒ cursor cannot advance past this event, so
-                    # emitting it would cause infinite re-delivery on the
-                    # next poll. Skip and warn.
-                    print(f"WARNING: event has no id; skipping: {event!r}",
-                          file=sys.stderr)
-                    continue
-                # #9898: emit BEFORE advancing the cursor. Previously the
-                # order was reversed — cursor advanced, then print(). A crash
-                # between the two (most plausibly BrokenPipeError from the
-                # flushed print when Monitor's downstream pipe drops) would
-                # leave the cursor past an unemitted event → silent loss
-                # (at-most-once with no consumer-side recovery).
-                #
-                # Emit-then-advance makes the contract at-least-once: a crash
-                # between print() and _write_cursor_atomic() means the next
-                # poll re-fetches the just-emitted event, which Monitor /
-                # downstream consumers can dedupe by event id. Idempotent
-                # consumers are already required by the #9740 eviction-
-                # re-anchor path (where the cursor moves to oldest_id while
-                # earlier events in the same batch were already emitted), so
-                # this is not a new requirement on consumers — it's the
-                # contract this poll loop was already implicitly relying on.
-                #
-                # When #9873-B lands, this whole branch is replaced by an
-                # ack-cursor emit to the harness. Until then this ordering
-                # closes the loss window.
-                print(json.dumps(event), flush=True)
-                if not _write_cursor_atomic(role, str(event_id)):
-                    # Cursor advance failed (disk full / permission). Return
-                    # None so callers treat this like any other fatal error
-                    # (single-shot: exit 2; --wait loop: exit 2). Operator
-                    # intervention required — silently looping at HTTP-rate
-                    # would burn CPU and re-fetch the same events forever.
-                    return None
-            # #9740: eviction re-anchor (post-loop). Only write `oldest_id`
-            # when the batch was empty AFTER role-filtering — otherwise the
-            # per-event advance above has already left the cursor at a valid
-            # id >= oldest_id. If `evicted: true` was returned without a
-            # truthy `oldest_id`, treat as fatal (harness contract violation,
-            # CONTEXT-9740 D4) — return None so the operator sees the
-            # failure rather than continuing on a stuck cursor.
-            if evicted and not events:
-                if not oldest_id:
-                    return None
-                if not _write_cursor_atomic(role, str(oldest_id)):
-                    return None
-            return events
+                clean.append(event)
+
+            if clean or evicted:
+                # Single edge-triggered wake. No payload — the agent does
+                # GET /events/for + per-event ack-cursor on waking (§8.1).
+                print(_NUDGE_LINE, flush=True)
+
+            next_since = _newest_id(clean)
+            if not next_since:
+                # No anchorable id in the batch. On an eviction gap fall back
+                # to oldest_id so the hwm still moves past the evicted range;
+                # otherwise keep the prior since (nothing new to anchor on).
+                next_since = str(oldest_id) if oldest_id else (since or "")
+            return clean, next_since
+
         if not retryable:
             print(f"ERROR: {fatal_msg}", file=sys.stderr)
             return None
@@ -349,11 +275,11 @@ def poll(role, since=None, limit=50, target_mode=False,
 def _parse_args(argv):
     p = argparse.ArgumentParser(
         prog="event_poll.py",
-        description="Stream harness events as JSON-lines to stdout.",
+        description="Emit a wake NUDGE to stdout when harness events arrive.",
     )
     p.add_argument("role")
     p.add_argument("--since", type=str, default=None,
-                   help="Override cursor (default: read working-state.md).")
+                   help="Seed the initial high-water-mark (default: empty).")
     p.add_argument("--wait", type=float, default=None,
                    help="HTTP timeout in seconds. When set, run in a long-poll "
                         "loop instead of exiting after one poll.")
@@ -372,10 +298,11 @@ def main(argv=None):
         sys.exit(2)
 
     if args.wait is None:
-        events = poll(args.role, since=args.since, limit=args.limit,
+        result = poll(args.role, since=args.since, limit=args.limit,
                       target_mode=args.target)
-        if events is None:
+        if result is None:
             sys.exit(2)
+        events, _ = result
         sys.exit(0 if events else 1)
 
     http_timeout = args.wait
@@ -384,15 +311,12 @@ def main(argv=None):
         # #9742: cap consecutive transient failures inside each poll() call
         # so Monitor exits on sustained harness loss. The harness auto-reboot
         # intent path picks up from the resulting session exit.
-        events = poll(args.role, since=since, limit=args.limit,
+        result = poll(args.role, since=since, limit=args.limit,
                       target_mode=args.target, http_timeout=http_timeout,
                       max_consecutive_failures=_WAIT_MAX_CONSECUTIVE_FAILURES)
-        if events is None:
+        if result is None:
             sys.exit(2)
-        # --since is a one-time bootstrap; subsequent iterations must
-        # read the advanced cursor from working-state.md or they will
-        # re-fetch the same events forever.
-        since = None
+        events, since = result
         if not events:
             time.sleep(http_timeout)
 
