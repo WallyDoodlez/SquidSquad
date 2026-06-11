@@ -226,6 +226,12 @@ class TestHighWaterMark:
     def test_newest_id_empty_when_no_anchorable_id(self):
         assert event_poll._newest_id([{"no_id": True}, "junk"]) == ""
 
+    def test_newest_id_rejects_empty_and_none_ids(self):
+        # Id contract: None and "" are NOT valid anchors (an empty `since` is
+        # dropped by _build_url). Both are rejected; a real id past them wins.
+        assert event_poll._newest_id([{"id": None}, {"id": ""}]) == ""
+        assert event_poll._newest_id([{"id": "e1"}, {"id": ""}]) == "e1"
+
     def test_wait_loop_advances_since_across_iterations(self, monkeypatch):
         """--wait passes the previous batch's hwm as the next `since`."""
         seen_since = []
@@ -276,6 +282,21 @@ class TestEviction:
         events, next_since = event_poll.poll("skill", sleep=no_sleep)
         assert _nudge_lines(capsys.readouterr().out) == ["NUDGE"]
         assert next_since == "s2"
+
+    def test_eviction_empty_no_anchor_is_fatal(
+        self, monkeypatch, stub_port, capsys, no_sleep,
+    ):
+        """evicted + empty batch + no oldest_id → fatal (return None), so
+        main() exits 2 → harness auto-reboot. The escape hatch that prevents
+        an unbreakable re-nudge loop on a degraded/cold-start deque."""
+        body = {"events": [], "evicted": True, "evicted_count_hint": 0}
+        fake, _ = _make_urlopen([body])
+        monkeypatch.setattr(event_poll.urllib.request, "urlopen", fake)
+        result = event_poll.poll("skill", since="stale", sleep=no_sleep)
+        assert result is None
+        out = capsys.readouterr()
+        assert "NUDGE" not in out.out
+        assert "giving up" in out.err
 
 
 # ---------------------------------------------------------------------------

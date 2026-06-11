@@ -308,10 +308,11 @@ class TestEventPollEvictionWarning(unittest.TestCase):
         stdout, stderr, events, next_since = self._run_poll_with_payload(payload)
         self.assertNotIn("EVICTION", stderr)
 
-    def test_eviction_with_empty_events_still_nudges(self):
-        """Harness deque empty + stale cursor (oldest_id None) → diagnostic
-        + NUDGE so the agent wakes, but no anchor to advance the hwm to, so
-        the hwm holds at the input since (the agent's recovery clears it)."""
+    def test_eviction_empty_no_anchor_is_fatal(self):
+        """Harness deque empty + stale cursor + no oldest_id anchor is a
+        contract violation. poll() returns None (fatal → main exits 2 →
+        harness auto-reboot) instead of holding the stale hwm and re-nudging
+        the same unrecoverable gap forever. No NUDGE on this path."""
         payload = {
             "events": [],
             "total": 0,
@@ -320,12 +321,11 @@ class TestEventPollEvictionWarning(unittest.TestCase):
             "evicted_count_hint": 0,
         }
         stdout, stderr, events, next_since = self._run_poll_with_payload(payload)
-        self.assertIn("EVICTION", stderr)
-        self.assertEqual(
-            [ln for ln in stdout.splitlines() if ln.strip()], ["NUDGE"])
+        # Fatal escape hatch: no NUDGE, error logged naming the violation.
+        self.assertNotIn("NUDGE", stdout)
+        self.assertIn("giving up", stderr)
+        self.assertIn("no oldest_id", stderr)
         self.assertEqual(events, [])
-        # No anchor available — hwm holds at the input since.
-        self.assertEqual(next_since, "stale-cursor")
 
     def test_eviction_hwm_advances_to_oldest_id_when_filter_drops_all(self):
         """`/events/for/{role}` can return ``evicted: true`` with an empty

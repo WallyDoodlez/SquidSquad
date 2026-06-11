@@ -96,7 +96,9 @@ class TestRetryCeiling:
         boom = urllib.error.URLError("connection refused")
         monkeypatch.setattr(event_poll.urllib.request, "urlopen",
                             lambda req, timeout=None: (_ for _ in ()).throw(boom))
-        event_poll.poll("skill", sleep=lambda _: None, max_consecutive_failures=10)
+        result = event_poll.poll("skill", sleep=lambda _: None,
+                                 max_consecutive_failures=10)
+        assert result is None
         err = capsys.readouterr().err
         assert "10 consecutive" in err
         assert "giving up" in err

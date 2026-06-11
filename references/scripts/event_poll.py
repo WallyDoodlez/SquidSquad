@@ -155,6 +155,15 @@ def _newest_id(events):
     move the hwm (they are still nudge-worthy — finding any event triggers a
     nudge — but they cannot serve as a `since` anchor). Walk from the end so
     the hwm lands on the newest anchorable id.
+
+    Id contract: harness event ids are **non-empty strings** (hex / prefixed,
+    e.g. ``ev-assigned-to-...``). The truthiness check below is deliberate —
+    it rejects both ``None`` (JSON null) and ``""``, the two values that are
+    invalid as a `since` anchor (an empty `since` is dropped by `_build_url`,
+    so anchoring on it would silently re-read the whole window). A numeric
+    ``0`` id cannot occur under the harness contract; were it ever introduced
+    it would also need handling in the `since or ""` URL path, so the fix
+    belongs at the id-generation boundary, not here.
     """
     for event in reversed(events):
         if isinstance(event, dict):
@@ -206,6 +215,31 @@ def poll(role, since=None, limit=50, target_mode=False,
             events = payload.get("events", [])
             evicted = bool(payload.get("evicted"))
             oldest_id = payload.get("oldest_id") if evicted else None
+
+            # Drop malformed (non-dict) entries with a warning so a bad
+            # payload can't crash the long-running --wait loop. They do not
+            # block the nudge — any surviving event still wakes the agent.
+            clean = []
+            for event in events:
+                if not isinstance(event, dict):
+                    print(f"WARNING: malformed event (not an object); "
+                          f"skipping: {event!r}", file=sys.stderr)
+                    continue
+                clean.append(event)
+
+            # #9740/#11329: eviction with an empty batch AND no anchor
+            # (falsy oldest_id) is a harness-contract violation (degraded /
+            # cold-start deque). Return None (fatal) so main() exits 2 and
+            # the harness auto-reboot path recovers — rather than holding the
+            # stale hwm and re-nudging the same unrecoverable gap every poll
+            # forever. This is the escape hatch the pre-migration #9740 guard
+            # provided; the model-B hwm cannot otherwise advance past it.
+            if evicted and not clean and not oldest_id:
+                print("ERROR: eviction with empty batch and no oldest_id "
+                      "anchor (harness contract violation); giving up",
+                      file=sys.stderr)
+                return None
+
             if evicted:
                 # Cursor predates the harness's retained window (#9331).
                 # In model B the AGENT performs the eviction recovery
@@ -220,17 +254,6 @@ def poll(role, since=None, limit=50, target_mode=False,
                     f"~{hint} events evicted",
                     file=sys.stderr,
                 )
-
-            # Drop malformed (non-dict) entries with a warning so a bad
-            # payload can't crash the long-running --wait loop. They do not
-            # block the nudge — any surviving event still wakes the agent.
-            clean = []
-            for event in events:
-                if not isinstance(event, dict):
-                    print(f"WARNING: malformed event (not an object); "
-                          f"skipping: {event!r}", file=sys.stderr)
-                    continue
-                clean.append(event)
 
             if clean or evicted:
                 # Single edge-triggered wake. No payload — the agent does
