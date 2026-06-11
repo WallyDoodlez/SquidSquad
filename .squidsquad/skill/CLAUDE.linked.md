@@ -841,7 +841,3 @@ The vault uses the **PARAG** taxonomy:
 → run sub-skill: vault-protocol
 
 Before starting a task, consult relevant vault notes. After completing real work, use vault-remember to capture durable learnings (max 2 writes per cycle; apply 4-gate logic: write budget → dedup → reusability → fresh-context test).
-
-### Vault Check — Level 1 (Auto-run)
-
-After every vault-create or vault-update, run vault-check Level 1 automatically. This verifies the note is syntactically valid and linked correctly in the knowledge graph.
