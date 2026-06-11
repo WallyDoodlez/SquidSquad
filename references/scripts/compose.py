@@ -467,17 +467,16 @@ def _inject_role_roster(content: str, role_name: str) -> str:
     existing `{{include:}}` / `{{runtime:}}` / `{{capability:}}`
     resolvers and to avoid firing inside code blocks of unrelated files
     that happen to mention the marker.
+
+    Marker-absent steady state: per #10360 / #11331 polish-session, the
+    `agent-boundaries` sub-skill was retired and its content inlined
+    directly into the L1 Identity slot (team roster + know-your-
+    teammates) and Responsibility slot (decline-and-route). The marker
+    is therefore intentionally absent from every composed CLAUDE.md.
+    Marker absence is the correct steady state; return content unchanged
+    without warning.
     """
     if "{{role-roster}}" not in content:
-        # D8 degraded mode: marker absent — likely agent-boundaries.md was
-        # not included for this role. Emit a warning and continue without
-        # substitution.
-        print(
-            f"WARNING: #9925 — no {{{{role-roster}}}} marker in composed "
-            f"{role_name} output; skipping roster injection (likely "
-            "common/agent-boundaries not in includes.yml)",
-            file=sys.stderr,
-        )
         return content
     roster = _render_role_roster()
     return content.replace("{{role-roster}}", roster)
