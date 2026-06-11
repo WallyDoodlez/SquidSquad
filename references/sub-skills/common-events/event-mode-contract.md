@@ -21,6 +21,12 @@ The boot sequence MUST work even when the harness is unreachable. Forge access i
 
    Then issue `GET /events/cursor/{role}` against the harness to read your initial cursor (the cursor itself lives in `.squidsquad/.event-state.json` — harness-owned; see [[cursor-management]]). A `null` response means first boot for this alias — start from the head of the deque.
 
+1a. **Legacy-cursor migration (one-time, #11329).** If `working-state.md` still contains a `- **Last Processed Event ID**: <id>` line with a real id (not `none`/empty), this is a pre-#11329 (model-A) install where the cursor lived in `working-state.md` instead of the harness. Migrate it once:
+   - If the `GET /events/cursor/{role}` above returned `null` (or an id the harness places earlier than `<id>`), POST a single `ack-cursor {event_id: <id>, role}` to seed the harness cursor — so you resume where model A left off rather than re-walking the whole retained deque.
+   - Then **remove the legacy line** from `working-state.md` on your next working-state write (the model-B template no longer carries it).
+   - **Idempotent**: on a fresh or already-migrated install (no such line), this step is a no-op. Skip it entirely.
+   - **Safety net**: this migration is an optimization, not a correctness gate. Even if it is skipped, the §8.1 walk forge-reads each event (authoritative) and acks past already-tended ones — so the only cost of skipping is one wasteful re-walk of the retained deque, never duplicated work on the forge.
+
 2. **Branch on what working-state shows:**
    - **In-progress tracker task** → verify against the forge: still my role? still `status:in-progress`? Yes → resume. No → clear the task field (`- **Task**: none` in working-state) and drop the task locally — **no forge transition is needed** because the forge already reflects the change (that is why verification failed). Fall through to a fresh `work_queue()` scan.
    - **Improvement-scan `Status: running`** (not a tracker item) → skip forge verification; restart the scan. Improvement scans are idempotent — a fresh scan subsumes a partial one. See [[idle-cooldown-loop]]. **When the scan completes, run `work_queue()`** before re-entering the cool-down loop, in case a task arrived during the outage.
