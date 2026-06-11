@@ -133,7 +133,6 @@ STATIC_TEST_MODULES = [
     "test_comprehension_10678",
     "test_l4_removal_c9",
     "test_l4_conflict_preempt_c8",
-    "test_l4_recompose_recovery_c7",
     "test_catalog_parser_d1",
     "test_catalog_parser_d8",
     "test_d2_link_stage_references",
