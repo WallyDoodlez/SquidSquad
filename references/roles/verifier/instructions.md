@@ -43,10 +43,6 @@ Goal: the agent has read the live context-pressure percentage from disk, compare
 
 ---
 
-→ run sub-skill: vault-protocol
-
----
-
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 

@@ -5,10 +5,6 @@ roles: [pm]
 step-ids: [step:cycle/check-in, step:cycle/pipeline-sentinel, step:cycle/task-intake, step:cycle/task-approval, step:cycle/health-check, step:cycle/vault-synthesis]
 ---
 
-→ run sub-skill: vault-protocol
-
----
-
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 

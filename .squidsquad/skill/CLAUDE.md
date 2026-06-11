@@ -635,10 +635,6 @@ Goal: `working-state.md` reflects the cycle's outcome — cleared if a task ship
 
 ---
 
-→ run sub-skill: vault-protocol
-
----
-
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 

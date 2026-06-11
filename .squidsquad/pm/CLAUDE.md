@@ -595,10 +595,6 @@ All issues and tasks are tracked as GitHub Issues with structured labels — tha
 
 ---
 
-→ run sub-skill: vault-protocol
-
----
-
 <!-- sub-skill: file-conventions -->
 ## File Conventions
 
