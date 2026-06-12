@@ -1,37 +1,49 @@
 # Working State
 
-- **Task**: pipeline sentinel + cutover prep tracking
-- **Status**: observer — skill doing stale-item cleanup (#11139) ahead of #11401
+- **Task**: pipeline sentinel + bundle composition verification
+- **Status**: ACTIVE — stale-items clearing, bundle composition needs re-verification
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
 ## Pipeline
 
-- pending_ship (cosmetic stale-label): #11404, #11166
+- pending_ship (cosmetic stale-label, PRs merged to main):
+  - #11139 (PR #11141 commit 081146fb1 ON MAIN)
+  - #11404, #11165, #11166
 - pending-test:
-  - **#11139 (NEW @ 06:42Z — stale-in-progress conflict-resolved, 147 commits merged from main, 113/113 PASS, awaiting QA re-verify on polish-HEAD)**
-  - #11165 (PR merged, cosmetic limbo)
+  - #11137 (NEW @ 07:12Z — 156-commit merge, deterministic recompose)
   - #10855 (skip)
+- in-progress: #11227 (skill HELD pending #11139 landing — semantic dependency)
 - Open issues:
   - #11394 (low)
-  - **#11401 (medium, OPERATOR-DIRECTED — skill picked #11139 first; reassess after 1-2 cycles)**
+  - **#11401 (medium, OPERATOR-DIRECTED — skill prioritized stale-item cleanup first, reasonable; reassess)**
 - pending intake (PM-owned): #11331, #11400, #11412
 - Approved queue: 6
-- Open PRs: 0
+- Open PRs: 0 (all in cosmetic stale-label limbo)
 - Harness: unreachable
 
-## Session ship tally: 37
+## Session ship tally: 37 (no new ships this cycle; #11139 landed but not yet status-transitioned)
 
-## Cutover-prep activity
+## ⚠️ Bundle composition needs re-verification
 
-Skill picked stale-in-progress #11139 over operator-directed #11401. Both are cutover-blocking — #11139 was on the cutover-workflow checklist (per #11331 c-2166 enumeration: 'skill transitions 3 stale items in-progress→pending-test, QA re-verifies on polish-HEAD'). #11401 is the wake-mode-divergence operator wanted folded into bundle.
+My cycle 2166 inventory classified #11227/#11139/#11137 as 'stale-in-progress with work-on-bundle.' But #11139's PR #11141 landed on MAIN (commit 081146fb1), not via the bundle branch. This means:
 
-Reasonable autonomous choice: clear the obvious blocker queue first (skill already had #11139 branch from cycle 1384 route-back, just needed conflict-resolve), then tackle #11401 which needs fresh implementation. Stale items #11227 + #11137 still pending similar cleanup.
+- The 3 items may all be main-targeted, not bundle content.
+- Bundle composition I've been tracking as 36 items (5 chain + 3 stale + 28 pre-bundle) may be 33 (5 chain + 28 pre-bundle) with the 3 stale items shipping to main independently.
+- v0.44.0 still carries the same total work (36 items), just split across two merge paths.
 
-## #11401 watch
+Will reconfirm by checking #11137 PR base + #11227 PR (when filed). Operator's option-1 choice (fix #11401 in bundle) still stands regardless — #11401 chain-merges to bundle per pattern.
 
-Filed operator-direction last cycle. Skill hasn't picked it up yet (chose #11139). Will reassess after 1-2 cycles — if skill is working through stale items #11139/#11227/#11137 in sequence, #11401 will come right after. No re-comment needed yet.
+## Cutover-prep status
+
+Skill's sequencing is clean:
+1. ✓ #11139 conflict-resolved + landed on main (PR #11141)
+2. ◐ #11137 conflict-resolved + at pending-test, awaiting QA
+3. ⏸ #11227 held pending #11139's main-landing (semantic successor)
+4. ⏳ #11401 still queued (operator-directed, post-stale-items)
+
+Expected sequence going forward: #11137 ship → #11227 unblock → #11227 work → #11227 ship → #11401 work → #11401 ship → bundle CUTOVER-READY (3rd time, final) → operator signals #11331 cutover.
 
 ## Context
 
-healthy. Skill autonomously prioritizing cutover-prep work, which is what operator implicitly wants.
+healthy.
