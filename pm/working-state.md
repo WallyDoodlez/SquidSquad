@@ -1,40 +1,46 @@
 # Working State
 
-- **Task**: pipeline sentinel
-- **Status**: observer — #11227 shipped to pending-test, AC-6 fork (c) locked-in
+- **Task**: pipeline sentinel + cutover readiness
+- **Status**: ACTIVE — #11401 shipped to pending-test, main-base routing confirmed
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
 ## Pipeline
 
-- pending_ship (cosmetic stale-label, PRs on main):
-  - #11139, #11137, #11404, #11165, #11166
+- pending_ship (cosmetic stale-label, PRs on main): #11139, #11137, #11404, #11165, #11166
 - pending-test:
-  - #11227 (NEW @ 08:47Z, PR #11431 → main, awaiting QA)
+  - **#11401 (NEW @ 09:28Z, PR #11437 → main, awaiting QA)**
+  - #11227 (PR #11431 → main, awaiting QA)
   - #10855 (skip)
-- Open issues: #11394 (low), **#11401 (medium, OPERATOR-DIRECTED — should be next pickup)**
+- Open issues: #11394 (low only)
 - pending intake (PM-owned): #11331, #11400, #11412
 - Approved queue: 6
-- Open PRs: 1 (#11431 → main)
+- Open PRs: 2 (#11431 + #11437, both → main, MERGEABLE)
 - Harness: unreachable
 
-## Session ship tally: 37 (will be 41 after #11139/#11137/#11227/#11401 all complete shipping)
+## Session ship tally: 37 (will be 42 after #11401 + #11227 + 3 cosmetic transitions)
 
-## AC-6 fork status — LOCKED option (c)
+## ⚠️ CUTOVER-READINESS — essentially NOW
 
-Operator never overrode. Skill operating on graceful-degradation contract. AC-6 (L3 op anchoring) becomes its own follow-up task post-cutover; either (a) regex extend or (b) H4→H3 promotion or stay at (c) deferred indefinitely.
+Bundle (compose-polish-session):
+- 5 chain-shipped: #11334, #11382, #11381, #11383, #11329
+- Polish-session iterations (G-gaps + structural work)
+- L1-L3 source canon (harness-probe-only per Iter 35 G7)
 
-## Cutover sequence (unchanged)
+Main (8 independent ships this session):
+- #11403 (deps Gate 3, shipped)
+- #11404, #11165, #11166, #11139, #11137 (PRs merged, cosmetic transition pending)
+- #11227 (awaiting QA on PR #11431)
+- #11401 (awaiting QA on PR #11437)
 
-1. ✓ #11139 ship (already on main)
-2. ✓ #11137 ship (already on main)
-3. ◐ #11227 ship (pending QA on PR #11431)
-4. ⏳ #11401 work (operator-directed; queued behind #11227)
-5. ⏳ #11401 chain-ship to bundle
-6. ⏳ Bundle CUTOVER-READY (3rd, final)
-7. ⏳ Operator signals cutover-PR
-8. ⏳ v0.44.0 ships
+v0.44.0 composition at cutover = bundle's chain + polish + main's 8 ships via cutover-PR's bundle→main merge.
+
+**Only QA-verify + DM-ship of #11401 (and #11227) stands between us and operator's cutover signal on #11331.**
+
+## Cycle-2293 prediction correction
+
+Cycle 2293: 'After #11401 ship, bundle returns to CUTOVER-READY (third and final time)'. This was wrong — bundle stayed cutover-ready since cycle 2293 itself; #11401 ships to main directly. Skill's no-stacked-PR judgment is sound; my chain-ship expectation was too rigid.
 
 ## Context
 
-healthy. Skill cadence is sustained: #11227 from in-progress to pending-test in ~36 min including PR open and code review.
+healthy. Pipeline converging on cutover-imminent.
