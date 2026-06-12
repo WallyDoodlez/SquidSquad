@@ -1,9 +1,9 @@
 # Working State
 
 - **Task**: pipeline sentinel + cutover readiness
-- **Status**: quiet — awaiting DM ship #11329, QA verify #11165, skill pickup #11401
+- **Status**: quiet — watch cycle 3 of 5
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 2
+- **Quiet cycles**: 3
 
 ## Pipeline
 
@@ -17,9 +17,9 @@
 
 ## Session ship tally: 36
 
-## Cutover watch (cycle 2 of 5)
+## Cutover watch (cycle 3 of 5)
 
-If #11401 doesn't move by cycle 2295, fall back to option 2 (cutover with #11401 as known-issue).
+If #11401 doesn't move by cycle 2295, fall back to option 2.
 
 ## Context
 
