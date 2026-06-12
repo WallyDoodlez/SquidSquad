@@ -338,12 +338,47 @@ def _strip_frontmatter(text):
     return text[m.end():]
 
 
+# #11139: L4-op-syntax H3 headers (`### append`, `### insert-after step:cycle/<id>`,
+# etc.) appear in many L1-L3 source files as authoring markers, but the
+# L1-L3 join pipeline doesn't process them as ops — only L4 ops are
+# applied. They survive into the composed CLAUDE.md as meaningless
+# meta-headers (e.g. PM CLAUDE.md lines 3, 90, 946, 954). Strip them
+# before join so the consuming agent doesn't see compose-machinery
+# headings interleaved with content. This does NOT affect L4 ops:
+# L4 ops are parsed from `.squidsquad/project/<role>.md` separately
+# and applied AFTER join, so they remain untouched.
+_L4_OP_HEADER_RE = re.compile(
+    r"^### (?:append|replace|"
+    r"(?:replace|insert-before|insert-after)\s+step:cycle/[A-Za-z0-9_-]+)\s*$",
+    re.MULTILINE,
+)
+
+
+def _strip_l4_op_headers(body):
+    """Remove L4-op-syntax H3 headers (and the trailing blank line that
+    typically follows them) from an L1-L3 source body. See #11139.
+    """
+    # Match the header line plus the optional blank line right after it,
+    # so removing the header doesn't leave a double-blank-line gap.
+    cleaned = re.sub(
+        r"^### (?:append|replace|"
+        r"(?:replace|insert-before|insert-after)\s+step:cycle/[A-Za-z0-9_-]+)"
+        r"\s*\n(?:\n)?",
+        "",
+        body,
+        flags=re.MULTILINE,
+    )
+    return cleaned
+
+
 def _join_bodies(bodies):
     """Concatenate per-file bodies with a single blank line between them.
 
     Each body is stripped of leading/trailing whitespace so the joined
     output has predictable spacing regardless of how each source file
-    terminates.
+    terminates. L4-op-syntax H3 headers (#11139) are stripped per-body
+    before joining.
     """
-    cleaned = [b.strip() for b in bodies if b.strip()]
+    cleaned = [_strip_l4_op_headers(b).strip() for b in bodies]
+    cleaned = [b for b in cleaned if b]
     return "\n\n".join(cleaned)
