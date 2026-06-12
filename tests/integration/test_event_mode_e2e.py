@@ -298,9 +298,12 @@ class EventModeE2ETestBase(unittest.TestCase):
         with self._stream._lock:
             self._stream._events.clear()
 
+        # Model-B (#11329): the cursor is harness-owned in .event-state.json;
+        # working-state.md carries no cursor line. event_poll never reads or
+        # writes it.
         ws = self._test_role_dir / "working-state.md"
         ws.write_text(
-            "# Working State\n\n- **Last Processed Event ID**: \n",
+            "# Working State\n\n- **Task**: none\n",
             encoding="utf-8",
         )
 
@@ -337,14 +340,24 @@ class EventModeE2ETestBase(unittest.TestCase):
             cwd=str(REPO_ROOT), timeout=20, env=env,
         )
 
-    def _read_cursor(self) -> str:
-        ws = (self._test_role_dir / "working-state.md").read_text(
-            encoding="utf-8",
+    def _agent_get(self, since: str | None = None, limit: int = 50) -> dict:
+        """Simulate the agent's model-B read path: GET /events/for/{role}.
+
+        In model B the AGENT (not event_poll) walks events past its cursor
+        and acks each. The skim-then-advance / oldest-first / eviction
+        invariants are properties of this harness endpoint, so we exercise
+        it directly. Returns the parsed response dict
+        (``events`` + optional ``evicted``/``oldest_id``/...).
+        """
+        params = {"limit": limit}
+        if since is not None:
+            params["since"] = since
+        url = (
+            f"http://127.0.0.1:{self._port}/events/for/"
+            f"{urllib.parse.quote(TEST_ROLE)}?{urllib.parse.urlencode(params)}"
         )
-        for line in ws.splitlines():
-            if line.startswith("- **Last Processed Event ID**:"):
-                return line.split(":", 1)[1].strip()
-        return ""
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return json.loads(resp.read().decode("utf-8"))
 
 
 class TestLiveHarnessPortNotTouched(EventModeE2ETestBase):
@@ -401,41 +414,38 @@ class TestLiveHarnessPortNotTouched(EventModeE2ETestBase):
 
 
 class TestCursorLongLag(EventModeE2ETestBase):
-    """§4.10 IT-CursorLongLag.
+    """§4.10 IT-CursorLongLag (model B, #11329).
 
-    Pre-seed cursor far behind head with the deque NOT rolled. Boot the
-    agent (run ``event_poll.py``) and verify skim-then-advance:
+    The skim-then-advance / oldest-first invariant is a property of the
+    harness ``GET /events/for/{role}?since=cursor`` endpoint that the AGENT
+    walks (event_poll no longer emits events or owns the cursor). We exercise
+    that endpoint directly via ``_agent_get`` and, separately, assert that
+    event_poll fires exactly one NUDGE when work is pending:
 
-    - Events surface chronologically from cursor forward, oldest first.
-    - Cursor advances incrementally; final cursor equals last id.
-    - No event between cursor and head is silently dropped.
-    - Multiple polls cumulatively catch the agent up to current head.
+    - Events surface chronologically from the cursor forward, oldest first.
+    - A small ``limit`` returns the OLDEST window — never a jump-to-latest.
+    - Successive GETs (agent acking forward) cumulatively catch up to head.
     """
 
-    def test_single_poll_within_limit(self):
-        """One poll catches the agent up when lag fits in `--limit`."""
+    # The agent's /events/for path filters by reacts-to; a real role reacts
+    # to status-transition, so mirror that for the isolated test role.
+    REACTS_TO = {TEST_ROLE: {"status-transition"}}
+
+    def test_single_get_within_limit(self):
+        """One GET catches the agent up when lag fits in `limit`."""
         anchor = self._seed_event("anchor-id")
         seeded_ids = [f"e{i:03d}" for i in range(50)]
         for eid in seeded_ids:
             self._seed_event(eid)
 
-        result = self._run_event_poll(since=anchor["id"], limit=100)
-        self.assertEqual(
-            result.returncode, 0,
-            msg=f"event_poll exit={result.returncode}\nstderr={result.stderr}",
-        )
-
-        emitted_ids = [
-            json.loads(line)["id"]
-            for line in result.stdout.splitlines() if line.strip()
-        ]
-        # Spec: events surface in chronological order from cursor forward;
+        resp = self._agent_get(since=anchor["id"], limit=100)
+        emitted_ids = [e["id"] for e in resp["events"]]
+        # Events surface in chronological order from the cursor forward;
         # none are silently dropped.
         self.assertEqual(emitted_ids, seeded_ids)
-        self.assertEqual(self._read_cursor(), seeded_ids[-1])
 
     def test_skim_then_advance_does_not_jump_to_latest(self):
-        """Long lag exceeding `--limit` is skimmed across multiple polls.
+        """Long lag exceeding `limit` is skimmed across successive GETs.
 
         Critical assertion: oldest events after the cursor are returned
         first — the agent never jumps to the latest event and silently
@@ -446,34 +456,44 @@ class TestCursorLongLag(EventModeE2ETestBase):
         for eid in seeded_ids:
             self._seed_event(eid)
 
-        # First poll with small limit: must surface the OLDEST `limit`
+        # First GET with small limit: must surface the OLDEST `limit`
         # events after the cursor, not the newest.
-        result1 = self._run_event_poll(since=anchor["id"], limit=10)
-        self.assertEqual(result1.returncode, 0, msg=result1.stderr)
-        first_batch = [
-            json.loads(line)["id"]
-            for line in result1.stdout.splitlines() if line.strip()
-        ]
+        resp1 = self._agent_get(since=anchor["id"], limit=10)
+        first_batch = [e["id"] for e in resp1["events"]]
         self.assertEqual(
             first_batch, seeded_ids[:10],
             msg="agent jumped to latest — oldest events silently dropped",
         )
-        self.assertEqual(self._read_cursor(), seeded_ids[9])
 
-        # Second poll reads the now-advanced cursor from working-state.md;
-        # no explicit --since needed.
-        result2 = self._run_event_poll(limit=100)
-        self.assertEqual(result2.returncode, 0, msg=result2.stderr)
-        second_batch = [
-            json.loads(line)["id"]
-            for line in result2.stdout.splitlines() if line.strip()
-        ]
+        # The agent acks forward to the last id it processed; the next GET
+        # uses that as `since` and surfaces the remainder oldest-first.
+        resp2 = self._agent_get(since=seeded_ids[9], limit=100)
+        second_batch = [e["id"] for e in resp2["events"]]
         self.assertEqual(second_batch, seeded_ids[10:])
-        self.assertEqual(self._read_cursor(), seeded_ids[-1])
+
+    def test_event_poll_nudges_when_work_pending(self):
+        """event_poll's model-B job: emit a single NUDGE (no payload) when
+        events exist past its high-water-mark, and exit 0."""
+        anchor = self._seed_event("anchor-id")
+        for eid in [f"e{i:03d}" for i in range(5)]:
+            self._seed_event(eid)
+
+        result = self._run_event_poll(since=anchor["id"], limit=100)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+        self.assertEqual(
+            lines, ["NUDGE"],
+            msg="event_poll must emit exactly one bare NUDGE — never event "
+                f"payloads. stdout={result.stdout!r}",
+        )
 
     def test_cursor_at_head_returns_empty(self):
-        """Cursor already at head: no events returned, exit 1, cursor unchanged."""
+        """Cursor already at head: GET returns no events; event_poll emits
+        no NUDGE and exits 1 (single-shot, nothing pending)."""
         head = self._seed_event("only-event")
+
+        resp = self._agent_get(since=head["id"], limit=50)
+        self.assertEqual(resp["events"], [])
 
         result = self._run_event_poll(since=head["id"], limit=50)
         # event_poll exits 1 when no events found (single-shot mode).
@@ -762,152 +782,102 @@ class TestReactsToFixtureMatchesConfig(unittest.TestCase):
 
 
 class TestEvictionGap(EventModeE2ETestBase):
-    """§4.4 IT-EvictionGap.
+    """§4.4 IT-EvictionGap (model B, #11329).
 
-    Pre-set the agent's cursor to an event id that has been rolled
-    out of the harness's retained deque, then run ``event_poll.py``.
-    The agent must:
+    When the agent's cursor predates the retained deque, the harness
+    ``GET /events/for/{role}?since=<stale>`` response carries the eviction
+    markers (``evicted``/``oldest_id``/``evicted_count_hint``) and the
+    OLDEST retained events (skim-then-advance) — this is the agent's
+    recovery surface. Separately, ``event_poll`` must NUDGE (so the agent
+    wakes to recover) and log a single eviction diagnostic, but it does NOT
+    emit events or advance any cursor (model B).
 
-    - log a warning naming the oldest available id and a count hint
-      (locked format per CONTEXT-9331 §4, exercised end-to-end here),
-    - advance the cursor to a known anchor (oldest retained id),
-    - NOT crash,
-    - emit subsequent retained events on stdout for normal processing.
-
-    Unblocked by #9331 — eviction-signal infrastructure now lives on
-    main (``EventStream.get_since_with_eviction``,
-    ``evicted``/``oldest_id``/``evicted_count_hint`` keys on the
-    ``GET /events`` response, and the matching detection path in
-    ``event_poll.py``). The in-process test server's ``_serve_events``
-    forwards those keys identically to the production endpoint, so
-    this test exercises the real EventStream + real event_poll
-    subprocess.
+    Backed by #9331's eviction-signal infrastructure
+    (``EventStream.get_since_with_eviction`` + the three response keys); the
+    in-process server mirrors the production endpoint shape.
     """
 
-    def test_stale_cursor_logs_warning_and_advances(self):
-        """Cursor predates retained window → warn, re-anchor, emit
-        retained events in order."""
-        # Fill the shared maxlen=1000 deque beyond capacity so the
-        # original cursor is definitively evicted. Events e0000–e1199
-        # emit, of which the deque retains the last 1000 (e0200..e1199).
-        stale_cursor = "evicted-before-the-deque-ever-saw-it"
-        # Pre-seed working state with the stale cursor so event_poll
-        # reads it from disk.
-        ws = self._test_role_dir / "working-state.md"
-        ws.write_text(
-            "# Working State\n\n"
-            f"- **Last Processed Event ID**: {stale_cursor}\n",
-            encoding="utf-8",
-        )
+    REACTS_TO = {TEST_ROLE: {"status-transition"}}
 
-        # Fill the deque past maxlen — picks up _total_emitted_count to
-        # 1200, leaves e0200..e1199 retained.
+    def test_stale_cursor_get_surfaces_eviction_markers_oldest_first(self):
+        """The agent's GET past a stale cursor returns eviction markers +
+        the OLDEST retained events — never a jump-to-latest."""
+        stale_cursor = "evicted-before-the-deque-ever-saw-it"
+        # Fill the deque past maxlen=1000: e0000..e1199 emit, e0200..e1199
+        # retained.
         seeded_ids = [f"e{i:04d}" for i in range(1200)]
         for eid in seeded_ids:
             self._seed_event(eid)
-        retained_ids = seeded_ids[-1000:]  # what the deque still holds
+        retained_ids = seeded_ids[-1000:]
 
-        # Use a small limit so we observe both the warning AND only the
-        # OLDEST retained events (skim-then-advance) — not just the
-        # newest. This is the §4.4 assertion that the agent does not
-        # silently jump-to-latest past the eviction.
-        result = self._run_event_poll(limit=8)
+        resp = self._agent_get(since=stale_cursor, limit=8)
+        self.assertTrue(resp.get("evicted"),
+                        msg="stale cursor must flag evicted=True")
+        self.assertEqual(
+            resp["oldest_id"], retained_ids[0],
+            msg="oldest_id must name the oldest retained event (safe "
+                "re-anchor for the agent's ack-cursor recovery).",
+        )
+        self.assertGreater(resp.get("evicted_count_hint", 0), 0)
+        emitted_ids = [e["id"] for e in resp["events"]]
+        self.assertEqual(
+            emitted_ids, retained_ids[:8],
+            msg="agent recovery surface must be oldest-first — never a "
+                "jump past the eviction window.",
+        )
+
+    def test_event_poll_nudges_and_logs_single_eviction(self):
+        """event_poll model-B role on an eviction gap: one NUDGE, one
+        eviction diagnostic naming the recovery anchor, exit 0 — no events,
+        no cursor write."""
+        stale_cursor = "evicted-before-the-deque-ever-saw-it"
+        seeded_ids = [f"e{i:04d}" for i in range(1200)]
+        for eid in seeded_ids:
+            self._seed_event(eid)
+        retained_ids = seeded_ids[-1000:]
+
+        result = self._run_event_poll(since=stale_cursor, limit=8)
         self.assertEqual(
             result.returncode, 0,
             msg=f"event_poll exit={result.returncode}\n"
                 f"stdout={result.stdout!r}\nstderr={result.stderr!r}",
         )
-
-        # Locked stderr warning format from CONTEXT-9331 §4.
-        expected_anchor = retained_ids[0]  # "e0200"
+        lines = [ln for ln in result.stdout.splitlines() if ln.strip()]
+        self.assertEqual(
+            lines, ["NUDGE"],
+            msg="event_poll must emit exactly one bare NUDGE on eviction, "
+                f"not event payloads. stdout={result.stdout!r}",
+        )
+        # New model-B diagnostic text: nudge-to-recover, not advance.
         self.assertIn(
             "[event_poll] EVICTION: cursor predates retained window — "
-            f"advancing to {expected_anchor},",
+            f"nudging agent to recover past {retained_ids[0]},",
             result.stderr,
-            msg="§4.4: stderr must carry the locked eviction warning "
-                "naming the oldest retained id as the safe re-anchor.",
         )
-        # Count hint must be present and non-zero — the exact value is
-        # coarse (depends on lifetime emits across other tests sharing
-        # this class's EventStream, since _total_emitted_count is a
-        # lifetime counter; only `_events` is cleared between tests).
-        # Operators only need an order-of-magnitude signal.
         import re as _re
-        m = _re.search(
-            r"~(\d+) events evicted", result.stderr,
-        )
-        self.assertIsNotNone(
-            m,
-            msg=f"§4.4: warning must include the evicted_count_hint "
-                f"(`~N events evicted`). stderr={result.stderr!r}",
-        )
-        self.assertGreater(
-            int(m.group(1)), 0,
-            msg="§4.4: evicted_count_hint must be non-zero when the "
-                "deque has rolled past the cursor.",
-        )
-        # Exactly one warning — not once per event in the batch.
+        m = _re.search(r"~(\d+) events evicted", result.stderr)
+        self.assertIsNotNone(m, msg=f"stderr={result.stderr!r}")
+        self.assertGreater(int(m.group(1)), 0)
+        # Exactly one diagnostic — not one per event.
         self.assertEqual(result.stderr.count("EVICTION"), 1)
 
-        emitted = [
-            json.loads(line) for line in result.stdout.splitlines()
-            if line.strip()
-        ]
-        emitted_ids = [e["id"] for e in emitted]
-        # §4.4: agent emits the OLDEST retained events first, advancing
-        # the cursor incrementally through them. Skim-then-advance —
-        # NOT a jump to the latest.
-        self.assertEqual(
-            emitted_ids, retained_ids[:8],
-            msg="agent jumped past the eviction window or emitted "
-                "events out of order — oldest-first contract violated.",
-        )
-        # Cursor advanced past the last emitted event in the batch.
-        self.assertEqual(self._read_cursor(), retained_ids[7])
-
-    def test_eviction_then_next_poll_resumes_from_anchor(self):
-        """After the first poll re-anchors past the gap, the next poll
-        uses the advanced cursor and surfaces no further eviction
-        warning — the agent has caught up to the retained window."""
-        stale_cursor = "stale-from-yesterday"
-        ws = self._test_role_dir / "working-state.md"
-        ws.write_text(
-            "# Working State\n\n"
-            f"- **Last Processed Event ID**: {stale_cursor}\n",
-            encoding="utf-8",
-        )
+    def test_recovered_cursor_get_has_no_eviction(self):
+        """Once the agent has acked forward into the retained window, its
+        next GET surfaces the remainder oldest-first with no eviction."""
         seeded_ids = [f"e{i:04d}" for i in range(1100)]
         for eid in seeded_ids:
             self._seed_event(eid)
         retained_ids = seeded_ids[-1000:]
 
-        # First poll — should hit eviction + emit the oldest 5 retained.
-        result1 = self._run_event_poll(limit=5)
-        self.assertEqual(result1.returncode, 0, msg=result1.stderr)
-        self.assertIn("EVICTION", result1.stderr)
-        # Cursor advanced past first 5 retained.
-        self.assertEqual(self._read_cursor(), retained_ids[4])
-
-        # Second poll reads the now-advanced cursor; cursor IS in deque
-        # so no eviction marker, no warning. Use a large limit so the
-        # batch covers the remaining 995 retained events in one shot.
-        result2 = self._run_event_poll(limit=2000)
-        self.assertEqual(result2.returncode, 0, msg=result2.stderr)
-        self.assertNotIn(
-            "EVICTION", result2.stderr,
-            msg="agent caught up after first re-anchor — no more "
-                "eviction warnings on subsequent polls.",
-        )
-        emitted2 = [
-            json.loads(line) for line in result2.stdout.splitlines()
-            if line.strip()
-        ]
+        # Agent recovered to the 5th retained id (post-eviction ack-walk).
+        resp = self._agent_get(since=retained_ids[4], limit=2000)
+        self.assertNotIn("evicted", resp,
+                         msg="cursor inside the retained window — no "
+                             "eviction marker expected.")
         self.assertEqual(
-            [e["id"] for e in emitted2], retained_ids[5:],
-            msg="second poll must surface the remaining retained "
-                "events oldest-first; cursor must end at last id.",
+            [e["id"] for e in resp["events"]], retained_ids[5:],
+            msg="remaining retained events must surface oldest-first.",
         )
-        self.assertEqual(self._read_cursor(), retained_ids[-1])
 
 
 if __name__ == "__main__":

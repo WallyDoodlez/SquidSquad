@@ -17,7 +17,7 @@ This fragment is a brief orientation. The full agent contract lives in the compa
 
 ### Quick reference
 
-- **Wake mechanism** — Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is one JSON event.
+- **Wake mechanism** — Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is a bare `NUDGE` (no payload); on each one you `GET /events/for/{role}?since=<cursor>` to fetch what's new.
 - **Atomic unit of work** — one event at a time. Process to completion before reading the next.
 - **Source of truth** — the forge (`tracker.py` queries). Event payloads are hints; always forge-read before acting.
 - **Cursor** — harness-owned in `.squidsquad/.event-state.json`; you advance it by POSTing `ack-cursor {event_id, role}` after each tended event (see [[cursor-management]]).

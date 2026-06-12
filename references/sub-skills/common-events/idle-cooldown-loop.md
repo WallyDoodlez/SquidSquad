@@ -41,9 +41,9 @@ Three fields, three values:
    ```
    Note: `Next scan after` is **stored**, not derived on the fly — this is the only place the cool-down value is read.
 4a. **Re-check the queue.** Run `work_queue()` immediately after writing the scan-completion fields. A task may have arrived during the scan (or during the crashed-out window if this was a crash-recovery restart). If `work_queue()` returns work, **exit the cool-down loop** — transition the top item to `in-progress`, update the Task field in `working-state.md`, and begin work directly (no need to wait for an event, since you already have the item). Only if `work_queue()` is empty proceed to step 5.
-5. **Wait via the Monitor.** The persistent Monitor (see [[event-mode-contract]] "How You Listen") delivers events at a short fixed cadence; you do not perform a long blocking sleep. After each empty poll interval:
+5. **Wait via the Monitor.** The persistent Monitor (see [[event-mode-contract]] "How You Listen") delivers `NUDGE` wake signals at a short fixed cadence; you do not perform a long blocking sleep. After each empty poll interval:
    - If `now >= Next scan after` → run the next improvement scan (back to step 3).
-   - If a task-relevant event arrives in the meantime → the Monitor wakes Case B in [[event-mode-contract]] (forge-read, possibly pick up new work). The cool-down timer keeps running in the background; when work completes (Case C) and the queue is empty again, return here for the eligibility check.
+   - If a `NUDGE` arrives in the meantime → the Monitor wakes Case B in [[event-mode-contract]] (you `GET /events/for`, forge-read, possibly pick up new work). The cool-down timer keeps running in the background; when work completes (Case C) and the queue is empty again, return here for the eligibility check.
 
 ### Atomicity
 
@@ -54,11 +54,11 @@ Three fields, three values:
 
 The atomicity rule above is enforced **by the Claude Code runtime**, not by anything in your sub-skill. Spell this out so the failure modes are unsurprising:
 
-- While you are mid-scan (running a tool call), the persistent Monitor's stdout — `event_poll.py`'s JSON lines — is **buffered** by the Claude Code runtime. You will not see those lines until the tool call returns and the next turn begins. This is what makes "finish the scan first" possible without you needing to poll Monitor mid-tool.
-- The buffered lines arrive **in order** on the next turn. Process them in arrival order; do not re-order based on payload timestamp. Per-event ordering is the contract event_poll.py + the Monitor pipeline guarantee.
-- `event_poll.py` advances its on-disk cursor as it writes each line to stdout — the cursor is past the line **before** you have seen it. This is intentional: the cursor tracks "delivered to the agent's transport", not "processed by the agent".
-- **Crash window**: if the agent crashes between event_poll.py advancing the cursor and the agent processing the buffered line, that line is lost from the event stream — the cursor has moved past it on disk. This is **acceptable** because step 4a (Re-check the queue) runs `work_queue()` after every scan completion and after every crash-recovery restart, and `work_queue()` is a fresh forge-read that absorbs any tracker state the lost event would have communicated (per [[forge-read-pattern]] — the forge is authoritative; events are hints). The same forge-read also absorbs anything that happened during the outage window.
-- **You do NOT try to read the cursor back, replay missed events, or rebuild from a buffered-but-unprocessed line.** The forge-read pattern is the recovery mechanism. Designing a sub-skill that tries to recover events out of the on-disk cursor would violate [[forge-read-pattern]].
+- While you are mid-scan (running a tool call), the persistent Monitor's stdout — `event_poll.py`'s `NUDGE` lines — is **buffered** by the Claude Code runtime. You will not see those nudges until the tool call returns and the next turn begins. This is what makes "finish the scan first" possible without you needing to poll Monitor mid-tool.
+- A `NUDGE` carries **no payload** — it is only a wake signal. However many buffered nudges arrive, you respond the same way on the next turn: one `GET /events/for/{role}?since=<cursor>` surfaces every event past your cursor, oldest-first. The harness GET (not the nudge stream) is what orders events; coalesced or duplicate nudges are harmless.
+- The cursor is **harness-owned** and advances only when **you** POST `ack-cursor` after tending an event — so it tracks "processed by the agent", not "delivered to a transport". `event_poll.py` never touches the cursor.
+- **Crash window**: because the cursor advances only on your post-processing ack (at-least-once), an event you have not yet tended is still past the cursor — a crash re-delivers it on the next `GET`. Nothing is lost at the cursor layer. As an additional backstop, step 4a (Re-check the queue) runs `work_queue()` after every scan completion and after every crash-recovery restart — a fresh forge-read that absorbs any tracker state an event would have communicated (per [[forge-read-pattern]] — the forge is authoritative; events are hints), and anything that happened during an outage.
+- **You do NOT try to replay missed events or rebuild from a buffered-but-unprocessed nudge.** The forge-read pattern is the recovery mechanism. Designing a sub-skill that tries to recover events out of the nudge stream would violate [[forge-read-pattern]].
 
 ### Cool-Down Configuration
 

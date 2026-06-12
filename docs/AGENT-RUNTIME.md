@@ -1177,6 +1177,12 @@ PM's inbox is disambiguated by `event_context`. The full set in use:
 
 PM agents recognize this set as their care-filter; new values added in future require both an emitter update and an entry in this list.
 
+### 9.6 Cursor-ownership migration (#11329 — model A → model B)
+
+Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last Processed Event ID**: <id>` line in `.squidsquad/<role>/working-state.md`, written per event by `event_poll.py`. #11329 moves the cursor to **harness ownership** (`.squidsquad/.event-state.json`, advanced by the agent's per-event `ack-cursor` POST — §5.3/§8.1); `event_poll.py` becomes nudge-only and never touches the cursor, and `working-state.md` no longer carries a cursor line.
+
+**Upgrade path** is a one-time agent boot step (Case A step 1a in [[event-mode-contract]]): on the first model-B boot, if the agent finds a legacy cursor line and the harness cursor (`GET /events/cursor/{role}`) is `null`/behind, it POSTs a single `ack-cursor(<legacy_id>)` to seed the harness cursor, then drops the line on its next working-state write. The step is **idempotent** (no legacy line → no-op) and **non-load-bearing**: even if it is skipped, correctness holds because the §8.1 walk forge-reads each event and acks past already-tended ones — the only cost of skipping is one wasteful re-walk of the retained deque. No installer action is required beyond `compose.py deploy-all` (already part of the standard upgrade) and an agent restart so the new boot step runs.
+
 ---
 
 ## 10. Open questions

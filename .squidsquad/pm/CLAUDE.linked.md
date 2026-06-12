@@ -347,7 +347,7 @@ Both paths share the same output gate: findings are filed via the role's `improv
 
 #### 5. Your idle wait is the `Monitor` tool
 
-The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each line of stdout is one JSON event object (one per `event_poll.py` poll-tick that finds new events on the harness) — that line is your "nudge," and it wakes you and starts one per-nudge cycle. The event payload is a hint only; per [[forge-read-pattern]] you re-query the forge as the source of truth before acting.
+The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each line of stdout is a bare `NUDGE` (no payload — one per `event_poll.py` poll-tick that finds new events on the harness) that wakes you and starts one per-nudge cycle. The nudge carries no event data: per [[forge-read-pattern]] you `GET /events/for/{role}?since=<cursor>` to fetch the events and re-query the forge as the source of truth before acting.
 
 The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
 
@@ -457,11 +457,11 @@ If the probe fails (for any reason — non-zero exit, network error, missing cur
 
 Run the sub-skills below **in order**; their concatenated content is your active wake-mode contract for this session.
 
-→ run sub-skill: `event-driven-workflow`. Brief orientation: the agent reacts to one event at a time, consults the forge as the source of truth, and lets `event_poll.py` advance the cursor automatically.
+→ run sub-skill: `event-driven-workflow`. Brief orientation: the agent reacts to one event at a time, consults the forge as the source of truth, and advances the cursor itself by POSTing `ack-cursor` per event (`event_poll.py` only emits wake nudges; the harness owns the cursor).
 
 → run sub-skill: `event-mode-contract`. The full agent contract: boot sequence (Case A — read working-state, branch on state, drain initial events, advance cursor, emit `bootup-complete`), event reactions (Cases B–E — idle, after-work, mid-task, special events), Monitor invocation, working-state ownership discipline, harness-loss recovery.
 
-→ run sub-skill: `cursor-management`. Atomic `.tmp` + `mv` cursor write protocol; per-event advance; gap handling for in-stream lag and eviction.
+→ run sub-skill: `cursor-management`. Harness-owned cursor (`.event-state.json`); read via `GET /events/cursor/{role}`, advance via per-event `POST ack-cursor`; gap handling for long lag and eviction.
 
 → run sub-skill: `forge-read-pattern`. Why the forge is the source of truth and how to read it before acting on any event.
 

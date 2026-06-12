@@ -11,8 +11,6 @@ The cursor is the canonical work-completed indicator for your alias — single s
 
 The cursor is **harness-owned**. It is persisted in `.squidsquad/.event-state.json` (one entry per alias) and you observe it only through the harness API — you never write the file directly. `working-state.md` does NOT carry a cursor line; that file holds your agent-private current-work state only (see `docs/AGENT-RUNTIME.md` §6).
 
-> Pre-#11329 transitional note: a legacy install may still have a `- **Last Processed Event ID**: <id>` line in `working-state.md`. Leave it alone — #11329 retires the line in the runtime cleanup. Do not read, write, or rely on it for cursor decisions.
-
 ### How to read the cursor
 
 Issue a GET against the harness:

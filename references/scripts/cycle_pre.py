@@ -360,7 +360,6 @@ def _read_working_state(role):
     remaining_steps = []
     key_decisions = []
     quiet_cycles = 0
-    last_processed_event_id = None
 
     for line in raw.splitlines():
         stripped = line.strip()
@@ -376,10 +375,6 @@ def _read_working_state(role):
                 quiet_cycles = int(stripped.split(":", 1)[1].strip())
             except ValueError:
                 quiet_cycles = 0
-        elif stripped.startswith("- **Last Processed Event ID**:"):
-            val = stripped.split(":", 1)[1].strip()
-            if val and val != "none":
-                last_processed_event_id = val
 
     # Parse list sections
     current_section = None
@@ -419,7 +414,6 @@ def _read_working_state(role):
     result["remaining_steps"] = remaining_steps
     result["key_decisions"] = key_decisions
     result["quiet_cycles"] = quiet_cycles
-    result["last_processed_event_id"] = last_processed_event_id
 
     return result
 
@@ -1386,12 +1380,15 @@ def main():
     else:
         role_input = ROLE_BUILDERS[role](role)
 
-    # 7b. Read event bus (#5622)
+    # 7b. Read event bus (#5622) — loop-mode mechanical-reaction read.
+    # #11329: the event cursor is harness-owned (.event-state.json) and is no
+    # longer mirrored in working-state.md. With no persistent loop-mode
+    # cursor, read the recent window each cycle — the mechanical reactions
+    # below are idempotent (#5622), so re-reading the window is harmless.
     recent_events = []
     try:
         from event_bus_reader import query as _query_events
-        last_event_id = working_state.get("last_processed_event_id", None)
-        recent_events = _query_events(since=last_event_id, limit=100)
+        recent_events = _query_events(since=None, limit=100)
         # Per-role relevance filtering (#5622 — agents keep what they care about)
         recent_events = _filter_events_for_role(recent_events, role)
     except (ImportError, Exception):
