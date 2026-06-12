@@ -3,7 +3,7 @@
 - **Task**: pipeline sentinel + cutover readiness
 - **Status**: ✅ CUTOVER-READY (final) — awaiting operator signal on #11331
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 2
+- **Quiet cycles**: 3
 
 ## Pipeline
 
@@ -19,4 +19,4 @@
 
 ## Context
 
-healthy. Awaiting operator.
+healthy.
