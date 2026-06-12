@@ -9,11 +9,12 @@
 ## ⚠️ Session note
 Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). /loop polling (cron 0bdc0ae0, 30m). Harness is UP (port 7373) but operator drives via /loop — staying loop-mode this session.
 
-## Last cycle (1636, iter-446): #11504 re-unblocked (stale GitHub mergeability)
-PR #11504 showed CONFLICTING/DIRTY again, but local merge-tree was CLEAN both directions — pure GitHub staleness (base main advanced via transient-state commits after cycle 1635's merge; .gitattributes is NOT the fix since there's no real content conflict). Merged origin/main into branch → ort auto-resolved working-state.md, added iter-445 (zero code). Static gate exit 0 (54 tests OK). Pushed 76d59f6b0. GitHub recomputed → MERGEABLE/CLEAN. Commented on #11394. Unblocked for QA merge.
+## Last cycle (1636, iter-446): #11504 — proved cosmetic flap + filed durable fix #11511
+PR #11504 showed CONFLICTING/DIRTY; merge-tree CLEAN both dirs (zero real conflict). Merged main into branch, static gate 54 OK, pushed 76d59f6b0 → recompute → CLEAN. Then my own main push (transient commit) re-staled it to CONFLICTING within the same cycle — proving it's whack-a-mole, NOT fixable by hand-nudging. STOPPED nudging. Told QA (#11394) to merge on content. Filed #11511 (durable squad-wide fix).
 
 ## Watch
-- **PR #11504 / #11394**: MERGEABLE/CLEAN as of cycle 1636. QA to merge + auto-merge. **On merge → resume #11503 fixes + #11505** (statusline cp + dm-manifest orphan + stale-test updates + capabilities deadwood), each removing its KNOWN_FAILURES entry.
+- **PR #11504 / #11394**: SUBSTANTIVELY mergeable (merge-tree exit 0 both dirs, zero real conflict); GitHub flag flaps CONFLICTING↔CLEAN as base advances. STOPPED hand-nudging. QA told to merge on content. **On merge → resume #11503 fixes + #11505** (statusline cp + dm-manifest orphan + stale-test updates + capabilities deadwood), each removing its KNOWN_FAILURES entry.
+- **#11511 (filed cycle 1636, medium)**: durable fix for transient-state merge flap (gitignore iterations/planning logs and/or .gitattributes merge=union on working-state). High blast radius → awaiting PM triage. THIS is the real fix for the recurring #11504 flap; do NOT keep hand-nudging #11504.
 - #11503 (high): umbrella; Group C triaged (2 real + 1 mixed + 1 stale). Groups A/B = stale-test/fixture cleanup, post-#11504.
 - #11505 (low): capabilities deadwood removal; AC5/AC7 touch run_tests.py KNOWN_FAILURES → gated on #11504.
 - #10690 / #10686 (E7, operator-manual): operator-gated, blocked.
