@@ -1952,6 +1952,18 @@ async def receive_event(request: Request):
     """Receive an event from an agent mechanical script.
 
     Stores in bounded stream, updates AgentState, logs to console.
+
+    Response contract (#11404):
+    - Missing ``event_type`` or ``role`` → ``400`` (hard reject).
+    - ``role`` not in the install's registered aliases (+ ``pm``) → ``204 No
+      Content``. This is an INTENTIONAL silent fire-and-forget drop (#9242):
+      the event is NOT stored, yet the caller still sees a 2xx. The internal
+      ``_emit_event`` path bypasses this guard, so production emits are
+      unaffected; a direct HTTP caller with a bad role is dropped on purpose
+      to keep malformed roles out of ``.event-state.json``.
+    - Otherwise stored with ``200``. If the body omits ``id``, one is
+      auto-assigned (#11404 AC1) so the event cannot be silently skipped by
+      id-tracking consumers (``event_poll`` skips id-less events).
     """
     body = await request.json()
 
@@ -1987,6 +1999,14 @@ async def receive_event(request: Request):
 
     # Stamp received_at for ordering (#5622)
     body["received_at"] = time.time()
+
+    # #11404 AC1: auto-assign an id when the caller omits one. event_poll and
+    # every consumer skip id-less events (the cursor cannot track them), so an
+    # id-less POST would be stored at 200 yet silently never delivered. Match
+    # the 16-hex shape _emit_event uses (#9415 D4) so both append paths produce
+    # the same id width.
+    if not body.get("id"):
+        body["id"] = os.urandom(8).hex()
 
     # Store in stream (with disk persistence via lifecycle manager)
     event_lifecycle.append(body)
