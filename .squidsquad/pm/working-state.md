@@ -1,32 +1,28 @@
 # Working State
 
-- **Task**: cycle 2324 (inline /loop) — confirmed #11394 ship-readiness, routed DM past stale-mergeability
-- **Status**: agents freshly respawned post-cutover (bootup_complete=false), settling at idle
+- **Task**: cycle 2325 (inline /loop) — quiet; pipeline moving under skill, PM backing off #11504 per skill signal
+- **Status**: agents settling post-respawn (dm bootup=True; pm/qa/skill bootup=false)
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 0 (real work this cycle)
+- **Quiet cycles**: 1
 
 ## Cycle work
 
-- **#11394 (severity:high) — pending-ship, PR #11504**: verifier passed (handoff 20:53Z); skill resolved transient-state merge conflict 20:57Z (e3e645957). gh reports `mergeable: CONFLICTING` but authoritative check proves STALE cache (#10181 failure mode):
-  - PR head e3e6459 == local origin/squidsquad/task/11394; base 6cb28bc == origin/main
-  - `git merge-tree --write-tree origin/main origin/squidsquad/task/11394` → exit 0, zero conflicts
-  - Only branch-vs-main diffs are transient skill state/planning files (auto-resolve)
-  - Posted DM routing comment: ship it, re-poll if gh refuses, do NOT bounce to skill.
-
-- **#11512 (severity:high) FILED → skill** (operator-reported, auto-approved bug): `thin_launcher.py:494-503` hardcodes `/loop` spawn prompt → all agents boot loop mode, boot Step 1 harness probe never reached → event mode dead-on-arrival. Root cause of event-mode-never-validated. Recorded in BRIEFING blockers.
+None requiring PM action. Verified pipeline health only:
+- skill cycle 1636 re-unblocked PR #11504 (forced GitHub mergeability recompute), self-filed #11511 (durable transient-state merge-flap fix), captured merge-tree-diagnostic vault learning, picked up #11512.
+- skill signaled "stop hand-nudging #11504" — PM honoring; my cycle-2324 diagnostic comment served its purpose (skill adopted merge-tree check). No further PM comments on #11504/#11394.
 
 ## Pipeline (read this cycle)
 
-- **pending-ship**: #11394 (PR #11504) → DM (ground-truth clean)
-- **pending-test**: #10855 (PR #10952) → QA lane (QA freshly respawned, will pick up)
-- **open high-sev**: #11503 (test-debt, role:skill — chain-ship to `squidsquad/skill/post-cutover-cleanup` per operator c-2026-06-12, post-#11504 merge per skill c1634 sequencing)
-- **open low-sev**: #11505 (capabilities deadwood, role:skill)
+- **pending-ship**: #11394 (PR #11504) → DM (bootup=True). Mergeability flaps cosmetically (UNKNOWN/CONFLICTING) as main advances; skill keeps it green. DM ships when recompute window shows MERGEABLE. Durable fix = #11511.
+- **pending-test**: #10855 (PR #10952) → QA (bootup still false, settling)
+- **in-progress (skill)**: #11512 (thin_launcher loop-mode bug — operator-reported, root cause of event-mode-never-reached)
+- **open (skill)**: #11511 (sev:med, durable merge-flap fix), #11503 (sev:high test-debt), #11505 (sev:low capabilities deadwood)
 - **in-progress (PM)**: #11092 (pull-only PRD), #11053 (agent-spawn §9 — 5 operator questions outstanding), #11000 (planning)
 - **Open PRs**: 2 — #11504 (#11394), #10952 (#10855)
 
 ## Agent state (harness status, this cycle)
 
-- pm/dm/qa/skill all `running`, intent=running, **bootup_complete=false** (respawned ~21:38Z this session). Operator wants idle-rest before event-mode end-to-end smoke. PM keeping noise low.
+- dm running bootup=True; pm/qa/skill running bootup=false. All intent=running.
 
 ## Operator asks (carried)
 
