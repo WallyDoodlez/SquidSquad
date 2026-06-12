@@ -1,36 +1,37 @@
 # Working State
 
-- **Task**: pipeline sentinel + cutover readiness + #11401 watch
-- **Status**: quiet — awaiting skill pickup of #11401 (operator-directed)
+- **Task**: pipeline sentinel + cutover prep tracking
+- **Status**: observer — skill doing stale-item cleanup (#11139) ahead of #11401
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 1
+- **Quiet cycles**: 0
 
 ## Pipeline
 
-- pending_ship (cosmetic stale-label limbo): #11404, #11166, #11165
-- pending-test: #10855 (skip)
+- pending_ship (cosmetic stale-label): #11404, #11166
+- pending-test:
+  - **#11139 (NEW @ 06:42Z — stale-in-progress conflict-resolved, 147 commits merged from main, 113/113 PASS, awaiting QA re-verify on polish-HEAD)**
+  - #11165 (PR merged, cosmetic limbo)
+  - #10855 (skip)
 - Open issues:
   - #11394 (low)
-  - **#11401 (medium, OPERATOR-DIRECTED — cutover-blocking, skill pickup imminent)**
-- pending intake (PM-owned): #11331 (cutover wrap, operator-option-1 recorded), #11400, #11412
+  - **#11401 (medium, OPERATOR-DIRECTED — skill picked #11139 first; reassess after 1-2 cycles)**
+- pending intake (PM-owned): #11331, #11400, #11412
 - Approved queue: 6
 - Open PRs: 0
 - Harness: unreachable
 
-## Session ship tally: 37 (#11329 added cycle 2293; #11404/#11166/#11165 still in cosmetic limbo, would be 40 if DM cleaned up)
+## Session ship tally: 37
 
-## Bundle status
+## Cutover-prep activity
 
-CUTOVER-READY (5 chain-shipped + 3 stale-in-progress + 28 pre-bundle = 36 items composing v0.44.0), but operator chose option 1 (fold #11401 fix into bundle before cutover). Cutover gated on #11401 ship.
+Skill picked stale-in-progress #11139 over operator-directed #11401. Both are cutover-blocking — #11139 was on the cutover-workflow checklist (per #11331 c-2166 enumeration: 'skill transitions 3 stale items in-progress→pending-test, QA re-verifies on polish-HEAD'). #11401 is the wake-mode-divergence operator wanted folded into bundle.
 
-## Cutover sequence (recorded on #11331 c-?)
+Reasonable autonomous choice: clear the obvious blocker queue first (skill already had #11139 branch from cycle 1384 route-back, just needed conflict-resolve), then tackle #11401 which needs fresh implementation. Stale items #11227 + #11137 still pending similar cleanup.
 
-1. Skill picks up #11401 next quiet cycle (operator-direction filed at 06:23Z)
-2. QA verifies → DM HOLDs → PM chain-ship auth → bundle counter +1 within window
-3. Bundle returns CUTOVER-READY (3rd and final time)
-4. Operator signals cutover
-5. PM completes #11331 intake → skill creates cutover-PR → QA re-verifies 3 stale items → DM ships → v0.44.0
+## #11401 watch
+
+Filed operator-direction last cycle. Skill hasn't picked it up yet (chose #11139). Will reassess after 1-2 cycles — if skill is working through stale items #11139/#11227/#11137 in sequence, #11401 will come right after. No re-comment needed yet.
 
 ## Context
 
-healthy. Operator handed PM the gating decision and PM filed the routing.
+healthy. Skill autonomously prioritizing cutover-prep work, which is what operator implicitly wants.
