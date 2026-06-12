@@ -1,44 +1,29 @@
 # Working State
 
-- **Task**: cycle 2327 (inline) — #10836 R1 continued; all 4 ERROR + 2 WARNING drift findings resolved
-- **Status**: #10836 in-progress on `squidsquad/task/10836`; only cross-ref pointer drift + DS audit remain
+- **Task**: cycle 2328 (inline) — #10836 R1 COMPLETE + DS-audited (PASS); awaiting operator R1-ship vs R2-continue call
+- **Status**: #10836 in-progress on `squidsquad/task/10836`, all R1 findings resolved + audit-fixed; no PR opened yet
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
-## Cycle work — #10836 R1 (operator-directed pickup)
+## #10836 R1 — DONE (branch squidsquad/task/10836)
 
-- Operator directed: do INSTALLER-ARCH reconciliation on its OWN branch (not main-direct, not the cleanup bundle).
-- Transitioned #10836 approved → in-progress (--role pm, assigned role).
-- Created + pushed branch `squidsquad/task/10836`.
-- **Decision A (E1 phantom clone registry) RESOLVED via code** — no operator input needed:
-  - `boot_remote.py:57`: global `~/.squidsquad/clones/` fallback removed #3100; `.squidsquad/.local-config` is sole registry.
-  - Code nuance: `shared_fs.py init` still creates clones/ + has read/register helpers → dir is **vestigial**, not gone.
-  - INSTALLER-ARCH was wrong doc; HARNESS-ARCH §7.2 right.
-  - Fixed §1.2/§3.1/§3.2/§4.2/§5 + revision log (commit 4882a31b on branch).
-  - Filed #11519 (role:skill, low) — retire unused shared_fs clones helpers (doc+code convergence).
-- Posted R1 scope-lock comment on #10836 with full remaining-findings plan.
+- Commits: 4882a31b (E1) · 138e00ed (E2/E4/E5/W4/W6) · bcd77c9b (E3/W5/L2/L3/L1; W3 accepted) · c3173326 (audit fix FINDING-1).
+- **All 11 audit findings resolved**; W3 accepted-as-is (role/alias spelling, #10358 closes).
+- **Prose-drift audit** (sonnet, internal + cross-pair vs COMPOSE/HARNESS-ARCH/VAULT-ARCH/AGENT-RUNTIME + code): **PASS** on all 11 edits. Only actionable finding (§5 .local-config label) fixed. 2 LOW findings left (acceptable per audit; #10023 attribution verified correct).
+- **DECISION PENDING (operator)**: (a) open PR now → verifier → ship R1 standalone, OR (b) continue to R2 (dep-provisioning, original #10836 scope) on same branch before one combined PR. PM recommends (a) — R1 self-contained + de-risks drift; R2 additive/lower-priority. No PR opened yet pending the call.
 
-## R1 status (on branch squidsquad/task/10836)
+## Other pipeline (healthy, no PM action)
 
-- **DONE (commit 4882a31b)**: E1 clone registry → .local-config canonical.
-- **DONE (commit 138e00ed)**: E4 (L4 append-H3 not new-file), E5 (compose triple+cache in §5/§3.2), E2 (migration-gate prose adaptation), W4 (vault all-R/W), W6 (L4 seed append-H3 grammar). All verified vs canonical source before edit.
-- **REMAINING**: cross-ref/pointer drift — E3 (§10.3→HARNESS §9), W5 (§6→HARNESS §7.2), W3 (§4.9/§6 role/alias), L1 (§2 diagram harness-restart), L2 (§3.2 AGENT-RUNTIME schema ref), L3 (§12 G2 COMPOSE §10.4). Need target-doc section verification.
-- **THEN**: DS internal + cross-pair audit → transition to pending-test.
-- R2 dep-provisioning deferred until R1 lands.
-
-## Branch hygiene
-
-- PM state (working-state/BRIEFING) committed to **main**, NOT the task branch — keeps `squidsquad/task/10836` clean (deliverable only) and avoids the transient-state merge-flap (#11511).
-
-## Other pipeline (unchanged, healthy)
-
-- #11512 (launcher bug) → **pending-ship** (PR #11518, QA PASS, DS clean) → DM. #11394 → pending-ship → DM. #11511 open (merge-flap fix); #10855 pending-test → QA.
-- PM in-progress: #11092, #11053 (§9 awaits operator), #11000 (planning).
+- **pending-ship → DM**: #11512 (PR #11518, launcher bug, QA PASS + DS clean), #11394 (PR #11504). DM alive (loop mode), within ship threshold.
+- **pending-test → QA**: #10855 (PR #10952).
+- **open (skill)**: #11511 (merge-flap fix), #11503 (test-debt), #11505 (capabilities deadwood), #11519 (vestigial shared_fs clones — PM-filed this session).
+- **in-progress (PM)**: #11092, #11053 (§9 awaits operator), #11000 (planning).
 
 ## Operator asks (carried)
 
-1. #11053 §9 — 5 questions or `go with defaults`
-2. #10955 — close as monitor?  3. #10541 — close as out-of-scope?
+1. **#10836** — ship R1 now (PR→verifier) or continue to R2 first? (PM rec: ship R1)
+2. **#11053 §9** — 5 questions or `go with defaults`
+3. **#10955** — close as monitor?  4. **#10541** — close as out-of-scope?
 
 ## Context
 
