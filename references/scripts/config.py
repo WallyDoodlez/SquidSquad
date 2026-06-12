@@ -31,7 +31,6 @@ about agents (e.g. `get interval`) work unchanged against either schema.
 import json
 import re
 import sys
-import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -256,7 +255,11 @@ def _harness_reachable():
     try:
         with urllib.request.urlopen(url, timeout=_WAKE_PROBE_TIMEOUT) as resp:
             return resp.status == 200
-    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+    except Exception:
+        # Any probe failure means "not reachable" → polling. Catch broadly
+        # (not just URLError/OSError) so a malformed response mid-restart
+        # — e.g. http.client.BadStatusLine, which is NOT an OSError — can't
+        # break the never-raises contract this helper owes statusline.
         return False
 
 

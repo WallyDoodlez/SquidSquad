@@ -117,9 +117,21 @@ class TestHarnessReachable:
             assert config._harness_reachable() is True
 
     def test_reachable_false_and_never_raises(self):
-        for exc in (OSError("x"), TimeoutError(), ValueError("x")):
+        import http.client
+        # Includes http.client.HTTPException (BadStatusLine) — NOT an OSError,
+        # realistic mid-restart failure — and AttributeError (atypical resp
+        # object). The contract is "any failure → polling, never raise".
+        exceptions = (
+            OSError("x"),
+            TimeoutError(),
+            ValueError("x"),
+            http.client.BadStatusLine("garbage"),
+            http.client.HTTPException("incomplete read"),
+            AttributeError("no status"),
+        )
+        for exc in exceptions:
             with patch.object(config.urllib.request, "urlopen", side_effect=exc):
-                assert config._harness_reachable() is False
+                assert config._harness_reachable() is False, f"{type(exc).__name__} must degrade to False"
 
     def test_port_from_file(self, tmp_path, monkeypatch):
         pf = tmp_path / ".harness-port"
