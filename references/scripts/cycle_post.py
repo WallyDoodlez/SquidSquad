@@ -86,28 +86,6 @@ def _config_get(field):
         return ""
 
 
-def _get_role_wake_mode(role):
-    """Delegate to canonical config.get_wake_mode (#9745).
-
-    Thin wrapper retained so cycle_post-internal callers don't need
-    import-path churn. See ``config.get_wake_mode`` for the resolution
-    rules — that is the single source of truth referenced by bootstrap.md.
-
-    Note (#11166): the cycle-output validation gate that called this was
-    removed under pull-only (#11092 Decision 4). The wrapper is retained per
-    that task's explicit scope — wake mode is still the boot-bootstrap
-    concept; this wrapper stays available for future cycle_post use.
-    """
-    script_dir_str = str(SCRIPT_DIR)
-    if script_dir_str not in sys.path:
-        sys.path.insert(0, script_dir_str)
-    try:
-        from config import get_wake_mode
-    except Exception:
-        return "polling"
-    return get_wake_mode(role)
-
-
 def _get_working_branch():
     """Get the configured working branch name. Falls back to 'main'."""
     branch = _config_get("working-branch")
