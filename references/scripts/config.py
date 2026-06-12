@@ -31,12 +31,26 @@ about agents (e.g. `get interval`) work unchanged against either schema.
 import json
 import re
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 # Auto-detect repo root (walk up from script location)
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 CONFIG_PATH = REPO_ROOT / ".squidsquad" / "config.md"
+
+# Harness wake-mode probe (#11401). Per AGENT-RUNTIME §2 the wake mechanism
+# is selected solely by the boot-time harness probe — there is no
+# `event-driven:` config field. These mirror the agent boot probe target.
+_HARNESS_PORT_FILE = REPO_ROOT / ".squidsquad" / ".harness-port"
+_DEFAULT_HARNESS_PORT = 7373
+# Tight timeout: the only live caller (statusline `mode` badge) runs under a
+# 1s shell `timeout`, and that budget also has to cover Python startup. Keep
+# the probe well inside it. A healthy local harness answers /status in
+# milliseconds; this bound only delays the "polling" answer when the harness
+# is actually down.
+_WAKE_PROBE_TIMEOUT = 0.5
 
 sys.path.insert(0, str(SCRIPT_DIR))
 from shared_fs import atomic_write_text  # #10007
@@ -219,44 +233,56 @@ _DUAL_AWARE_CONFIG_FIELDS_6274 = {
 }
 
 
-def get_wake_mode(role):
-    """Canonical wake-mode resolution for a role (#9745).
+def _harness_wake_port():
+    """Resolve the harness port from the port file, default 7373.
 
-    Lookup precedence:
-        1. `event-driven-<role>`  (per-role override)
-        2. `event-driven`         (global default)
-        3. fallback to `"polling"`
-
-    Returns the literal string ``"event-driven"`` or ``"polling"`` — never
-    ``None``, never raises. Values normalize: ``yes/true/1/event-driven`` →
-    ``event-driven``; ``no/false/0/polling`` → ``polling``; anything else
-    falls through to the next field, then to the polling default.
-
-    Stderr from missing fields is suppressed (``get_field`` prints
-    ``ERROR: Field 'X' not found`` and ``sys.exit(1)`` — field absence is
-    the *documented* default for both wake-mode fields, so the noise is
-    spurious during normal operation per #8697 R3). All exceptions are
-    caught to keep this safe for use during compose/statusline/cycle-post
-    where a hard exit is unacceptable.
-
-    This is the single source of truth referenced by ``boot-bootstrap.md``
-    Step 1 (prose) and three Python callers (compose, cycle_post,
-    statusline_data). If you need to change the resolution rules, change
-    them here and update bootstrap.md's prose to match.
+    Mirrors the agent boot probe (AGENT-RUNTIME §8.0) and
+    ``statusline_data._harness_port``. Never raises.
     """
-    import contextlib
-    import io
-    for field in (f"event-driven-{role}", "event-driven"):
-        try:
-            with contextlib.redirect_stderr(io.StringIO()):
-                v = (get_field(field) or "").strip().lower()
-        except BaseException:
-            v = ""
-        if v in ("yes", "true", "1", "event-driven"):
-            return "event-driven"
-        if v in ("no", "false", "0", "polling"):
-            return "polling"
-    return "polling"
+    try:
+        return int(_HARNESS_PORT_FILE.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return _DEFAULT_HARNESS_PORT
+
+
+def _harness_reachable():
+    """True iff the harness answers ``GET /status`` with HTTP 200 in time.
+
+    This is the same signal the agent boot uses to select event vs. polling
+    mode. Any failure (missing/unreachable port, timeout, non-200, no curl
+    equivalent) means "not reachable" → polling. Never raises.
+    """
+    url = f"http://127.0.0.1:{_harness_wake_port()}/status"
+    try:
+        with urllib.request.urlopen(url, timeout=_WAKE_PROBE_TIMEOUT) as resp:
+            return resp.status == 200
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+        return False
+
+
+def get_wake_mode(role=None):
+    """Resolve the wake mode by probing the harness (#11401).
+
+    Per AGENT-RUNTIME §2, event mode is the unconditional architecture and
+    the wake mechanism is selected **solely by the boot-time harness
+    probe** — there is no ``event-driven:`` config field, no per-role
+    override, and no operator-flipped flag. This function mirrors that
+    contract for the Python runtime so the scripts never disagree with the
+    agent's actual mode: a reachable harness (``GET /status`` → 200) means
+    event-driven; any failure means polling.
+
+    Before #11401 this read ``event-driven[-<role>]`` from ``config.md``,
+    which could diverge from the agent (e.g. ``event-driven: yes`` in
+    config while the harness was down → agent polled but scripts reported
+    event). The probe removes that divergence at the source.
+
+    ``role`` is accepted for caller-signature compatibility but unused —
+    harness reachability is global, not per-role.
+
+    Returns ``"event-driven"`` or ``"polling"`` — never ``None``, never
+    raises.
+    """
+    return "event-driven" if _harness_reachable() else "polling"
 
 
 def set_field(field, value):

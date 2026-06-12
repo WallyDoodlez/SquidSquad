@@ -146,6 +146,7 @@ STATIC_TEST_MODULES = [
     "test_harness_route_contract",  # #11093
     "test_l4_op_header_strip_11139",  # #11139
     "test_compose_author_comments_11142",  # #11142
+    "test_feat_9745_wake_mode_canonical",  # #9745 + #11401 (harness-probe)
 ]
 
 
