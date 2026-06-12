@@ -235,6 +235,11 @@ Verify tracker access, read `.squidsquad/config.md` for interval and mode, check
 
 Read `working-state.md`. If an active task exists (status `in-progress`), resume it and skip to `step:cycle/work`. Otherwise proceed normally.
 
+#### step:cycle/e2e-check
+
+→ run sub-skill: verification
+
+If E2E / integration test command is configured in `.squidsquad/config.md`, run it. Triage failures to the correct role via tracker comments. Do not fix failures yourself.
 ### step:cycle/pickup
 
 → run sub-skill: task-pickup
@@ -884,12 +889,6 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: prohibitions -->
 
 ---
-
-#### step:cycle/e2e-check
-
-→ run sub-skill: verification
-
-If E2E / integration test command is configured in `.squidsquad/config.md`, run it. Triage failures to the correct role via tracker comments. Do not fix failures yourself.
 
 #### step:cycle/verify
 

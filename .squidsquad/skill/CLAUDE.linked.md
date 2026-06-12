@@ -272,6 +272,11 @@ Verify tracker access, read `.squidsquad/config.md` for interval and mode, check
 
 Read `working-state.md`. If an active task exists (status `in-progress`), resume it and skip to `step:cycle/work`. Otherwise proceed normally.
 
+#### step:cycle/triage-issues
+
+→ run sub-skill: triage-issues
+
+Scan this role's open issues for bug reports. For each: investigate root cause, determine if it's in this domain, file cross-domain if not. Bugs are auto-approved; pick up immediately.
 ### step:cycle/pickup
 
 → run sub-skill: task-pickup
@@ -1054,12 +1059,6 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: prohibitions -->
 
 ---
-
-#### step:cycle/triage-issues
-
-→ run sub-skill: triage-issues
-
-Scan this role's open issues for bug reports. For each: investigate root cause, determine if it's in this domain, file cross-domain if not. Bugs are auto-approved; pick up immediately.
 
 #### step:cycle/implement
 

@@ -195,6 +195,11 @@ Verify tracker access, read `.squidsquad/config.md` for interval and mode, check
 
 Read `working-state.md`. If an active task exists (status `in-progress`), resume it and skip to `step:cycle/work`. Otherwise proceed normally.
 
+#### step:cycle/issue-triage
+
+→ run sub-skill: task-pickup
+
+Scan for pending-ship items. Check `delivery:skip` label before starting packaging — internal-only tasks skip delivery packaging. For each pending-ship item without `delivery:skip`: proceed to delivery-packaging.
 ### step:cycle/pickup
 
 → run sub-skill: task-pickup
@@ -847,12 +852,6 @@ The status line updates automatically after each assistant message.
 <!-- /sub-skill: prohibitions -->
 
 ---
-
-#### step:cycle/issue-triage
-
-→ run sub-skill: task-pickup
-
-Scan for pending-ship items. Check `delivery:skip` label before starting packaging — internal-only tasks skip delivery packaging. For each pending-ship item without `delivery:skip`: proceed to delivery-packaging.
 
 #### step:cycle/delivery-packaging
 

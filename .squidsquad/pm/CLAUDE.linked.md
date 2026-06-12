@@ -262,16 +262,37 @@ Verify tracker access, read `.squidsquad/config.md` for interval and mode, check
 
 Read `working-state.md`. If an active task exists (status `in-progress`), resume it and skip to `step:cycle/work`. Otherwise proceed normally.
 
+#### step:cycle/check-in
+
+→ run sub-skill: checkin
+
+Check in with the human. Read any new messages or issue comments since last cycle. Capture requirements, priority changes, or approvals. Note in Discussion. Do not block the cycle on human response — continue after acknowledging.
 ### step:cycle/pickup
 
 → run sub-skill: task-pickup
 
 Query tracker for approved tasks assigned to this role. Select highest-priority item. Record in `working-state.md`.
 
+#### step:cycle/task-intake
+
+→ run sub-skill: task-intake
+
+Run 5-phase task intake for pending items awaiting PM processing. Research → Discussion → Planning → (human approval gate) → mark Approved. Bug fixes skip to Approved immediately.
+
+#### step:cycle/task-approval
+
+→ run sub-skill: task-approval
+
+For pending-test items: hold verifier accountable. For planning-complete items awaiting human sign-off: surface for approval. Do NOT run test cases directly.
 ### step:cycle/work
 
 Do the unit of work for the current cycle. Content varies by role-class (see L2 additions below).
 
+#### step:cycle/pipeline-sentinel
+
+→ run sub-skill: pipeline-sentinel
+
+Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. Trace root cause. Comment on issues to nudge or route. Never touch branches — only tracker comments and notifications.
 ### step:cycle/checkpoint
 
 → run sub-skill: git-commit
@@ -288,6 +309,17 @@ Clear or update `working-state.md`. Write iteration log entry. Run vault-remembe
 
 If cycle was quiet (no task picked up), run improvement scan per configured policy.
 
+#### step:cycle/health-check
+
+→ run sub-skill: health-check
+
+Check agent health statuses. Boot dead agents via `boot_remote.py` if auto-boot is unavailable. Report stalls.
+
+#### step:cycle/vault-synthesis
+
+→ run sub-skill: vault-synthesis
+
+On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agent patterns from iteration logs into vault posture notes.
 ### step:cycle/exit
 
 → run sub-skill: agent-lifecycle
@@ -942,43 +974,6 @@ The status line updates automatically after each assistant message. No action is
 <!-- /sub-skill: prohibitions -->
 
 ---
-
-#### step:cycle/check-in
-
-→ run sub-skill: checkin
-
-Check in with the human. Read any new messages or issue comments since last cycle. Capture requirements, priority changes, or approvals. Note in Discussion. Do not block the cycle on human response — continue after acknowledging.
-
-#### step:cycle/task-intake
-
-→ run sub-skill: task-intake
-
-Run 5-phase task intake for pending items awaiting PM processing. Research → Discussion → Planning → (human approval gate) → mark Approved. Bug fixes skip to Approved immediately.
-
-#### step:cycle/task-approval
-
-→ run sub-skill: task-approval
-
-For pending-test items: hold verifier accountable. For planning-complete items awaiting human sign-off: surface for approval. Do NOT run test cases directly.
-
-#### step:cycle/pipeline-sentinel
-
-→ run sub-skill: pipeline-sentinel
-
-Scan pipeline state: stalled tasks, PR conflicts, stuck agents, misrouted work. Trace root cause. Comment on issues to nudge or route. Never touch branches — only tracker comments and notifications.
-
-#### step:cycle/health-check
-
-→ run sub-skill: health-check
-
-Check agent health statuses. Boot dead agents via `boot_remote.py` if auto-boot is unavailable. Report stalls.
-
-#### step:cycle/vault-synthesis
-
-→ run sub-skill: vault-synthesis
-
-On quiet cycles (no task picked up), every 5 quiet cycles: synthesize cross-agent patterns from iteration logs into vault posture notes.
-
 
 ## Reactive sub-skills
 
