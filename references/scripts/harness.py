@@ -607,7 +607,13 @@ class HarnessState:
             try:
                 new_observer, new_debouncer = starter()
             except Exception as e:
-                _log(f"L4 file-watcher start failed: {e!r}")
+                # #11403 AC3: surface the remediation in plain text (str, not
+                # repr) and name the operator impact, so a missing `watchdog`
+                # dependency is actionable rather than buried in a traceback
+                # repr. The harness still degrades gracefully (returns
+                # "start-failed"); only L4 auto-recompose is disabled.
+                _log(f"WARNING: L4 file-watcher start failed — PRD-E E3 "
+                     f"auto-recompose on L4 edits is DISABLED this run. {e}")
                 return "start-failed"
             self._l4_observer = new_observer
             self._l4_debouncer = new_debouncer
