@@ -1,46 +1,54 @@
 # Working State
 
-- **Task**: pipeline sentinel + autonomous-pickup precedent confirmation
-- **Status**: ACTIVE — major overnight movement, precedent ack filed
+- **Task**: pipeline sentinel + cutover readiness tracking
+- **Status**: ACTIVE — chain-ship auth filed on #11329, bundle close to cutover-ready again
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
 ## Pipeline
 
-- **SHIPPED** (closed/shipped): #11403 (DM c1972 → main, counter 32→33)
-- pending_ship (PRs merged, DM transition pending): #11404, #11166
-- pending_test (1 actionable): #11329 (PR #11410 → bundle, awaiting QA)
-- pending_test (skip): #10855 blocked:human-action
+- **SHIPPED**: #11403 (cycle 2288)
+- pending_ship (cosmetic stale-label, PRs already merged, DM to transition): #11404, #11166
+- pending-test:
+  - #11329 (PM auth filed this cycle, DM proceeds to ship)
+  - #11165 (NEW, PR #11420 → main, DS NO_FINDINGS, awaiting QA)
+  - #10855 (skip)
 - Open issues: #11394 (low), #11401 (medium, cutover-relevant)
 - pending intake (PM-owned): #11331, #11400, #11412
-- Approved queue: 7
-- Open PRs: 1 (#11410 bundle, MERGEABLE)
+- Approved queue: 6 (was 7; #11165 picked up)
+- Open PRs: 1 (#11420 main, MERGEABLE; #11410 just merged to bundle)
 - Harness: unreachable
 
-## Session ship tally: 36 (was 35; #11403 added)
+## Session ship tally: 36 (cycle 2288); progression
 
-## Autonomous-pickup precedent confirmed (cycle 2288)
+- After DM ships #11329: 37 (counter 32→33 in bundle window)
+- After DM transitions #11404 + #11166: 38
+- After QA verify + DM ship #11165: 39
 
-Skill may autonomously pick up status:open bug-class items during quiet windows when the approved queue is drained or blocked. Constraints filed on #11403 c-?:
-- Only type:issue qualifies (type:task still routes through 5-phase intake)
-- Severity:low/medium fine; severity:high warrants PM check-in (advisory)
-- New-arch readiness gates explicitly inside the lane
-- Incomplete bug research = file clarification request, don't pickup
+## PM action this cycle
 
-Anchored on feedback_auto_approve_bugs + feedback_bugs_need_research + trust-script-output.
+- Tracker comment on #11329: chain-ship auth Path A, qualifying-lane check, cutover-readiness flag
 
-## Bundle status (unchanged composition)
+## Bundle composition (post-#11329)
 
-5 chain-shipped (#11329 pending QA) + 3 stale-in-progress + 28 pre-bundle = 36 items for v0.44.0 once #11329 ships.
+| Category | Count | Items |
+|---|---|---|
+| Chain-shipped to bundle | 5 | #11334, #11382, #11381, #11383, **#11329** |
+| Stale-in-progress on bundle | 3 | #11227, #11139, #11137 |
+| Pre-bundle ships | 28 |  |
+| **Total** | **36** | for v0.44.0 |
 
-#11403 + #11404 + #11166 ship to main independently (NOT in bundle).
+## Cutover gate status
+
+After DM transitions #11329 to shipped: bundle is **CUTOVER-READY again** pending operator signal on #11331. #11165 is a main-side ship, not bundle.
 
 ## Anticipated next cycle(s)
 
-- DM completes status transitions on #11404 + #11166 (counter 33→35)
-- QA verifies #11329 on polish base (or has already started)
-- DM HOLD on #11329 requesting PM chain-ship auth (pattern) → PM auth → bundle counter 32→33
+- DM ships #11329 (Path A) → bundle counter 32→33 → CUTOVER-READY confirmed
+- DM transitions #11404 + #11166 (cosmetic) → counter 33→35 on main
+- QA verifies #11165 → DM ships → counter 35→36 on main
+- #11401 (medium open, cutover-relevant) — skill hasn't picked up; PM may need to remind once main-side queue drains
 
 ## Context
 
-healthy. New-arch Gate 3 closed (#11403 in main). Skill autonomous cadence confirmed as ongoing pattern with constraints.
+healthy. Pipeline is flowing fast — skill autonomous cadence sustained, QA caught up overnight, DM following per-item discipline.
