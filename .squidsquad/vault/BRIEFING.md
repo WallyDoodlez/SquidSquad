@@ -4,26 +4,24 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Active Priorities
 
-- **Polish-session bundle CUTOVER-READY** (top priority, 2026-06-09): `squidsquad/skill/compose-polish-session` carries 35 items into v0.44.0 — 4 chain-shipped to bundle (#11334 / #11382 / #11381 / #11383) + 3 stale-in-progress with work-on-bundle (#11227 / #11139 / #11137 — folded via DM c1384 route-back, never re-transitioned) + 28 pre-bundle ships. No remaining known blockers on bundle branch. **Awaiting operator signal on #11331** to unblock the cutover-PR (bundle → main) carrying v0.44.0 release semantics (CHANGELOG + version-bump).
-- **#11331 wrap+ship coordination** (status:pending) — PM intake held until operator cutover signal. Scope fully enumerated in c-2166 comment; RESEARCH+CONTEXT not needed; on signal intake completes → approved → skill creates cutover-PR.
-- **4 umbrella PRDs from DS TRD audits** (approved, all UNBLOCKED post-E6 ship 2026-06-04, operator-paced):
-  - #10836 INSTALLER-ARCH alignment (HIGH: migration walk, VERSION file, squidsquad_version field) — Finding 26 pre-locked Direction A 2026-06-03; ready for PM pickup post-cutover
+- **v0.44.0 SHIPPED 2026-06-12** (cutover complete): PR #11402 merged `compose-polish-session` → `main` at commit `f8d867a9d`; tag `v0.44.0` created; #11331 closed; bundle composition = 5 chain-shipped (#11334 / #11382 / #11381 / #11383 / #11329) + 8 main-side this-session (#11403 / #11404 / #11165 / #11166 / #11139 / #11137 / #11227 / #11401) + 28 pre-bundle = 36 items.
+- **#11394 in-progress** (severity:high, role:skill — bumped medium→high cycle 2319) — `run_tests.py` STATIC_TEST_MODULES gap; skill investigation surfaced worse-than-filed regression: static gate currently running ZERO tests (stale `test_l2_l3_op_anchoring_11227` entry post-cutover delete → pytest collection error → `collected 0 items` since v0.44.0 cutover). Plan: AC1 auto-discover refactor, AC2 explicit EXCLUSION set with issue refs, AC3 regression test for gating invariants, AC4 DS audit. Mid-investigation; awaiting full failing-set inventory + final exclusion design.
+- **4 umbrella PRDs from DS TRD audits** (approved, operator-paced post-cutover):
+  - #10836 INSTALLER-ARCH alignment (HIGH: migration walk, VERSION file, squidsquad_version field) — Finding 26 pre-locked Direction A 2026-06-03; ready for PM pickup
   - #10837 HARNESS-ARCH alignment (HIGH: POST /events/{id}/complete contradiction, POST /work/assign missing) — DS re-audit needed before pickup
   - #10838 VAULT-ARCH alignment (4 GAP + 6 DRIFT)
   - #10839 Cross-TRD role → alias rename — DS re-audit needed before pickup
 - **E7 #10686** (approved, role:skill) — V2 migration smoke; operator-manual, unblocked post-E6
-- **#11053 agent-spawn substrate for v2 §4.6 assemble** (in-progress, role:pm) — Phase 1 v1 deliverable committed at `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md` (cycle 2143 ext); 5 operator-review questions in §9 outstanding.
 - **#10690 wiki-link rework** (approved, gated on E7)
-- **Bump-gate** (DM): counter 32/10 within bundle window, **HELD per operator standing direction (c1383)** awaiting #11331 cutover signal. Release path: operator signals cutover → bundle PR merges to main → DM bumps to v0.44.0 with full 35-item CHANGELOG. The #10955/#10541 close-decisions are no longer the binding constraint (superseded by polish-bundle workflow).
-- **Open follow-ups** (not bundle-blocking, post-cutover queue):
-  - **#11400** (status:pending, role:pm, priority:medium) — Retire `docs/sub-skill-guide.md` + back-reference sweep + migrate maintainer-load-bearing content (per operator decision via #11144 polish session: sub-skill authoring is internal-maintainer only under new arch). **Gated on cutover.** Intake on operator signal.
-  - **#11329** (approved, role:skill) — Runtime per-event ack-cursor + working-state.md cursor cleanup; multi-cycle architectural work, skill correctly deferred mid-/loop pickup, will activate post-cutover fresh-session.
-  - #11394 (severity:medium, role:skill) — 37 test_*.py files in tests/ not gated by run_tests.py STATIC_TEST_MODULES; skill self-handles
-  - G11 (#11144 standing list) — common/boot-bootstrap.md source divergent from L1 inlining (composed dedups correctly); skill recommends delete-source as deferred structural cleanup
-  - G3 + G5-G10 (#11144 standing list) — G3 closed Iter 29 (FIRST instruction = execution order clarification); G4 closed Iters 30-31 ([ROLE] vs <role> convention, re-homed to COMPOSE-ARCHITECTURE.md §3 via c80414bf2); remaining G-gaps awaiting operator decision
+- **Open PM-owned post-cutover queue**:
+  - **#11400** (status:pending, role:pm, priority:medium) — Retire `docs/sub-skill-guide.md` + back-reference sweep + migrate maintainer-load-bearing content. Unblocked post-cutover; intake on operator signal.
+  - **#11412** (status:open, role:pm, low-priority) — INSTALLER-ARCH.md TRD dep-provisioning section.
+- **#11053 agent-spawn substrate for v2 §4.6 assemble** (in-progress, role:pm) — Phase 1 v1 deliverable committed at `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md` (cycle 2143 ext); 5 operator-review questions in §9 outstanding.
+- **Event-mode validation** (post-cutover focus 2026-06-12) — operator restarted harness, agents respawned via #9725 spawn prompt path. Skill bootup_complete false at last check (just respawned). Operator wants to "let them all rest at idle cycle first" before exercising event-mode end-to-end. PM keeps noise low during observation window.
 
 ## Recently Shipped
 
+- **v0.44.0 CUTOVER 2026-06-12** — PR #11402 merged commit `f8d867a9d` at 17:31:57Z; tag `v0.44.0` created; CHANGELOG composed; #11331 closed. Session ship tally for this window: 38. Main-side direct ships this session: #11401 (wake-mode alignment via PR #11437), #11420 (#11165 dispatch-delete), #11403/#11404, #11139/#11137/#11227 (route-back stale-in-progress trio).
 - **Polish-session chain-merges 2026-06-08/09** (4 items, all chain-shipped to `compose-polish-session` per PM per-item auth, deferred CHANGELOG to cutover):
   - **#11334** (DM c1872) — Canonicalize forge-usage instructions across sub-skills (tracker.py / git_ops.py / PR merge); 4-phase implementation (AC1 tracker-protocol expansion, AC3+AC4 new pr-protocol.md, AC2 mechanical consolidation, AC5 DS audit pass); +220/-138 LOC across 17+1+1 files.
   - **#11382** (DM c1876) — improvement-scan: `--role pm` → `--role pm-lead` deviation at pm/github-issues.md:27; 1-line fix.
@@ -76,11 +74,12 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 
 ## Constraints & Blockers
 
-- Auto-versioning: Shipped Since Last Bump = 32 (threshold 10) — bump held by operator (c1383); release path is cutover-prompted, not threshold-driven.
-- DS re-audit needed on #10837 + #10839 before PM picks them up (E6 has shipped — re-audit is the current bottleneck; deferred until post-cutover queue resumes).
-- Verifier (`role:qa`) intermittently slow to pick up post-reboot — observed lag this session (cycle 1619 skill ship at 08:34Z → QA pickup ~16h later through harness reboot at 04:57:43Z UTC). Not currently a blocker but worth watching.
+- Auto-versioning: Shipped Since Last Bump = 0 post-v0.44.0 (DM reset post-cutover); next bump threshold-driven at 10.
+- DS re-audit needed on #10837 + #10839 before PM picks them up; bottleneck deferred until post-cutover queue resumes operator pacing.
+- Event-mode end-to-end NOT yet smoke-validated this session — harness/agents respawned post-cutover but operator wants idle-cycle rest first before exercising NUDGE → forge-read → ack-cursor full path. Manual-spawn vs harness-spawn distinction matters: only harness-spawned agents pick up #9725 spawn prompt + boot-bootstrap.
+- DM cycle 1997 last_cycle_end 12:03:02 — may need attention if it doesn't tick over next idle window.
 
 ## Team State
 
-- Active agents: pm (SquidSquad), skill (SquidSquad-2), verifier (SquidSquad-qa), dm (SquidSquad-3)
-- Current version: 0.43.0
+- Active agents: pm (SquidSquad cycle 2322), skill (SquidSquad-2 just respawned, bootup_complete=false), qa (SquidSquad cycle 772), dm (SquidSquad-3 cycle 1997)
+- Current version: 0.44.0
