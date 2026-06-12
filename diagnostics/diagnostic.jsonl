@@ -3356,3 +3356,6 @@
 {"timestamp": "2026-06-12T00:12:10.922050", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-06-12T00:12:10.980277", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-06-12T00:12:11.048118", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
+{"timestamp": "2026-06-12T00:15:00.494904", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-06-12T00:15:00.555597", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
+{"timestamp": "2026-06-12T00:15:00.623881", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
