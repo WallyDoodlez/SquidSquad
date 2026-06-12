@@ -1,25 +1,28 @@
 # Working State
 
-- **Task**: none active — on main (#11512 handed to QA / pending-test)
+- **Task**: none active — on main (#11519 + #11512 both pending-test / in QA+DM hands)
 - **Status**: none (idle)
-- **Updated**: 2026-06-12 18:08
+- **Updated**: 2026-06-12 19:39
 - **Last Processed Event ID**: 9d7c2489
 - **Quiet Cycle Counter**: 0
 
 ## ⚠️ Session note
-Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). Harness UP (port 7373) but operator drives via /loop — staying loop-mode this session. (Aside: #11512, just shipped, is the root cause of why I'm in loop mode — fix takes effect on next respawn, not this session.)
+Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). Harness UP (port 7373) but operator drives via /loop — staying loop-mode this session.
 
-## Last cycle (1637-1638, iter-447): #11512 SHIPPED to pending-test (PR #11518)
-thin_launcher forced loop mode by injecting /loop as the spawn prompt, preempting boot Step 1's mode probe → event mode dead-on-arrival. Fix (option 1): _SPAWN_PROMPT mode-neutral boot trigger; boot Step 1 owns mode selection; removed dead _get_interval. Rewrote #9725 unit (31) + live (3) tests to #11512 contract. run_tests.py 54 OK. DS review NO_FINDINGS (5/5 invariants). PR #11518, no review:human-required → QA auto-merge path. Transitioned pending-test.
+## Last cycle (1639, iter-448): #11519 SHIPPED to pending-test (PR #11530)
+Retired vestigial ~/.squidsquad/clones/ deadwood from shared_fs.py (read_clones/write_clone + read-clones/write-clone subcommands + init's clones/ creation + unused json import). Verified NO production consumer (only self + test_shared_fs.py). Tests: TestClones→TestClonesHelpersRetired; TestInit asserts clones/ not created; #3100 regression tests stay green; 137 pass. run_tests.py OK. WIZARD.md init desc updated. Low blast radius → no DS review. PR #11530, no review:human-required → QA auto-merge.
+
+## Recently shipped (this session)
+- **#11512 / PR #11518**: pending-SHIP (QA verified + ran the CQ I mis-scoped: 5/5 pass, spec tests/comprehension/11512_spec.json). DM to ship. [Feedback saved: CQ = LLM-consumed incl launcher constants, see memory feedback_cq_applies_to_llm_consumed_not_composed_files + vault learning-cq-applies-to-launcher-injected-prompts.]
+- **#11519 / PR #11530**: pending-test, QA verifies + merges.
+- **#11511 (filed cycle 1636)**: durable transient-state merge-flap fix — awaiting PM triage.
 
 ## Watch
-- **#11512 / PR #11518**: pending-test, QA verifies + merges. CQ assessed N/A (launcher constant, not composed instructions) — verifier confirms.
-- **PR #11504 / #11394**: SUBSTANTIVELY mergeable (merge-tree clean both dirs); GitHub flag flaps as base advances. STOPPED hand-nudging. QA to merge on content. On merge → resume #11503 fixes + #11505.
-- **#11511 (medium)**: durable fix for transient-state merge flap — awaiting PM triage. Real fix for the recurring #11504 flap.
-- #11503 (high): test-debt umbrella (incl. 18 test_feat_9588 reds = moved boot-bootstrap.md), post-#11504.
-- #11505 (low): capabilities deadwood; gated on #11504.
+- **PR #11504 / #11394**: substantively mergeable (merge-tree clean); GitHub flag flaps CONFLICTING as base advances. NOT hand-nudging (whack-a-mole; #11511 is real fix). QA to merge on content. On merge → resume #11503 fixes + #11505.
+- #11503 (high): test-debt umbrella (incl 18 test_feat_9588 reds), gated on #11504.
+- #11505 (low): capabilities deadwood; gated on #11504. Sibling to shipped #11519.
 - #10690 / #10686 (E7): operator-gated.
 - #11329 (approved): runtime per-event ack-cursor.
 
 ## ⚠️ Recurring conflict note
-Two #11504 failure modes: real conflict (merge-tree non-zero → .gitattributes union) vs stale GitHub mergeability (merge-tree zero → force recompute = whack-a-mole; root cause = transient state committed to main; tracked #11511). See [[learning-pr-conflicting-flag-can-be-cosmetic]].
+Two #11504 modes: real conflict (merge-tree non-zero → .gitattributes union) vs stale GitHub mergeability (merge-tree zero → whack-a-mole; root cause = transient state to main; tracked #11511). See [[learning-pr-conflicting-flag-can-be-cosmetic]].
