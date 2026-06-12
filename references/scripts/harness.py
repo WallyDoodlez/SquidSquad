@@ -607,7 +607,13 @@ class HarnessState:
             try:
                 new_observer, new_debouncer = starter()
             except Exception as e:
-                _log(f"L4 file-watcher start failed: {e!r}")
+                # #11403 AC3: surface the remediation in plain text (str, not
+                # repr) and name the operator impact, so a missing `watchdog`
+                # dependency is actionable rather than buried in a traceback
+                # repr. The harness still degrades gracefully (returns
+                # "start-failed"); only L4 auto-recompose is disabled.
+                _log(f"WARNING: L4 file-watcher start failed — PRD-E E3 "
+                     f"auto-recompose on L4 edits is DISABLED this run. {e}")
                 return "start-failed"
             self._l4_observer = new_observer
             self._l4_debouncer = new_debouncer
@@ -885,77 +891,29 @@ EVENT_STATE_FILE = SQUIDSQUAD_DIR / ".event-state.json"
 
 
 class EventLifecycleManager:
-    """Manages event dispatch, per-role queues, and disk persistence (#7630 P-1/P-3).
+    """Manages the event stream's disk persistence and per-role cursors.
 
     Wraps EventStream with:
-    - Disk persistence: events survive harness restarts
-    - Per-role in-flight tracking: one event at a time per role
-    - Dispatch/ack lifecycle for future event-driven mode
+    - Disk persistence: events survive harness restarts (.event-state.json)
+    - Per-role consumer cursors (#9873-A), advanced via ``ack-cursor``.
+
+    #11165 (#11092 Decision 2): the dispatch / ack / in-flight tracking
+    machinery was removed under pull-only — the harness only nudges and
+    agents poll the forge + advance the cursor themselves.
     """
 
-    DEFAULT_TIMEOUT_MINUTES = 10
-    DEFAULT_MAX_RETRIES = 3
-    SCAN_INTERVAL = 30  # seconds between timeout scans
-
-    def __init__(self, stream: EventStream, max_in_flight: int = 50,
-                 timeout_minutes: int = 10, max_retries: int = 3):
+    def __init__(self, stream: EventStream):
         self._stream = stream
         self._lock = threading.Lock()
-        self._in_flight: dict[str, list[str]] = {}  # role → [event_ids]
-        self._max_in_flight = max_in_flight
-        self._dispatched: dict[str, dict] = {}  # event_id → event dict
-        self._dispatch_times: dict[str, float] = {}  # event_id → dispatch timestamp
-        self._retry_counts: dict[str, int] = {}  # event_id → retry count
         # #9873-A: per-role consumer cursor. Populated by ack-cursor handler.
         # Persisted under "cursors" key in .event-state.json.
         self._cursors: dict[str, str] = {}
-        self._timeout_minutes = timeout_minutes
-        self._max_retries = max_retries
         self._loaded = False
-        self._scanner_running = False
-        self._scanner_thread = None
 
     def append(self, event: dict):
         """Store event in stream and persist to disk."""
         self._stream.append(event)
         self._persist()
-
-    def dispatch(self, event_id: str, role: str, event: dict):
-        """Mark an event as dispatched to a role (in-flight tracking).
-
-        NOTE: Not yet wired into POST /events — Phase 4 plumbing. Currently
-        dormant; will be activated when event-driven mode replaces the loop.
-        """
-        with self._lock:
-            if role not in self._in_flight:
-                self._in_flight[role] = []
-            # Skip if already dispatched (prevents re-dispatch on cursor loss)
-            if event_id in self._dispatched:
-                return
-            if len(self._in_flight[role]) < self._max_in_flight:
-                self._in_flight[role].append(event_id)
-                self._dispatched[event_id] = event
-                self._dispatch_times[event_id] = time.time()
-        self._persist()
-
-    def ack(self, event_id: str, role: str) -> bool:
-        """Acknowledge event completion. Returns True if event was in-flight."""
-        found = False
-        with self._lock:
-            if role in self._in_flight and event_id in self._in_flight[role]:
-                self._in_flight[role].remove(event_id)
-                self._dispatched.pop(event_id, None)
-                self._dispatch_times.pop(event_id, None)
-                self._retry_counts.pop(event_id, None)
-                found = True
-        if found:
-            self._persist()
-        return found
-
-    def get_in_flight(self, role: str) -> list[str]:
-        """Get list of in-flight event IDs for a role."""
-        with self._lock:
-            return list(self._in_flight.get(role, []))
 
     def get_cursor(self, role: str):
         """Return the current cursor event_id for ``role``, or ``None`` if no
@@ -1042,10 +1000,6 @@ class EventLifecycleManager:
             recent_events = list(self._stream.get_recent(200))
             data = {
                 "events": recent_events,
-                "in_flight": {r: list(ids) for r, ids in self._in_flight.items()},
-                "dispatched": {eid: ev for eid, ev in self._dispatched.items()},
-                "dispatch_times": dict(self._dispatch_times),
-                "retry_counts": dict(self._retry_counts),
                 # #9873-A: per-role consumer cursors. Pre-migration state
                 # files lack this key — load() uses .get("cursors", {}).
                 "cursors": dict(self._cursors),
@@ -1093,20 +1047,12 @@ class EventLifecycleManager:
         except (json.JSONDecodeError, OSError):
             return
 
-        # Restore in-flight/dispatch state under lock, then load events outside
-        # to maintain consistent lock ordering: self._lock → EventStream._lock
+        # Restore cursors under lock, then load events outside to maintain
+        # consistent lock ordering: self._lock → EventStream._lock.
+        # #11165: the in-flight/dispatch state was deleted under pull-only;
+        # old state files that still carry those keys are silently ignored.
         events_to_load = data.get("events", [])
         with self._lock:
-            self._in_flight = {
-                r: list(ids) for r, ids in data.get("in_flight", {}).items()
-            }
-            self._dispatched = data.get("dispatched", {})
-            self._dispatch_times = {
-                k: float(v) for k, v in data.get("dispatch_times", {}).items()
-            }
-            self._retry_counts = {
-                k: int(v) for k, v in data.get("retry_counts", {}).items()
-            }
             # #9873-A AC-1 / R2 F5: backward-compat — pre-migration state
             # files have no "cursors" key. data.get(..., {}) prevents a
             # KeyError that would crash harness boot on existing deployments.
@@ -1117,75 +1063,6 @@ class EventLifecycleManager:
         # Append events outside self._lock (acquires EventStream._lock)
         for event in events_to_load:
             self._stream.append(event)
-
-    def timeout_scan(self):
-        """Check for overdue in-flight events and escalate (#7630 2-3).
-
-        For each overdue event:
-        - If retries < max: increment retry count, reset dispatch time
-        - If retries >= max: mark as timed-out, remove from in-flight
-        All logging happens outside the lock to prevent deadlock with print().
-        """
-        now = time.time()
-        timeout_secs = self._timeout_minutes * 60
-        timed_out = []
-        retry_messages = []
-
-        with self._lock:
-            for role, event_ids in list(self._in_flight.items()):
-                to_remove = []
-                for event_id in list(event_ids):
-                    dispatch_time = self._dispatch_times.get(event_id, now)
-                    if now - dispatch_time > timeout_secs:
-                        retries = self._retry_counts.get(event_id, 0)
-                        if retries < self._max_retries:
-                            self._retry_counts[event_id] = retries + 1
-                            self._dispatch_times[event_id] = now
-                            retry_messages.append(
-                                f"Event {event_id} overdue for {role} "
-                                f"(retry {retries + 1}/{self._max_retries})")
-                        else:
-                            timed_out.append((role, event_id))
-                            to_remove.append(event_id)
-                            self._dispatched.pop(event_id, None)
-                            self._dispatch_times.pop(event_id, None)
-                            self._retry_counts.pop(event_id, None)
-                # Remove timed-out events from live list
-                for eid in to_remove:
-                    if eid in event_ids:
-                        event_ids.remove(eid)
-
-        # Log outside lock
-        for msg in retry_messages:
-            _log(msg)
-        for role, event_id in timed_out:
-            _log(f"Event {event_id} TIMED OUT for {role} after {self._max_retries} retries — escalating")
-
-        if timed_out or retry_messages:
-            self._persist()
-
-        return timed_out
-
-    def start_timeout_scanner(self):
-        """Start background thread that scans for overdue events."""
-        if self._scanner_running:
-            return
-        self._scanner_running = True
-        self._scanner_thread = threading.Thread(
-            target=self._scan_loop, daemon=True, name="event-timeout-scanner"
-        )
-        self._scanner_thread.start()
-
-    def stop_timeout_scanner(self):
-        self._scanner_running = False
-
-    def _scan_loop(self):
-        while self._scanner_running:
-            try:
-                self.timeout_scan()
-            except Exception:
-                pass  # Don't crash scanner on transient errors
-            time.sleep(self.SCAN_INTERVAL)
 
     @property
     def stream(self) -> EventStream:
@@ -1401,7 +1278,6 @@ async def lifespan(app: FastAPI):
             _log(f"WARNING: Could not distribute port to clones: {e}")
 
         event_lifecycle.load()
-        event_lifecycle.start_timeout_scanner()
         activity_detector.start()
         _log(f"Event state loaded: {len(event_stream)} events in stream")
 
@@ -1952,6 +1828,18 @@ async def receive_event(request: Request):
     """Receive an event from an agent mechanical script.
 
     Stores in bounded stream, updates AgentState, logs to console.
+
+    Response contract (#11404):
+    - Missing ``event_type`` or ``role`` → ``400`` (hard reject).
+    - ``role`` not in the install's registered aliases (+ ``pm``) → ``204 No
+      Content``. This is an INTENTIONAL silent fire-and-forget drop (#9242):
+      the event is NOT stored, yet the caller still sees a 2xx. The internal
+      ``_emit_event`` path bypasses this guard, so production emits are
+      unaffected; a direct HTTP caller with a bad role is dropped on purpose
+      to keep malformed roles out of ``.event-state.json``.
+    - Otherwise stored with ``200``. If the body omits ``id``, one is
+      auto-assigned (#11404 AC1) so the event cannot be silently skipped by
+      id-tracking consumers (``event_poll`` skips id-less events).
     """
     body = await request.json()
 
@@ -1988,6 +1876,14 @@ async def receive_event(request: Request):
     # Stamp received_at for ordering (#5622)
     body["received_at"] = time.time()
 
+    # #11404 AC1: auto-assign an id when the caller omits one. event_poll and
+    # every consumer skip id-less events (the cursor cannot track them), so an
+    # id-less POST would be stored at 200 yet silently never delivered. Match
+    # the 16-hex shape _emit_event uses (#9415 D4) so both append paths produce
+    # the same id width.
+    if not body.get("id"):
+        body["id"] = os.urandom(8).hex()
+
     # Store in stream (with disk persistence via lifecycle manager)
     event_lifecycle.append(body)
 
@@ -2012,9 +1908,10 @@ async def receive_event(request: Request):
 
     # Ack processing (#9873-A): the previous single ``ack`` event type is
     # split into ``ack-cursor`` (advance consumer cursor) and ``ack-stop``
-    # (preserve stop-confirmed branch). D6 locks the split; D9/AC-18 mandate
-    # that ack-cursor MUST NOT call the old ``event_lifecycle.ack()`` — that
-    # in-flight tracker is dead code since #9741 stripped dispatch().
+    # (preserve stop-confirmed branch). D6 locks the split. The old
+    # dispatch-side ``event_lifecycle.ack()`` / in-flight tracker was deleted
+    # outright under pull-only (#11165 / #11092 D2); only cursor advancement
+    # remains.
     if event_type == "ack-cursor":
         # #9902 F4: guard against payload being present-but-not-dict (e.g.
         # a string from a malformed POST). The default `{}` only triggers
@@ -2237,67 +2134,27 @@ async def get_events_cursor(role: str):
 
 @app.post("/events/{event_id}/complete")
 async def complete_event(event_id: str, request: Request):
-    """Mark an event as completed by the processing agent (#7630 Phase 4).
+    """REMOVED (#11165 / #11092 Decision 2 — pull-only).
 
-    Called by agents after they finish processing an event. The harness:
-    1. Marks the event as acked in EventLifecycleManager
-    2. Executes any mechanical side effects (status transitions, commits)
-    3. Returns success/failure
-
-    Request body:
-        role: str — the agent role completing the event
-        status: str — "success" or "failure"
-        summary: str — brief description of what was done
-        transitions: list — optional status transitions to execute
-        comments: list — optional tracker comments to post
-        commit_message: str — optional commit message for git commit
+    The dispatch/ack lifecycle this endpoint drove was deleted: under
+    pull-only the harness only nudges, and agents poll the forge + advance
+    the cursor via ``ack-cursor`` (AGENT-RUNTIME §2/§7). Retained as a
+    410 Gone shell so any stale caller fails loudly rather than silently.
     """
-    body = await request.json()
-    role = body.get("role")
-    if not role:
-        raise HTTPException(status_code=400, detail="role is required")
-
-    # Ack the event in lifecycle manager
-    acked = event_lifecycle.ack(event_id, role)
-    if not acked:
-        # Event not in-flight — may have timed out or already been acked
-        from starlette.responses import JSONResponse
-        return JSONResponse(
-            status_code=410,
-            content={"status": "gone", "detail": f"Event {event_id} not in-flight for {role}"},
-        )
-
-    _log(f"Event {event_id} completed by {role}: {body.get('summary', 'no summary')}")
-
-    # Execute mechanical side effects
-    errors = []
-
-    # Status transitions
-    for transition in body.get("transitions", []):
-        try:
-            _execute_transition(transition)
-        except Exception as ex:
-            errors.append(f"transition error: {ex}")
-
-    # Tracker comments
-    for comment in body.get("comments", []):
-        try:
-            _execute_comment(comment)
-        except Exception as ex:
-            errors.append(f"comment error: {ex}")
-
-    return {
-        "status": "ok" if not errors else "partial",
-        "event_id": event_id,
-        "errors": errors,
-    }
+    from starlette.responses import JSONResponse
+    return JSONResponse(
+        status_code=410,
+        content={
+            "status": "gone",
+            "detail": "POST /events/{id}/complete removed under pull-only "
+                      "(#11165) — agents advance the cursor via ack-cursor.",
+        },
+    )
 
 
-@app.get("/events/in-flight/{role}")
-async def get_in_flight_events(role: str):
-    """Get in-flight event IDs for a role (#7630 P-3)."""
-    _validate_role(role)
-    return {"role": role, "in_flight": event_lifecycle.get_in_flight(role)}
+# GET /events/in-flight/{role} removed (#11165 / #11092 Decision 2): in-flight
+# dispatch tracking no longer exists under pull-only, and no caller invoked
+# the route (caller survey 2026-06-11).
 
 
 # Status priority/severity rank for /human/queue ordering (high → low).
@@ -2434,19 +2291,13 @@ async def get_human_queue():
 
 @app.get("/events/lifecycle")
 async def get_event_lifecycle():
-    """Event lifecycle overview — stream size, in-flight per role, persistence state (#7630 2-7)."""
-    in_flight = {}
-    try:
-        roles = boot_remote._get_all_roles()
-        for role in roles:
-            ids = event_lifecycle.get_in_flight(role)
-            if ids:
-                in_flight[role] = ids
-    except (SystemExit, Exception):
-        pass
+    """Event lifecycle overview — stream size + persistence state (#7630 2-7).
+
+    The ``in_flight`` field was dropped (#11165 / #11092 Decision 2): under
+    pull-only there is no dispatch in-flight tracking.
+    """
     return {
         "stream_size": len(event_stream),
-        "in_flight": in_flight,
         "persisted": EVENT_STATE_FILE.exists(),
     }
 

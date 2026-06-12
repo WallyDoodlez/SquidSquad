@@ -67,6 +67,8 @@ The cycle wrapper (pre → creative → post) is the same regardless. Only *what
 
 **Bus-fallback granularity at runtime.** Even within a successful event-mode session, an individual `GET /events/for/<alias>` that fails (transient harness blip) silently degrades that cycle's reactions to tracker reads. The cursor is not advanced past a failed read; the next successful poll resumes from the unchanged cursor. The harness staying unreachable past one cycle is not a mode flip — the agent stays event-mode and keeps probing.
 
+**Python-runtime alignment (#11401).** The boot probe is also the source of truth for any Python script that needs to know the wake mode (e.g. the statusline mode badge via `statusline_data.py mode`). `config.get_wake_mode()` probes `GET /status` rather than reading a config field, so the scripts never disagree with the agent's actual mode. Before #11401 they read an `event-driven:` field from `config.md`, which could diverge from harness reachability (config said event, harness down → agent polled but scripts reported event). The field is no longer consulted by the runtime.
+
 ### 2.1 Why both exist
 
 Loop mode has three persistent problems v2's event-driven mode fixes:

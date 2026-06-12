@@ -87,14 +87,15 @@ def test_no_op_type_headers_in_linked_intermediate(_deploy_all, role):
 
 def test_l4_append_op_body_still_flows_into_composite():
     """Smoke check: the L4 file `.squidsquad/project/pm.md` has an
-    `### append` op under `## Identity` whose body is the recognizable
-    'You are PM on SquidSquad — the framework that builds itself.'
+    `### append` op under `## Identity` whose body opens with the
+    recognizable 'SquidSquad is the framework that builds itself.'
     sentence. After the strip fix, that BODY must still appear in the
     composed pm CLAUDE.md — only the op-type header gets removed,
-    not the content the op applied."""
+    not the content the op applied. (Sentinel reconciled at the v0.44.0
+    cutover to match the current L4 Identity-append wording.)"""
     path = REPO_ROOT / ".squidsquad" / "pm" / "CLAUDE.md"
     text = path.read_text(encoding="utf-8")
-    sentinel = "You are PM on SquidSquad"
+    sentinel = "SquidSquad is the framework that builds itself"
     assert sentinel in text, (
         f"L4 append op body missing from {path}; the strip fix may "
         f"have removed too much. Expected sentinel: {sentinel!r}."

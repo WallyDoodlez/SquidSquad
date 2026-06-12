@@ -1,18 +1,27 @@
-"""Tests for the canonical config.get_wake_mode helper (#9745).
+"""Tests for config.get_wake_mode — harness-probe contract (#9745, #11401).
 
-Before #9745 wake-mode resolution was duplicated across compose.py,
-cycle_post.py, and statusline_data.py with subtly different stderr-handling.
-#9745 consolidates the logic into config.get_wake_mode and reduces the
-duplicates to thin delegating wrappers. These tests cover:
+#9745 consolidated wake-mode resolution into config.get_wake_mode. #11401
+changed *how* it resolves: per AGENT-RUNTIME §2 the wake mechanism is
+selected solely by the boot-time harness probe (GET /status → 200 =
+event-driven; any failure = polling). There is no `event-driven:` config
+field anymore, so the Python runtime probes the harness instead of reading
+config.md — removing the divergence where config said one thing and the
+agent (driven by harness reachability) did another.
 
-- The canonical helper's resolution rules + stderr suppression.
-- Each of the 3 wrapper sites delegates to the canonical helper.
-- The bootstrap.md prose still describes the same precedence.
+These tests cover the resolution table from #11401:
+
+| harness reachable | result        |
+|-------------------|---------------|
+| yes (200)         | event-driven  |
+| no (refused/timeout/non-200/no port) | polling |
+
+…and the two divergence cases that motivated the fix: config.md content is
+now irrelevant — a down harness yields polling even if config said
+`event-driven: yes`, and an up harness yields event-driven even if config
+never set the field.
 """
 
-import io
 import sys
-from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -24,132 +33,130 @@ sys.path.insert(0, str(SCRIPTS))
 import config
 
 
+def _mock_resp(status=200):
+    """A urlopen context-manager mock returning a response with ``status``."""
+    resp = MagicMock()
+    resp.status = status
+    cm = MagicMock()
+    cm.__enter__.return_value = resp
+    cm.__exit__.return_value = False
+    return cm
+
+
 # ---------------------------------------------------------------------------
-# Canonical helper
+# Probe-based resolution
 # ---------------------------------------------------------------------------
 
 class TestGetWakeMode:
-    """config.get_wake_mode is the single source of truth."""
+    def test_event_driven_when_harness_returns_200(self):
+        with patch.object(config.urllib.request, "urlopen", return_value=_mock_resp(200)):
+            assert config.get_wake_mode("skill") == "event-driven"
 
-    def test_returns_event_driven_when_per_role_yes(self, monkeypatch):
-        monkeypatch.setattr(config, "get_field", lambda f: "yes" if f == "event-driven-skill" else None)
-        assert config.get_wake_mode("skill") == "event-driven"
+    def test_polling_when_connection_refused(self):
+        import urllib.error
+        with patch.object(config.urllib.request, "urlopen",
+                          side_effect=urllib.error.URLError("refused")):
+            assert config.get_wake_mode("skill") == "polling"
 
-    def test_returns_event_driven_when_global_yes(self, monkeypatch):
-        monkeypatch.setattr(config, "get_field", lambda f: "yes" if f == "event-driven" else "")
-        assert config.get_wake_mode("skill") == "event-driven"
+    def test_polling_on_timeout(self):
+        with patch.object(config.urllib.request, "urlopen", side_effect=TimeoutError()):
+            assert config.get_wake_mode("skill") == "polling"
 
-    def test_per_role_overrides_global(self, monkeypatch):
-        """Per-role value beats global."""
-        def gf(f):
-            return {"event-driven-skill": "no", "event-driven": "yes"}.get(f, "")
-        monkeypatch.setattr(config, "get_field", gf)
-        assert config.get_wake_mode("skill") == "polling"
+    def test_polling_on_non_200(self):
+        with patch.object(config.urllib.request, "urlopen", return_value=_mock_resp(503)):
+            assert config.get_wake_mode("skill") == "polling"
 
-    def test_per_role_true_variants(self, monkeypatch):
-        for val in ("yes", "true", "1", "event-driven", "YES", "True", "EVENT-DRIVEN"):
-            monkeypatch.setattr(config, "get_field", lambda f, v=val: v if f == "event-driven-pm" else "")
-            assert config.get_wake_mode("pm") == "event-driven", f"value {val!r} should resolve to event-driven"
+    def test_polling_on_oserror(self):
+        with patch.object(config.urllib.request, "urlopen", side_effect=OSError("socket")):
+            assert config.get_wake_mode("skill") == "polling"
 
-    def test_per_role_polling_variants(self, monkeypatch):
-        for val in ("no", "false", "0", "polling", "POLLING"):
-            monkeypatch.setattr(config, "get_field", lambda f, v=val: v if f == "event-driven-pm" else "")
-            assert config.get_wake_mode("pm") == "polling", f"value {val!r} should resolve to polling"
+    def test_role_arg_is_ignored(self):
+        """Reachability is global, not per-role: same result for any role,
+        and role is optional."""
+        with patch.object(config.urllib.request, "urlopen", return_value=_mock_resp(200)):
+            assert config.get_wake_mode("pm") == "event-driven"
+            assert config.get_wake_mode("dm") == "event-driven"
+            assert config.get_wake_mode() == "event-driven"
 
-    def test_defaults_to_polling_when_both_fields_missing(self, monkeypatch):
-        """get_field raises SystemExit on missing field; helper catches and falls back."""
-        def gf(f):
-            print(f"ERROR: Field '{f}' not found in config.md", file=sys.stderr)
-            raise SystemExit(1)
-        monkeypatch.setattr(config, "get_field", gf)
-        assert config.get_wake_mode("skill") == "polling"
-
-    def test_stderr_suppressed_on_missing_fields(self, monkeypatch, capsys):
-        """#8697 R3 regression: spurious ERROR output during normal probing is suppressed."""
-        def gf(f):
-            print(f"ERROR: Field '{f}' not found in config.md", file=sys.stderr)
-            raise SystemExit(1)
-        monkeypatch.setattr(config, "get_field", gf)
-        config.get_wake_mode("skill")
-        # Caller-observable stderr must be clean.
-        assert capsys.readouterr().err == ""
-
-    def test_tolerates_oserror_from_config_read(self, monkeypatch):
-        """A TOCTOU race on config.md must not crash callers."""
-        def gf(f):
-            raise OSError("config.md vanished mid-read")
-        monkeypatch.setattr(config, "get_field", gf)
-        assert config.get_wake_mode("skill") == "polling"
-
-    def test_unrecognized_value_falls_through_to_global(self, monkeypatch):
-        """Per-role with garbage value falls through to global."""
-        def gf(f):
-            return {"event-driven-skill": "maybe", "event-driven": "yes"}.get(f, "")
-        monkeypatch.setattr(config, "get_field", gf)
-        assert config.get_wake_mode("skill") == "event-driven"
-
-    def test_unrecognized_global_falls_through_to_polling(self, monkeypatch):
-        def gf(f):
-            return "garbage"
-        monkeypatch.setattr(config, "get_field", gf)
-        assert config.get_wake_mode("skill") == "polling"
+    def test_returns_literal_strings_only(self):
+        with patch.object(config.urllib.request, "urlopen", return_value=_mock_resp(200)):
+            assert config.get_wake_mode("skill") in ("event-driven", "polling")
 
 
 # ---------------------------------------------------------------------------
-# Delegation: 3 wrappers must call config.get_wake_mode
+# Divergence cases from #11401 — config.md is now irrelevant
 # ---------------------------------------------------------------------------
 
-class TestWrappersDelegate:
-    """compose / cycle_post / statusline_data delegate to config.get_wake_mode."""
+class TestConfigIsIgnored:
+    def test_down_harness_polls_even_if_config_says_event(self, monkeypatch):
+        """The original bug: config `event-driven: yes` while harness down
+        made scripts report event while the agent polled. Now: polling."""
+        monkeypatch.setattr(config, "get_field", lambda f: "yes")
+        import urllib.error
+        with patch.object(config.urllib.request, "urlopen",
+                          side_effect=urllib.error.URLError("down")):
+            assert config.get_wake_mode("skill") == "polling"
 
-    def _import_module(self, name):
-        # Fresh import — these modules sit next to config.py on sys.path
-        sys.modules.pop(name, None)
-        return __import__(name)
+    def test_up_harness_events_even_if_config_unset(self, monkeypatch):
+        """The mirror bug: no config field but harness up → agent events,
+        scripts must agree."""
+        def gf(f):
+            raise SystemExit(1)  # field absent (get_field's behavior)
+        monkeypatch.setattr(config, "get_field", gf)
+        with patch.object(config.urllib.request, "urlopen", return_value=_mock_resp(200)):
+            assert config.get_wake_mode("skill") == "event-driven"
 
-    # test_compose_delegates retired in E6 #10685 Phase 5 along with
-    # ``compose._get_wake_mode`` (orphan after Phase 3d.5 deleted the v1
-    # ``compose_role`` chain that was its only caller).
 
-    def test_cycle_post_delegates(self, monkeypatch):
-        cycle_post = self._import_module("cycle_post")
-        called_with = []
-        monkeypatch.setattr(config, "get_wake_mode", lambda r: called_with.append(r) or "polling")
-        assert cycle_post._get_role_wake_mode("qa") == "polling"
-        assert called_with == ["qa"]
+# ---------------------------------------------------------------------------
+# Probe helper internals
+# ---------------------------------------------------------------------------
 
+class TestHarnessReachable:
+    def test_reachable_true_on_200(self):
+        with patch.object(config.urllib.request, "urlopen", return_value=_mock_resp(200)):
+            assert config._harness_reachable() is True
+
+    def test_reachable_false_and_never_raises(self):
+        import http.client
+        # Includes http.client.HTTPException (BadStatusLine) — NOT an OSError,
+        # realistic mid-restart failure — and AttributeError (atypical resp
+        # object). The contract is "any failure → polling, never raise".
+        exceptions = (
+            OSError("x"),
+            TimeoutError(),
+            ValueError("x"),
+            http.client.BadStatusLine("garbage"),
+            http.client.HTTPException("incomplete read"),
+            AttributeError("no status"),
+        )
+        for exc in exceptions:
+            with patch.object(config.urllib.request, "urlopen", side_effect=exc):
+                assert config._harness_reachable() is False, f"{type(exc).__name__} must degrade to False"
+
+    def test_port_from_file(self, tmp_path, monkeypatch):
+        pf = tmp_path / ".harness-port"
+        pf.write_text("9999", encoding="utf-8")
+        monkeypatch.setattr(config, "_HARNESS_PORT_FILE", pf)
+        assert config._harness_wake_port() == 9999
+
+    def test_port_default_when_file_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(config, "_HARNESS_PORT_FILE", tmp_path / "nope")
+        assert config._harness_wake_port() == config._DEFAULT_HARNESS_PORT
+
+    def test_port_default_when_file_garbage(self, tmp_path, monkeypatch):
+        pf = tmp_path / ".harness-port"
+        pf.write_text("not-an-int", encoding="utf-8")
+        monkeypatch.setattr(config, "_HARNESS_PORT_FILE", pf)
+        assert config._harness_wake_port() == config._DEFAULT_HARNESS_PORT
+
+
+# ---------------------------------------------------------------------------
+# statusline_data still delegates to the canonical helper
+# ---------------------------------------------------------------------------
+
+class TestStatuslineDelegates:
     def test_statusline_data_delegates(self, monkeypatch):
-        statusline_data = self._import_module("statusline_data")
-        called_with = []
-        monkeypatch.setattr(config, "get_wake_mode", lambda r: called_with.append(r) or "event-driven")
+        sys.modules.pop("statusline_data", None)
+        statusline_data = __import__("statusline_data")
+        monkeypatch.setattr(config, "get_wake_mode", lambda r: "event-driven")
         assert statusline_data._get_wake_mode("dm") == "event-driven"
-        assert called_with == ["dm"]
-
-
-# ---------------------------------------------------------------------------
-# Bootstrap prose audit
-# ---------------------------------------------------------------------------
-
-class TestBootstrapProseAudit:
-    """boot-bootstrap.md Step 1 must still describe the canonical precedence."""
-
-    BOOTSTRAP = Path(__file__).resolve().parent.parent / "references" / "sub-skills" / "common" / "boot-bootstrap.md"
-
-    def test_bootstrap_exists(self):
-        assert self.BOOTSTRAP.exists(), f"{self.BOOTSTRAP} not found"
-
-    def test_bootstrap_mentions_per_role_override(self):
-        """Per-role override `event-driven-<role>` must be documented."""
-        text = self.BOOTSTRAP.read_text(encoding="utf-8")
-        assert "event-driven-skill" in text or "event-driven-<role>" in text or "event-driven-pm" in text or "event-driven-" in text
-
-    def test_bootstrap_mentions_global_default(self):
-        """Global `event-driven:` field must be documented."""
-        text = self.BOOTSTRAP.read_text(encoding="utf-8")
-        assert "event-driven:" in text or "`event-driven`" in text
-
-    def test_bootstrap_mentions_polling_fallback(self):
-        """Polling fallback when neither field is set must be documented."""
-        text = self.BOOTSTRAP.read_text(encoding="utf-8")
-        # The bootstrap explicitly says polling is the safe fallback per CONTEXT-9588 D3.
-        assert "polling" in text.lower()

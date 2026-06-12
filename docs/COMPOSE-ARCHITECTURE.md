@@ -347,6 +347,18 @@ Each `## <Slot>` section holds the project's customizations for that slot. Withi
 
 Compose **must validate** that every `step:` reference in an `## Instructions` H3 resolves to a real L1-L3 step ID before emitting output. Unresolved references abort compose with a diagnostic.
 
+#### Inline ops in L1-L3 source bodies (#11227)
+
+Ops are **not L4-exclusive**. The same H3 op grammar (`### append`, `### insert-after step:cycle/<id>`, `### insert-before step:cycle/<id>`, `### replace step:cycle/<id>`) may appear **inline inside an L1-L3 source body**, not just in the L4 file. This lets a role-class (L2) or domain (L3) source anchor its own cycle steps at the shared L1 cycle positions instead of dumping them at the end of the slot. For example, `references/roles/pm/instructions.md` (L2) carries `### insert-after step:cycle/resume` whose body is the PM-specific `#### step:cycle/check-in` block — so in the composed PM `CLAUDE.md` the check-in step lands right after the L1 `### step:cycle/resume` step.
+
+The link stage (`v2_link_stage`) handles these during slot assembly:
+
+- **Step-targeted directives** (`insert-after` / `insert-before` / `replace step:cycle/<id>`) are extracted from each source body and applied — via the same `l4_op_processor.apply_l4_ops` used for L4 — against the `### step:cycle/<id>` **H3 anchors** present in the joined L1-L3 base content. Inline ops apply **before** the L4 file's ops for that slot.
+- **Bare `### append` / `### replace`** (no step target) in a source body: the op header is dropped and the body flows on as ordinary slot content (concatenation is equivalent to a slot-end append).
+- **Anchor must be an H3.** An inline step-targeted directive only anchors if its target appears as a top-level `### step:cycle/<id>` heading in the base. A directive whose target is absent **degrades to inline content** at its source position (compose stays green; nothing is lost, nothing raises).
+
+> **Current limitation — L3→L2 anchoring deferred (#11227 AC-6).** L2 sources define their cycle sub-steps as `#### step:cycle/<id>` (**H4**, nested under the H3 cycle step), but `l4_op_processor` anchors only on `### step:cycle/<id>` (**H3**). So an **L3** directive targeting an **L2-defined sub-step** (e.g. `dm/skill` → `insert-after step:cycle/delivery-packaging`, where `delivery-packaging` is an H4 in `dm/instructions.md`) currently degrades to inline rather than anchoring. Activating L3 anchoring requires a design decision (extend the op-processor anchor to H4, or promote L2 sub-steps to H3) tracked as a follow-up. L2 directives targeting L1 H3 steps (`resume`/`pickup`/`work`/`cleanup`) anchor today.
+
 #### Per-slot op constraints
 
 Not every op is legal on every slot. The soul slot is identity, not instruction, and is constrained to additive customization only:
@@ -440,14 +452,15 @@ Compose processes L1-L3 deterministically:
 2. **Filter by role-class**: each file may declare which role-classes it applies to (via `roles:` frontmatter list; default = all). Files not applicable to the current role-class are dropped.
 3. **Sort**: stable sort by `(slot_index, ordinal)`. `slot_index` is a fixed enum: identity=0, responsibility=1, soul=2, instructions=3, project-context=4, vault=5.
 4. **Emit orchestration**: under the appropriate top-level section header, emit each file's orchestration content verbatim. Inside the `instructions` slot, step bodies are **references to sub-skills by name** (e.g. `→ run sub-skill: pipeline-sentinel`) rather than inlined sub-skill content. The catalog of available sub-skills lives at [`sub-skill-catalog.md`](sub-skill-catalog.md) — composed CLAUDE.md never duplicates it.
+5. **Resolve inline ops** (#11227): a source body may itself carry H3 op directives (`### insert-after step:cycle/<id>`, `insert-before`, `replace step:cycle/<id>`, bare `### append`). Within each slot, the link stage splits every body into content vs. op directives, applies the step-targeted directives — via the same `apply_l4_ops` used for L4 — against the `### step:cycle/<id>` H3 anchors present in the joined base, and degrades any directive whose anchor is absent to inline content. This is what lets an L2/L3 source anchor its own cycle steps at the L1 cycle positions. See §3.3 "Inline ops in L1-L3 source bodies" for the grammar, ordering (inline ops before L4 ops), and the deferred L3→L2 (H4-anchor) limitation.
 
-The output of step 4 is the **L1-L3 base composition** — purely the SquidSquad-shipped orchestration, with sub-skill names referenced (not their bodies), and no project customization yet applied.
+The output of steps 4–5 is the **L1-L3 base composition** — the SquidSquad-shipped orchestration with each layer's inline ops resolved, sub-skill names referenced (not their bodies), and no project (L4) customization yet applied.
 
 **Why references and not inlining**: today's behavior inlined sub-skill bodies via `{{include}}` directives, producing 50KB+ composed CLAUDE.md files where most content was duplicated sub-skill text. Under v2, composed CLAUDE.md is the thin orchestration (5–10KB) and the model invokes sub-skills via the Skill tool when their description matches the situation. The transition is staged — see §10 migration plan.
 
 ### 4.2 Link: Creative L4 application
 
-After the L1-L3 base is in memory, compose reads exactly one L4 file: `.squidsquad/project/<role-class>.md` (the role-class being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only.
+After the L1-L3 base is in memory (with its own inline ops already resolved per §4.1 step 5), compose reads exactly one L4 file: `.squidsquad/project/<role-class>.md` (the role-class being deployed). If the file is absent, the L4 step is a no-op — the composed output is L1-L3 only. L4 ops apply **on top of** the inline-op-resolved base, so an L4 `insert-after step:cycle/<id>` can target a step that an L1-L3 inline op introduced.
 
 1. Parse the L4 file. Top-level H2 sections name the slot: `## Identity` / `## Responsibility` / `## Soul` / `## Instructions` / `## Project Context` / `## Vault`. Sections may appear in any order; missing sections are skipped.
 2. For each slot section present, apply ops in this order to the L1-L3 base for that slot:
@@ -1097,7 +1110,7 @@ Notes:
 
 ### 6.1 Step ID grammar and step ↔ sub-skill mapping
 
-Every L1-L3 instruction step declares a **stable step ID** that L4 can target.
+Every L1-L3 instruction step declares a **stable step ID** that ops can target — both L4 file ops and inline ops authored in L1-L3 source bodies (#11227, see §3.3). Step IDs surface in the composed output as `### step:cycle/<id>` H3 anchors; those H3 anchors are what the op processor resolves against.
 
 **Formal grammar** (BNF):
 
@@ -1356,7 +1369,7 @@ Maximum 4 files per install; fewer if some role-classes aren't in the team prese
 
 `compose.py deploy <alias>` resolves alias → role-class via `.squidsquad/config.md`'s `## Aliases` registry (§3.0), then reads `.squidsquad/project/<role-class>.md` to find the L4 file. The file is **created at install time by the installer** (see [§5.5](#55-project-context) and INSTALLER-ARCH §4.8 Phase 5 step 4 — the installer seeds the `## Project Context` block from Phase 1 intake answers; other slots start empty). The file then **grows over time** as more customizations are added via the runtime L4 write flow (`l4-curation`, §7).
 
-Internal structure mirrors the composed-output grammar (§5): top-level H2 sections name the slot; under `## Instructions`, H3 blocks name the op + target:
+Internal structure mirrors the composed-output grammar (§5): top-level H2 sections name the slot; under `## Instructions`, H3 blocks name the op + target. The **same H3 op grammar may also appear inline in L1-L3 source bodies** (#11227, §3.3) — the L4 file is the project-overlay surface, but it is not the only place ops live:
 
 ```markdown
 # Project L4 — PM
