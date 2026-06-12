@@ -4,14 +4,6 @@ ordinal: 10
 step-ids: [step:cycle/boot, step:cycle/resume, step:cycle/pickup, step:cycle/work, step:cycle/checkpoint, step:cycle/cleanup, step:cycle/exit]
 ---
 
-<!-- Layer 1: Base Agent Definition -->
-<!-- This content is prepended to every agent's CLAUDE.md at deploy time. -->
-<!-- It defines what ANY SquidSquad agent is, regardless of role. -->
-
-<!-- NOTE: step IDs below are the canonical base step IDs for L2/L3 targeting via insert-after / replace.
-     The Tracker Protocol section below is the full inline content for the instructions slot.
-     Sub-skill references use → run sub-skill: <name> grammar. -->
-
 ### step:cycle/boot
 
 → run sub-skill: boot-bootstrap

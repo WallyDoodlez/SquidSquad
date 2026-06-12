@@ -1,0 +1,15 @@
+# SquidSquad harness runtime dependencies (#11403).
+#
+# These are required to RUN the harness (references/scripts/harness.py) and its
+# subsystems. Install with:  pip install -r requirements.txt
+#
+# Dev/test-only dependencies (pytest, etc.) live in requirements-dev.txt and are
+# NOT needed to run a SquidSquad install.
+#
+# Drift guard: tests/test_runtime_requirements.py asserts every top-level
+# third-party import the harness needs at runtime is declared here.
+
+fastapi>=0.100.0      # harness HTTP server (hard requirement — harness exits without it)
+starlette>=0.27.0     # imported directly (harness.py JSONResponse); fastapi's tighter pin governs resolution
+uvicorn>=0.23.0       # ASGI server that runs the FastAPI app (hard requirement)
+watchdog>=3.0.0       # PRD-E E3 L4 file-watch Observer (auto-recompose on L4 edit)

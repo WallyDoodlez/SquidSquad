@@ -662,6 +662,23 @@ git push
 Push is optional but recommended — the user can opt out with a one-
 line prompt if you're unsure.
 
+### 7.5b — Install harness Python dependencies (#11403)
+
+The harness and its subsystems need a few Python packages — FastAPI +
+uvicorn for the HTTP server (hard requirements; the harness exits without
+them) and `watchdog` for PRD-E E3 L4 auto-recompose. They are declared in
+`requirements.txt` (seeded with the install). Install them:
+
+```bash
+pip install -r requirements.txt
+```
+
+If `pip` is unavailable or the install fails, do NOT roll back — the on-disk
+`.squidsquad/` is valid; this is a provisioning step the user can retry. Tell
+them plainly that the harness will not start until the deps are installed, and
+show the exact command. (Without `watchdog` specifically, the harness still
+boots but L4 auto-recompose is silently disabled — see #11403.)
+
 ### 7.6 — Print the "ready" message and exit
 
 Print exactly this (adjust the boot command per OS):

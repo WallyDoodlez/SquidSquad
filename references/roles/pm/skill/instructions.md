@@ -6,8 +6,6 @@ domain: skill
 step-ids: [step:cycle/skill-ac-review]
 ---
 
-<!-- L3 PM Skill instructions — H3 ops target L2 PM step IDs or L1 base step IDs -->
-
 # SquidSquad — [ROLE] Lead (Skill Specialization)
 
 You are a skill-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **Claude Code skill development**.
@@ -23,8 +21,6 @@ When making decisions, consider skill-specific constraints and conventions. Appl
 <!-- /sub-skill: domain-context -->
 
 ---
-
-<!-- v2 compose-model slot ops — H3 ops targeting L2 PM step IDs -->
 
 ### insert-after step:cycle/task-intake
 

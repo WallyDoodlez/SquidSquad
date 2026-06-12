@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 182 files
+# Total: 183 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -207,3 +207,7 @@ references/sub-skills/roles/worker/ralph-loop-overview.md
 references/sub-skills/roles/verifier/ralph-loop-overview.md
 references/sub-skills/roles/pm/ralph-loop-overview.md
 references/sub-skills/roles/dm/ralph-loop-overview.md
+
+# Harness runtime dependency manifest (#11403) — seeded so the wizard's
+# Step 7.5b `pip install -r requirements.txt` provisioning step can run.
+requirements.txt
