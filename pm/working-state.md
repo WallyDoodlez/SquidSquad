@@ -1,45 +1,36 @@
 # Working State
 
-- **Task**: pipeline sentinel + cutover readiness
-- **Status**: ACTIVE — bundle CUTOVER-READY (confirmed), awaiting operator signal
+- **Task**: pipeline sentinel + cutover readiness + #11401 watch
+- **Status**: quiet — awaiting skill pickup of #11401 (operator-directed)
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 0
+- **Quiet cycles**: 1
 
 ## Pipeline
 
-- **SHIPPED**: #11329 (DM c1974, counter 33→34)
-- pending_ship (cosmetic stale-label, PRs merged, DM to transition): #11404, #11166, #11165
-- pending-test (skip): #10855
-- Open issues: #11394 (low), **#11401 (medium, cutover-relevant, watch cycle 4/5)**
-- pending intake (PM-owned): #11331 (cutover wrap), #11400, #11412
+- pending_ship (cosmetic stale-label limbo): #11404, #11166, #11165
+- pending-test: #10855 (skip)
+- Open issues:
+  - #11394 (low)
+  - **#11401 (medium, OPERATOR-DIRECTED — cutover-blocking, skill pickup imminent)**
+- pending intake (PM-owned): #11331 (cutover wrap, operator-option-1 recorded), #11400, #11412
 - Approved queue: 6
-- Open PRs: 0 (all merged; cosmetic-label cleanups pending)
+- Open PRs: 0
 - Harness: unreachable
 
-## Session ship tally: 37 (was 36; #11329 added)
+## Session ship tally: 37 (#11329 added cycle 2293; #11404/#11166/#11165 still in cosmetic limbo, would be 40 if DM cleaned up)
 
-## ⚠️ BUNDLE CUTOVER-READY (confirmed)
+## Bundle status
 
-`squidsquad/skill/compose-polish-session` carries the full v0.44.0:
+CUTOVER-READY (5 chain-shipped + 3 stale-in-progress + 28 pre-bundle = 36 items composing v0.44.0), but operator chose option 1 (fold #11401 fix into bundle before cutover). Cutover gated on #11401 ship.
 
-| Category | Count | Items |
-|---|---|---|
-| Chain-shipped to bundle | 5 | #11334, #11382, #11381, #11383, #11329 |
-| Stale-in-progress on bundle | 3 | #11227, #11139, #11137 (re-verify at cutover) |
-| Pre-bundle ships | 28 |  |
-| **Total** | **36** | for v0.44.0 |
+## Cutover sequence (recorded on #11331 c-?)
 
-**Awaiting operator signal on #11331**.
-
-## Counter-accounting lesson (recorded on #11329)
-
-When real ships to main interleave with chain ships to bundle in the same window, the bundle-window counter and the global counter diverge. PM should either (a) not name a target counter in chain-ship auth comments (DM owns the increment), or (b) name it as "+1 from whatever the live count is at ship-time". Auth disposition is unaffected — Path A is mechanical regardless of the counter value.
-
-## Cutover watch (cycle 4 of 5)
-
-- #11401 STILL OPEN. One more cycle on the watch then I recommend fallback to option 2 (cutover with known-issue).
-- Skill autonomous bug-class lane confirmed cycle 2288. May pick up #11401 organically.
+1. Skill picks up #11401 next quiet cycle (operator-direction filed at 06:23Z)
+2. QA verifies → DM HOLDs → PM chain-ship auth → bundle counter +1 within window
+3. Bundle returns CUTOVER-READY (3rd and final time)
+4. Operator signals cutover
+5. PM completes #11331 intake → skill creates cutover-PR → QA re-verifies 3 stale items → DM ships → v0.44.0
 
 ## Context
 
-healthy.
+healthy. Operator handed PM the gating decision and PM filed the routing.
