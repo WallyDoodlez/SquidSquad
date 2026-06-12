@@ -28,7 +28,7 @@ Throughout this doc, **prose talks about the categorical classes** (PM, workers,
 
 Why: agents work autonomously and concurrently. If they shared one working tree they would step on each other's `git pull`, `git checkout`, branch switches, and uncommitted state. Per-agent clones make each agent's working tree disjoint while still coordinating through the same remote (the source-of-truth git repo) and forge (GitHub Issues).
 
-The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<alias>` (one file per alias, contents = absolute path to that alias's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
+The clones live wherever the operator places them on disk; their paths are registered in the project-local `.squidsquad/.local-config` (the alias→path map — see §3.2). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad. (The legacy global `~/.squidsquad/clones/` registry is **no longer** the boot-time discovery mechanism — its fallback was removed in [#3100](https://github.com/WallyDoodlez/SquidSquad/issues/3100); `.local-config` is the sole clone-path source the harness and `start.sh` consult. See HARNESS-ARCH §7.2.)
 
 In scope:
 
@@ -88,7 +88,7 @@ Three commitments:
 | **Human conversation** | Project domain, **team preset** (which workers and verifiers to install — see §1.1), loop interval, model routing preferences, tracker backend (GitHub Issues default, Forgejo alt), git workflow preferences. **NOT collected at install: tool/MCP/CLI configuration** — those are per-agent decisions made post-install (see §8). |
 | **Repo state** | Git existence + branch + history; existing `.squidsquad/` (triggers the migration-walk step inside the standard flow — §4.4); language/stack hints from filesystem |
 | **Environment** | `gh` CLI installed + authenticated; Python 3 + `pip`; OS (Windows, macOS, Linux); `claude` CLI on PATH |
-| **`~/.squidsquad/`** | Cross-install shared filesystem — existing secrets, clone registry, prior config |
+| **`~/.squidsquad/`** | Cross-install shared filesystem — existing secrets and cross-install config. (Clone-path discovery is project-local in `.squidsquad/.local-config`, not here — see §3.2.) |
 
 ### 3.2 Outputs
 
@@ -100,7 +100,7 @@ Three commitments:
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
 | `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones. Installer-scaffolded; harness reads it at boot to populate per-alias `clone_path` into in-memory `AgentState` (see HARNESS-ARCH §7.2 step 1 + §7.5). At runtime the harness's `.harness-state.json` is the operational source; `.local-config` is the install-time source of truth. |
 | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |
-| `~/.squidsquad/clones/` | Per-alias clone-path registry. One file per alias (filename = alias literal, no extension — e.g. `~/.squidsquad/clones/pm`, `~/.squidsquad/clones/frontend-1`); file contents = the absolute path to that alias's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
+| `~/.squidsquad/clones/` | **Legacy/vestigial** — still created by `shared_fs.py init` (Phase 0a), but **no longer the clone-path registry**: the boot-time fallback that read it was removed in [#3100](https://github.com/WallyDoodlez/SquidSquad/issues/3100). The harness and `start.sh` read `.squidsquad/.local-config` (above) instead. Retained only for backward compatibility; pending code cleanup of the unused `shared_fs.py` clones helpers. |
 | **Forge (GitHub)** | Issue labels created via `gh label create` — status/role/type/priority/severity taxonomy |
 | **Git commit** | Single atomic install commit on `main` (or the operator's chosen branch) |
 
@@ -163,7 +163,8 @@ Helper: `references/scripts/wizard.py check-gh` returns a JSON envelope with `ok
 ~/.squidsquad/
 ├── secrets        # API keys, restricted perms (0600)
 ├── config         # cross-install config
-└── clones/        # per-alias clone-path registry (one file per alias; mandatory per §1.2)
+└── clones/        # legacy/vestigial dir — still created here, but NOT the clone registry
+                   #   (boot reads .squidsquad/.local-config since #3100 — see §3.2)
 ```
 
 Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
@@ -332,7 +333,8 @@ And the per-user shared filesystem (not part of any single repo):
 ~/.squidsquad/
 ├── secrets         # API keys (chmod 0600)
 ├── config          # cross-install config
-└── clones/         # per-alias clone-path registry — one file per alias, contents = absolute path
+└── clones/         # legacy/vestigial — created by shared_fs.py init but unused for boot;
+                    #   clone-path registry is .squidsquad/.local-config (see §3.2, #3100)
 ```
 
 ---
@@ -590,6 +592,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 
 ## 14. Revision log
 
+- **2026-06-12 (#10836 R1 reconciliation — in progress)** — Post-cutover drift sweep against the stabilized arch docs (audit: `.squidsquad/pm/planning/AUDIT-INSTALLER-ARCH-2026-06-12.md`). **E1+W2 (clone registry) resolved**: the doc claimed `~/.squidsquad/clones/<alias>` is the boot-time clone-path registry, contradicting HARNESS-ARCH §7.2 (`.squidsquad/.local-config`). Code confirms `boot_remote.py` reads `.local-config` exclusively and the global `~/.squidsquad/clones/` fallback was removed in #3100; `shared_fs.py init` still *creates* the dir but nothing consumes it for boot. Fixed §1.2, §3.1, §3.2 (outputs row reframed legacy/vestigial), §4.2 + §5 trees to make `.local-config` canonical and mark `~/.squidsquad/clones/` vestigial. Surfaced a code-cleanup follow-up (retire unused `shared_fs.py` clones helpers). Remaining R1 findings (E2/E4/E5, W4/W6, cross-ref drift) tracked on #10836; DS audit before pending-test.
 - **2026-05-23 (v1 draft)** — initial draft. Consolidates the install flow into one architecture doc, distinct from the step-by-step WIZARD.md runbook. Locks the two-phase (conversation, then atomic commit) model, the ephemeral-installer-agent commitment, and the simple "pull latest sources + recompose" upgrade flow. Open gaps in §12 carry forward to follow-up issues.
 - **2026-05-23 (v1 draft, capability removal)** — §8 rewritten. SquidSquad no longer has a "capability" framework at install time. Tool/MCP/CLI configuration is per-agent post-install: the human tells each agent what tools to use, the agent persists via L4 writes per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md). All references in §3 (inputs), §4 (Phase 1 conversation, Phase 5 atomic write), and §5 (file layout) updated to drop capability mentions. The prior `references/sub-skills/capabilities/` directory and `common/capability-check.md` are marked as architectural deadwood; follow-up task against `worker` (skill) to remove them.
 - **2026-05-23 (v1 draft, R1 fixes)** — DS round-1 surfaced 8 findings (4 ERROR, 3 WARNING, 1 LOW). All applied: (1) 3 broken §7→§10 cross-refs for the upgrade flow location; (2) Phase 3 review screen example still leaked "Figma design; local delivery" — replaced with capability-free spec; (3) §11.1 "Phases 0–6 make no changes" rewritten honestly — Phases 0–4 don't touch the target repo, Phases 5–7 are pre-commit local + forge writes, Phase 8 is the atomic commit; (4) Step vs Phase numbering clash — added an explicit numbering-note callout at the end of §2, replaced "Step 7 commit" in the diagram with "Phase 8 commit"; (5) "Phase 5c" for Forgejo → "WIZARD Step 5c" (the wizard's step number, mapped into this doc's Phase 1 conversation); (6) §10 upgrade flow expanded with a user-confirm gate showing a changeset summary, and an explicit harness-restart specification (`POST /agents/<role>/stop` + `POST /agents/<role>/start` per role, falling through to `start.sh` if the harness isn't running); (7) NEW §4.8 Phase 4 dedicated approval section — describes the Approve / Edit / Abort prompt format and the "last clean abort point" semantics; (8) §3.2 outputs row for runtime harness files now lists `.harness-port` + `.harness-state.json` + `.event-state.json` together with a "harness-owned, not installer-written" note. Phase numbering renumbered downstream: old §4.7 (Phase 4–5 bundled) split into §4.7 Phase 4 + §4.8 Phase 5; §4.8–4.11 shifted to §4.9–4.12. DS artifact: `.squidsquad/pm/planning/REVIEW-INSTALLER-ARCH-DEEPSEEK-1.md`.
