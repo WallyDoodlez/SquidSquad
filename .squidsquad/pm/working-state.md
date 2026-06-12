@@ -13,6 +13,8 @@
   - Only branch-vs-main diffs are transient skill state/planning files (auto-resolve)
   - Posted DM routing comment: ship it, re-poll if gh refuses, do NOT bounce to skill.
 
+- **#11512 (severity:high) FILED → skill** (operator-reported, auto-approved bug): `thin_launcher.py:494-503` hardcodes `/loop` spawn prompt → all agents boot loop mode, boot Step 1 harness probe never reached → event mode dead-on-arrival. Root cause of event-mode-never-validated. Recorded in BRIEFING blockers.
+
 ## Pipeline (read this cycle)
 
 - **pending-ship**: #11394 (PR #11504) → DM (ground-truth clean)

@@ -77,6 +77,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - Auto-versioning: Shipped Since Last Bump = 0 post-v0.44.0 (DM reset post-cutover); next bump threshold-driven at 10.
 - DS re-audit needed on #10837 + #10839 before PM picks them up; bottleneck deferred until post-cutover queue resumes operator pacing.
 - Event-mode end-to-end NOT yet smoke-validated this session — harness/agents respawned post-cutover but operator wants idle-cycle rest first before exercising NUDGE → forge-read → ack-cursor full path. Manual-spawn vs harness-spawn distinction matters: only harness-spawned agents pick up #9725 spawn prompt + boot-bootstrap.
+- **#11512 (severity:high, role:skill — filed 2026-06-12 by operator) — ROOT CAUSE of event-mode-never-reached.** `thin_launcher.py:494-503` unconditionally injects `/loop {interval}m execute one Ralph Loop cycle` as the spawn prompt (added #9725, loop-mode era), so every agent's first turn runs the /loop skill + schedules a cron and never reaches the boot Step 1 harness probe. Event mode is dead-on-arrival regardless of harness state — confirmed live (harness reachable, PM still booted loop mode). Event-mode validation is blocked until #11512 fixed. Skill owns the fix design (conditional spawn prompt vs neutral prompt vs launcher-side probe).
 - DM cycle 1997 last_cycle_end 12:03:02 — may need attention if it doesn't tick over next idle window.
 
 ## Team State
