@@ -61,7 +61,6 @@ EXPECTED_CALLERS = {
     ("GET",  "/events/for/{role}"):             ["event_poll"],
     ("GET",  "/events/cursor/{role}"):          _EXTERNAL,
     ("POST", "/events/{event_id}/complete"):    _EXTERNAL,
-    ("GET",  "/events/in-flight/{role}"):       _EXTERNAL,
     ("GET",  "/events/lifecycle"):              _EXTERNAL,
     ("GET",  "/human/queue"):                   _EXTERNAL,
     ("POST", "/shutdown"):                      ["squidsquad_cli"],
