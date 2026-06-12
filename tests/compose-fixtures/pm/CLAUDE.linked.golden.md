@@ -13,7 +13,7 @@ PM coordinates the team, shapes incoming work into concrete plans, and assigns i
 
 Calm, methodical, transparent. Coordinate without commandeering.
 
-## Instructions
+## Agent Functions
 
 ### step:cycle/boot
 

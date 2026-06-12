@@ -8,11 +8,11 @@ roles: [dm]
 
 DM is the one role whose work routinely spans **waiting on an external system**: a feature PR must merge before DM can transition the corresponding tracker item to `shipped` and run delivery packaging. Event mode makes this wait a single atomic task that DM holds open until the merge resolves (or DM rolls it back).
 
-This fragment defines DM's behavior across the lifecycle of a `pending-ship` task. It builds on [[l1-base]] (Cases A–E), [[forge-read-pattern]], and [[comment-handling]] — read those first.
+This fragment defines DM's behavior across the lifecycle of a `pending-ship` task. It builds on [[event-mode-contract]] (Cases A–E), [[forge-read-pattern]], and [[comment-handling]] — read those first.
 
 ### The Task IS The Wait
 
-A `pending-ship` item assigned to DM is an active task even though DM is "just" waiting on a PR merge. From the agent's point of view this is a single atomic task per [[l1-base]] Case D: DM holds the Task field set to the issue number for the full wait, and the task only completes when DM has confirmed (via forge-read) that the PR has reached a terminal state — merged, closed without merge, or blocked by an unresolvable merge conflict.
+A `pending-ship` item assigned to DM is an active task even though DM is "just" waiting on a PR merge. From the agent's point of view this is a single atomic task per [[event-mode-contract]] Case D: DM holds the Task field set to the issue number for the full wait, and the task only completes when DM has confirmed (via forge-read) that the PR has reached a terminal state — merged, closed without merge, or blocked by an unresolvable merge conflict.
 
 ### Pickup-Time Readiness Check
 
@@ -34,13 +34,13 @@ Branches 3 and 4 do NOT transition to `shipped` (they actively roll back). Branc
 
 ### No Sub-Loop During The Wait
 
-Per [[comment-handling]] DM exception: comments arriving on the issue during the wait are NOT polled in real time. DM does NOT enter a watch loop, does NOT re-read the issue every few seconds, and does NOT react to comments mid-wait. Doing so would violate the atomicity rule in [[l1-base]] Case D — events arriving mid-task are noted but not acted upon, and their information is absorbed by DM's final forge-read at task completion.
+Per [[comment-handling]] DM exception: comments arriving on the issue during the wait are NOT polled in real time. DM does NOT enter a watch loop, does NOT re-read the issue every few seconds, and does NOT react to comments mid-wait. Doing so would violate the atomicity rule in [[event-mode-contract]] Case D — events arriving mid-task are noted but not acted upon, and their information is absorbed by DM's final forge-read at task completion.
 
 The reaction window for a comment that arrives during the wait is "the moment the wait ends" — see "End-Of-Task Re-Read" below.
 
 ### How DM Detects The Merge
 
-The wait is implemented as a **bounded periodic forge-read**, NOT as event-driven action. Events arriving on the stream during the wait are handled per [[l1-base]] Case D (noted, not acted on) — they are NOT what triggers DM to recheck the PR.
+The wait is implemented as a **bounded periodic forge-read**, NOT as event-driven action. Events arriving on the stream during the wait are handled per [[event-mode-contract]] Case D (noted, not acted on) — they are NOT what triggers DM to recheck the PR.
 
 On each Monitor wake (the persistent `event_poll.py` heartbeat at the role's wait cadence), DM performs two cheap tracker checks **before** the PR forge-read so an operator redirect lands in one wake interval rather than waiting for PR terminal state (#9744):
 
@@ -73,7 +73,7 @@ When the wait ends, DM performs a **single, complete re-read** of both the issue
    - **(b)** **The issue is no longer at `pending-ship`** (operator transitioned it to another status during the wait) → leave it where the operator put it; do NOT transition further. Comments on the new owner are honored at their next pickup.
    - **(c)** **PR is not merged AND (closed without merge, OR open-but-conflicted, OR stalled-PR ceiling exceeded)** (rollback) → comment a one-line summary of the cause, transition `pending-ship → in-progress` so the assigned worker role can address it. Do NOT run delivery. The "not merged" qualifier prevents a stale rollback if the PR transitioned to `merged` in the interval between the detection forge-read and this re-read — in that case fall through to outcome (d).
    - **(d)** **PR merged AND the issue is still at `pending-ship`** → **first** check the issue's Discussion for a `delivery: skip` marker (mandatory per DM's always-on prohibitions). If `delivery: skip` is present, skip delivery packaging and transition `pending-ship → shipped` directly. Otherwise run delivery packaging (CHANGELOG, version bumps as configured) and then transition `pending-ship → shipped`. Either way the transition auto-closes the issue.
-5. **Update working-state** → `- **Task**: none` (atomic write per [[l1-base]] ownership discipline). If outcome (a) or (b) was taken there was no transition, so DM did NOT just complete a tracker transition — see step 6.
+5. **Update working-state** → `- **Task**: none` (atomic write per [[event-mode-contract]] ownership discipline). If outcome (a) or (b) was taken there was no transition, so DM did NOT just complete a tracker transition — see step 6.
 6. Run `work_queue()` for the next DM item. This is the same forge-read step that Case C performs after a transition; in outcomes (a) and (b) you skip Case C's "you just transitioned" preamble (no transition occurred) and go straight to the queue read.
 
 ### Comment Examples (For Future Reference)

@@ -162,7 +162,7 @@ def test_deploy_alias_v2_output_contains_six_canonical_h2_sections(tmp_path):
         "## Identity",
         "## Responsibility",
         "## Soul",
-        "## Instructions",
+        "## Agent Functions",
         "## Project Context",
         "## Vault",
     ]
@@ -211,7 +211,7 @@ def test_deploy_alias_v2_aborts_on_r5_unknown_step_id(tmp_path, capsys):
     l4_path = tmp_path / ".squidsquad" / "project" / "pm.md"
     l4_path.parent.mkdir(parents=True, exist_ok=True)
     l4_path.write_text(
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### replace step:cycle/ghost\n\n"
         "Ghost body.\n",
         encoding="utf-8",

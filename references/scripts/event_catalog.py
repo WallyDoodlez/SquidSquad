@@ -133,7 +133,7 @@ RECOGNIZED = {
     "assigned-to": {
         "description": "Work item assigned to a role — agent should wake and process",
         "planned_source": "harness.py ExternalActivityDetector",
-        "payload_fields": ["issue_number", "title", "target_role", "event_context"],
+        "payload_fields": ["issue_number", "title", "target_alias", "event_context"],
     },
     "stop-requested": {
         "description": "Harness requests agent to checkpoint and exit cleanly",

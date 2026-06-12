@@ -74,12 +74,14 @@ def test_emit_v2_linked_emits_exactly_six_h2_sections_in_canonical_order(tmp_pat
     _make_minimal_fixture(tmp_path)
     out = v2.emit_v2_linked("worker", None, repo_root=tmp_path)
     h2_lines = [ln for ln in out.splitlines() if ln.startswith("## ")]
+    # #11144 G12: project-context moved before soul/instructions so a
+    # reader gets project framing before diving into soul + operations.
     assert h2_lines == [
         "## Identity",
         "## Responsibility",
-        "## Soul",
-        "## Instructions",
         "## Project Context",
+        "## Soul",
+        "## Agent Functions",
         "## Vault",
     ]
 
@@ -98,10 +100,11 @@ def test_emit_v2_linked_emits_empty_section_for_absent_slot(tmp_path):
 def test_emit_v2_linked_groups_by_slot(tmp_path):
     _make_minimal_fixture(tmp_path)
     out = v2.emit_v2_linked("worker", None, repo_root=tmp_path)
-    # The two instructions-slot sources are in the Instructions section.
-    idx_instructions = out.index("## Instructions")
-    idx_project_ctx = out.index("## Project Context")
-    instructions_block = out[idx_instructions:idx_project_ctx]
+    # The two instructions-slot sources are in the Agent Functions section.
+    # #11144 G12: Agent Functions is between Soul and Vault (post-slot-reorder).
+    idx_instructions = out.index("## Agent Functions")
+    idx_vault = out.index("## Vault")
+    instructions_block = out[idx_instructions:idx_vault]
     assert "### step:cycle/boot" in instructions_block
     assert "### step:cycle/work" in instructions_block
 
@@ -128,7 +131,7 @@ def test_emit_v2_linked_applies_l4_replace_step_op(tmp_path):
     _make_minimal_fixture(tmp_path)
     l4_path = tmp_path / "l4.md"
     l4_path.write_text(
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### replace step:cycle/work\n\n"
         "Do something DIFFERENT.\n",
         encoding="utf-8",
@@ -280,11 +283,215 @@ def test_canonical_slot_order_is_six():
 
 
 def test_canonical_slot_order_matches_trd():
+    # #11144 G12: project-context moved before soul/instructions so a
+    # reader gets project framing before diving into the agent's soul +
+    # operating manual. Order is asserted here as the contract.
     assert v2.CANONICAL_SLOT_ORDER == (
         "identity",
         "responsibility",
+        "project-context",
         "soul",
         "instructions",
-        "project-context",
         "vault",
     )
+
+
+# ---------------------------------------------------------------------------
+# #11227: inline op extraction from L1-L3 source bodies
+# ---------------------------------------------------------------------------
+
+def test_extract_inline_ops_no_ops_passes_through():
+    body = "Just some prose.\n\n## Some H2 header\n\nMore prose.\n"
+    cleaned, ops = v2._extract_inline_ops(body)
+    assert cleaned == body
+    assert ops == []
+
+
+def test_extract_inline_ops_empty_body_returns_empty():
+    cleaned, ops = v2._extract_inline_ops("")
+    assert cleaned == ""
+    assert ops == []
+
+
+def test_extract_inline_ops_insert_after_extracted():
+    body = (
+        "Lead prose.\n"
+        "\n"
+        "### insert-after step:cycle/work\n"
+        "\n"
+        "Op body line 1.\n"
+        "Op body line 2.\n"
+    )
+    cleaned, ops = v2._extract_inline_ops(body)
+    assert cleaned == "Lead prose.\n\n"
+    assert len(ops) == 1
+    assert ops[0].op_type == "insert-after"
+    assert ops[0].target_step_id == "work"
+    assert "Op body line 1." in ops[0].body_text
+    assert "Op body line 2." in ops[0].body_text
+
+
+def test_extract_inline_ops_insert_before_extracted():
+    body = "### insert-before step:cycle/cleanup\n\nBefore-cleanup content.\n"
+    _, ops = v2._extract_inline_ops(body)
+    assert ops[0].op_type == "insert-before"
+    assert ops[0].target_step_id == "cleanup"
+
+
+def test_extract_inline_ops_replace_step_extracted():
+    body = "### replace step:cycle/pickup\n\nReplacement body.\n"
+    _, ops = v2._extract_inline_ops(body)
+    assert ops[0].op_type == "replace"
+    assert ops[0].target_step_id == "pickup"
+    assert ops[0].body_text == "Replacement body."
+
+
+def test_extract_inline_ops_bare_append_extracted():
+    body = "### append\n\nAppended content.\n"
+    _, ops = v2._extract_inline_ops(body)
+    assert ops[0].op_type == "append"
+    assert ops[0].target_step_id is None
+
+
+def test_extract_inline_ops_bare_replace_extracted():
+    body = "### replace\n\nWhole-slot replacement.\n"
+    _, ops = v2._extract_inline_ops(body)
+    assert ops[0].op_type == "replace"
+    assert ops[0].target_step_id is None
+
+
+def test_extract_inline_ops_multiple_ops_in_source_order():
+    body = (
+        "Prose before any op.\n"
+        "\n"
+        "### insert-after step:cycle/resume\n"
+        "\n"
+        "First op body.\n"
+        "\n"
+        "### insert-after step:cycle/work\n"
+        "\n"
+        "Second op body.\n"
+        "\n"
+        "### append\n"
+        "\n"
+        "Third op body.\n"
+    )
+    cleaned, ops = v2._extract_inline_ops(body)
+    assert cleaned == "Prose before any op.\n\n"
+    assert [op.op_type for op in ops] == ["insert-after", "insert-after", "append"]
+    assert [op.target_step_id for op in ops] == ["resume", "work", None]
+    assert "First op body." in ops[0].body_text
+    assert "Second op body." in ops[1].body_text
+    assert "Third op body." in ops[2].body_text
+
+
+def test_extract_inline_ops_non_op_h3_in_pre_op_body():
+    """A regular H3 sub-heading is NOT an op directive."""
+    body = (
+        "### Regular Sub-Heading\n"
+        "\n"
+        "This stays in cleaned_body.\n"
+        "\n"
+        "### insert-after step:cycle/work\n"
+        "\n"
+        "Op body.\n"
+    )
+    cleaned, ops = v2._extract_inline_ops(body)
+    assert "### Regular Sub-Heading" in cleaned
+    assert "This stays in cleaned_body." in cleaned
+    assert len(ops) == 1
+    assert ops[0].op_type == "insert-after"
+
+
+def test_extract_inline_ops_h4_step_heading_inside_op_body():
+    """H4 sub-step headings inside an op body are NOT extracted as ops."""
+    body = (
+        "### insert-after step:cycle/work\n"
+        "\n"
+        "#### step:cycle/sub-task\n"
+        "\n"
+        "Sub-task body.\n"
+    )
+    cleaned, ops = v2._extract_inline_ops(body)
+    assert cleaned == ""
+    assert len(ops) == 1
+    assert "#### step:cycle/sub-task" in ops[0].body_text
+    assert "Sub-task body." in ops[0].body_text
+
+
+def test_extract_inline_ops_op_body_trailing_newlines_stripped():
+    body = "### append\n\nContent.\n\n\n\n"
+    _, ops = v2._extract_inline_ops(body)
+    assert ops[0].body_text == "Content."
+
+
+# ---------------------------------------------------------------------------
+# #11227: end-to-end op application across L1-L4 layers
+# ---------------------------------------------------------------------------
+
+def test_emit_v2_linked_applies_l2_insert_after_step_op(tmp_path):
+    """L2 source `### insert-after step:cycle/work` anchors to L1 H3."""
+    repo = tmp_path
+    (repo / "references" / "sub-skills" / "common").mkdir(parents=True)
+    (repo / "references" / "roles" / "pm").mkdir(parents=True)
+    # L1 base provides the step:cycle/work anchor at H3.
+    _make_source(
+        repo / "references" / "roles" / "instructions.md",
+        slot="instructions",
+        ordinal=10,
+        body="### step:cycle/work\n\nL1 base body for work step.\n",
+    )
+    # L2 PM extends with an op that anchors to it.
+    _make_source(
+        repo / "references" / "roles" / "pm" / "instructions.md",
+        slot="instructions",
+        ordinal=20,
+        roles=["pm"],
+        body=(
+            "### insert-after step:cycle/work\n"
+            "\n"
+            "#### step:cycle/check-in\n"
+            "\n"
+            "PM-only check-in content.\n"
+        ),
+    )
+    result = v2.emit_v2_linked("pm", None, repo_root=repo)
+    assert "### step:cycle/work" in result
+    assert "L1 base body for work step." in result
+    # The L2 op's content must appear AFTER the L1 anchor.
+    work_idx = result.index("### step:cycle/work")
+    checkin_idx = result.index("#### step:cycle/check-in")
+    assert work_idx < checkin_idx
+    assert "PM-only check-in content." in result
+
+
+def test_extract_inline_ops_h2_boundary_terminates_op_body():
+    """An H2 heading terminates the current op body — the H2 + content
+    after it flow as cleaned_body, NOT as part of the op.
+
+    Regression: L2 PM's `### insert-after step:cycle/cleanup` op was
+    sucking in the subsequent `## Reactive sub-skills` section.
+    """
+    body = (
+        "### insert-after step:cycle/cleanup\n"
+        "\n"
+        "#### step:cycle/health-check\n"
+        "→ run sub-skill: health-check\n"
+        "Check agent health.\n"
+        "\n"
+        "## Reactive sub-skills\n"
+        "\n"
+        "These are invoked reactively.\n"
+        "\n"
+        "### Project customization\n"
+        "→ run sub-skill: l4-curation\n"
+    )
+    cleaned, ops = v2._extract_inline_ops(body)
+    assert len(ops) == 1
+    assert ops[0].op_type == "insert-after"
+    assert ops[0].target_step_id == "cleanup"
+    assert "#### step:cycle/health-check" in ops[0].body_text
+    assert "Check agent health." in ops[0].body_text
+    assert "## Reactive sub-skills" not in ops[0].body_text
+    assert "## Reactive sub-skills" in cleaned
+    assert "Project customization" in cleaned

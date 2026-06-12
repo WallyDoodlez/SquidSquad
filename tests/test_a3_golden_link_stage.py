@@ -145,7 +145,7 @@ def test_corrupted_l4_aborts_with_parse_error(tmp_path):
     bad_root = tmp_path / "pm"
     l4_path = bad_root / ".squidsquad" / "project" / "pm.md"
     l4_path.write_text(
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### replace garbage\n\n"
         "Not a legal op heading — `replace` is op-like but the rest is malformed.\n",
         encoding="utf-8",
@@ -168,7 +168,7 @@ def test_corrupted_l4_does_not_silently_match_golden(tmp_path):
     bad_root = tmp_path / "pm"
     l4_path = bad_root / ".squidsquad" / "project" / "pm.md"
     l4_path.write_text(
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### frobnicate step:cycle/work\n\n"
         "Not a legal op heading.\n",
         encoding="utf-8",

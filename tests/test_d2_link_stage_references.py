@@ -222,13 +222,18 @@ def test_live_v2_emits_sub_skill_references(role):
 
 def test_live_v2_boot_block_inlined_per_path_a():
     """Post-#11049 PM Path A: ``boot-bootstrap`` is mandatory-inline, so the
-    Boot block (``## Boot — Mode Detection``) MUST appear in v2 output for
-    every role that consumes it. The pre-#11049 contract (boot block
-    referenced not inlined) is retired pending #9968 runtime resolution.
+    Boot block MUST appear in v2 output for every role that consumes it.
+    The pre-#11049 contract (boot block referenced not inlined) is retired
+    pending #9968 runtime resolution.
+
+    Post-#11144 Iter 22 polish-restructure the H2 ``## Boot — Mode
+    Detection`` heading was replaced with the step-ID form ``### Step 1
+    — step:cycle/boot`` (the canonical cycle-step anchor). The marker
+    survives; the heading is the step-ID form.
     """
     for role in _MANDATORY_ROLES:
         out = v2.emit_v2_linked(role, None, l4_path=_NO_L4)
-        assert "## Boot — Mode Detection" in out, (
+        assert "### Step 1 — step:cycle/boot" in out, (
             f"role={role}: Boot block prose missing — boot-bootstrap is "
             f"mandatory-inline per #11049 Path A and must survive the "
             f"link-stage walk into the composite."

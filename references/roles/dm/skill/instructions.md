@@ -6,10 +6,6 @@ domain: skill
 step-ids: [step:cycle/skill-delivery-doc, step:cycle/skill-changelog]
 ---
 
-# SquidSquad — [ROLE] Lead (Skill Specialization)
-
-You are a skill-specialized [ROLE] agent. You inherit all standard [ROLE] responsibilities and add domain expertise in **Claude Code skill development**.
-
 <!-- sub-skill: domain-context -->
 ### Skill Domain Context
 

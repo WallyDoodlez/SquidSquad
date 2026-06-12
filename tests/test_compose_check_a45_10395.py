@@ -57,7 +57,7 @@ def test_check_alias_staged_l4_clean_returns_role_class(tmp_path):
     _stage_minimal_install(tmp_path, role="pm")
     staged = tmp_path / "staged.md"
     staged.write_text(
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### insert-after step:cycle/boot\n\n"
         "→ run sub-skill: pipeline-sentinel\n\n"
         "Post-boot body.\n",
@@ -82,7 +82,7 @@ def test_check_alias_staged_l4_missing_staged_file_raises_filenotfound(tmp_path)
 def test_check_alias_staged_l4_unknown_alias_raises_keyerror(tmp_path):
     _stage_minimal_install(tmp_path)
     staged = tmp_path / "staged.md"
-    staged.write_text("## Instructions\n", encoding="utf-8")
+    staged.write_text("## Agent Functions\n", encoding="utf-8")
     with pytest.raises(KeyError):
         compose.check_alias_staged_l4(
             "ghost-alias", staged, target_root=tmp_path,
@@ -111,7 +111,7 @@ def test_check_alias_staged_l4_r5_violation_raises(tmp_path):
     _stage_minimal_install(tmp_path)
     staged = tmp_path / "staged.md"
     staged.write_text(
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### replace step:cycle/ghost-step\n\n"
         "Body.\n",
         encoding="utf-8",
@@ -130,7 +130,7 @@ def test_check_alias_staged_l4_r7_violation_raises(tmp_path):
     _stage_minimal_install(tmp_path)
     staged = tmp_path / "staged.md"
     staged.write_text(
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### replace step:cycle/work\n\n"
         "First body.\n\n"
         "### replace step:cycle/work\n\n"
@@ -151,7 +151,7 @@ def test_check_alias_staged_l4_does_not_write_to_disk(tmp_path):
     _stage_minimal_install(tmp_path)
     staged = tmp_path / "staged.md"
     staged.write_text(
-        "## Instructions\n\n### insert-after step:cycle/boot\n\n→ run sub-skill: x\n\nBody.\n",
+        "## Agent Functions\n\n### insert-after step:cycle/boot\n\n→ run sub-skill: x\n\nBody.\n",
         encoding="utf-8",
     )
     before = set(tmp_path.rglob("*"))
@@ -198,7 +198,7 @@ def test_cli_staged_l4_nonexistent_path_exits_2(tmp_path):
 def test_cli_staged_l4_with_unknown_alias_exits_2(tmp_path):
     """Even with a valid staged file, an unknown alias is a setup error."""
     staged = tmp_path / "staged.md"
-    staged.write_text("## Instructions\n", encoding="utf-8")
+    staged.write_text("## Agent Functions\n", encoding="utf-8")
     result = _run_compose(
         "deploy", "definitely-not-a-real-alias", "--check",
         "--staged-l4", str(staged),

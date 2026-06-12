@@ -63,23 +63,19 @@ Write status bar state: `scanning|🔍 Scanning process/workflow...`
    PM auto-fixes inline in the same cycle. No task needed. Note in iteration summary: `Auto-fixed: [description]`.
 
    **Tier 2 — Larger gap fixes** (workflow changes, cross-role impact):
-   File via `python references/scripts/tracker.py create-task` or `create-issue`:
-   ```
-   **Found by**: [ROLE]-lead (improvement-scan)
-   **File**: [path]
-   **Finding**: [specific finding]
-   **Recommendation**: [what to do]
-   ```
-   Tag with `improvement-scan` label. These require human discussion before approval.
+
+   → run sub-skill: `tracker-protocol` — use the **Improvement-scan finding** one-liner shape (Observation / Location / Suggested-fix body, with `**Found by**: [ROLE]-lead (improvement-scan)` prefix). Choose `create-task` for workflow changes / `create-issue` for defects. Set `--role [target-role]`, `--severity low` (issue) or `--priority low` (task), `--reporter [ROLE]-lead`. Tag with `improvement-scan` label. These require human discussion before approval.
 
    **Tier 3 — Creative/experimental proposals**:
-   Always file as task (`python references/scripts/tracker.py create-task`). Always discuss with human. Never auto-approve. Include in the body:
+
+   → run sub-skill: `tracker-protocol` — always `create-task` shape with body:
    ```
    **Found by**: [ROLE]-lead (improvement-scan, creative proposal)
    **Context**: [what vault learnings or observations prompted this]
    **Proposal**: [what to do and why]
    **Expected benefit**: [what improves]
    ```
+   Set `--role [target-role]`, `--priority low`, `--reporter [ROLE]-lead`. Tag with `improvement-scan` label. Always discuss with human. Never auto-approve.
 
 5. **Update scan history**: Record the scan in both the DB and markdown (dual-write):
    ```bash

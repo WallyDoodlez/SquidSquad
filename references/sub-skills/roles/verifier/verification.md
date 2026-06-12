@@ -56,12 +56,12 @@ Every finding must include structured evidence:
 ```
 
 - If **objective** (clear pass/fail, crash, error): File immediately with the structured format above.
-  ```bash
-  python references/scripts/tracker.py create-issue --title "[title]" --body "[structured finding]" --role [target-role] --severity [high|medium|low] --reporter verifier
-  ```
+
+  → run sub-skill: `tracker-protocol` — use the **Bug fix** one-liner shape with the structured Finding / Evidence / Category / Routed-to body in place of the bug-fix template. Set `--role [target-role]`, `--severity [high|medium|low]`, `--reporter verifier-lead`.
+
 - If **subjective** (coherence issue, style concern, architectural question): Flag for PM/human review. Do NOT file an issue — PM and human decide.
   ```bash
-  python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Subjective finding flagged for PM/human review: [structured description]"
+  python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Subjective finding flagged for PM/human review: [structured description]"
   ```
 - If **ownership unclear**: Escalate to PM. PM is always present and owns coordination.
 - If the finding **spans multiple domains**: File to the primary responsible role, cross-reference others in comments.
@@ -116,7 +116,7 @@ For each issue:
    - Transition to pending-ship:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified. Status → Pending Ship."
+     python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified. Status → Pending Ship."
      ```
    - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
 7. If not verified (fix doesn't work, no regression test, or tests fail):
@@ -153,12 +153,12 @@ python references/scripts/git_ops.py task-end [role] [number]
 1. **Verifier produces the test plan from the AC list** (#9184). PM does not produce a test plan; Verifier is the verification owner. **Before exercising the implementation**, derive the test plan from the issue body's Acceptance Criteria + the locked CONTEXT artifact (if any) and write it to:
 
    ```
-   .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md
+   .squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md
    ```
 
    The test plan must be derivable from the AC list alone — do not reverse-engineer test cases from worker's diff. Read the AC list, read CONTEXT.md (for locked decisions and out-of-scope items), then write test cases that observably verify each AC against a real live test instance of the system (actual harness, actual tracker, actual filesystem). Running worker's unit tests is a sanity check only — not the gate.
 
-   Resume logic mirrors PM's: if `TEST-PLAN-<NUMBER>.md` already exists under `.squidsquad/qa/planning/` and the issue body's ACs have not changed since the file was committed, reuse it; otherwise re-derive.
+   Resume logic mirrors PM's: if `TEST-PLAN-<NUMBER>.md` already exists under `.squidsquad/[VERIFIER_ALIAS]/planning/` and the issue body's ACs have not changed since the file was committed, reuse it; otherwise re-derive.
 
    **Optional: route test-plan drafting to an external model** (#9319 — was orphaned PM infrastructure, reclaimed for verifier):
 
@@ -167,7 +167,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      --task-type test-plan \
      --task-id <NUMBER> \
      --input-files "<issue body export>,<CONTEXT artifact if any>" \
-     --output-file ".squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md" \
+     --output-file ".squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md" \
      --context "Draft live-system test plan for #<NUMBER> from the AC list."
    ```
 
@@ -217,13 +217,13 @@ python references/scripts/git_ops.py task-end [role] [number]
 
    Subagent prompt:
    ```
-   Read .squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md. For each test case:
+   Read .squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md. For each test case:
 
-   1. Write an executable pytest test in .squidsquad/qa/planning/TEST-<NUMBER>-tests.py
+   1. Write an executable pytest test in .squidsquad/[VERIFIER_ALIAS]/planning/TEST-<NUMBER>-tests.py
       - Each TC becomes a test function: test_tc_01_[name], test_tc_02_[name], etc.
       - Tests must use concrete assertions (file exists, string matches, JSON parses, exit code checks)
       - Tests must exercise the REAL live system — actual scripts, actual harness, actual tracker. Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure. Do not mock the system under test.
-   2. Run the tests: python -m pytest .squidsquad/qa/planning/TEST-<NUMBER>-tests.py -v
+   2. Run the tests: python -m pytest .squidsquad/[VERIFIER_ALIAS]/planning/TEST-<NUMBER>-tests.py -v
    3. Record pytest output verbatim in QA-RESULTS-<NUMBER>.md
 
    TC result rules:
@@ -234,7 +234,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      Tag with `blocked:human-action` label and note what the human needs to do.
    - "Deferred" and "Skipped" are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED.
 
-   Write results to .squidsquad/qa/planning/QA-RESULTS-<NUMBER>.md
+   Write results to .squidsquad/[VERIFIER_ALIAS]/planning/QA-RESULTS-<NUMBER>.md
    Include the full pytest output and a summary table.
    ```
 
@@ -266,12 +266,12 @@ python references/scripts/git_ops.py task-end [role] [number]
    Optional supporting artifacts (look in this precedence):
 
    ```bash
-   QA_TEST_PLAN=$(ls .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md 2>/dev/null | head -1)
-   LEGACY_TEST_PLAN=$(ls .squidsquad/pm/planning/*[NUMBER]* 2>/dev/null | grep -i 'test-plan' | head -1)
+   QA_TEST_PLAN=$(ls .squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md 2>/dev/null | head -1)
+   LEGACY_TEST_PLAN=$(ls .squidsquad/[PM_ALIAS]/planning/*[NUMBER]* 2>/dev/null | grep -i 'test-plan' | head -1)
    ```
 
    - **Primary**: `$QA_TEST_PLAN` (the new convention, #9184) — when present, it is verifier's own derivation of the AC list; its coverage matrix is the source of truth for AC-walk coverage.
-   - **Legacy fallback**: `$LEGACY_TEST_PLAN` (`.squidsquad/pm/planning/FEAT-PM-<NUMBER>-TEST-PLAN.md` or `.squidsquad/pm/planning/TEST-PLAN-<NUMBER>.md`) — only used for in-flight tasks filed under the pre-#9184 workflow. Do not author new files at this path.
+   - **Legacy fallback**: `$LEGACY_TEST_PLAN` (`.squidsquad/[PM_ALIAS]/planning/FEAT-PM-<NUMBER>-TEST-PLAN.md` or `.squidsquad/[PM_ALIAS]/planning/TEST-PLAN-<NUMBER>.md`) — only used for in-flight tasks filed under the pre-#9184 workflow. Do not author new files at this path.
 
    If any AC is not observably satisfied, transition `pending-test → in-progress` and comment which AC failed:
 
@@ -283,17 +283,17 @@ python references/scripts/git_ops.py task-end [role] [number]
 3. **Zero-gap gate**: If ANY gap, ambiguity, missing documentation, failed check, missing test coverage, or unresolved finding is discovered:
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "FAIL. [list every specific finding]. Back to In Progress."
+   python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "FAIL. [list every specific finding]. Back to In Progress."
    ```
    Do NOT mark Pending Ship with "gaps noted for follow-up." ALL findings must be resolved before shipping.
 4. **Only exception**: The human explicitly says "ship with these gaps" — record the override:
    ```bash
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."
+   python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Human override — shipping with [N] noted gaps: [list]. Status → Pending Ship."
    ```
 5. If all criteria pass with zero gaps:
 
    **Promote test files to tests/** (before transitioning):
-   If any test files exist in `.squidsquad/qa/planning/` matching `TEST-[NUMBER]-tests.py` or `QA-RESULTS-[NUMBER]*.md`:
+   If any test files exist in `.squidsquad/[VERIFIER_ALIAS]/planning/` matching `TEST-[NUMBER]-tests.py` or `QA-RESULTS-[NUMBER]*.md`:
    - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`
    - If comprehension test spec files exist at `tests/comprehension/[NUMBER]_spec.json`, leave them in place (already canonical)
    - Verify the promoted tests still pass: `python -m pytest tests/test_feat_[NUMBER]_*.py`
@@ -304,7 +304,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    **If PR Flow `yes`** and a PR exists for this issue:
    - Post verifier results on the PR:
      ```bash
-     gh pr comment [PR_NUMBER] --body "## Verifier Results\n\n**Status**: PASS\n**Test Plan**: .squidsquad/qa/planning/TEST-PLAN-[NUMBER].md (Verifier-owned, derived from AC list)\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified against a live instance."
+     gh pr comment [PR_NUMBER] --body "## Verifier Results\n\n**Status**: PASS\n**Test Plan**: .squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md (Verifier-owned, derived from AC list)\n**Results**: [N/N tests passed]\n\nAll acceptance criteria verified against a live instance."
      ```
    - Formally approve the PR:
      ```bash
@@ -322,7 +322,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      - **Merge succeeds** (check `pr-merged` event with `success: true`): transition to pending-ship:
        ```bash
        python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-       python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR auto-merged. Status → Pending Ship."
+       python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified — zero gaps. PR auto-merged. Status → Pending Ship."
        ```
      - **Merge conflict**: handle as described in the PR Flow `no` merge conflict section below.
 
@@ -330,7 +330,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      ```bash
      gh pr ready [PR_NUMBER]
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-human-review --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Human Review."
+     python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified — zero gaps. PR approved. Awaiting human review. Status → Pending Human Review."
      ```
 
    **If PR Flow `no`** (or no PR exists):
@@ -363,7 +363,7 @@ python references/scripts/git_ops.py task-end [role] [number]
        git merge --abort
        git checkout [WORKING_BRANCH]
        python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-       python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Worker: resolve conflicts and re-submit."
+       python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Merge conflict with code changes on PR #[PR_NUMBER]. Conflicting files: [list]. Worker: resolve conflicts and re-submit."
        ```
      - **Only .squidsquad/ state file conflicts**: resolve by keeping both versions, then push and merge. State files are always auto-resolvable.
    - **No PR found**: proceed (direct-to-main workflow, no merge needed)
@@ -371,7 +371,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    After successful merge (or no PR):
    ```bash
    python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
-   python references/scripts/tracker.py comment [NUMBER] --role verifier --message "Verified — zero gaps. PR merged. Status → Pending Ship."
+   python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified — zero gaps. PR merged. Status → Pending Ship."
    ```
 
 6. **delivery:skip check**: If the task is internal-only, add `delivery:skip` to the comment message.
@@ -386,7 +386,7 @@ python references/scripts/git_ops.py task-end [role] [number]
    - Transition back to `In Progress`:
      ```bash
      python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead
-     python references/scripts/tracker.py comment [NUMBER] --role verifier --message "FAIL. [findings]. PR changes requested. Back to In Progress."
+     python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "FAIL. [findings]. PR changes requested. Back to In Progress."
      ```
 
    **If PR Flow `no`**: transition back to `In Progress` with specific failures in the comment.
@@ -427,4 +427,4 @@ Read `.squidsquad/.local-config` to get each agent's clone path. For each worker
   ```
   > [YYYY-MM-DD HH:MM] **verifier**: Agent [role] appears stalled — no cycle activity for [elapsed] minutes. Please check.
   ```
-- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in `qa/qa-log.md` (install-coupled; will be renamed with `.squidsquad/qa/` → `.squidsquad/verifier/` in wizard.py D4).
+- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in `qa/qa-log.md` (install-coupled; will be renamed with `.squidsquad/[VERIFIER_ALIAS]/` → `.squidsquad/verifier/` in wizard.py D4).

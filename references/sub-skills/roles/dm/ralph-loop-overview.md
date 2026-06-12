@@ -26,10 +26,10 @@ At the end of each cycle, print:
 
 **Step markers**: At the start of each step, print a one-line `[🦑 HH:MM:SS]` timestamped status so the human can scan scrollback. Key sub-actions also get markers. Keep each marker to one concise line. **All timestamps** (`HH:MM:SS`, `YYYY-MM-DD HH:MM`) must come from `python references/scripts/cycle.py timestamp-short` — see Timestamps in Tracker Protocol. Never guess or fabricate times.
 
-**Status bar state**: At each step marker, also write your current state to `.squidsquad/dm/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
+**Status bar state**: At each step marker, also write your current state to `.squidsquad/[DM_ALIAS]/current-state` so the status bar can display it. **Use atomic writes** (write to `.tmp` then `mv`) to avoid file locking races with the statusline script on Windows:
 
 ```bash
-echo "phase|sub-skill — description" > .squidsquad/dm/current-state.tmp && mv -f .squidsquad/dm/current-state.tmp .squidsquad/dm/current-state
+echo "phase|sub-skill — description" > .squidsquad/[DM_ALIAS]/current-state.tmp && mv -f .squidsquad/[DM_ALIAS]/current-state.tmp .squidsquad/[DM_ALIAS]/current-state
 ```
 
 Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The sub-skill is the short name of the active sub-skill (e.g., `pull-latest`, `delivery-packaging`, `version-bumps`, `git-commit`). The description is a short (≤60 char) human-readable label. **Include the specific item ID** in all item-specific phases. Put the item ID near the start of the description so it survives truncation. Examples:
@@ -41,3 +41,13 @@ Phase is one of: `pulling`, `delivering`, `shipping`, `committing`, `idle`. The 
 - `idle|`
 
 Write `idle|` at cycle end so the status bar shows rotating hints between cycles.
+
+## Loop-mode cycle steps
+
+Each `/loop` cron fire executes one cycle through these steps. The harness wraps each cycle with `cycle_pre.py` (git pull, working-state read, `cycle-input.json`) and `cycle_post.py` (commit, push, working-state write); your creative work happens between them. Step IDs and sub-skill references match the event-mode contract so role-specific instruction appendices apply unchanged.
+
+1. **`step:cycle/pickup`** — → run sub-skill: `task-pickup`. Query the tracker for pending-ship items, select the highest-priority item, record it in `working-state.md`. (Event-mode's per-event care filter does not apply here — loop mode has no event stream.)
+2. **`step:cycle/work`** — Do the unit of work (verify citation gate, ship, write CHANGELOG/release notes). Role-specific instructions in your composed CLAUDE.md define what counts as work.
+3. **`step:cycle/checkpoint`** — → run sub-skill: `git-commit`. The mechanical commit and push are part of the post-cycle wrapper (`cycle_post.py`); use this step to mark logical checkpoints (end of substep, end of sub-skill block) so the post-cycle commit captures a coherent diff.
+4. **`step:cycle/cleanup`** — → run sub-skill: `working-state` (clear or update `working-state.md`, write iteration log, run vault-remember if real work occurred). → run sub-skill: `improvement-scan-slim` (run improvement scan per configured policy if the cycle produced no work).
+5. **`step:cycle/exit`** — Exit the cycle cleanly. `cycle_post.py` applies your output before the next cron fire; `/loop` triggers the next cycle at the configured interval. Loop mode runs exactly one cycle per cron fire — there is no per-event walk to continue. Inline-mode caveats (above) apply when a human is driving the session directly.

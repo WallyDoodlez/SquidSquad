@@ -4,7 +4,7 @@ inside any slot.
 Pre-fix the parser treated every H3 line as an op directive, raising
 ``L4ParseError`` for non-op-grammar headings like ``### Zero-gap gate
 is absolute`` even when they appeared under ``## Soul`` / ``## Identity``
-/ ``## Instructions`` as content sub-headings. 3 of 4 shipped L4 files
+/ ``## Agent Functions`` as content sub-headings. 3 of 4 shipped L4 files
 under ``.squidsquad/project/`` reproduced the error in production, which
 in turn blocked ``compose.py deploy-all`` for dm/verifier/worker
 post-#10981.
@@ -91,14 +91,14 @@ class TestNonOpH3UnderNonInstructionsSlot:
 
 
 class TestNonOpH3UnderInstructionsSlot:
-    """Production L4 files use prose H3s under ``## Instructions`` too
+    """Production L4 files use prose H3s under ``## Agent Functions`` too
     (``### Boot & Pre-flight``, ``### Delivery Flow``, etc.). Those must
     flow into an implicit append rather than raising malformed-op.
     """
 
     def test_prose_h3_in_instructions_opens_implicit_append(self):
         text = (
-            "## Instructions\n"
+            "## Agent Functions\n"
             "\n"
             "### Boot & Pre-flight\n"
             "\n"
@@ -118,7 +118,7 @@ class TestNonOpH3UnderInstructionsSlot:
         still work alongside the new prose-H3 acceptance.
         """
         text = (
-            "## Instructions\n"
+            "## Agent Functions\n"
             "\n"
             "### append\n"
             "\n"
@@ -144,7 +144,7 @@ class TestNonOpH3UnderInstructionsSlot:
         until the next explicit op opens its own.
         """
         text = (
-            "## Instructions\n"
+            "## Agent Functions\n"
             "\n"
             "### Boot & Pre-flight\n"
             "\n"
@@ -172,7 +172,7 @@ class TestNonOpH3UnderInstructionsSlot:
         silently absorbed into the explicit op's body.
         """
         text = (
-            "## Instructions\n"
+            "## Agent Functions\n"
             "\n"
             "### append\n"
             "\n"
@@ -198,11 +198,11 @@ class TestNonOpH3UnderInstructionsSlot:
         assert "Prose paragraph that must not be absorbed" in instr[1].body_text
 
     def test_plain_prose_before_first_h3_in_instructions_not_lost(self):
-        """DS finding 4: plain prose between ``## Instructions`` and the
+        """DS finding 4: plain prose between ``## Agent Functions`` and the
         first H3 must flow into the implicit append, not silently drop.
         """
         text = (
-            "## Instructions\n"
+            "## Agent Functions\n"
             "\n"
             "Plain prose paragraph that should be captured.\n"
             "\n"
@@ -225,7 +225,7 @@ class TestNonOpH3UnderInstructionsSlot:
 
 class TestImplicitAppendExemptFromR4Validation:
     """DS finding 1: R4 in link_stage_validator rejects ``### append``
-    ops under ``## Instructions`` without a ``→ run sub-skill:`` ref.
+    ops under ``## Agent Functions`` without a ``→ run sub-skill:`` ref.
     Implicit appends from prose H3s (which by definition can't have a
     sub-skill ref — that's the whole point of being prose) must be
     exempt, otherwise compose for dm/verifier/worker aborts at R4.
@@ -241,7 +241,7 @@ class TestImplicitAppendExemptFromR4Validation:
         assert getattr(op, "_implicit", False) is True
 
     def test_explicit_append_op_is_not_marked_implicit(self):
-        text = "## Instructions\n\n### append\n\n→ run sub-skill: x\n"
+        text = "## Agent Functions\n\n### append\n\n→ run sub-skill: x\n"
         op = l4.parse_l4_text(text).slots["instructions"][0]
         assert getattr(op, "_implicit", False) is False
 
@@ -258,7 +258,7 @@ class TestImplicitAppendExemptFromR4Validation:
         )
 
         text = (
-            "## Instructions\n"
+            "## Agent Functions\n"
             "\n"
             "### Boot & Pre-flight\n"
             "\n"
@@ -286,7 +286,7 @@ class TestImplicitAppendExemptFromR4Validation:
         )
 
         text = (
-            "## Instructions\n"
+            "## Agent Functions\n"
             "\n"
             "### append\n"
             "\n"
@@ -340,7 +340,7 @@ class TestLiveProductionL4Files:
         for slot_label, slot_key in [
             ("## Identity", "identity"),
             ("## Soul", "soul"),
-            ("## Instructions", "instructions"),
+            ("## Agent Functions", "instructions"),
             ("## Project Context", "project-context"),
         ]:
             if slot_label in text:

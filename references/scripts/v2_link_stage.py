@@ -59,16 +59,20 @@ from link_stage_validator import LinkStageSource  # noqa: E402
 CANONICAL_SLOT_ORDER = (
     "identity",
     "responsibility",
+    "project-context",
     "soul",
     "instructions",
-    "project-context",
     "vault",
 )
 SLOT_DISPLAY = {
     "identity": "Identity",
     "responsibility": "Responsibility",
     "soul": "Soul",
-    "instructions": "Instructions",
+    # #11144 Finding 5b: "Instructions" was ambiguous to a reader who
+    # hits the heading after Identity/Responsibility/Soul — instruction
+    # for WHAT? "Agent Functions" telegraphs scope (the agent's role
+    # in the team + how it operates each cycle).
+    "instructions": "Agent Functions",
     "project-context": "Project Context",
     "vault": "Vault",
 }
@@ -126,9 +130,20 @@ def emit_v2_linked(role_class, l3_domain, *, repo_root=None, l4_path=None):
     # stage shouldn't crash on if it happens.
     parsed.sort(key=lambda r: (r[0], r[1], r[2]))
 
+    # #11227: inline op extraction. Each L1-L3 source body may contain
+    # L4-style op directives (### insert-after step:cycle/<id>, ### replace
+    # step:cycle/<id>, etc.). Extract them so they apply the same way
+    # L4 ops do — same grammar, same anchor model, same processor.
+    # Sources that author no op directives produce empty ops lists; their
+    # body flows through verbatim. Ops accumulate per-slot in source-layer
+    # sort order (set above by parsed.sort), and apply BEFORE L4 file ops.
     slot_bodies = {slot: [] for slot in CANONICAL_SLOT_ORDER}
+    inline_ops = {slot: [] for slot in CANONICAL_SLOT_ORDER}
     for slot_idx, _ordinal, _path, body in parsed:
-        slot_bodies[CANONICAL_SLOT_ORDER[slot_idx]].append(body)
+        slot_key = CANONICAL_SLOT_ORDER[slot_idx]
+        cleaned_body, source_ops = _extract_inline_ops(body)
+        slot_bodies[slot_key].append(cleaned_body)
+        inline_ops[slot_key].extend(source_ops)
 
     if Path(l4_path).is_file():
         l4_doc = parse_l4_file(l4_path)
@@ -137,15 +152,118 @@ def emit_v2_linked(role_class, l3_domain, *, repo_root=None, l4_path=None):
 
     out_chunks = []
     for slot in CANONICAL_SLOT_ORDER:
-        combined, inline_ops = _assemble_slot(slot, slot_bodies[slot])
-        ops = inline_ops + l4_doc.slots.get(slot, [])
-        if ops:
-            combined = apply_l4_ops(combined, ops)
+        combined = _join_bodies(slot_bodies[slot])
+        # Apply ops in source-layer order: L1-L3 inline ops first, then
+        # L4 file ops. Both speak the same grammar and run through the
+        # same processor.
+        all_ops = inline_ops[slot] + l4_doc.slots.get(slot, [])
+        if all_ops:
+            combined = apply_l4_ops(combined, all_ops)
         # Every H2 section starts with the canonical heading and a blank
         # line. If the slot is empty, the section is still emitted to
         # satisfy the "exactly six H2 sections" AC.
         out_chunks.append(f"## {SLOT_DISPLAY[slot]}\n\n{combined}".rstrip() + "\n")
     return "\n".join(out_chunks)
+
+
+# Inline op directive grammar — mirrors l4_parser._OP_RE exactly so the
+# two parsers stay in lockstep. The wrapping group captures the full
+# directive for easy dispatch; inner groups capture step IDs.
+_INLINE_OP_DIRECTIVE_RE = re.compile(
+    r"^###\s+"
+    r"(append$"
+    r"|replace$"
+    r"|replace\s+step:cycle/([A-Za-z0-9_-]+)$"
+    r"|insert-before\s+step:cycle/([A-Za-z0-9_-]+)$"
+    r"|insert-after\s+step:cycle/([A-Za-z0-9_-]+)$)"
+)
+
+
+def _extract_inline_ops(body):
+    """Extract L4-style op directives embedded in a source body.
+
+    Returns ``(cleaned_body, ops_list)``. The cleaned body is the
+    source's non-op content (everything BEFORE the first op directive,
+    plus any non-op H3 sub-headings that appear before an op); ops_list
+    is the explicit op H3s in source order with their bodies, ready to
+    feed to ``apply_l4_ops``.
+
+    Grammar matched here matches ``l4_parser._OP_RE`` exactly:
+      ### append
+      ### replace
+      ### replace step:cycle/<id>
+      ### insert-before step:cycle/<id>
+      ### insert-after step:cycle/<id>
+
+    Sources that author no op directives produce no ops; their full
+    body flows through as ``cleaned_body``. Most L1 / common sub-skill
+    sources hit this fast path.
+    """
+    if not body:
+        return ("", [])
+
+    lines = body.splitlines(keepends=True)
+    pre_op_lines = []
+    ops = []
+    current_op = None  # tuple (L4Op record, list of body lines)
+
+    for line in lines:
+        m = _INLINE_OP_DIRECTIVE_RE.match(line.rstrip("\n"))
+        if m is None:
+            # An H2 boundary (`## Heading`) terminates the current op's
+            # body and the H2 + everything after flows as plain content
+            # (cleaned_body). Without this terminator the extractor was
+            # too greedy — it sucked H2-rooted sub-sections into the op
+            # body, which then got `insert-after` injected at the step
+            # anchor and ended up in the wrong place in composed output.
+            # H3 non-op headings (e.g. `### Some Heading`) continue to
+            # flow into the op body — only H2 is a hard structural
+            # boundary inside a single-slot source.
+            if current_op is not None and line.startswith("## ") and not line.startswith("### "):
+                op_record, body_lines = current_op
+                op_record.body_text = "".join(body_lines).strip("\n")
+                ops.append(op_record)
+                current_op = None
+                pre_op_lines.append(line)
+                continue
+            if current_op is None:
+                pre_op_lines.append(line)
+            else:
+                current_op[1].append(line)
+            continue
+
+        # Commit the pending op (if any) before starting a new one.
+        if current_op is not None:
+            op_record, body_lines = current_op
+            op_record.body_text = "".join(body_lines).strip("\n")
+            ops.append(op_record)
+
+        directive = m.group(1)
+        if directive == "append":
+            op_type, target = "append", None
+        elif directive == "replace":
+            op_type, target = "replace", None
+        elif directive.startswith("replace "):
+            op_type, target = "replace", m.group(2)
+        elif directive.startswith("insert-before "):
+            op_type, target = "insert-before", m.group(3)
+        elif directive.startswith("insert-after "):
+            op_type, target = "insert-after", m.group(4)
+        else:  # defensive — regex above is exhaustive
+            continue
+
+        current_op = (
+            L4Op(op_type=op_type, target_step_id=target, body_text="", metadata={}),
+            [],
+        )
+
+    # Commit the final op (if any).
+    if current_op is not None:
+        op_record, body_lines = current_op
+        op_record.body_text = "".join(body_lines).strip("\n")
+        ops.append(op_record)
+
+    return ("".join(pre_op_lines), ops)
 
 
 def _parse_all_applicable_sources(repo_root, role_class, l3_domain):
@@ -338,155 +456,86 @@ def _strip_frontmatter(text):
     return text[m.end():]
 
 
+# #11139: L4-op-syntax H3 headers (`### append`, `### insert-after step:cycle/<id>`,
+# etc.) appear in many L1-L3 source files as authoring markers, but the
+# L1-L3 join pipeline doesn't process them as ops — only L4 ops are
+# applied. They survive into the composed CLAUDE.md as meaningless
+# meta-headers (e.g. PM CLAUDE.md lines 3, 90, 946, 954). Strip them
+# before join so the consuming agent doesn't see compose-machinery
+# headings interleaved with content. This does NOT affect L4 ops:
+# L4 ops are parsed from `.squidsquad/project/<role>.md` separately
+# and applied AFTER join, so they remain untouched.
+_L4_OP_HEADER_RE = re.compile(
+    r"^### (?:append|replace|"
+    r"(?:replace|insert-before|insert-after)\s+step:cycle/[A-Za-z0-9_-]+)\s*$",
+    re.MULTILINE,
+)
+
+
+def _strip_l4_op_headers(body):
+    """Remove L4-op-syntax H3 headers (and the trailing blank line that
+    typically follows them) from an L1-L3 source body. See #11139.
+    """
+    # Match the header line plus the optional blank line right after it,
+    # so removing the header doesn't leave a double-blank-line gap.
+    cleaned = re.sub(
+        r"^### (?:append|replace|"
+        r"(?:replace|insert-before|insert-after)\s+step:cycle/[A-Za-z0-9_-]+)"
+        r"\s*\n(?:\n)?",
+        "",
+        body,
+        flags=re.MULTILINE,
+    )
+    return cleaned
+
+
+# #11144 Finding 1 Shape A: source SOUL.md / Identity / Responsibility
+# files author themselves with ``## Soul — Base Agent`` / ``## Soul — PM``
+# / etc. as the top-level body heading. The compose pipeline already
+# emits the canonical slot heading (``## Soul``) from SLOT_DISPLAY, so
+# the source layer-discriminating heading becomes a redundant peer that
+# tells the reader about the L1/L2 layering — which they don't need to
+# know about. Strip from each L1-L3 source body before join. The
+# standalone .squidsquad/<r>/SOUL.md file produced by the v1
+# _assemble_soul path is unaffected; this strip is scoped to the v2
+# link-stage join only.
+_REDUNDANT_SLOT_HEADER_RE = re.compile(
+    # Shape A: layer-discriminating slot headings like
+    # ``## Soul — Base Agent``, ``## Soul — PM``, etc.
+    # Shape D companion: bare canonical slot headings like ``## Identity``
+    # or ``## Soul`` (#11144 Finding 1 Shape D): L1/L2/L3 source files
+    # author themselves with the canonical slot heading, but the SLOT_DISPLAY
+    # emit step already prepends the canonical heading — the body's copy
+    # duplicates it. Strip both shapes here so each composed slot ends up
+    # with exactly ONE canonical heading at the top.
+    r"^## (?:Soul|Identity|Responsibility|Instructions|"
+    r"Agent Functions|Project Context|Vault)"
+    r"(?: — [^\n]*)?\n(?:\n)?",
+    re.MULTILINE,
+)
+
+
+def _strip_redundant_slot_headers(body):
+    """Remove redundant slot headings from an L1-L3 source body. See #11144
+    Finding 1 Shapes A + D. Two patterns handled:
+    - Layer-discriminating: ``## Soul — Base Agent``, ``## Soul — PM``
+    - Bare canonical duplicate: ``## Identity`` (the SLOT_DISPLAY emit
+      step adds this; the source-body copy is redundant)
+    Idempotent."""
+    return _REDUNDANT_SLOT_HEADER_RE.sub("", body)
+
+
 def _join_bodies(bodies):
     """Concatenate per-file bodies with a single blank line between them.
 
     Each body is stripped of leading/trailing whitespace so the joined
     output has predictable spacing regardless of how each source file
-    terminates.
+    terminates. L4-op-syntax H3 headers (#11139) and layer-discriminating
+    slot headings (#11144) are stripped per-body before joining.
     """
-    cleaned = [b.strip() for b in bodies if b.strip()]
+    cleaned = [
+        _strip_redundant_slot_headers(_strip_l4_op_headers(b)).strip()
+        for b in bodies
+    ]
+    cleaned = [b for b in cleaned if b]
     return "\n\n".join(cleaned)
-
-
-# #11227: an `### step:cycle/<id>` H3 anchor in joined L1-L3 base content.
-# Used to decide whether an inline step-targeted op directive can anchor
-# (target present) or must degrade to inline content (target absent).
-# Same shape as l4_op_processor._STEP_HEADING_RE, kept local so this
-# module doesn't re-couple to A2c internals.
-_STEP_ANCHOR_RE = re.compile(
-    r"^### step:cycle/([A-Za-z0-9_-]+)\s*$", re.MULTILINE
-)
-# H3 heading text grammar (mirrors l4_parser._H3_RE).
-_H3_HEADING_RE = re.compile(r"^###\s+(.+?)\s*#*\s*$")
-# An H3 heading "looks like" an op directive (mirrors l4_parser._OP_LIKE_RE).
-_INLINE_OP_LIKE_RE = re.compile(
-    r"^(append|replace|insert-before|insert-after)(\s|$)"
-)
-# Strict op grammar (mirrors l4_parser._OP_RE): bare append/replace, or a
-# step-targeted replace/insert-before/insert-after.
-_INLINE_OP_RE = re.compile(
-    r"^(append|replace)$"
-    r"|^(replace|insert-before|insert-after)\s+step:cycle/([A-Za-z0-9_-]+)$"
-)
-
-
-def _split_body_segments(body, slot):
-    """Split an L1-L3 source body into ordered segments (#11227).
-
-    Returns a list of ``("content", text)`` and ``("op", L4Op)`` tuples in
-    source order. A focused line scanner — NOT the L4 file parser — because
-    L1-L3 bodies carry their own ``## <Section>`` headings, which the L4
-    parser would mis-read as slot boundaries.
-
-    - ``### insert-after|insert-before|replace step:cycle/<id>`` → an ``op``
-      segment (step-targeted ``L4Op``), its body running to the next op
-      directive, the next ``## `` section heading, or end of body.
-    - ``### append`` / whole-slot ``### replace`` (no target) → the header
-      is dropped and the body flows on as a fresh ``content`` segment;
-      concatenation is equivalent to a slot-end append and preserves
-      #11139's verified strip-header-keep-body behavior.
-    - Everything else (prose, ``### step:cycle/<id>`` anchor headings,
-      ``#### `` sub-steps, malformed op-like headings) is ``content``.
-    """
-    segments = []
-    buf = []
-    op_type = None
-    op_target = None
-    op_buf = []
-
-    def flush_content():
-        text = "\n".join(buf).strip()
-        buf.clear()
-        if text:
-            segments.append(("content", text))
-
-    def flush_op():
-        nonlocal op_type, op_target
-        segments.append(("op", L4Op(
-            op_type=op_type,
-            target_step_id=op_target,
-            body_text="\n".join(op_buf).strip(),
-        )))
-        op_buf.clear()
-        op_type = op_target = None
-
-    for line in body.split("\n"):
-        if line.startswith("### "):
-            m = _H3_HEADING_RE.match(line)
-            heading = m.group(1).strip() if m else ""
-            if _INLINE_OP_LIKE_RE.match(heading):
-                mo = _INLINE_OP_RE.match(heading)
-                if mo is not None:
-                    if op_type is not None:
-                        flush_op()
-                    else:
-                        flush_content()
-                    if mo.group(1) is None:
-                        # step-targeted op → accumulate its body
-                        op_type, op_target = mo.group(2), mo.group(3)
-                    # else bare append/replace: header dropped, body
-                    # continues as a fresh content segment.
-                    continue
-                # malformed op-like heading → fall through as content
-        if line.startswith("## ") and op_type is not None:
-            # A section heading ends the current op body and is content.
-            flush_op()
-            buf.append(line)
-            continue
-        if op_type is not None:
-            op_buf.append(line)
-        else:
-            buf.append(line)
-
-    if op_type is not None:
-        flush_op()
-    else:
-        flush_content()
-    return segments
-
-
-def _assemble_slot(slot, bodies):
-    """Build a slot's base content and the inline ops to apply to it (#11227).
-
-    Returns ``(combined_base, inline_ops)``:
-    - ``combined_base`` — all content segments across ``bodies`` (in sort
-      order), plus the bodies of any step-targeted ops whose anchor is
-      NOT present (degraded to inline at source position — keeps compose
-      green for L3 ops targeting L2-defined H4 sub-steps, AC-6 deferred).
-    - ``inline_ops`` — the step-targeted ops whose ``### step:cycle/<id>``
-      anchor IS present in the combined base, to be applied via
-      ``apply_l4_ops`` so their content anchors at the right cycle step
-      (AC-4/AC-5).
-
-    Two passes: collect the anchor set from content first, then partition
-    ops into anchorable (applied) vs non-anchorable (degraded inline) so
-    anchorability doesn't depend on body ordering.
-    """
-    segments = []
-    for body in bodies:
-        segments.extend(_split_body_segments(body, slot))
-
-    anchor_ids = set()
-    for kind, val in segments:
-        if kind == "content":
-            anchor_ids.update(m.group(1) for m in _STEP_ANCHOR_RE.finditer(val))
-
-    base_parts = []
-    inline_ops = []
-    for kind, val in segments:
-        if kind == "content":
-            base_parts.append(val)
-        elif not val.body_text:
-            # An op with no body adds nothing whether applied or degraded
-            # (e.g. two op directives back-to-back). Drop it so it can't
-            # become a silent no-op insert.
-            continue
-        elif val.target_step_id in anchor_ids:
-            inline_ops.append(val)
-        else:
-            # Target anchor absent → degrade to inline content in source
-            # position (the post-#11139 behavior), so compose stays green.
-            base_parts.append(val.body_text)
-
-    return _join_bodies(base_parts), inline_ops

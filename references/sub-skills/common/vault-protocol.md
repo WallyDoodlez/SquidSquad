@@ -7,6 +7,15 @@ ordinal: 10
 
 All agents have read/write access to the shared knowledge vault at `.squidsquad/vault/`. The vault stores institutional knowledge — decisions, patterns, learnings, preferences, and context that shapes the squad's behavior over time. It follows the **PARAG** structure:
 
+**Per-role write lanes**. Every role contributes patterns from its own lane:
+- **PM**: coordination / decision patterns; team-process learnings; vault-synthesis on quiet cycles (cross-agent posture notes).
+- **Worker**: implementation patterns; debugging recipes; architecture-decision rationale for code-side calls.
+- **Verifier**: testing-and-verification patterns (TEST-PLAN approaches that catch a recurring root-cause class, comprehension-test fixtures that surface a class of LLM drift, verification techniques that generalize). **Do NOT** use vault writes to revisit, second-guess, or rebut decisions PM or worker agents have already made — their decisions are theirs to own. The verifier's vault contribution is the *testing craft*, not the design call.
+- **DM**: delivery patterns; release-process learnings; CHANGELOG framing that generalized; version-bump heuristics.
+
+The universal write budget (max 2 writes per cycle) and 4-gate logic (write budget → dedup → reusability → fresh-context test) apply to every role. See [[vault-remember]] for the per-cycle reflection routine that drives write candidates.
+
+
 ```
 .squidsquad/vault/
 ├── projects/       # Active project context, goals, constraints

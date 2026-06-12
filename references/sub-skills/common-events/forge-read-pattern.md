@@ -11,19 +11,19 @@ Every decision consults the forge before acting. This is the rule that lets the 
 
 ### When You Receive An Event
 
-1. **Wake.** `event_poll.py` delivered one JSON event to stdout.
+1. **Wake.** `event_poll.py` delivered a `NUDGE` (no payload) to stdout; `GET /events/for/{role}?since=<cursor>` and take the next event.
 2. **Read the event payload.** Treat it as a hint about what may have changed on the forge.
 3. **Forge-read.** Query the forge via `tracker.py` for the referenced item (and/or `work_queue(<role>)` for your role's queue). The forge tells you the actual current state.
 4. **Act on what the forge says**, not on what the event payload said. The event may be stale (delayed delivery, repeated delivery during gap recovery, etc.).
 
-The cursor advances automatically as `event_poll.py` emits each event line — there is no separate step you take to advance it (see [[cursor-management]]).
+After you tend each event (steps 1-4 above), you MUST POST `ack-cursor {event_id, role}` to the harness — the cursor does NOT advance automatically. `event_poll.py` only emits a wake `NUDGE`; it never touches the cursor. The harness cursor (in `.event-state.json`) advances only when the agent POSTs `ack-cursor` for the event it just finished (see [[cursor-management]] for the wire shape; see [[event-mode-contract]] for the per-event loop). Skipping the POST leaves the cursor stuck at the boot position; every event re-delivers on the next restart.
 
 ### Why
 
 - Events can be **stale, duplicated, or out-of-order**. The forge is consistent.
 - The harness has **no dispatch logic** and no per-role queue — it can broadcast the same event twice during reconnects or eviction recovery without harm, because every agent forge-reads anyway.
 - **Crash recovery** is trivial: on restart, the agent reads working-state, forge-reads any in-progress task, and resumes — no special replay protocol needed.
-- **Mid-task events** (Case D in [[l1-base]]) are absorbed by the next forge-read at task completion. The agent never needs an in-memory event queue.
+- **Mid-task events** (Case D in [[event-mode-contract]]) are absorbed by the next forge-read at task completion. The agent never needs an in-memory event queue.
 
 ### `work_queue()` Semantics
 

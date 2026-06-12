@@ -24,39 +24,17 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
    python references/scripts/git_ops.py commit-state [ROLE] "[brief description of state changes]"
    ```
 
-3. **When marking Pending Test**, create a PR from the feature branch:
+3. **When marking Pending Test**, create a PR from the feature branch.
 
-   Check PR Flow setting:
+   → run sub-skill: `pr-protocol` — canonical owner of PR creation. The locked rule (`git_ops.py pr-create`, not bare `gh pr create`), the structured-vs-simple body shapes, and the planning-review carve-out all live there. This step is the commit-flow handoff to PR creation.
+
+   Read `PR Flow` from config:
    ```bash
    python references/scripts/config.py get pr-flow
    ```
 
-   **If PR Flow `yes`** — structured PR with review sections:
-   ```bash
-   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title]" "$(cat <<'PRBODY'
-   Closes #[NUMBER]
+   Pick the body shape per `pr-protocol`'s **Body shape** section (`PR Flow yes` → structured; `PR Flow no` → simple). Invoke `git_ops.py pr-create` with that body. For `PR Flow yes`, post a Code Review Summary as a PR comment after creation:
 
-   ### Summary
-   [Brief description of what was implemented and why]
-
-   ### Acceptance Criteria
-   - [ ] [criterion 1]
-   - [ ] [criterion 2]
-
-   ### Changes
-   - **Files**: [key files changed]
-   - **What**: [what changed]
-   - **Why**: [rationale and key decisions]
-
-   ### Verifier Status
-   - [ ] Unit tests passing
-   - [ ] Smoke tests passing
-   - [ ] Acceptance criteria met
-   PRBODY
-   )"
-   ```
-
-   After PR creation, post a code review summary as a PR comment:
    ```bash
    gh pr comment [PR_NUMBER] --body "## Code Review Summary
 
@@ -64,11 +42,6 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
    **Why**: [rationale]
    **Key decisions**: [any notable choices]
    **Files touched**: [list of key files]"
-   ```
-
-   **If PR Flow `no`** — simple PR (no review sections):
-   ```bash
-   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title]" "Closes #[NUMBER]\n\n## #[NUMBER]\n\n[acceptance criteria]\n\nStatus: Pending Test"
    ```
 
    Record the PR URL in the tracker Discussion:

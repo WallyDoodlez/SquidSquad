@@ -1,0 +1,31 @@
+{
+  "issue": 11227,
+  "title": "L2-L3 op anchoring — uniform op grammar across L2-L4",
+  "files": [
+    "references/scripts/v2_link_stage.py",
+    "references/scripts/l4_op_processor.py",
+    "docs/COMPOSE-ARCHITECTURE.md"
+  ],
+  "questions": [
+    {
+      "id": "1-grammar-scope",
+      "question": "After #11227, which source layers may author L4-style op directives (### insert-after step:cycle/<id>, ### append, etc.) in their source bodies? List the layers and explain how their ops get applied.",
+      "expected": "L2, L3, AND L4 may author op directives. L1 conventionally does not author ops (the grammar permits it but L1 stays as base content). The grammar is identical across layers — the same five op forms (append, replace, replace step:cycle/<id>, insert-before step:cycle/<id>, insert-after step:cycle/<id>) are recognized at every layer that authors them. Application order is source-layer order: L1-L3 inline ops first (sorted by ordinal/path within their slot), then L4 file ops. All ops flow through the same processor — l4_op_processor.apply_l4_ops. The link stage (v2_link_stage.emit_v2_linked) calls _extract_inline_ops on each L1-L3 source body to extract ops from prose, then concatenates the cleaned bodies and feeds the accumulated ops list to apply_l4_ops alongside ops from the L4 file."
+    },
+    {
+      "id": "2-extract-inline-ops-contract",
+      "question": "What is the contract of _extract_inline_ops(body) in v2_link_stage.py? Describe what it returns when (a) the body has no op directives, (b) the body has only op directives, (c) the body has prose then op directives.",
+      "expected": "_extract_inline_ops returns a tuple (cleaned_body, ops_list). (a) No ops in body: cleaned_body == the full input body unchanged; ops_list is empty. (b) Only ops: cleaned_body is an empty string; ops_list contains the L4Op records in source order. (c) Mixed prose + ops: cleaned_body contains everything BEFORE the first op directive (plus any non-op H3 sub-headings that appear before an op); ops_list contains the explicit ops in source order. Each op's body_text is everything from immediately after the op H3 line until either the next op H3 or end of body, with leading and trailing newlines stripped. The grammar matched is identical to l4_parser._OP_RE: ### append, ### replace, ### replace step:cycle/<id>, ### insert-before step:cycle/<id>, ### insert-after step:cycle/<id>."
+    },
+    {
+      "id": "3-step-heading-anchor-levels",
+      "question": "Per the updated _STEP_HEADING_RE in l4_op_processor.py, at which markdown heading levels may a step:cycle/<id> ANCHOR (target) heading appear? Why was this changed, and what level must op DIRECTIVES themselves use?",
+      "expected": "Per #11227, the target step heading may appear at H3, H4, H5, or H6 — the regex is ^#{3,6} step:cycle/<id>\\s*$. This was relaxed from H3-only because L1 cycle steps live at H3 (top-level cycle anchors), L2 step extensions sit at H4 as sub-steps under their L1 parent, and L3 extensions sit at H5 under L2. The op processor needs to find step IDs regardless of nesting depth so that L3 ops can anchor to L2-introduced step IDs (e.g., L3 worker/skill's `### insert-after step:cycle/implement` finds L2 worker's `#### step:cycle/implement`). The op DIRECTIVES themselves (the `### insert-after step:cycle/<id>` lines that get extracted by the link stage) remain H3-only — that is the unchanged grammar contract enforced by l4_parser._OP_RE and v2_link_stage._INLINE_OP_DIRECTIVE_RE. Only the TARGET heading depth is flexible."
+    },
+    {
+      "id": "4-pm-l2-op-example",
+      "question": "Given the L2 PM source file `references/roles/pm/instructions.md` contains:\n\n    ### insert-after step:cycle/resume\n    #### step:cycle/check-in\n    → run sub-skill: checkin\n    Check in with the human...\n\nWhere does this content appear in the composed pm CLAUDE.md, and what was happening to it BEFORE #11227?",
+      "expected": "After #11227, the `#### step:cycle/check-in` heading + body lands immediately AFTER the L1-provided `### step:cycle/resume` anchor heading + its body in the composed pm CLAUDE.md instructions slot (Agent Functions section). The L1 step heading is preserved; the L2 content is inserted between the L1 step and whatever comes next in the L1 ordering. Before #11227, the link stage only applied ops from L4 files (`.squidsquad/project/<role>.md`) — L2 op directives were silently dropped: the link stage treated `### insert-after step:cycle/resume` as a regular prose H3 and appended it verbatim to the slot body. The composed CLAUDE.md would carry the literal `### insert-after step:cycle/resume` heading text with no insertion happening. PM L2 had four such directives (resume, pickup, work, cleanup), all silently dropped — the agent never received the intended step-anchored content."
+    }
+  ]
+}

@@ -44,7 +44,7 @@ RUNTIME_READ_FRAGMENTS = frozenset({
     "roles/verifier/ralph-loop-overview",
     "roles/dm/ralph-loop-overview",
     "common-events/event-driven-workflow",
-    "common-events/l1-base",
+    "common-events/event-mode-contract",
     "common-events/cursor-management",
     "common-events/forge-read-pattern",
     "common-events/idle-cooldown-loop",
@@ -467,17 +467,16 @@ def _inject_role_roster(content: str, role_name: str) -> str:
     existing `{{include:}}` / `{{runtime:}}` / `{{capability:}}`
     resolvers and to avoid firing inside code blocks of unrelated files
     that happen to mention the marker.
+
+    Marker-absent steady state: per #10360 / #11331 polish-session, the
+    `agent-boundaries` sub-skill was retired and its content inlined
+    directly into the L1 Identity slot (team roster + know-your-
+    teammates) and Responsibility slot (decline-and-route). The marker
+    is therefore intentionally absent from every composed CLAUDE.md.
+    Marker absence is the correct steady state; return content unchanged
+    without warning.
     """
     if "{{role-roster}}" not in content:
-        # D8 degraded mode: marker absent — likely agent-boundaries.md was
-        # not included for this role. Emit a warning and continue without
-        # substitution.
-        print(
-            f"WARNING: #9925 — no {{{{role-roster}}}} marker in composed "
-            f"{role_name} output; skipping roster injection (likely "
-            "common/agent-boundaries not in includes.yml)",
-            file=sys.stderr,
-        )
         return content
     roster = _render_role_roster()
     return content.replace("{{role-roster}}", roster)
@@ -598,6 +597,37 @@ def _get_entry_file_for_role(role_name: str) -> str:
     return role_name
 
 
+_ROLE_CONDITIONAL_RE = re.compile(
+    r"<!--\s*if\s+role\s*:\s*([A-Za-z0-9_-]+)\s*-->\s*\n?"
+    r"([\s\S]*?)"
+    r"\s*<!--\s*endif\s*-->\s*\n?",
+)
+
+
+def _apply_role_conditionals(content: str, role_name: str) -> str:
+    """Strip ``<!-- if role:<name> --> ... <!-- endif -->`` blocks that
+    don't match the target role.
+
+    Authors wrap content meant for a single role in a conditional block;
+    compose evaluates it at deploy time so the agent only sees content
+    relevant to its own role. Multi-line and single-line blocks both
+    supported. When the role matches, the markers are stripped and the
+    body survives. When it doesn't, the entire block (markers + body)
+    is removed and no trace is left in the composed output.
+
+    Idempotent — content without conditionals is returned unchanged.
+    """
+    def _replace(match):
+        block_role = match.group(1)
+        block_body = match.group(2)
+        if block_role == role_name:
+            # Keep the body, trimmed of leading/trailing newlines so the
+            # surrounding paragraph spacing of the caller controls layout.
+            return block_body.strip("\n") + "\n"
+        return ""
+    return _ROLE_CONDITIONAL_RE.sub(_replace, content)
+
+
 def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> str:
     """Substitute role-specific placeholders in composed content.
 
@@ -607,6 +637,11 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     `is_dev` below accepts both "dev" and "worker" entry_file values).
     """
     is_dev = entry_file in ("dev", "worker")  # #6274 dual-aware
+
+    # First pass: strip role-conditional blocks. Runs before any
+    # placeholder substitution so the substituted values can't accidentally
+    # match the conditional marker grammar.
+    content = _apply_role_conditionals(content, role_name)
 
     # Universal substitution — all roles need [ROLE] for cycle-runner paths
     content = content.replace("[ROLE]", role_name)
@@ -636,6 +671,15 @@ def _substitute_placeholders(content: str, role_name: str, entry_file: str) -> s
     # Shared placeholders (all roles)
     interval = _read_config_value("interval") or "30"
     content = content.replace("[INTERVAL]", interval)
+
+    # Role-class alias placeholders (#11144 G10). Sources write
+    # `.squidsquad/[VERIFIER_ALIAS]/...` so paths track the install's alias
+    # at compose time. PM/Verifier/DM are singleton today; this stages the
+    # multi-instance turn-on without changing composed output (singleton
+    # install: [VERIFIER_ALIAS] = "qa" via the legacy `qa` config key).
+    content = content.replace("[PM_ALIAS]", _read_config_value("alias-pm") or "pm")
+    content = content.replace("[VERIFIER_ALIAS]", _read_config_value("alias-qa") or "qa")
+    content = content.replace("[DM_ALIAS]", _read_config_value("alias-dm") or "dm")
 
     # PM/DM-specific
     if not is_dev:

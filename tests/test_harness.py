@@ -2205,13 +2205,17 @@ class TestEventDrivenPhase4(unittest.TestCase):
             pass
 
     def test_event_poll_target_mode_url(self):
-        """event_poll.py in target mode queries /events/for/<role>."""
+        """event_poll.py in target mode queries /events/for/<role>.
+
+        Reconciled to model-B (#11329): event_poll no longer owns the
+        cursor — it is harness-owned and passed via ``since=``. The
+        legacy ``_read_cursor_from_working_state`` / ``_write_cursor_atomic``
+        helpers were removed by the ack-cursor migration; ``poll`` now
+        returns a ``(events, hwm)`` tuple.
+        """
         import event_poll
 
         with patch.object(event_poll, "_discover_port", return_value=7373), \
-             patch.object(event_poll, "_read_cursor_from_working_state",
-                          return_value="abc123"), \
-             patch.object(event_poll, "_write_cursor_atomic"), \
              patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
             mock_resp.read.return_value = b'{"events": []}'
@@ -2219,23 +2223,25 @@ class TestEventDrivenPhase4(unittest.TestCase):
             mock_resp.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_resp
 
-            result = event_poll.poll("skill", target_mode=True,
-                                     sleep=lambda _: None)
+            events, _ = event_poll.poll("skill", since="abc123",
+                                        target_mode=True, sleep=lambda _: None)
 
             # Verify the URL used /events/for/skill
             call_args = mock_urlopen.call_args
             req = call_args[0][0]
             self.assertIn("/events/for/skill", req.full_url)
-            self.assertEqual(result, [])
+            self.assertEqual(events, [])
 
     def test_event_poll_legacy_mode_url(self):
-        """event_poll.py in legacy mode queries /events with role param."""
+        """event_poll.py in legacy mode queries /events with role param.
+
+        Reconciled to model-B (#11329): ``poll`` returns ``(events, hwm)``
+        and the cursor is supplied by the caller, not read from
+        working-state.
+        """
         import event_poll
 
         with patch.object(event_poll, "_discover_port", return_value=7373), \
-             patch.object(event_poll, "_read_cursor_from_working_state",
-                          return_value=""), \
-             patch.object(event_poll, "_write_cursor_atomic"), \
              patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
             mock_resp.read.return_value = b'{"events": [{"id": "x1"}]}'
@@ -2243,8 +2249,8 @@ class TestEventDrivenPhase4(unittest.TestCase):
             mock_resp.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_resp
 
-            result = event_poll.poll("skill", target_mode=False,
-                                     sleep=lambda _: None)
+            events, _ = event_poll.poll("skill", target_mode=False,
+                                        sleep=lambda _: None)
 
             # Verify legacy URL uses /events?role=skill
             call_args = mock_urlopen.call_args
@@ -2336,18 +2342,18 @@ class TestGetEventsForRole(unittest.TestCase):
         with self.event_stream._lock:
             self.event_stream._events.clear()
 
-    def test_filters_by_target_role(self):
+    def test_filters_by_target_alias(self):
         """GET /events/for/skill returns only events targeted at skill."""
         from harness import event_stream
 
         # Add events for different roles
         event_stream.append({
             "id": "e1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         event_stream.append({
             "id": "e2", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "pm", "issue_number": "2"},
+            "payload": {"target_alias": "pm", "issue_number": "2"},
         })
 
         with patch("harness._validate_role"):
@@ -2364,11 +2370,11 @@ class TestGetEventsForRole(unittest.TestCase):
 
         event_stream.append({
             "id": "old1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill"},
+            "payload": {"target_alias": "skill"},
         })
         event_stream.append({
             "id": "new1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill"},
+            "payload": {"target_alias": "skill"},
         })
 
         with patch("harness._validate_role"):
@@ -2547,7 +2553,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         state.set_agent("skill", agent)
         event_stream.append({
             "id": "e_nogate_a", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")
@@ -2565,7 +2571,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         state.set_agent("skill", agent)
         event_stream.append({
             "id": "e_unique_1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")
@@ -2595,7 +2601,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         from harness import event_stream
         event_stream.append({
             "id": "e_nogate_1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")

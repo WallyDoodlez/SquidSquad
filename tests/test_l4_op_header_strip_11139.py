@@ -6,14 +6,10 @@ semantic value (only L4 ops are processed at compose time). They were
 surviving into the rendered CLAUDE.md output where the consuming agent
 saw meaningless compose-machinery headings interleaved with content.
 
-Original #11139 fix stripped these headers in
-`v2_link_stage._strip_l4_op_headers`. #11227 SUPERSEDED that strip with
-inline-op extraction (`v2_link_stage._split_body_segments` /
-`_assemble_slot`): step-targeted directives now anchor at their
-`### step:cycle/<id>` target, and bare `### append` headers are dropped
-with their body flowing on as content. Either way the op-type H3 header
-never survives into composed output — so the #11139 regression contract
-below still holds and is retained as a guard.
+Fix: `v2_link_stage._strip_l4_op_headers` strips them from each L1-L3
+source body before `_join_bodies` concatenates. L4 ops are unaffected
+because they are parsed from `.squidsquad/project/<role>.md` separately
+and applied AFTER join.
 
 Regression contract:
 - `^### (append|replace|insert-after step:cycle/<id>|insert-before step:cycle/<id>|replace step:cycle/<id>)$`
@@ -91,15 +87,52 @@ def test_no_op_type_headers_in_linked_intermediate(_deploy_all, role):
 
 def test_l4_append_op_body_still_flows_into_composite():
     """Smoke check: the L4 file `.squidsquad/project/pm.md` has an
-    `### append` op under `## Identity` whose body is the recognizable
-    'You are PM on SquidSquad — the framework that builds itself.'
+    `### append` op under `## Identity` whose body opens with the
+    recognizable 'SquidSquad is the framework that builds itself.'
     sentence. After the strip fix, that BODY must still appear in the
     composed pm CLAUDE.md — only the op-type header gets removed,
-    not the content the op applied."""
+    not the content the op applied. (Sentinel reconciled at the v0.44.0
+    cutover to match the current L4 Identity-append wording.)"""
     path = REPO_ROOT / ".squidsquad" / "pm" / "CLAUDE.md"
     text = path.read_text(encoding="utf-8")
-    sentinel = "You are PM on SquidSquad"
+    sentinel = "SquidSquad is the framework that builds itself"
     assert sentinel in text, (
-        f"L4 append op body missing from {path}; the op handling may "
+        f"L4 append op body missing from {path}; the strip fix may "
         f"have removed too much. Expected sentinel: {sentinel!r}."
     )
+
+
+def test_strip_helper_is_idempotent():
+    """_strip_l4_op_headers should be a no-op on an already-clean body."""
+    sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
+    from v2_link_stage import _strip_l4_op_headers
+    clean = "## Identity\n\nYou are a SquidSquad agent.\n\n### Boundaries\n\n- bullet\n"
+    assert _strip_l4_op_headers(clean) == clean
+
+
+def test_strip_helper_removes_append_with_trailing_blank():
+    sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
+    from v2_link_stage import _strip_l4_op_headers
+    body = "## Identity\n\n### append\n\nYou are PM.\n"
+    expected = "## Identity\n\nYou are PM.\n"
+    assert _strip_l4_op_headers(body) == expected
+
+
+def test_strip_helper_removes_insert_after_step():
+    sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
+    from v2_link_stage import _strip_l4_op_headers
+    body = (
+        "### insert-after step:cycle/resume\n\n"
+        "#### step:cycle/triage-issues\n\n"
+        "Triage prose.\n"
+    )
+    expected = "#### step:cycle/triage-issues\n\nTriage prose.\n"
+    assert _strip_l4_op_headers(body) == expected
+
+
+def test_strip_helper_preserves_non_op_h3_headings():
+    """Boundaries, What this role does, etc. must not be stripped."""
+    sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
+    from v2_link_stage import _strip_l4_op_headers
+    body = "### Boundaries\n\n- bullet\n\n### What this role does\n\n- bullet\n"
+    assert _strip_l4_op_headers(body) == body

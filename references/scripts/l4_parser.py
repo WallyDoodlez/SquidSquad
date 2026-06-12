@@ -168,6 +168,13 @@ def _parse_text(text, source):
             _commit_current_op()
             current_body = []
             slot_name = _normalize_slot(h2.group(1))
+            # #11144 Finding 5b: composed CLAUDE.md renders the
+            # ``instructions`` slot as ``## Agent Functions``. L4 files
+            # may use either the new heading or the legacy
+            # ``## Instructions``; both normalize to the canonical
+            # ``instructions`` slot key here.
+            if slot_name == "agent-functions":
+                slot_name = "instructions"
             if slot_name not in LEGAL_SLOTS:
                 raise L4ParseError(
                     f"{source}:{lineno}: unknown L4 slot heading "

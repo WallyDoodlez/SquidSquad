@@ -76,7 +76,7 @@ _H3_ROLE_DIR_RE = re.compile(
 _TABLE_DELIM_RE = re.compile(r"^\s*\|(\s*:?-+:?\s*\|)+\s*$")
 
 # A sub-skill name in the catalog rows: lowercase, hyphen-separated,
-# enclosed in backticks. e.g. `boot-bootstrap` or `vault-protocol-slim`.
+# enclosed in backticks. e.g. `boot-bootstrap` or `vault-protocol`.
 # Slash-bearing names like ``roles/dm/events/pr-merge-wait`` ARE valid —
 # they encode the source path inline (the catalog name IS the
 # `→ run sub-skill: <name>` lookup key per compose.py:53 + the
