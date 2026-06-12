@@ -8,12 +8,9 @@ Usage:
     python scripts/shared_fs.py init                    # Create ~/.squidsquad/ structure
     python scripts/shared_fs.py read-secret KEY         # Read a secret value
     python scripts/shared_fs.py write-secret KEY VALUE  # Write a secret (chmod 600)
-    python scripts/shared_fs.py read-clones             # Read cross-clone paths (JSON)
-    python scripts/shared_fs.py write-clone ROLE PATH   # Register a clone path
     python scripts/shared_fs.py home                    # Print ~/.squidsquad/ path
 """
 
-import json
 import os
 import stat
 import sys
@@ -33,7 +30,6 @@ def init():
         ~/.squidsquad/
         ~/.squidsquad/secrets      (chmod 600)
         ~/.squidsquad/config
-        ~/.squidsquad/clones/
     """
     home = get_home()
     home.mkdir(parents=True, exist_ok=True)
@@ -53,9 +49,6 @@ def init():
             "# SquidSquad global config — shared across all clones\n",
             encoding="utf-8",
         )
-
-    clones_dir = home / "clones"
-    clones_dir.mkdir(exist_ok=True)
 
     print(f"Initialized {home}")
     return str(home)
@@ -236,38 +229,6 @@ def write_secret(key, value):
     print(f"Secret '{key}' written to {secrets_file}")
 
 
-def read_clones():
-    """Read cross-clone paths from ~/.squidsquad/clones/.
-
-    Returns dict: {role: path_string}
-    """
-    clones_dir = get_home() / "clones"
-    if not clones_dir.exists():
-        return {}
-
-    result = {}
-    for clone_file in clones_dir.iterdir():
-        if clone_file.is_file() and not clone_file.name.startswith("."):
-            try:
-                path = clone_file.read_text(encoding="utf-8").strip()
-                if path:
-                    result[clone_file.name] = path
-            except (OSError, UnicodeDecodeError):
-                continue
-    return result
-
-
-def write_clone(role, path):
-    """Register a clone path in ~/.squidsquad/clones/."""
-    clones_dir = get_home() / "clones"
-    if not clones_dir.exists():
-        init()
-
-    clone_file = clones_dir / role
-    clone_file.write_text(str(path) + "\n", encoding="utf-8")
-    print(f"Clone '{role}' registered: {path}")
-
-
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ("--help", "-h"):
@@ -295,14 +256,6 @@ def main():
             print("Usage: shared_fs.py write-secret KEY VALUE", file=sys.stderr)
             return 2
         write_secret(args[1], args[2])
-    elif cmd == "read-clones":
-        clones = read_clones()
-        print(json.dumps(clones, indent=2))
-    elif cmd == "write-clone":
-        if len(args) < 3:
-            print("Usage: shared_fs.py write-clone ROLE PATH", file=sys.stderr)
-            return 2
-        write_clone(args[1], args[2])
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         return 2

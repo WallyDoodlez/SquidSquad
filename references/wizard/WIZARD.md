@@ -56,7 +56,7 @@ Initialize the shared filesystem at `~/.squidsquad/`:
 python references/scripts/shared_fs.py init
 ```
 
-This creates `~/.squidsquad/`, `secrets` (restricted permissions), `config`, and `clones/` if they don't already exist. Idempotent — safe to run on re-installs.
+This creates `~/.squidsquad/`, `secrets` (restricted permissions), and `config` if they don't already exist. Idempotent — safe to run on re-installs.
 
 ---
 
