@@ -94,6 +94,52 @@ def test_split_malformed_op_like_heading_is_content():
     assert segs[0][1].startswith("### replace the foo")
 
 
+def test_split_consecutive_op_directives_yield_empty_body_op():
+    """Two op directives with nothing between them → the first parses with
+    an empty body. _assemble_slot drops empty-body ops (see below) so it
+    never becomes a silent no-op insert."""
+    body = (
+        "### insert-after step:cycle/resume\n"
+        "### insert-after step:cycle/pickup\n\n"
+        "#### step:cycle/x\n\nBody.\n"
+    )
+    segs = v._split_body_segments(body, "instructions")
+    assert [k for k, _ in segs] == ["op", "op"]
+    assert segs[0][1].body_text == ""          # first op: empty body
+    assert segs[0][1].target_step_id == "resume"
+    assert segs[1][1].body_text.startswith("#### step:cycle/x")
+
+
+def test_split_eof_while_in_op_mode():
+    """A body ending immediately after an op directive (no trailing
+    content) yields an op with an empty body — must not raise."""
+    segs = v._split_body_segments("### insert-after step:cycle/resume\n", "instructions")
+    assert [k for k, _ in segs] == ["op"]
+    assert segs[0][1].body_text == ""
+
+
+def test_split_inline_replace_step_op():
+    body = "### replace step:cycle/work\n\nNew work body.\n"
+    segs = v._split_body_segments(body, "instructions")
+    assert [k for k, _ in segs] == ["op"]
+    op = segs[0][1]
+    assert op.op_type == "replace"
+    assert op.target_step_id == "work"
+    assert op.body_text == "New work body."
+
+
+def test_assemble_drops_empty_body_op():
+    """An empty-body op (e.g. back-to-back directives) is dropped — neither
+    applied (silent no-op insert) nor degraded — even if its anchor exists."""
+    base = "### step:cycle/resume\n\nResume body.\n"
+    empties = "### insert-after step:cycle/resume\n### insert-after step:cycle/resume\n\nReal.\n"
+    combined, inline_ops = v._assemble_slot("instructions", [base, empties])
+    # One real op survives (the second, which has the "Real." body); the
+    # first (empty) is dropped.
+    assert len(inline_ops) == 1
+    assert inline_ops[0].body_text == "Real."
+
+
 # ---------------------------------------------------------------------------
 # _assemble_slot — AC-4/AC-5 apply, AC-6 graceful degrade
 # ---------------------------------------------------------------------------

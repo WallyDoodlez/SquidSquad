@@ -477,9 +477,14 @@ def _assemble_slot(slot, bodies):
     for kind, val in segments:
         if kind == "content":
             base_parts.append(val)
+        elif not val.body_text:
+            # An op with no body adds nothing whether applied or degraded
+            # (e.g. two op directives back-to-back). Drop it so it can't
+            # become a silent no-op insert.
+            continue
         elif val.target_step_id in anchor_ids:
             inline_ops.append(val)
-        elif val.body_text:
+        else:
             # Target anchor absent → degrade to inline content in source
             # position (the post-#11139 behavior), so compose stays green.
             base_parts.append(val.body_text)
