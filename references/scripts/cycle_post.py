@@ -48,11 +48,12 @@ except ImportError:
 
 from shared_fs import atomic_write_text  # #10007
 
-# Required top-level fields in cycle-output.json. Mode-gated (#8918): event
-# mode replaces `cycle_number` with `task` — the task IS the cycle in event
-# mode (DECISIONS-4792.md Q7 + CONTEXT.md §5.5 + TEST-PLAN-8701 §3.2 UT-10).
-LOOP_REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}
-EVENT_REQUIRED_FIELDS = {"role", "task", "cycle_type"}
+# Required top-level fields in cycle-output.json. Mode-agnostic under
+# pull-only (#11092 Decision 4): polling and event cycles have an identical
+# shape from cycle_post's perspective, so the #8918 mode gate is removed.
+# `task` is now OPTIONAL — present on active cycles, omitted on quiet cycles —
+# neither required nor forbidden.
+REQUIRED_FIELDS = {"role", "cycle_number", "cycle_type"}
 VALID_CYCLE_TYPES = {"active", "quiet", "suppressed"}
 
 # ---------------------------------------------------------------------------
@@ -91,6 +92,11 @@ def _get_role_wake_mode(role):
     Thin wrapper retained so cycle_post-internal callers don't need
     import-path churn. See ``config.get_wake_mode`` for the resolution
     rules — that is the single source of truth referenced by bootstrap.md.
+
+    Note (#11166): the cycle-output validation gate that called this was
+    removed under pull-only (#11092 Decision 4). The wrapper is retained per
+    that task's explicit scope — wake mode is still the boot-bootstrap
+    concept; this wrapper stays available for future cycle_post use.
     """
     script_dir_str = str(SCRIPT_DIR)
     if script_dir_str not in sys.path:
@@ -140,23 +146,19 @@ def _write_status_bar(role, phase, description):
 def _validate_output(data, role=None):
     """Validate cycle-output.json structure. Returns list of errors.
 
-    Mode-gated (#8918): event-driven roles use ``EVENT_REQUIRED_FIELDS``
-    (``task`` replaces ``cycle_number``); loop-mode roles use
-    ``LOOP_REQUIRED_FIELDS``. The role argument is optional so existing test
-    fixtures that build `data` directly still validate against the loop set —
-    callers that need event-mode validation pass the role so wake mode is
-    looked up via ``_get_role_wake_mode``.
+    Mode-agnostic (#11092 Decision 4 / pull-only): every cycle — polling or
+    event, active or quiet — validates against the same ``REQUIRED_FIELDS``.
+    ``task`` is optional (the #8918 event-mode `task`-required gate was removed
+    once pull-only made the two modes' output shape identical). The ``role``
+    argument is retained for caller-signature compatibility but no longer
+    affects which fields are required.
     """
     errors = []
 
     if not isinstance(data, dict):
         return ["cycle-output.json must be a JSON object"]
 
-    if role is not None and _get_role_wake_mode(role) == "event-driven":
-        required = EVENT_REQUIRED_FIELDS
-    else:
-        required = LOOP_REQUIRED_FIELDS
-    for field in required:
+    for field in REQUIRED_FIELDS:
         if field not in data:
             errors.append(f"Missing required field: {field}")
 
@@ -955,7 +957,7 @@ def main():
         print(f"[🦑 {ts}] ERROR: Invalid JSON in cycle-output.json: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Validate (mode-gated — event-driven roles use EVENT_REQUIRED_FIELDS, #8918)
+    # Validate (mode-agnostic REQUIRED_FIELDS, #11092 Decision 4)
     errors = _validate_output(data, role)
     if errors:
         print(f"[🦑 {ts}] ERROR: Invalid cycle-output.json:", file=sys.stderr)

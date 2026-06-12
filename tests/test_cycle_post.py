@@ -99,52 +99,54 @@ class TestValidateOutput:
         assert cycle_post._validate_output(data) == []
 
 
-class TestValidateOutputModeGated:
-    """#8918 (UT-10): _validate_output picks REQUIRED_FIELDS by role wake mode.
+class TestValidateOutputModeAgnostic:
+    """#11166 (#11092 Decision 4): under pull-only, _validate_output is
+    mode-agnostic. The same REQUIRED_FIELDS {role, cycle_number, cycle_type}
+    apply to polling and event cycles; `task` is optional (present on active
+    cycles, absent on quiet) — neither required nor forbidden. Replaces the
+    #8918 mode-gated behavior."""
 
-    Loop mode keeps {role, cycle_number, cycle_type}. Event mode swaps in
-    `task` (the task IS the cycle in event mode) so a cycle-output without
-    cycle_number but with task passes, and one without either fails clearly.
-    """
+    def test_legacy_mode_gated_constants_removed(self):
+        """AC1: the two mode-gated constants are collapsed to one."""
+        assert not hasattr(cycle_post, "EVENT_REQUIRED_FIELDS")
+        assert not hasattr(cycle_post, "LOOP_REQUIRED_FIELDS")
+        assert hasattr(cycle_post, "REQUIRED_FIELDS")
 
-    def test_event_mode_passes_with_task(self, monkeypatch):
-        """UT-10a: event-mode role + task identifier present → validation passes."""
-        monkeypatch.setattr(
-            cycle_post, "_get_role_wake_mode", lambda r: "event-driven",
-        )
-        data = {"role": "skill", "task": "100", "cycle_type": "active"}
+    def test_polling_quiet_cycle_validates(self):
+        """AC3: a quiet polling cycle (cycle_type=quiet, no task) validates."""
+        data = {"role": "skill", "cycle_number": 42, "cycle_type": "quiet"}
         assert cycle_post._validate_output(data, "skill") == []
 
-    def test_loop_mode_rejects_missing_cycle_number(self, monkeypatch):
-        """UT-10b: loop-mode role without cycle_number → validation fails on it."""
-        monkeypatch.setattr(
-            cycle_post, "_get_role_wake_mode", lambda r: "polling",
-        )
+    def test_event_quiet_cycle_validates(self):
+        """AC4: an event-mode quiet cycle (same shape, no task) validates —
+        previously rejected by the #8918 task-required gate."""
+        data = {"role": "skill", "cycle_number": 42, "cycle_type": "quiet"}
+        assert cycle_post._validate_output(data, "skill") == []
+
+    def test_active_cycle_with_task_validates(self):
+        """AC5: an active cycle with `task` present validates — task is
+        optional, neither required nor forbidden."""
+        data = {"role": "skill", "cycle_number": 42, "task": "100",
+                "cycle_type": "active"}
+        assert cycle_post._validate_output(data, "skill") == []
+
+    def test_missing_cycle_number_still_fails(self):
         data = {"role": "skill", "cycle_type": "active"}
         errors = cycle_post._validate_output(data, "skill")
         assert any("cycle_number" in e for e in errors), errors
-        # And task is NOT required in loop mode — error list mentions only
-        # cycle_number, not task.
+
+    def test_task_never_required(self):
+        """A cycle without `task` never errors on task, regardless of role."""
+        data = {"role": "skill", "cycle_number": 42, "cycle_type": "active"}
+        errors = cycle_post._validate_output(data, "skill")
         assert not any("task" in e for e in errors), errors
 
-    def test_event_mode_rejects_missing_task(self, monkeypatch):
-        """UT-10c: event-mode role with no task identifier → validation fails on it."""
-        monkeypatch.setattr(
-            cycle_post, "_get_role_wake_mode", lambda r: "event-driven",
-        )
-        data = {"role": "skill", "cycle_type": "active"}
-        errors = cycle_post._validate_output(data, "skill")
-        assert any("task" in e for e in errors), errors
-        # cycle_number is NOT required in event mode, so it must NOT appear.
-        assert not any("cycle_number" in e for e in errors), errors
-
-    def test_default_role_none_uses_loop_required(self):
-        """Existing callers that pass no role keep the pre-refactor behavior:
-        validate against LOOP_REQUIRED_FIELDS. Preserves backwards compat for
-        tests that don't yet thread a role through."""
-        data = {"role": "skill", "cycle_type": "active"}
-        errors = cycle_post._validate_output(data)
-        assert any("cycle_number" in e for e in errors)
+    def test_role_argument_does_not_change_required_fields(self):
+        """The role arg is signature-compat only — passing it or not yields
+        identical required-field validation (mode no longer gates)."""
+        data = {"role": "skill", "cycle_type": "active"}  # missing cycle_number
+        assert (cycle_post._validate_output(data, "skill")
+                == cycle_post._validate_output(data, None))
 
 
 class TestAdvanceEventCursorRemoved:
