@@ -326,7 +326,7 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 │   ├── resources/
 │   ├── archives/
 │   └── galaxy/
-├── .local-config                # per-clone alias→path map (read by start.sh)
+├── .local-config                # per-clone alias→path map (read by start.sh + harness first-boot discovery — §3.2)
 └── (runtime) .harness-port, .harness-state.json, .event-state.json — created when the harness boots
 ```
 
