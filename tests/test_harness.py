@@ -1123,6 +1123,42 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         data = resp.json()
         self.assertIn("agents", data)
 
+    def test_post_events_assigns_id_when_missing(self):
+        """#11404 AC1: POST /events with no `id` auto-assigns a 16-hex id so
+        id-tracking consumers (event_poll) can't silently skip the event."""
+        from harness import event_lifecycle
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch.object(event_lifecycle, "append") as mock_append:
+            resp = self.client.post("/events", json={
+                "event_type": "status-transition", "role": "skill"})
+        self.assertEqual(resp.status_code, 200)
+        mock_append.assert_called_once()
+        stored = mock_append.call_args[0][0]
+        self.assertRegex(stored.get("id", ""), r"^[0-9a-f]{16}$")
+
+    def test_post_events_preserves_provided_id(self):
+        """A caller-provided id is not overwritten by the auto-assign."""
+        from harness import event_lifecycle
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch.object(event_lifecycle, "append") as mock_append:
+            resp = self.client.post("/events", json={
+                "event_type": "status-transition", "role": "skill",
+                "id": "caller-supplied-id"})
+        self.assertEqual(resp.status_code, 200)
+        stored = mock_append.call_args[0][0]
+        self.assertEqual(stored["id"], "caller-supplied-id")
+
+    def test_post_events_unknown_role_response_contract(self):
+        """#11404 AC2: an unregistered emitter role is dropped with 204 (the
+        INTENTIONAL fire-and-forget contract, #9242) and NOT stored."""
+        from harness import event_lifecycle
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch.object(event_lifecycle, "append") as mock_append:
+            resp = self.client.post("/events", json={
+                "event_type": "status-transition", "role": "bogus-role-xyz"})
+        self.assertEqual(resp.status_code, 204)
+        mock_append.assert_not_called()
+
     def test_post_agents_all_start(self):
         """POST /agents/all/start returns 200 with results."""
         mock_result = {"role": "skill", "action": "skip", "success": True,
