@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: cycle 2326 (inline) — PICKED UP #10836 R1 (INSTALLER-ARCH reconciliation), own branch
-- **Status**: #10836 in-progress on `squidsquad/task/10836`; E1 landed; remaining R1 findings queued
+- **Task**: cycle 2327 (inline) — #10836 R1 continued; all 4 ERROR + 2 WARNING drift findings resolved
+- **Status**: #10836 in-progress on `squidsquad/task/10836`; only cross-ref pointer drift + DS audit remain
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
@@ -18,9 +18,12 @@
   - Filed #11519 (role:skill, low) — retire unused shared_fs clones helpers (doc+code convergence).
 - Posted R1 scope-lock comment on #10836 with full remaining-findings plan.
 
-## R1 remaining (on branch, then DS audit before pending-test)
+## R1 status (on branch squidsquad/task/10836)
 
-- E4 (§8.2 new-L4-file vs COMPOSE one-file/append), E5 (§5 layout missing compose triple+cache), E2 (§10 migration-audit "same gating" claim), W4 (§5 vault access stale), W6 (§4.8 L4 seed format), E3/W5/W3/L1-L3 (cross-ref/pointer drift, 6 items).
+- **DONE (commit 4882a31b)**: E1 clone registry → .local-config canonical.
+- **DONE (commit 138e00ed)**: E4 (L4 append-H3 not new-file), E5 (compose triple+cache in §5/§3.2), E2 (migration-gate prose adaptation), W4 (vault all-R/W), W6 (L4 seed append-H3 grammar). All verified vs canonical source before edit.
+- **REMAINING**: cross-ref/pointer drift — E3 (§10.3→HARNESS §9), W5 (§6→HARNESS §7.2), W3 (§4.9/§6 role/alias), L1 (§2 diagram harness-restart), L2 (§3.2 AGENT-RUNTIME schema ref), L3 (§12 G2 COMPOSE §10.4). Need target-doc section verification.
+- **THEN**: DS internal + cross-pair audit → transition to pending-test.
 - R2 dep-provisioning deferred until R1 lands.
 
 ## Branch hygiene
@@ -29,7 +32,7 @@
 
 ## Other pipeline (unchanged, healthy)
 
-- #11394 pending-ship → DM; #11512 in-progress (skill, launcher bug); #11511 open (merge-flap fix); #10855 pending-test → QA.
+- #11512 (launcher bug) → **pending-ship** (PR #11518, QA PASS, DS clean) → DM. #11394 → pending-ship → DM. #11511 open (merge-flap fix); #10855 pending-test → QA.
 - PM in-progress: #11092, #11053 (§9 awaits operator), #11000 (planning).
 
 ## Operator asks (carried)
