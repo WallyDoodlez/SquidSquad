@@ -135,12 +135,23 @@ def run_static_tests():
     """Run static analysis tests via pytest (auto-discovered — #11394)."""
     print("\n=== Static Analysis Tests (pytest) ===\n")
     modules = discover_static_modules()
+    # Guard: an empty module list would make pytest fall back to recursive
+    # auto-discovery from cwd, running EVERY test (incl _live, integration, and
+    # the very files we excluded) — silently defeating the exclusion mechanism.
+    # An empty gate is always a misconfiguration, so fail fast (#11394).
+    if not modules:
+        print(
+            "ERROR: static-gate discovery returned 0 modules — gate "
+            "configuration is broken (all test_*.py excluded?). Refusing to "
+            "fall back to recursive auto-discovery."
+        )
+        return False
     excluded = (
         [(name, "non-static", reason) for name, reason in sorted(KNOWN_NON_STATIC.items())]
         + [(name, "known-failure", reason) for name, reason in sorted(KNOWN_FAILURES.items())]
     )
-    if excluded:
-        live_n = sum(1 for p in TESTS_DIR.glob(f"test_*{LIVE_SUFFIX}.py"))
+    live_n = sum(1 for p in TESTS_DIR.glob(f"test_*{LIVE_SUFFIX}.py"))
+    if excluded or live_n:
         print(
             f"NOTICE: gating {len(modules)} static test file(s); "
             f"{len(excluded)} excluded by allowlist + {live_n} *_live (run separately):"

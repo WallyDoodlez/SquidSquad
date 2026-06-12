@@ -96,11 +96,24 @@ def test_live_suffix_files_are_never_gated():
     )
 
 
+def test_empty_gate_fails_fast(monkeypatch):
+    """If discovery returns empty, run_static_tests() must fail fast — never
+    fall through to a bare `pytest` call, which would recursively auto-discover
+    and run EVERY test (incl _live / integration / excluded). DS-audit finding."""
+    import run_tests
+
+    monkeypatch.setattr(run_tests, "discover_static_modules", lambda: [])
+
+    def _must_not_run(*args, **kwargs):
+        raise AssertionError("pytest must not be invoked when the gate is empty")
+
+    monkeypatch.setattr(run_tests.subprocess, "run", _must_not_run)
+    assert run_tests.run_static_tests() is False
+
+
 def test_gate_survives_a_deleted_gated_file(tmp_path, monkeypatch):
     """Simulate the cutover regression: a previously-gated file is deleted.
     Auto-discovery must simply omit it — no crash, no dangling reference."""
-    import run_tests
-
     real_glob = type(TESTS_DIR).glob
 
     # Pretend one currently-gated file vanished from disk.
