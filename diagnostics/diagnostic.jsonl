@@ -3382,3 +3382,4 @@
 {"timestamp": "2026-06-12T05:10:00.938289", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-06-12T05:10:01.000083", "severity": "warning", "source": "git_ops", "message": "stash pop failed during pull \u2014 possible merge conflict"}
 {"timestamp": "2026-06-12T05:10:01.070479", "severity": "error", "source": "git_ops", "message": "push failed: rejected"}
+{"timestamp": "2026-06-12T05:14:00.868443", "severity": "warning", "source": "tracker", "message": "Blocked transition #11227 status:pending-test -> status:pending-ship: unread feedback from pm-lead (2026-06-12T08:07:17Z)"}
