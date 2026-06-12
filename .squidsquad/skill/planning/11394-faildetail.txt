@@ -1,0 +1,51 @@
+
+########## test_agent_boundaries (39 failures) ##########
+  - test_ac4_composed_contains_l1_awareness_and_l2[pm]: AssertionError: L1 awareness instruction missing from composed pm
+assert "Know each other's responsibilities" in '## Identity\n\nYou are the **PM** agent on SquidSquad — a multi-agent team that builds
+  - test_ac4_composed_contains_l1_awareness_and_l2[verifier]: AssertionError: L1 awareness instruction missing from composed verifier
+assert "Know each other's responsibilities" in '## Identity\n\nYou are the **VERIFIER** agent on SquidSquad — a multi-agent team
+  - test_ac4_composed_contains_l1_awareness_and_l2[dm]: AssertionError: L1 awareness instruction missing from composed dm
+assert "Know each other's responsibilities" in '## Identity\n\nYou are the **DM** agent on SquidSquad — a multi-agent team that builds
+  - test_ac4_composed_contains_l1_awareness_and_l2[skill]: AssertionError: L1 awareness instruction missing from composed skill
+assert "Know each other's responsibilities" in '## Identity\n\nYou are the **SKILL** agent on SquidSquad — a multi-agent team that 
+  - test_ac4_roster_has_exactly_active_roles: assert -1 != -1
+  - test_ac6_memory_absorption_lineage_tag[feedback_dont_do_qa_job-references/sub-skills/roles/pm/responsibility.md]: AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md
+assert False
+ +  where False = exists()
+ +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skill
+
+########## test_config_functions (14 failures) ##########
+  - test_field_map_entry_resolves[code-review-model]: AssertionError: FIELD_MAP['code-review-model'] → section='Model Routing', field='Code Review Model' not found in SAMPLE_CONFIG. Update the fixture.
+assert None is not None
+  - test_field_map_entry_resolves[effort-dm]: AssertionError: FIELD_MAP['effort-dm'] → section='Agent Effort', field='dm' not found in SAMPLE_CONFIG. Update the fixture.
+assert None is not None
+  - test_field_map_entry_resolves[effort-pm]: AssertionError: FIELD_MAP['effort-pm'] → section='Agent Effort', field='pm' not found in SAMPLE_CONFIG. Update the fixture.
+assert None is not None
+  - test_field_map_entry_resolves[effort-qa]: AssertionError: FIELD_MAP['effort-qa'] → section='Agent Effort', field='qa' not found in SAMPLE_CONFIG. Update the fixture.
+assert None is not None
+  - test_field_map_entry_resolves[effort-skill]: AssertionError: FIELD_MAP['effort-skill'] → section='Agent Effort', field='skill' not found in SAMPLE_CONFIG. Update the fixture.
+assert None is not None
+  - test_field_map_entry_resolves[event-driven]: AssertionError: FIELD_MAP['event-driven'] → section='Event Driven', field='Enabled' not found in SAMPLE_CONFIG. Update the fixture.
+assert None is not None
+
+########## test_feat_6581_wizard_reframing (1 failures) ##########
+  - test_tc_10b_run_tests_exit_zero: AssertionError: tests/run_tests.py exited with code 1.
+  stdout:
+  ============================= test session starts =============================
+  platform win32 -- Python 3.12.10, pytest-9.0.2, plu
+
+########## test_feat_9588_lazy_load_bootstrap (18 failures) ##########
+  - test_tc_02_bootstrap_present[skill]: AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **SKILL** agent on SquidSquad — a multi-agent team that builds software autonomously. Your...ery patterns). Max
+  - test_tc_02_bootstrap_present[pm]: AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **PM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max
+  - test_tc_02_bootstrap_present[qa]: AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **QA** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max
+  - test_tc_02_bootstrap_present[dm]: AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **DM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max
+  - test_tc_04_event_fragments_referenced_in_bootstrap[skill]: AssertionError: skill: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md
+assert 'references/sub-skills/common-events/event-driven-workflow.md' in '<!-- sub-sk
+  - test_tc_04_event_fragments_referenced_in_bootstrap[pm]: AssertionError: pm: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md
+assert 'references/sub-skills/common-events/event-driven-workflow.md' in '<!-- sub-skill
+
+########## test_stale_tracker_files_ref (4 failures) ##########
+  - test_prohibitions_no_stale_tracker_files[pm]: FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\pm\\prohibitions.md'
+  - test_prohibitions_no_stale_tracker_files[dm]: FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\dm\\prohibitions.md'
+  - test_pm_prohibitions_names_actual_files: FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\pm\\prohibitions.md'
+  - test_dm_prohibitions_names_actual_files: FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\dm\\prohibitions.md'
