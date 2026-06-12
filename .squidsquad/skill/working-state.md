@@ -1,27 +1,25 @@
 # Working State
 
-- **Task**: none active — on main
+- **Task**: none active — on main (#11512 handed to QA / pending-test)
 - **Status**: none (idle)
-- **Updated**: 2026-06-12 17:43
+- **Updated**: 2026-06-12 18:08
 - **Last Processed Event ID**: 9d7c2489
 - **Quiet Cycle Counter**: 0
 
 ## ⚠️ Session note
-Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). /loop polling (cron 0bdc0ae0, 30m). Harness is UP (port 7373) but operator drives via /loop — staying loop-mode this session.
+Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). Harness UP (port 7373) but operator drives via /loop — staying loop-mode this session. (Aside: #11512, just shipped, is the root cause of why I'm in loop mode — fix takes effect on next respawn, not this session.)
 
-## Last cycle (1636, iter-446): #11504 — proved cosmetic flap + filed durable fix #11511
-PR #11504 showed CONFLICTING/DIRTY; merge-tree CLEAN both dirs (zero real conflict). Merged main into branch, static gate 54 OK, pushed 76d59f6b0 → recompute → CLEAN. Then my own main push (transient commit) re-staled it to CONFLICTING within the same cycle — proving it's whack-a-mole, NOT fixable by hand-nudging. STOPPED nudging. Told QA (#11394) to merge on content. Filed #11511 (durable squad-wide fix).
+## Last cycle (1637-1638, iter-447): #11512 SHIPPED to pending-test (PR #11518)
+thin_launcher forced loop mode by injecting /loop as the spawn prompt, preempting boot Step 1's mode probe → event mode dead-on-arrival. Fix (option 1): _SPAWN_PROMPT mode-neutral boot trigger; boot Step 1 owns mode selection; removed dead _get_interval. Rewrote #9725 unit (31) + live (3) tests to #11512 contract. run_tests.py 54 OK. DS review NO_FINDINGS (5/5 invariants). PR #11518, no review:human-required → QA auto-merge path. Transitioned pending-test.
 
 ## Watch
-- **PR #11504 / #11394**: SUBSTANTIVELY mergeable (merge-tree exit 0 both dirs, zero real conflict); GitHub flag flaps CONFLICTING↔CLEAN as base advances. STOPPED hand-nudging. QA told to merge on content. **On merge → resume #11503 fixes + #11505** (statusline cp + dm-manifest orphan + stale-test updates + capabilities deadwood), each removing its KNOWN_FAILURES entry.
-- **#11511 (filed cycle 1636, medium)**: durable fix for transient-state merge flap (gitignore iterations/planning logs and/or .gitattributes merge=union on working-state). High blast radius → awaiting PM triage. THIS is the real fix for the recurring #11504 flap; do NOT keep hand-nudging #11504.
-- #11503 (high): umbrella; Group C triaged (2 real + 1 mixed + 1 stale). Groups A/B = stale-test/fixture cleanup, post-#11504.
-- #11505 (low): capabilities deadwood removal; AC5/AC7 touch run_tests.py KNOWN_FAILURES → gated on #11504.
-- #10690 / #10686 (E7, operator-manual): operator-gated, blocked.
-- #11329 (approved): runtime per-event ack-cursor, multi-cycle, post-cutover fresh-session.
+- **#11512 / PR #11518**: pending-test, QA verifies + merges. CQ assessed N/A (launcher constant, not composed instructions) — verifier confirms.
+- **PR #11504 / #11394**: SUBSTANTIVELY mergeable (merge-tree clean both dirs); GitHub flag flaps as base advances. STOPPED hand-nudging. QA to merge on content. On merge → resume #11503 fixes + #11505.
+- **#11511 (medium)**: durable fix for transient-state merge flap — awaiting PM triage. Real fix for the recurring #11504 flap.
+- #11503 (high): test-debt umbrella (incl. 18 test_feat_9588 reds = moved boot-bootstrap.md), post-#11504.
+- #11505 (low): capabilities deadwood; gated on #11504.
+- #10690 / #10686 (E7): operator-gated.
+- #11329 (approved): runtime per-event ack-cursor.
 
 ## ⚠️ Recurring conflict note
-Distinguish TWO failure modes on PR #11504:
-1. **Real content conflict** (merge-tree exits non-zero) → transient/shared state both sides edit → candidate for .gitattributes merge=union (see [[gitattributes_for_transient_state]]).
-2. **Stale GitHub mergeability** (merge-tree exits 0 but GitHub shows CONFLICTING) → base advanced via transient commits, GitHub cached old result → fix is merge-main-into-branch + push to force recompute. THIS is what cycles 1635/1636 hit. .gitattributes does NOT help mode 2.
-If mode 2 keeps recurring every cycle, root cause is cycle_post committing transient state (iterations/planning logs/working-state) to MAIN, advancing base. Candidate: stop tracking .squidsquad/<role>/planning logs on shared branches, or .gitignore them.
+Two #11504 failure modes: real conflict (merge-tree non-zero → .gitattributes union) vs stale GitHub mergeability (merge-tree zero → force recompute = whack-a-mole; root cause = transient state committed to main; tracked #11511). See [[learning-pr-conflicting-flag-can-be-cosmetic]].
