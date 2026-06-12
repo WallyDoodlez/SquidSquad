@@ -1,9 +1,9 @@
 # Working State
 
-- **Task**: pipeline sentinel + harness/event-mode validation (operator-directed)
-- **Status**: quiet on tracker; harness validation in flight
+- **Task**: pipeline sentinel + harness validation (in flight)
+- **Status**: quiet on tracker
 - **Last Processed Event ID**: 3e50e129c8e74594
-- **Quiet cycles**: 1
+- **Quiet cycles**: 2
 
 ## Pipeline
 
@@ -13,28 +13,17 @@
 - pending intake: #11331, #11400, #11412
 - Approved queue: 6
 - Open PRs: 0
-- Harness: REACHABLE (operator-tested this session)
+- Harness: REACHABLE
 
 ## Session ship tally: 37
 
-## Harness + event-mode validation status
+## Harness/event-mode validation
 
-- ✓ requirements.txt installed (watchdog 6.0.0 + already-present fastapi/uvicorn/starlette)
-- ✓ Harness restarted, L4 file-watcher live (PRD-E E3 active)
-- ✓ Skill clone switched to polish-branch (compose-polish-session)
-- ✓ Composed CLAUDE.md verified: boot section harness-probe-only (per Iter 35 G7)
-- ◐ Skill restarted on PID 46748 — alive but bootup_complete=False after 7+ min, context-pressure stale 4+ min, 0 events emitted
-- ⏳ Awaiting operator's skill-terminal-state report
-
-## Operational learnings (worth saving)
-
-1. **thin_launcher #9725**: spawn prompt is `/loop` regardless of wake mode — universal cron safety-net, NOT a mode indicator. Seeing /loop in spawn prompt does not prove polling.
-2. **Pre-cutover event mode requires explicit opt-in**: on main, agent CLAUDE.md still has the pre-polish config.md gate (Step 1 checks `event-driven: yes`). Without the field, agent falls through to polling without ever probing harness. Polish-branch strips this gate (harness-probe-only per Iter 35 G7) — but main doesn't have polish-branch content yet. **THIS MAKES CUTOVER LOAD-BEARING for event mode at scale.**
-
-## Cutover-readiness — still NOW for tracker; event-mode validation in progress
-
-Bundle is cutover-ready. The event-mode investigation is a pre-cutover sanity check, not a cutover-blocker — even if event mode has issues, cutover ships the polish-branch L1-L3 sources to main and unlocks event mode automatically.
+- Skill PID 46748 on polish-branch CLAUDE.md
+- bootup_complete still False after ~50 min, but context-pressure ticked 09:22→09:52 (slow progress through boot-bootstrap)
+- 0 events emitted by skill
+- Awaiting operator's terminal-state report or kill/respawn decision
 
 ## Context
 
-healthy on tracker. Harness test mid-investigation.
+healthy on tracker. Cutover-ready state unchanged.
