@@ -1,49 +1,63 @@
 # Working State
 
-- **Task**: pipeline sentinel + bundle composition verification
-- **Status**: ACTIVE — stale-items clearing, bundle composition needs re-verification
+- **Task**: pipeline sentinel + #11227 fork decision tracking
+- **Status**: ACTIVE — ratified #11227 Finding 1, endorsed scope reduction, surfaced AC-6 fork to operator
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
 ## Pipeline
 
-- pending_ship (cosmetic stale-label, PRs merged to main):
-  - #11139 (PR #11141 commit 081146fb1 ON MAIN)
+- pending_ship (cosmetic stale-label, PRs ON MAIN):
+  - #11139 (PR #11141 commit 081146fb1)
+  - #11137 (PR #11138 commit 7a7def905, NEW this cycle)
   - #11404, #11165, #11166
-- pending-test:
-  - #11137 (NEW @ 07:12Z — 156-commit merge, deterministic recompose)
-  - #10855 (skip)
-- in-progress: #11227 (skill HELD pending #11139 landing — semantic dependency)
+- pending-test: #10855 (skip)
+- pending-human-review:
+  - **#11227 (NEW — AC-6 fork awaiting operator decision; PM recommended (c) defer)**
 - Open issues:
   - #11394 (low)
-  - **#11401 (medium, OPERATOR-DIRECTED — skill prioritized stale-item cleanup first, reasonable; reassess)**
+  - #11401 (medium, OPERATOR-DIRECTED — queued after #11227 ship)
 - pending intake (PM-owned): #11331, #11400, #11412
 - Approved queue: 6
-- Open PRs: 0 (all in cosmetic stale-label limbo)
+- Open PRs: 0
 - Harness: unreachable
 
-## Session ship tally: 37 (no new ships this cycle; #11139 landed but not yet status-transitioned)
+## Session ship tally: 37 (no new ships)
 
-## ⚠️ Bundle composition needs re-verification
+## ⚠️ Bundle composition CORRECTED
 
-My cycle 2166 inventory classified #11227/#11139/#11137 as 'stale-in-progress with work-on-bundle.' But #11139's PR #11141 landed on MAIN (commit 081146fb1), not via the bundle branch. This means:
+All 3 stale-in-progress items ship to MAIN, NOT bundle:
+- #11139 → main via PR #11141 (already merged)
+- #11137 → main via PR #11138 (already merged)
+- #11227 → main via TBD PR (after operator decides AC-6 fork)
 
-- The 3 items may all be main-targeted, not bundle content.
-- Bundle composition I've been tracking as 36 items (5 chain + 3 stale + 28 pre-bundle) may be 33 (5 chain + 28 pre-bundle) with the 3 stale items shipping to main independently.
-- v0.44.0 still carries the same total work (36 items), just split across two merge paths.
+Revised bundle composition for v0.44.0 cutover-PR:
 
-Will reconfirm by checking #11137 PR base + #11227 PR (when filed). Operator's option-1 choice (fix #11401 in bundle) still stands regardless — #11401 chain-merges to bundle per pattern.
+| Category | Count | Items |
+|---|---|---|
+| Chain-shipped to bundle | 5 (will be 6 after #11401) | #11334, #11382, #11381, #11383, #11329, (#11401) |
+| Stale-in-progress on MAIN (NOT bundle) | 3 | #11139, #11137, #11227 |
+| Pre-bundle ships | 28 |  |
+| **Total v0.44.0** | **36** (or 37 if #11401 chain-merged) |  |
 
-## Cutover-prep status
+## AC-6 fork (operator decision pending)
 
-Skill's sequencing is clean:
-1. ✓ #11139 conflict-resolved + landed on main (PR #11141)
-2. ◐ #11137 conflict-resolved + at pending-test, awaiting QA
-3. ⏸ #11227 held pending #11139's main-landing (semantic successor)
-4. ⏳ #11401 still queued (operator-directed, post-stale-items)
+- **(a)** extend op-processor regex H3→H3-or-H4 — shared blast radius (L4 op semantics change)
+- **(b)** promote L2 sub-steps H4→H3 — flattens deliberate hierarchy
+- **(c)** defer L3 op anchoring, file separate task — **PM recommended**
 
-Expected sequence going forward: #11137 ship → #11227 unblock → #11227 work → #11227 ship → #11401 work → #11401 ship → bundle CUTOVER-READY (3rd time, final) → operator signals #11331 cutover.
+Operator answer in next 1-2 cycles or (c) locks in by default per the comment.
+
+## Cutover sequence reminder
+
+1. Operator picks AC-6 fork (or accepts PM (c) default)
+2. Skill ships #11227 Part A+C → main
+3. Skill picks up #11401 (operator-directed)
+4. #11401 chain-ships to bundle
+5. Bundle CUTOVER-READY (3rd, final)
+6. Operator signals cutover-PR
+7. v0.44.0 ships
 
 ## Context
 
-healthy.
+healthy. PM doing what PM does: ratify gap audits, endorse scope reductions, surface architectural forks for operator decision.
