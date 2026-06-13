@@ -1,7 +1,26 @@
 # Working State
 
-- **Task**: cycle 2342 (inline) — degraded state holding: skill + QA stopped (down, not looping); awaiting operator decisions
-- **Status**: skill DOWN (intent label=restarting but 0 procs, NOT respawning); QA DOWN (stopping); DM+PM up. No loops/thrash.
+- **Task**: cycle 2344 — overnight stabilization (operator asleep, expects: reboot issue resolved + team in event mode)
+- **Status (02:25)**: ALL 4 AGENTS RUNNING & STABLE — pids constant over 40s, NOTHING crash-looping. QA now in OWN clone. Lock-watchdog active.
+
+## >>> OVERNIGHT HANDOFF SUMMARY (read this first) <<<
+
+**DELIVERED:**
+1. **Reboot crash-loop RESOLVED** — cause was stale `.claude/scheduled_tasks.lock` (dead-PID) → claude exit-1 at startup → harness reboots → lock persists → loop. Cleared on all clones. Durable fix queued #11641.
+2. **Crash-loop CANNOT RECUR overnight** — operational lock-watchdog running in background (`.squidsquad/pm/lock-watchdog.sh`, bg task bsj1gq479, clears stale locks every 60s for 8h). Log: `~/.squidsquad-lock-watchdog.log`.
+3. **QA wrong-realm FIXED** — registered `qa → ../SquidSquad-qa` in .local-config; QA now runs in its OWN clone (pid 40328), no longer clobbering PM clone. Verified `_get_clone_path('qa')` → D:\Dev\Dev\SquidSquad-qa.
+
+**PARTIAL (honest):**
+- **Event mode**: DM = TRUE event mode (event_poll armed) ✓. skill/qa = NOT fully there. skill reliably boots event mode (emits bootup-complete) but never arms Monitor/event_poll → INERT (#10855/#11586 class, agent-side boot-contract bug I CANNOT fix externally). qa = loop mode (stable, DOES cycle).
+- Probe is contention-sensitive: under harness load the 5s curl probe times out → loop-mode fallback. My own status-polling during boot windows likely contributed.
+- **Could not force full event mode overnight** — it needs the worker (skill) to fix its own event-mode arming, and skill is the broken one (chicken/egg). Loop mode is the documented safe fallback and WORKS.
+
+**KEY INSIGHT**: loop mode is what CREATES the scheduled_tasks.lock that later goes stale → so true event mode (no /loop) would eliminate the crash class entirely. Fixing event-mode arming (#11586) is the real durable cure; #11641 (clear stale lock on spawn) is the safety net.
+
+**MORNING DECISIONS:**
+1. Event-mode-inert (skill never arms event_poll) — needs investigation; may need manual/operator action since skill can't fix itself while inert. Related: #11586, #10855.
+2. qa→verifier full rename (#11600 "b") — still not scoped (high-blast).
+3. #11641 (stale-lock spawn fix) + #11640 (no-fallback clone resolution) queued role:skill — won't progress while skill inert.
 
 ## INCIDENT STATE — ROOT CAUSE FOUND (cycle 2343, read-only investigation DONE)
 
