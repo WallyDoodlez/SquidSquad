@@ -130,12 +130,15 @@ class TestParseLocalConfigMandatory:
 
 
 class TestGetClonePath:
-    """Regression tests for _get_clone_path() JSON serialization (#5915)."""
+    """_get_clone_path() resolution: JSON-serializable str (#5915) and
+    fail-closed on unsafe resolution (#11640)."""
 
     def test_returns_str_not_path(self, tmp_path):
         """_get_clone_path must return str so AgentState is JSON-serializable."""
+        skill_clone = tmp_path / "skill-clone"
+        skill_clone.mkdir()
         config = tmp_path / ".local-config"
-        config.write_text(f"- **skill**: {tmp_path / 'skill-clone'}\n")
+        config.write_text(f"- **skill**: {skill_clone}\n")
 
         with patch.object(boot_remote, "LOCAL_CONFIG", config):
             result = boot_remote._get_clone_path("skill")
@@ -147,15 +150,59 @@ class TestGetClonePath:
         import json
         json.dumps({"clone_path": result})  # Should not raise
 
-    def test_fallback_returns_str(self, tmp_path):
-        """Fallback to REPO_ROOT also returns str."""
+    def test_unregistered_role_raises(self, tmp_path):
+        """#11640 AC1: an unregistered role must raise, NOT fall back to
+        REPO_ROOT. The incident: `qa` absent from .local-config silently
+        resolved to PM's clone and clobbered it."""
+        pm_clone = tmp_path / "pm-clone"
+        pm_clone.mkdir()
         config = tmp_path / ".local-config"
-        config.write_text(f"- **pm**: {tmp_path / 'pm-clone'}\n")
+        config.write_text(f"- **pm**: {pm_clone}\n")
 
         with patch.object(boot_remote, "LOCAL_CONFIG", config):
-            result = boot_remote._get_clone_path("skill")  # not in config
+            with pytest.raises(boot_remote.CloneResolutionError) as exc:
+                boot_remote._get_clone_path("qa")  # not in config
+        # Error names the offending role and refuses REPO_ROOT
+        assert "qa" in str(exc.value)
+        assert "REPO_ROOT" in str(exc.value)
 
-        assert isinstance(result, str)
+    def test_registered_nonexistent_path_raises(self, tmp_path):
+        """#11640 AC2: a role registered to a path that does not exist on
+        disk must raise (e.g. verifier -> ../SquidSquad-verifier missing)."""
+        config = tmp_path / ".local-config"
+        missing = tmp_path / "does-not-exist"
+        config.write_text(f"- **verifier**: {missing}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", config):
+            with pytest.raises(boot_remote.CloneResolutionError) as exc:
+                boot_remote._get_clone_path("verifier")
+        assert "does not exist" in str(exc.value)
+
+    def test_registered_existing_path_resolves(self, tmp_path):
+        """#11640 AC4: a legit registered role still resolves to its clone."""
+        skill_clone = tmp_path / "skill-clone"
+        skill_clone.mkdir()
+        config = tmp_path / ".local-config"
+        config.write_text(f"- **skill**: {skill_clone}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", config):
+            result = boot_remote._get_clone_path("skill")
+        assert result == str(skill_clone)
+
+    def test_explicit_repo_root_registration_resolves(self, tmp_path):
+        """#11640 AC4: an EXPLICIT repo-root registration (`- **pm**: .`)
+        is valid and resolves — only an UNregistered role defaulting to
+        repo-root was the bug. Here pm is registered to an existing dir
+        that doubles as REPO_ROOT."""
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        config = tmp_path / ".local-config"
+        config.write_text(f"- **pm**: {repo_root}\n")
+
+        with patch.object(boot_remote, "LOCAL_CONFIG", config), \
+             patch.object(boot_remote, "REPO_ROOT", repo_root):
+            result = boot_remote._get_clone_path("pm")
+        assert result == str(repo_root)
 
 
 class TestIsProcessAlive:
@@ -252,6 +299,37 @@ class TestBootAgentSkip:
         result = boot_remote.boot_agent("skill")
         assert result["action"] == "skip"
         assert result["success"] is True
+
+
+class TestBootAgentCloneResolutionRefusal:
+    """#11640: boot_agent must REFUSE to spawn when clone resolution fails —
+    no orphan sweep, no boot sentinel, no terminal spawn. A wrong-realm boot
+    is data corruption (#11600), so a loud refusal is the correct outcome."""
+
+    @patch("boot_remote._spawn_terminal")
+    @patch("boot_remote._write_booting_sentinel")
+    @patch("boot_remote._get_clone_path",
+           side_effect=boot_remote.CloneResolutionError("role 'qa' not registered; REPO_ROOT refused"))
+    def test_unregistered_role_refuses_spawn(self, mock_clone, mock_sentinel, mock_spawn):
+        result = boot_remote.boot_agent("qa")
+        assert result["success"] is False
+        assert result["action"] == "error"
+        assert "clone resolution failed" in result["message"]
+        # Zero spawn: never reached the sentinel claim or terminal spawn
+        mock_sentinel.assert_not_called()
+        mock_spawn.assert_not_called()
+
+    @patch("boot_remote._spawn_terminal")
+    @patch("boot_remote._get_clone_path",
+           side_effect=boot_remote.CloneResolutionError("missing clone"))
+    def test_dry_run_also_refuses(self, mock_clone, mock_spawn):
+        """Even a dry-run must refuse — the resolution gate precedes the
+        dry-run short-circuit, so an unresolvable role never reports
+        'would boot'."""
+        result = boot_remote.boot_agent("qa", dry_run=True)
+        assert result["success"] is False
+        assert result["action"] == "error"
+        mock_spawn.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

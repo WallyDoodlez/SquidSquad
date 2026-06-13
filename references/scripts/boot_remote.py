@@ -153,14 +153,50 @@ def _get_all_roles():
     return sorted(roles)
 
 
-def _get_clone_path(role):
-    """Get the clone root path for a role. Falls back to REPO_ROOT.
+class CloneResolutionError(Exception):
+    """Raised when a role's clone path cannot be safely resolved (#11640).
 
-    Returns str (not Path) so the value is JSON-serializable when stored
-    in AgentState and written to .harness-state.json.
+    A missing or misregistered clone must NEVER fall back to REPO_ROOT.
+    Spawning an agent in the wrong realm corrupts another agent's working
+    checkout — exactly the incident in #11600, where `qa` (absent from
+    `.local-config`, which registers `verifier`) silently resolved to
+    REPO_ROOT and clobbered PM's clone. A loud failure is correct; a
+    wrong-realm boot is data corruption. Spawn paths catch this and REFUSE
+    to spawn.
+    """
+
+
+def _get_clone_path(role):
+    """Get the clone root path for a role. Raises on unsafe resolution.
+
+    Raises CloneResolutionError when:
+      - `role` is not registered in .local-config (no silent REPO_ROOT
+        fallback — #11640), or
+      - the registered path does not exist on disk.
+
+    An explicitly registered repo-root (`- **pm**: .`) is valid and
+    resolves normally; only an UNregistered role defaulting to repo-root
+    was the bug. Returns str (not Path) so the value is JSON-serializable
+    when stored in AgentState and written to .harness-state.json.
     """
     local = _parse_local_config()
-    return str(local.get(role, REPO_ROOT))
+    if role not in local:
+        raise CloneResolutionError(
+            f"role '{role}' is not registered in {LOCAL_CONFIG} "
+            f"(registered roles: {sorted(local)}). Refusing to fall back "
+            f"to REPO_ROOT ({REPO_ROOT}) — a wrong-realm boot corrupts "
+            f"another agent's clone (#11640). Register '{role}' in "
+            f".local-config before spawning it."
+        )
+    path = local[role]
+    if not Path(path).exists():
+        raise CloneResolutionError(
+            f"role '{role}' is registered to '{path}' in {LOCAL_CONFIG} "
+            f"but that path does not exist on disk. Refusing to spawn "
+            f"against a missing clone (#11640) — fix .local-config or "
+            f"create the clone."
+        )
+    return str(path)
 
 
 # ---------------------------------------------------------------------------
@@ -516,8 +552,23 @@ def boot_agent(role, dry_run=False):
         "timestamp": time.time(),
     }
 
+    # Clone resolution is the first gate (#11640). `_needs_boot` calls
+    # `_get_clone_path`, which now raises rather than silently falling back
+    # to REPO_ROOT for an unregistered / missing clone. Catch it here and
+    # REFUSE to spawn — never reach the orphan sweep, the boot sentinel, or
+    # the terminal spawn, all of which would otherwise operate in the wrong
+    # realm. This single guard covers every spawn path that routes through
+    # boot_agent: manual boot (start_team.py), the harness auto-reboot loop
+    # (harness.py), and POST /agents/{role}/start.
+    try:
+        needs, reason, clone_path = _needs_boot(role)
+    except CloneResolutionError as e:
+        result["action"] = "error"
+        result["success"] = False
+        result["message"] = f"clone resolution failed — refusing to spawn: {e}"
+        return result
+
     # PID-based detection
-    needs, reason, clone_path = _needs_boot(role)
     if not needs:
         result["action"] = "skip"
         result["success"] = True
