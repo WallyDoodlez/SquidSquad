@@ -341,7 +341,14 @@ class HarnessState:
                 # intent eventually wins. CONTEXT-4792.md §3.3. Idempotent:
                 # the kill races against the cooperative exit and we re-check
                 # on the next poll either way.
-                if alive and pid and agent.intent in (
+                # #11538: skip when pid_changed — a NEW claude PID means the
+                # old process already died and the agent rebooted, so the
+                # STOPPING/RESTARTING intent has been fulfilled. intent_set_at
+                # still references the OLD process's clock; force-killing the
+                # freshly-booted replacement for that stale timer is wrong (the
+                # RESTARTING→RUNNING reset just below clears the intent on this
+                # same poll).
+                if alive and pid and not pid_changed and agent.intent in (
                     AgentState.INTENT_STOPPING, AgentState.INTENT_RESTARTING,
                 ) and agent.intent_set_at is not None and (
                     time.time() - agent.intent_set_at
@@ -371,10 +378,19 @@ class HarnessState:
                 # Update status
                 if alive:
                     agent.status = "running"
-                    if agent.intent == AgentState.INTENT_RESTARTING:
+                    # #11538: only clear a RESTARTING intent once a NEW claude
+                    # PID has appeared (pid_changed) — i.e. the old process
+                    # actually died and the agent rebooted. Resetting whenever
+                    # the SAME PID is merely alive silently undoes an in-flight
+                    # restart within one health poll (HEALTH_POLL_INTERVAL=5s)
+                    # AND disarms the 60s force-kill safety net, so a wedged /
+                    # non-cycling agent could never be restarted OR force-killed
+                    # via the documented endpoint. Mirrors the STOPPING branch.
+                    if agent.intent == AgentState.INTENT_RESTARTING and pid_changed:
                         agent.intent = AgentState.INTENT_RUNNING
                         agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
+                        _log(f"{role}: alive with new PID (restart complete), reset to running (#11538)")
                     elif agent.intent in (
                         AgentState.INTENT_STOPPING,
                         AgentState.INTENT_STOPPED,

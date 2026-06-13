@@ -594,6 +594,130 @@ class TestForceKillSafetyNet(unittest.TestCase):
         self.assertIsNone(hs.get_agent("skill").intent_set_at)
 
 
+class TestRestartLifecycle(unittest.TestCase):
+    """#11538: update_health must not undo an in-flight RESTARTING intent.
+
+    Regression for the bug where a restart of a still-alive (incl. wedged /
+    non-cycling) agent was silently reverted within one health poll
+    (HEALTH_POLL_INTERVAL=5s) — the RESTARTING->RUNNING reset fired whenever the
+    SAME claude PID was merely alive, with no pid_changed guard. That also
+    disarmed the 60s force-kill safety net (scoped to STOPPING/RESTARTING), so a
+    wedged agent could never be restarted OR force-killed via the endpoint. The
+    reset must now wait for a genuinely NEW claude PID (pid_changed) — proof the
+    old process died and the agent rebooted.
+    """
+
+    def _make_state(self, intent, intent_set_at, stored_pid=12345):
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/clone")
+        agent.intent = intent
+        agent.intent_set_at = intent_set_at
+        agent.claude_pid = stored_pid
+        agent.status = "running"
+        hs.set_agent("skill", agent)
+        return hs, agent
+
+    def _run_health(self, hs, *, fake_now, stored_pid_alive, read_pid_return):
+        """Drive one update_health poll with deterministic PID detection.
+
+        stored_pid_alive: boot_remote._is_process_alive result for the
+            currently-stored claude_pid.
+        read_pid_return: (pid, alive) tuple from reboot_agent._read_claude_pid,
+            consulted only when the stored PID is not alive (mirrors
+            update_health's fall-through). A NEW pid here simulates a reboot
+            (pid_changed=True).
+        """
+        kill = MagicMock()
+        patches = [
+            patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path", return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive",
+                  return_value=stored_pid_alive),
+            patch("harness.reboot_agent._read_claude_pid",
+                  return_value=read_pid_return),
+            patch("harness.reboot_agent._kill_process", kill),
+            patch("harness.time.time", return_value=fake_now),
+            patch("harness._log"),
+        ]
+        for p in patches:
+            p.start()
+        try:
+            hs.update_health()
+        finally:
+            for p in patches:
+                p.stop()
+        return kill
+
+    def test_restarting_same_pid_alive_does_not_reset_intent(self):
+        """THE BUG: a RESTARTING agent whose same claude PID is still alive
+        must KEEP intent=RESTARTING (not silently revert to RUNNING). 10s
+        elapsed mirrors a real /status poll well inside the 60s window."""
+        from harness import AgentState
+        hs, _ = self._make_state(AgentState.INTENT_RESTARTING, 1000.0)
+        kill = self._run_health(
+            hs, fake_now=1010.0, stored_pid_alive=True,
+            read_pid_return=(None, False),
+        )
+        got = hs.get_agent("skill")
+        self.assertEqual(got.intent, AgentState.INTENT_RESTARTING)
+        self.assertEqual(got.intent_set_at, 1000.0)
+        kill.assert_not_called()
+
+    def test_restarting_new_pid_resets_to_running(self):
+        """Restart COMPLETED: old PID dead, a new claude PID booted. The
+        RESTARTING intent clears to RUNNING and intent_set_at resets. (This
+        happy path was preserved — passes on both old and new code.)"""
+        from harness import AgentState
+        hs, _ = self._make_state(AgentState.INTENT_RESTARTING, 1000.0,
+                                 stored_pid=12345)
+        kill = self._run_health(
+            hs, fake_now=1010.0, stored_pid_alive=False,
+            read_pid_return=(99999, True),
+        )
+        got = hs.get_agent("skill")
+        self.assertEqual(got.intent, AgentState.INTENT_RUNNING)
+        self.assertIsNone(got.intent_set_at)
+        self.assertEqual(got.claude_pid, 99999)
+        kill.assert_not_called()
+
+    def test_wedged_restarting_agent_force_killed_after_timeout(self):
+        """The payoff: because intent now PERSISTS as RESTARTING, the 60s
+        force-kill net finally engages for a wedged/non-cycling agent whose
+        same PID never reaches a cooperative cycle boundary. Old code reset
+        intent to RUNNING in the same poll, so this assertion would fail."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, _ = self._make_state(AgentState.INTENT_RESTARTING, 1000.0)
+        kill = self._run_health(
+            hs, fake_now=1000.0 + FORCE_KILL_TIMEOUT_SECONDS + 1,
+            stored_pid_alive=True, read_pid_return=(None, False),
+        )
+        kill.assert_called_once_with(12345)
+        got = hs.get_agent("skill")
+        # Intent stays RESTARTING (no new PID yet); next poll sees the dead PID
+        # and runs the reboot path. intent_set_at cleared so the kill is not
+        # re-logged every poll.
+        self.assertEqual(got.intent, AgentState.INTENT_RESTARTING)
+        self.assertIsNone(got.intent_set_at)
+
+    def test_new_pid_not_force_killed_even_past_timeout(self):
+        """A restart that took >60s end-to-end must NOT have its freshly-booted
+        replacement force-killed: pid_changed proves the old process already
+        died, so the stale intent_set_at clock does not apply to the new PID."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, _ = self._make_state(AgentState.INTENT_RESTARTING, 1000.0,
+                                 stored_pid=12345)
+        kill = self._run_health(
+            hs, fake_now=1000.0 + FORCE_KILL_TIMEOUT_SECONDS + 60,
+            stored_pid_alive=False, read_pid_return=(99999, True),
+        )
+        kill.assert_not_called()
+        got = hs.get_agent("skill")
+        self.assertEqual(got.intent, AgentState.INTENT_RUNNING)
+        self.assertIsNone(got.intent_set_at)
+        self.assertEqual(got.claude_pid, 99999)
+
+
 class TestIntentSetAtRepeatRequestIsIdempotent(unittest.TestCase):
     """#4792 Phase 1 iter-4: repeated stop/restart requests on an already
     -STOPPING/-RESTARTING agent must NOT reset intent_set_at — that would
