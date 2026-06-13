@@ -1,40 +1,31 @@
 # Working State
 
-- **Task**: cycle 2336 (inline) — wrote+audited+shipped R2 dep-provisioning section (PR #11588 → pending-test); diagnosed harness proactor exception (#11587)
-- **Status**: R2 with verifier; #11412 closed superseded; harness proactor noise = cosmetic (filed #11587)
-
-## R2 (#11537) dep-provisioning — DONE → pending-test
-
-- Branch squidsquad/task/11537: ee66f83b (section) + e7b6ed26 (audit fixes). PR #11588.
-- §4.1 rewritten: gather-all → consent → provision (operator-locked option-b: install-time consent gate + start.sh/.ps1 re-ensure; claude/gh-auth guided; full scope). §3.1 + §2 + §11.1 reconciled.
-- DS audit: 1 ERROR (start.ps1 EXISTS — research was wrong, I'd claimed no-Windows-path) + 4 WARN, all fixed.
-- #11412 closed (superseded). **Post-merge**: file R2 impl task to skill (gather-all collector, per-platform dispatch, consent prompt, pyyaml move, requirements.txt unified read).
-
-## Harness proactor exception (operator-reported)
-
-- ProactorEventLoop ConnectionReset (WinError 10054) — COSMETIC (harness responsive all session). #9562 SelectorEventLoopPolicy fix is in code (harness.py:3074) but defeated: uvicorn.Config (harness.py:3155) has no loop= → auto → daemon-thread proactor override. Filed **#11587** (medium, skill).
+- **Task**: cycle 2337 (inline) — found event-mode verifier routing gap (#11589); R2 with verifier (stuck)
+- **Status**: event mode NOT production-ready; pending-test queue stuck (QA event-mode, not receiving work)
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
-## Event-mode investigation (operator goal: squad → event mode)
+## Event-mode reliability cluster (operator goal: squad → event mode) — NOT READY
 
-- **"2 skill agents" = NOT real** — Claude desktop app processes (WindowsApps Electron, --type). Named squidsquad agents: 1 each (pm/qa/dm/skill).
-- **DM "restart into event mode"**: harness restart endpoint failed again (#11538). Force-killed DM 46736 → harness auto-respawned (boot_agent) → new PID 45212, clean. BUT landed **loop mode** (ran cycle 412, no event_poll). DM clone HAS #11512 fix → not a stale-launcher issue.
-- **Root finding**: event_poll is spawned by the AGENT arming Monitor (event mode), NOT by boot_agent (boot_remote has no event_poll spawn). Reboot/respawn → loop mode. Only **qa** is event-mode — reached via **in-session switch** (commit 1ec4c89d: killed /loop cron, armed Monitor on operator request), NOT a reboot.
-- **Implication**: start.sh reboot likely WON'T reach event mode (same boot_agent path). Only in-session switch works today; doesn't scale.
-- **Filed #11586** (high, skill): fresh-boot→event-mode path broken; +doc/impl drift (HARNESS-ARCH §7.2 says harness spawns event_poll, impl has agent-via-Monitor). Cluster with #11538/#11512.
+- **#11589 (high, FILED)** — event-mode verifier never gets pending-test work. QA idle ~2h; its event queue has 11 events but pending-test transitions emit `status-transition` tagged with the TRANSITIONING role (pm/skill), NOT `assigned-to qa`. Care-filter (target_alias==qa) skips them all → QA never verifies. Loop mode worked (QA scanned work-queue each cycle); event mode has no equivalent routing.
+- **#11586 (high)** — fresh boot/respawn doesn't reach event mode (lands loop). event_poll is agent-spawned via Monitor, not by boot_agent.
+- **#11538 (pending-test, fixed by skill)** — harness restart endpoint ineffective.
+- **Conclusion**: keep squad in LOOP mode until cluster fixed. Event mode breaks at boot (don't reach it) AND at runtime (work not routed to reached agents).
 
-## Open threads (operator)
+## STUCK: pending-test queue (QA not verifying in event mode)
 
-1. **R2 #11537 dep-provisioning** (status:planning) — research done (RESEARCH-INSTALLER-DEPROV-11537.md). 3 design Qs pending operator: (Q1) provision at install-time vs start.sh vs both; (Q2) confirm claude/gh-auth stay instruct; (Q3) scope system-tools+pkgs vs pkgs-only. PM recs: install-time primary / yes / full-scope. Then write section (own branch) + file impl to skill.
-2. **Event mode**: how to proceed — in-session-switch each agent (manual, works) vs wait for #11586 fix. Operator's call.
+- #11538 (skill, harness fix — had spurious close/reopen churn), #11537 (pm, R2 PR #11588), #10855 (skill, long-deferred).
+- **Immediate unblock**: switch QA back to loop mode (operator action) → it scans + verifies. OR in-session verify. Flagged to operator.
 
-## Pipeline (clean)
+## R2 (#11537) dep-provisioning — section DONE, with verifier
 
-- pending-ship empty; pending-test #10855 (QA). DM cycling (loop, cycle 412). All agents 1-each, healthy.
+- PR #11588, pending-test. DS audit caught start.ps1-exists ERROR + 4 WARN, all fixed. #11412 closed superseded.
+- Post-merge: file R2 impl task to skill (gather-all collector, per-platform dispatch, consent prompt, pyyaml move, requirements.txt unified read).
 
-## Incident follow-ups (this session)
-- #11538 (harness restart ineffective), #11586 (event-mode not reached on boot), #11511 (merge-flap), #10540 (batch-drain), #11570 (#11053 Phase 2), #11519 (clones deadwood, shipped).
+## Other / cosmetic
+
+- #11587 (medium, skill) — harness proactor ConnectionReset = cosmetic (uvicorn loop=auto defeats #9562 SelectorEventLoopPolicy).
+- #10541 kept open (pre-bootup wedge, investigate under event mode). #11570 (#11053 Phase 2 to skill). #11519 shipped.
 
 ## Context
-healthy.
+healthy (harness responsive; agents loop-cycling except qa idle-in-event-mode).
