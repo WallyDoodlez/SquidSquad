@@ -1,7 +1,18 @@
 # Working State
 
 - **Task**: cycle 2344 — overnight stabilization (operator asleep, expects: reboot issue resolved + team in event mode)
-- **Status (02:25)**: ALL 4 AGENTS RUNNING & STABLE — pids constant over 40s, NOTHING crash-looping. QA now in OWN clone. Lock-watchdog active.
+- **Status (02:42)**: ALL 4 AGENTS RUNNING & STABLE — NOTHING looping. dm=EVENT(working); skill=LOOP pinned(stable+working, pid 32432); qa=LOOP(own clone, working); pm healthy. Lock-watchdog active. Reboot issue RESOLVED (both fast stale-lock + slow event-mode loops neutralized).
+
+## >>> UPDATE 02:33 — skill SLOW-reboot-loops in event mode (#11586, separate from stale-lock) <<<
+
+- skill pids: 48864 (02:25) → 45180 (02:31) → 50988 (02:32) — **rebooting every ~2-5min in EVENT mode**. NOT stale-lock (watchdog log empty). This is the ORIGINAL #11612/#11586: boots event mode → emits bootup-complete → never sustains event_poll/Monitor → "Monitor exit = end session" → harness reboots → repeat.
+- **Two DISTINCT reboot causes now confirmed**: (1) FAST 15-20s = stale lock [FIXED]; (2) SLOW 2-5min = event-mode arming failure [#11586, OPEN, deep].
+- skill-inert == **#10855** (`blocked:human-action`, "deeper bug than PR #10952", already human-escalated) — this is a KNOWN pre-existing deep bug, NOT a regression from this session.
+- #11587 (proactor ConnectionReset) is the prime suspect for killing skill's event_poll on connect — RE-EVALUATE as non-cosmetic. DM's event_poll survives (established earlier); skill's new connections may get reset.
+- **RESOLVED 02:42 — skill PINNED to loop mode (stable + working).** Pre-pin watch proved the slow loop conclusively: 50988→None→19788→32432 (~1.5-2min reboots, event mode). Post-pin: skill pid 32432 STABLE, 0 reboots, LOOP mode (lock present = cycling/working).
+  - **HOW**: wrote dead port `59999` to `D:\Dev\Dev\SquidSquad-2\.squidsquad\.harness-port` → boot probe fails → loop-mode fallback (the documented safe path; manual stand-in for the not-yet-built SQUIDSQUAD_FORCE_LOOP #11612-step2).
+  - **TO REVERT (after #11586 fixed)**: restore skill's .harness-port to `7373` (or delete it — #11601 defaults to 7373) + restart skill. NOTE: a harness RESTART will re-distribute 7373 to skill's clone (_deferred_init), un-pinning it → skill returns to event-mode slow-loop until #11586 lands. If operator restarts harness overnight, re-pin skill or expect its loop to resume.
+  - Loop mode re-creates scheduled_tasks.lock each /loop → stale-lock watchdog (bsj1gq479) covers unclean-death recurrence.
 
 ## >>> OVERNIGHT HANDOFF SUMMARY (read this first) <<<
 
