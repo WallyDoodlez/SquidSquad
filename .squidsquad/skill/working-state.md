@@ -1,44 +1,38 @@
 # Working State
 
-- **Task**: #11503 (high, in-progress, role:skill) — post-cutover test-debt. **21/23 stale tests cleared; remaining 2 are #10360-gated (not stale).**
-- **Status**: Group A tail done this cycle (cycle 1644): 4 stale tests rebound + un-quarantined (cycle_pre, terminology_6274, own_domain_autofix, vault_synthesis). Triage finding: last 2 KNOWN_FAILURES (compose_author_comments_11142, agent_boundaries) block on OPEN #10360 (Responsibility compose slot §5.2), NOT cutover-stale. Re-pointed their reasons; did NOT weaken assertions. PM decision requested on #11503 (recommend: close at 21/23, let #10360 carry final 2).
-- **Commits (bundle branch, LOCAL — not pushed; push to origin/post-cutover-cleanup explicitly when PR-ready)**:
-  - 7357b6cd7 #11503 Group A tail (4 stale cleared + 2 triaged to #10360) [cycle 1644]
-  - eb21957ea cycle 1643 state; 2ad42181f #11657 event_poll removal; 85d6eb430 #11503 Group A/B (12 tests) [cycle 1643]
-  - (prior-session ancestors: 7f6c5258b, e8896df59, 6968c3217)
-  - push.default=simple → bare push safely refuses (branch≠upstream main).
-- **Branch**: squidsquad/skill/post-cutover-cleanup (bundle branch per operator decision c-2026-06-12). NOTE: upstream misconfigured to origin/main — push must target origin/post-cutover-cleanup explicitly, NEVER main.
-- **Mode**: POLLING (harness probe failed at boot — port file 59999, connection refused). /loop cron ea6e7da1 (30m). NOTE: a process answers on default 7373 — port file looks stale; possible #11586-class boot-probe mismatch. Did NOT re-probe (mode sticky).
-- **Updated**: 2026-06-13 03:30
+- **Active work spans TWO branches this session:**
+  1. **squidsquad/skill/post-cutover-cleanup** (bundle, session home) — #11503 (21/23 stale cleared) + #11657 (done). 9 commits ahead of origin/main, LOCAL (not pushed). Awaiting PM disposition on #11503 (recommended close at 21/23; final 2 are #10360-gated).
+  2. **squidsquad/task/11641** (based on origin/main) — #11641 fix, 1 commit (cff818eb7), LOCAL. in-progress, NOT pending-test (see blocker below).
+
+- **#11503**: 21/23 stale-test debt cleared. Final 2 (compose_author_comments_11142, agent_boundaries) are #10360-gated, NOT stale — re-pointed in KNOWN_FAILURES, cross-linked on #10360. PM decision requested (no response yet).
+- **#11657**: done (event_poll stale test removed; on bundle).
+- **#11641** (cycle 1645): implemented thin_launcher stale-scheduled-lock reclamation + 6 regression tests (incl. wiring). 37 thin_launcher tests pass. **NOT pending-test**: full run_tests.py on the main-based branch shows 1 failure = test_event_poll_exits_cleanly_when_harness_unreachable, which is PRE-EXISTING ON MAIN (= the #11657 fix that lives on the bundle, not yet merged). My #11641 changes are green in isolation. Held in-progress to avoid handing verifier a red suite.
+
+- **MERGE ORDERING (PM/DM)**: land the post-cutover-cleanup bundle (#11503+#11657) to main FIRST → main goes green → then squidsquad/task/11641 merges a green main and goes pending-test. Surfaced on #11641 + #11503.
+
+- **Branches/push**: both branches LOCAL, not pushed. Bundle upstream misconfigured to origin/main — NEVER bare-push (push.default=simple refuses). Push explicit refspecs when PR-ready.
+- **Mode**: POLLING (harness probe failed at boot — port file 59999 refused; a process answers on default 7373, likely #11586-class stale-port mismatch). /loop cron ea6e7da1 (30m). Mode sticky.
+- **Updated**: 2026-06-13 03:55
 
 ## Improvement Scan
-Status: idle
-Last completed: (none this session)
-Next scan after: (eligible — defer until #11503 dispositioned)
+Status: idle. Next: eligible once #11503/#11641 dispositioned.
 
-## #11503 — DONE (stale debt cleared)
-All 21 genuinely-stale post-cutover tests rebound to v2 reality + un-quarantined across cycles:
-- cycle 1642(prior): Group C ×3 + event-mode ×2 (5)
-- cycle 1643: Group A/B ×12
-- cycle 1644: Group A tail ×4 (cycle_pre, terminology_6274, own_domain_autofix, vault_synthesis)
+## #11503 — DONE (21 stale cleared) / BLOCKED (2 on #10360)
+21 genuinely-stale tests rebound across cycles 1642-1644. Final 2 gate on OPEN #10360 (Responsibility compose slot §5.2): test_compose_author_comments_11142 (stale half fixed; test_10360_cleanup half is #10360), test_agent_boundaries (20 L3 stubs §5.2 + 19 superseded assertions). DO NOT weaken to force green; ride #10360.
 
-## #11503 — BLOCKED on OPEN #10360 (the final 2 of 23 — NOT stale)
-#10360 = "Implement Responsibility compose slot per COMPOSE-ARCHITECTURE §5.2" (OPEN). Both tests fail on genuinely-incomplete §5.2 work:
-- **test_compose_author_comments_11142**: stale half FIXED (boot-bootstrap marker moved to references/roles/instructions.md in #11331). test_10360_cleanup_markers_preserved half detects #10360 breadcrumbs dropped by #11331 rewrite — gated on #10360.
-- **test_agent_boundaries**: 20 missing L3 variant responsibility.md stubs (§5.2) gate on #10360; 19 other assertions (ac4/ac6/ac11) superseded by agent-boundaries sub-skill retirement — rewrite whole file when #10360 unblocks.
-Cross-linked on #10360. KNOWN_FAILURES reasons re-pointed. DO NOT un-quarantine these by weakening assertions; they ride #10360.
+## #11641 — DONE on its branch (cycle 1645)
+thin_launcher._reclaim_stale_scheduled_lock(clone_path): removes .claude/scheduled_tasks.lock iff holder pid dead (reuses _is_process_alive), before Popen; live lock preserved; corrupt/pid-less lock left+warn. Wiring test confirms main() calls it. Root cause of #11612 reboot loop. Commit cff818eb7 on squidsquad/task/11641.
 
-## #11657 — DONE (cycle 1643, commit 2ad42181f)
-Stale event_poll integration test removed (superseded by #11601). Deviation noted on issue.
+## #11657 — DONE (cycle 1643, commit 2ad42181f on bundle)
 
-## Tree cruft (NOT tracked, leave untracked)
-- .claude/scheduled_tasks.lock.stale-bak — #11641 (stale lock crash)
-- .squidsquad/skill/planning/CODE-REVIEW-11601.md — #11601 leftover (shipped)
-- .squidsquad/.harness-port — restored to 59999 during #11657 triage (gitignored)
+## Tree cruft (untracked, leave)
+- .claude/scheduled_tasks.lock.stale-bak — #11641 repro backup (now travels with checkouts)
+- .squidsquad/skill/planning/CODE-REVIEW-11601.md — #11601 leftover
+- .squidsquad/.harness-port — restored 59999 during #11657 triage (gitignored)
 
 ## Standing items
-- #10360 (high, OPEN) — Responsibility compose slot §5.2; now also gates the final 2 #11503 tests
-- #11641 (high) — stale scheduled_tasks.lock crashes claude → reboot loop
-- #11640 (high) — boot_remote._get_clone_path REPO_ROOT fallback must fail-closed
-- #11586 (high) — agents don't reach event mode on reboot (cf. port-file/7373 mismatch)
+- #10360 (high, OPEN) — Responsibility compose slot §5.2; gates final 2 #11503 tests
+- #11641 (in-progress, this session) — verification-blocked on bundle→main merge
+- #11640 (high) — boot_remote REPO_ROOT fallback must fail-closed
+- #11586 (high) — agents don't reach event mode on reboot (cf. 7373/port-file mismatch)
 - #11587 (medium), #11511 (medium), #11505 (capabilities teardown)
