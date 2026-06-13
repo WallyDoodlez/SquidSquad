@@ -2,12 +2,16 @@
 
 - **Task**: #11587 — uvicorn loop=none (harness ProactorEventLoop fix) — COMPLETE, PR #11722
 - **Status**: in-progress — HELD pre-pending-test, gated on #11683 shipping (full-suite green)
-- **Updated**: 2026-06-13 09:13
+- **Updated**: 2026-06-13 10:14
 - **Branch**: squidsquad/task/11587 (current). Other in-flight: task/11640, task/11641.
-- **Quiet Cycle Counter**: 0 (iter-460: caught #11505 scope conflict — real work, not quiet)
+- **Quiet Cycle Counter**: 0 (iter-462: FOUND #11586 root cause — harness was up all along; stale .harness-port)
 
-## ⚠️ Session note
-Harness DOWN (port 59999, curl exit 7) — loop-mode (skill pinned stable per #11586). `/loop 30m` cron c8644353. cycle_pre/post DON'T fire — commit/push/PR MANUALLY. working-state.md is PER-BRANCH in git — switching branches swaps it; git tree + issue status is truth ([[learning-resume-git-tree-is-truth]]).
+## ⚠️ Session note — CORRECTED iter-462
+Harness is **UP on 7373** (16h uptime, healthy) — NOT down. My loop-mode all session was caused by a STALE .harness-port=59999 in my clone (probed dead 59999→exit 7→loop). FIXED: corrected .harness-port→7373 (now curl-reachable). Mode is sticky this session (stay loop), but future boot reaches event mode. `/loop 30m` cron c8644353. working-state.md is PER-BRANCH; git tree is truth ([[learning-resume-git-tree-is-truth]]).
+
+## ⭐ #11586 ROOT CAUSE FOUND (iter-462) — stale client-side .harness-port, NOT harness availability
+Harness healthy on 7373 whole time. Agents with NO port file default to 7373 (reach harness); agent with STALE port file probes dead port→loop mode. Matrix: pm/qa=MISSING→7373✓, dm=7373✓, skill=59999(dead)→loop✗. Vector: harness _deferred_init (harness.py:1280-1294) distributes its port to all .local-config clones; an integration test starting a harness on ephemeral 59999 (find_free_port(59999), test_harness.py) writes that dead port into REAL clones, teardown doesn't restore → strands live agents. Instance of [[learning-tests-must-not-mutate-shared-live-state]]. Reported on #11586.
+**DURABLE FIX (next cycle, skill-domain, NOT gated on #11683):** (1) tests must not distribute ephemeral port into real clones (isolate .local-config / guard _deferred_init / restore in teardown); (2) harden _discover_port (event_poll.py + cycle_post.py) to treat a non-listening port-file value as stale → fall through to default/parent-walk. Own branch off main; own tests green; independent of #11683.
 
 ## THREE skill PRs in flight — ALL gated on #11683 ship
 | Issue | Fix | Branch | PR | Tests | DS | State |
