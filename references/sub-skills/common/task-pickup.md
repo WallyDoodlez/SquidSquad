@@ -21,7 +21,7 @@ If the queue returns an approved task (not just role-specific items like pending
    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status -> In Progress."
    ```
 4. **Branch checkout**: `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]`
-5. Read planning artifacts if available (`.squidsquad/pm/planning/`).
+5. Read planning artifacts if available (`.squidsquad/[PM_ALIAS]/planning/`).
 6. Implement the task per acceptance criteria.
 7. Run tests: `python tests/run_tests.py`
 8. **Verify changes exist**: `python references/scripts/git_ops.py has-changes`

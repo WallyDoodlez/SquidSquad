@@ -261,7 +261,7 @@ Templates are framework-shipped (not operator-written) and are only consulted by
 
 ## 7. The sub-skills
 
-All vault behavior is encoded as markdown fragments under `references/sub-skills/`. Each fragment is inlined into the consuming agent's composed `CLAUDE.md` by `compose.py`. Four distinct sub-skills are described below; `vault-protocol` ships with a read-only variant (`vault-protocol-slim`) — see §7.1.
+All vault behavior is encoded as markdown fragments under `references/sub-skills/`. Each fragment is inlined into the consuming agent's composed `CLAUDE.md` by `compose.py`. Four distinct sub-skills are described below. The vault is **shared institutional knowledge** — every role (PM, verifier, worker, DM) has full R/W access via `vault-protocol`; the historical `vault-protocol-slim` read-only variant was retired in #11331 (Iter 56) when verifier/DM were granted write access for their lane-specific patterns (verifier: testing-and-verification learnings; DM: delivery patterns).
 
 **Execution model**: vault sub-skills split into two execution lanes by weight. The principle: keep the consuming agent's context lean — anything that requires meaningful reasoning over vault content runs out of process.
 
@@ -292,7 +292,7 @@ Each sub-skill's **Cycle integration** line below names its lane.
 
 **Source-vs-spec drift**: source file still references the dropped `links` frontmatter field, the dropped `source: code` value, the unimplemented "auto-maintain `links` frontmatter" behavior, and the pre-#6274 `owner:` enum values (`qa`, `skill` instead of `verifier`, `worker`). Sync tracked in #10098.
 
-**Read-only variant** (`references/sub-skills/common/vault-protocol-slim.md`): the same protocol with all write operations removed — just session-start `BRIEFING.md` reading and the four `vault-search` modes. Composed by `compose.py` for roles where vault writes are not appropriate; the base-name-to-slim-variant mapping is a composition concern (see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md)).
+**Per-role write lanes**: every role uses the full `vault-protocol`. What differs is what each role writes about — patterns from its own lane (PM: coordination/decision; worker: implementation; verifier: testing-and-verification; DM: delivery). The verifier specifically does NOT use vault writes to revisit or rebut decisions made by PM/worker — the verifier's vault contribution is testing craft, not design call. Project-adaptation prose (under `.squidsquad/project/<role>.md`) names the per-role discipline; the universal write budget + 4-gate logic still applies (max 2 writes/cycle).
 
 ### 7.2 `vault-remember`
 
@@ -426,7 +426,7 @@ The vault is touched at three points in a cycle (boot, creative, post-cycle); pr
 
 ### 9.4 Post-cycle (mechanical wrap)
 
-> Step labels (Step 4a, 4b, …) in this section reference the post-cycle sequence enumerated in [AGENT-RUNTIME.md §6.1](AGENT-RUNTIME.md). This doc only describes the vault-touching steps; non-vault post-cycle steps (status transitions, tracker comments, iteration logs, commits) live there.
+> Step labels (Step 4a, 4b, …) in this section reference the post-cycle sequence enumerated in [AGENT-RUNTIME.md §7.1](AGENT-RUNTIME.md). This doc only describes the vault-touching steps; non-vault post-cycle steps (status transitions, tracker comments, iteration logs, commits) live there.
 
 In order:
 
@@ -621,7 +621,7 @@ Falls under the broader vault-living-memory umbrella (#5855).
 
 ### 11.4 Future gap — event bus integration (vault emits/consumes zero events today)
 
-[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §4 documents the event bus and §4.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
+[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5 documents the event bus and §5.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
 
 Consequences for current behavior:
 
@@ -638,7 +638,7 @@ A future integration would add vault-related signal types to the catalog, e.g.:
 - `vault.posture-detected` (payload: `posture-name`, `source-notes`) — emitted by `vault-synthesis`
 - `vault.note-read` (payload: `path`, `reader-role`) — would source the §11.3 impression model
 
-Falls under the broader vault-living-memory umbrella (#5855) and overlaps with the event-driven mode work in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §7.
+Falls under the broader vault-living-memory umbrella (#5855) and overlaps with the event-driven mode work in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §8.
 
 ### 11.5 Implementation gap — heavy sub-skills currently run inline (target: background subagent)
 
@@ -674,7 +674,7 @@ Filed as #10180. Until that lands, the §7 description is the architectural targ
 | [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) | Vault is one of the 6 composed-output slots (`identity / responsibility / soul / instructions / project-context / vault`). §5.6 ("Vault") is intentionally short and points to `vault-protocol.md` for the per-cycle usage contract and to this doc for the architecture. §3.3 + §5.6 + §11.2 G4 lock the slot to **L1-exclusive** authoring (no L2/L3/L4 fragments) — see §1 of this doc for the policy summary. | §3.3, §5.6, §11.2 G4 | Slot-machinery + L1-exclusive policy |
 | [AGENT-RUNTIME.md](AGENT-RUNTIME.md) | State-persistence table row (L507) — "Decisions / institutional memory" lives in `.squidsquad/vault/`. References an in-vault decision note for the event-bus architecture (L195, L1044). | L195, L507, L1044 | One row + two citations |
 | [INSTALLER-ARCH.md](INSTALLER-ARCH.md) | Vault skeleton is part of the install scaffold (L100 §3.2 outputs row, L228 Phase 5 scaffold step, L292-293 file layout tree). Vault is explicitly preserved across clean-rebuild and upgrade (L436, L464, L472). | L100, L228, L292-293, L436, L464, L472 | Install-time scaffolding + preservation rules |
-| [sub-skill-catalog.md](sub-skill-catalog.md) | Lists all 5 vault sub-skills (`vault-protocol`, `vault-protocol-slim`, `vault-remember`, `vault-optimize`, `vault-synthesis`) with one-line descriptions under the "Vault (institutional memory)" subheading. | "common/" → "Vault (institutional memory)" subsection | Catalog entries only |
+| [sub-skill-catalog.md](sub-skill-catalog.md) | Lists the 4 vault sub-skills (`vault-protocol`, `vault-remember`, `vault-optimize`, `vault-synthesis`) with one-line descriptions under the "Vault (institutional memory)" subheading. The `vault-protocol-slim` read-only variant was retired in #11331 (Iter 56). | "common/" → "Vault (institutional memory)" subsection | Catalog entries only |
 
 This doc (`VAULT-ARCH.md`) is the first **dedicated** architecture treatment of the vault. ARCHITECTURE.md §L6 has the most content elsewhere, but it's overview-level — not an architecture spec.
 
@@ -684,7 +684,7 @@ The cross-references above are **accurate but not yet two-way**. Reconciliation 
 
 - **ARCHITECTURE.md §L6 Memory Layer**: Should add a single line pointing to `VAULT-ARCH.md` as the canonical deep-dive. Today's L150-167 content is overview-correct but doesn't reference this doc (it can't — this doc didn't exist before).
 - **COMPOSE-ARCHITECTURE.md §5.6 and §11.2 G4**: §5.6 now references `VAULT-ARCH.md` for the architecture (vs `vault-protocol.md` for the per-cycle usage contract) and declares the slot **L1-exclusive** (no L2/L3/L4 authoring). §11.2 G4 is **CLOSED** as of 2026-05-29 — the "slot contract" gap is settled by the L1-exclusive guardrail (the slot contract is the L1 short-descriptor pattern; nothing else is authorable). Revisit when a concrete customization pattern surfaces.
-- **AGENT-RUNTIME.md §5 state-persistence row**: Should link to `VAULT-ARCH.md` for the "what" (vs the row's "where" + "owner" + "why" data).
+- **AGENT-RUNTIME.md §6 state-persistence row**: Should link to `VAULT-ARCH.md` for the "what" (vs the row's "where" + "owner" + "why" data).
 - **INSTALLER-ARCH.md §3.2 + §5 + §11**: All vault mentions are factual scaffolding/preservation notes. Should cross-reference `VAULT-ARCH.md` once in the file-layout section so a reader knows where to learn what they just installed.
 - **sub-skill-catalog.md "Vault (institutional memory)" subsection**: Should add a header line linking to `VAULT-ARCH.md` for architecture context.
 
@@ -692,7 +692,7 @@ These are noted here; the actual edits land in a separate commit or as part of t
 
 ### 12.3 Vault sub-skill source files (canonical specs)
 
-- [`references/sub-skills/common/vault-protocol.md`](../references/sub-skills/common/vault-protocol.md) — full R/W contract (the `vault-protocol-slim.md` file in the same directory is the read-only variant; see §7.1)
+- [`references/sub-skills/common/vault-protocol.md`](../references/sub-skills/common/vault-protocol.md) — full R/W contract (used by all 4 roles; the historical `vault-protocol-slim.md` read-only variant was retired in #11331 Iter 56)
 - [`references/sub-skills/common/vault-remember.md`](../references/sub-skills/common/vault-remember.md) — reflection
 - [`references/sub-skills/common/vault-optimize.md`](../references/sub-skills/common/vault-optimize.md) — quiet-cycle maintenance
 - [`references/sub-skills/roles/pm/vault-synthesis.md`](../references/sub-skills/roles/pm/vault-synthesis.md) — PM cross-agent synthesis

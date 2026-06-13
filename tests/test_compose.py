@@ -157,6 +157,67 @@ class TestSubstitutePlaceholders:
         assert "fe" in result
         assert "skill" not in result.split("Others: ")[1]
 
+    def test_role_class_alias_placeholders_singleton(self):
+        """[PM_ALIAS]/[VERIFIER_ALIAS]/[DM_ALIAS] resolve from config (#11144 G10).
+
+        Singleton install: aliases match canonical names (qa for verifier
+        legacy key). Substituted for all roles — paths like
+        `.squidsquad/[VERIFIER_ALIAS]/planning/` must resolve at compose
+        time so multi-instance turn-on is a config change, not a prose
+        rewrite.
+        """
+        content = (
+            "verifier: .squidsquad/[VERIFIER_ALIAS]/planning/X.md, "
+            "pm: .squidsquad/[PM_ALIAS]/working-state.md, "
+            "dm: .squidsquad/[DM_ALIAS]/iterations/"
+        )
+        with patch.object(compose, "_read_config_value", side_effect=lambda f: {
+            "alias-pm": "pm",
+            "alias-qa": "qa",
+            "alias-dm": "dm",
+            "interval": "30",
+        }.get(f, "")):
+            result = compose._substitute_placeholders(content, "pm", "pm")
+        assert "[VERIFIER_ALIAS]" not in result
+        assert "[PM_ALIAS]" not in result
+        assert "[DM_ALIAS]" not in result
+        assert ".squidsquad/qa/planning/X.md" in result
+        assert ".squidsquad/pm/working-state.md" in result
+        assert ".squidsquad/dm/iterations/" in result
+
+    def test_role_class_alias_placeholders_custom(self):
+        """Multi-instance / custom-alias install: placeholders track config.
+
+        Simulates a future install that aliases the verifier-class agent
+        as `qa-skill` (instead of legacy `qa`). The composed output must
+        carry the actual alias.
+        """
+        content = ".squidsquad/[VERIFIER_ALIAS]/current-state"
+        with patch.object(compose, "_read_config_value", side_effect=lambda f: {
+            "alias-qa": "qa-skill",
+            "interval": "30",
+        }.get(f, "")):
+            result = compose._substitute_placeholders(content, "skill", "dev")
+        assert "[VERIFIER_ALIAS]" not in result
+        assert ".squidsquad/qa-skill/current-state" in result
+
+    def test_role_class_alias_placeholders_fallback(self):
+        """Missing config entries fall back to canonical names.
+
+        When config.md doesn't have `alias-pm`/`alias-qa`/`alias-dm` keys,
+        substitution uses the default (`pm`/`qa`/`dm`) so partial configs
+        still compose cleanly.
+        """
+        content = (
+            ".squidsquad/[PM_ALIAS]/ .squidsquad/[VERIFIER_ALIAS]/ "
+            ".squidsquad/[DM_ALIAS]/"
+        )
+        with patch.object(compose, "_read_config_value", return_value=""):
+            result = compose._substitute_placeholders(content, "skill", "dev")
+        assert ".squidsquad/pm/" in result
+        assert ".squidsquad/qa/" in result
+        assert ".squidsquad/dm/" in result
+
 
 # ---------------------------------------------------------------------------
 # _list_known_role_identities

@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.44.0] — 2026-06-12
+
+### Added
+
+- #11144/#11331/#11402 — **Compose-polish session (64-iteration overhaul):** all four composed agent CLAUDE.md files are now production-ready. Agent boot moves to a harness-probe-based wake-mode, op-anchoring and L4-header-stripping are unified into a single extractor pass, and L1–L3 instruction sources are fully restructured for clarity and maintainability. The result is tighter, more consistent agent behaviour out of the box.
+- #11227 — L2 agent instructions now carry inline op-anchors, so operation boundaries are unambiguous even when context pressure has stripped surrounding prose.
+- #11329/#11328/#11330 — Per-event ack-cursor is now the canonical runtime contract: agents advance their delivery cursor after each event rather than at end-of-loop, eliminating the back-pressure gap where a crash between events could lose work. AGENT-RUNTIME.md and all sub-skills updated to match.
+- #10650–#10659/#10987/#11089 — **L4 project customization:** operators can now give durable, project-specific directives that get safely woven into agent instructions. The pipeline includes an audit step, a dry-run preview, and a confirmation gate before any change lands; H3 sub-headings inside Soul/Identity prose slots are now accepted by the parser.
+- #10492/#10672–#10684/#11049/#11050/#11087/#11142/#11136 — **Compose pipeline v2:** the instruction-compose engine gains a sub-skill catalog (name → path lookup), a v2 link-stage that replaces legacy `{{include:}}` directives, dead sub-skill pruning, and HTML-comment stripping from all composed output. 38 orphaned source files are removed; the pipeline is significantly leaner.
+
+### Changed
+
+- #11137 — Reversed the over-inlining introduced in #11049: 8 sub-skills that had their full body inlined into composed files are back to markers + goal references, keeping composed CLAUDE.md files focused and context-efficient.
+- #11139 — L4 op-syntax H3 headers are now stripped from L1–L3 source bodies during compose, so internal structural headers never leak into the final agent context.
+- #11401 — Python wake-mode detection is now aligned with the harness probe contract across all agent roles; the four-file drift that could silently pick the wrong boot path is eliminated.
+- #11334 — Forge-usage instructions (tracker.py / git_ops.py / PR merge) are now canonical across all sub-skills — agents get consistent guidance regardless of which sub-skill path they loaded.
+- #11165/#11166 — Dispatch infrastructure deleted and `cycle_post.py` collapsed to a single `REQUIRED_FIELDS` set that works in both event and polling mode; operators running mixed deployments no longer need separate config branches.
+- #11091 — Improvement-scan cool-down is now a configurable field (default 30 min) instead of being hardcoded; operators can tune scan frequency per project.
+- #10538 — New `SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT` env var lets operators disable harness auto-respawn, useful for supervised restarts and CI environments where silent reboot would mask failures.
+
+### Fixed
+
+- #11403 — Harness runtime dependencies (`watchdog`, `fastapi`, `uvicorn`) are now declared in the package manifest; the PRD-E file-watch feature was silently dead on fresh installs.
+- #11404 — `POST /events` now auto-assigns an ID when the caller omits one and returns 204 (drop) for unknown roles instead of silently swallowing events with a 2xx, so lost events are visible rather than invisible.
+- #11093 — Added an HTTP route contract test that fails CI if an endpoint is renamed without updating callers; prevents the class of silent 404s that bit the event-bus endpoints.
+- #11383 — Boot-bootstrap compose tests refreshed after the Iter-22 restructure; the test suite is green on `main` again.
+- #11042–#11047 — Repaired 14+ failing tests caused by a stale `installer-files.txt` and `config.md` pollution from leaked test state; the full suite passes cleanly.
+- #11065/#11083 — `.backlog-cache` and operational state files (`vault/BRIEFING.md`, `config.md`) are no longer auto-committed to the state branch or feature branches; volatile runtime data stays out of git history.
+- #10820 — DM's SKILL.md doc-commit path now actually writes to `main`; the 70-cycle streak of silent no-ops (working tree stayed modified despite reported success) is fixed.
+- #10516 — `event_bus.SQUID_DIR` is now resolved lazily rather than at module-import time, so `SQUIDSQUAD_DIR` overrides set after import take effect correctly.
+- #10523 — `diagnostics.log_entry` rotation is now atomic; concurrent writers can no longer double-truncate the log.
+- #10530/#10559 — Hardened the reboot-agent PID validation and replaced the deprecated `gh pr edit` GraphQL path with a direct API call, fixing a per-invocation failure.
+
 ## [0.43.0] — 2026-05-22
 
 ### Fixed

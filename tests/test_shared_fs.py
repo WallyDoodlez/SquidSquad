@@ -30,7 +30,9 @@ class TestInit:
         assert fake_home.exists()
         assert (fake_home / "secrets").exists()
         assert (fake_home / "config").exists()
-        assert (fake_home / "clones").is_dir()
+        # #11519: init no longer creates the vestigial ~/.squidsquad/clones/
+        # (dead since #3100 — .squidsquad/.local-config is the sole clone registry).
+        assert not (fake_home / "clones").exists()
 
     def test_idempotent(self, tmp_path):
         fake_home = tmp_path / ".squidsquad"
@@ -135,29 +137,17 @@ class TestReadSecretOrEnv:
         assert value == ""
 
 
-class TestClones:
-    def test_write_and_read(self, tmp_path):
-        fake_home = tmp_path / ".squidsquad"
-        with patch.object(shared_fs, "get_home", return_value=fake_home):
-            shared_fs.init()
-            shared_fs.write_clone("skill", "/path/to/skill-clone")
-            shared_fs.write_clone("pm", "/path/to/pm-clone")
-            clones = shared_fs.read_clones()
-        assert clones["skill"] == "/path/to/skill-clone"
-        assert clones["pm"] == "/path/to/pm-clone"
+class TestClonesHelpersRetired:
+    """#11519: read_clones/write_clone + the clones dir were retired (dead since #3100)."""
 
-    def test_empty_clones(self, tmp_path):
-        fake_home = tmp_path / ".squidsquad"
-        with patch.object(shared_fs, "get_home", return_value=fake_home):
-            shared_fs.init()
-            clones = shared_fs.read_clones()
-        assert clones == {}
+    def test_clone_helpers_removed(self):
+        assert not hasattr(shared_fs, "read_clones")
+        assert not hasattr(shared_fs, "write_clone")
 
-    def test_no_clones_dir(self, tmp_path):
-        fake_home = tmp_path / ".squidsquad-missing"
-        with patch.object(shared_fs, "get_home", return_value=fake_home):
-            clones = shared_fs.read_clones()
-        assert clones == {}
+    def test_clone_subcommands_rejected(self, capsys):
+        for sub in ("read-clones", "write-clone"):
+            sys.argv = ["shared_fs.py", sub]
+            assert shared_fs.main() == 2  # unknown command
 
 
 class TestCLI:

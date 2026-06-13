@@ -5,14 +5,10 @@ Runs before the agent's creative phase. Handles git pull, context pressure,
 working state, triage, branch setup, and writes cycle-input.json.
 
 Usage:
-    python references/scripts/cycle_pre.py <role>             # /loop mode
-    python references/scripts/cycle_pre.py <role> --task <n>  # event-driven, task-scoped (#8701)
+    python references/scripts/cycle_pre.py <role>
 
-In task mode (#8701, used by event-driven agents), `cycle_pre` skips the
-work-queue scan and writes a `cycle-input.json` scoped to the single task
-passed via `--task`. `cycle_post.py` detects task mode by the presence of
-a `task` field in `cycle-output.json` and uses task-log files keyed by
-task id + timestamp rather than monotonic cycle numbers.
+Under pull-only (#11092 / #11165) every cycle is a normal pull cycle — the
+per-task CLI flag and its task-scoped `cycle-input.json` branch were removed.
 
 Exit codes:
     0 — success (cycle-input.json written, possibly degraded)
@@ -360,7 +356,6 @@ def _read_working_state(role):
     remaining_steps = []
     key_decisions = []
     quiet_cycles = 0
-    last_processed_event_id = None
 
     for line in raw.splitlines():
         stripped = line.strip()
@@ -376,10 +371,6 @@ def _read_working_state(role):
                 quiet_cycles = int(stripped.split(":", 1)[1].strip())
             except ValueError:
                 quiet_cycles = 0
-        elif stripped.startswith("- **Last Processed Event ID**:"):
-            val = stripped.split(":", 1)[1].strip()
-            if val and val != "none":
-                last_processed_event_id = val
 
     # Parse list sections
     current_section = None
@@ -419,7 +410,6 @@ def _read_working_state(role):
     result["remaining_steps"] = remaining_steps
     result["key_decisions"] = key_decisions
     result["quiet_cycles"] = quiet_cycles
-    result["last_processed_event_id"] = last_processed_event_id
 
     return result
 
@@ -1204,23 +1194,14 @@ ROLE_BUILDERS = {
 
 
 def _parse_cli_args(argv):
-    """Parse `<role> [--task <number>]` from argv (post-script-name).
+    """Parse `<role>` from argv (post-script-name). Returns role or None.
 
-    Returns (role, task) where task is a string or None. Kept lightweight
-    so cycle_pre stays callable from tests without rebuilding argv.
+    Kept lightweight so cycle_pre stays callable from tests without rebuilding
+    argv. (#11165: the per-task CLI flag was removed under pull-only.)
     """
     if not argv:
-        return None, None
-    role = argv[0]
-    task = None
-    i = 1
-    while i < len(argv):
-        if argv[i] == "--task" and i + 1 < len(argv):
-            task = argv[i + 1]
-            i += 2
-        else:
-            i += 1
-    return role, task
+        return None
+    return argv[0]
 
 
 def _reconcile_ship_counter():
@@ -1321,9 +1302,9 @@ def _reconcile_ship_counter():
 
 
 def main():
-    role, task_id = _parse_cli_args(sys.argv[1:])
+    role = _parse_cli_args(sys.argv[1:])
     if not role:
-        print("Usage: cycle_pre.py <role> [--task <number>]", file=sys.stderr)
+        print("Usage: cycle_pre.py <role>", file=sys.stderr)
         sys.exit(1)
     if role not in ROLE_BUILDERS:
         print(f"ERROR: Unknown role '{role}'. Valid: {list(ROLE_BUILDERS.keys())}",
@@ -1331,10 +1312,7 @@ def main():
         sys.exit(1)
 
     ts = _timestamp_short()
-    if task_id:
-        print(f"[🦑 {ts}] cycle_pre starting for {role} (task #{task_id}, event-driven mode)...")
-    else:
-        print(f"[🦑 {ts}] cycle_pre starting for {role}...")
+    print(f"[🦑 {ts}] cycle_pre starting for {role}...")
     _write_status_bar(role, "pulling", "pull-latest — Syncing with remote...")
 
     # 1a. Read working state early to determine correct branch (#4942)
@@ -1355,7 +1333,7 @@ def main():
     # 1f. #9772: DM-only self-heal for `Shipped Since Last Bump` clobbers.
     # Runs after pull so the counter check sees the freshest main state.
     ship_counter_repair = None
-    if role == "dm" and not task_id:
+    if role == "dm":
         ship_counter_repair = _reconcile_ship_counter()
 
     # 2. Context pressure
@@ -1372,26 +1350,19 @@ def main():
     # 6. Status bar
     _write_status_bar(role, "triaging", "tracker-protocol — Building work queue...")
 
-    # 7. Role-specific input
-    # #8701: task mode skips the role-specific work-queue scan. The harness
-    # already chose this task; cycle_pre's only forge-side responsibility is
-    # to surface the task itself plus the standard branch/state context.
-    if task_id:
-        role_input = {
-            "task": task_id,
-            "task_mode": True,
-            # Cross-agent health checks intentionally omitted in event-driven
-            # mode (per #8701 design: the harness owns liveness).
-        }
-    else:
-        role_input = ROLE_BUILDERS[role](role)
+    # 7. Role-specific input. #11165: under pull-only every cycle is a normal
+    # pull cycle — the #8701 task-mode branch was removed.
+    role_input = ROLE_BUILDERS[role](role)
 
-    # 7b. Read event bus (#5622)
+    # 7b. Read event bus (#5622) — loop-mode mechanical-reaction read.
+    # #11329: the event cursor is harness-owned (.event-state.json) and is no
+    # longer mirrored in working-state.md. With no persistent loop-mode
+    # cursor, read the recent window each cycle — the mechanical reactions
+    # below are idempotent (#5622), so re-reading the window is harmless.
     recent_events = []
     try:
         from event_bus_reader import query as _query_events
-        last_event_id = working_state.get("last_processed_event_id", None)
-        recent_events = _query_events(since=last_event_id, limit=100)
+        recent_events = _query_events(since=None, limit=100)
         # Per-role relevance filtering (#5622 — agents keep what they care about)
         recent_events = _filter_events_for_role(recent_events, role)
     except (ImportError, Exception):

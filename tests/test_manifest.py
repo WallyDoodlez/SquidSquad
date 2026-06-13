@@ -155,15 +155,26 @@ class TestManifestIntegrity:
         except Exception:
             pass
 
-        # #9588: mode-specific fragments are Read at runtime by
-        # `common/boot-bootstrap.md` instead of being inlined via manifest.
-        # Treat any fragment whose path appears inside the bootstrap text
-        # as referenced — broken paths there are caught by a dedicated
-        # test in test_compose_9588.py, so duplicating that check here
-        # would just couple the orphan-scan to bootstrap formatting.
-        bootstrap_path = self.sub_skills_dir / "common" / "boot-bootstrap.md"
-        if bootstrap_path.exists():
-            bootstrap_text = bootstrap_path.read_text(encoding="utf-8")
+        # #9588: mode-specific fragments are Read at runtime by the
+        # boot-bootstrap block, which since #11144 lives inline in L1
+        # (`references/roles/instructions.md` between
+        # `<!-- sub-skill: boot-bootstrap -->` and the matching close).
+        # Treat any fragment whose path appears inside that block as
+        # referenced — broken paths are caught by a dedicated test in
+        # test_compose_9588.py, so duplicating the check here would just
+        # couple the orphan-scan to bootstrap formatting.
+        bootstrap_text = ""
+        l1_instructions = self.sub_skills_dir.parent / "roles" / "instructions.md"
+        if l1_instructions.exists():
+            l1_text = l1_instructions.read_text(encoding="utf-8")
+            m = re.search(
+                r"<!-- sub-skill: boot-bootstrap -->(.*?)<!-- /sub-skill: boot-bootstrap -->",
+                l1_text,
+                re.DOTALL,
+            )
+            if m:
+                bootstrap_text = m.group(1)
+        if bootstrap_text:
             for rel_str in re.findall(
                 r"references/sub-skills/([^\s`)]+\.md)", bootstrap_text
             ):
@@ -201,7 +212,13 @@ class TestManifestIntegrity:
         # any current role manifest. It's a sub-skill that may be wired in
         # for future event-driven needs; explicitly tolerate its
         # un-referenced state rather than block the build.
-        known_unused = {"common/event-reactions.md"}
+        # #11381: common/pr-protocol.md is reachable at runtime via
+        # common/git-commit.md → pr-protocol marker chain. The directive
+        # walker above only scans references/roles/**/instructions.md, so
+        # transitive references from sub-skill bodies are invisible to it.
+        # Grandfather alongside event-reactions.md until the walker is
+        # taught to traverse sub-skill bodies.
+        known_unused = {"common/event-reactions.md", "common/pr-protocol.md"}
         orphans = all_md - referenced - known_unused
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"
 
@@ -220,7 +237,16 @@ class TestManifestIntegrity:
         roles_dir = REFERENCES_DIR / "roles"
         if not roles_dir.exists():
             return set()
-        directive_re = re.compile(r'→\s*run\s+sub-skill:\s*([A-Za-z0-9][\w-]*)')
+        # #11381: tolerate two lexical surface variants the original regex
+        # missed — (1) backtick-wrapped names (e.g. `→ run sub-skill:
+        # `foo`.`) used stylistically to format identifiers as code, and
+        # (2) slash-bearing path-form names (e.g.
+        # `roles/dm/events/pr-merge-wait`) per the sub-skill-catalog
+        # name-shape spec. Capture the final segment so the downstream
+        # file-stem match works for both bare and slash-bearing forms.
+        directive_re = re.compile(
+            r'→\s*run\s+sub-skill:\s*`?(?:[\w/-]+/)?([A-Za-z0-9][\w-]*)`?'
+        )
         names = set()
         for instr in roles_dir.rglob("instructions.md"):
             text = instr.read_text(encoding="utf-8")
@@ -349,7 +375,7 @@ class TestIncludesYml:
             # them up at runtime.
             mode_specific_runtime_loaded = {
                 "common-events/event-driven-workflow",
-                "common-events/l1-base",
+                "common-events/event-mode-contract",
                 "common-events/cursor-management",
                 "common-events/forge-read-pattern",
                 "common-events/idle-cooldown-loop",

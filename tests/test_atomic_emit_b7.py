@@ -33,7 +33,7 @@ _LINKED_COMPOSITE = (
     "Worker is responsible for implementation.\n\n"
     "## Soul\n\n"
     "Base soul prose.\n\n"
-    "## Instructions\n\n"
+    "## Agent Functions\n\n"
     "### step:cycle/boot\n→ run sub-skill: boot-bootstrap\nBoot body.\n\n"
     "### step:cycle/work\n→ run sub-skill: triage-issues\nWork body.\n\n"
     "## Project Context\n\n"
@@ -76,7 +76,7 @@ def test_success_claude_md_contains_six_h2_sections_in_order(tmp_path):
         "## Identity",
         "## Responsibility",
         "## Soul",
-        "## Instructions",
+        "## Agent Functions",
         "## Project Context",
         "## Vault",
     ]
@@ -223,7 +223,7 @@ def test_split_linked_keeps_role_suffixed_h2_inside_parent_slot(tmp_path):
         "## Responsibility\n\nresp body\n\n"
         "## Soul\n\n"
         "## Soul — PM\n\nPM-specific soul body.\n\n"
-        "## Instructions\n\ninstructions body\n\n"
+        "## Agent Functions\n\ninstructions body\n\n"
         "## Project Context\n\npc\n\n"
         "## Vault\n\nvault\n"
     )

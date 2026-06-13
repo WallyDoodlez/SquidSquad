@@ -594,6 +594,130 @@ class TestForceKillSafetyNet(unittest.TestCase):
         self.assertIsNone(hs.get_agent("skill").intent_set_at)
 
 
+class TestRestartLifecycle(unittest.TestCase):
+    """#11538: update_health must not undo an in-flight RESTARTING intent.
+
+    Regression for the bug where a restart of a still-alive (incl. wedged /
+    non-cycling) agent was silently reverted within one health poll
+    (HEALTH_POLL_INTERVAL=5s) — the RESTARTING->RUNNING reset fired whenever the
+    SAME claude PID was merely alive, with no pid_changed guard. That also
+    disarmed the 60s force-kill safety net (scoped to STOPPING/RESTARTING), so a
+    wedged agent could never be restarted OR force-killed via the endpoint. The
+    reset must now wait for a genuinely NEW claude PID (pid_changed) — proof the
+    old process died and the agent rebooted.
+    """
+
+    def _make_state(self, intent, intent_set_at, stored_pid=12345):
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/clone")
+        agent.intent = intent
+        agent.intent_set_at = intent_set_at
+        agent.claude_pid = stored_pid
+        agent.status = "running"
+        hs.set_agent("skill", agent)
+        return hs, agent
+
+    def _run_health(self, hs, *, fake_now, stored_pid_alive, read_pid_return):
+        """Drive one update_health poll with deterministic PID detection.
+
+        stored_pid_alive: boot_remote._is_process_alive result for the
+            currently-stored claude_pid.
+        read_pid_return: (pid, alive) tuple from reboot_agent._read_claude_pid,
+            consulted only when the stored PID is not alive (mirrors
+            update_health's fall-through). A NEW pid here simulates a reboot
+            (pid_changed=True).
+        """
+        kill = MagicMock()
+        patches = [
+            patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path", return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive",
+                  return_value=stored_pid_alive),
+            patch("harness.reboot_agent._read_claude_pid",
+                  return_value=read_pid_return),
+            patch("harness.reboot_agent._kill_process", kill),
+            patch("harness.time.time", return_value=fake_now),
+            patch("harness._log"),
+        ]
+        for p in patches:
+            p.start()
+        try:
+            hs.update_health()
+        finally:
+            for p in patches:
+                p.stop()
+        return kill
+
+    def test_restarting_same_pid_alive_does_not_reset_intent(self):
+        """THE BUG: a RESTARTING agent whose same claude PID is still alive
+        must KEEP intent=RESTARTING (not silently revert to RUNNING). 10s
+        elapsed mirrors a real /status poll well inside the 60s window."""
+        from harness import AgentState
+        hs, _ = self._make_state(AgentState.INTENT_RESTARTING, 1000.0)
+        kill = self._run_health(
+            hs, fake_now=1010.0, stored_pid_alive=True,
+            read_pid_return=(None, False),
+        )
+        got = hs.get_agent("skill")
+        self.assertEqual(got.intent, AgentState.INTENT_RESTARTING)
+        self.assertEqual(got.intent_set_at, 1000.0)
+        kill.assert_not_called()
+
+    def test_restarting_new_pid_resets_to_running(self):
+        """Restart COMPLETED: old PID dead, a new claude PID booted. The
+        RESTARTING intent clears to RUNNING and intent_set_at resets. (This
+        happy path was preserved — passes on both old and new code.)"""
+        from harness import AgentState
+        hs, _ = self._make_state(AgentState.INTENT_RESTARTING, 1000.0,
+                                 stored_pid=12345)
+        kill = self._run_health(
+            hs, fake_now=1010.0, stored_pid_alive=False,
+            read_pid_return=(99999, True),
+        )
+        got = hs.get_agent("skill")
+        self.assertEqual(got.intent, AgentState.INTENT_RUNNING)
+        self.assertIsNone(got.intent_set_at)
+        self.assertEqual(got.claude_pid, 99999)
+        kill.assert_not_called()
+
+    def test_wedged_restarting_agent_force_killed_after_timeout(self):
+        """The payoff: because intent now PERSISTS as RESTARTING, the 60s
+        force-kill net finally engages for a wedged/non-cycling agent whose
+        same PID never reaches a cooperative cycle boundary. Old code reset
+        intent to RUNNING in the same poll, so this assertion would fail."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, _ = self._make_state(AgentState.INTENT_RESTARTING, 1000.0)
+        kill = self._run_health(
+            hs, fake_now=1000.0 + FORCE_KILL_TIMEOUT_SECONDS + 1,
+            stored_pid_alive=True, read_pid_return=(None, False),
+        )
+        kill.assert_called_once_with(12345)
+        got = hs.get_agent("skill")
+        # Intent stays RESTARTING (no new PID yet); next poll sees the dead PID
+        # and runs the reboot path. intent_set_at cleared so the kill is not
+        # re-logged every poll.
+        self.assertEqual(got.intent, AgentState.INTENT_RESTARTING)
+        self.assertIsNone(got.intent_set_at)
+
+    def test_new_pid_not_force_killed_even_past_timeout(self):
+        """A restart that took >60s end-to-end must NOT have its freshly-booted
+        replacement force-killed: pid_changed proves the old process already
+        died, so the stale intent_set_at clock does not apply to the new PID."""
+        from harness import AgentState, FORCE_KILL_TIMEOUT_SECONDS
+        hs, _ = self._make_state(AgentState.INTENT_RESTARTING, 1000.0,
+                                 stored_pid=12345)
+        kill = self._run_health(
+            hs, fake_now=1000.0 + FORCE_KILL_TIMEOUT_SECONDS + 60,
+            stored_pid_alive=False, read_pid_return=(99999, True),
+        )
+        kill.assert_not_called()
+        got = hs.get_agent("skill")
+        self.assertEqual(got.intent, AgentState.INTENT_RUNNING)
+        self.assertIsNone(got.intent_set_at)
+        self.assertEqual(got.claude_pid, 99999)
+
+
 class TestIntentSetAtRepeatRequestIsIdempotent(unittest.TestCase):
     """#4792 Phase 1 iter-4: repeated stop/restart requests on an already
     -STOPPING/-RESTARTING agent must NOT reset intent_set_at — that would
@@ -1122,6 +1246,52 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertIn("agents", data)
+
+    def test_post_events_assigns_id_when_missing(self):
+        """#11404 AC1: POST /events with no `id` auto-assigns a 16-hex id so
+        id-tracking consumers (event_poll) can't silently skip the event."""
+        from harness import event_lifecycle
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch.object(event_lifecycle, "append") as mock_append:
+            resp = self.client.post("/events", json={
+                "event_type": "status-transition", "role": "skill"})
+        self.assertEqual(resp.status_code, 200)
+        mock_append.assert_called_once()
+        stored = mock_append.call_args[0][0]
+        self.assertRegex(stored.get("id", ""), r"^[0-9a-f]{16}$")
+
+    def test_post_events_preserves_provided_id(self):
+        """A caller-provided id is not overwritten by the auto-assign."""
+        from harness import event_lifecycle
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch.object(event_lifecycle, "append") as mock_append:
+            resp = self.client.post("/events", json={
+                "event_type": "status-transition", "role": "skill",
+                "id": "caller-supplied-id"})
+        self.assertEqual(resp.status_code, 200)
+        stored = mock_append.call_args[0][0]
+        self.assertEqual(stored["id"], "caller-supplied-id")
+
+    def test_post_events_unknown_role_response_contract(self):
+        """#11404 AC2: an unregistered emitter role is dropped with 204 (the
+        INTENTIONAL fire-and-forget contract, #9242) and NOT stored."""
+        from harness import event_lifecycle
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch.object(event_lifecycle, "append") as mock_append:
+            resp = self.client.post("/events", json={
+                "event_type": "status-transition", "role": "bogus-role-xyz"})
+        self.assertEqual(resp.status_code, 204)
+        mock_append.assert_not_called()
+
+    def test_events_lifecycle_omits_in_flight(self):
+        """#11165 AC5: GET /events/lifecycle no longer reports `in_flight`
+        (dispatch in-flight tracking was deleted under pull-only)."""
+        resp = self.client.get("/events/lifecycle")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertNotIn("in_flight", data)
+        self.assertIn("stream_size", data)
+        self.assertIn("persisted", data)
 
     def test_post_agents_all_start(self):
         """POST /agents/all/start returns 200 with results."""
@@ -1663,10 +1833,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
 
 
 class TestEventLifecycleManager(unittest.TestCase):
-    """#7630 P-1/P-3: EventLifecycleManager disk persistence and in-flight tracking."""
+    """EventLifecycleManager disk persistence (#7630 P-1). The dispatch /
+    in-flight tracking was deleted in #11165 (pull-only)."""
 
     def test_persist_and_load_round_trip(self):
-        """Event state (events + in_flight + dispatched) survives harness restart."""
+        """Event state survives a harness restart (append → load)."""
         import tempfile
         from harness import EventStream, EventLifecycleManager
 
@@ -1675,64 +1846,41 @@ class TestEventLifecycleManager(unittest.TestCase):
             with patch("harness.EVENT_STATE_FILE", state_file):
                 stream = EventStream()
                 mgr = EventLifecycleManager(stream)
-
-                event = {"id": "abc12345", "event_type": "test", "role": "skill"}
-                mgr.append(event)
-                mgr.dispatch("abc12345", "skill", event)
-
+                mgr.append({"id": "abc12345", "event_type": "test", "role": "skill"})
                 self.assertTrue(state_file.exists())
 
-                # Load into new manager
                 stream2 = EventStream()
                 mgr2 = EventLifecycleManager(stream2)
                 mgr2.load()
-
                 events = stream2.get_all()
                 self.assertEqual(len(events), 1)
                 self.assertEqual(events[0]["id"], "abc12345")
-                # In-flight state also restored
-                self.assertEqual(mgr2.get_in_flight("skill"), ["abc12345"])
 
-    def test_in_flight_tracking(self):
-        """Dispatch/ack lifecycle tracks per-role in-flight events."""
+    def test_load_ignores_legacy_dispatch_fields(self):
+        """#11165: a legacy state file still carrying in_flight/dispatched/
+        dispatch_times/retry_counts loads cleanly — those keys are silently
+        ignored, cursors + events still restore, no AttributeError."""
+        import tempfile
+        import json
         from harness import EventStream, EventLifecycleManager
 
-        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
-            stream = EventStream()
-            mgr = EventLifecycleManager(stream)
-
-            mgr.dispatch("evt1", "skill", {"id": "evt1"})
-            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
-
-            result = mgr.ack("evt1", "skill")
-            self.assertTrue(result)
-            self.assertEqual(mgr.get_in_flight("skill"), [])
-
-    def test_ack_unknown_event_returns_false(self):
-        """Acking an event not in-flight returns False."""
-        from harness import EventStream, EventLifecycleManager
-
-        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
-            stream = EventStream()
-            mgr = EventLifecycleManager(stream)
-
-            result = mgr.ack("nonexistent", "skill")
-            self.assertFalse(result)
-
-    def test_in_flight_cap(self):
-        """Per-role in-flight queue respects cap. Dropped events excluded from _dispatched."""
-        from harness import EventStream, EventLifecycleManager
-
-        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
-            stream = EventStream()
-            mgr = EventLifecycleManager(stream, max_in_flight=2)
-
-            mgr.dispatch("evt1", "skill", {"id": "evt1"})
-            mgr.dispatch("evt2", "skill", {"id": "evt2"})
-            mgr.dispatch("evt3", "skill", {"id": "evt3"})  # should be dropped
-
-            self.assertEqual(len(mgr.get_in_flight("skill")), 2)
-            self.assertNotIn("evt3", mgr._dispatched)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".event-state.json"
+            state_file.write_text(json.dumps({
+                "events": [{"id": "e1", "event_type": "t", "role": "skill"}],
+                "in_flight": {"skill": ["e1"]},
+                "dispatched": {"e1": {}},
+                "dispatch_times": {"e1": 1.0},
+                "retry_counts": {"e1": 0},
+                "cursors": {"skill": "e1"},
+            }), encoding="utf-8")
+            with patch("harness.EVENT_STATE_FILE", state_file):
+                stream = EventStream()
+                mgr = EventLifecycleManager(stream)
+                mgr.load()  # must not raise on the legacy keys
+                self.assertEqual(len(stream.get_all()), 1)
+                self.assertEqual(mgr.get_cursor("skill"), "e1")
+                self.assertFalse(hasattr(mgr, "_in_flight"))
 
     def test_load_is_idempotent(self):
         """Calling load() twice does not duplicate events (#7630 CRITICAL-2)."""
@@ -2161,46 +2309,6 @@ class TestTerminalPidInAgentState(unittest.TestCase):
                 self.assertEqual(loaded.terminal_pid, 99999)
 
 
-class TestTimeoutScanner(unittest.TestCase):
-    """#7630 2-3: EventLifecycleManager timeout detection."""
-
-    def test_overdue_event_detected(self):
-        """Events past timeout are detected by timeout_scan."""
-        from harness import EventStream, EventLifecycleManager
-
-        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")), \
-             patch("harness._log"):
-            stream = EventStream()
-            mgr = EventLifecycleManager(stream, timeout_minutes=0)  # 0 = immediate timeout
-
-            mgr.dispatch("evt1", "skill", {"id": "evt1"})
-            # Backdate dispatch time to force timeout
-            mgr._dispatch_times["evt1"] = time.time() - 1
-
-            timed_out = mgr.timeout_scan()
-            # First scan: retry (not yet at max retries)
-            self.assertEqual(len(timed_out), 0)  # retried, not timed out
-            self.assertEqual(mgr._retry_counts.get("evt1"), 1)
-
-    def test_max_retries_causes_timeout(self):
-        """After max retries, event is removed from in-flight."""
-        from harness import EventStream, EventLifecycleManager
-
-        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")), \
-             patch("harness._log"):
-            stream = EventStream()
-            mgr = EventLifecycleManager(stream, timeout_minutes=0, max_retries=1)
-
-            mgr.dispatch("evt1", "skill", {"id": "evt1"})
-            mgr._dispatch_times["evt1"] = time.time() - 1
-            mgr._retry_counts["evt1"] = 1  # Already at max
-
-            timed_out = mgr.timeout_scan()
-            self.assertEqual(len(timed_out), 1)
-            self.assertEqual(timed_out[0], ("skill", "evt1"))
-            self.assertEqual(mgr.get_in_flight("skill"), [])
-
-
 class TestEventDrivenPhase4(unittest.TestCase):
     """#7630 Phase 4: Event-driven wake prototype — config, endpoints, poll."""
 
@@ -2221,13 +2329,17 @@ class TestEventDrivenPhase4(unittest.TestCase):
             pass
 
     def test_event_poll_target_mode_url(self):
-        """event_poll.py in target mode queries /events/for/<role>."""
+        """event_poll.py in target mode queries /events/for/<role>.
+
+        Reconciled to model-B (#11329): event_poll no longer owns the
+        cursor — it is harness-owned and passed via ``since=``. The
+        legacy ``_read_cursor_from_working_state`` / ``_write_cursor_atomic``
+        helpers were removed by the ack-cursor migration; ``poll`` now
+        returns a ``(events, hwm)`` tuple.
+        """
         import event_poll
 
         with patch.object(event_poll, "_discover_port", return_value=7373), \
-             patch.object(event_poll, "_read_cursor_from_working_state",
-                          return_value="abc123"), \
-             patch.object(event_poll, "_write_cursor_atomic"), \
              patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
             mock_resp.read.return_value = b'{"events": []}'
@@ -2235,23 +2347,25 @@ class TestEventDrivenPhase4(unittest.TestCase):
             mock_resp.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_resp
 
-            result = event_poll.poll("skill", target_mode=True,
-                                     sleep=lambda _: None)
+            events, _ = event_poll.poll("skill", since="abc123",
+                                        target_mode=True, sleep=lambda _: None)
 
             # Verify the URL used /events/for/skill
             call_args = mock_urlopen.call_args
             req = call_args[0][0]
             self.assertIn("/events/for/skill", req.full_url)
-            self.assertEqual(result, [])
+            self.assertEqual(events, [])
 
     def test_event_poll_legacy_mode_url(self):
-        """event_poll.py in legacy mode queries /events with role param."""
+        """event_poll.py in legacy mode queries /events with role param.
+
+        Reconciled to model-B (#11329): ``poll`` returns ``(events, hwm)``
+        and the cursor is supplied by the caller, not read from
+        working-state.
+        """
         import event_poll
 
         with patch.object(event_poll, "_discover_port", return_value=7373), \
-             patch.object(event_poll, "_read_cursor_from_working_state",
-                          return_value=""), \
-             patch.object(event_poll, "_write_cursor_atomic"), \
              patch("urllib.request.urlopen") as mock_urlopen:
             mock_resp = MagicMock()
             mock_resp.read.return_value = b'{"events": [{"id": "x1"}]}'
@@ -2259,8 +2373,8 @@ class TestEventDrivenPhase4(unittest.TestCase):
             mock_resp.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_resp
 
-            result = event_poll.poll("skill", target_mode=False,
-                                     sleep=lambda _: None)
+            events, _ = event_poll.poll("skill", target_mode=False,
+                                        sleep=lambda _: None)
 
             # Verify legacy URL uses /events?role=skill
             call_args = mock_urlopen.call_args
@@ -2335,22 +2449,6 @@ class TestEventDrivenPhase4(unittest.TestCase):
         with self.assertRaises(ValueError):
             _execute_comment({"number": 1, "message": "hello\x00world"})
 
-    def test_dispatch_skips_already_dispatched(self):
-        """dispatch() skips events that are already in _dispatched."""
-        from harness import EventStream, EventLifecycleManager
-
-        with patch("harness.EVENT_STATE_FILE", Path("/nonexistent")):
-            stream = EventStream()
-            mgr = EventLifecycleManager(stream)
-
-            mgr.dispatch("evt1", "skill", {"id": "evt1"})
-            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
-
-            # Dispatch same event again — should not duplicate
-            mgr.dispatch("evt1", "skill", {"id": "evt1"})
-            self.assertEqual(mgr.get_in_flight("skill"), ["evt1"])
-
-
 class TestGetEventsForRole(unittest.TestCase):
     """#7630 Phase 4: GET /events/for/{role} endpoint tests."""
 
@@ -2367,23 +2465,19 @@ class TestGetEventsForRole(unittest.TestCase):
         """Clear event stream between tests."""
         with self.event_stream._lock:
             self.event_stream._events.clear()
-        with self.event_lifecycle._lock:
-            self.event_lifecycle._in_flight.clear()
-            self.event_lifecycle._dispatched.clear()
-            self.event_lifecycle._dispatch_times.clear()
 
-    def test_filters_by_target_role(self):
+    def test_filters_by_target_alias(self):
         """GET /events/for/skill returns only events targeted at skill."""
         from harness import event_stream
 
         # Add events for different roles
         event_stream.append({
             "id": "e1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         event_stream.append({
             "id": "e2", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "pm", "issue_number": "2"},
+            "payload": {"target_alias": "pm", "issue_number": "2"},
         })
 
         with patch("harness._validate_role"):
@@ -2394,39 +2488,17 @@ class TestGetEventsForRole(unittest.TestCase):
         self.assertEqual(len(data["events"]), 1)
         self.assertEqual(data["events"][0]["id"], "e1")
 
-    def test_does_not_dispatch(self):
-        """#9741: GET /events/for/skill must NOT add events to in-flight.
-
-        Before #9741 the endpoint called event_lifecycle.dispatch() on every
-        delivered event, but there is no ack consumer wired yet — every
-        event would eventually time out, growing .event-state.json and
-        spamming the timeout-scanner log. CONTEXT-9741 D1 strips the call;
-        the endpoint is a pure filtered-read with no lifecycle side effects.
-        """
-        from harness import event_stream, event_lifecycle
-
-        event_stream.append({
-            "id": "e3", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "3"},
-        })
-
-        with patch("harness._validate_role"):
-            self.client.get("/events/for/skill")
-
-        # Endpoint delivers the event but does not touch in-flight state.
-        self.assertNotIn("e3", event_lifecycle.get_in_flight("skill"))
-
     def test_since_cursor_filters_events(self):
         """GET /events/for/skill?since=X returns only events after cursor."""
         from harness import event_stream
 
         event_stream.append({
             "id": "old1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill"},
+            "payload": {"target_alias": "skill"},
         })
         event_stream.append({
             "id": "new1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill"},
+            "payload": {"target_alias": "skill"},
         })
 
         with patch("harness._validate_role"):
@@ -2437,146 +2509,30 @@ class TestGetEventsForRole(unittest.TestCase):
         self.assertNotIn("old1", ids)
         self.assertIn("new1", ids)
 
-    def test_endpoint_does_not_touch_lifecycle_state(self):
-        """#9741: with dispatch stripped, the endpoint must not mutate in-flight.
-
-        Even when an event was pre-dispatched by some other path, calling
-        the read endpoint must not re-dispatch, re-add, or otherwise mutate
-        the lifecycle state. CONTEXT-9741 D2 — the idempotency guard test
-        is irrelevant once dispatch is stripped; this test instead verifies
-        the read-only invariant.
-        """
-        from harness import event_stream, event_lifecycle
-
-        event_stream.append({
-            "id": "e4", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill"},
-        })
-
-        # Pre-dispatch via the lifecycle manager directly (NOT via the endpoint).
-        event_lifecycle.dispatch("e4", "skill", {"id": "e4"})
-        before = list(event_lifecycle.get_in_flight("skill"))
-
-        with patch("harness._validate_role"):
-            self.client.get("/events/for/skill")
-
-        # In-flight state must be identical — endpoint touched nothing.
-        after = list(event_lifecycle.get_in_flight("skill"))
-        self.assertEqual(before, after)
-        # And specifically: e4 still appears exactly once (the pre-dispatch),
-        # not zero (would mean endpoint cleared it) or two (would mean
-        # endpoint re-dispatched).
-        self.assertEqual(after.count("e4"), 1)
-
-
 class TestCompleteEventEndpoint(unittest.TestCase):
-    """#7630 Phase 4: POST /events/{event_id}/complete endpoint tests."""
+    """#11165: POST /events/{event_id}/complete was removed under pull-only —
+    it now returns 410 Gone unconditionally. The dispatch/ack lifecycle it
+    drove was deleted (#11092 Decision 2)."""
 
     @classmethod
     def setUpClass(cls):
         from fastapi.testclient import TestClient
-        from harness import app, event_stream, event_lifecycle
+        from harness import app
 
         cls.client = TestClient(app, raise_server_exceptions=False)
-        cls.event_stream = event_stream
-        cls.event_lifecycle = event_lifecycle
 
-    def setUp(self):
-        """Clear lifecycle state between tests."""
-        with self.event_lifecycle._lock:
-            self.event_lifecycle._in_flight.clear()
-            self.event_lifecycle._dispatched.clear()
-            self.event_lifecycle._dispatch_times.clear()
-
-    def test_complete_acks_in_flight_event(self):
-        """POST /events/evt1/complete acks an in-flight event."""
-        self.event_lifecycle.dispatch("evt1", "skill", {"id": "evt1"})
-        self.assertIn("evt1", self.event_lifecycle.get_in_flight("skill"))
-
-        resp = self.client.post("/events/evt1/complete", json={
-            "role": "skill",
-            "status": "success",
-            "summary": "Done",
+    def test_complete_returns_410_always(self):
+        """AC3: a well-formed completion POST returns 410 Gone."""
+        resp = self.client.post("/events/any-id/complete", json={
+            "role": "skill", "status": "success", "summary": "Done",
         })
-
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertEqual(data["status"], "ok")
-        self.assertNotIn("evt1", self.event_lifecycle.get_in_flight("skill"))
-
-    def test_complete_returns_410_for_unknown_event(self):
-        """POST /events/unknown/complete returns 410 when event not in-flight."""
-        resp = self.client.post("/events/unknown-id/complete", json={
-            "role": "skill",
-            "status": "success",
-            "summary": "Done",
-        })
-
         self.assertEqual(resp.status_code, 410)
-        data = resp.json()
-        self.assertEqual(data["status"], "gone")
+        self.assertEqual(resp.json()["status"], "gone")
 
-    def test_complete_executes_transitions(self):
-        """POST /events/evt2/complete executes status transitions."""
-        self.event_lifecycle.dispatch("evt2", "skill", {"id": "evt2"})
-
-        with patch("harness._execute_transition") as mock_trans:
-            resp = self.client.post("/events/evt2/complete", json={
-                "role": "skill",
-                "status": "success",
-                "summary": "Fixed",
-                "transitions": [
-                    {"number": 123, "from": "in-progress", "to": "pending-test", "role": "skill-lead"}
-                ],
-            })
-
-        self.assertEqual(resp.status_code, 200)
-        mock_trans.assert_called_once()
-
-    def test_complete_executes_comments(self):
-        """POST /events/evt3/complete executes tracker comments."""
-        self.event_lifecycle.dispatch("evt3", "skill", {"id": "evt3"})
-
-        with patch("harness._execute_comment") as mock_comment:
-            resp = self.client.post("/events/evt3/complete", json={
-                "role": "skill",
-                "status": "success",
-                "summary": "Commented",
-                "comments": [
-                    {"number": 123, "role": "skill-lead", "message": "Done."}
-                ],
-            })
-
-        self.assertEqual(resp.status_code, 200)
-        mock_comment.assert_called_once()
-
-    def test_complete_reports_partial_on_side_effect_failure(self):
-        """POST /events/evt4/complete returns partial on transition errors."""
-        self.event_lifecycle.dispatch("evt4", "skill", {"id": "evt4"})
-
-        with patch("harness._execute_transition", side_effect=RuntimeError("tracker fail")):
-            resp = self.client.post("/events/evt4/complete", json={
-                "role": "skill",
-                "status": "success",
-                "summary": "Partial",
-                "transitions": [
-                    {"number": 1, "from": "a", "to": "b"}
-                ],
-            })
-
-        self.assertEqual(resp.status_code, 200)
-        data = resp.json()
-        self.assertEqual(data["status"], "partial")
-        self.assertTrue(len(data["errors"]) > 0)
-
-    def test_complete_requires_role(self):
-        """POST /events/evt5/complete returns 400 without role."""
-        resp = self.client.post("/events/evt5/complete", json={
-            "status": "success",
-            "summary": "No role",
-        })
-
-        self.assertEqual(resp.status_code, 400)
+    def test_complete_returns_410_even_without_role(self):
+        """The 410 fires before any body validation — pure deprecation shell."""
+        resp = self.client.post("/events/any-id/complete", json={})
+        self.assertEqual(resp.status_code, 410)
 
 
 # ---------------------------------------------------------------------------
@@ -2721,7 +2677,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         state.set_agent("skill", agent)
         event_stream.append({
             "id": "e_nogate_a", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")
@@ -2739,7 +2695,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         state.set_agent("skill", agent)
         event_stream.append({
             "id": "e_unique_1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")
@@ -2769,7 +2725,7 @@ class TestBootupCompleteFlag(unittest.TestCase):
         from harness import event_stream
         event_stream.append({
             "id": "e_nogate_1", "event_type": "assigned-to", "role": "harness",
-            "payload": {"target_role": "skill", "issue_number": "1"},
+            "payload": {"target_alias": "skill", "issue_number": "1"},
         })
         with patch("harness._validate_role"):
             resp = self.client.get("/events/for/skill")

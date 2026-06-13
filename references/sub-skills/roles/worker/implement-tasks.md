@@ -21,8 +21,8 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    The **GitHub issue body is the authoritative source of the acceptance criteria.** PM no longer produces a test plan (#9184) — the AC list in the issue body IS the contract, and worker implements against it. CONTEXT.md captures locked decisions, scope boundaries, and side-effect mitigations agreed during Phase 2 discussion.
 
    Before writing any code, check for planning artifacts:
-   - `.squidsquad/pm/planning/CONTEXT.md` (bundle-level; the per-task section is `### 5.X #<NUMBER> — …`)
-   - `.squidsquad/pm/planning/CONTEXT-<NUMBER>.md` (per-task)
+   - `.squidsquad/[PM_ALIAS]/planning/CONTEXT.md` (bundle-level; the per-task section is `### 5.X #<NUMBER> — …`)
+   - `.squidsquad/[PM_ALIAS]/planning/CONTEXT-<NUMBER>.md` (per-task)
    - Fallback location: `.squidsquad/[ROLE]/planning/` (your own planning directory) — same file patterns
 
    Read the relevant CONTEXT section (`### 5.X #<NUMBER>` for bundle CONTEXT.md, OR the full per-task `CONTEXT-<NUMBER>.md`) AND the **Acceptance Criteria** section of the issue body **in full** before writing code. The issue body lists the ACs; CONTEXT.md states the locked architectural decisions that shape *how* to satisfy them.
@@ -33,7 +33,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
    If PM comments reference planning artifacts but you cannot find them, **push back** (see Prohibitions). If no CONTEXT artifact exists (bug fix or trivial task), the issue body's AC list is the contract; proceed to step 2c.
 
-   **Do NOT look for a PM-side `TEST-PLAN-<NUMBER>.md`** — under the new workflow (#9184) PM does not produce one. Verifier writes its own test plan at `.squidsquad/qa/planning/TEST-PLAN-<NUMBER>.md` during verification. Worker's job is to implement against the AC list, not against a pre-written test plan.
+   **Do NOT look for a PM-side `TEST-PLAN-<NUMBER>.md`** — under the new workflow (#9184) PM does not produce one. Verifier writes its own test plan at `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` during verification. Worker's job is to implement against the AC list, not against a pre-written test plan.
 2c. **Consult the vault** (#5572) — before implementing, search the vault for relevant context:
    ```bash
    grep -rl "[keyword]" .squidsquad/vault/ --include="*.md" | head -5
@@ -65,14 +65,14 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    ```
 
    **Locate planning artifacts** — when a task has a `CONTEXT-<NUMBER>.md`
-   (or bundle section in `CONTEXT.md`) in `.squidsquad/pm/planning/`, the
+   (or bundle section in `CONTEXT.md`) in `.squidsquad/[PM_ALIAS]/planning/`, the
    review must check the diff against those architectural locks, not only
    code quality (#8950 Gate #2 / #8916 §9c / #9184). PM-side `TEST-PLAN-*.md`
    files are legacy historical artifacts and may exist for older tasks;
    include them if present, but do not require them — under the new workflow
    (#9184) PM produces no test plan. Discover by task-number match:
    ```bash
-   ARTIFACTS=$(ls .squidsquad/pm/planning/CONTEXT*[NUMBER]* .squidsquad/pm/planning/*[NUMBER]*TEST-PLAN* 2>/dev/null | paste -sd, -)
+   ARTIFACTS=$(ls .squidsquad/[PM_ALIAS]/planning/CONTEXT*[NUMBER]* .squidsquad/[PM_ALIAS]/planning/*[NUMBER]*TEST-PLAN* 2>/dev/null | paste -sd, -)
    ```
 
    **Get changed files and run review**:
@@ -92,9 +92,12 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 
    **Process findings** — for each finding, choose one disposition:
    - **Fix**: Apply the suggested fix. Re-run tests after fixing.
-   - **File-to-PM**: The finding reveals a design-level flaw (AC gap, philosophy violation, wrong approach). The review loop **exits immediately**. Transition to `planning`:
+   - **File-to-PM**: The finding reveals a design-level flaw (AC gap, philosophy violation, wrong approach). The review loop **exits immediately**. File a cross-role issue to PM, then transition to `planning`.
+
+     → run sub-skill: `tracker-protocol` — use the **Cross-role issue** one-liner shape with title `"[finding summary]"` and the evidence-from-review body. Set `--role pm`, `--severity medium`, `--reporter [ROLE]-lead`.
+
+     Then transition + comment:
      ```bash
-     python references/scripts/tracker.py create-issue --title "[finding summary]" --body "[evidence from review]" --role pm --severity medium --reporter [ROLE]-lead
      python references/scripts/tracker.py transition [NUMBER] in-progress planning --role [ROLE]-lead
      python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "External review found design-level flaw. Filed #[NEW]. Status → Planning for PM to re-plan."
      ```

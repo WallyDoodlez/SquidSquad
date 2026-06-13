@@ -1,0 +1,309 @@
+commit 11c92bddd2c706bde3139988d081d326838a3bbe
+Author: Wallace Chan <naahtec@hotmail.com>
+Date:   Thu Jun 11 18:17:53 2026 -0400
+
+    skill: #11329 AC2 — working-state schema cleanup + model-B doc reconciliation
+    
+    Remove the `- **Last Processed Event ID**:` line from the working-state.md
+    template and stop parsing it in cycle_pre.py (the only reader). The event
+    cursor is harness-owned in .event-state.json; the legacy #5622 loop-mode
+    event-bus read now defaults to the recent window (mechanical reactions are
+    idempotent). Replaces the 3 cursor-parse tests with one model-B removal test.
+    
+    Retire the explicitly-tagged transitional notes #11329 was written to remove
+    and reconcile the residual model-A prose to the agent-acks / event_poll-
+    nudges-only model across the L1/L2 sources and shared event sub-skills:
+    - cursor-management.md: drop the pre-#11329 legacy-line note.
+    - event-mode-contract.md: NUDGE (no payload) wakes you → you GET+ack; drop
+      the legacy cursor-line ownership note; Case B/D read-from-Monitor → GET.
+    - event-driven-workflow / forge-read-pattern / idle-cooldown-loop: NUDGE not
+      JSON; cursor = "processed by agent" (at-least-once via ack), not
+      "delivered to transport"; event_poll never touches the cursor.
+    - instructions.md §5 + the cursor-management/event-driven-workflow markers;
+      worker cleanup goal.
+    
+    Recomposed all 4 roles (deploy-all, exit 0). Composed output verified free of
+    model-A cursor residue.
+    
+    Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+
+diff --git a/references/roles/instructions.md b/references/roles/instructions.md
+index 399e29992..becb4338f 100644
+--- a/references/roles/instructions.md
++++ b/references/roles/instructions.md
+@@ -114,7 +114,7 @@ Both paths share the same output gate: findings are filed via the role's `improv
+ 
+ #### 5. Your idle wait is the `Monitor` tool
+ 
+-The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each line of stdout is one JSON event object (one per `event_poll.py` poll-tick that finds new events on the harness) — that line is your "nudge," and it wakes you and starts one per-nudge cycle. The event payload is a hint only; per [[forge-read-pattern]] you re-query the forge as the source of truth before acting.
++The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each line of stdout is a bare `NUDGE` (no payload — one per `event_poll.py` poll-tick that finds new events on the harness) that wakes you and starts one per-nudge cycle. The nudge carries no event data: per [[forge-read-pattern]] you `GET /events/for/{role}?since=<cursor>` to fetch the events and re-query the forge as the source of truth before acting.
+ 
+ The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
+ 
+@@ -183,11 +183,11 @@ If the probe fails (for any reason — non-zero exit, network error, missing cur
+ 
+ Run the sub-skills below **in order**; their concatenated content is your active wake-mode contract for this session.
+ 
+-→ run sub-skill: `event-driven-workflow`. Brief orientation: the agent reacts to one event at a time, consults the forge as the source of truth, and lets `event_poll.py` advance the cursor automatically.
++→ run sub-skill: `event-driven-workflow`. Brief orientation: the agent reacts to one event at a time, consults the forge as the source of truth, and advances the cursor itself by POSTing `ack-cursor` per event (`event_poll.py` only emits wake nudges; the harness owns the cursor).
+ 
+ → run sub-skill: `event-mode-contract`. The full agent contract: boot sequence (Case A — read working-state, branch on state, drain initial events, advance cursor, emit `bootup-complete`), event reactions (Cases B–E — idle, after-work, mid-task, special events), Monitor invocation, working-state ownership discipline, harness-loss recovery.
+ 
+-→ run sub-skill: `cursor-management`. Atomic `.tmp` + `mv` cursor write protocol; per-event advance; gap handling for in-stream lag and eviction.
++→ run sub-skill: `cursor-management`. Harness-owned cursor (`.event-state.json`); read via `GET /events/cursor/{role}`, advance via per-event `POST ack-cursor`; gap handling for long lag and eviction.
+ 
+ → run sub-skill: `forge-read-pattern`. Why the forge is the source of truth and how to read it before acting on any event.
+ 
+diff --git a/references/roles/worker/instructions.md b/references/roles/worker/instructions.md
+index a95677dc9..d484c32c9 100644
+--- a/references/roles/worker/instructions.md
++++ b/references/roles/worker/instructions.md
+@@ -29,7 +29,7 @@ Use the per-finding-kind one-liners in `tracker-protocol`'s **Creating Issues**
+ 
+ → run sub-skill: working-state
+ 
+-Goal: `working-state.md` reflects the cycle's outcome — cleared if a task shipped, updated if work continues — with the last-processed event ID preserved across any clear. The iteration log captures the cycle's summary for institutional memory.
++Goal: `working-state.md` reflects the cycle's outcome — cleared if a task shipped, updated if work continues. (The event cursor is harness-owned in `.event-state.json`, not stored in working-state — nothing cursor-related to preserve across a clear; see [[cursor-management]].) The iteration log captures the cycle's summary for institutional memory.
+ 
+ ---
+ 
+diff --git a/references/scripts/cycle_pre.py b/references/scripts/cycle_pre.py
+index 251a0de74..cdca27e27 100644
+--- a/references/scripts/cycle_pre.py
++++ b/references/scripts/cycle_pre.py
+@@ -360,7 +360,6 @@ def _read_working_state(role):
+     remaining_steps = []
+     key_decisions = []
+     quiet_cycles = 0
+-    last_processed_event_id = None
+ 
+     for line in raw.splitlines():
+         stripped = line.strip()
+@@ -376,10 +375,6 @@ def _read_working_state(role):
+                 quiet_cycles = int(stripped.split(":", 1)[1].strip())
+             except ValueError:
+                 quiet_cycles = 0
+-        elif stripped.startswith("- **Last Processed Event ID**:"):
+-            val = stripped.split(":", 1)[1].strip()
+-            if val and val != "none":
+-                last_processed_event_id = val
+ 
+     # Parse list sections
+     current_section = None
+@@ -419,7 +414,6 @@ def _read_working_state(role):
+     result["remaining_steps"] = remaining_steps
+     result["key_decisions"] = key_decisions
+     result["quiet_cycles"] = quiet_cycles
+-    result["last_processed_event_id"] = last_processed_event_id
+ 
+     return result
+ 
+@@ -1386,12 +1380,15 @@ def main():
+     else:
+         role_input = ROLE_BUILDERS[role](role)
+ 
+-    # 7b. Read event bus (#5622)
++    # 7b. Read event bus (#5622) — loop-mode mechanical-reaction read.
++    # #11329: the event cursor is harness-owned (.event-state.json) and is no
++    # longer mirrored in working-state.md. With no persistent loop-mode
++    # cursor, read the recent window each cycle — the mechanical reactions
++    # below are idempotent (#5622), so re-reading the window is harmless.
+     recent_events = []
+     try:
+         from event_bus_reader import query as _query_events
+-        last_event_id = working_state.get("last_processed_event_id", None)
+-        recent_events = _query_events(since=last_event_id, limit=100)
++        recent_events = _query_events(since=None, limit=100)
+         # Per-role relevance filtering (#5622 — agents keep what they care about)
+         recent_events = _filter_events_for_role(recent_events, role)
+     except (ImportError, Exception):
+diff --git a/references/sub-skills/common-events/cursor-management.md b/references/sub-skills/common-events/cursor-management.md
+index 6f111e52d..e70f63d8d 100644
+--- a/references/sub-skills/common-events/cursor-management.md
++++ b/references/sub-skills/common-events/cursor-management.md
+@@ -11,8 +11,6 @@ The cursor is the canonical work-completed indicator for your alias — single s
+ 
+ The cursor is **harness-owned**. It is persisted in `.squidsquad/.event-state.json` (one entry per alias) and you observe it only through the harness API — you never write the file directly. `working-state.md` does NOT carry a cursor line; that file holds your agent-private current-work state only (see `docs/AGENT-RUNTIME.md` §6).
+ 
+-> Pre-#11329 transitional note: a legacy install may still have a `- **Last Processed Event ID**: <id>` line in `working-state.md`. Leave it alone — #11329 retires the line in the runtime cleanup. Do not read, write, or rely on it for cursor decisions.
+-
+ ### How to read the cursor
+ 
+ Issue a GET against the harness:
+diff --git a/references/sub-skills/common-events/event-driven-workflow.md b/references/sub-skills/common-events/event-driven-workflow.md
+index 08ba601cd..3d7f3d5f0 100644
+--- a/references/sub-skills/common-events/event-driven-workflow.md
++++ b/references/sub-skills/common-events/event-driven-workflow.md
+@@ -17,7 +17,7 @@ This fragment is a brief orientation. The full agent contract lives in the compa
+ 
+ ### Quick reference
+ 
+-- **Wake mechanism** — Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is one JSON event.
++- **Wake mechanism** — Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is a bare `NUDGE` (no payload); on each one you `GET /events/for/{role}?since=<cursor>` to fetch what's new.
+ - **Atomic unit of work** — one event at a time. Process to completion before reading the next.
+ - **Source of truth** — the forge (`tracker.py` queries). Event payloads are hints; always forge-read before acting.
+ - **Cursor** — harness-owned in `.squidsquad/.event-state.json`; you advance it by POSTing `ack-cursor {event_id, role}` after each tended event (see [[cursor-management]]).
+diff --git a/references/sub-skills/common-events/event-mode-contract.md b/references/sub-skills/common-events/event-mode-contract.md
+index d3af1f561..c56e24f75 100644
+--- a/references/sub-skills/common-events/event-mode-contract.md
++++ b/references/sub-skills/common-events/event-mode-contract.md
+@@ -28,7 +28,7 @@ The boot sequence MUST work even when the harness is unreachable. Forge access i
+ 
+ 3. **Harness reachability is guaranteed by the bootstrap (#9588).** If this fragment is being Read, the boot bootstrap (`common/boot-bootstrap.md`) has already verified that the harness is reachable — otherwise the bootstrap would have routed the agent to the polling fragment, not here. Continue to step 4. (If you got here from step 2's empty idle branch, after step 5 enter the improvement-scan cool-down loop — see [[idle-cooldown-loop]].)
+ 
+-4. **Drain events from cursor forward.** Issue `GET /events/for/{role}?since=<cursor>` against the harness (or invoke `event_poll.py --since <cursor>` in single-shot mode) and walk the returned events through the canonical §8.1 loop: care filter → cycle wrapper if cared → POST `ack-cursor` per event. Boot-drain events typically reflect forge state you can also discover via `tracker.py`, so the cycle wrapper's work is usually a no-op for cared events, but the loop discipline still applies — never jump-to-latest. Handle gap scenarios per [[cursor-management]] (long lag, eviction gap). In an eviction gap specifically, the recovery path is a forge-read followed by a single `ack-cursor(oldest_id)` POST to fast-forward — not a walk of the evicted range.
++4. **Drain events from cursor forward.** Issue `GET /events/for/{role}?since=<cursor>` against the harness and walk the returned events through the canonical §8.1 loop: care filter → cycle wrapper if cared → POST `ack-cursor` per event. Boot-drain events typically reflect forge state you can also discover via `tracker.py`, so the cycle wrapper's work is usually a no-op for cared events, but the loop discipline still applies — never jump-to-latest. Handle gap scenarios per [[cursor-management]] (long lag, eviction gap). In an eviction gap specifically, the recovery path is a forge-read followed by a single `ack-cursor(oldest_id)` POST to fast-forward — not a walk of the evicted range.
+ 
+ 5. **Announce listener-active.** Emit `bootup-complete` (POST `/events` with `event_type=bootup-complete`, `role=<role>`, payload `{"listener_active": true}`); enter the event-listening loop via `event_poll.py`. Per-event cursor advances during the boot drain are POSTed via `ack-cursor` exactly as they will be during the steady-state loop (see [[cursor-management]] and the canonical §8.1 loop in `docs/AGENT-RUNTIME.md`).
+ 
+@@ -47,7 +47,7 @@ Monitor tool invocation:
+   persistent: true
+ ```
+ 
+-`event_poll.py` writes one JSON event object per line to stdout (also called a "NUDGE line" in the L1 instructions and §8.1 diagram). Each line wakes you to process exactly one event.
++`event_poll.py` writes a single literal `NUDGE\n` line (no payload) to stdout whenever events arrive past your cursor. A `NUDGE` is a wake signal only — it never carries event data. On each `NUDGE` you do your own `GET /events/for/{role}?since=<cursor>` and walk the returned events through the §8.1 loop (one `ack-cursor` POST per event). False-positive nudges are harmless: the GET simply returns `[]` and you idle again.
+ 
+ > **Monitor exit ⇒ exit the session immediately (#9742).** If the Monitor tool exits for ANY reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — **end your session right away**. Do NOT attempt to re-invoke Monitor, do NOT wait for the harness to recover, do NOT pivot to forge-direct work or polling-mode fallback mid-session. The harness / `thin_launcher.py` auto-reboot path owns recovery; the agent exiting IS the signal that recovery is needed. This rule is unconditional — it applies whether Monitor exits before or after `bootup-complete` is emitted. `event_poll.py --wait` has a bounded retry ceiling (10 consecutive transient failures per CONTEXT-9742) so a sustained harness outage will cause Monitor to exit on its own; you do not need to enforce the ceiling yourself.
+ 
+@@ -59,7 +59,7 @@ Monitor tool invocation:
+ 
+ ### Case B — Idle, event arrives
+ 
+-1. Read the event delivered by the Monitor.
++1. The `NUDGE` woke you — `GET /events/for/{role}?since=<cursor>` to fetch the event(s) and take the next one.
+ 2. **Forge-read** the referenced item (if any) via `tracker.py`. The forge is the source of truth — see [[forge-read-pattern]].
+ 3. Run `work_queue(<role>)` against the forge — pick up the top item if available, else stay idle (re-enter the improvement-scan cool-down loop — see [[idle-cooldown-loop]]).
+ 
+@@ -76,7 +76,7 @@ Monitor tool invocation:
+ 
+ ### Case D — Mid-task, event arrives
+ 
+-1. Read the event delivered by the Monitor.
++1. A `NUDGE` arrived mid-task. You may leave it unread — the event sits past your cursor and your post-task `GET /events/for` (Case C) will surface it.
+ 2. **Note but do NOT act.** The current task runs atomically to completion.
+ 3. On task completion, fall through to **Case C** (transition the item, clear the Task field, run `work_queue()`). Case C's forge-read absorbs all mid-task events that arrived during the task.
+ 
+@@ -95,7 +95,7 @@ Monitor tool invocation:
+ - **Forge-read before acting.** Every decision consults the forge. Event payloads are hints, not state. See [[forge-read-pattern]].
+ - **One event at a time.** Process atomically. Never start a second event before the first is complete.
+ - **Cursor advance is per-event and agent-initiated.** You POST `ack-cursor {event_id, role}` after tending each event (cared or skipped); the harness writes `.event-state.json`. No client-side atomicity protocol applies — the harness owns the file and its durability. See [[cursor-management]].
+-- **`working-state.md` is agent-owned for agent-authored fields.** You are the sole writer of `- **Task**: …`, the `## Improvement Scan` block, and any agent-private metadata. The post-#11328 cursor model places the cursor in `.event-state.json` (harness-owned) — `working-state.md` is NOT the cursor's home. Pre-#11329 transitional note: until #11329 retires the legacy code path, `event_poll.py` still writes a `- **Last Processed Event ID**: <id>` line to `working-state.md` per event (legacy `.tmp` + `mv` atomicity, see `event_poll.py:6` + `_write_cursor_atomic`). Treat that line as `event_poll.py`'s internal scratch state — do not read, write, or rely on it for cursor decisions; the canonical cursor lives in `.event-state.json` and you read/advance it via the harness API exactly as described in [[cursor-management]].
++- **`working-state.md` is agent-owned for agent-authored fields.** You are the sole writer of `- **Task**: …`, the `## Improvement Scan` block, and any agent-private metadata. The cursor is NOT here: it lives in `.event-state.json` (harness-owned), and you read/advance it via the harness API exactly as described in [[cursor-management]]. `working-state.md` carries no cursor line.
+ - **Bare comments do not wake anyone.** Urgent agent-to-agent signaling must ride a status transition or label change. See [[comment-handling]].
+ - **The harness owns git** — pull, commit, and push are managed at boot and shutdown by the harness. You do not run mechanical pre/post steps in event mode. Event IDs are the tracking unit; there is no per-iteration counter.
+ - **Context pressure is managed by the harness.** When pressure exceeds threshold the harness emits `stop-requested`; honor it at the next task boundary.
+diff --git a/references/sub-skills/common-events/forge-read-pattern.md b/references/sub-skills/common-events/forge-read-pattern.md
+index 47ee1338d..682ba6f78 100644
+--- a/references/sub-skills/common-events/forge-read-pattern.md
++++ b/references/sub-skills/common-events/forge-read-pattern.md
+@@ -11,12 +11,12 @@ Every decision consults the forge before acting. This is the rule that lets the
+ 
+ ### When You Receive An Event
+ 
+-1. **Wake.** `event_poll.py` delivered one JSON event to stdout.
++1. **Wake.** `event_poll.py` delivered a `NUDGE` (no payload) to stdout; `GET /events/for/{role}?since=<cursor>` and take the next event.
+ 2. **Read the event payload.** Treat it as a hint about what may have changed on the forge.
+ 3. **Forge-read.** Query the forge via `tracker.py` for the referenced item (and/or `work_queue(<role>)` for your role's queue). The forge tells you the actual current state.
+ 4. **Act on what the forge says**, not on what the event payload said. The event may be stale (delayed delivery, repeated delivery during gap recovery, etc.).
+ 
+-After you tend each event (steps 1-4 above), you MUST POST `ack-cursor {event_id, role}` to the harness — the cursor does NOT advance automatically. `event_poll.py` writes its own local cursor file before printing the event line, but that is `event_poll.py`'s read-position bookkeeping, not the harness's per-role cursor. The harness cursor advances only when the agent POSTs `ack-cursor` for the event it just finished (see [[cursor-management]] for the wire shape; see [[event-mode-contract]] for the per-event loop). Skipping the POST leaves the cursor stuck at the boot position; every event re-delivers on the next restart.
++After you tend each event (steps 1-4 above), you MUST POST `ack-cursor {event_id, role}` to the harness — the cursor does NOT advance automatically. `event_poll.py` only emits a wake `NUDGE`; it never touches the cursor. The harness cursor (in `.event-state.json`) advances only when the agent POSTs `ack-cursor` for the event it just finished (see [[cursor-management]] for the wire shape; see [[event-mode-contract]] for the per-event loop). Skipping the POST leaves the cursor stuck at the boot position; every event re-delivers on the next restart.
+ 
+ ### Why
+ 
+diff --git a/references/sub-skills/common-events/idle-cooldown-loop.md b/references/sub-skills/common-events/idle-cooldown-loop.md
+index c812ed14a..22a8bee54 100644
+--- a/references/sub-skills/common-events/idle-cooldown-loop.md
++++ b/references/sub-skills/common-events/idle-cooldown-loop.md
+@@ -54,11 +54,11 @@ Three fields, three values:
+ 
+ The atomicity rule above is enforced **by the Claude Code runtime**, not by anything in your sub-skill. Spell this out so the failure modes are unsurprising:
+ 
+-- While you are mid-scan (running a tool call), the persistent Monitor's stdout — `event_poll.py`'s JSON lines — is **buffered** by the Claude Code runtime. You will not see those lines until the tool call returns and the next turn begins. This is what makes "finish the scan first" possible without you needing to poll Monitor mid-tool.
+-- The buffered lines arrive **in order** on the next turn. Process them in arrival order; do not re-order based on payload timestamp. Per-event ordering is the contract event_poll.py + the Monitor pipeline guarantee.
+-- `event_poll.py` advances its on-disk cursor as it writes each line to stdout — the cursor is past the line **before** you have seen it. This is intentional: the cursor tracks "delivered to the agent's transport", not "processed by the agent".
+-- **Crash window**: if the agent crashes between event_poll.py advancing the cursor and the agent processing the buffered line, that line is lost from the event stream — the cursor has moved past it on disk. This is **acceptable** because step 4a (Re-check the queue) runs `work_queue()` after every scan completion and after every crash-recovery restart, and `work_queue()` is a fresh forge-read that absorbs any tracker state the lost event would have communicated (per [[forge-read-pattern]] — the forge is authoritative; events are hints). The same forge-read also absorbs anything that happened during the outage window.
+-- **You do NOT try to read the cursor back, replay missed events, or rebuild from a buffered-but-unprocessed line.** The forge-read pattern is the recovery mechanism. Designing a sub-skill that tries to recover events out of the on-disk cursor would violate [[forge-read-pattern]].
++- While you are mid-scan (running a tool call), the persistent Monitor's stdout — `event_poll.py`'s `NUDGE` lines — is **buffered** by the Claude Code runtime. You will not see those nudges until the tool call returns and the next turn begins. This is what makes "finish the scan first" possible without you needing to poll Monitor mid-tool.
++- A `NUDGE` carries **no payload** — it is only a wake signal. However many buffered nudges arrive, you respond the same way on the next turn: one `GET /events/for/{role}?since=<cursor>` surfaces every event past your cursor, oldest-first. The harness GET (not the nudge stream) is what orders events; coalesced or duplicate nudges are harmless.
++- The cursor is **harness-owned** and advances only when **you** POST `ack-cursor` after tending an event — so it tracks "processed by the agent", not "delivered to a transport". `event_poll.py` never touches the cursor.
++- **Crash window**: because the cursor advances only on your post-processing ack (at-least-once), an event you have not yet tended is still past the cursor — a crash re-delivers it on the next `GET`. Nothing is lost at the cursor layer. As an additional backstop, step 4a (Re-check the queue) runs `work_queue()` after every scan completion and after every crash-recovery restart — a fresh forge-read that absorbs any tracker state an event would have communicated (per [[forge-read-pattern]] — the forge is authoritative; events are hints), and anything that happened during an outage.
++- **You do NOT try to replay missed events or rebuild from a buffered-but-unprocessed nudge.** The forge-read pattern is the recovery mechanism. Designing a sub-skill that tries to recover events out of the nudge stream would violate [[forge-read-pattern]].
+ 
+ ### Cool-Down Configuration
+ 
+diff --git a/references/sub-skills/common/working-state.md b/references/sub-skills/common/working-state.md
+index 0f6f92404..c9b6520ea 100644
+--- a/references/sub-skills/common/working-state.md
++++ b/references/sub-skills/common/working-state.md
+@@ -13,7 +13,6 @@ Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context
+ - **Task**: [#NUMBER, or "none"]
+ - **Status**: [in-progress / blocked / none]
+ - **Started**: [YYYY-MM-DD HH:MM]
+-- **Last Processed Event ID**: [8-char hex ID, or "none"]
+ 
+ ## Completed Steps
+ - [what has been done so far]
+@@ -27,6 +26,6 @@ Maintain `.squidsquad/[ROLE]/working-state.md` to persist context across context
+ 
+ - **Create/update** when starting a bug fix or feature implementation.
+ - **Update** as you complete sub-steps — this is your safety net if context resets.
+-- **Clear** when a task is complete — reset Task and Status to `none`, but **preserve** the `Last Processed Event ID` to avoid re-processing events.
++- **Clear** when a task is complete — reset Task and Status to `none`. (The event cursor is harness-owned in `.squidsquad/.event-state.json`, not stored here; see [[cursor-management]].)
+ - **Read on startup** (Step 1c) to resume mid-task after a context reset.
+ - Before a **context pressure exit** (Step 1b), compact your current understanding into this file.
+diff --git a/tests/test_cycle_pre.py b/tests/test_cycle_pre.py
+index a12930653..a2250da22 100644
+--- a/tests/test_cycle_pre.py
++++ b/tests/test_cycle_pre.py
+@@ -109,43 +109,21 @@ class TestReadWorkingState:
+         assert result["suppressed"] is True
+         assert result["phase"] == "researching #2070"
+ 
+-    def test_last_processed_event_id(self, patch_dirs, squid_dir):
+-        """#5622: working state parser reads Last Processed Event ID."""
++    def test_cursor_line_no_longer_parsed(self, patch_dirs, squid_dir):
++        """#11329: the event cursor moved to harness-owned .event-state.json;
++        working-state.md no longer carries a Last Processed Event ID line and
++        the parser no longer surfaces one — even if a legacy install still has
++        the line, it is ignored (not mistaken for agent-private state)."""
+         ws = squid_dir / "skill" / "working-state.md"
+         ws.write_text(
+             "# Working State\n\n"
+             "- **Task**: #5622\n"
+             "- **Status**: in-progress\n"
+-            "- **Last Processed Event ID**: abc12345\n",
++            "- **Last Processed Event ID**: abc12345\n",  # legacy residue
+             encoding="utf-8",
+         )
+         result = cycle_pre._read_working_state("skill")
+-        assert result["last_processed_event_id"] == "abc12345"
+-
+-    def test_last_processed_event_id_none(self, patch_dirs, squid_dir):
+-        """#5622: 'none' value results in None."""
+-        ws = squid_dir / "skill" / "working-state.md"
+-        ws.write_text(
+-            "# Working State\n\n"
+-            "- **Task**: none\n"
+-            "- **Status**: none\n"
+-            "- **Last Processed Event ID**: none\n",
+-            encoding="utf-8",
+-        )
+-        result = cycle_pre._read_working_state("skill")
+-        assert result["last_processed_event_id"] is None
+-
+-    def test_last_processed_event_id_missing(self, patch_dirs, squid_dir):
+-        """#5622: field absent defaults to None."""
+-        ws = squid_dir / "skill" / "working-state.md"
+-        ws.write_text(
+-            "# Working State\n\n"
+-            "- **Task**: none\n"
+-            "- **Status**: none\n",
+-            encoding="utf-8",
+-        )
+-        result = cycle_pre._read_working_state("skill")
+-        assert result["last_processed_event_id"] is None
++        assert "last_processed_event_id" not in result
+ 
+ 
+ # ---------------------------------------------------------------------------

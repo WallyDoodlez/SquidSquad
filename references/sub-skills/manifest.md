@@ -58,7 +58,6 @@ Project sub-skills are owned by PM (via the L4 propagation flow: PM writes to `.
 
 Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in the role directory and is copied verbatim to `.squidsquad/<role>/SOUL.md` at install time — it is NOT listed in the include order because it is not composed). **Source of truth**: `references/roles/worker/includes.yml`.
 
-1. `common/boot-bootstrap` — #9588 mode-aware boot: reads runtime fragments at session start
 2. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
 3. `common/context-pressure` — Step 1b: context pressure check
 4. `common/resume-working-state` — Step 1c: resume from working state
@@ -70,7 +69,6 @@ Entry file with includes (the role's own `SOUL.md` sits alongside `CLAUDE.md` in
 10. `common/vault-remember` — Step 4b: end-of-cycle vault reflection
 11. `common/vault-optimize` — Vault optimization on quiet cycles
 12. `common/git-commit` — Step 5: commit/push protocol with PR flow
-14. `common/issue-filing` — Self-file and cross-file bug templates
 15. `common/working-state` — Working State File format
 16. `common/vault-protocol` — Vault operations (full)
 19. `common/self-restart` — Context-pressure self-restart at cycle end
@@ -85,7 +83,6 @@ Optional (comms-layer, not yet included by default):
 
 Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is copied verbatim at install time. **Source of truth**: `references/roles/pm/includes.yml`.
 
-1. `common/boot-bootstrap` — #9588 mode-aware boot: reads runtime fragments at session start
 2. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
 3. `common/context-pressure` — Step 1b: context pressure check
 4. `common/task-pickup` — Deterministic work-queue triage for non-worker roles
@@ -114,7 +111,6 @@ Entry file with includes. PM's `SOUL.md` sits alongside its `CLAUDE.md` and is c
 
 Entry file with includes. **Source of truth**: `references/roles/verifier/includes.yml`.
 
-1. `common/boot-bootstrap` — #9588 mode-aware boot: reads runtime fragments at session start
 2. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
 3. `common/context-pressure` — Step 1b: context pressure check
 4. `common/task-pickup` — Deterministic work-queue triage for non-worker roles
@@ -122,7 +118,8 @@ Entry file with includes. **Source of truth**: `references/roles/verifier/includ
 6. `common/improvement-scan-slim` — Improvement filing only (slim variant for verifier/DM)
 7. `roles/verifier/issue-filing` — Verifier Bug Filing Protocol
 8. `roles/verifier/discussion-protocol` — Discussion entry format (verifier alias)
-9. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
+9. `common/vault-protocol` — Full vault R/W operations
+10. `common/vault-remember` — End-of-cycle reflection; writes testing-pattern learnings
 12. `common/self-restart` — Context-pressure self-restart at cycle end
 13. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
 
@@ -130,7 +127,6 @@ Entry file with includes. **Source of truth**: `references/roles/verifier/includ
 
 Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml`.
 
-1. `common/boot-bootstrap` — #9588 mode-aware boot: reads runtime fragments at session start
 2. `common/capability-check` — Startup capability verification (DM)
 3. `common/cycle-runner` — Cycle runner transport layer (pre/post cycle mechanical operations)
 4. `common/context-pressure` — Step 1b: context pressure check
@@ -141,7 +137,8 @@ Entry file with includes. **Source of truth**: `references/roles/dm/includes.yml
 9. `roles/dm/doc-improvement-loop` — Quiet-cycle doc scanning (DM only)
 10. `roles/dm/discussion-protocol` — Discussion entry format (dm alias)
 11. `roles/dm/issue-filing` — DM bug/feature filing
-12. `common/vault-protocol-slim` — Vault read-only operations (slim variant)
+12. `common/vault-protocol` — Full vault R/W operations
+13. `common/vault-remember` — End-of-cycle reflection; writes delivery-pattern learnings
 15. `common/self-restart` — Context-pressure self-restart at cycle end
 16. `common/agent-lifecycle` — Agent lifecycle management (reboot, heartbeat, singleton)
 
@@ -198,11 +195,9 @@ references/sub-skills/
 │   ├── improvement-scan.md           (Quiet-cycle improvement scanning — shared by all roles)
 │   ├── git-commit.md                 (Step 5 — commit/push + PR flow — shared by dev)
 │   ├── discussion-protocol.md        (Discussion entry format — shared by dev)
-│   ├── issue-filing.md                 (Self-file + cross-file bug templates — shared by dev)
 │   ├── file-conventions.md           (File/directory conventions — shared by dev)
-│   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — PM + dev only)
-│   ├── vault-optimize.md            (Vault optimization on quiet cycles — PM + dev only)
-│   ├── vault-protocol-slim.md       (Vault read-only operations — verifier, DM)
+│   ├── vault-remember.md             (Step 4b — end-of-cycle vault reflection — all roles)
+│   ├── vault-optimize.md            (Vault optimization on quiet cycles — PM + worker)
 │   ├── improvement-scan-slim.md     (Improvement filing only — verifier, DM)
 │   ├── status-line.md                (Status line description — shared by dev)
 │   ├── prohibitions.md               (Shared "never do" rules — shared by dev)
@@ -211,7 +206,6 @@ references/sub-skills/
 │   ├── cycle-runner.md              (Cycle runner transport layer — opt-in via feature flag, all roles)
 │   ├── agent-lifecycle.md           (Agent lifecycle: reboot, heartbeat, singleton — all roles)
 │   ├── self-restart.md              (Context-pressure self-restart — all roles)
-│   ├── boot-bootstrap.md            (#9588 mode-aware boot fragment-loader — all roles)
 │   ├── agent-boundaries.md          (#9925 inter-role responsibility layering — all roles)
 │   ├── pickup-comment-fidelity.md   (Verify pickup-comment scope vs issue — worker only)
 │   ├── chat-etiquette.md            (Chat room behavior rules — comms-layer, optional)

@@ -46,12 +46,15 @@ ROLE_TO_ENTRY = {
     "dm": "dm",
 }
 
-# Marker the bootstrap fragment writes at the top of its content. Comes
-# from references/sub-skills/common/boot-bootstrap.md's `## Boot — Mode
-# Detection (#9588)` heading, which compose preserves verbatim under its
-# `<!-- sub-skill: boot-bootstrap -->` wrapper.
+# Marker the bootstrap fragment writes at the top of its content.
+# Post-#11144 Iter 22 polish-restructure the bootstrap content was hoisted
+# into the L1 `references/roles/instructions.md` directly under the
+# `### Step 1 — step:cycle/boot` H3 (the canonical step heading from the
+# cycle's step-ID contract). The legacy H2 `## Boot — Mode Detection (#9588)`
+# heading was retired with the restructure; the marker still wraps the
+# block but the inner heading is now the step-ID form.
 BOOT_BOOTSTRAP_MARKER = "<!-- sub-skill: boot-bootstrap -->"
-BOOT_BOOTSTRAP_HEADING = "## Boot — Mode Detection (#9588)"
+BOOT_BOOTSTRAP_HEADING = "### Step 1 — step:cycle/boot"
 
 # Mode-specific sub-skill markers that MUST NOT appear in composed output
 # after #9588. compose strips the outer markers from the source fragment
@@ -60,7 +63,7 @@ BOOT_BOOTSTRAP_HEADING = "## Boot — Mode Detection (#9588)"
 MODE_SPECIFIC_MARKERS = [
     "<!-- sub-skill: ralph-loop-overview -->",
     "<!-- sub-skill: event-driven-workflow -->",
-    "<!-- sub-skill: l1-base -->",
+    "<!-- sub-skill: event-mode-contract -->",
     "<!-- sub-skill: cursor-management -->",
     "<!-- sub-skill: forge-read-pattern -->",
     "<!-- sub-skill: idle-cooldown-loop -->",
@@ -152,8 +155,12 @@ def test_dm_bootstrap_enumerates_pr_merge_wait():
     start = text.find(BOOT_BOOTSTRAP_MARKER)
     end = text.find("<!-- /sub-skill: boot-bootstrap -->", start)
     block = text[start:end]
-    assert "roles/dm/events/pr-merge-wait.md" in block, (
-        "DM's bootstrap must enumerate `pr-merge-wait.md` — it is the only "
+    # Post-#11144 polish: the bootstrap names sub-skills by their bare
+    # `→ run sub-skill:` identifier (no `.md` suffix) rather than by file
+    # path, per the directive grammar canonized in the step-ID contract.
+    # `roles/dm/events/pr-merge-wait` is the slash-bearing identifier form.
+    assert "roles/dm/events/pr-merge-wait" in block, (
+        "DM's bootstrap must enumerate `pr-merge-wait` — it is the only "
         "role-specific events extra in the codebase and the bootstrap is "
         "the sole loader for it after #9588."
     )
@@ -219,15 +226,22 @@ def test_bootstrap_documents_role_runtime_substitution():
     compose would substitute it away at compose time (the very bug we're
     avoiding). So we check for the teaching marker + the role-name guidance.
     """
-    text = (SUB_SKILLS / "common" / "boot-bootstrap.md").read_text(encoding="utf-8")
+    # Post-#11144 G11 close: the boot block is canonical in L1
+    # `references/roles/instructions.md` (Iter 22 hoisted it from the
+    # sub-skill source; Iter 36 deleted `common/boot-bootstrap.md` once
+    # the source had become dead-code-divergent from L1). Validation
+    # targets the L1 source.
+    text = (REPO_ROOT / "references" / "roles" / "instructions.md").read_text(
+        encoding="utf-8"
+    )
     assert "Placeholder substitution inside runtime-loaded fragments" in text, (
-        "boot-bootstrap.md must carry the placeholder-substitution rule so "
+        "L1 instructions.md must carry the placeholder-substitution rule so "
         "the agent knows what to do with role/interval placeholders inside "
         "a runtime-loaded fragment. Without this rule, the literal "
         "placeholder breaks path/arg construction in the polling fragment."
     )
     assert "Role-name placeholder" in text and "SQUIDSQUAD_ROLE" in text, (
-        "boot-bootstrap.md placeholder section must call out the role-name "
+        "L1 instructions.md placeholder section must call out the role-name "
         "placeholder and tell the agent to substitute its own SQUIDSQUAD_ROLE."
     )
     # And critically: the section must survive compose unchanged — i.e., the
@@ -245,18 +259,18 @@ def test_bootstrap_documents_role_runtime_substitution():
         )
 
 
-def test_l1_base_unreachable_branch_removed():
-    """l1-base.md §3 no longer carries the bespoke degraded-mode block."""
-    text = (SUB_SKILLS / "common-events" / "l1-base.md").read_text(encoding="utf-8")
+def test_event_mode_contract_unreachable_branch_removed():
+    """event-mode-contract.md §3 no longer carries the bespoke degraded-mode block."""
+    text = (SUB_SKILLS / "common-events" / "event-mode-contract.md").read_text(encoding="utf-8")
     # The old block had this distinctive sequence — its presence would mean
     # we re-introduced the unreachable branch the bootstrap now subsumes.
     assert "proceed to degraded-mode operation" not in text, (
-        "l1-base.md still contains the legacy degraded-mode block; #9588 "
+        "event-mode-contract.md still contains the legacy degraded-mode block; #9588 "
         "deletes it because the boot bootstrap routes harness-unreachable "
-        "to polling-mode before l1-base is ever Read."
+        "to polling-mode before event-mode-contract is ever Read."
     )
     # Also: the Degraded-Mode Glossary section is gone.
     assert "### Degraded-Mode Glossary" not in text, (
-        "l1-base.md still has the Degraded-Mode Glossary section — replace "
+        "event-mode-contract.md still has the Degraded-Mode Glossary section — replace "
         "it with the Harness-Loss Recovery block per CONTEXT §2.6."
     )

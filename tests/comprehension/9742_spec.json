@@ -1,23 +1,23 @@
 {
   "issue": 9742,
-  "title": "Monitor-exit handling in l1-base.md",
+  "title": "Monitor-exit handling in event-mode-contract.md",
   "files": [
-    "references/sub-skills/common-events/l1-base.md"
+    "references/sub-skills/common-events/event-mode-contract.md"
   ],
   "questions": [
     {
       "id": "1",
-      "question": "Per l1-base.md, what should you do when the Monitor tool exits (event_poll.py terminates, non-zero exit, tool error, or stream close)? List the action and the actions you must NOT take.",
+      "question": "Per event-mode-contract.md, what should you do when the Monitor tool exits (event_poll.py terminates, non-zero exit, tool error, or stream close)? List the action and the actions you must NOT take.",
       "expected": "End / exit the agent session immediately. Do NOT attempt to re-invoke Monitor, do NOT wait for the harness to recover, and do NOT pivot to forge-direct work or polling-mode fallback mid-session. Agent exit IS the signal to the harness / thin_launcher that recovery is needed; the auto-reboot intent path owns the restart."
     },
     {
       "id": "2",
-      "question": "Per l1-base.md, does the Monitor-exit rule depend on whether bootup-complete has been emitted yet, or whether Monitor exited cleanly versus with an error?",
+      "question": "Per event-mode-contract.md, does the Monitor-exit rule depend on whether bootup-complete has been emitted yet, or whether Monitor exited cleanly versus with an error?",
       "expected": "No. The rule is unconditional. It applies regardless of whether Monitor exited cleanly (code 0), with an error (code 2), or via any other path. It applies whether the exit happens before or after bootup-complete is emitted. Any Monitor exit triggers immediate session exit."
     },
     {
       "id": "3",
-      "question": "Per l1-base.md, who is responsible for enforcing the retry ceiling on harness reachability, and where does that ceiling live?",
+      "question": "Per event-mode-contract.md, who is responsible for enforcing the retry ceiling on harness reachability, and where does that ceiling live?",
       "expected": "event_poll.py --wait enforces it internally. The agent does NOT need to enforce a retry ceiling itself. event_poll.py has a bounded retry ceiling of 10 consecutive transient failures per CONTEXT-9742 so a sustained harness outage causes Monitor to exit on its own. The agent just needs to follow the unconditional rule of exiting the session when Monitor exits."
     }
   ]

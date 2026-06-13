@@ -69,20 +69,27 @@ class TestAgentInstructions:
 
 
 class TestRunTestsModuleList:
-    """#5435 regression: all STATIC_TEST_MODULES entries must exist as files."""
+    """#5435 / #11394 regression: gate exclusion entries must name existing files.
 
-    def test_all_static_test_modules_exist(self):
-        """Every entry in STATIC_TEST_MODULES must have a corresponding .py file."""
+    The hand-maintained STATIC_TEST_MODULES allowlist was replaced by
+    auto-discovery (#11394). The original #5435 intent — no dangling references
+    to deleted test files — now applies to the KNOWN_NON_STATIC / KNOWN_FAILURES
+    exclusion dicts, since a stale entry there silently un-gates a file.
+    """
+
+    def test_no_stale_exclusion_entries(self):
+        """Every KNOWN_NON_STATIC / KNOWN_FAILURES entry must name an existing file."""
         import sys
         sys.path.insert(0, str(REPO_ROOT / "tests"))
-        from run_tests import STATIC_TEST_MODULES
+        from run_tests import KNOWN_NON_STATIC, KNOWN_FAILURES
 
         tests_dir = REPO_ROOT / "tests"
         missing = [
-            m for m in STATIC_TEST_MODULES
+            m for m in (set(KNOWN_NON_STATIC) | set(KNOWN_FAILURES))
             if not (tests_dir / f"{m}.py").exists()
         ]
         assert missing == [], (
-            f"STATIC_TEST_MODULES references nonexistent test files: {missing}. "
-            "Remove stale entries or restore the missing files."
+            f"Gate exclusion dicts reference nonexistent test files: {missing}. "
+            "Remove stale entries (a deleted file should drop out of the gate, "
+            "not linger in an exclusion list)."
         )

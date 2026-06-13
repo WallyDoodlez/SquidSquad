@@ -16,7 +16,6 @@
 #
 # Order matters — includes are resolved top-to-bottom.
 includes:
-  - common/boot-bootstrap
   - common/cycle-runner
   - common/context-pressure
   - common/resume-working-state
@@ -28,7 +27,6 @@ includes:
   - common/vault-remember
   - common/vault-optimize
   - common/git-commit
-  - common/issue-filing
   - common/working-state
   - common/vault-protocol
   - common/self-restart

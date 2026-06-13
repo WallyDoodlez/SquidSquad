@@ -60,23 +60,22 @@ def _get_effort_level(role):
         return "high"
 
 
-def _get_interval():
-    """Read iteration interval (minutes) from config.md. Falls back to '30' (#9725).
-
-    Used to construct the spawn /loop prompt so freshly spawned agents register
-    a recurring loop on their first turn rather than running one inline cycle
-    and stalling (CONTEXT-9725 §2).
-    """
-    try:
-        sys.path.insert(0, str(SCRIPT_DIR))
-        from config import get_field
-        val = get_field("interval")
-        if val is None:
-            return "30"
-        s = str(val).strip()
-        return s if s else "30"
-    except (Exception, SystemExit):
-        return "30"
+# #11512: the spawn prompt must NOT force loop mode. The composed CLAUDE.md
+# boot Step 1 (step:cycle/boot) probes harness reachability and selects the
+# wake mode itself — EVENT (arm Monitor) when the harness is up, POLLING
+# (which self-schedules /loop) when it is down. Injecting a literal
+# `/loop {interval}m ...` here (the pre-#11512 behavior added by #9725)
+# preempted that probe: the agent's first turn ran the /loop skill instead of
+# Step 1, so every agent booted loop mode and event mode was never reached.
+# A mode-neutral boot trigger hands mode selection back to the single source
+# of truth (boot Step 1). Neither mode stalls afterward: event mode arms a
+# persistent Monitor idle-wait, polling mode schedules its own /loop cron.
+_SPAWN_PROMPT = (
+    "Begin your SquidSquad agent session now. Execute your composed boot "
+    "sequence starting at Step 1 (step:cycle/boot): probe harness reachability "
+    "and proceed in whichever wake mode the probe selects. Do not pre-commit "
+    "to a mode before the probe runs."
+)
 
 
 def _is_process_alive(pid):
@@ -496,10 +495,9 @@ def main():
             "--name", f"squidsquad-{role}",
             "--effort", effort,
             "--dangerously-skip-permissions",
-            # #9725: spawn prompt IS the /loop registration. The agent's first
-            # turn registers the recurring schedule; subsequent cycles fire via
-            # cron, not via a stalled-in-Step-1 inline cycle. See CONTEXT-9725.
-            f"/loop {_get_interval()}m execute one Ralph Loop cycle",
+            # #11512: mode-neutral boot trigger — boot Step 1 selects the wake
+            # mode (event when harness reachable, /loop only on polling fallback).
+            _SPAWN_PROMPT,
         ])
 
         proc = subprocess.Popen(

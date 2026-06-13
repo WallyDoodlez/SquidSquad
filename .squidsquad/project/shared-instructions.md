@@ -34,7 +34,7 @@ These instructions apply to ALL agents on this project.
 
 ### Planning & Verification
 
-- **Planning artifacts (#9184)**: PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/pm/planning/`. QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/qa/planning/` when picking up verification. PM does NOT produce a test plan.
+- **Planning artifacts (#9184)**: PM produces RESEARCH.md and CONTEXT.md under `.squidsquad/[PM_ALIAS]/planning/`. QA produces `TEST-PLAN-<NUMBER>.md`, `TEST-<NUMBER>-tests.py`, and `QA-RESULTS-<NUMBER>.md` under `.squidsquad/[VERIFIER_ALIAS]/planning/` when picking up verification. PM does NOT produce a test plan.
 - **Clone isolation paths from `.local-config`**: Each agent's clone path resolved via boot_remote.
 - **BRIEFING.md staleness check every cycle**: Version, active agents, priorities verified against config.md.
 - **Bug fixes need research**: PM runs Phase 1 research before filing, not just "fix this."

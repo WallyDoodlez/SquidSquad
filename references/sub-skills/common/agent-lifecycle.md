@@ -10,8 +10,8 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 
 **Three guarantees**:
 1. **Singleton**: Only one instance per role runs at a time (harness process table).
-2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42.
-3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle.
+2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42. (Polling-mode wrapper. In event mode the per-event ack-cursor loop has no cycle boundary; the stop signal is observed at task boundaries per [[event-mode-contract]] Case E.)
+3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle. (Polling-mode wrapper. In event mode the harness owns git — pull, commit, and push are managed at boot and shutdown by the harness; agents do not run `cycle_pre.py` / `cycle_post.py` per event.)
 
 **Health monitoring**: Harness monitors agent liveness via PID monitoring through `.claude-pid` (sole liveness signal). The harness polls every 5 seconds.
 

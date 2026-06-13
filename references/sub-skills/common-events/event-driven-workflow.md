@@ -5,22 +5,22 @@ ordinal: 12
 
 ## Event-Driven Workflow
 
-You are a persistent agent session driven by events from the harness. You react to one event at a time, consult the forge as the source of truth, and let `event_poll.py` advance your cursor automatically.
+You are a persistent agent session driven by events from the harness. You react to one event at a time, consult the forge as the source of truth, and POST `ack-cursor` to the harness after each tended event so it advances your cursor in `.squidsquad/.event-state.json`.
 
 This fragment is a brief orientation. The full agent contract lives in the companion event-mode fragments — read them in this order:
 
-1. **[[l1-base]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline. Harness-loss recovery is handled by `common/boot-bootstrap.md` (polling-mode fallback at boot, #9588), not inline degraded mode.
-2. **[[cursor-management]]** — atomic `.tmp` + `mv` protocol, per-event advance, gap handling (in-stream, long lag, eviction).
+1. **[[event-mode-contract]]** — boot sequence (Case A), event reactions (Cases B–E), case-precedence rule, working-state ownership discipline. Harness-loss recovery is handled by `common/boot-bootstrap.md` (polling-mode fallback at boot, #9588), not inline degraded mode.
+2. **[[cursor-management]]** — harness-owned cursor in `.squidsquad/.event-state.json`; agent reads via `GET /events/cursor/{role}` and advances via `POST /events ack-cursor` per tended event; gap handling (long lag, eviction).
 3. **[[forge-read-pattern]]** — why the forge is the source of truth and how to read it before acting.
 4. **[[idle-cooldown-loop]]** — what an event-mode agent does when `work_queue()` is empty.
 5. **[[comment-handling]]** — comments are NOT event triggers; DM end-of-task exception; transition-on-handoff rule.
 
 ### Quick reference
 
-- **Wake mechanism** — Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is one JSON event.
+- **Wake mechanism** — Monitor tool streaming `python references/scripts/event_poll.py <role> --wait 5 --target`. Each line of stdout is a bare `NUDGE` (no payload); on each one you `GET /events/for/{role}?since=<cursor>` to fetch what's new.
 - **Atomic unit of work** — one event at a time. Process to completion before reading the next.
 - **Source of truth** — the forge (`tracker.py` queries). Event payloads are hints; always forge-read before acting.
-- **Cursor** — `event_poll.py` persists it to `working-state.md` automatically (see [[cursor-management]]).
+- **Cursor** — harness-owned in `.squidsquad/.event-state.json`; you advance it by POSTing `ack-cursor {event_id, role}` after each tended event (see [[cursor-management]]).
 - **Idle** — improvement-scan cool-down loop (see [[idle-cooldown-loop]]).
 - **Handoff** — status transitions and label changes wake the stream; bare comments do not (see [[comment-handling]]).
 
@@ -32,4 +32,4 @@ If the harness becomes unreachable mid-session, the agent does NOT pivot to forg
 
 ### Context pressure
 
-The harness monitors agent context pressure files and emits `stop-requested` when a restart is needed. Honor `stop-requested` at the next task boundary (see Case E in [[l1-base]]); the harness handles the respawn.
+The harness monitors agent context pressure files and emits `stop-requested` when a restart is needed. Honor `stop-requested` at the next task boundary (see Case E in [[event-mode-contract]]); the harness handles the respawn.

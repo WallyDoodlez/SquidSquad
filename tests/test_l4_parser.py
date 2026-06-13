@@ -38,7 +38,7 @@ def test_empty_file_returns_empty_document(tmp_path):
         ("## Identity", "identity"),
         ("## Responsibility", "responsibility"),
         ("## Soul", "soul"),
-        ("## Instructions", "instructions"),
+        ("## Agent Functions", "instructions"),
         ("## Project Context", "project-context"),
         ("## Vault", "vault"),
     ],
@@ -84,7 +84,7 @@ def test_whole_slot_replace_no_target():
 
 def test_replace_step_targeted():
     doc = l4.parse_l4_text(
-        "## Instructions\n\n### replace step:cycle/triage\n\nnew body\n"
+        "## Agent Functions\n\n### replace step:cycle/triage\n\nnew body\n"
     )
     op = doc.slots["instructions"][0]
     assert op.op_type == "replace"
@@ -93,7 +93,7 @@ def test_replace_step_targeted():
 
 def test_insert_before_step_targeted():
     doc = l4.parse_l4_text(
-        "## Instructions\n\n### insert-before step:cycle/file-bug\n\nnew step\n"
+        "## Agent Functions\n\n### insert-before step:cycle/file-bug\n\nnew step\n"
     )
     op = doc.slots["instructions"][0]
     assert op.op_type == "insert-before"
@@ -102,7 +102,7 @@ def test_insert_before_step_targeted():
 
 def test_insert_after_step_targeted_with_hyphenated_id():
     doc = l4.parse_l4_text(
-        "## Instructions\n\n### insert-after step:cycle/pipeline-sentinel\n\nbody\n"
+        "## Agent Functions\n\n### insert-after step:cycle/pipeline-sentinel\n\nbody\n"
     )
     op = doc.slots["instructions"][0]
     assert op.op_type == "insert-after"
@@ -115,7 +115,7 @@ def test_insert_after_step_targeted_with_hyphenated_id():
 
 def test_multiple_ops_in_one_slot_preserved_in_file_order():
     text = (
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### append\n\nfirst block\n\n"
         "### insert-before step:cycle/X\n\nsecond block\n\n"
         "### append\n\nthird block\n"
@@ -131,7 +131,7 @@ def test_multiple_ops_in_one_slot_preserved_in_file_order():
 def test_ops_across_multiple_slots():
     text = (
         "## Identity\n\n### append\n\nidentity prose\n\n"
-        "## Instructions\n\n### append\n\ninstructions prose\n"
+        "## Agent Functions\n\n### append\n\ninstructions prose\n"
     )
     doc = l4.parse_l4_text(text)
     assert set(doc.slots) == {"identity", "instructions"}
@@ -157,7 +157,7 @@ def test_ops_across_multiple_slots():
     ],
 )
 def test_malformed_h3_rejected(bad_h3):
-    text = f"## Instructions\n\n{bad_h3}\n\nbody\n"
+    text = f"## Agent Functions\n\n{bad_h3}\n\nbody\n"
     with pytest.raises(l4.L4ParseError) as exc:
         l4.parse_l4_text(text)
     assert "malformed H3 op" in str(exc.value)
@@ -178,7 +178,7 @@ def test_non_op_like_h3_treated_as_prose(prose_h3):
     body, preserving the raw heading line. Shipped production L4 files
     under ``.squidsquad/project/`` use this convention pervasively.
     """
-    text = f"## Instructions\n\n{prose_h3}\n\nfollowing prose\n"
+    text = f"## Agent Functions\n\n{prose_h3}\n\nfollowing prose\n"
     doc = l4.parse_l4_text(text)
     instructions = doc.slots.get("instructions", [])
     assert len(instructions) == 1
@@ -201,7 +201,7 @@ def test_h3_outside_any_slot_rejected():
 
 def test_metadata_trailer_extracted_and_stripped():
     text = (
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### append\n\n"
         "body line one\n"
         "body line two\n\n"
@@ -234,7 +234,7 @@ def test_metadata_only_terminal_comment_counts_as_trailer():
     # An HTML comment in the middle of the body is NOT a trailer — only
     # the one at the end. Locks the regex's "end of body" anchor.
     text = (
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### append\n\n"
         "<!-- not metadata -->\n\n"
         "real body\n\n"
@@ -251,7 +251,7 @@ def test_metadata_multiline_midbody_comment_not_treated_as_trailer():
     # picked up as the trailer because `$` matched any end-of-line. With
     # \Z (end-of-string), only the terminal comment counts.
     text = (
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### append\n\n"
         "real intro text\n\n"
         "<!--\n"
@@ -314,7 +314,7 @@ def test_metadata_unparseable_lines_ignored_per_trd_7_3():
 def test_parse_l4_file_round_trip(tmp_path):
     text = (
         "## Identity\n\n### append\n\nidentity body\n\n"
-        "## Instructions\n\n"
+        "## Agent Functions\n\n"
         "### append\n\nappend body\n\n"
         "### replace step:cycle/foo\n\nreplace body\n"
     )

@@ -8,27 +8,27 @@ roles: [worker]
 
 Print: `[🦑 HH:MM:SS] Checking work queue...`
 
-**First, check for QA-rejected items** (highest priority — fix existing before starting new):
+**First, check for verifier-rejected items** (highest priority — fix existing before starting new):
 
 ```bash
 python references/scripts/triage.py qa-rejected [ROLE] --json
 ```
 
 If the result is non-empty, pick up the first item:
-1. Read the full QA feedback: `gh issue view [NUMBER] --json title,body,comments`
+1. Read the full verifier feedback: `gh issue view [NUMBER] --json title,body,comments`
 2. Write working state with `Task: #[NUMBER]`, status `in-progress`.
 3. Fix each gap identified in the feedback.
 4. Re-run tests and smoke tests; capture output: `[ROLE_TEST_CMD] 2>&1 | tee .squidsquad/[ROLE]/test-output-[NUMBER].log`
-4b. **Pickup-comment fidelity check** (#9946) — even on the QA-rejected fast-path. Run `git diff origin/main...HEAD --name-only` and confirm every gap-fix you plan to claim in the transition comment is substantiated by a changed file in the diff. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables. See the `Pickup-comment fidelity` fragment for full guidance.
+4b. **Pickup-comment fidelity check** (#9946) — even on the verifier-rejected fast-path. Run `git diff origin/main...HEAD --name-only` and confirm every gap-fix you plan to claim in the transition comment is substantiated by a changed file in the diff. State-file edits (`.squidsquad/`, `.claude/`) are filtered by `commit_code` and never appear in the feature PR — do not claim them as PR deliverables. See the `Pickup-comment fidelity` fragment for full guidance.
 5. Transition back to Pending Test:
    ```bash
    python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
    # Comment text must satisfy Step 4b fidelity check — gap-by-gap mapping to changed files; real pass/fail counts from the captured log.
-   python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed [N] QA gaps: [gap-by-gap list with file references]. Tests: [actual pass/fail counts from test-output log]. Status → Pending Test."
+   python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Fixed [N] verifier gaps: [gap-by-gap list with file references]. Tests: [actual pass/fail counts from test-output log]. Status → Pending Test."
    ```
 6. Clear working state. Proceed to Step 4.
 
-**If no QA-rejected items, use the deterministic work queue**:
+**If no verifier-rejected items, use the deterministic work queue**:
 
 ```bash
 python references/scripts/tracker.py work-queue [ROLE]

@@ -109,43 +109,21 @@ class TestReadWorkingState:
         assert result["suppressed"] is True
         assert result["phase"] == "researching #2070"
 
-    def test_last_processed_event_id(self, patch_dirs, squid_dir):
-        """#5622: working state parser reads Last Processed Event ID."""
+    def test_cursor_line_no_longer_parsed(self, patch_dirs, squid_dir):
+        """#11329: the event cursor moved to harness-owned .event-state.json;
+        working-state.md no longer carries a Last Processed Event ID line and
+        the parser no longer surfaces one — even if a legacy install still has
+        the line, it is ignored (not mistaken for agent-private state)."""
         ws = squid_dir / "skill" / "working-state.md"
         ws.write_text(
             "# Working State\n\n"
             "- **Task**: #5622\n"
             "- **Status**: in-progress\n"
-            "- **Last Processed Event ID**: abc12345\n",
+            "- **Last Processed Event ID**: abc12345\n",  # legacy residue
             encoding="utf-8",
         )
         result = cycle_pre._read_working_state("skill")
-        assert result["last_processed_event_id"] == "abc12345"
-
-    def test_last_processed_event_id_none(self, patch_dirs, squid_dir):
-        """#5622: 'none' value results in None."""
-        ws = squid_dir / "skill" / "working-state.md"
-        ws.write_text(
-            "# Working State\n\n"
-            "- **Task**: none\n"
-            "- **Status**: none\n"
-            "- **Last Processed Event ID**: none\n",
-            encoding="utf-8",
-        )
-        result = cycle_pre._read_working_state("skill")
-        assert result["last_processed_event_id"] is None
-
-    def test_last_processed_event_id_missing(self, patch_dirs, squid_dir):
-        """#5622: field absent defaults to None."""
-        ws = squid_dir / "skill" / "working-state.md"
-        ws.write_text(
-            "# Working State\n\n"
-            "- **Task**: none\n"
-            "- **Status**: none\n",
-            encoding="utf-8",
-        )
-        result = cycle_pre._read_working_state("skill")
-        assert result["last_processed_event_id"] is None
+        assert "last_processed_event_id" not in result
 
 
 # ---------------------------------------------------------------------------
@@ -1729,31 +1707,18 @@ class TestRunMechanicalReactions:
 
 
 class TestParseCliArgs:
-    def test_role_only_no_task(self):
-        role, task = cycle_pre._parse_cli_args(["skill"])
-        assert role == "skill"
-        assert task is None
+    """#11165: _parse_cli_args returns the role only — the per-task CLI flag
+    was removed under pull-only (#11092 Decision 3)."""
 
-    def test_role_with_task_flag(self):
-        role, task = cycle_pre._parse_cli_args(["skill", "--task", "42"])
-        assert role == "skill"
-        assert task == "42"
-
-    def test_task_flag_with_no_value_ignored(self):
-        """Trailing `--task` without a value should not crash."""
-        role, task = cycle_pre._parse_cli_args(["skill", "--task"])
-        assert role == "skill"
-        assert task is None
+    def test_role_only(self):
+        assert cycle_pre._parse_cli_args(["skill"]) == "skill"
 
     def test_empty_argv(self):
-        role, task = cycle_pre._parse_cli_args([])
-        assert role is None
-        assert task is None
+        assert cycle_pre._parse_cli_args([]) is None
 
-    def test_extra_args_after_task(self):
-        role, task = cycle_pre._parse_cli_args(["pm", "--task", "100", "--ignored"])
-        assert role == "pm"
-        assert task == "100"
+    def test_extra_args_ignored(self):
+        # Only the role (argv[0]) is parsed; any trailing args are ignored.
+        assert cycle_pre._parse_cli_args(["pm", "--whatever", "x"]) == "pm"
 
 
 # ---------------------------------------------------------------------------

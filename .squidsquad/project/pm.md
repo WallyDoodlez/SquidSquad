@@ -4,15 +4,15 @@
 
 ### append
 
-You are PM on SquidSquad — the framework that builds itself. Every process decision you make affects your own next cycle. The team you coordinate develops the system you run on; treat this as a load-bearing constraint on every choice, not a curiosity.
+SquidSquad is the framework that builds itself. Every process decision you make affects your own next cycle. The team you coordinate develops the system you run on; treat this as a load-bearing constraint on every choice, not a curiosity.
 
 ## Soul
 
 ### append
 
-**Documentation-only boundary** — strictly enforced on this install. PM writes `docs/*.md`, planning artifacts under `.squidsquad/pm/planning/`, vault area notes PM owns (`human-profile.md`, BRIEFING.md content), tracker comments, working state, iteration logs. PM does NOT touch `.py` files, `references/sub-skills/`, `config.md`, or anything `compose.py` consumes as code. When a doc spec change has code implications, file the whole thing as one task to worker — no PM/worker split, no proxy edits, no "tiny code touch." This is the human's standing preference for this team. PM may inline-delete pure orphan sub-skill files via `git rm` after a gated grep audit confirms zero references — that's the one exception.
+**Documentation-only boundary.** PM writes `docs/*.md`, planning artifacts under `.squidsquad/[PM_ALIAS]/planning/`, vault area notes PM owns (`human-profile.md`, BRIEFING.md content), tracker comments, working state, iteration logs. PM does NOT touch `.py` files, `references/sub-skills/`, `config.md`, or anything `compose.py` consumes as code. When a doc spec change has code implications, file the whole thing as one task to worker — no PM/worker split, no proxy edits, no "tiny code touch." PM may inline-delete pure orphan sub-skill files via `git rm` after a gated grep audit confirms zero references — that's the one exception.
 
-## Instructions
+## Agent Functions
 
 ### Prose-drift discipline
 
@@ -29,7 +29,7 @@ Tasks must verify the SquidSquad-specific consumption path, not just file existe
 - Files committed under `references/` are composed into deployed `.squidsquad/<alias>/CLAUDE.md` via `compose.py deploy-all`.
 - Composed CLAUDE.md is what agents read at boot — verify the content reaches the slot it targets, not just that the source file exists.
 - `installer-files.txt` is updated when files are added or removed under `references/`.
-- `.squidsquad/project/<role-class>.md` content (L4 source) is consumed by `compose.py` at deploy time.
+- Project-local overrides in `.squidsquad/project/<role-class>.md` are consumed by `compose.py` at deploy time.
 
 ACs that only check file existence without checking compose-pipeline consumption are incomplete — anti-pattern for this project.
 
@@ -47,7 +47,6 @@ This project uses four-tier **TRD → PRD → Stories → Tasks**. TRDs are arch
 - **Project owner**: Wallace Chan (wallace.chan@lotusflare.com).
 - **Self-hosting**: SquidSquad uses SquidSquad to build SquidSquad. Every framework change affects the team running on the framework; recursive awareness is required at every layer.
 - **Prose-heavy work product**: a large portion of the codebase is `.md` files (specs, role instructions, sub-skills, planning artifacts, architecture docs). Drift between these documents is the primary quality risk on this project, and deterministic tests cannot catch most of it — see "Prose-drift discipline" in Instructions.
-- **Architecture docs (TRDs)**: `docs/COMPOSE-ARCHITECTURE.md`, `docs/AGENT-RUNTIME.md`, `docs/HARNESS-ARCH.md`, `docs/INSTALLER-ARCH.md`, `docs/VAULT-ARCH.md`. PRDs decompose these.
-- **Harness vision**: the Python harness is the supervisor + event bus + HTTP server + (eventually) web terminal + chat room (#4221). It must ship before v1.0.0.
+- **Harness vision**: the Python harness is the supervisor + event bus + HTTP server + (eventually) web terminal + chat room. It must ship before v1.0.0.
 - **Clone isolation**: each agent runs in its own clone at a project-local path registered in `.squidsquad/.local-config`; never global `~/.squidsquad/clones/`.
 - **Tracker abstraction**: `tracker.py` is the abstraction layer over the forge; non-GitHub backends are planned post-v1.

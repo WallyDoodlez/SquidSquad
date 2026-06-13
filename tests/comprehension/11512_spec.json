@@ -1,0 +1,36 @@
+{
+  "issue": 11512,
+  "title": "thin_launcher mode-neutral spawn prompt — boot Step 1 owns wake-mode selection",
+  "files": [
+    "references/scripts/thin_launcher.py",
+    "references/roles/instructions.md"
+  ],
+  "note": "The LLM-consumed artifact changed by #11512 is the launcher's _SPAWN_PROMPT (agent's literal first-turn prompt). It must route the agent into composed-CLAUDE.md boot Step 1 (step:cycle/boot) so the harness-reachability probe — the sole wake-mode decider — selects EVENT vs POLLING, instead of forcing /loop. Verifier ran this CQ live on 2026-06-12: fresh sonnet agent given _SPAWN_PROMPT + boot Step 1 excerpt; 5/5 correct.",
+  "questions": [
+    {
+      "id": "1-first-command",
+      "question": "Given the spawn prompt as your first-turn instruction and the boot Step 1 contract, what is the FIRST concrete command you run this session?",
+      "expected": "python references/scripts/tracker.py check-gh — the GitHub Issues access gate runs before mode selection."
+    },
+    {
+      "id": "2-mode-decider",
+      "question": "After the GitHub check, what single observable result decides whether you enter EVENT mode or POLLING mode?",
+      "expected": "The exit code of the harness probe `curl -sf --max-time 5 http://127.0.0.1:<port>/status`: exit 0 = reachable = EVENT mode; any non-zero = unreachable = POLLING mode. The probe is the sole wake-mode decider."
+    },
+    {
+      "id": "3-harness-up-no-loop",
+      "question": "The harness is UP (curl /status returns exit code 0). Which mode do you enter, and do you schedule a /loop cron in that case?",
+      "expected": "EVENT mode. No — /loop is NOT scheduled when the harness is reachable. Scheduling /loop only happens in the POLLING fallback."
+    },
+    {
+      "id": "4-event-action",
+      "question": "In that same harness-UP case, what do you do instead of scheduling /loop?",
+      "expected": "Load the event-mode contract and arm a persistent Monitor idle-wait (wait for NUDGE on event_poll stdin)."
+    },
+    {
+      "id": "5-no-premature-loop",
+      "question": "Is it correct to schedule a /loop recurring cron immediately on your first turn, before running the probe? Why or why not?",
+      "expected": "No. The probe is the sole wake-mode decider; scheduling /loop before the probe pre-commits to POLLING before the result is known, which the spawn prompt ('Do not pre-commit to a mode before the probe runs') and boot Step 1 both forbid."
+    }
+  ]
+}

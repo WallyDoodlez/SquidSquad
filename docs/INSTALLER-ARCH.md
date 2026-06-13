@@ -18,7 +18,7 @@ This doc uses the four **categorical role classes** from SquidSquad's architectu
 - **verifiers** — the verification specialists (plural class; typically one, but the model supports multiple).
 - **DM** — the delivery manager (singleton; one per install).
 
-The **team preset** is the concrete roster chosen at install — which actual workers and verifiers to instantiate. The default preset has one worker named `worker` and one verifier named `verifier`, alongside the singleton `pm` and `dm` (post-#6274 rename — see AGENT-RUNTIME §10 revision log). Other shipped presets include stack-specialized ones (e.g. workers `fe` + `be`, or `web` + `ios` + `api`). Operators may also define custom presets.
+The **team preset** is the concrete roster chosen at install — which actual workers and verifiers to instantiate. The default preset has one worker named `worker` and one verifier named `verifier`, alongside the singleton `pm` and `dm` (post-#6274 rename — see AGENT-RUNTIME §11 revision log). Other shipped presets include stack-specialized ones (e.g. workers `fe` + `be`, or `web` + `ios` + `api`). Operators may also define custom presets.
 
 Throughout this doc, **prose talks about the categorical classes** (PM, workers, verifiers, DM). File-layout examples use `<worker-role>/`, `<verifier-role>/`, `pm/`, `dm/` placeholders since concrete names depend on the chosen preset.
 
@@ -28,7 +28,7 @@ Throughout this doc, **prose talks about the categorical classes** (PM, workers,
 
 Why: agents work autonomously and concurrently. If they shared one working tree they would step on each other's `git pull`, `git checkout`, branch switches, and uncommitted state. Per-agent clones make each agent's working tree disjoint while still coordinating through the same remote (the source-of-truth git repo) and forge (GitHub Issues).
 
-The clones live wherever the operator places them on disk; their paths are registered in `~/.squidsquad/clones/<alias>` (one file per alias, contents = absolute path to that alias's clone). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad.
+The clones live wherever the operator places them on disk; their paths are registered in the project-local `.squidsquad/.local-config` (the alias→path map — see §3.2). The harness reads this registry at boot, and `start.sh` uses it to sync all clones with `git pull` before booting the squad. (The legacy global `~/.squidsquad/clones/` registry is **no longer** the boot-time discovery mechanism — its fallback was removed in [#3100](https://github.com/WallyDoodlez/SquidSquad/issues/3100); `.local-config` is the sole clone-path source the harness and `start.sh` consult. See HARNESS-ARCH §7.2.)
 
 In scope:
 
@@ -72,8 +72,10 @@ flowchart LR
 Three commitments:
 
 1. **Ephemeral agent.** The installer is a one-shot Claude Code session. It boots, talks to the human, runs helpers, commits the final state, prints "SquidSquad ready", and exits. No background process, no daemon, no long-lived install state.
-2. **Two halves — pure conversation, then writes-and-commit.** Phases 0–4 (per §4 below) are pure conversation + helper queries — no writes to the target repo. From Phase 5 onward the installer writes to the local filesystem; Phase 8 is the atomic git commit + push that publishes everything. The user can abort cleanly through Phase 4; aborting between Phase 5 and Phase 8 is also clean but requires re-running the installer (which detects the partial state per §11.1's interrupted-install recovery — user-initiated mid-flow abort is not a first-class supported path; the installer either completes or is re-run).
+2. **Two halves — pure conversation, then writes-and-commit.** Phases 0–4 (per §4 below) make **no writes to the target repo** — they are conversation + helper queries, with two host-level exceptions outside the repo: Phase 0 may provision system tools and Python packages on the host *with operator consent* (§4.1), and Phase 0a writes to `~/.squidsquad/` (§4.2). From Phase 5 onward the installer writes to the local filesystem; Phase 8 is the atomic git commit + push that publishes everything. The user can abort cleanly through Phase 4; aborting between Phase 5 and Phase 8 is also clean but requires re-running the installer (which detects the partial state per §11.1's interrupted-install recovery — user-initiated mid-flow abort is not a first-class supported path; the installer either completes or is re-run).
 3. **One flow, fresh and re-run.** There is no distinct "upgrade flow". Re-running the installer on a repo that already has `.squidsquad/` walks the same phases; the existing-install case is handled by a migration-walk step (§4.4) that consults per-version `references/migrations/v<N-1>-to-v<N>.md` files. Helpers like `shared_fs.py init` are idempotent — safe to run on re-installs.
+
+> **Restart step not shown.** The high-level diagram above ends at Phase 9 (exit). On a **re-run** (existing install), a per-agent harness restart fires *between* the Phase 8 commit and the Phase 9 exit — so running agents pick up the newly composed CLAUDE.md (see §10.3). It is omitted from this mental-model diagram because a fresh install has no running agents to restart (the squad boots later via `start.sh`); the restart is a re-run-only concern.
 
 > **Numbering note.** This doc's "Phases 0–9" are an architectural decomposition of the install flow. The companion runbook [`WIZARD.md`](../references/wizard/WIZARD.md) uses its own "Step 0 / 0a / 0b / 1 / 1b / 2 / 3 / 4 / 5 / 5b / 5c / 5d / 6 / 7" numbering that maps roughly onto these phases. When this doc references a `Step <N>` it means the WIZARD step; `Phase <N>` is always this doc's numbering.
 
@@ -87,24 +89,24 @@ Three commitments:
 |---|---|
 | **Human conversation** | Project domain, **team preset** (which workers and verifiers to install — see §1.1), loop interval, model routing preferences, tracker backend (GitHub Issues default, Forgejo alt), git workflow preferences. **NOT collected at install: tool/MCP/CLI configuration** — those are per-agent decisions made post-install (see §8). |
 | **Repo state** | Git existence + branch + history; existing `.squidsquad/` (triggers the migration-walk step inside the standard flow — §4.4); language/stack hints from filesystem |
-| **Environment** | `gh` CLI installed + authenticated; Python 3 + `pip`; OS (Windows, macOS, Linux); `claude` CLI on PATH |
-| **`~/.squidsquad/`** | Cross-install shared filesystem — existing secrets, clone registry, prior config |
+| **Environment** | The full dependency set Phase 0 detects + provisions (§4.1): `gh` CLI installed + authenticated; Python 3 + `pip` + runtime packages; `claude` CLI on PATH; OS (Windows, macOS, Linux). Phase 0 reads this set in one gather-all pass — see §4.1 for the detect→consent→provision model. |
+| **`~/.squidsquad/`** | Cross-install shared filesystem — existing secrets and cross-install config. (Clone-path discovery is project-local in `.squidsquad/.local-config`, not here — see §3.2.) |
 
 ### 3.2 Outputs
 
 | Destination | What the installer writes |
 |---|---|
-| `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow, the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from `references/VERSION` (shipped with the pulled SquidSquad sources); read by the migration walk §10 step 2) and the **`## Aliases` registry section** mapping each install-time alias to its role-class + L3 domain (used by the harness for `/work/assign` alias-existence validation — see [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)). **No `event-driven:` field** — wake-mode selection happens at agent boot via harness probe (AGENT-RUNTIME §8.3), not via config. |
-| `.squidsquad/<alias>/` | Per-alias agent directory (CLAUDE.md composed, working-state.md skeleton, planning/, iterations/) — one per alias in the chosen team preset: PM, each worker, each verifier, DM. *Note: no separate `SOUL.md` per alias — `SOUL.md` is a filename shorthand for the soul-slot source at `references/roles/<role-class>/SOUL.md`; its content is composed into `CLAUDE.md §3 Soul`. The v1 per-alias sidecar is retired per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md).* |
+| `.squidsquad/config.md` | Project config — iter interval, ship threshold, model routing, tracker backend, git workflow, the install's **SquidSquad version stamp** (`squidsquad_version: <semver>` field; written at Phase 5 from `references/VERSION` (shipped with the pulled SquidSquad sources); read by the migration walk §10 step 2) and the **`## Aliases` registry section** mapping each install-time alias to its role-class + L3 domain (used by the harness for `/work/assign` alias-existence validation — see [AGENT-RUNTIME.md §8.3](AGENT-RUNTIME.md)). **No `event-driven:` field** — wake-mode selection happens at agent boot via harness probe (AGENT-RUNTIME §9.3), not via config. |
+| `.squidsquad/<alias>/` | Per-alias agent directory (the compose triple `CLAUDE.md` + `CLAUDE.linked.md` + `CLAUDE.conflicts.md` + `.assemble-cache/`, working-state.md skeleton, planning/, iterations/ — see §5) — one per alias in the chosen team preset: PM, each worker, each verifier, DM. *Note: no separate `SOUL.md` per alias — `SOUL.md` is a filename shorthand for the soul-slot source at `references/roles/<role-class>/SOUL.md`; its content is composed into `CLAUDE.md §3 Soul`. The v1 per-alias sidecar is retired per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md).* |
 | `.squidsquad/project/` | L4 project-local files — one unified `<role-class>.md` per role-class (pm.md, `<worker-class>.md`, `<verifier-class>.md`, dm.md) with H2 slot sections. Initial `## Project Context` block in each is seeded from Phase 1 conversational answers (per §4.8 step 4); other slots start empty and accumulate at runtime via `l4-curation` (see [COMPOSE-ARCHITECTURE.md §5.5 + §7](COMPOSE-ARCHITECTURE.md)). |
 | `.squidsquad/vault/` | Shared memory layer skeleton (BRIEFING.md + the five vault dirs: projects/, areas/, resources/, archives/, galaxy/). Vault architecture documented in [`VAULT-ARCH.md`](VAULT-ARCH.md). |
 | `.squidsquad/.local-config` | Per-clone alias→path mapping for `start.sh` to sync clones. Installer-scaffolded; harness reads it at boot to populate per-alias `clone_path` into in-memory `AgentState` (see HARNESS-ARCH §7.2 step 1 + §7.5). At runtime the harness's `.harness-state.json` is the operational source; `.local-config` is the install-time source of truth. |
 | `~/.squidsquad/secrets` | API keys for external models (restricted permissions, never committed to repo) |
-| `~/.squidsquad/clones/` | Per-alias clone-path registry. One file per alias (filename = alias literal, no extension — e.g. `~/.squidsquad/clones/pm`, `~/.squidsquad/clones/frontend-1`); file contents = the absolute path to that alias's clone. Always created — clone isolation is mandatory (see §1.2), not a configurable mode. |
+| `~/.squidsquad/clones/` | **Legacy/vestigial** — still created by `shared_fs.py init` (Phase 0a), but **no longer the clone-path registry**: the boot-time fallback that read it was removed in [#3100](https://github.com/WallyDoodlez/SquidSquad/issues/3100). The harness and `start.sh` read `.squidsquad/.local-config` (above) instead. Retained only for backward compatibility; pending code cleanup of the unused `shared_fs.py` clones helpers. |
 | **Forge (GitHub)** | Issue labels created via `gh label create` — status/role/type/priority/severity taxonomy |
 | **Git commit** | Single atomic install commit on `main` (or the operator's chosen branch) |
 
-> **Runtime files (not installer outputs):** `.squidsquad/.harness-port`, `.squidsquad/.harness-state.json`, `.squidsquad/.event-state.json` do not exist immediately after `squidsquad init` exits; they appear only after the harness is first started (`start.sh` / HARNESS-ARCH §2). They are harness-owned, not installer outputs. Schemas are documented in [`HARNESS-ARCH.md`](HARNESS-ARCH.md) §7 + [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5. Listed here as a pointer because operators inspecting the directory post-install will see them.
+> **Runtime files (not installer outputs):** `.squidsquad/.harness-port`, `.squidsquad/.harness-state.json`, `.squidsquad/.event-state.json` do not exist immediately after `squidsquad init` exits; they appear only after the harness is first started (`start.sh` / HARNESS-ARCH §2). They are harness-owned, not installer outputs. Canonical state-file schemas are in [`HARNESS-ARCH.md`](HARNESS-ARCH.md) §7; which files persist what is mapped in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §6 (state-persistence map, not schema docs). Listed here as a pointer because operators inspecting the directory post-install will see them.
 
 ---
 
@@ -144,16 +146,37 @@ flowchart TB
     style Migrate fill:#dff
 ```
 
-### 4.1 Phase 0 — Prerequisite check
+### 4.1 Phase 0 — Prerequisite detection & provisioning
 
-Verify the environment can run a SquidSquad install:
+Phase 0 ensures the environment can run a SquidSquad install. It follows a **gather-all → present → consent → provision** model — it never fails fast on the first missing dependency.
 
-- `gh` CLI installed AND authenticated (`gh auth status`) — required for tracker
-- Python 3 + `pip` — required for helpers
-- `claude` CLI on PATH — required to spawn agents
-- Git repo present + clean working tree (or operator-acknowledged)
+**Dependencies in scope:**
 
-Helper: `references/scripts/wizard.py check-gh` returns a JSON envelope with `ok: true | false` and a `stage: ready | installed | authenticated` field. The installer agent acts on the JSON, never invents environment checks.
+| Dependency | Why needed | Provisioning |
+|---|---|---|
+| `gh` CLI (installed) | tracker (GitHub Issues) | auto — per-platform package manager |
+| `gh` auth | tracker API calls | **guided** — `gh auth login` is interactive; cannot be silently forced |
+| Python 3 | runs all helpers | auto — per-platform package manager |
+| `pip` | installs Python packages | auto — `apt` / `ensurepip` |
+| Runtime Python packages — `requirements.txt` (fastapi, starlette, uvicorn, watchdog) **plus `pyyaml`** (used at runtime by `manifest.py` / `capability_check.py` / `source_frontmatter.py` / `wizard.py`; **currently declared only in `requirements-dev.txt`** — moving it to `requirements.txt` is part of the target implementation) | harness + helpers | auto — `pip install -r requirements.txt` |
+| `claude` CLI on PATH | spawns agents | **guided** — npm global (`npm i -g @anthropic-ai/claude-code`); attempt only when npm is present, else instruct |
+| Git repo present + clean working tree | install target | operator-acknowledged (not auto) |
+
+**The flow:**
+
+1. **Gather-all detect** — a single pass enumerates **every** missing or unsatisfied dependency above without bailing on the first. It produces the complete missing-set, each item annotated with the exact per-OS provisioning action.
+2. **Present + consent** — the installer shows the human the full missing-set in plain language with what it proposes to do for each, then asks **one** permission ("Install these N items?"). Nothing is installed before consent. (Per operator direction: gather all, then ask once — not a prompt per dependency.)
+3. **Provision on approval** — for each approved item the installer runs its per-platform action:
+   - **System tools** (`gh`, Python, pip): per-platform package manager — `winget` / `choco` (Windows), `brew` (macOS), `apt` / `dnf` (Linux).
+   - **Python packages**: `pip install -r requirements.txt` (**target**: a single unified read — the implementation must replace the current 2-of-4 hard-coded subset in `start.sh` / `start.ps1` with this).
+   - **Guided, not auto**: `claude` CLI (npm global) and `gh auth login` (interactive) are surfaced as guided steps the installer runs *with* the human, rather than silently forcing.
+4. **Re-verify** — after provisioning, re-run the gather-all detect. Anything still missing → instruct the human and stop cleanly (no partial scaffold; Phase 0 is still pre-Phase-5, so abort leaves no repo writes).
+
+**Install-time vs runtime split** (operator-locked): the gather-all + consent + provision runs **here at install time** — the human is present to consent once. `start.sh` keeps a **silent re-ensure** safety net at every boot: it re-checks the same dependency set and installs the auto-provisionable ones *without* prompting (a boot-time guard, not a consent gate), so a clone that drifts still comes up. The consent gate lives only at install time; boot-time re-ensure is unattended by design.
+
+**Platform strategy**: provisioning dispatches on detected OS; the per-platform system-tool install commands are encoded in a single helper, not scattered across the flow. The runtime boot path already has both a bash `start.sh` and a Windows `start.ps1` for the re-ensure step — but both currently hard-code a 2-of-4 package subset and need updating to the unified `requirements.txt` read.
+
+> **Current state (target vs today)**: today `references/scripts/wizard.py` checks **only `gh`** (install + auth), fail-fast, and *instructs* the human (returns a JSON envelope with `ok: true | false` and a `stage: ready | installed | authenticated` field, plus a `fix` list). Python 3 / pip / packages are auto-installed only later by `start.sh` (bash) and `start.ps1` (PowerShell) at runtime boot — both hard-code 2 of the 4 runtime packages — and `claude` is only warned about. The **gather-all collector, per-platform install dispatch, consent prompt, unified-`requirements.txt` read, and `pyyaml` runtime-requirement move** described above are the **target design — not yet implemented**. Implementation is a separate worker (skill) task filed off #11537; this section is the contract for that work. The installer agent acts on the helper JSON and never invents environment checks; the gather-all detector extends that single-helper-JSON pattern to every dependency.
 
 ### 4.2 Phase 0a — Shared filesystem init
 
@@ -163,7 +186,8 @@ Helper: `references/scripts/wizard.py check-gh` returns a JSON envelope with `ok
 ~/.squidsquad/
 ├── secrets        # API keys, restricted perms (0600)
 ├── config         # cross-install config
-└── clones/        # per-alias clone-path registry (one file per alias; mandatory per §1.2)
+└── clones/        # legacy/vestigial dir — still created here, but NOT the clone registry
+                   #   (boot reads .squidsquad/.local-config since #3100 — see §3.2)
 ```
 
 Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
@@ -245,7 +269,7 @@ Once approved, the installer:
    | verifier | verifier | — |
    | dm | dm | — |
    ```
-4. **Seeds L4 Project Context** — for each role-class in the chosen preset, writes the Phase 1 project-intake answers (domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes) into `.squidsquad/project/<role-class>.md` under the `## Project Context` H2 section. This is the single unified L4 file per role-class (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md) and the "two complementary sources" callout in [§5.5](COMPOSE-ARCHITECTURE.md)). Other L4 slots (Identity / Soul / Instructions / etc.) start empty at install time and are populated at runtime by the `l4-curation` sub-skill (per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md)).
+4. **Seeds L4 Project Context** — for each role-class in the chosen preset, writes the Phase 1 project-intake answers (domain, audience, primary language/stack, repositories of record, external systems, project-specific tone notes) into `.squidsquad/project/<role-class>.md` as the first `### append` H3 op-block under the `## Project Context` slot — the seed follows the append-only H3 op grammar (per [COMPOSE-ARCHITECTURE.md §5.5](COMPOSE-ARCHITECTURE.md)), **not** a naive prose write under the H2, so `compose.py`'s §4.2 validation accepts it. This is the single unified L4 file per role-class (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md) and the "two complementary sources" callout in [§5.5](COMPOSE-ARCHITECTURE.md)). Other L4 slots (Identity / Soul / Instructions / etc.) start empty at install time and are populated at runtime by the `l4-curation` sub-skill (per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md)).
 
    > **Historical context (no installer code needed):** earlier installs used a multi-file L4 seed pattern (`references/sub-skills/project/<role>-instructions.md`, `<role>-responsibility.md`, `<role>-soul-directives.md`, `shared-*.md`, `setup-upgrade-gate.md`). That pattern is retired and replaced by the unified `<role-class>.md` model above. The installer does **not** carry migration code for the legacy pattern — fresh installs never see it, and existing installs are migrated by a separate one-time tool (out of scope for this doc). This callout exists only to disambiguate the docs; an implementer reading §4.8 should write the unified-file path and not the legacy multi-file path.
 5. **Ensures GitHub labels** — creates the status/role/type/priority/severity label taxonomy via `gh label create` (idempotent per-label check).
@@ -282,13 +306,16 @@ The installer prints a one-line confirmation with next steps — typically how t
 
 ## 5. File layout produced
 
-The full `.squidsquad/` tree post-install. PM and DM dirs are always present (singletons); each chosen worker and verifier from the team preset gets its own dir. The names `pm`, `verifier`, `worker`, `dm` shown below are the *default-preset* names (post-#6274 rename — see AGENT-RUNTIME §10 revision log); other presets use different concrete names (e.g. `fe`, `be`, `web`, `ios` for workers).
+The full `.squidsquad/` tree post-install. PM and DM dirs are always present (singletons); each chosen worker and verifier from the team preset gets its own dir. The names `pm`, `verifier`, `worker`, `dm` shown below are the *default-preset* names (post-#6274 rename — see AGENT-RUNTIME §11 revision log); other presets use different concrete names (e.g. `fe`, `be`, `web`, `ios` for workers).
 
 ```
 .squidsquad/
 ├── config.md                    # project config (interval, threshold, routing, tracker, git workflow, team preset)
 ├── pm/                          # PM (singleton — always present)
 │   ├── CLAUDE.md                # composed orchestration (compose.py deploy pm)
+│   ├── CLAUDE.linked.md         # link-resolved companion — part of the compose triple
+│   ├── CLAUDE.conflicts.md      # compose conflict report — part of the compose triple
+│   ├── .assemble-cache/         # compose assemble-stage cache
 │   ├── working-state.md         # crash-recovery checkpoint (skeleton)
 │   ├── enhancements.md          # product backlog seed
 │   ├── planning/                # RESEARCH/CONTEXT artifacts
@@ -313,16 +340,18 @@ The full `.squidsquad/` tree post-install. PM and DM dirs are always present (si
 │   ├── worker.md                # default preset: generalist worker class
 │   ├── verifier.md              # default preset: verifier class
 │   └── dm.md                    # H2 slot sections; ## Project Context seeded from Phase 1
-├── vault/                       # shared memory (PM + workers R/W, verifiers + DM read-only)
+├── vault/                       # shared memory (all agents R/W — vault-protocol-slim read-only variant retired #11331)
 │   ├── BRIEFING.md
 │   ├── projects/
 │   ├── areas/
 │   ├── resources/
 │   ├── archives/
 │   └── galaxy/
-├── .local-config                # per-clone alias→path map (read by start.sh)
+├── .local-config                # per-clone alias→path map (read by start.sh + harness first-boot discovery — §3.2)
 └── (runtime) .harness-port, .harness-state.json, .event-state.json — created when the harness boots
 ```
+
+> **Composed-output set (per alias dir)**: every alias dir (`pm/`, each worker, each verifier, `dm/`) contains the same compose **triple** — `CLAUDE.md` + `CLAUDE.linked.md` + `CLAUDE.conflicts.md` — plus a `.assemble-cache/` dir, all written atomically by `compose.py` (the triple write post-E6 cutover #10685; see [COMPOSE-ARCHITECTURE.md §4.6](COMPOSE-ARCHITECTURE.md)). The `pm/` block above shows the full set explicitly; the other alias dirs list `CLAUDE.md` as shorthand for the same triple + cache.
 
 > **L4 file naming**: the four possible L4 filenames are `pm.md`, `worker.md`, `verifier.md`, `dm.md` — one per L2 role-class, max 4 per install. L3 specialization (FE/BE/iOS/etc.) does NOT differentiate L4 files; all worker-class agents share `worker.md` regardless of L3 domain. See COMPOSE-ARCHITECTURE §3.3 and §7.3.
 
@@ -332,7 +361,8 @@ And the per-user shared filesystem (not part of any single repo):
 ~/.squidsquad/
 ├── secrets         # API keys (chmod 0600)
 ├── config          # cross-install config
-└── clones/         # per-alias clone-path registry — one file per alias, contents = absolute path
+└── clones/         # legacy/vestigial — created by shared_fs.py init but unused for boot;
+                    #   clone-path registry is .squidsquad/.local-config (see §3.2, #3100)
 ```
 
 ---
@@ -351,7 +381,7 @@ The installer agent never invents behavior the helpers already implement. Every 
 | `references/scripts/tracker.py` | The tracker abstraction layer — agents use this at runtime; the installer uses its label-creation paths at Phase 5 |
 | `start.sh` | Post-install boot script — ensures Python deps, syncs all clones, runs the harness |
 
-> **Runtime-shipped components (not installer-invoked):** the SquidSquad source tree also ships `references/scripts/event_poll.py` (per-agent event-bus sidecar; harness-spawned when the agent boots into event-mode wake — see [AGENT-RUNTIME.md §7.0](AGENT-RUNTIME.md) + [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md)) and `references/scripts/harness.py` itself. The installer does NOT invoke these — they're part of the runtime. They're mentioned here because they live alongside the installer's helper scripts under `references/scripts/` and operators inspecting that directory will see them.
+> **Runtime-shipped components (not installer-invoked):** the SquidSquad source tree also ships `references/scripts/event_poll.py` (per-agent event-bus sidecar; harness-spawned when the agent boots into event-mode wake — see [AGENT-RUNTIME.md §8.0](AGENT-RUNTIME.md) + [HARNESS-ARCH.md §7.2 step 4](HARNESS-ARCH.md)) and `references/scripts/harness.py` itself. The installer does NOT invoke these — they're part of the runtime. They're mentioned here because they live alongside the installer's helper scripts under `references/scripts/` and operators inspecting that directory will see them.
 
 ---
 
@@ -389,7 +419,7 @@ The agent treats this as a runtime L4 write per [COMPOSE-ARCHITECTURE.md §7](CO
 
 1. Agent classifies the directive (`append` / `insert-before` / `insert-after` / `replace` on its `instructions` or `project-context` slot).
 2. DeepSeek audit + mini-CQ ([COMPOSE-ARCHITECTURE.md §7.4](COMPOSE-ARCHITECTURE.md)) gates the write.
-3. If approved, the agent persists the directive to a new L4 file in `.squidsquad/project/` with proper frontmatter, then triggers a recompose.
+3. If approved, the agent **appends** the directive as an H3 op-block to its role-class L4 file `.squidsquad/project/<role-class>.md` — one unified file per role-class; ops accumulate as H3 sub-sections and do **not** create new files (per [COMPOSE-ARCHITECTURE.md §7.5](COMPOSE-ARCHITECTURE.md)) — then triggers a recompose.
 4. The next session boots with the new tool/MCP/CLI wired into its CLAUDE.md as if it had always been there.
 
 API keys and secrets stay in `~/.squidsquad/secrets` (created by the installer's Phase 0a `shared_fs.py init`); the L4 file references them by name, not by value.
@@ -405,7 +435,7 @@ The existing `references/sub-skills/capabilities/` directory and `common/capabil
 
 ### 8.4 What if an agent needs a tool it doesn't know about yet?
 
-The agent surfaces the gap to the human via the normal `/work/assign` → PM routing with `event_context="process-concern"` (see [AGENT-RUNTIME.md §7.3](AGENT-RUNTIME.md)). PM either prompts the human for direction or surfaces it at the next check-in. The human's directive becomes an L4 write per §8.2. No installer involvement.
+The agent surfaces the gap to the human via the normal `/work/assign` → PM routing with `event_context="process-concern"` (see [AGENT-RUNTIME.md §8.3](AGENT-RUNTIME.md)). PM either prompts the human for direction or surfaces it at the next check-in. The human's directive becomes an L4 write per §8.2. No installer involvement.
 
 ---
 
@@ -448,7 +478,7 @@ flowchart LR
    - **Interrupted Phase 5 from a prior run**: `.squidsquad/` exists in a partial state but the stamp was never written (Phase 5 didn't complete). Run the §11.2 interrupted-install recovery path first (clean up scaffold debris while preserving §11.3's items), then either treat as fresh-install (if config.md was wiped per §11.2) or as pre-version-stamp (if config.md survived without the stamp).
 
    **Version sources**: `installed-version` reads from `.squidsquad/config.md`'s `squidsquad_version:` field. `installer-version` reads from `references/VERSION` *after* step 1's pull — so the comparison always reflects what the operator is moving *to*. If `installer-version ≤ installed-version`, the walk is a no-op (no migration markdowns to apply); the installer falls through to the standard phases (1+). (The pulled-but-not-migrated `references/` source is still updated on disk — operators who pulled accidentally can `git checkout HEAD references/` to revert.)
-3. **Walk migrations**: for each version step between installed → current (e.g. `1.2→1.3`, `1.3→1.4`, `1.4→1.5`), find the matching `references/migrations/v<N-1>-to-v<N>.md` file. If a version step has no migration file, **skip it** — that release shipped no on-disk change. For each found migration file, apply its instructions under the **three-gate model** (same gating as `l4-curation`, per [COMPOSE-ARCHITECTURE.md §7.4](COMPOSE-ARCHITECTURE.md)):
+3. **Walk migrations**: for each version step between installed → current (e.g. `1.2→1.3`, `1.3→1.4`, `1.4→1.5`), find the matching `references/migrations/v<N-1>-to-v<N>.md` file. If a version step has no migration file, **skip it** — that release shipped no on-disk change. For each found migration file, apply its instructions under an **analogous three-gate model** (DeepSeek audit → mini-CQ → compose dry-run — cf. `l4-curation`'s gates in [COMPOSE-ARCHITECTURE.md §7.4](COMPOSE-ARCHITECTURE.md), but adapted for **prose** migration files: the audit reviews the LLM's planned writes against the migration prose's stated intent, not the H3 op-classification that l4-curation audits):
    1. **DeepSeek audit**: a deepseek-class model reviews the proposed edit against the migration prose
    2. **Mini-CQ**: one-line plain-language confirmation to the human ("Migration v1.4 → v1.5 wants to rename `Iteration_Interval` to `Iteration Interval` in your config — OK?"); rejection aborts that step with no file change
    3. **Compose dry-run**: `compose.py deploy-all --check` validates the migrated content composes cleanly before any write
@@ -516,10 +546,10 @@ Detection: the installer issues `GET http://localhost:<port>/status` (port read 
   POST /agents/<alias>/stop    # graceful stop; harness handles ack-stop / timeout
   POST /agents/<alias>/start   # boot with new composed CLAUDE.md
   ```
-  For each agent in the install's `## Aliases` registry. The URL-template token is named `{role}` in the source code for legacy compatibility; the value is always the alias (rename to `{alias}` tracked in HARNESS-ARCH §4.1 + #10358).
+  For each agent in the install's `## Aliases` registry. The URL-template token is named `{role}` in the source code for legacy compatibility; the value is always the alias (rename to `{alias}` tracked in HARNESS-ARCH §9 (Vocabulary note) + #10358).
 - **Harness unreachable** (port file missing / port unreachable / timeout) — the installer invokes `start.sh` from the repo root as the cold-start path. `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots all configured agents. If each restarted agent's boot probe succeeds, the harness spawns its paired `event_poll.py` per HARNESS-ARCH §7.2.
 
-**In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent recovers from `working-state.md` (see AGENT-RUNTIME §5 + §6.5).
+**In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent recovers from `working-state.md` (see AGENT-RUNTIME §6 + §7.5).
 
 ### 10.4 Edge cases
 
@@ -542,7 +572,7 @@ Operators on consuming installs never write migration files — they consume the
 
 The installer is designed to be safe to re-run:
 
-- **Phases 0–4** make no changes the user can see in the target repo. (Phase 0a `shared_fs.py init` writes to `~/.squidsquad/` but is idempotent — creates dirs only if absent — and is shared across all installs, not specific to this one.)
+- **Phases 0–4** make no changes the user can see in the target repo. (Two host-level exceptions, both outside the repo: Phase 0 provisioning installs system tools + Python packages on the host OS — but only after explicit operator consent per §4.1, and the abort path before consent leaves nothing changed; and Phase 0a `shared_fs.py init` writes to `~/.squidsquad/` but is idempotent — creates dirs only if absent — and is shared across all installs, not specific to this one.)
 - **Phase 5 (local scaffold + forge labels)** is the first phase that writes to the target repo. It uses a "scaffold then write" pattern — failures partway leave the filesystem in a state the next re-run can clean up via WIZARD's Step 7.1 ("Full rebuild cleanup if applicable") cleanup path.
 - **Phase 5 label creation on the forge** is per-label idempotent (`gh label create` skips existing labels).
 - **Phase 6 compose** is deterministic *for a given set of inputs* — the same L1-L3 sources + L4 file always produce the same composed CLAUDE.md. During an upgrade (§10), the L1-L3 sources change because the installer pulls newer SquidSquad releases, so the composed output legitimately changes; that is not a determinism violation, just a reflection of the input change. Re-running Phase 6 against an unchanged source set is safely idempotent.
@@ -567,7 +597,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 ## 12. Open questions & gaps
 
 - **G1** — Migration steps for pre-#9925 installs (before the four-layer responsibility model). The migration walk (§10) assumes the existing install already has the L1-L4 structure; pre-#9925 installs would need a one-off migration. Not yet specified.
-- **G2** — L4 backfill from the human's auto-memory directory (`~/.claude/projects/<repo>/memory/`) — referenced from [COMPOSE-ARCHITECTURE.md §10.4](COMPOSE-ARCHITECTURE.md) but not yet implemented as an installer step. Open: should the installer offer to import these on upgrade, or is this a separate one-off tool?
+- **G2** — L4 backfill from the human's auto-memory directory (`~/.claude/projects/<repo>/memory/`). [COMPOSE-ARCHITECTURE.md §10.4](COMPOSE-ARCHITECTURE.md) (migration plan row N) already scopes this as a **separate one-time backfill tool** (pm-authored, skill-reviewed) + migration — **not** an installer step. So this is not an installer gap: the installer correctly does not own it, and the standalone tool is tracked in #10023. Retained here only as a pointer so implementers don't mistake it for missing installer scope.
 - **G3** — Multi-tenant install (one repo hosting multiple SquidSquad teams) — likely deferred. Today's model is one SquidSquad install per repo.
 - **G4** — Atomic install across Phase 5–8. Today the scaffold (Phase 5) writes locally before the commit (Phase 8); a hard crash between them leaves the filesystem written but no git history. The interrupted-install recovery path in §11.2 handles this, but the model isn't truly atomic.
 
@@ -590,6 +620,17 @@ Across both upgrade and clean-rebuild, these are always preserved:
 
 ## 14. Revision log
 
+- **2026-06-12 (#11537 R2 — dependency provisioning)** — Rewrote §4.1 Phase 0 from a flat 4-bullet "prerequisite check" into the full **dependency detection & provisioning** design (operator-locked option-b-with-consent, 2026-06-12). New model: **gather-all detect → present full missing-set → one consent prompt → per-platform provision → re-verify**. Locks: provision at **install time** (consent gate) with `start.sh` silent re-ensure at boot; `claude` CLI + `gh auth` stay **guided** (not silently forced); **full scope** (system tools + Python packages, instruct-fallback for the un-installable). Per-dependency provisioning table + platform-dispatch strategy added. Fixed §3.1 Environment-row drift (it listed deps as if all were checked; today only `gh` is — now points to §4.1's gather-all model). Honest target-vs-today callout: gather-all collector, per-platform dispatch, consent prompt, unified-`requirements.txt` read, and `pyyaml` runtime-requirement move are **not yet implemented** — implementation is a separate skill task off #11537. (Note: `start.ps1` already exists alongside `start.sh`; both hard-code a 2-of-4 package subset that the unified read replaces.) §2 commitment 2 + §11.1 updated to carve out Phase 0 host-level provisioning from the 'no writes during Phases 0–4' invariant (repo-write invariant preserved; host installs are consent-gated). Research: `.squidsquad/pm/planning/RESEARCH-INSTALLER-DEPROV-11537.md`. (R2 is the original #10836 scope, split out when R1 absorbed the drift sweep.)
+- **2026-06-12 (#10836 R1 reconciliation — in progress)** — Post-cutover drift sweep against the stabilized arch docs (audit: `.squidsquad/pm/planning/AUDIT-INSTALLER-ARCH-2026-06-12.md`). **Architectural-drift findings resolved (4 ERROR + 2 WARNING):**
+  - **E1+W2 (clone registry)**: doc claimed `~/.squidsquad/clones/<alias>` is the boot-time clone-path registry, contradicting HARNESS-ARCH §7.2 (`.squidsquad/.local-config`). Code confirms `boot_remote.py` reads `.local-config` exclusively; the global `~/.squidsquad/clones/` fallback was removed in #3100; `shared_fs.py init` still *creates* the dir but nothing consumes it for boot. Fixed §1.2, §3.1, §3.2, §4.2 + §5 trees → `.local-config` canonical, `~/.squidsquad/clones/` marked vestigial. Code-cleanup follow-up: #11519 (retire unused `shared_fs.py` clones helpers).
+  - **E4 (L4 write model)**: §8.2 step 3 said post-install directives persist to a *new* L4 file; COMPOSE §7.5 says one unified file per role-class, ops accumulate as H3 sub-sections. Fixed → append H3 op-block to `.squidsquad/project/<role-class>.md`.
+  - **E5 (compose-output set)**: §5 layout + §3.2 showed only `CLAUDE.md` per alias; compose emits the triple `CLAUDE.md` + `CLAUDE.linked.md` + `CLAUDE.conflicts.md` + `.assemble-cache/` (compose.py atomic_emit, post-E6 #10685). Fixed §5 `pm/` block + new composed-output-set note + §3.2 outputs row.
+  - **E2 (migration audit gating)**: §10 step 3 claimed the migration three-gate is "same gating as l4-curation per COMPOSE §7.4"; migration files are prose, not H3 ops. Softened → "analogous three-gate adapted for prose migrations" (audit reviews planned writes vs migration prose intent, not op-classification).
+  - **W4 (vault access)**: §5 `vault/` said "verifiers + DM read-only"; VAULT-ARCH confirms all roles R/W since `vault-protocol-slim` retired #11331. Fixed → all agents R/W.
+  - **W6 (L4 seed format)**: §4.8 step 4 wrote Phase 1 answers as prose under `## Project Context` H2; COMPOSE §5.5 requires the seed follow append-only `### append` H3 grammar. Fixed → first `### append` op-block under the slot.
+  - **Cross-ref/pointer drift resolved**: E3 (§10.3 rename ref §4.1 → §9 Vocabulary note), W5 (§6 event_poll ref §8.2 → §7.2 step 4), L2 (§3.2 schema ref precision — HARNESS-ARCH §7 canonical, AGENT-RUNTIME §6 is persistence map), L3 (§12 G2 reframed — COMPOSE §10.4 row N scopes memory→L4 backfill as a one-time tool #10023, not an installer gap), L1 (§2 added re-run-only harness-restart note). All target sections verified in the live docs before edit.
+  - **W3 accepted as-is**: §4.9 uses `<role>` (the literal CLI param, with a code-compat note) while §6 uses `<alias>` (semantic value) for `compose.py deploy`. Both locations already explain role==alias; the rename closes under #10358. Forcing one spelling would contradict the deliberate code-faithful note at §4.9 — left consistent-by-explanation rather than introduce new drift.
+  - **Remaining**: DS internal + cross-pair audit (prose-drift discipline) → then transition to pending-test for verifier.
 - **2026-05-23 (v1 draft)** — initial draft. Consolidates the install flow into one architecture doc, distinct from the step-by-step WIZARD.md runbook. Locks the two-phase (conversation, then atomic commit) model, the ephemeral-installer-agent commitment, and the simple "pull latest sources + recompose" upgrade flow. Open gaps in §12 carry forward to follow-up issues.
 - **2026-05-23 (v1 draft, capability removal)** — §8 rewritten. SquidSquad no longer has a "capability" framework at install time. Tool/MCP/CLI configuration is per-agent post-install: the human tells each agent what tools to use, the agent persists via L4 writes per [COMPOSE-ARCHITECTURE.md §7](COMPOSE-ARCHITECTURE.md). All references in §3 (inputs), §4 (Phase 1 conversation, Phase 5 atomic write), and §5 (file layout) updated to drop capability mentions. The prior `references/sub-skills/capabilities/` directory and `common/capability-check.md` are marked as architectural deadwood; follow-up task against `worker` (skill) to remove them.
 - **2026-05-23 (v1 draft, R1 fixes)** — DS round-1 surfaced 8 findings (4 ERROR, 3 WARNING, 1 LOW). All applied: (1) 3 broken §7→§10 cross-refs for the upgrade flow location; (2) Phase 3 review screen example still leaked "Figma design; local delivery" — replaced with capability-free spec; (3) §11.1 "Phases 0–6 make no changes" rewritten honestly — Phases 0–4 don't touch the target repo, Phases 5–7 are pre-commit local + forge writes, Phase 8 is the atomic commit; (4) Step vs Phase numbering clash — added an explicit numbering-note callout at the end of §2, replaced "Step 7 commit" in the diagram with "Phase 8 commit"; (5) "Phase 5c" for Forgejo → "WIZARD Step 5c" (the wizard's step number, mapped into this doc's Phase 1 conversation); (6) §10 upgrade flow expanded with a user-confirm gate showing a changeset summary, and an explicit harness-restart specification (`POST /agents/<role>/stop` + `POST /agents/<role>/start` per role, falling through to `start.sh` if the harness isn't running); (7) NEW §4.8 Phase 4 dedicated approval section — describes the Approve / Edit / Abort prompt format and the "last clean abort point" semantics; (8) §3.2 outputs row for runtime harness files now lists `.harness-port` + `.harness-state.json` + `.event-state.json` together with a "harness-owned, not installer-written" note. Phase numbering renumbered downstream: old §4.7 (Phase 4–5 bundled) split into §4.7 Phase 4 + §4.8 Phase 5; §4.8–4.11 shifted to §4.9–4.12. DS artifact: `.squidsquad/pm/planning/REVIEW-INSTALLER-ARCH-DEEPSEEK-1.md`.

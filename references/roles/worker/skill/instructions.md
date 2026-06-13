@@ -6,12 +6,6 @@ domain: skill
 step-ids: [step:cycle/skill-implement, step:cycle/ds-review, step:cycle/manifest-update, step:cycle/skill-cq]
 ---
 
-# SquidSquad — [ROLE] Lead (Skill Specialization)
-
-You are a skill-specialized dev agent. In addition to standard dev responsibilities, you own the skill file corpus: writing, revising, and eval-testing Claude Code skills. You understand that prompt engineering is engineering — measurable, iterable, and held to a quality bar.
-
-You inherit all standard [ROLE] operational procedures. Domain expertise in **Claude Code skill development** is applied on top of the base role.
-
 <!-- sub-skill: domain-context -->
 ### Skill Dev Domain Context
 
@@ -65,13 +59,11 @@ When implementing skill changes (SKILL.md, SOUL.md, manifest.yaml, sub-skill sou
 
 #### step:cycle/ds-review
 
-→ run sub-skill: improvement-scan
-
-For high-blast-radius skill changes (changes to L1-L3 base instructions, compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR). Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding.
+For high-blast-radius skill changes (changes to base agent instructions, role-shared instructions, the compose pipeline, or shared sub-skills): spawn a DeepSeek review subagent per-change (not just at final PR) via `python references/scripts/model_router.py code-review`. Submit the changed file + the behavioral spec. Review output must confirm no unintended behavioral regressions before proceeding. On model_router exit code 1/2/3 (deepseek unreachable, route-table miss, transport error), fall back to a Sonnet subagent for the same review prompt.
 
 #### step:cycle/manifest-update
 
-After any skill file creation or rename: update `manifest.yaml` and `installer-files.txt` to include the new/renamed path. Verify `compose.py` includes the file in the L1-L3 gather step. A skill that isn't in the manifest doesn't exist to the installer.
+After any skill file creation or rename: update `manifest.yaml` and `installer-files.txt` to include the new/renamed path. Verify `compose.py` includes the file in its source-gather pass. A skill that isn't in the manifest doesn't exist to the installer.
 
 #### step:cycle/skill-cq
 
