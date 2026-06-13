@@ -11,7 +11,7 @@ owner: skill
 status: active
 confidence: high
 source: observation
-links: [pattern-update-stale-test-on-behavior-reversal, decision-local-config-priority]
+links: [pattern-update-stale-test-on-behavior-reversal, decision-local-config-priority, learning-tests-must-not-mutate-shared-live-state]
 ---
 
 ## Context
