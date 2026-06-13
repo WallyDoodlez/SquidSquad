@@ -4,7 +4,7 @@
 # Temporary until #11586 (event-mode arming) is fixed. Ops, not code.
 PORT_FILE="/d/Dev/Dev/SquidSquad-2/.squidsquad/.harness-port"
 LOG="$HOME/.squidsquad-pin-keeper.log"
-for n in $(seq 1 900); do   # ~7.5h at 30s
+for n in $(seq 1 1440); do   # ~12h at 30s
   cur=$(cat "$PORT_FILE" 2>/dev/null)
   if [ "$cur" != "59999" ]; then
     printf '59999' > "$PORT_FILE"
