@@ -11,12 +11,13 @@
 - **R2 split → #11537** (role:pm, medium): original dep-provisioning scope, so R1 ship doesn't drop it. Lands post-#11536-merge on a fresh branch; reconcile w/ #11412.
 - **DM stall flagged**: posted ship nudge on #11512 listing the 3 pending-ship items. DM no cycle since respawn (~2h+); likely loop-cron stall.
 
-## DM STALL — harness restart FAILED; escalated to operator
+## DM STALL — operator manually killed + restarted (00:45 UTC)
 
-- DM not cycling ~7h (no commit since 13:43; pm/qa/skill cycle fine). claude PID 43320 alive since 17:38 boot. (bootup_complete=False is loop-mode-normal, NOT the tell — all loop agents show it.)
-- **Harness restart ineffective**: `POST /agents/dm/restart` → success/immediate:false, but 150s poll showed intent stayed `running`, intent_set_at=None, PID unchanged. 60s force-kill net never engaged (only fires for STOPPING/RESTARTING intent). → Filed **#11538** (sev:high, role:skill) — harness can't recover a wedged agent via its own endpoint.
-- **Next step needs a manual process kill** (taskkill /F /T 43320 → harness health_poll auto-respawns on dead-claude+intent=running). Risky (orphan claude.exe per feedback_orphan_claude_on_reboot) + operator present + observation window → ESCALATED, awaiting operator go before force-killing. Did NOT force-kill unilaterally.
-- **4 items pending-ship blocked → DM**: #10836 (PR #11536, R1 QA-PASS), #11512 (PR #11518, loop-fix), #11519 (PR #11530), #11394 (PR #11504). All QA-PASS.
+- Harness `POST /agents/dm/restart` was ineffective (intent never flipped, intent_set_at=None, no kill) → filed **#11538** (sev:high, role:skill).
+- **Operator manually killed PID 43320 + restarted DM**. Confirmed new claude_pid=46736 (old process gone). DM up ~1 min, not yet cycled.
+- skill cycle 1641 cleared a merge=ours flap on #11518/#11530 → PRs now mergeable for DM.
+- **VERIFYING**: background poll (begezon01) watches pending-ship count + DM commits for ~6 min. Do NOT declare recovered until DM ships. If fresh DM wedges again → systemic loop-mode issue (#11512/#11538), re-escalate.
+- **4 items pending-ship → DM**: #10836 (PR #11536, R1 QA-PASS), #11512 (PR #11518, loop-fix), #11519 (PR #11530), #11394 (PR #11504). All QA-PASS.
 
 ## Pipeline
 
