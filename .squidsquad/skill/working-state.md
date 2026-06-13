@@ -13,14 +13,14 @@ Harness DOWN (port 59999, curl exit 7) — loop-mode (skill pinned stable per #1
 | Issue | Fix | Branch | PR | Tests | State |
 |---|---|---|---|---|---|
 | #11640 | _get_clone_path raises (no REPO_ROOT fallback); all spawn paths refuse | task/11640 | #11709 | 237 pass; DS NO_FINDINGS | in-progress, gated |
-| #11641 | thin_launcher reclaims stale scheduled_tasks.lock before Popen | task/11641 | #11715 | 37 pass; DS running (bxas30jg8) | in-progress, gated |
+| #11641 | thin_launcher reclaims stale scheduled_tasks.lock before Popen | task/11641 | #11715 | 37 pass; DS NO_FINDINGS | in-progress, gated |
 
 Both PR'd this/last cycle from prior-session WIP that was implemented but never committed/pushed (the resume-gap pattern). PM confirmed #11641 = durable #11612 fix.
 
 ## ⚠️ The shared gate: #11683 / #11657
 Full suite has ONE red on every branch that has current main: `test_event_poll_exits_cleanly_when_harness_unreachable` — stale pre-#11601 contract. Fixed + verified + **pending-ship on PR #11683** (#11657, bundles #11503). NOT mine, NOT a regression in either of my PRs.
 - **Next cycle**: check #11683 mergedAt. If shipped → for EACH of task/11640 & task/11641: merge origin/main, run `python tests/run_tests.py`, confirm green, transition → pending-test (PR #11709 / #11715). If still open, keep holding; nudge DM again if stale.
-- DS reviews: #11640 = NO_FINDINGS (done). #11641 = bxas30jg8 running — read output, address real findings on PR #11715 before handoff.
+- DS reviews: #11640 = NO_FINDINGS (done). #11641 = NO_FINDINGS (done). Both PRs implementation-clean; no findings to address.
 
 ## Standing (re-verify next cycle)
 - **#11538 / PR #11564**: harness restart fix — was pending-test. Re-check ship/verify status.
