@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: cycle 2340 (inline) — R2 SHIPPED; QA safely stopped; skill reboot-loop filed (#11612); awaiting operator on stabilize-vs-rename
-- **Status**: calm; pending-ship empty; event-mode cluster unstable but contained
+- **Task**: cycle 2341 (inline) — operator confirmed STABILIZE-then-rename; elevated #11612 to top priority w/ ordered plan
+- **Status**: calm; skill STABLE now (pid 5208, not looping — bursts subsided) but idle 3h; rename deferred
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
@@ -24,9 +24,14 @@
 - **#11586 (high)** — event-mode reach (partially contradicted: skill DID reach event mode then reboot-loops).
 - Recommendation to operator: **stabilize cluster FIRST (instrument respawn logging → root-cause), THEN do the rename.** Awaiting operator's go.
 
-## DECISION PENDING (operator)
+## STABILIZE-FIRST locked (operator 2026-06-13 04:05) → #11612 top priority
 
-- Stabilize event-mode cluster first vs push the qa→verifier rename now? (PM rec: stabilize first.)
+Ordered plan (commented on #11612, routed to skill as active focus):
+1. **Harness respawn-reason logging** (harness.py:_log → file; record role+exit-code+intent+event_poll-alive per reboot). Small; unblocks root-causing.
+2. **Force-loop-mode override** (SQUIDSQUAD_FORCE_LOOP env/config) — pin agents to stable loop mode while event mode is fixed.
+3. **Root-cause + fix** intermittent reboot (event_poll death → Monitor exit → respawn; re-eval #11587 proactor resets).
+- THEN rename (#10839/#10358). QA stays stopped until then.
+- skill currently stable (5208) but idle — watch that it picks up #11612 (event-mode work-routing reliability is itself in question).
 
 ## Pipeline (clean)
 
