@@ -1,43 +1,37 @@
 # Working State
 
-- **Task**: cycle 2332 (inline) — monitoring DM drain; 3 items still pending-ship, DM idle between ticks
-- **Status**: DM healthy (cycle 410, shipped #11394); idle ~13min post-ship, next /loop tick ~21:18 — NOT re-wedged (within cadence). 3 clean items remain.
+- **Task**: cycle 2333 (inline) — filed #11053 Phase 2 → skill (#11570); cleared stale §9 ask; pipeline clean
+- **Status**: pending-ship empty; agents transitioning to event mode (loop-fix #11512 shipped)
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
 ## Cycle work
 
-- **#10836 R1 → pending-test**: opened PR #11536 (squidsquad/task/10836 → main, docs-only), transitioned in-progress → pending-test, posted verifier handoff comment. Audit PASS (all 11 findings). Verifier owns it now.
-- **R2 split → #11537** (role:pm, medium): original dep-provisioning scope, so R1 ship doesn't drop it. Lands post-#11536-merge on a fresh branch; reconcile w/ #11412.
-- **DM stall flagged**: posted ship nudge on #11512 listing the 3 pending-ship items. DM no cycle since respawn (~2h+); likely loop-cron stall.
+- **#11053 Phase 2 FILED → #11570** (role:skill, medium). §9 was operator-locked 2026-06-05; the 'file Phase 2 next cycle' commitment had been dropped during cutover and mislabeled as 'open §9 questions' in working-state for a week. Now closed. #11570 bakes in all 5 locks (assemble subagent type / sonnet / 1 retry / 120s / assemble-log), 3 phased deliverables, AC6/AC7 + compose-consumption ACs. Commented handoff on #11053.
+- Operator confirmed locks ('All good') → proceeded.
 
-## DM STALL — RESOLVED (operator manual restart) ✅
+## STALE-ASK CORRECTION (own-domain)
 
-- Wedged DM (PID 43320) never cycled ~7h. Harness `POST /agents/dm/restart` was ineffective (intent never flipped, intent_set_at=None) → filed **#11538** (sev:high, role:skill).
-- **Operator manually killed PID 43320 + restarted** → new PID 46736, healthy.
-- **DM recovered + shipped**: cycle 410 shipped **#11394** via PR #11504 (cleared the CONFLICTING merge-flap PR itself), status:shipped/closed, counter 1/10. DM committing again = fully cycling.
-- **3 clean items remain pending-ship → DM** (drain on next /loop ticks, 1/pass per #10540): #11519 (PR #11530), #11512 (PR #11518, loop-fix), #10836 (PR #11536, R1). All QA-PASS, PRs clean.
-- Next cycle: confirm DM drains the remaining 3; if it re-wedges/idles without progressing, re-escalate.
+- '#11053 §9 — 5 questions or go with defaults' was STALE — §9 locked 2026-06-05. Removed from operator-asks. BRIEFING needs same correction (next: update BRIEFING #11053 line to 'Phase 2 filed #11570').
 
-## Follow-up issues from this incident
+## Pipeline (clean)
 
-- **#11538** (sev:high, skill) — harness restart endpoint can't recover a wedged agent. Real gap.
-- **#10540** (open, dm) — batch ship doesn't fully drain in one pass; DM ships 1/cycle then idles. Surfaced live this incident. Worth prioritizing.
-- **#11511** (open, skill) — durable transient-state merge-flap fix (#11504 kept re-CONFLICTING). Worth prioritizing so DM doesn't grind on flap.
-- **#11512** (pending-ship) — loop-mode launcher fix; once shipped, agents boot event-mode (root cause of the whole wedge class).
+- **pending-ship**: empty (DM cycle 411 drained #11512/#10836 R1/#11519).
+- **pending-test → QA**: #10855 (PR #10952).
+- **event-mode transition in progress**: #11512 (loop-fix) shipped → operator switching agents to event mode (QA already: 'loop cron killed, Monitor armed' commit 1ec4c89d). Watch for harness-spawned agents now booting event-mode (vs loop) since launcher fix is live.
+- **in-progress (PM)**: #11092 (pull-only PRD), #11000 (planning), #11053 (parent, Phase 2 now #11570), #11537 (R2, gated on... R1 merged so unblocked).
 
-## Pipeline
+## Incident follow-ups (this session)
 
-- **pending-test → verifier(QA)**: #10836 (PR #11536, R1 docs), #10855 (PR #10952).
-- **pending-ship → DM (STALLED)**: #11512, #11519, #11394.
-- **open (skill)**: #11511 (merge-flap fix), #11503 (test-debt), #11505 (capabilities deadwood).
-- **in-progress (PM)**: #11092, #11053 (§9 awaits operator), #11000 (planning), #11537 (R2, gated on #11536 merge).
+- #11538 (high, skill) — harness can't restart wedged agent.
+- #10540 (dm) — batch ship drain (DM did drain all 3 in cycle 411 this time — better than feared, but the after-outage failure mode is real).
+- #11511 (skill) — durable merge-flap fix.
 
 ## Operator asks (carried)
 
-1. **DM stall** — authorize restart? (PM plans to restart next cycle if unshipped)
-2. **#11053 §9** — 5 questions or `go with defaults`
-3. **#10955** — close as monitor?  4. **#10541** — close as out-of-scope?
+1. **#10955** — close as monitor?
+2. **#10541** — close as out-of-scope?
+(#11053 §9 REMOVED — was stale/locked.)
 
 ## Context
 

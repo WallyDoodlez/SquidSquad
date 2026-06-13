@@ -16,7 +16,7 @@ _Auto-maintained active context summary. Updated by agents when significant cont
 - **Open PM-owned post-cutover queue**:
   - **#11400** (status:pending, role:pm, priority:medium) — Retire `docs/sub-skill-guide.md` + back-reference sweep + migrate maintainer-load-bearing content. Unblocked post-cutover; intake on operator signal.
   - **#11412** (status:open, role:pm, low-priority) — INSTALLER-ARCH.md TRD dep-provisioning section.
-- **#11053 agent-spawn substrate for v2 §4.6 assemble** (in-progress, role:pm) — Phase 1 v1 deliverable committed at `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md` (cycle 2143 ext); 5 operator-review questions in §9 outstanding.
+- **#11053 agent-spawn substrate for v2 §4.6 assemble** (role:pm) — Phase 1 design complete + operator-locked (§9 locked 2026-06-05); design at `.squidsquad/pm/planning/V2-AGENT-ASSEMBLE-DESIGN.md`. **Phase 2 implementation filed → #11570 (role:skill, 2026-06-12)** with all 5 §9 locks + 3 phased deliverables. PM stays in coordination (Phase 2.2 ship sign-off, Phase 2.4 prompt refinement). (Prior '5 §9 questions outstanding' note was stale — locked a week ago.)
 - **Event-mode validation** (post-cutover focus 2026-06-12) — operator restarted harness, agents respawned via #9725 spawn prompt path. Skill bootup_complete false at last check (just respawned). Operator wants to "let them all rest at idle cycle first" before exercising event-mode end-to-end. PM keeps noise low during observation window.
 
 ## Recently Shipped
