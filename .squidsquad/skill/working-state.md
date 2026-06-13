@@ -1,10 +1,24 @@
 # Working State
 
-- **Task**: All 4 PRs landed (#11723/#11641 SHIPPED, #11640/#11587 pending-ship). Queue triage-blocked. iter-469: vault hygiene only.
-- **Status**: in-progress (#11745, #11511) — both still blocked on operator/direction (no response as of 15:38). No shippable APPROVED code in queue.
-- **Updated**: 2026-06-13 15:38
-- **Branch**: main (state). Feature branches: task/11587, task/11640, task/11641, task/11723 (all merged/merging).
-- **Quiet Cycle Counter**: 1 (iter-469: vault cross-link only; queue blocked)
+- **Task**: Operator unblocked both held items (AskUserQuestion). #11745 IMPLEMENTED → pending-test (PR #11811). #11511 ratified, implement next.
+- **Status**: idle — #11745 handed to verifier; #11511 ready to implement next cycle.
+- **Updated**: 2026-06-13 16:04
+- **Branch**: main (state). Feature: task/11745 (PR #11811).
+- **Quiet Cycle Counter**: 0 (iter-470: shipped #11745 to pending-test)
+
+## ⭐ iter-470 (16:04) — operator ratified both forks; implemented #11745
+Operator answers (AskUserQuestion, 2026-06-13): #11745 → **Option A** (self-closing windows); #11511 → **advisory + harden routing**. Recorded both on the forge.
+**#11745 IMPLEMENTED → pending-test (PR #11811):** _spawn_windows switched wt new-tab → `cmd /c start` (OS closes window on any exit code); dropped legacy `pwsh -NoExit`. **DS review caught a CRITICAL bug** (title unquoted in Popen list → START misreads it as the program → every Windows spawn would silently fail); fixed by building a quoted command STRING; DS re-review NO_FINDINGS. Suite green. Unit tests TestSpawnWindows11745 (win32-guarded) assert title-quoting. Live verify = verifier manual (AC). macOS/Linux orphan handling = follow-up (Option A is Windows-specific).
+Vault: learning-windows-cmd-start-title-must-be-quoted.
+
+## NEXT — #11511 (ratified: advisory + harden routing), implement next cycle
+Two parts: (1) `git_ops.py check-real-conflict <base> <head>` deterministic helper (runs `git merge-tree --write-tree` both ways; CLEAN exit0 / CONFLICT exit1) so agents/DM treat GitHub CONFLICTING as advisory — zero-risk, buildable immediately. (2) Harden state routing so working-state.md can't land on a feature branch even on manual/harness-down paths. NOT touching .gitattributes (server-side no-op) / NOT gitignoring working-state (breaks cross-agent visibility). DS review required (state-routing = high blast radius). Detail on #11511 comment.
+
+## Prior 4 PRs — DONE
+#11723 (#11729) SHIPPED · #11641 (#11715) SHIPPED · #11640 (#11709) pending-ship · #11587 (#11722) pending-ship → DM finishing.
+
+## Other queue (still operator/triage-blocked)
+#11505 (PM disambiguation) · #10690 (E7-gated) · #10686 (operator-manual) · #11716 (untriaged own-scan).
 
 ## ⚠️ QUEUE STATE — every actionable item is triage/operator-blocked (operator: needs unblocking)
 - **#11745** (in-progress) — orphan terminals; blocked on operator A-vs-B UX fork (iter-467).
