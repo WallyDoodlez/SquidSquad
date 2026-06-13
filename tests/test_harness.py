@@ -3280,5 +3280,77 @@ class TestCleanupLegacySentinels(unittest.TestCase):
         )
 
 
+class TestCloneResolutionRefusal(unittest.TestCase):
+    """#11640: every spawn path must REFUSE when clone resolution fails,
+    never spawning in REPO_ROOT. Covers the /start endpoint, the /restart
+    endpoint, and the harness auto-reboot loop."""
+
+    def setUp(self):
+        import harness
+        self.harness = harness
+        # Isolate from any state other tests left behind.
+        harness.state.agents.pop("qa", None)
+        harness.state.compose_freshness_failed = False
+
+    def test_start_endpoint_refuses_and_marks_error(self):
+        """POST /agents/{role}/start refuses (500) and marks the agent error
+        when boot_agent reports a clone-resolution failure — no spawn."""
+        from fastapi.testclient import TestClient
+        err = {"role": "qa", "action": "error", "success": False,
+               "message": "clone resolution failed — refusing to spawn"}
+        with patch.object(self.harness.boot_remote, "boot_agent", return_value=err) as mock_boot:
+            client = TestClient(self.harness.app)
+            resp = client.post("/agents/qa/start")
+        self.assertEqual(resp.status_code, 500)
+        self.assertFalse(resp.json()["success"])
+        mock_boot.assert_called_once_with("qa")
+        agent = self.harness.state.get_agent("qa")
+        self.assertIsNotNone(agent)
+        self.assertEqual(agent.status, "error")
+
+    def test_restart_endpoint_refuses_before_mutating_intent(self):
+        """POST /agents/{role}/restart resolves the clone BEFORE setting
+        intent=restarting, so an unregistered role is refused (500) and is
+        NOT left in a restarting state. `qa` is unregistered in this clone's
+        .local-config, so this exercises the real _get_clone_path raise."""
+        from fastapi.testclient import TestClient
+        client = TestClient(self.harness.app)
+        resp = client.post("/agents/qa/restart")
+        self.assertEqual(resp.status_code, 500)
+        self.assertIn("clone resolution failed", resp.json()["message"])
+        # No restarting state was created for the refused role.
+        agent = self.harness.state.get_agent("qa")
+        if agent is not None:
+            self.assertNotEqual(agent.intent, self.harness.AgentState.INTENT_RESTARTING)
+
+    def test_auto_reboot_loop_refuses_and_marks_error(self):
+        """The harness auto-reboot loop marks the agent error (and does not
+        retain a spawn) when boot_agent refuses on clone resolution."""
+        from harness import HarnessState, AgentState
+        st = HarnessState()
+        # A dead agent that was running and should reboot.
+        agent = AgentState("skill", "/tmp/skill-clone")
+        agent.status = "running"  # prev_status seen by the loop
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.claude_pid = 99999999  # a dead pid
+        st.agents["skill"] = agent
+
+        err = {"role": "skill", "action": "error", "success": False,
+               "message": "clone resolution failed — refusing to spawn"}
+        with patch.object(self.harness.boot_remote, "_get_all_roles", return_value=["skill"]), \
+             patch.object(self.harness.boot_remote, "_get_clone_path", return_value="/tmp/skill-clone"), \
+             patch.object(self.harness.boot_remote, "_is_process_alive", return_value=False), \
+             patch.object(self.harness.reboot_agent, "_read_claude_pid", return_value=(None, False)), \
+             patch.object(self.harness.boot_remote, "boot_agent", return_value=err) as mock_boot, \
+             patch.object(self.harness, "_NO_AUTO_REBOOT", False), \
+             patch.object(st, "save_state"):
+            st.update_health()
+
+        mock_boot.assert_called_once_with("skill")
+        self.assertEqual(st.agents["skill"].status, "error")
+        # Refused boot left no terminal pid behind.
+        self.assertIsNone(st.agents["skill"].terminal_pid)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -478,6 +478,16 @@ class HarnessState:
                         agent = self.agents.get(role)
                         if agent:
                             agent.terminal_pid = result["terminal_pid"]
+                elif result.get("action") == "error":
+                    # #11640: boot_agent refused (e.g. unregistered/missing
+                    # clone). Never spawned in REPO_ROOT — surface the refusal
+                    # and mark the agent error so the operator sees it instead
+                    # of an endlessly re-attempting silent reboot.
+                    _log(f"Auto-reboot of {role} REFUSED: {result.get('message')}")
+                    with self._lock:
+                        agent = self.agents.get(role)
+                        if agent:
+                            agent.status = "error"
                 self.save_state()
             except Exception as e:
                 _log(f"Auto-reboot of {role} failed: {e}")
@@ -1599,7 +1609,17 @@ async def stop_all():
 
     results = []
     for role in roles:
-        clone_path = boot_remote._get_clone_path(role)
+        # #11640: an unregistered / missing clone now raises rather than
+        # resolving to REPO_ROOT. Stopping such a role is a no-op (it can't
+        # be running in a clone we refuse to resolve) — skip it instead of
+        # 500-ing the whole endpoint.
+        try:
+            clone_path = boot_remote._get_clone_path(role)
+        except boot_remote.CloneResolutionError as e:
+            results.append({"role": role, "action": "skip", "success": True,
+                            "message": f"skip (clone unresolved: {e})"})
+            _log(f"  {role}: skip (clone unresolved — {e})")
+            continue
 
         # Check if agent is already stopped (intent or health)
         agent_state = state.get_agent(role)
@@ -1690,6 +1710,14 @@ async def start_agent(role: str):
             agent_state.bootup_complete = False
         state.set_agent(role, agent_state)
         # #9242: disk write off the asyncio event loop.
+        await asyncio.to_thread(state.save_state)
+    elif result.get("action") == "error":
+        # #11640: boot_agent refused to spawn (e.g. unregistered/missing
+        # clone). No process started in REPO_ROOT — mark the agent error so
+        # the failed start is visible, not silently retried.
+        agent_state = state.get_agent(role) or AgentState(role)
+        agent_state.status = "error"
+        state.set_agent(role, agent_state)
         await asyncio.to_thread(state.save_state)
 
     status_code = 200 if result["success"] else 500
@@ -2350,6 +2378,23 @@ async def restart_agent(role: str):
 
     _log(f"Restarting {role}...")
 
+    # #11640: resolve the clone path BEFORE mutating any state. An
+    # unregistered / missing clone now raises rather than resolving to
+    # REPO_ROOT — refuse the restart up front so we never set
+    # intent=restarting (which would arm the auto-reboot loop to refuse
+    # spawn anyway) for a role we can't safely place.
+    try:
+        clone_path = boot_remote._get_clone_path(role)
+    except boot_remote.CloneResolutionError as e:
+        _log(f"  {role}: restart refused — clone resolution failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"role": role, "action": "restart", "success": False,
+                     "message": f"clone resolution failed — refusing to "
+                                f"restart: {e}"},
+        )
+    clone_path_p = Path(clone_path)
+
     # Set intent — harness will auto-reboot when agent exits
     # cycle_post.py queries GET /agents/{role} and reads intent (#4966).
     # Only record `intent_set_at` on the transition INTO RESTARTING; a repeat
@@ -2367,8 +2412,6 @@ async def restart_agent(role: str):
     await asyncio.to_thread(state.save_state)
 
     # #4792: stop is now expressed via harness intent — no sentinel to clean.
-    clone_path = boot_remote._get_clone_path(role)
-    clone_path_p = Path(clone_path)
 
     # #8689: if the agent is idle between cycles, kill the claude process
     # right now so the auto-reboot path (running periodic health-poll already
@@ -2439,7 +2482,15 @@ async def shutdown():
             if agent and agent.intent == AgentState.INTENT_STOPPING:
                 _log(f"  {role}: skip (already stopping)")
                 continue
-            needs_boot, _, _ = boot_remote._needs_boot(role)
+            # #11640: _needs_boot resolves the clone and now raises for an
+            # unregistered / missing one. Such a role cannot be running in a
+            # clone we refuse to resolve — skip it rather than crashing the
+            # shutdown thread.
+            try:
+                needs_boot, _, _ = boot_remote._needs_boot(role)
+            except boot_remote.CloneResolutionError as e:
+                _log(f"  {role}: skip (clone unresolved — {e})")
+                continue
             if needs_boot:
                 _log(f"  {role}: skip (not running)")
                 continue
