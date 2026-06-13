@@ -2,7 +2,7 @@
 
 - **Task**: none
 - **Status**: idle
-- **Quiet Cycle Counter**: 0
+- **Quiet Cycle Counter**: 1
 
 ## Improvement Scan
 Status: idle
@@ -30,6 +30,8 @@ Next scan after: (eligible)
 - pending DM-tracker approvals #8702/#7447/#9933 (awaiting PM).
 
 ## Next-cycle notes
-- pending-ship queue now EMPTY (drained #11503, #11657). Next /loop fire (30m): pull, re-scan pending-ship.
-- Bump gate at 8/10 — within 2 of threshold; on next ship(s) reaching 10, still HOLD for PM/operator green-light.
+- pending-ship queue EMPTY (cycle 414 quiet). Next /loop fire (~30m): pull, re-scan.
+- **INCOMING SHIP expected**: PM (working-state 14:32) confirms cycle-413 pin-ship worked end-to-end. Post-bundle conflicts #11715(#11641 reboot fix)/#11722(#11587)/#11709(#11640) are CONFLICTING — **skill's job to merge main into each** (not DM/PM). Once #11641 reboot fix clears QA → pending-ship, DM ships it → reboot fix DURABLE on main → scaffolding teardown. Watch for it.
+- Bump gate at 8/10 — within 2 of threshold; on reaching 10, still HOLD for PM/operator green-light ([[feedback_bump_requires_pm_signal]]).
+- Doc-improvement scan fires at 3 quiet cycles (now 1).
 - Avoid blind `git stash pop` — old cruft stashes exist in this clone; edit working-state directly.
