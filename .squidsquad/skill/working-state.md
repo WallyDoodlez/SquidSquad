@@ -2,9 +2,9 @@
 
 - **Task**: #11723 — liveness-aware port discovery (#11586 root-cause fix) — COMPLETE, PR #11729
 - **Status**: in-progress — HELD pre-pending-test, gated on #11683 (full-suite green); DS review running
-- **Updated**: 2026-06-13 10:58
+- **Updated**: 2026-06-13 11:30
 - **Branch**: squidsquad/task/11723 (current). Other in-flight: task/11640, task/11641, task/11587.
-- **Quiet Cycle Counter**: 0 (iter-463: implemented #11723)
+- **Quiet Cycle Counter**: 0 (iter-464: scoped #11723 root fix, backed out — fixture ripple)
 
 ## ⚠️ Session note
 Harness is UP on 7373 (confirmed iter-462). My clone's .harness-port keeps getting re-stomped to 59999 by the verifier's per-cycle test runs (harness _deferred_init distributes test port into real clones). Mode sticky this session (loop). #11723 makes discovery resilient to this for future boots. `/loop 30m` cron c8644353. working-state per-branch; git tree is truth.
@@ -27,10 +27,12 @@ Harness healthy on 7373 whole time. Agents with a stale/dead port file (test-pol
 - **#11683 ship** (operator/DM): unblocks all 4 PRs + #11505 AC7. Verified+MERGEABLE, pending-ship ~6h.
 - **#11505**: blocked on PM/operator disambiguation (#11505↔#10025 overlap, touches PM task-intake).
 
+## #11723 follow-up (1) — ROOT fix scoped (iter-464), backed out, queued
+EXACT mechanism: boot_remote.py:35-39 hard-codes SQUIDSQUAD_DIR (ignores $SQUIDSQUAD_DIR env — the lone holdout vs harness/event_bus/event_poll). So _deferred_init clone-distribution reads the REAL .local-config even from an isolated test harness → pollutes real clones. Fix = 2 coupled parts: (a) boot_remote._resolve_squidsquad_dir() honoring the env (drafted + 4 unit tests green this cycle); (b) REQUIRED ripple — real_harness fixture writes NO .local-config in its isolated SQUIDSQUAD_DIR, so (a) alone → isolated harness reads missing config → sys.exit(2) → 404s (confirmed: test_9398_real_agent_subprocess 404). Fixtures must write an isolated .local-config (test role → temp clone w/ .squidsquad). Backed out (a) this cycle to keep PR #11729 clean; Part 2 already protects the symptom so this is non-urgent cleanup. Full detail on #11723 comment. (3) boot-instruction fall-through also open.
+
 ## Next cycle
-- (#11723 DS review done — NO_FINDINGS. All 4 PRs now DS-clean.)
 - Check #11683 → if shipped, land 4 PRs (merge main, run suite, confirm green, transition).
-- Then #11723 follow-up (1): test .local-config isolation (the root pollution fix) — next substantive work item if PRs stay gated.
+- #11723 follow-up (1): do (a)+(b) together — boot_remote env-honor + fixture .local-config isolation, as one coherent change (own cycle, careful integration-fixture work). Ignore stray bg run_tests b9zzb3t4o result.
 
 ## Standing
 #11538 SHIPPED. #11716 (low improvement-scan) awaiting triage. #11511 not-implementing. #10690/#10686 E6/E7-gated. #11505 blocked (above). Pre-existing test-debt: test_cycle_pre TestGetVerifiableRoles (verifier/qa #6274, quarantined in KNOWN_FAILURES — not mine).
