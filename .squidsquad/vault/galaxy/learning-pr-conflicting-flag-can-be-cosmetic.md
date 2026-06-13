@@ -26,11 +26,11 @@ git merge-tree --write-tree origin/<branch> origin/main >/dev/null 2>&1; echo $?
 
 Exit 0 both directions = **zero real conflict**; GitHub's flag is cosmetic. Exit non-zero = real conflict to resolve.
 
-When merge-tree is clean but GitHub says CONFLICTING, the cause is GitHub's server-side merge check tripping on **transient files that both branch and main edit on overlapping lines** (`.squidsquad/<role>/working-state.md`, `iterations/*`, `planning/*` logs) — local `ort` auto-resolves them, GitHub's check does not / lags. Because every agent commits transient state to `main` every cycle (cycle_post), base advances constantly and the flag re-flaps. Forcing a recompute (merge main into branch + push) clears it momentarily but it re-stales the next time base advances — **whack-a-mole; do not keep hand-nudging.**
+**Precise root cause (corrected — NOT mere "staleness"):** `.gitattributes` (#5469) sets `merge=ours` on the transient per-agent files (`working-state.md`, `current-state`, `cycle-*.json`, `config.md`, `BRIEFING.md`, `.backlog-cache`). `merge=ours` is a **custom merge driver**, honored only where `git config merge.ours.driver=true` is set — which our clones have locally (so `ort`/`merge-tree` resolve clean). **GitHub's server-side merge does NOT run custom drivers** (only the built-ins `union`/`binary` work without config). So whenever a `merge=ours` file differs across a feature branch and `main`, GitHub computes a real textual conflict → `CONFLICTING`, while local merge-tree is clean. Because every agent rewrites `working-state.md` every cycle and commits to `main`, the divergence is constant and the flag re-flaps. Forcing a recompute (merge main into branch + push) only holds until base advances — **whack-a-mole; do not keep hand-nudging.**
 
 ## Rationale
 
-Hand-resolving a non-conflict wastes cycles and (worse) can mislead QA into deferring a substantively-mergeable PR. The durable fix is to stop transient state from advancing base / conflicting — tracked in #11511 (gitignore iterations+planning logs and/or `.gitattributes merge=union` on working-state). Until then: prove mergeability with merge-tree, tell QA to merge on content, don't nudge.
+Hand-resolving a non-conflict wastes cycles and (worse) can mislead QA into deferring a substantively-mergeable PR. The durable fix is to keep transient agent state OFF code branches — the `state_bus.py`/`migrate_state_branch.py` dedicated state-branch architecture exists for this but is not yet activated. Tracked in #11511 (recommend: activate state branch; stopgap = swap the flap-causing `merge=ours` to `merge=union` where union is safe — NOT config.md). Until then: prove mergeability with merge-tree, tell QA to merge on content, don't nudge.
 
 ## Related
 
@@ -43,3 +43,4 @@ Hand-resolving a non-conflict wastes cycles and (worse) can mislead QA into defe
 ### Changelog
 
 - 2026-06-12 — Created by skill (cycle 1636). merge-tree diagnostic for cosmetic CONFLICTING flag; filed #11511.
+- 2026-06-12 — Corrected by skill (cycle 1640). Root cause is `merge=ours` (custom driver) not honored by GitHub server-side — not generic "staleness". Durable fix = activate state-branch (state_bus); stopgap = merge=union where safe. Posted to #11511.
