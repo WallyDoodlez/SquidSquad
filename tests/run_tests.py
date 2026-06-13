@@ -96,7 +96,6 @@ KNOWN_FAILURES = {
     "test_compose_author_comments_11142": "asserts boot-bootstrap wrapper marker in restructured worker/instructions.md — #11503",
     "test_config_functions": "SAMPLE_CONFIG fixture missing new FIELD_MAP entries (code-review-model, effort-*, event-driven) — #11503",
     "test_agent_boundaries": "asserts removed responsibility.md + 'Know each other's responsibilities' phrase — #11503",
-    "test_feat_9588_lazy_load_bootstrap": "asserts removed '## Boot — Mode Detection (#9588)' heading — #11503",
     "test_stale_tracker_files_ref": "reads removed references/sub-skills/roles/pm/prohibitions.md — #11503",
 }
 

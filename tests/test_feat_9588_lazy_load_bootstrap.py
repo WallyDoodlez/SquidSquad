@@ -86,7 +86,11 @@ def test_tc_01_no_mode_specific_markers_inlined(role, marker):
 def test_tc_02_bootstrap_present(role):
     text = _composed(role)
     assert "<!-- sub-skill: boot-bootstrap -->" in text
-    assert "## Boot — Mode Detection (#9588)" in text
+    # v2 cutover (#11394): the boot section heading "## Boot — Mode Detection
+    # (#9588)" was restructured into the canonical step anchor
+    # `### Step 1 — step:cycle/boot`. The contract (a boot/mode-detection
+    # section exists in the bootstrap) is unchanged. (#11503 Group A)
+    assert "step:cycle/boot" in text
 
 
 # TC-3
@@ -106,39 +110,51 @@ def test_tc_03_polling_fragment_substituted_per_role(role, entry):
 # TC-4
 @pytest.mark.parametrize("role", ROLES)
 def test_tc_04_event_fragments_referenced_in_bootstrap(role):
+    # v2 cutover (#11394): event fragments are wired via `→ run sub-skill:
+    # <bare-name>` markers (catalog-resolved to common-events/<name>.md), not
+    # literal `Read .../common-events/X.md` paths. The contract (a fresh
+    # event-mode agent loads the full event contract at boot) is unchanged.
+    # (#11503 Group A)
     block = _bootstrap_block(_composed(role))
     for frag in EVENT_FRAGMENTS:
-        path = f"references/sub-skills/{frag}.md"
-        assert path in block, (
-            f"{role}: bootstrap missing reference to {path}"
+        name = frag.split("/")[-1]  # bare catalog name used by the marker
+        pat = re.compile(r"run sub-skill:\s*`?" + re.escape(name) + r"`?")
+        assert pat.search(block), (
+            f"{role}: bootstrap missing `→ run sub-skill: {name}` marker"
         )
-        assert (REPO_ROOT / path).exists(), (
-            f"{role}: event fragment {path} does not exist on disk"
+        assert (REPO_ROOT / f"references/sub-skills/{frag}.md").exists(), (
+            f"{role}: event fragment {frag}.md does not exist on disk"
         )
 
 
 def test_tc_04_dm_pr_merge_wait_present_only_in_dm():
+    # v2 cutover (#11394): pr-merge-wait is referenced via a `→ run sub-skill:
+    # roles/dm/events/pr-merge-wait` marker, and compose role-scopes
+    # `roles/dm/*` references so only DM's composed bootstrap carries it.
+    # (#11503 Group A)
     dm_block = _bootstrap_block(_composed("dm"))
-    assert "roles/dm/events/pr-merge-wait.md" in dm_block
+    pat = re.compile(r"run sub-skill:\s*`?roles/dm/events/pr-merge-wait`?")
+    assert pat.search(dm_block), (
+        "dm bootstrap must reference roles/dm/events/pr-merge-wait via a "
+        "`→ run sub-skill:` marker"
+    )
     assert (REPO_ROOT / "references/sub-skills/roles/dm/events/pr-merge-wait.md").exists()
+    # Non-DM roles must NOT carry the DM-only fragment (compose role-scoping).
     for r in ("skill", "pm", "qa"):
         block = _bootstrap_block(_composed(r))
-        # Non-DM roles still mention "role is dm" in conditional text, but should
-        # not be telling themselves to Read the file. Check the file path appears
-        # only inside a conditional pointing at dm role.
-        # The bootstrap text says: "if your role is `dm`, ALSO Read ... pr-merge-wait.md"
-        # Non-DM roles inherit this conditional verbatim, which is fine — the
-        # check that matters is they do not unconditionally Read it. We verify by
-        # confirming the conditional wording is preserved.
-        if "pr-merge-wait.md" in block:
-            assert "if your role is `dm`" in block.lower() or "role is `dm`" in block, (
-                f"{r}: pr-merge-wait.md mentioned without DM conditional"
-            )
+        assert "pr-merge-wait" not in block, (
+            f"{r}: pr-merge-wait must not appear in a non-DM bootstrap "
+            f"(v2 compose role-scopes roles/dm/* references)"
+        )
 
 
 # TC-5
 def test_tc_05_bootstrap_uses_127_0_0_1_and_no_dev_null():
-    src = (SUB_SKILLS / "common" / "boot-bootstrap.md").read_text(encoding="utf-8")
+    # v2 cutover (#11394): the boot-bootstrap body is authored in the shared
+    # base references/roles/instructions.md and composed into each role; the
+    # standalone common/boot-bootstrap.md is gone. Read the probe instruction
+    # from the composed boot block instead. (#11503 Group A)
+    src = _bootstrap_block(_composed("skill"))
     assert "127.0.0.1" in src, "Bootstrap must probe 127.0.0.1 (not localhost)"
     assert "/status" in src
     assert "--max-time 5" in src
@@ -161,11 +177,14 @@ def test_tc_06_event_mode_contract_degraded_branch_removed():
 
 # TC-7
 @pytest.mark.parametrize("role", ROLES)
-def test_tc_07_bootstrap_reads_config_at_runtime(role):
+def test_tc_07_bootstrap_mode_is_sticky(role):
+    # v2 cutover (#11394): wake mode is decided by the harness curl probe
+    # (TC-5) and the /loop interval is substituted at compose time (TC-8), so
+    # the bootstrap no longer Reads config.md at runtime — the original
+    # `Read config.md` assertion was dropped. The surviving, still-load-bearing
+    # contract is loaded-mode stickiness: mode is fixed for the session and
+    # flips only take effect on the next restart. (#11503 Group A)
     block = _bootstrap_block(_composed(role))
-    assert "Read `.squidsquad/config.md`" in block, (
-        f"{role}: bootstrap must instruct agent to Read config.md at runtime"
-    )
     assert "Loaded mode is sticky" in block, (
         f"{role}: bootstrap must declare the loaded-mode-is-sticky contract"
     )
@@ -308,9 +327,12 @@ def test_tc_13_manifest_no_runtime_read_entries(role, manifest_file):
     assert isinstance(data, dict)
     includes = data.get("includes", [])
     assert includes, f"{manifest_path}: empty includes list"
-    assert includes[0] == "common/boot-bootstrap", (
-        f"{manifest_path}: boot-bootstrap must be the first include"
-    )
+    # v2 cutover (#11394): boot-bootstrap is no longer an includes.yml entry —
+    # it is authored in the shared base references/roles/instructions.md and
+    # composed into every role, so the includes.yml first entry is now an
+    # ordinary cycle sub-skill (cycle-runner / capability-check). The contract
+    # this TC still enforces is unchanged: runtime-Read fragments must NOT be
+    # inlined via includes. (#11503 Group A)
     forbidden = {
         f"roles/{entry}/ralph-loop-overview",
         *EVENT_FRAGMENTS,
