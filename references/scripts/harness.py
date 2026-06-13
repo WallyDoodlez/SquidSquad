@@ -3077,6 +3077,34 @@ class CtrlCHandler:
 # Main
 # ---------------------------------------------------------------------------
 
+def _build_uvicorn_config(app_, host, port, log_level="warning"):
+    """Build the harness's uvicorn Config (#11587).
+
+    ``loop="none"`` is load-bearing on Windows. uvicorn's default
+    ``loop="auto"`` resolves (no uvloop on Windows) to
+    ``uvicorn.loops.asyncio.asyncio_loop_factory``, which HARD-CODES
+    ``asyncio.ProactorEventLoop`` on win32 — it bypasses the process
+    event-loop policy entirely. So the ``WindowsSelectorEventLoopPolicy`` set
+    in ``main()`` (#9562) never reaches the server loop that actually runs in
+    the uvicorn daemon thread, and the ProactorEventLoop ConnectionResetError
+    (WinError 10054) recurs (#11587).
+
+    ``loop="none"`` makes uvicorn pass ``loop_factory=None`` to ``asyncio.run``,
+    which creates the loop via ``asyncio.new_event_loop()`` — and THAT respects
+    the policy, yielding a SelectorEventLoop. Verified against uvicorn 0.41.0
+    (``Config(loop="none").get_loop_factory() is None``). Cross-platform safe:
+    on Linux the policy default is already SelectorEventLoop, so ``loop="none"``
+    changes nothing there.
+    """
+    return uvicorn.Config(
+        app_,
+        host=host,
+        port=port,
+        log_level=log_level,
+        loop="none",
+    )
+
+
 def main():
     # On Windows, the default ProactorEventLoop's cleanup path
     # (_ProactorBasePipeTransport._call_connection_lost) does not handle
@@ -3168,12 +3196,10 @@ def main():
     # for signal handling. On Windows, signal handlers set via
     # signal.signal() only fire in the main thread — if uvicorn.run()
     # blocks the main thread, Ctrl+C is never delivered to our handler.
-    config = uvicorn.Config(
-        app,
-        host="127.0.0.1",
-        port=actual_port,
-        log_level="warning",
-    )
+    # #11587: loop="none" (set inside _build_uvicorn_config) is what makes the
+    # #9562 WindowsSelectorEventLoopPolicy above actually govern the server loop
+    # running in this daemon thread — otherwise uvicorn imposes a ProactorEventLoop.
+    config = _build_uvicorn_config(app, host="127.0.0.1", port=actual_port)
     server = uvicorn.Server(config)
 
     server_thread = threading.Thread(target=server.run, daemon=True, name="uvicorn")
