@@ -2,7 +2,7 @@
 
 - **Task**: none
 - **Status**: idle
-- **Quiet Cycle Counter**: 1
+- **Quiet Cycle Counter**: 0
 
 ## Improvement Scan
 Status: idle
@@ -10,28 +10,30 @@ Last completed: (none this session)
 Next scan after: (eligible)
 
 ## Session Context (POLLING-mode, boot @ 2026-06-13 14:05)
-- **Wake mode: POLLING** — harness DOWN (curl :59999 → exit 7 conn-refused; port file says 59999). `/loop 30m` scheduled (cron fe435afd, session-only, 7-day expiry). Mode sticky for session.
-- Version: **v0.44.0**; Shipped Since Last Bump: **8/10** (config.md authoritative). Bump gate: 8/10 + needs PM/operator signal — do not auto-fire ([[feedback_bump_requires_pm_signal]]).
+- **Wake mode: POLLING** — harness DOWN (curl :59999 → exit 7 conn-refused). `/loop 30m` scheduled (cron fe435afd, session-only, 7-day expiry). Mode sticky for session.
+- Version: **v0.44.0**; Shipped Since Last Bump: **10/10** (config.md authoritative).
 - Local-merge fallback in use (harness down) — see #10540 / [[learning-dm-local-merge-when-harness-down]].
 
-## SHIPPED THIS SESSION (cycle 413, 2 items via 1 PR)
-- **#11503** (type:issue, sev:HIGH, role:skill) — post-cutover test-debt cleared 21/23 (PM-approved close at 21/23; final 2 are #10360-gated, NOT stale). Verifier PASS zero gaps. Counter 6→7.
-- **#11657** (type:issue, sev:MED, role:skill) — removed stale test_event_poll_exits_cleanly_when_harness_unreachable (pre-#11601 contract). Verifier PASS zero gaps. Counter 7→8.
-- Both rode **PR #11683** (squidsquad/skill/post-cutover-cleanup → main, was DRAFT). Local-merged: ff-only origin/main → merge --no-ff bundle → push. merge-tree clean, bundle touched 0 DM-volatile files. PR auto-closed on push (verify).
-- No CHANGELOG.md write (internal test-debt, not user-facing; held for next bump). No README/SKILL change.
+## >>> BUMP GATE OPEN — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
+- Counter **10/10 = Ship Threshold**. Bump gate technically open. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]).
+- On green-light: bump minor v0.44.0→v0.45.0 (config.md + SKILL.md frontmatter + CHANGELOG.md), git tag, push, reset counter→0. CHANGELOG held entries below.
+- **CHANGELOG held (internal-reliability framing; all 10 since last bump are internal harness/test-debt, NOT user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dependency-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723). Frame for operators, not end-users.
 
-## CARRY-OVER from prior session (now committed this cycle)
-- Counter 4→6 (prior-session ships #11538, #11537) + working-state were uncommitted at boot (harness down at prior session end, no cycle_post). Committed as part of this cycle's push.
+## SHIPPED THIS SESSION (4 items)
+- **cycle 413** — #11503 (test-debt 21/23) + #11657 (stale-test removal) via PR #11683 (bundle). Counter 6→8.
+- **cycle 415** — #11641 (reclaim stale scheduled_tasks.lock, PR #11715) + #11723 (liveness-aware port discovery Part 2, PR #11729). Both verifier-PASS, merge-tree clean, local-merged serially. Counter 8→10.
+  - #11641: thin_launcher reclaims dead-holder lock before Popen → kills harness reboot-loop. Harness-script, no reboot needed (operator restart picks up).
+  - #11723: Part-2 resilience only. **@pm flagged**: Parts 1 (boot_remote env-honor) & 3 (boot-bootstrap CQ) NOT covered — PM to file follow-ups (issue auto-closed).
 
 ## Watch / carried
-- #10540 OPEN (DM-domain: batch-ship race + local-merge fallback; awaiting PM approval to encode degraded-mode in delivery-packaging.md). DM cannot self-pickup (open→in-progress needs worker authority; this is DM-labelled — PM routes).
-- event_poll.py port-file bug (prior session): should default 7373 when .harness-port absent — flag skill+pm (deferred).
+- **#10540 OPEN** (DM-domain: local-merge fallback; awaiting PM routing to encode degraded-mode in delivery-packaging.md). DM cannot self-pickup (open→in-progress needs worker authority).
+- **#11723 Parts 1 & 3** — flagged @pm to file follow-ups (boot_remote env-honor + test-fixture isolation; boot-bootstrap CQ).
+- event_poll.py port-file bug — likely SUBSUMED by #11723 Part-2 (liveness walk + 7373 default). Verify before re-filing.
 - #11503/#11657 final-2 tests gate on OPEN #10360 (status:pending, role:pm).
 - pending DM-tracker approvals #8702/#7447/#9933 (awaiting PM).
+- Harness DOWN — #11641/#11723 fixes are ON main but only take effect on operator harness-restart.
 
 ## Next-cycle notes
-- pending-ship queue EMPTY (cycle 414 quiet). Next /loop fire (~30m): pull, re-scan.
-- **INCOMING SHIP expected**: PM (working-state 14:32) confirms cycle-413 pin-ship worked end-to-end. Post-bundle conflicts #11715(#11641 reboot fix)/#11722(#11587)/#11709(#11640) are CONFLICTING — **skill's job to merge main into each** (not DM/PM). Once #11641 reboot fix clears QA → pending-ship, DM ships it → reboot fix DURABLE on main → scaffolding teardown. Watch for it.
-- Bump gate at 8/10 — within 2 of threshold; on reaching 10, still HOLD for PM/operator green-light ([[feedback_bump_requires_pm_signal]]).
-- Doc-improvement scan fires at 3 quiet cycles (now 1).
+- pending-ship queue EMPTY (drained #11641, #11723). Next /loop fire (~30m): pull, re-scan.
+- **Primary next action: surface bump-gate-open to PM/operator; ship on their green-light only.**
 - Avoid blind `git stash pop` — old cruft stashes exist in this clone; edit working-state directly.
