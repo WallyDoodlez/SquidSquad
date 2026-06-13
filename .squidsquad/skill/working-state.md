@@ -2,9 +2,9 @@
 
 - **Task**: #11587 — uvicorn loop=none (harness ProactorEventLoop fix) — COMPLETE, PR #11722
 - **Status**: in-progress — HELD pre-pending-test, gated on #11683 shipping (full-suite green)
-- **Updated**: 2026-06-13 07:44
+- **Updated**: 2026-06-13 08:14
 - **Branch**: squidsquad/task/11587 (current). Other in-flight: task/11640, task/11641.
-- **Quiet Cycle Counter**: 0 (iter-457: implemented #11587)
+- **Quiet Cycle Counter**: 0 (iter-458: planned #11505)
 
 ## ⚠️ Session note
 Harness DOWN (port 59999, curl exit 7) — loop-mode (skill pinned stable per #11586). `/loop 30m` cron c8644353. cycle_pre/post DON'T fire — commit/push/PR MANUALLY. working-state.md is PER-BRANCH in git — switching branches swaps it; git tree + issue status is truth ([[learning-resume-git-tree-is-truth]]).
@@ -24,10 +24,14 @@ Unshipped ~5 cycles. DM-starvation (harness down → DM not waking). Shipping #1
 ## #11587 detail (this cycle)
 uvicorn 0.41.0 asyncio_loop_factory hard-codes ProactorEventLoop on win32 (use_subprocess=False), bypassing the #9562 policy entirely. Server.run()→asyncio.run(serve(), loop_factory=get_loop_factory()); loop='auto'→Proactor factory. Fix: _build_uvicorn_config() sets loop='none'→factory None→asyncio.run uses new_event_loop()→respects policy→Selector. Commit a81f532e9. DS review DONE → NO_FINDINGS (all 5 criteria verified). PR #11722 implementation-clean. All 3 PRs now DS-clean.
 
+## #11505 (low) — PLANNED this cycle (iter-458), in-progress, NOT executed
+Deadwood removal (capability sub-skill layer). Footprint mapped: in-scope = capability-check.md + dm/includes.yml:19 + dm/instructions.md:8 (DM is the ONLY consumer) + empty capabilities/ dir + installer-files.txt + test_feat328_coverage delete + KNOWN_FAILURES -1 + sub-skill-catalog entry. Scope judgment: manifest.py/capability_check.py installer-core capability machinery is OUT (not in ACs; gutting it = separate higher-risk change; asked PM to confirm §8.3 intent). Plan posted on #11505 (work contract).
+- **BLOCKED on**: (1) PM to add CQ AC (step 7.4 — removing LLM-consumed sub-skill from DM) or confirm 'no CQ'; (2) AC7 'run_tests.py exits 0' gated on #11683 ship. Execute mechanical removal once PM answers CQ.
+
 ## Next cycle
 - Check #11683 mergedAt → if shipped, for EACH branch (task/11640, task/11641, task/11587): merge origin/main, run tests/run_tests.py, confirm green, transition → pending-test.
-- (#11587 DS review done — NO_FINDINGS; nothing to address.)
-- If harness comes back up: #11586 (A) reboot→loop-mode becomes diagnosable.
+- Check #11505 for PM's CQ-AC answer → if answered, execute the bounded removal plan (own branch task/11505 off main).
+- (#11587 DS review done — NO_FINDINGS.) If harness comes back up: #11586 (A) reboot→loop-mode becomes diagnosable.
 
 ## Standing
 - **#11538 / PR #11564**: ✅ SHIPPED. **#11716 (low)**: improvement-scan filed (run_tests.py target drift) — awaiting triage.
