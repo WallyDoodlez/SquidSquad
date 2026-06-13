@@ -36,6 +36,12 @@ Next scan after: #10540 routed/closed (then quiet-gate resumes).
 - pending DM-tracker approvals #8702/#7447/#9933 (awaiting PM).
 - Harness DOWN — #11641/#11723 fixes are ON main but only take effect on operator harness-restart.
 
+## >>> PIPELINE STALLED UPSTREAM (observed cycle 421, 18:15) <<<
+- Last non-DM commit: **pm cycle 2351 @ 16:33** (~1h40m ago). skill/qa/pm have NOT cycled since. Only DM (this /loop session) is alive — other agents have no active /loop and the harness is DOWN, so they're effectively offline.
+- Consequence: **no new work will reach pending-ship** (no workers producing, no verifier verifying). DM autonomous queue is dry until harness/agents return OR operator acts.
+- **CHURN DISCIPLINE**: on identical no-change quiet cycles, SKIP the commit (just pull+scan+idle) — do not emit a counter-bump commit every 30m. Only commit when something material changes (new pending-ship, forge signal, operator action).
+- **Operator levers**: (1) restart harness (picks up this session's 7 fixes + re-enables agents/event-mode work on #10855); (2) green-light v0.45.0 bump (13/10 staged); (3) route #10540 (unblocks DM doc-scan + fallback encoding).
+
 ## Team mode (PM cycle 2351, 2026-06-13 ~16:4x)
 - PM attempted EVENT-mode switch after reboot fix landed durable on main → **event mode INERT (#10855, role:skill, pending-test)**; PM reverted team to working LOOP mode; lock-watchdog retired.
 - **POLLING is the correct/expected stance** for this session and near future — event mode blocked until #10855 resolves. Do not re-probe mode mid-session (sticky).
