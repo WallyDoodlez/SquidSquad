@@ -1,7 +1,20 @@
 # Working State
 
-- **Task**: cycle 2341 (inline) — operator confirmed STABILIZE-then-rename; elevated #11612 to top priority w/ ordered plan
-- **Status**: calm; skill STABLE now (pid 5208, not looping — bursts subsided) but idle 3h; rename deferred
+- **Task**: cycle 2342 (inline) — degraded state holding: skill + QA stopped (down, not looping); awaiting operator decisions
+- **Status**: skill DOWN (intent label=restarting but 0 procs, NOT respawning); QA DOWN (stopping); DM+PM up. No loops/thrash.
+
+## INCIDENT STATE (skill+QA down by design)
+
+- **skill**: STOPPED (0 procs, stable 25s). Was reboot-looping ~15-20s; operator had me stop respawn. Reboot ROOT CAUSE STILL UNKNOWN.
+- **#11601 verified**: DS NO_FINDINGS + 44/44 tests + functionally returns 7373. **GOOD fix, safe to ship — BUT does NOT stop the reboot loop** (skill looped AFTER #11601 committed 00:15). Second cause exists (likely context-pressure exit-42; `context-pressure`=8 marker). Committed on squidsquad/task/11601 (d0986cb7e), NOT pushed, no PR.
+- **QA**: STOPPED (#11600 clone fix pending). Verification paused.
+- **Reboot diagnosis needs harness respawn-reason logging** (#11612 step 1) — but skill (the worker) is down. Chicken-and-egg; may need read-only PM investigation of cycle_post exit-42 / context-pressure threshold.
+
+## PENDING OPERATOR DECISIONS
+
+1. Ship #11601? (good fix, won't stop reboots — ship anyway for event_poll correctness)
+2. How to find reboot root cause with skill down (PM read-only investigation vs bring skill back briefly)?
+3. QA clone fix (#11600) — quick qa-key vs full rename (b).
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
