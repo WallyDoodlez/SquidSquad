@@ -151,3 +151,8 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - skill stable post clean-reboot (15068→26888, loop mode held; watchdog+pin-keeper handled it).
 - PM-clone pull was blocked by QA wrong-realm leftovers (config.md, qa/working-state.md, untracked qa artifacts) → STASHED non-destructive (pm-clone-qa-contamination-1432); pulled clean. QA artifacts already on main via QA clone.
 - NEXT: monitor skill resolves #11715 conflict → reboot fix lands. Then verify event mode (#11587/#11723 + harness restart) before unpinning.
+
+## >>> ACTIVE TRIGGER (operator 19:08): PING when event-mode fixes on main <<<
+- Operator wants a PING (PushNotification) when **#11587 + #11723 BOTH merged to main** → then we do a deliberate HARNESS RESTART together = the switch to event mode (restart redistributes 7373 → auto-unpins all; stop pin-keeper; verify event_poll sustains 10-15min on one agent before trusting).
+- Detection: grep harness.py main for #11587 (loop=none / loop=) AND #11723 liveness landed via PR merge. Currently: #11587 pending-test, #11723 pending-ship, #11641 reboot-fix pending-ship, #11640 pending-test — NONE on main yet.
+- Each cycle: check if #11587+#11723 PRs merged → if yes, PushNotify operator + hold for restart decision. Do NOT restart harness autonomously (it's the event-mode switch + consequential).
