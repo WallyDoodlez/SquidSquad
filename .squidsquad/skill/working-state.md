@@ -1,10 +1,20 @@
 # Working State
 
-- **Task**: ALL 4 skill PRs landed → pending-test (gate #11683 cleared). Lane ends here; verifier owns next.
-- **Status**: idle — no in-progress skill work; awaiting verifier on the 4 PRs.
-- **Updated**: 2026-06-13 14:50
+- **Task**: #11745 (orphan terminals) picked up → in-progress, BLOCKED on operator design fork (A vs B). 4 prior PRs progressing out-of-lane.
+- **Status**: in-progress (#11745) but blocked-on-operator; no shippable skill code in flight.
+- **Updated**: 2026-06-13 14:59
 - **Branch**: main (state). Feature branches: task/11587, task/11640, task/11641, task/11723.
-- **Quiet Cycle Counter**: 0 (iter-466: landed 4 PRs)
+- **Quiet Cycle Counter**: 0 (iter-467: #11745 investigation + fork)
+
+## iter-467 (14:59) — #11745 orphan terminals: investigated, surfaced design fork
+Root cause (boot_remote _spawn_*): Windows wt.exe path runs agent as a command launched DIRECTLY in Terminal → closeOnExit default `automatic`=`graceful` → tab stays open on non-zero/kill exit (the orphan). NO wt CLI flag to override (microsoft/terminal#15747); `closeOnExit:always` is settings.json-profile-only. Legacy ps1 path `pwsh -NoExit` = guaranteed orphan. macOS Terminal.app `do script` leaves window. Linux tmux detached session lingers (kill-session only at spawn, not stop).
+**FORK posted on #11745 (blocked on PM/operator):** A = self-closing separate windows via `cmd /c start` (zero provisioning, OS-guaranteed close — RECOMMENDED, directly kills the accumulation complaint) vs B = keep wt tabs + provision a `closeOnExit:always` WT profile (preserves tabbed UX, needs installer+upgrade settings.json provisioning). Once ratified I implement chosen option + drop legacy -NoExit + macOS/Linux handling + unit tests on spawn-cmd construction; live verify is verifier/operator manual.
+
+## 4 prior PRs — status as of 14:59 (out of skill lane, monitoring only)
+- #11723 (PR #11729) → **pending-ship** (verifier passed; DM next)
+- #11641 (PR #11715) → **pending-ship**
+- #11640 (PR #11709) → pending-test (verifier not yet)
+- #11587 (PR #11722) → pending-test
 
 ## ⭐ THIS CYCLE (iter-466, 14:50) — gate #11683 MERGED → landed all 4 PRs
 #11683 (the blocker) shipped/merged to main at 333c351b2. Merged origin/main into each branch, ran full suite (run_tests.py exit 0 = pytest + static 53 OK), pushed, transitioned → pending-test. All 4 PRs now **MERGEABLE / CLEAN**:
