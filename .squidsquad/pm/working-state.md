@@ -156,3 +156,10 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - Operator wants a PING (PushNotification) when **#11587 + #11723 BOTH merged to main** → then we do a deliberate HARNESS RESTART together = the switch to event mode (restart redistributes 7373 → auto-unpins all; stop pin-keeper; verify event_poll sustains 10-15min on one agent before trusting).
 - Detection: grep harness.py main for #11587 (loop=none / loop=) AND #11723 liveness landed via PR merge. Currently: #11587 pending-test, #11723 pending-ship, #11641 reboot-fix pending-ship, #11640 pending-test — NONE on main yet.
 - Each cycle: check if #11587+#11723 PRs merged → if yes, PushNotify operator + hold for restart decision. Do NOT restart harness autonomously (it's the event-mode switch + consequential).
+
+## >>> UPDATE 16:33 — EVENT-MODE SWITCH ATTEMPTED: reboot FIXED but event mode INERT (#10855) → reverted to loop <<<
+- Ran the switch (operator approved): removed scaffolding, restored 7373, restarted harness (new code: #11587 fix, uptime fresh), re-added lost qa key to .local-config, restarted skill into event mode.
+- RESULT: skill EVENT mode = STABLE (pid 43596, 0 reboots 10min) → **#11587/#11641 FIXED THE REBOOT LOOP (durable, on main).** BUT skill was INERT: boot=True yet no event_poll, no transcript, current-state frozen "pulling" 22min, last_cycle=None, ~13% CPU spinning. = #10855 (alive-but-inert), separate deep bug, blocked:human-action.
+- REVERTED: re-pinned skill+dm+qa to 59999 loop; restarted skill → immediately WORKING (current-state "implementing #11511" fresh). Loop=functional, event=inert. Pin-keeper relaunched (b1pcn6g7h, skill+dm+qa). Lock-watchdog RETIRED (reclaim-fn on main; reboot crash can't recur).
+- **EVENT MODE BLOCKER = #10855 (inert boot).** Reboot fixes necessary-not-sufficient. Switch to event only after #10855 fixed. Operator informed.
+- Team now: skill/dm/qa working LOOP (pinned), reboot durably fixed, scaffolding reduced to just pin-keeper (for inert-dodge, not reboot).
