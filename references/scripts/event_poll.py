@@ -47,6 +47,7 @@ import argparse
 import http.client
 import json
 import os
+import socket
 import sys
 import time
 import urllib.error
@@ -84,48 +85,80 @@ _WAIT_MAX_CONSECUTIVE_FAILURES = 10
 _NUDGE_LINE = "NUDGE"
 
 
-def _discover_port():
-    """Discover the harness port — default 7373 + parent-dir walk for
-    `.harness-port` (#11601). Mirrors cycle_post._discover_harness_port so the
-    wake-mechanism poller agrees with the boot probe (CLAUDE.md Step 1) and the
-    cycle wrapper on port resolution. Always returns an int.
+_HARNESS_DEFAULT_PORT = 7373
 
-    `.harness-port` is gitignored (.gitignore:20), so it is NOT synced across
-    sibling agent clones — only the clone the harness wrote it in has it.
-    Returning None here (the pre-#11601 behavior) made event_poll print
-    'harness port not found' and exit 2 in every clone lacking the file, which
-    kills the Monitor and (per #9742) the agent session — so event mode could
-    never *sustain* even though the boot probe selected it (the symptom behind
-    #11586). Falling back to the default port closes that gap.
 
-    Resolution order: this repo's `.squidsquad/`, then a 5-level parent-dir walk
-    for an inherited `.harness-port` (clone isolation), finally default 7373.
+def _port_is_live(port, timeout=0.5):
+    """True if something is accepting TCP connections on 127.0.0.1:port.
+
+    Used to skip a stale/leaked `.harness-port` value (#11723): a test harness
+    distributes its ephemeral port into real clones via
+    `harness._deferred_init`, and after it dies the dead port lingers in the
+    clone's `.harness-port`. Trusting it blindly strands the agent in loop mode
+    (boot probe fails) or kills a live event-mode Monitor (event_poll polls a
+    dead port and exits). A quick connect check lets discovery skip it: a live
+    localhost port connects in ~1ms; a dead one refuses immediately.
     """
-    # First: this repo's .squidsquad/.harness-port
-    port_file = SQUID_DIR / ".harness-port"
-    if port_file.exists():
-        try:
-            return int(port_file.read_text(encoding="utf-8").strip())
-        except (ValueError, OSError):
-            pass
+    try:
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=timeout):
+            return True
+    except (OSError, ValueError, TypeError, OverflowError):
+        return False
 
-    # Second: walk parent directories (agent clone may be a child of the
-    # primary repo) — matches cycle_post._discover_harness_port.
+
+def _read_port_file(path):
+    """Return the int port written in `path`, or None if absent/unreadable/invalid."""
+    try:
+        if path.exists():
+            return int(path.read_text(encoding="utf-8").strip())
+    except (ValueError, OSError):
+        pass
+    return None
+
+
+def _discover_port():
+    """Discover the harness port — liveness-aware (#11601, #11723). Always
+    returns an int. Mirrors cycle_pre/cycle_post._discover_harness_port.
+
+    Resolution order, returning the FIRST candidate that is actually LISTENING:
+    this repo's `.squidsquad/.harness-port`, a 5-level parent-dir walk for an
+    inherited `.harness-port`, then the default 7373. A candidate whose port is
+    not accepting connections is SKIPPED (#11723) — a stale/leaked port file
+    (e.g. a dead port a test harness distributed into real clones) can no
+    longer strand the agent or kill its Monitor. If nothing is listening
+    (harness genuinely down), returns the default 7373 so the caller's own
+    probe fails cleanly and selects loop mode.
+
+    `.harness-port` is gitignored, so it is NOT synced across clones. Returning
+    None here (pre-#11601) made event_poll exit 2 in every clone lacking the
+    file (the #11586 sustain gap); defaulting closed that, and #11723's
+    liveness check makes a WRONG (dead) port file behave like a missing one.
+    """
+    candidates = []
+    local = _read_port_file(SQUID_DIR / ".harness-port")
+    if local is not None:
+        candidates.append(local)
+
     current = REPO_ROOT.parent
     for _ in range(5):  # max 5 levels up
-        candidate = current / ".squidsquad" / ".harness-port"
-        if candidate.exists():
-            try:
-                return int(candidate.read_text(encoding="utf-8").strip())
-            except (ValueError, OSError):
-                pass
+        inherited = _read_port_file(current / ".squidsquad" / ".harness-port")
+        if inherited is not None:
+            candidates.append(inherited)
         parent = current.parent
         if parent == current:
             break
         current = parent
 
-    # Fall back to the harness default port.
-    return 7373
+    if _HARNESS_DEFAULT_PORT not in candidates:
+        candidates.append(_HARNESS_DEFAULT_PORT)
+
+    for port in candidates:
+        if _port_is_live(port):
+            return port
+
+    # Nothing live — return the default; the caller's own probe fails and
+    # selects loop mode (harness genuinely unreachable).
+    return _HARNESS_DEFAULT_PORT
 
 
 def _backoff_seconds(attempt):

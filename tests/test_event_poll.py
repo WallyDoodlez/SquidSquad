@@ -8,11 +8,23 @@ touches the repo's `.squidsquad/` tree.
 """
 
 import json
+import socket
 import sys
 import urllib.error
 from pathlib import Path
 
 import pytest
+
+
+def _live_port_socket():
+    """Bind a listening socket on 127.0.0.1; return (sock, port). Caller closes.
+
+    #11723: _discover_port is liveness-aware, so tests that assert a port-file
+    value is returned must point it at an actually-listening port."""
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    return srv, srv.getsockname()[1]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
@@ -469,10 +481,14 @@ class TestDiscoverPort:
     def test_reads_repo_port_file_when_present(self, monkeypatch, tmp_path):
         squid = tmp_path / ".squidsquad"
         squid.mkdir()
-        (squid / ".harness-port").write_text("8080", encoding="utf-8")
-        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
-        monkeypatch.setattr(event_poll, "REPO_ROOT", tmp_path / "repo")
-        assert event_poll._discover_port() == 8080
+        srv, port = _live_port_socket()  # #11723: file port must be live
+        try:
+            (squid / ".harness-port").write_text(str(port), encoding="utf-8")
+            monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
+            monkeypatch.setattr(event_poll, "REPO_ROOT", tmp_path / "repo")
+            assert event_poll._discover_port() == port
+        finally:
+            srv.close()
 
     def test_defaults_to_7373_when_file_absent(self, monkeypatch, tmp_path):
         # The bug: .harness-port is gitignored and absent in sibling clones.
@@ -488,10 +504,14 @@ class TestDiscoverPort:
         (clone / ".squidsquad").mkdir(parents=True)  # no port file in clone
         parent_squid = tmp_path / ".squidsquad"      # inherited from ancestor
         parent_squid.mkdir()
-        (parent_squid / ".harness-port").write_text("9001", encoding="utf-8")
-        monkeypatch.setattr(event_poll, "SQUID_DIR", clone / ".squidsquad")
-        monkeypatch.setattr(event_poll, "REPO_ROOT", clone)
-        assert event_poll._discover_port() == 9001
+        srv, port = _live_port_socket()  # #11723: inherited port must be live
+        try:
+            (parent_squid / ".harness-port").write_text(str(port), encoding="utf-8")
+            monkeypatch.setattr(event_poll, "SQUID_DIR", clone / ".squidsquad")
+            monkeypatch.setattr(event_poll, "REPO_ROOT", clone)
+            assert event_poll._discover_port() == port
+        finally:
+            srv.close()
 
     def test_garbage_content_defaults_to_7373(self, monkeypatch, tmp_path):
         clone = tmp_path / "clone"
