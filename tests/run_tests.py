@@ -82,7 +82,6 @@ KNOWN_FAILURES = {
     "test_references": "asserts removed v1 references/agent-instructions.md — #11503",
     "test_state_bus": "asserts git pull --rebase; code is --no-rebase per never-rebase rule — #11503",
     "test_comms_sub_skills": "chat-etiquette.md heading-format assertion (possibly real) — #11503",
-    "test_event_mode_fragments": "expects includes.yml to list common/boot-bootstrap (v2 changed includes) — #11503",
     "test_cycle_pre": "asserts 'verifier' in alias set; #6274 rename partial — #11503 / #6274",
     "test_4792_fragment_hygiene": "asserts removed 'sole liveness signal' phrase in composed skill — #11503",
     "test_deterministic_qa_framework": "asserts '\"Deferred\"' in composed QA (drifted) — #11503",

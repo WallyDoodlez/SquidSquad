@@ -169,94 +169,96 @@ class TestAc7TopicCoverage:
 
 
 class TestAc6M62ManifestWiring:
-    """AC-6 M-6.2 (post-#9588 + post-E6 cutover #10999): the event-mode L1
-    base fragment + its four supporting common-events fragments must reach
-    the agent at runtime via the boot bootstrap, NOT via compose-time
-    inlining.
+    """AC-6 M-6.2 (v2 wiring, rebound at #11503): the event-mode L1 base
+    fragment + its supporting common-events fragments must reach the agent
+    at runtime via the boot bootstrap, NOT via compose-time inlining.
 
-    #9588 swapped the wiring mechanism: instead of every event-mode manifest
-    listing all six common-events fragments and the template having matching
-    `{{include:}}` directives, the manifest now contains `common/boot-bootstrap`
-    only, and the bootstrap's content carries `Read references/sub-skills/
-    common-events/<name>.md` directives that fire when the agent boots in
-    event mode.
+    History of the wiring mechanism:
+    - #9588 swapped per-manifest fragment lists for a single
+      ``common/boot-bootstrap`` loader carrying runtime-load directives.
+    - #11046 consolidated the v1 polling/event manifest split
+      (``includes.yml`` + ``includes-events.yml``) into one mode-agnostic
+      ``includes.yml`` per role.
+    - v0.44.0 / v2 cutover (#11394) moved the boot-bootstrap body OUT of a
+      standalone ``common/boot-bootstrap.md`` AND out of per-role
+      ``includes.yml`` entirely: it is now authored in the shared base
+      ``references/roles/instructions.md`` (composed into every role via
+      the ``<!-- sub-skill: boot-bootstrap -->`` markers) and references
+      each runtime fragment with a ``→ run sub-skill: <name>`` marker
+      (catalog-resolved to ``common-events/<name>.md``) instead of a
+      literal ``Read .../common-events/X.md`` path.
 
-    #11046: post-E6 cutover (#10999, commit 1050bfe0) consolidated the v1
-    polling/event manifest split (``includes.yml`` + ``includes-events.yml``)
-    into a single mode-agnostic ``includes.yml`` per role. The per-role
-    ``includes-events.yml`` files are GONE — wake mode is a runtime
-    concern handled by ``common/boot-bootstrap`` at session start. This
-    fixture and the manifest test rebind from the retired file to the
-    surviving unified manifest. The wiring contract is unchanged.
+    This test rebinds to that v2 source + reference syntax (#11503 Group A).
+    The wiring contract is unchanged: every role reaches event mode, and the
+    bootstrap loads the full event contract at boot.
     """
 
+    # Bare catalog names (v2): the boot block references these via
+    # `→ run sub-skill: <name>` markers; the catalog resolves each to
+    # references/sub-skills/common-events/<name>.md.
     REQUIRED_COMMON_EVENTS = [
-        "common-events/event-mode-contract",
-        "common-events/cursor-management",
-        "common-events/forge-read-pattern",
-        "common-events/idle-cooldown-loop",
-        "common-events/comment-handling",
+        "event-mode-contract",
+        "cursor-management",
+        "forge-read-pattern",
+        "idle-cooldown-loop",
+        "comment-handling",
     ]
-    # #10156: post-#6274.2 rename — dev→worker, qa→verifier. Directories
-    # on disk are references/roles/{worker,pm,verifier,dm}/.
-    ROLES = ["worker", "pm", "verifier", "dm"]
+
+    SHARED_BASE = REPO_ROOT / "references" / "roles" / "instructions.md"
 
     @pytest.fixture(scope="class")
-    def includes_by_role(self):
-        """#11046: switched from the retired ``includes-events.yml`` to the
-        post-cutover unified ``includes.yml``."""
-        import yaml
-        roles_dir = REPO_ROOT / "references" / "roles"
-        out = {}
-        for role in self.ROLES:
-            path = roles_dir / role / "includes.yml"
-            assert path.exists(), f"missing manifest: {path}"
-            data = yaml.safe_load(path.read_text(encoding="utf-8"))
-            out[role] = data.get("includes", [])
-        return out
-
-    @pytest.fixture(scope="class")
-    def bootstrap_text(self):
-        path = SUB_SKILLS / "common" / "boot-bootstrap.md"
-        assert path.exists(), (
-            "common/boot-bootstrap.md must exist — #9588 made it the single "
-            "loader for both polling and event-mode entry fragments."
+    def bootstrap_block(self):
+        """The boot-bootstrap body lives in the shared base instructions
+        (composed into every role), delimited by the sub-skill markers.
+        Extract that block so the reference checks target bootstrap content,
+        not the whole file."""
+        assert self.SHARED_BASE.exists(), (
+            f"shared base instructions missing: {self.SHARED_BASE}"
         )
-        return path.read_text(encoding="utf-8")
+        text = self.SHARED_BASE.read_text(encoding="utf-8")
+        m = re.search(
+            r"<!-- sub-skill: boot-bootstrap -->(.*?)"
+            r"<!-- /sub-skill: boot-bootstrap -->",
+            text, re.DOTALL,
+        )
+        assert m, (
+            "references/roles/instructions.md must contain a "
+            "`<!-- sub-skill: boot-bootstrap -->` block — it is the v2 home "
+            "of the boot sequence that gets every role into event mode "
+            "(or fallback polling)."
+        )
+        return m.group(1)
 
-    @pytest.mark.parametrize("role", ROLES)
-    def test_role_manifest_includes_boot_bootstrap(
-        self, includes_by_role, role,
-    ):
-        """Manifests reference `common/boot-bootstrap` as the loader. The
-        six legacy `common-events/*` entries are no longer present — they
-        are Read at runtime by the bootstrap instead."""
-        includes = includes_by_role[role]
-        assert "common/boot-bootstrap" in includes, (
-            f"references/roles/{role}/includes.yml must list "
-            f"`common/boot-bootstrap` — #9588 made it the manifest entry "
-            f"that gets the agent into event mode (or fallback polling)."
+    def test_boot_bootstrap_authored_in_shared_base(self, bootstrap_block):
+        """The boot-bootstrap block composes into every role from the shared
+        base, so one presence check covers all roles (replaces the retired
+        per-role includes.yml entry check)."""
+        assert "step:cycle/boot" in bootstrap_block, (
+            "boot-bootstrap block must define the step:cycle/boot sequence."
         )
 
     @pytest.mark.parametrize("required", REQUIRED_COMMON_EVENTS)
     def test_bootstrap_references_common_events_fragment(
-        self, bootstrap_text, required,
+        self, bootstrap_block, required,
     ):
-        """The bootstrap fragment must Read each common-events fragment at
-        runtime so a fresh event-mode agent loads the full event contract."""
-        rel = f"references/sub-skills/{required}.md"
-        assert rel in bootstrap_text, (
-            f"boot-bootstrap.md must reference `{rel}` so event-mode agents "
-            f"Read it at boot. Removing the runtime Read here breaks the "
-            f"same wiring AC-6 M-6.2 was originally written to enforce."
+        """The bootstrap block must load each common-events fragment at
+        runtime via a `→ run sub-skill: <name>` marker so a fresh event-mode
+        agent loads the full event contract at boot."""
+        pat = re.compile(r"run sub-skill:\s*`?" + re.escape(required) + r"`?")
+        assert pat.search(bootstrap_block), (
+            f"boot-bootstrap block must reference `{required}` via a "
+            f"`→ run sub-skill: {required}` marker so event-mode agents Read "
+            f"it at boot. Removing it breaks the wiring AC-6 M-6.2 enforces."
         )
 
-    def test_bootstrap_references_pr_merge_wait_for_dm(self, bootstrap_text):
-        """DM's role-specific events extra is loaded by the bootstrap too."""
-        rel = "references/sub-skills/roles/dm/events/pr-merge-wait.md"
-        assert rel in bootstrap_text, (
-            f"boot-bootstrap.md must reference `{rel}` in its DM-only "
-            f"branch — it is the sole loader for the per-role events extra."
+    def test_bootstrap_references_pr_merge_wait(self, bootstrap_block):
+        """DM's role-specific events extra is loaded by the bootstrap too
+        (referenced in the shared block in v2)."""
+        pat = re.compile(r"run sub-skill:\s*`?roles/dm/events/pr-merge-wait`?")
+        assert pat.search(bootstrap_block), (
+            "boot-bootstrap block must reference "
+            "`roles/dm/events/pr-merge-wait` via a `→ run sub-skill:` marker "
+            "— it is the sole loader for the per-role events extra."
         )
 
 
