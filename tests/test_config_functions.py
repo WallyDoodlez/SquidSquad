@@ -20,6 +20,7 @@ SAMPLE_CONFIG = """# SquidSquad Config
 ## Agents
 
 - **Dev Agents**: qa, skill
+- **Workers**: qa, skill
 - **PM**: always present
 - **QA**: always present
 - **DM**: present
@@ -68,6 +69,7 @@ SAMPLE_CONFIG = """# SquidSquad Config
 ## Improvement Scanning
 
 - **Enabled**: yes
+- **Improvement Scan Cool-Down**: 30
 
 ## Vault Optimize
 
@@ -103,6 +105,7 @@ SAMPLE_CONFIG = """# SquidSquad Config
 - **QA Execution Model**: claude
 - **Comprehension Model**: claude
 - **Improvement Scan Model**: claude
+- **Code Review Model**: deepseek-v4-pro
 - **Fallback Model**: claude
 - **API Timeout Seconds**: 120
 
@@ -116,6 +119,23 @@ SAMPLE_CONFIG = """# SquidSquad Config
 ## Mandatory Human Approval
 
 - **Enabled**: yes
+
+## Event Driven
+
+- **Enabled**: no
+- **Scan Idle Timeout**: 300
+- **Timeout Minutes**: 5
+- **Max Retries**: 3
+- **Poll Interval**: 30
+- **Queue Cap**: 100
+- **Scan Cooldown**: 60
+
+## Agent Effort
+
+- **pm**: high
+- **skill**: high
+- **qa**: high
+- **dm**: high
 
 ## Auto Versioning
 

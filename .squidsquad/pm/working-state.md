@@ -3,6 +3,20 @@
 - **Task**: cycle 2344 — overnight stabilization (operator asleep, expects: reboot issue resolved + team in event mode)
 - **Status (02:42)**: ALL 4 AGENTS RUNNING & STABLE — NOTHING looping. dm=EVENT(working); skill=LOOP pinned(stable+working, pid 32432); qa=LOOP(own clone, working); pm healthy. Lock-watchdog active. Reboot issue RESOLVED (both fast stale-lock + slow event-mode loops neutralized).
 
+## >>> UPDATE 10:32 — scaffolding maintenance: lock-watchdog expired+RELAUNCHED <<<
+
+- **5.5hr stable** (skill 15068). Pin-keeper caught port set to '7373' at 10:17 (harness redistribution?) → restored 59999. Keeper essential.
+- **lock-watchdog EXPIRED** (8h loop done ~10:31) → **RELAUNCHED 12h** (bg br9xol2h0, expires ~22:30). Edited lock-watchdog.sh to seq 720.
+- **PIN-KEEPER expires ~12:38** (started ~05:08, 7.5h) → RELAUNCH on/before 12:32 cycle (bg bm5wzho27). Watch for it.
+- **Scaffolding is HIGH-MAINTENANCE** (timed loops expire, need relaunch) — reinforces: durable fix #11641-on-main is the real close-out. Still awaiting operator's active return to drive the consequential DM delivery chain (told operator I'd do it WITH them).
+
+## >>> UPDATE 05:31 — DM STARVED (event-mode work-delivery gap); durable-fix chain deferred to MORNING <<<
+
+- **DM not shipping #11503/#11657** (pending-ship 42min). Root: DM has **0 events past cursor** + transcript 16h old (yesterday 13:47). NOT broken — STARVED: QA's pending-ship transition emitted no dm-targeted work event. Concrete **#11586 symptom** (event-mode work-delivery gap). Bare-comment nudge can't wake event-mode agent → pipeline-sentinel ineffective here.
+- **DECISION: do NOT pin/restart DM tonight.** Reboot is protected by scaffolding (watchdog+pin-keeper). The DURABLE fix = #11641 landing on main, which needs a 4-step chain (DM ship bundle→main green→skill push #11641→QA verify→DM ship #11641). Multi-agent delivery + PR merges + version bumps = consequential; doing it autonomously at 5am with flaky event mode risks a half-merged mess. **Complete the chain in the MORNING with operator.**
+- **CAVEAT — scaffolding is BABYSITTING, not durable**: watchdog (bsj1gq479) + pin-keeper (bm5wzho27) only run while THIS PM session runs. If session ends, they die → skill can revert to looping. Durable resolution REQUIRES #11641 on main. Morning priority.
+- **MORNING CHAIN TO DRIVE**: (1) get DM to ship #11683 (likely pin DM→loop like skill/qa, OR fix #11586 event delivery); (2) skill pushes squidsquad/task/11641 (unpushed local cff818eb7) on green main; (3) QA verify; (4) DM ship → #11641 on main → remove scaffolding + restore ports to 7373.
+
 ## >>> UPDATE 05:05 — loop-pin CLEARED → slow loop resumed → RE-PINNED; chain advancing <<<
 
 - **CHAIN PROGRESS (good)**: skill pushed bundle → PR #11683 (MERGEABLE/CLEAN) → QA VERIFIED #11503+#11657 → **both pending-ship** (awaiting DM). QA working correctly in own clone.
@@ -125,3 +139,8 @@ Ordered plan (commented on #11612, routed to skill as active focus):
 
 ## Context
 harness responsive; QA stopped intentionally; skill reboot-prone.
+
+## >>> UPDATE 14:05 — DM PINNED to loop (operator approved ship); #11745 terminal-cleanup filed <<<
+- Operator "go ahead" → DM pinned to loop mode (59999, pid 17008, own clone SquidSquad-3) to ship the 6 queued clean PRs (#11683/#11715/#11709/#11722/#11729). Pin-keeper extended to cover skill+dm.
+- WATCH: DM ships → #11641 (PR#11715) lands → reboot fix durable → tear down lock-watchdog. Then verify event mode (#11587+#11723 need harness restart) before unpinning anyone.
+- #11745 FILED (skill, med): kill terminal/wt-tab when agent process dies (leftover terminals accumulate). Current leftovers = dead wt tabs under single WindowsTerminal.exe — can't process-kill individually w/o disrupting live agents; accumulation stopped (reboot loops fixed). Durable fix = #11745.

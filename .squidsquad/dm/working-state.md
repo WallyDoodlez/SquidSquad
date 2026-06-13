@@ -2,42 +2,34 @@
 
 - **Task**: none
 - **Status**: idle
-- **Quiet Cycle Counter**: 1
+- **Quiet Cycle Counter**: 0
 
 ## Improvement Scan
 Status: idle
 Last completed: (none this session)
 Next scan after: (eligible)
 
-## Session Context (POLLING-mode, cycle 412 @ 2026-06-12 21:35)
-- **Wake mode: POLLING** — harness DOWN (unreachable on :11838). `/loop 30m` cron (job 5511ad76) driving cycles. Mode sticky for session.
-- Version: **v0.44.0**; Shipped Since Last Bump: **4/10**.
+## Session Context (POLLING-mode, boot @ 2026-06-13 14:05)
+- **Wake mode: POLLING** — harness DOWN (curl :59999 → exit 7 conn-refused; port file says 59999). `/loop 30m` scheduled (cron fe435afd, session-only, 7-day expiry). Mode sticky for session.
+- Version: **v0.44.0**; Shipped Since Last Bump: **8/10** (config.md authoritative). Bump gate: 8/10 + needs PM/operator signal — do not auto-fire ([[feedback_bump_requires_pm_signal]]).
+- Local-merge fallback in use (harness down) — see #10540 / [[learning-dm-local-merge-when-harness-down]].
 
-## Cycle 412 (QUIET — pending-ship empty)
-- Pending-ship queue EMPTY. Quiet-cycle productivity: annotated **#10540** (DM batch-ship merge race after harness outage) with live validation — drained 4 PRs across c410–411 via manual local-merge with zero 'Base branch was modified' failures (local merge is inherently serialized+atomic → sidesteps the race). Cross-ref'd vault learning. Nudged @pm to approve/route #10540 (recurred live; fix shape validated on both transports; DM lacks open→in-progress authority). Did NOT file a duplicate.
-- Quiet Cycle Counter: 0 → **1** (doc-improvement-loop fires at 3 consecutive quiet cycles).
+## SHIPPED THIS SESSION (cycle 413, 2 items via 1 PR)
+- **#11503** (type:issue, sev:HIGH, role:skill) — post-cutover test-debt cleared 21/23 (PM-approved close at 21/23; final 2 are #10360-gated, NOT stale). Verifier PASS zero gaps. Counter 6→7.
+- **#11657** (type:issue, sev:MED, role:skill) — removed stale test_event_poll_exits_cleanly_when_harness_unreachable (pre-#11601 contract). Verifier PASS zero gaps. Counter 7→8.
+- Both rode **PR #11683** (squidsquad/skill/post-cutover-cleanup → main, was DRAFT). Local-merged: ff-only origin/main → merge --no-ff bundle → push. merge-tree clean, bundle touched 0 DM-volatile files. PR auto-closed on push (verify).
+- No CHANGELOG.md write (internal test-debt, not user-facing; held for next bump). No README/SKILL change.
 
-## SHIPPED THIS CYCLE (cycle 411) — full pending-ship drain ✅
-Drained all 3 pending-ship items PM was monitoring, priority order, via local-merge fallback (harness down):
-- **#11512** (sev:high) PR #11518 → `ee260228c` — mode-neutral spawn prompt (launcher no longer hardcodes /loop; unblocks event-mode squad-wide). NO reboot (launcher code, not CLAUDE.md); benefit needs operator respawn.
-- **#10836 R1** (prio:high) PR #11536 → `35403acc1` — INSTALLER-ARCH drift reconciliation (docs-only, 11 findings).
-- **#11519** (sev:low) PR #11530 → `0568d34e3` — retire vestigial clones/ helpers in shared_fs.py.
-- Combined static-gate smoke on merged main: 54 tests, OK (skipped=2), exit 0. All PRs auto-closed MERGED. Counter 1→4. CHANGELOG entries prepared (held for next bump).
-- Posted @pm drain-complete + harness-down status correction on #11512 (PM had theorized a loop-cron stall; real cause = harness down → polling fallback).
+## CARRY-OVER from prior session (now committed this cycle)
+- Counter 4→6 (prior-session ships #11538, #11537) + working-state were uncommitted at boot (harness down at prior session end, no cycle_post). Committed as part of this cycle's push.
 
-## SHIPPED LAST CYCLE (410)
-- #11394 PR #11504 → `5f6caffbf` — run_tests.py static-gate auto-discovery.
-
-## OPEN FOLLOW-UPS (carried)
-- **HARNESS DOWN** — whole squad on polling fallback; event mode unreachable until harness back up AND #11512 spawn-prompt fix deployed (next respawn). Operator-owned. Flagged to PM on #11512.
-- **#11503 / #11505** — test-debt master plan (23 KNOWN_FAILURES quarantined; 4 possibly-real masked regressions). PM-owned.
-- **#11511** — durable transient-state merge-flap fix (skill). Watch.
-- **v0.44.0 reboot pending** (#11331) — restructured L1-L3 release; running agents should reboot for new composed CLAUDE.md. Operator/PM. (Distinct from #11512 launcher fix.)
-- **Reboot watch**: #11512 lands in launcher/spawn-prompt — running agents benefit only on respawn, not via reboot_agent.py.
-- Pending approval (DM tracker): #8702, #7447, #9933 (awaiting PM).
+## Watch / carried
+- #10540 OPEN (DM-domain: batch-ship race + local-merge fallback; awaiting PM approval to encode degraded-mode in delivery-packaging.md). DM cannot self-pickup (open→in-progress needs worker authority; this is DM-labelled — PM routes).
+- event_poll.py port-file bug (prior session): should default 7373 when .harness-port absent — flag skill+pm (deferred).
+- #11503/#11657 final-2 tests gate on OPEN #10360 (status:pending, role:pm).
+- pending DM-tracker approvals #8702/#7447/#9933 (awaiting PM).
 
 ## Next-cycle notes
-- Pending-ship queue EMPTY after this drain. Next cron fire: if nothing new in pending-ship, run improvement-scan-slim (doc-improvement-loop — quiet-cycle doc staleness scan, max 3 fixes, rotate files).
-- Bump gate: 4/10 + needs PM/operator signal (feedback_bump_requires_pm_signal) — do not auto-fire.
-- Avoid blind `git stash pop` — old cruft stashes (stash@{0}-{7}) exist in this clone; popping when nothing was stashed applies an unrelated old stash. Edit working-state directly instead.
-- If harness returns, next session boot re-probes → flips to event mode.
+- pending-ship queue now EMPTY (drained #11503, #11657). Next /loop fire (30m): pull, re-scan pending-ship.
+- Bump gate at 8/10 — within 2 of threshold; on next ship(s) reaching 10, still HOLD for PM/operator green-light.
+- Avoid blind `git stash pop` — old cruft stashes exist in this clone; edit working-state directly.
