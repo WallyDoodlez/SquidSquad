@@ -15,9 +15,18 @@
 - **QA**: STOPPED (#11600 clone fix pending). Verification paused.
 - **Instrumentation gap**: restart-log.txt stale since 2026-04-15; harness not logging respawns (#11612 step-1 respawn-reason logging still worth doing).
 
-## >>> AWAITING OPERATOR: ship #11601 to main (= the reboot fix) <<<
+## >>> REBOOT FIX SHIPPED (cycle 2344) + skill recovered <<<
 
-Investigation complete. Decision needed: push squidsquad/task/11601 -> PR -> merge. Then un-stop skill (safe; its clone has the fix) + close #11612/#11601. Contributing fragility (.harness-port distribution unreliable / stale clone port files) optional durable-hardening follow-up.
+- **#11601 MERGED to main** (PR #11639, 04:49Z) — 7373 fallback now on main; reboot loop fixed.
+- **skill rebooted clean** — pid 22968 stable, bootup=True, current-state idle. No loop. (No event_poll seen → likely loop-mode fallback; verify next cycle it picks up #11503/#11640.)
+- **#11612 + #11601 CLOSED** (auto-closed via PR).
+
+## QA "wrong realm" (#11600) — diagnosed + routed; QA stays DOWN
+
+- 3-name drift: alias=`qa` (harness/boot lookup) vs `.local-config` key=`verifier`→../SquidSquad-verifier (nonexistent) vs real clone ../SquidSquad-qa (unregistered). `_get_clone_path('qa')` misses → boot_remote.py:163 `local.get(role, REPO_ROOT)` silently returns PM clone.
+- **#11640 FILED (role:skill)** — operator directive: no fallback; `_get_clone_path` must FAIL + spawn paths refuse + never boot into REPO_ROOT.
+- **#11600** retains registry/identity half (qa→verifier rename, high-blast, operator chose "b" earlier — NOT yet scoped). QA stays stopped until both land (fail-loud is now the desired behavior).
+- **AWAITING OPERATOR**: scope qa→verifier rename now, or park QA.
 
 ## PENDING OPERATOR DECISIONS (after root cause found)
 
