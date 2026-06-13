@@ -2,7 +2,7 @@
 
 - **Task**: none
 - **Status**: idle
-- **Quiet Cycle Counter**: 1
+- **Quiet Cycle Counter**: 2
 
 ## Improvement Scan
 Status: idle
@@ -41,7 +41,9 @@ Next scan after: (eligible)
 - **POLLING is the correct/expected stance** for this session and near future — event mode blocked until #10855 resolves. Do not re-probe mode mid-session (sticky).
 
 ## Next-cycle notes
-- pending-ship queue EMPTY (cycle 418 quiet). Next /loop fire (~30m): pull, re-scan.
+- pending-ship queue EMPTY (cycles 418–419 quiet, counter 2). No new forge activity since c418.
+- **Quiet counter at 2 — if cycle 420 is also quiet, run doc-improvement-loop**: scan README/SKILL.md/CHANGELOG.md for staleness vs current behavior, max 3 fixes, rotate files, file findings as tracker tasks (do NOT auto-fix prod docs beyond DM-owned user-facing files).
+- Next /loop fire (~30m): pull, re-scan pending-ship first.
 - Scan timing race: qa transition → pending-ship can lag the git push by seconds; if a fresh qa-ship commit appears in `git log origin/main` but the label scan shows 0, re-scan / check the issue directly before declaring quiet.
 - **Primary next action: ship bump v0.45.0 ON operator green-light only (counter 12/10).**
 - Boot pull pattern: use `git merge --ff-only origin/main || git merge --no-ff origin/main` (cycle-416 boot did an unnecessary --no-ff bubble because the `--is-ancestor` guard mislabels behind-state as DIVERGED).
