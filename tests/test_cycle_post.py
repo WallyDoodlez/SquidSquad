@@ -608,8 +608,11 @@ class TestSelfRestartFragmentMentionsQuit:
 class TestPortDiscovery:
     """#4966: Port discovery for harness API communication."""
 
-    def test_reads_port_from_harness_port_file(self, patch_dirs, squid_dir):
+    def test_reads_port_from_harness_port_file(self, patch_dirs, squid_dir, monkeypatch):
         """Reads port from .squidsquad/.harness-port."""
+        # #11723: discovery is liveness-aware; stub liveness True to test the
+        # file-reading path in isolation.
+        monkeypatch.setattr(cycle_post, "_port_is_live", lambda *a, **k: True)
         port_file = squid_dir / ".harness-port"
         port_file.write_text("8080", encoding="utf-8")
         result = cycle_post._discover_harness_port()

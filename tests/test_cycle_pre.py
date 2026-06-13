@@ -1731,7 +1731,10 @@ class TestDiscoverHarnessPort:
         # No .harness-port anywhere → fall back to 7373
         assert cycle_pre._discover_harness_port() == 7373
 
-    def test_reads_squid_dir_port_file(self, patch_dirs, squid_dir):
+    def test_reads_squid_dir_port_file(self, patch_dirs, squid_dir, monkeypatch):
+        # #11723: discovery is liveness-aware; stub liveness True to test the
+        # file-reading path in isolation.
+        monkeypatch.setattr(cycle_pre, "_port_is_live", lambda *a, **k: True)
         (squid_dir / ".harness-port").write_text("9999", encoding="utf-8")
         assert cycle_pre._discover_harness_port() == 9999
 
@@ -1739,10 +1742,12 @@ class TestDiscoverHarnessPort:
         (squid_dir / ".harness-port").write_text("not-a-port", encoding="utf-8")
         assert cycle_pre._discover_harness_port() == 7373
 
-    def test_parent_walk_finds_port_file(self, patch_dirs, squid_dir, tmp_path):
+    def test_parent_walk_finds_port_file(self, patch_dirs, squid_dir, tmp_path, monkeypatch):
         """Clone-isolation: agent clone is a child of the primary repo, so
         `.harness-port` lives in a parent's `.squidsquad/` rather than the
         clone's own. The 5-level walk must discover it."""
+        # #11723: stub liveness True to test the parent-walk read in isolation.
+        monkeypatch.setattr(cycle_pre, "_port_is_live", lambda *a, **k: True)
         parent_squid = tmp_path.parent / ".squidsquad"
         parent_squid.mkdir(parents=True, exist_ok=True)
         (parent_squid / ".harness-port").write_text("8888", encoding="utf-8")
