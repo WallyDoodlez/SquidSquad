@@ -144,3 +144,10 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - Operator "go ahead" → DM pinned to loop mode (59999, pid 17008, own clone SquidSquad-3) to ship the 6 queued clean PRs (#11683/#11715/#11709/#11722/#11729). Pin-keeper extended to cover skill+dm.
 - WATCH: DM ships → #11641 (PR#11715) lands → reboot fix durable → tear down lock-watchdog. Then verify event mode (#11587+#11723 need harness restart) before unpinning anyone.
 - #11745 FILED (skill, med): kill terminal/wt-tab when agent process dies (leftover terminals accumulate). Current leftovers = dead wt tabs under single WindowsTerminal.exe — can't process-kill individually w/o disrupting live agents; accumulation stopped (reboot loops fixed). Durable fix = #11745.
+
+## >>> UPDATE 14:32 — DM PIN VALIDATED: bundle SHIPPED to main <<<
+- DM (pinned loop) shipped #11503+#11657 (PR#11683 merged d41974572, DM cycle 413, counter 6→8). pending-ship now empty. **Pin approach works end-to-end.**
+- POST-MERGE CONFLICTS (expected): #11715(#11641 reboot fix), #11722(#11587), #11709(#11640) now CONFLICTING — based on pre-bundle main. **skill must merge main into each branch** (its job, not PM's; skill flagged this ordering). Then #11641 → pending-test → QA → DM ship → reboot fix DURABLE on main → tear down scaffolding.
+- skill stable post clean-reboot (15068→26888, loop mode held; watchdog+pin-keeper handled it).
+- PM-clone pull was blocked by QA wrong-realm leftovers (config.md, qa/working-state.md, untracked qa artifacts) → STASHED non-destructive (pm-clone-qa-contamination-1432); pulled clean. QA artifacts already on main via QA clone.
+- NEXT: monitor skill resolves #11715 conflict → reboot fix lands. Then verify event mode (#11587/#11723 + harness restart) before unpinning.
