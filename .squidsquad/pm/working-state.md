@@ -3,6 +3,15 @@
 - **Task**: cycle 2344 — overnight stabilization (operator asleep, expects: reboot issue resolved + team in event mode)
 - **Status (02:42)**: ALL 4 AGENTS RUNNING & STABLE — NOTHING looping. dm=EVENT(working); skill=LOOP pinned(stable+working, pid 32432); qa=LOOP(own clone, working); pm healthy. Lock-watchdog active. Reboot issue RESOLVED (both fast stale-lock + slow event-mode loops neutralized).
 
+## >>> UPDATE 04:01 — skill PRODUCTIVE in pinned loop mode; PM dispositions posted <<<
+
+- **1hr full stability** — all pids unchanged 03:01→04:01. Reboot fix holds. skill loop-mode cycling + working.
+- **skill shipped work overnight**: #11641 DONE on branch (cff818eb7 — the durable reboot fix: `_reclaim_stale_scheduled_lock`), #11657 DONE, #11503 21/23 stale cleared. All LOCAL (not pushed).
+- **PM disposition #11503 posted**: APPROVED close at 21/23. Verified #10360 OPEN (pending, role:pm) → final 2 tests legitimately gate it (allowlist in KNOWN_FAILURES). Skill to push bundle + PR + pending-test.
+- **PM #11641 ack posted**: merge-ordering confirmed (bundle→main green FIRST, then #11641→pending-test). Noted the 59999 loop-pin is intentional (leave until #11586 lands).
+- **CHAIN TO WATCH**: skill picks up #11503 disposition next loop (~30min) → pushes bundle → DM ships → main green → #11641 merges → **reboot fix lands on main durably** (replaces watchdog reliance).
+- **PM STANDING ITEM**: #10360 (role:pm, pending) — Responsibility compose slot impl; gates #11503 final 2. Needs proper attention when operator back (not 4am rush).
+
 ## >>> UPDATE 02:33 — skill SLOW-reboot-loops in event mode (#11586, separate from stale-lock) <<<
 
 - skill pids: 48864 (02:25) → 45180 (02:31) → 50988 (02:32) — **rebooting every ~2-5min in EVENT mode**. NOT stale-lock (watchdog log empty). This is the ORIGINAL #11612/#11586: boots event mode → emits bootup-complete → never sustains event_poll/Monitor → "Monitor exit = end session" → harness reboots → repeat.
