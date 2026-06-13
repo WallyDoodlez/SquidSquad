@@ -14,7 +14,7 @@ Harness DOWN (port 59999, curl exit 7) — loop-mode (skill pinned stable per #1
 |---|---|---|---|---|---|---|
 | #11640 | _get_clone_path raises (no REPO_ROOT fallback); spawn paths refuse | task/11640 | #11709 | 237 | NO_FINDINGS | in-progress, gated |
 | #11641 | thin_launcher reclaims stale scheduled_tasks.lock before Popen | task/11641 | #11715 | 37 | NO_FINDINGS | in-progress, gated |
-| #11587 | uvicorn loop="none" → SelectorEventLoopPolicy governs server loop | task/11587 | #11722 | 9 | running (b0gcqdjtm) | in-progress, gated |
+| #11587 | uvicorn loop="none" → SelectorEventLoopPolicy governs server loop | task/11587 | #11722 | 9 | NO_FINDINGS | in-progress, gated |
 
 All own-tests-green; each held ONLY because merging current main pulls in the #11657 stale event_poll test (the single full-suite red).
 
@@ -22,11 +22,11 @@ All own-tests-green; each held ONLY because merging current main pulls in the #1
 Unshipped ~5 cycles. DM-starvation (harness down → DM not waking). Shipping #11683 → main green → I merge into all 3 branches → all → pending-test. Escalated on #11586 (iter-455). ALSO removes a test that kills live Monitors (iter-456 triage). **Operator action: manually ship #11683.**
 
 ## #11587 detail (this cycle)
-uvicorn 0.41.0 asyncio_loop_factory hard-codes ProactorEventLoop on win32 (use_subprocess=False), bypassing the #9562 policy entirely. Server.run()→asyncio.run(serve(), loop_factory=get_loop_factory()); loop='auto'→Proactor factory. Fix: _build_uvicorn_config() sets loop='none'→factory None→asyncio.run uses new_event_loop()→respects policy→Selector. Commit a81f532e9. Read DS output (b0gcqdjtm); address real findings on PR #11722.
+uvicorn 0.41.0 asyncio_loop_factory hard-codes ProactorEventLoop on win32 (use_subprocess=False), bypassing the #9562 policy entirely. Server.run()→asyncio.run(serve(), loop_factory=get_loop_factory()); loop='auto'→Proactor factory. Fix: _build_uvicorn_config() sets loop='none'→factory None→asyncio.run uses new_event_loop()→respects policy→Selector. Commit a81f532e9. DS review DONE → NO_FINDINGS (all 5 criteria verified). PR #11722 implementation-clean. All 3 PRs now DS-clean.
 
 ## Next cycle
 - Check #11683 mergedAt → if shipped, for EACH branch (task/11640, task/11641, task/11587): merge origin/main, run tests/run_tests.py, confirm green, transition → pending-test.
-- Read #11587 DS review (b0gcqdjtm); address findings.
+- (#11587 DS review done — NO_FINDINGS; nothing to address.)
 - If harness comes back up: #11586 (A) reboot→loop-mode becomes diagnosable.
 
 ## Standing
