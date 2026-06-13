@@ -10,11 +10,28 @@
 - **QA**: STOPPED (#11600 clone fix pending). Verification paused.
 - **Reboot diagnosis needs harness respawn-reason logging** (#11612 step 1) — but skill (the worker) is down. Chicken-and-egg; may need read-only PM investigation of cycle_post exit-42 / context-pressure threshold.
 
-## PENDING OPERATOR DECISIONS
+## >>> NEXT TASK (operator-directed, post-compaction): CHASE REBOOT ROOT CAUSE (read-only) <<<
 
-1. Ship #11601? (good fix, won't stop reboots — ship anyway for event_poll correctness)
-2. How to find reboot root cause with skill down (PM read-only investigation vs bring skill back briefly)?
-3. QA clone fix (#11600) — quick qa-key vs full rename (b).
+Goal: find why skill reboot-loops ~15-20s. Known: #11601 (event_poll None→7373) is committed+present but does NOT stop it. So cause is a SECOND mechanism — leading hypothesis: **context-pressure exit-42** (skill's `.squidsquad/skill/context-pressure` marker = "8").
+
+Read-only investigation steps (no agent restart, don't un-stop skill/QA):
+1. **cycle_post.py** — exit-42 trigger: what context-pressure threshold fires exit 42? Where's the threshold configured? (grep cycle_post.py for context-pressure / exit 42 / threshold / 0.X)
+2. **context-pressure marker semantics** — what does "8" mean? Who writes it (cycle_post?)? Is it a consecutive-pressure counter or a percentage?
+3. **harness respawn on exit-42** — harness.py auto-reboot fires immediately on exit-42 + intent=running → fast loop. Confirm timing.
+4. **skill iter-447/448/449** (3 logs same second 20:37:25) — read them: what did skill do right before each rapid exit?
+5. **Distinguish**: context-pressure exit-42 vs Monitor/event_poll exit vs boot crash. #11601 ruled out the simple event_poll-None path.
+6. Synthesize → file/update #11612 with the confirmed cause → recommend fix to skill.
+
+## PENDING OPERATOR DECISIONS (after root cause found)
+
+1. Ship #11601? (good fix, won't stop reboots — ship anyway for event_poll correctness; committed squidsquad/task/11601 d0986cb7e, needs push→PR→merge)
+2. QA clone fix (#11600) — quick qa-key→../SquidSquad-qa vs full rename (b).
+3. Bring skill/QA back once reboot cause fixed + clone fixed.
+
+## CONSTRAINTS (don't forget post-compaction)
+- skill + QA are STOPPED (down) by design — do NOT restart/un-stop them.
+- I (PM) am in PM's clone (D:\Dev\Dev\SquidSquad) shared w/ harness-pm 40440 + QA (stopped). Keep git minimal, NO branch switches (clobber risk).
+- #11601 verified GOOD (DS NO_FINDINGS, 44/44, returns 7373) but ≠ reboot fix.
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
