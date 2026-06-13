@@ -27,11 +27,12 @@
 - #10540 (dm) — batch ship drain (DM did drain all 3 in cycle 411 this time — better than feared, but the after-outage failure mode is real).
 - #11511 (skill) — durable merge-flap fix.
 
-## Operator asks (carried)
+## Operator asks — all cleared this session
 
-1. **#10955** — close as monitor?
-2. **#10541** — close as out-of-scope?
-(#11053 §9 REMOVED — was stale/locked.)
+- ~~#11053 §9~~ — was stale/locked; Phase 2 filed #11570.
+- ~~#10955~~ — CLOSED 2026-06-12 (operator): OOM root cause structurally fixed by cutover #10685; monitor-and-reopen.
+- ~~#10541~~ — KEPT OPEN (operator): commented "may be fixed by event-mode/harness switch but still investigate"; reframed as canonical pre-bootup-wedge bug + linked DM recurrence + #11538/#11512. role:skill to investigate under event-mode boot.
+- No outstanding operator-asks. #11053 §9 was the last stale one.
 
 ## Context
 
