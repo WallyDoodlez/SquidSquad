@@ -139,3 +139,8 @@ Ordered plan (commented on #11612, routed to skill as active focus):
 
 ## Context
 harness responsive; QA stopped intentionally; skill reboot-prone.
+
+## >>> UPDATE 14:05 — DM PINNED to loop (operator approved ship); #11745 terminal-cleanup filed <<<
+- Operator "go ahead" → DM pinned to loop mode (59999, pid 17008, own clone SquidSquad-3) to ship the 6 queued clean PRs (#11683/#11715/#11709/#11722/#11729). Pin-keeper extended to cover skill+dm.
+- WATCH: DM ships → #11641 (PR#11715) lands → reboot fix durable → tear down lock-watchdog. Then verify event mode (#11587+#11723 need harness restart) before unpinning anyone.
+- #11745 FILED (skill, med): kill terminal/wt-tab when agent process dies (leftover terminals accumulate). Current leftovers = dead wt tabs under single WindowsTerminal.exe — can't process-kill individually w/o disrupting live agents; accumulation stopped (reboot loops fixed). Durable fix = #11745.
