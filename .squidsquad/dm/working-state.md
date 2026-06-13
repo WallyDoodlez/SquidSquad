@@ -2,7 +2,7 @@
 
 - **Task**: none
 - **Status**: idle
-- **Quiet Cycle Counter**: 0
+- **Quiet Cycle Counter**: 1
 
 ## Improvement Scan
 Status: idle
@@ -36,8 +36,12 @@ Next scan after: (eligible)
 - pending DM-tracker approvals #8702/#7447/#9933 (awaiting PM).
 - Harness DOWN — #11641/#11723 fixes are ON main but only take effect on operator harness-restart.
 
+## Team mode (PM cycle 2351, 2026-06-13 ~16:4x)
+- PM attempted EVENT-mode switch after reboot fix landed durable on main → **event mode INERT (#10855, role:skill, pending-test)**; PM reverted team to working LOOP mode; lock-watchdog retired.
+- **POLLING is the correct/expected stance** for this session and near future — event mode blocked until #10855 resolves. Do not re-probe mode mid-session (sticky).
+
 ## Next-cycle notes
-- pending-ship queue EMPTY (drained #11745). Next /loop fire (~30m): pull, re-scan.
+- pending-ship queue EMPTY (cycle 418 quiet). Next /loop fire (~30m): pull, re-scan.
 - Scan timing race: qa transition → pending-ship can lag the git push by seconds; if a fresh qa-ship commit appears in `git log origin/main` but the label scan shows 0, re-scan / check the issue directly before declaring quiet.
 - **Primary next action: ship bump v0.45.0 ON operator green-light only (counter 12/10).**
 - Boot pull pattern: use `git merge --ff-only origin/main || git merge --no-ff origin/main` (cycle-416 boot did an unnecessary --no-ff bubble because the `--is-ancestor` guard mislabels behind-state as DIVERGED).
