@@ -2,9 +2,9 @@
 
 - **Task**: #11587 — uvicorn loop=none (harness ProactorEventLoop fix) — COMPLETE, PR #11722
 - **Status**: in-progress — HELD pre-pending-test, gated on #11683 shipping (full-suite green)
-- **Updated**: 2026-06-13 08:42
+- **Updated**: 2026-06-13 09:13
 - **Branch**: squidsquad/task/11587 (current). Other in-flight: task/11640, task/11641.
-- **Quiet Cycle Counter**: 1 (iter-459: fully blocked — all 3 PRs MERGEABLE/CLEAN, awaiting #11683 ship)
+- **Quiet Cycle Counter**: 0 (iter-460: caught #11505 scope conflict — real work, not quiet)
 
 ## ⚠️ Session note
 Harness DOWN (port 59999, curl exit 7) — loop-mode (skill pinned stable per #11586). `/loop 30m` cron c8644353. cycle_pre/post DON'T fire — commit/push/PR MANUALLY. working-state.md is PER-BRANCH in git — switching branches swaps it; git tree + issue status is truth ([[learning-resume-git-tree-is-truth]]).
@@ -26,7 +26,7 @@ uvicorn 0.41.0 asyncio_loop_factory hard-codes ProactorEventLoop on win32 (use_s
 
 ## #11505 (low) — PLANNED this cycle (iter-458), in-progress, NOT executed
 Deadwood removal (capability sub-skill layer). Footprint mapped: in-scope = capability-check.md + dm/includes.yml:19 + dm/instructions.md:8 (DM is the ONLY consumer) + empty capabilities/ dir + installer-files.txt + test_feat328_coverage delete + KNOWN_FAILURES -1 + sub-skill-catalog entry. Scope judgment: manifest.py/capability_check.py installer-core capability machinery is OUT (not in ACs; gutting it = separate higher-risk change; asked PM to confirm §8.3 intent). Plan posted on #11505 (work contract).
-- **BLOCKED on**: (1) PM to add CQ AC (step 7.4 — removing LLM-consumed sub-skill from DM) or confirm 'no CQ'; (2) AC7 'run_tests.py exits 0' gated on #11683 ship. Execute mechanical removal once PM answers CQ.
+- **iter-460 SCOPE CONFLICT (stopped execution):** branched task/11505 off main to execute, but deeper trace found capability-check is NOT isolated deadwood: capability_check.py is load-bearing in **PM task-intake** (task-intake.md:70 'Capability gap analysis', composed into PM via pm/includes.yml:31) + DM startup; AND manifest.md:149 + catalog:143 EXPLICITLY say its removal is 'not this PR — paired with #10025 (capability-framework retirement, OPEN)'. AC4's L1-L3 sweep would silently delete a PM workflow step + contradict #10025. capabilities/ DIR already gone (2026-05-27). Posted finding + 3 options (downscope / close-as-superseded-by-#10025 / confirm-full-retirement-with-PM-signoff). Deleted the empty task/11505 branch (no edits made). **BLOCKED on PM/operator disambiguation of #11505↔#10025 overlap.** Do NOT execute until resolved. (Earlier CQ-AC + AC7#11683 blockers also still stand if it proceeds.)
 
 ## Next cycle
 - Check #11683 mergedAt → if shipped, for EACH branch (task/11640, task/11641, task/11587): merge origin/main, run tests/run_tests.py, confirm green, transition → pending-test.
