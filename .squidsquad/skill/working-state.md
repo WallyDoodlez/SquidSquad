@@ -15,7 +15,7 @@ Harness is UP on 7373 (confirmed iter-462). My clone's .harness-port keeps getti
 | #11640 | clone-resolution refuse | task/11640 | #11709 | NO_FINDINGS | #11683 ship |
 | #11641 | stale scheduled_tasks.lock reclaim | task/11641 | #11715 | NO_FINDINGS | #11683 ship |
 | #11587 | uvicorn loop=none (ProactorEventLoop) | task/11587 | #11722 | NO_FINDINGS | #11683 ship |
-| #11723 | liveness-aware port discovery (#11586 root cause) | task/11723 | #11729 | running (bv4nh01ft) | #11683 ship |
+| #11723 | liveness-aware port discovery (#11586 root cause) | task/11723 | #11729 | NO_FINDINGS | #11683 ship |
 
 All own-tests green; each held only because merging current main pulls in the #11657 stale event_poll test (the single full-suite red).
 
@@ -28,9 +28,9 @@ Harness healthy on 7373 whole time. Agents with a stale/dead port file (test-pol
 - **#11505**: blocked on PM/operator disambiguation (#11505↔#10025 overlap, touches PM task-intake).
 
 ## Next cycle
-- Read #11723 DS output (bv4nh01ft); address findings on PR #11729.
+- (#11723 DS review done — NO_FINDINGS. All 4 PRs now DS-clean.)
 - Check #11683 → if shipped, land 4 PRs (merge main, run suite, confirm green, transition).
-- Then #11723 follow-up (1): test .local-config isolation (the root pollution fix).
+- Then #11723 follow-up (1): test .local-config isolation (the root pollution fix) — next substantive work item if PRs stay gated.
 
 ## Standing
 #11538 SHIPPED. #11716 (low improvement-scan) awaiting triage. #11511 not-implementing. #10690/#10686 E6/E7-gated. #11505 blocked (above). Pre-existing test-debt: test_cycle_pre TestGetVerifiableRoles (verifier/qa #6274, quarantined in KNOWN_FAILURES — not mine).
