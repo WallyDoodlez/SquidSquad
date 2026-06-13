@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: cycle 2338 (inline) — CORRECTED #11589 error (closed); R2 PASS→pending-ship; recovered from wrong-branch
-- **Status**: event mode PARTIALLY works (qa verified event-driven); 2 PM errors this cycle, both recovered
+- **Task**: cycle 2339 (inline) — measured; #11537+#11538 pending-ship→DM (work ~25min old, DM ships on next tick)
+- **Status**: stable; NOT restarting DM (cycled 22:06 quietly; ship work arrived 23:07 — between-ticks, not a stall)
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
