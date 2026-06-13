@@ -3,28 +3,25 @@
 - **Task**: cycle 2342 (inline) — degraded state holding: skill + QA stopped (down, not looping); awaiting operator decisions
 - **Status**: skill DOWN (intent label=restarting but 0 procs, NOT respawning); QA DOWN (stopping); DM+PM up. No loops/thrash.
 
-## INCIDENT STATE (skill+QA down by design)
+## INCIDENT STATE — ROOT CAUSE FOUND (cycle 2343, read-only investigation DONE)
 
-- **skill**: STOPPED (0 procs, stable 25s). Was reboot-looping ~15-20s; operator had me stop respawn. Reboot ROOT CAUSE STILL UNKNOWN.
-- **#11601 verified**: DS NO_FINDINGS + 44/44 tests + functionally returns 7373. **GOOD fix, safe to ship — BUT does NOT stop the reboot loop** (skill looped AFTER #11601 committed 00:15). Second cause exists (likely context-pressure exit-42; `context-pressure`=8 marker). Committed on squidsquad/task/11601 (d0986cb7e), NOT pushed, no PR.
+- **REBOOT ROOT CAUSE CONFIRMED — single mechanism, NOT context-pressure:**
+  - `.squidsquad/.harness-port` is **gitignored** (.gitignore:20) -> absent in every sibling clone (verified: skill clone none; qa clone STALE dead-port 65485; pm clone none).
+  - On main, event_poll `_discover_port()` returns **None** on missing file -> `poll()`/`main()` exit 2 -> Monitor dies -> agent session ends (#9742) -> harness #4949 auto-reboots (intent=running) -> ~15-20s loop.
+  - **Context-pressure exit-42 RULED OUT**: marker "8" = 8% used_pct vs threshold 70% (cycle_pre.py:342 `exceeded = used_pct >= threshold`) -> exceeded=False. My prior "second cause" hypothesis was WRONG.
+  - "#11601 committed but loop continued" explained: committing on a branch != running it. **#11601 is NOT merged to main.**
+- **#11601 IS THE FIX** (None->7373 fallback + parent-walk). Verified: DS NO_FINDINGS, 44/44 tests, returns 7373. Commit d0986cb7e on squidsquad/task/11601, **unpushed, no PR**. Skill clone HEAD 718a84821 already contains it -> skill safe to un-stop now (would boot clean today).
+- **Filed**: full analysis posted to #11612; confirmation to #11601 (both cycle 2343).
 - **QA**: STOPPED (#11600 clone fix pending). Verification paused.
-- **Reboot diagnosis needs harness respawn-reason logging** (#11612 step 1) — but skill (the worker) is down. Chicken-and-egg; may need read-only PM investigation of cycle_post exit-42 / context-pressure threshold.
+- **Instrumentation gap**: restart-log.txt stale since 2026-04-15; harness not logging respawns (#11612 step-1 respawn-reason logging still worth doing).
 
-## >>> NEXT TASK (operator-directed, post-compaction): CHASE REBOOT ROOT CAUSE (read-only) <<<
+## >>> AWAITING OPERATOR: ship #11601 to main (= the reboot fix) <<<
 
-Goal: find why skill reboot-loops ~15-20s. Known: #11601 (event_poll None→7373) is committed+present but does NOT stop it. So cause is a SECOND mechanism — leading hypothesis: **context-pressure exit-42** (skill's `.squidsquad/skill/context-pressure` marker = "8").
-
-Read-only investigation steps (no agent restart, don't un-stop skill/QA):
-1. **cycle_post.py** — exit-42 trigger: what context-pressure threshold fires exit 42? Where's the threshold configured? (grep cycle_post.py for context-pressure / exit 42 / threshold / 0.X)
-2. **context-pressure marker semantics** — what does "8" mean? Who writes it (cycle_post?)? Is it a consecutive-pressure counter or a percentage?
-3. **harness respawn on exit-42** — harness.py auto-reboot fires immediately on exit-42 + intent=running → fast loop. Confirm timing.
-4. **skill iter-447/448/449** (3 logs same second 20:37:25) — read them: what did skill do right before each rapid exit?
-5. **Distinguish**: context-pressure exit-42 vs Monitor/event_poll exit vs boot crash. #11601 ruled out the simple event_poll-None path.
-6. Synthesize → file/update #11612 with the confirmed cause → recommend fix to skill.
+Investigation complete. Decision needed: push squidsquad/task/11601 -> PR -> merge. Then un-stop skill (safe; its clone has the fix) + close #11612/#11601. Contributing fragility (.harness-port distribution unreliable / stale clone port files) optional durable-hardening follow-up.
 
 ## PENDING OPERATOR DECISIONS (after root cause found)
 
-1. Ship #11601? (good fix, won't stop reboots — ship anyway for event_poll correctness; committed squidsquad/task/11601 d0986cb7e, needs push→PR→merge)
+1. Ship #11601 — THIS IS THE REBOOT FIX (not optional correctness). Committed squidsquad/task/11601 d0986cb7e, needs push→PR→merge.
 2. QA clone fix (#11600) — quick qa-key→../SquidSquad-qa vs full rename (b).
 3. Bring skill/QA back once reboot cause fixed + clone fixed.
 
