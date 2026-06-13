@@ -3,6 +3,13 @@
 - **Task**: cycle 2344 — overnight stabilization (operator asleep, expects: reboot issue resolved + team in event mode)
 - **Status (02:42)**: ALL 4 AGENTS RUNNING & STABLE — NOTHING looping. dm=EVENT(working); skill=LOOP pinned(stable+working, pid 32432); qa=LOOP(own clone, working); pm healthy. Lock-watchdog active. Reboot issue RESOLVED (both fast stale-lock + slow event-mode loops neutralized).
 
+## >>> UPDATE 10:32 — scaffolding maintenance: lock-watchdog expired+RELAUNCHED <<<
+
+- **5.5hr stable** (skill 15068). Pin-keeper caught port set to '7373' at 10:17 (harness redistribution?) → restored 59999. Keeper essential.
+- **lock-watchdog EXPIRED** (8h loop done ~10:31) → **RELAUNCHED 12h** (bg br9xol2h0, expires ~22:30). Edited lock-watchdog.sh to seq 720.
+- **PIN-KEEPER expires ~12:38** (started ~05:08, 7.5h) → RELAUNCH on/before 12:32 cycle (bg bm5wzho27). Watch for it.
+- **Scaffolding is HIGH-MAINTENANCE** (timed loops expire, need relaunch) — reinforces: durable fix #11641-on-main is the real close-out. Still awaiting operator's active return to drive the consequential DM delivery chain (told operator I'd do it WITH them).
+
 ## >>> UPDATE 05:31 — DM STARVED (event-mode work-delivery gap); durable-fix chain deferred to MORNING <<<
 
 - **DM not shipping #11503/#11657** (pending-ship 42min). Root: DM has **0 events past cursor** + transcript 16h old (yesterday 13:47). NOT broken — STARVED: QA's pending-ship transition emitted no dm-targeted work event. Concrete **#11586 symptom** (event-mode work-delivery gap). Bare-comment nudge can't wake event-mode agent → pipeline-sentinel ineffective here.
