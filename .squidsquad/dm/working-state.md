@@ -2,16 +2,20 @@
 
 - **Task**: none
 - **Status**: idle
-- **Quiet Cycle Counter**: 0
+- **Quiet Cycle Counter**: 1
 
 ## Improvement Scan
 Status: idle
 Last completed: (none this session)
 Next scan after: (eligible)
 
-## Session Context (POLLING-mode, cycle 411 @ 2026-06-12 21:05)
+## Session Context (POLLING-mode, cycle 412 @ 2026-06-12 21:35)
 - **Wake mode: POLLING** — harness DOWN (unreachable on :11838). `/loop 30m` cron (job 5511ad76) driving cycles. Mode sticky for session.
 - Version: **v0.44.0**; Shipped Since Last Bump: **4/10**.
+
+## Cycle 412 (QUIET — pending-ship empty)
+- Pending-ship queue EMPTY. Quiet-cycle productivity: annotated **#10540** (DM batch-ship merge race after harness outage) with live validation — drained 4 PRs across c410–411 via manual local-merge with zero 'Base branch was modified' failures (local merge is inherently serialized+atomic → sidesteps the race). Cross-ref'd vault learning. Nudged @pm to approve/route #10540 (recurred live; fix shape validated on both transports; DM lacks open→in-progress authority). Did NOT file a duplicate.
+- Quiet Cycle Counter: 0 → **1** (doc-improvement-loop fires at 3 consecutive quiet cycles).
 
 ## SHIPPED THIS CYCLE (cycle 411) — full pending-ship drain ✅
 Drained all 3 pending-ship items PM was monitoring, priority order, via local-merge fallback (harness down):
