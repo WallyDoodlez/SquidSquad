@@ -242,10 +242,11 @@ class TestSmokeManifestValidation:
         assert set(roles.keys()) >= {"pm", "dm", "worker", "verifier"}
 
     def test_st2_tool_manifests_load_cleanly(self):
+        # capabilities/ removed as deadwood (INSTALLER-ARCH §8.3, superseded by
+        # per-agent L4 tool config) → the registry now loads zero tools, cleanly.
+        # Full capability-mechanism teardown tracked in #11505. (#11503)
         _, _, tools, _ = manifest.validate_registry()
-        assert set(tools.keys()) >= {
-            "figma", "google_stitch", "local_html", "local_delivery",
-        }
+        assert tools == {}
 
     def test_st3_preset_manifests_load_cleanly(self):
         _, _, _, presets = manifest.validate_registry()

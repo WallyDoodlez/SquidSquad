@@ -54,17 +54,28 @@ class TestStatusline:
 
 
 class TestAgentInstructions:
-    """Verify agent-instructions.md exists and has sub-skill markers."""
+    """Verify the v2 shared instructions base exists and has sub-skill markers.
+
+    #11503 rebind: v1 references/agent-instructions.md was removed in the
+    L1-L4 compose migration.  The v2 equivalent is the shared base layer at
+    references/roles/instructions.md, which carries the boot-bootstrap
+    <!-- sub-skill: --> marker and is the common foundation assembled into
+    every role's composed CLAUDE.md.
+    """
 
     def test_agent_instructions_exists(self):
-        path = REFERENCES_DIR / "agent-instructions.md"
-        assert path.exists(), "Missing agent-instructions.md in references/"
+        # v2: monolithic agent-instructions.md was split; shared base is here.
+        path = REFERENCES_DIR / "roles" / "instructions.md"
+        assert path.exists(), (
+            "Missing v2 shared base instructions at references/roles/instructions.md"
+        )
 
     def test_has_sub_skill_markers(self):
-        content = (REFERENCES_DIR / "agent-instructions.md").read_text(encoding="utf-8")
+        # v2: sub-skill markers live in per-layer instructions.md files.
+        content = (REFERENCES_DIR / "roles" / "instructions.md").read_text(encoding="utf-8")
         assert "<!-- sub-skill:" in content, (
-            "agent-instructions.md has no sub-skill markers — "
-            "may not be composed from sub-skills"
+            "references/roles/instructions.md has no sub-skill markers — "
+            "v2 shared base must contain at least one <!-- sub-skill: --> block"
         )
 
 

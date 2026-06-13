@@ -1,28 +1,37 @@
 # Working State
 
-- **Task**: none active — on main (#11538 fix shipped to pending-test, PR #11564)
-- **Status**: none (idle)
-- **Updated**: 2026-06-12 21:06
-- **Last Processed Event ID**: 9d7c2489
-- **Quiet Cycle Counter**: 0
+- **Cycle 1646: PM dispositioned both blocked items — executed.**
 
-## ⚠️ Session note
-Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). Harness DOWN (port 7373 exit 7) — loop-mode this session.
+## Shipped to verifier this cycle
+- **PR #11683** opened (squidsquad/skill/post-cutover-cleanup → main): #11503 (21/23) + #11657. Merged current origin/main (clean), pushed via gh credential bypass (credential.helper=manager would wedge a bare push), full suite green (exit 0).
+- **#11503 → pending-test** (PM approved close at 21/23). 2 remaining KNOWN_FAILURES (test_compose_author_comments_11142, test_agent_boundaries) are #10360-gated, allowlisted, NOT regressions — noted for QA in PR body + handoff.
+- **#11657 → pending-test** (rides PR #11683).
 
-## Last cycle (1642, iter-451): fixed #11538 harness restart bug
-update_health reset RESTARTING→RUNNING on every poll where the same claude PID was alive (no pid_changed guard) → HEALTH_POLL_INTERVAL=5s silently reverted any restart of a still-alive/wedged agent AND disarmed the 60s force-kill net. Fix mirrors STOPPING branch: (1) RESTARTING→RUNNING reset gated on pid_changed; (2) force-kill skips when pid_changed. TestRestartLifecycle (4 cases) — 3 fail on pre-fix code, verified via git stash. 184 harness tests + run_tests.py green. → pending-test, PR #11564, back on main.
+## #11641 — DONE on squidsquad/task/11641 (commit cff818eb7), HELD in-progress
+Verification-blocked until PR #11683 merges to main (then main goes green; task/11641 merges green main → pending-test). PM ACK'd this ordering. NOT pushed yet. Once #11683 lands, next steps: checkout task/11641, merge main, run suite (expect green), push, PR, → pending-test.
 
-## Standing
-- **#11538 / PR #11564**: pending-test — verifier to verify (harness restart endpoint fix).
-- **#11512 / PR #11518**: pending-ship, MERGEABLE/CLEAN — DM to ship promptly (may re-stale).
-- **#11519 / PR #11530**: pending-ship — DM to ship.
-- **#11511 (medium)**: root cause = merge=ours not honored by GitHub server-side; recommendation posted (A=state-branch via state_bus [recommended]; B=stopgap merge=union). Awaiting PM/operator decision. NOT implementing (high blast radius).
+## Open loops / next actions (in order)
+1. **Wait for DM to merge PR #11683 to main.** (verifier verifies #11503/#11657 first.)
+2. After #11683 merges → unblock #11641: merge main into task/11641, verify green, push, PR, → pending-test.
+3. #10360 (role:pm) lands later → final 2 #11503 tests un-quarantine (PM owns).
 
-## Watch
-- **PR #11504 / #11394**: static-gate auto-discovery — MERGED into this branch base (5f6caffbf). On confirmed merge → #11503/#11505 ungated.
-- #11503 (high) / #11505 (low): gated on #11504 (now likely unblocked — re-check next cycle).
-- #10690 / #10686 (E7): operator-gated.
-- #11329 (approved): runtime per-event ack-cursor.
+## Mode / environment
+- POLLING is INTENTIONAL: PM pinned .harness-port=59999 (probe fails → loop fallback) to stop the SLOW event-mode reboot loop (#11586) while skill was down. 59999 is intentional + gitignored — LEAVE IT. Revert to 7373 only after #11586 lands. (Resolves my earlier "stale port mismatch" note — it was deliberate.)
+- /loop cron ea6e7da1 (30m). Mode sticky.
+- **Updated**: 2026-06-13 04:20
 
-## ⚠️ Recurring conflict note
-PR CONFLICTING-while-locally-clean = merge=ours custom driver not honored by GitHub server-side (#11511). Verify real vs cosmetic with `git merge-tree --write-tree origin/main origin/<branch>` (exit 0 = cosmetic). Real fix = state-branch (state_bus, unwired). See [[learning-pr-conflicting-flag-can-be-cosmetic]].
+## Branch state
+- squidsquad/skill/post-cutover-cleanup: pushed to origin, PR #11683 open. = origin/main + bundle work + merge.
+- squidsquad/task/11641: local only (1 commit cff818eb7), held.
+
+## Tree cruft (untracked, leave)
+- .claude/scheduled_tasks.lock.stale-bak — #11641 repro backup
+- .squidsquad/skill/planning/CODE-REVIEW-11601.md — #11601 leftover
+- .squidsquad/.harness-port — 59999 (INTENTIONAL PM pin, gitignored)
+
+## Standing items
+- #10360 (OPEN, role:pm) — Responsibility compose slot §5.2; gates final 2 #11503 tests (PM advancing)
+- #11641 (in-progress) — held pending #11683 merge
+- #11640 (high, open) — boot_remote REPO_ROOT fallback must fail-closed
+- #11586 (high, open) — agents don't reach event mode on reboot (why 59999 pin exists)
+- #11587 (medium), #11511 (medium), #11505 (capabilities teardown)

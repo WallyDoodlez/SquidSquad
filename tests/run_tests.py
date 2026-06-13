@@ -75,33 +75,17 @@ KNOWN_NON_STATIC = {
     "test_feat_6581_wizard_reframing": "test_tc_10b recursively invokes run_tests.py (full suite incl integration) — unsuitable for static gate; #11503",
 }
 
-# Currently-red files quarantined out of the gate. Triage/fix tracked in #11503
-# (gate went dead at the v0.44.0 cutover, masking these). Reasons are the
-# first-failure cause; full detail in .squidsquad/skill/planning/11394-reasons.txt.
+# Currently-red files quarantined out of the gate. The post-cutover stale-test
+# debt (gate went dead at the v0.44.0 cutover, masking these; full detail in
+# .squidsquad/skill/planning/11394-reasons.txt) has been worked down under
+# #11503. The REMAINING two entries are NOT stale-test debt: they are tests
+# that correctly fail on genuinely-incomplete work tracked by OPEN #10360
+# (Implement Responsibility compose slot per COMPOSE-ARCHITECTURE §5.2). They
+# clear only once #10360 lands the Responsibility slot — do NOT paper over by
+# weakening assertions. See the #11503 comment for the full triage.
 KNOWN_FAILURES = {
-    "test_references": "asserts removed v1 references/agent-instructions.md — #11503",
-    "test_manifest_registry": "shipped registry validation error (possibly real) — #11503",
-    "test_statusline_schema": "references/ vs .squidsquad/ statusline.sh out of sync (possibly real) — #11503",
-    "test_feat328_coverage": "capability registry empty: known capabilities [] (possibly real) — #11503",
-    "test_state_bus": "asserts git pull --rebase; code is --no-rebase per never-rebase rule — #11503",
-    "test_comms_sub_skills": "chat-etiquette.md heading-format assertion (possibly real) — #11503",
-    "test_event_mode_fragments": "expects includes.yml to list common/boot-bootstrap (v2 changed includes) — #11503",
-    "test_cycle_pre": "asserts 'verifier' in alias set; #6274 rename partial — #11503 / #6274",
-    "test_4792_fragment_hygiene": "asserts removed 'sole liveness signal' phrase in composed skill — #11503",
-    "test_deterministic_qa_framework": "asserts '\"Deferred\"' in composed QA (drifted) — #11503",
-    "test_dm_verify_before_block": "reads removed references/sub-skills/roles/dm/prohibitions.md — #11503",
-    "test_own_domain_autofix": "asserts removed v1 {{include:}} directive syntax (#11049 Path A) — #11503",
-    "test_vault_synthesis": "asserts 'create-task' in restructured pm source (drifted) — #11503",
-    "test_pickup_comment_fidelity_9946": "reads removed references/roles/dev/includes.yml (pre-rename) — #11503",
-    "test_terminology_dual_aware_6274": "asserts pre-rename ('dev','skill'); #6274 landed → ('worker','skill') — #11503",
-    "test_compose_a2f_10492": "compose section-list golden drifted — #11503",
-    "test_atomic_emit_b7": "compose section-list golden drifted — #11503",
-    "test_a3_golden_link_stage": "compose golden drifted — #11503",
-    "test_compose_author_comments_11142": "asserts boot-bootstrap wrapper marker in restructured worker/instructions.md — #11503",
-    "test_config_functions": "SAMPLE_CONFIG fixture missing new FIELD_MAP entries (code-review-model, effort-*, event-driven) — #11503",
-    "test_agent_boundaries": "asserts removed responsibility.md + 'Know each other's responsibilities' phrase — #11503",
-    "test_feat_9588_lazy_load_bootstrap": "asserts removed '## Boot — Mode Detection (#9588)' heading — #11503",
-    "test_stale_tracker_files_ref": "reads removed references/sub-skills/roles/pm/prohibitions.md — #11503",
+    "test_compose_author_comments_11142": "test_10360_cleanup_markers_preserved: #10360-cleanup breadcrumbs (future-work pointers for OPEN #10360) dropped by #11331 rewrite — blocked on #10360 (the stale boot-bootstrap-marker half is fixed)",
+    "test_agent_boundaries": "test_ac7: 20 L3 variant responsibility stubs missing (COMPOSE-ARCH §5.2) — blocked on OPEN #10360. The other 19 assertions (ac4/ac6/ac11) are superseded by the agent-boundaries sub-skill retirement; rewrite the file together once #10360 unblocks it",
 }
 
 
