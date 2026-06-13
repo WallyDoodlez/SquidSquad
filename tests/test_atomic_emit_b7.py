@@ -75,9 +75,9 @@ def test_success_claude_md_contains_six_h2_sections_in_order(tmp_path):
     assert h2 == [
         "## Identity",
         "## Responsibility",
+        "## Project Context",
         "## Soul",
         "## Agent Functions",
-        "## Project Context",
         "## Vault",
     ]
 

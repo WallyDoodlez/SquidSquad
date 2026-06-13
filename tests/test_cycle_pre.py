@@ -988,17 +988,22 @@ class TestGetVerifiableRoles:
         roles = cycle_pre._get_verifiable_roles()
         assert "dm" in roles
         assert "pm" in roles
-        assert "verifier" in roles
+        # #6274 D5 dual-aware: the verifier class is mandatory under whichever
+        # install identity exists on disk — "qa" pre-wizard-D4 (qa/ dir), and
+        # "verifier" once D4 renames the install dir. _get_verifiable_roles
+        # adds exactly one of {qa, verifier} per the on-disk check.
+        assert "verifier" in roles or "qa" in roles
 
     def test_fallback_when_config_empty(self, monkeypatch):
         """If config returns empty, at least skill is present."""
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
         roles = cycle_pre._get_verifiable_roles()
         assert "skill" in roles
-        # mandatory roles always added (pm, verifier, dm — #9318 / #6274.2)
+        # mandatory roles always added (pm, verifier-class, dm — #9318 / #6274.2)
         assert "dm" in roles
         assert "pm" in roles
-        assert "verifier" in roles
+        # #6274 D5 dual-aware (see test_always_includes_mandatory_roles).
+        assert "verifier" in roles or "qa" in roles
 
     def test_deduplicates(self, monkeypatch):
         """Roles are not duplicated even if they appear in config and hardcoded."""

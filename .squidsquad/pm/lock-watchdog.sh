@@ -4,7 +4,7 @@
 # overnight until #11641 (durable spawn-path fix) lands. Ops stall-recovery, not code.
 LOG="$HOME/.squidsquad-lock-watchdog.log"
 CLONES="/d/Dev/Dev/SquidSquad-2 /d/Dev/Dev/SquidSquad-qa /d/Dev/Dev/SquidSquad-3 /d/Dev/Dev/SquidSquad"
-for n in $(seq 1 480); do   # ~8h at 60s
+for n in $(seq 1 720); do   # ~12h at 60s
   for c in $CLONES; do
     lk="$c/.claude/scheduled_tasks.lock"
     [ -f "$lk" ] || continue

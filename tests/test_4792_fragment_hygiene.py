@@ -88,7 +88,15 @@ class TestSharedInstructions:
 
 
 class TestComposedClaudeMd:
-    """Composed CLAUDE.md files must mirror the cleaned fragments."""
+    """Composed CLAUDE.md files must wire the agent-lifecycle sub-skill.
+
+    Post-v0.44.0 cutover: agent-lifecycle is no longer inlined into CLAUDE.md
+    at compose time — it is invoked at runtime via ``→ run sub-skill:``.
+    The lifecycle phrases ("sole liveness signal", "squidsquad_cli.py start")
+    live in the sub-skill source and in shared-instructions.md (tested
+    separately by TestSharedInstructions).  What the composed CLAUDE.md MUST
+    do is reference the sub-skill so the agent picks it up at runtime.
+    """
 
     @pytest.mark.parametrize("composed", COMPOSED_CLAUDE_MD,
                              ids=lambda p: p.parent.name)
@@ -99,17 +107,31 @@ class TestComposedClaudeMd:
             "recompose pass is incomplete"
         )
 
-    @pytest.mark.parametrize("composed", COMPOSED_CLAUDE_MD,
-                             ids=lambda p: p.parent.name)
-    def test_sole_liveness_signal_present(self, composed):
-        text = composed.read_text(encoding="utf-8")
-        assert "sole liveness signal" in text
+    def test_sole_liveness_signal_present(self):
+        # v2: lifecycle info lives in shared-instructions.md (always merged
+        # into agent context) and in the agent-lifecycle sub-skill source.
+        # Verify that shared-instructions carries the canonical phrase so the
+        # agent definitely reads it — the sub-skill itself is tested by
+        # TestLifecycleFragment.test_canonical_liveness_phrase_present.
+        shared = SHARED_INSTRUCTIONS.read_text(encoding="utf-8")
+        assert "sole liveness signal" in shared, (
+            "sole liveness signal must be present in shared-instructions.md "
+            "— agents read this file every cycle."
+        )
 
     @pytest.mark.parametrize("composed", COMPOSED_CLAUDE_MD,
                              ids=lambda p: p.parent.name)
     def test_squidsquad_cli_canonical(self, composed):
+        # v2: squidsquad_cli.py is referenced in shared-instructions.md and
+        # in the agent-lifecycle sub-skill source (tested by
+        # TestLifecycleFragment.test_lifecycle_interface_uses_squidsquad_cli).
+        # The composed CLAUDE.md wires the sub-skill via a runtime reference.
         text = composed.read_text(encoding="utf-8")
-        assert "squidsquad_cli.py start" in text
+        assert "agent-lifecycle" in text, (
+            f"{composed.parent.name}/CLAUDE.md must reference the "
+            "agent-lifecycle sub-skill so the agent can access the "
+            "squidsquad_cli.py lifecycle interface at runtime."
+        )
 
 
 class TestComprehensionSpecExists:
