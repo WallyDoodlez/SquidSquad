@@ -446,11 +446,72 @@ class TestUrlBuilding:
 
 
 class TestHarnessUnreachable:
-    def test_poll_returns_none_when_port_file_missing(self, monkeypatch,
-                                                       capsys):
+    def test_poll_returns_none_when_discover_port_returns_none(self, monkeypatch,
+                                                               capsys):
+        """Defensive branch: poll() still bails cleanly if _discover_port ever
+        yields None. Post-#11601 _discover_port always returns an int (7373
+        fallback), so a genuinely-missing port file no longer reaches here —
+        but the guard is kept for call-shape consistency with cycle_post and is
+        exercised by stubbing the discovery to None."""
         monkeypatch.setattr(event_poll, "_discover_port", lambda: None)
         assert event_poll.poll("skill", sleep=lambda _: None) is None
         assert "port not found" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Port discovery — #11601: missing/garbage .harness-port falls back to 7373
+# instead of returning None (which killed the Monitor → session, defeating
+# event mode in every clone lacking the gitignored port file).
+# ---------------------------------------------------------------------------
+
+
+class TestDiscoverPort:
+    def test_reads_repo_port_file_when_present(self, monkeypatch, tmp_path):
+        squid = tmp_path / ".squidsquad"
+        squid.mkdir()
+        (squid / ".harness-port").write_text("8080", encoding="utf-8")
+        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
+        monkeypatch.setattr(event_poll, "REPO_ROOT", tmp_path / "repo")
+        assert event_poll._discover_port() == 8080
+
+    def test_defaults_to_7373_when_file_absent(self, monkeypatch, tmp_path):
+        # The bug: .harness-port is gitignored and absent in sibling clones.
+        clone = tmp_path / "clone"
+        squid = clone / ".squidsquad"
+        squid.mkdir(parents=True)
+        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
+        monkeypatch.setattr(event_poll, "REPO_ROOT", clone)
+        assert event_poll._discover_port() == 7373
+
+    def test_walks_parent_dirs_for_inherited_file(self, monkeypatch, tmp_path):
+        clone = tmp_path / "clone"
+        (clone / ".squidsquad").mkdir(parents=True)  # no port file in clone
+        parent_squid = tmp_path / ".squidsquad"      # inherited from ancestor
+        parent_squid.mkdir()
+        (parent_squid / ".harness-port").write_text("9001", encoding="utf-8")
+        monkeypatch.setattr(event_poll, "SQUID_DIR", clone / ".squidsquad")
+        monkeypatch.setattr(event_poll, "REPO_ROOT", clone)
+        assert event_poll._discover_port() == 9001
+
+    def test_garbage_content_defaults_to_7373(self, monkeypatch, tmp_path):
+        clone = tmp_path / "clone"
+        squid = clone / ".squidsquad"
+        squid.mkdir(parents=True)
+        (squid / ".harness-port").write_text("not-a-port", encoding="utf-8")
+        monkeypatch.setattr(event_poll, "SQUID_DIR", squid)
+        monkeypatch.setattr(event_poll, "REPO_ROOT", clone)
+        assert event_poll._discover_port() == 7373
+
+    def test_always_returns_int_never_none(self, monkeypatch, tmp_path):
+        """Contract regression for #11601: the function must never return None
+        (the old behavior that exited Monitor with code 2)."""
+        clone = tmp_path / "clone"
+        (clone / ".squidsquad").mkdir(parents=True)
+        monkeypatch.setattr(event_poll, "SQUID_DIR", clone / ".squidsquad")
+        monkeypatch.setattr(event_poll, "REPO_ROOT", clone)
+        result = event_poll._discover_port()
+        assert isinstance(result, int)
+        assert result is not None
 
 
 # ---------------------------------------------------------------------------
