@@ -75,16 +75,17 @@ KNOWN_NON_STATIC = {
     "test_feat_6581_wizard_reframing": "test_tc_10b recursively invokes run_tests.py (full suite incl integration) — unsuitable for static gate; #11503",
 }
 
-# Currently-red files quarantined out of the gate. Triage/fix tracked in #11503
-# (gate went dead at the v0.44.0 cutover, masking these). Reasons are the
-# first-failure cause; full detail in .squidsquad/skill/planning/11394-reasons.txt.
+# Currently-red files quarantined out of the gate. The post-cutover stale-test
+# debt (gate went dead at the v0.44.0 cutover, masking these; full detail in
+# .squidsquad/skill/planning/11394-reasons.txt) has been worked down under
+# #11503. The REMAINING two entries are NOT stale-test debt: they are tests
+# that correctly fail on genuinely-incomplete work tracked by OPEN #10360
+# (Implement Responsibility compose slot per COMPOSE-ARCHITECTURE §5.2). They
+# clear only once #10360 lands the Responsibility slot — do NOT paper over by
+# weakening assertions. See the #11503 comment for the full triage.
 KNOWN_FAILURES = {
-    "test_cycle_pre": "asserts 'verifier' in alias set; #6274 rename partial — #11503 / #6274",
-    "test_own_domain_autofix": "asserts removed v1 {{include:}} directive syntax (#11049 Path A) — #11503",
-    "test_vault_synthesis": "asserts 'create-task' in restructured pm source (drifted) — #11503",
-    "test_terminology_dual_aware_6274": "asserts pre-rename ('dev','skill'); #6274 landed → ('worker','skill') — #11503",
-    "test_compose_author_comments_11142": "asserts boot-bootstrap wrapper marker in restructured worker/instructions.md — #11503",
-    "test_agent_boundaries": "asserts removed responsibility.md + 'Know each other's responsibilities' phrase — #11503",
+    "test_compose_author_comments_11142": "test_10360_cleanup_markers_preserved: #10360-cleanup breadcrumbs (future-work pointers for OPEN #10360) dropped by #11331 rewrite — blocked on #10360 (the stale boot-bootstrap-marker half is fixed)",
+    "test_agent_boundaries": "test_ac7: 20 L3 variant responsibility stubs missing (COMPOSE-ARCH §5.2) — blocked on OPEN #10360. The other 19 assertions (ac4/ac6/ac11) are superseded by the agent-boundaries sub-skill retirement; rewrite the file together once #10360 unblocks it",
 }
 
 

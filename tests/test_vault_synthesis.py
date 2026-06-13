@@ -65,9 +65,12 @@ class TestVaultSynthesisStructure:
         assert re.search(r'\*\*Tags\*\*.*posture', synthesis_text)
 
     def test_human_approval_task(self, synthesis_text):
-        """#3139: Each posture files a pending task for human review."""
-        assert "create-task" in synthesis_text
-        assert "pending" in synthesis_text.lower() or "human" in synthesis_text.lower()
+        """#3139: Each posture files a pending task for human review.
+        (The `create-task` CLI one-liner now lives in tracker-protocol;
+        vault-synthesis delegates to it by reference rather than
+        inlining the command.)"""
+        assert "File a pending task for human review" in synthesis_text
+        assert "tracker-protocol" in synthesis_text
 
     def test_max_one_posture_per_cycle(self, synthesis_text):
         """#3139: Max 1 posture per synthesis cycle."""
@@ -98,8 +101,11 @@ class TestVaultSynthesisComposed:
     """Verify the sub-skill is properly composed into PM's CLAUDE.md."""
 
     def test_synthesis_in_composed_output(self, composed_pm):
-        """#3139: vault-synthesis appears in composed PM CLAUDE.md."""
-        assert "Vault Synthesis" in composed_pm
+        """#3139: vault-synthesis appears in composed PM CLAUDE.md.
+        (Composed via the `→ run sub-skill:` step marker — the step
+        anchor `step:cycle/vault-synthesis` is the inlined trace, not
+        the sub-skill's title-case heading.)"""
+        assert "vault-synthesis" in composed_pm
 
     def test_synthesis_after_vault_optimize(self, composed_pm):
         """#3139: vault-synthesis appears after vault-optimize in compose order."""
