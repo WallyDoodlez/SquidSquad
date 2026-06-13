@@ -1,10 +1,10 @@
 # Working State
 
-- **Task**: Queue is triage-blocked. iter-468 delivered decisive #11511 finding. #11745 + #11511 both in-progress, held for operator/direction. 4 prior PRs progressing out-of-lane.
-- **Status**: in-progress (#11745, #11511) — both blocked on operator/direction; no shippable approved code in queue.
-- **Updated**: 2026-06-13 15:15
-- **Branch**: main (state). Feature branches: task/11587, task/11640, task/11641, task/11723.
-- **Quiet Cycle Counter**: 0 (iter-468: #11511 root-cause finding)
+- **Task**: All 4 PRs landed (#11723/#11641 SHIPPED, #11640/#11587 pending-ship). Queue triage-blocked. iter-469: vault hygiene only.
+- **Status**: in-progress (#11745, #11511) — both still blocked on operator/direction (no response as of 15:38). No shippable APPROVED code in queue.
+- **Updated**: 2026-06-13 15:38
+- **Branch**: main (state). Feature branches: task/11587, task/11640, task/11641, task/11723 (all merged/merging).
+- **Quiet Cycle Counter**: 1 (iter-469: vault cross-link only; queue blocked)
 
 ## ⚠️ QUEUE STATE — every actionable item is triage/operator-blocked (operator: needs unblocking)
 - **#11745** (in-progress) — orphan terminals; blocked on operator A-vs-B UX fork (iter-467).
@@ -19,8 +19,8 @@ Implementable approved work (the 4 PRs) shipped cycle 466. Until operator triage
 DECISIVE: GitHub does NOT honor user .gitattributes merge drivers for PR mergeability (merge=union = open GH feature request since 2021, community discussion #9288; merge=ours is doubly local-only — `merge.ours.driver=true` lives in local .git/config, not committed). So the EXISTING .gitattributes strategies are server-side no-ops; candidate 2 (add merge=union) WON'T fix the flap. Candidate 1 (gitignore): current-state/cycle-*.json/.backlog-cache already gitignored (don't flap); remaining = working-state.md, but gitignoring it breaks INTENTIONAL cross-agent visibility (cycle_post splits state→main on purpose; health_check/state_bus/migrate_state_branch read it).
 ROOT CAUSE: working-state.md flaps only when it lands on a FEATURE branch (both-sides-changed). cycle_post already routes state→working/main, not feature branch — it leaks onto feature branches only when the wrapper is bypassed (harness-down manual commits) or branch races. RECOMMENDED (held for confirm, high blast radius): (1) treat GH CONFLICTING as advisory — verify with `git merge-tree --write-tree base head` before hand-nudging; merge locally when harness down (zero-risk, stops wasted cycles now); (2) harden state routing so working-state can't land on feature branches even on manual paths; (3) do NOT add .gitattributes entries / do NOT gitignore working-state. Full detail on #11511 comment.
 
-## 4 prior PRs — status as of 15:15 (out of lane, monitoring)
-- #11723 (#11729) pending-ship · #11641 (#11715) pending-ship · #11640 (#11709) pending-test · #11587 (#11722) pending-test
+## 4 prior PRs — status as of 15:38 (out of lane, DM shipping)
+- #11723 (#11729) **SHIPPED** · #11641 (#11715) **SHIPPED** · #11640 (#11709) pending-ship · #11587 (#11722) pending-ship
 
 ## iter-467 (14:59) — #11745 orphan terminals: investigated, surfaced design fork
 Root cause (boot_remote _spawn_*): Windows wt.exe path runs agent as a command launched DIRECTLY in Terminal → closeOnExit default `automatic`=`graceful` → tab stays open on non-zero/kill exit (the orphan). NO wt CLI flag to override (microsoft/terminal#15747); `closeOnExit:always` is settings.json-profile-only. Legacy ps1 path `pwsh -NoExit` = guaranteed orphan. macOS Terminal.app `do script` leaves window. Linux tmux detached session lingers (kill-session only at spawn, not stop).
