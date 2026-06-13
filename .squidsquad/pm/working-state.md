@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: cycle 2331 (inline) — DM RECOVERED (operator manual restart); shipped #11394; 3 clean items draining
-- **Status**: DM healthy + cycling (cycle 410, counter 1/10); #10836 R1 awaiting DM ship
+- **Task**: cycle 2332 (inline) — monitoring DM drain; 3 items still pending-ship, DM idle between ticks
+- **Status**: DM healthy (cycle 410, shipped #11394); idle ~13min post-ship, next /loop tick ~21:18 — NOT re-wedged (within cadence). 3 clean items remain.
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
