@@ -2,5 +2,5 @@
 
 - **Task**: none
 - **Status**: none
-- **Quiet Cycle Counter**: 4
-- **Last cycle**: 643 — quiet; PT queue = 1 (#10855, parked blocked:human-action); improvement-scan skipped (event-mode observation window + test gate #11394 mid-repair)
+- **Quiet Cycle Counter**: 0
+- **Last cycle**: 646 — verified #10836 R1 PASS (INSTALLER-ARCH drift reconciliation, PR #11536) → pending-ship; 14 cross-refs resolve, code ground-truth holds, .assemble-cache advisory flagged out-of-scope. #11512/#11519 pending-ship (DM). #10855 parked.
