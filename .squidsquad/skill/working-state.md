@@ -1,28 +1,29 @@
 # Working State
 
-- **Task**: none active — on main (#11538 fix shipped to pending-test, PR #11564)
-- **Status**: none (idle)
-- **Updated**: 2026-06-12 21:06
-- **Last Processed Event ID**: 9d7c2489
+- **Task**: #11640 — clone-resolution refuse (COMPLETE, committed 481cd4414, PR #11709)
+- **Status**: in-progress — HELD pre-pending-test, gated on #11683 shipping (full-suite green)
+- **Updated**: 2026-06-13 05:19
 - **Quiet Cycle Counter**: 0
 
 ## ⚠️ Session note
-Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). Harness DOWN (port 7373 exit 7) — loop-mode this session.
+Harness DOWN (port 59999, curl exit 7) — loop-mode this session (skill pinned to stable loop per #11586 workaround). `/loop 30m` scheduled (cron c8644353). cycle_pre/post wrappers do NOT fire (harness down) — I commit/push/PR manually.
 
-## Last cycle (1642, iter-451): fixed #11538 harness restart bug
-update_health reset RESTARTING→RUNNING on every poll where the same claude PID was alive (no pid_changed guard) → HEALTH_POLL_INTERVAL=5s silently reverted any restart of a still-alive/wedged agent AND disarmed the 60s force-kill net. Fix mirrors STOPPING branch: (1) RESTARTING→RUNNING reset gated on pid_changed; (2) force-kill skips when pid_changed. TestRestartLifecycle (4 cases) — 3 fail on pre-fix code, verified via git stash. 184 harness tests + run_tests.py green. → pending-test, PR #11564, back on main.
+## Last cycle (resumed WIP for #11640)
+Resumed uncommitted #11640 WIP (boot_remote.py + harness.py + tests) that working-state had not recorded. Verified complete: _get_clone_path raises CloneResolutionError on unregistered role + registered-but-missing path (no REPO_ROOT fallback); boot_agent + auto-reboot loop + /start + /restart + stop_all + shutdown all refuse/skip safely. 9 new tests, all ACs covered, 237 passed in touched files. Committed 481cd4414, merged origin/main (clean), pushed, PR #11709. DS review running (bg bbz33qa9s) on the boot_remote/harness diff.
 
-## Standing
-- **#11538 / PR #11564**: pending-test — verifier to verify (harness restart endpoint fix).
-- **#11512 / PR #11518**: pending-ship, MERGEABLE/CLEAN — DM to ship promptly (may re-stale).
-- **#11519 / PR #11530**: pending-ship — DM to ship.
-- **#11511 (medium)**: root cause = merge=ours not honored by GitHub server-side; recommendation posted (A=state-branch via state_bus [recommended]; B=stopgap merge=union). Awaiting PM/operator decision. NOT implementing (high blast radius).
+## ⚠️ #11640 handoff is GATED
+Full repo suite has ONE red: test_event_poll_exits_cleanly_when_harness_unreachable = pre-existing #11601 regression, already fixed + verified + pending-ship on **PR #11683** (#11657, also bundles #11503). NOT mine. #11640 cannot reach a green full suite (→ pending-test) until #11683 ships to main + I merge main.
+- **Next cycle**: check if #11683 shipped → if yes, merge origin/main into task/11640, run full suite, confirm green, transition #11640 → pending-test on PR #11709. If still pending-ship, keep holding; consider nudging DM.
+- Check DS review output (.squidsquad/skill/planning/CODE-REVIEW-11640.md) — address any real findings on PR #11709 before pending-test.
 
-## Watch
-- **PR #11504 / #11394**: static-gate auto-discovery — MERGED into this branch base (5f6caffbf). On confirmed merge → #11503/#11505 ungated.
-- #11503 (high) / #11505 (low): gated on #11504 (now likely unblocked — re-check next cycle).
-- #10690 / #10686 (E7): operator-gated.
-- #11329 (approved): runtime per-event ack-cursor.
+## Standing (from prior session, re-verify)
+- **#11641**: stale scheduled_tasks.lock reclaim — was implemented on branch task/11641 (commit cff818eb7), thin_launcher._reclaim_stale_scheduled_lock. PM confirmed as durable #11612 fix. Re-check its PR/ship status next cycle.
+- **#11538 / PR #11564**: harness restart bug fix — was pending-test last session; re-check.
+- **#11511 (medium)**: PR mergeability flaps from transient-state commits — merge=ours not honored server-side; recommendation posted, awaiting PM/operator. NOT implementing (high blast radius).
+
+## Untracked files (leave; not part of #11640 PR)
+- `.claude/scheduled_tasks.lock.stale-bak` — #11641 manual-fix backup, do NOT commit.
+- `.squidsquad/skill/planning/CODE-REVIEW-11601.md`, `DIFF-11640.patch` — local planning scratch.
 
 ## ⚠️ Recurring conflict note
-PR CONFLICTING-while-locally-clean = merge=ours custom driver not honored by GitHub server-side (#11511). Verify real vs cosmetic with `git merge-tree --write-tree origin/main origin/<branch>` (exit 0 = cosmetic). Real fix = state-branch (state_bus, unwired). See [[learning-pr-conflicting-flag-can-be-cosmetic]].
+PR CONFLICTING-while-locally-clean = merge=ours custom driver not honored by GitHub server-side (#11511). Verify real vs cosmetic with `git merge-tree --write-tree origin/main origin/<branch>` (exit 0 = cosmetic). See [[learning-pr-conflicting-flag-can-be-cosmetic]].
