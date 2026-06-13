@@ -1,30 +1,29 @@
-"""Live-system pytest for #9725 — spawn /loop registration in thin_launcher.
+"""Live-system pytest for the thin_launcher spawn prompt.
 
-AC-derived (without reading the diff) against #9725 issue body + CONTEXT-9725 §7.
+ORIGIN #9725 made the spawn prompt a literal `/loop <N>m ...` registration.
+#11512 SUPERSEDES that: forcing /loop on the first turn preempted composed
+CLAUDE.md boot Step 1 (the harness probe that selects event vs polling mode),
+so every agent booted loop mode and event mode was never reached. The spawn
+prompt is now a mode-neutral boot trigger (`thin_launcher._SPAWN_PROMPT`) and
+mode selection lives solely in boot Step 1. These cases assert the #11512
+contract.
 
 TC mapping:
-  TC-1 → AC-1: thin_launcher.main builds a command whose last positional is
-              `/loop <N>m execute one Ralph Loop cycle`
-  TC-2 → AC-4: interval is read from config.md (mock + verify substitution)
-  TC-3 → AC-4: interval defaults to '30' when config field is missing/None
-  TC-4 → AC-1: defensive — old "Boot. Begin your first Ralph Loop cycle now."
-              prompt is no longer present in the spawned command
+  TC-1 → #11512: thin_launcher.main builds a command whose last positional is
+              the mode-neutral _SPAWN_PROMPT, contains no /loop directive, and
+              still excludes the pre-#9725 "Boot. Begin your first Ralph Loop
+              cycle now." prompt.
   TC-5 → dev unit suite green (`tests/test_thin_launcher.py`)
-  TC-6 → AC-2 live-witness: this very session is the proof — QA was spawned via
-         the new spawn prompt and has been cycling regularly. Captured here as
-         a structural smoke check on the running clone's iter log directory.
+  TC-6 → live-witness: agents on this team commit one `<role>: cycle <N>`
+         per cycle regardless of wake mode (cycle_post fires under both event
+         and loop modes). Structural smoke check on origin/main history.
 """
 
 from __future__ import annotations
 
-import importlib
-import os
-import re
 import subprocess
 import sys
-import time
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -44,9 +43,8 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 import thin_launcher  # noqa: E402
 
 
-# TC-1 + TC-4
-def test_tc_01_spawn_prompt_is_loop_directive(monkeypatch):
-    monkeypatch.setattr(thin_launcher, "_get_interval", lambda: "30")
+# TC-1
+def test_tc_01_spawn_prompt_is_mode_neutral_boot_trigger(monkeypatch):
     # Bypass the #8692 singleton check (this very session holds the role's
     # .claude-pid lock — without this, main() refuses to spawn).
     monkeypatch.setattr(thin_launcher, "_check_singleton", lambda cp, r: None)
@@ -84,41 +82,17 @@ def test_tc_01_spawn_prompt_is_loop_directive(monkeypatch):
     cmd = captured.get("cmd", [])
     assert cmd, "thin_launcher.main did not invoke subprocess.Popen"
     last = cmd[-1]
-    assert re.match(r"^/loop \d+m execute one Ralph Loop cycle$", last), (
-        f"spawn prompt should be `/loop <N>m execute one Ralph Loop cycle`; "
-        f"got {last!r}"
-    )
-    # TC-4 — defensive: old hard-imperative prompt must not appear anywhere
+    # #11512: last positional is the mode-neutral boot trigger, not a /loop cmd.
+    assert last == thin_launcher._SPAWN_PROMPT
+    assert not any(
+        isinstance(a, str) and a.startswith("/loop") for a in cmd
+    ), f"spawn command must not force loop mode; got {cmd!r}"
+    # Defensive: old hard-imperative prompt must not appear anywhere
     assert "Boot. Begin your first Ralph Loop cycle now." not in " ".join(cmd), (
         "Old pre-#9725 spawn prompt leaked into the command"
     )
-
-
-# TC-2
-def test_tc_02_interval_read_from_config_field():
-    """_get_interval reads the `interval` field from config and returns it as a string."""
-    # Import config + monkey-patch get_field to a sentinel value
-    sys.path.insert(0, str(SCRIPTS_DIR))
-    import config
-    with mock.patch.object(config, "get_field", return_value="45"):
-        # Re-import to refresh; or patch directly on thin_launcher's import.
-        # _get_interval uses `from config import get_field` at call time,
-        # so patching config.get_field is enough.
-        assert thin_launcher._get_interval() == "45"
-
-
-# TC-3
-def test_tc_03_interval_defaults_to_30_when_missing():
-    sys.path.insert(0, str(SCRIPTS_DIR))
-    import config
-    # config.get_field on missing fields raises SystemExit per its convention.
-    with mock.patch.object(config, "get_field", side_effect=SystemExit(1)):
-        assert thin_launcher._get_interval() == "30"
-    # Also handle None and empty-string returns
-    with mock.patch.object(config, "get_field", return_value=None):
-        assert thin_launcher._get_interval() == "30"
-    with mock.patch.object(config, "get_field", return_value=""):
-        assert thin_launcher._get_interval() == "30"
+    # _get_interval was removed with the /loop prompt (#11512).
+    assert not hasattr(thin_launcher, "_get_interval")
 
 
 # TC-5

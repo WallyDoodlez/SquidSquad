@@ -88,14 +88,17 @@ class TestClaudeInvocation:
         with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
              patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
              patch("thin_launcher._get_effort_level", return_value="high"), \
-             patch("thin_launcher._get_interval", return_value="30"), \
              patch("sys.argv", ["thin_launcher.py", "skill"]):
             thin_launcher.main()
 
         assert "--strict-mcp-config" in captured_cmd
-        # Flag must appear before the spawn prompt (positional, last arg per #9725).
+        # #11512: spawn prompt is the mode-neutral boot trigger (last positional),
+        # NOT a /loop command — mode selection belongs to boot Step 1.
         prompt = captured_cmd[-1]
-        assert prompt.startswith("/loop "), f"Expected /loop spawn prompt, got: {prompt}"
+        assert prompt == thin_launcher._SPAWN_PROMPT
+        assert not prompt.startswith("/loop "), (
+            f"spawn prompt must not force loop mode; got {prompt!r}"
+        )
         flag_idx = captured_cmd.index("--strict-mcp-config")
         assert flag_idx < len(captured_cmd) - 1
 
@@ -115,7 +118,6 @@ class TestClaudeInvocation:
         with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
              patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
              patch("thin_launcher._get_effort_level", return_value="high"), \
-             patch("thin_launcher._get_interval", return_value="30"), \
              patch("sys.argv", ["thin_launcher.py", "skill"]):
             thin_launcher.main()
 
@@ -123,12 +125,18 @@ class TestClaudeInvocation:
         assert captured_cmd[idx + 1] == "SQUIDSQUAD_ROLE=skill"
 
 
-class TestSpawnPromptIsLoopRegistration:
-    """#9725: spawn prompt registers /loop instead of running one inline cycle."""
+class TestSpawnPromptIsModeNeutral:
+    """#11512: spawn prompt is a mode-neutral boot trigger, NOT a /loop command.
 
-    def test_prompt_is_loop_command(self, tmp_path):
-        """Final positional arg starts with /loop."""
-        sqdir = tmp_path / ".squidsquad" / "skill"
+    Mode selection (event vs polling) belongs to composed CLAUDE.md boot
+    Step 1 (step:cycle/boot). The launcher must not preempt that probe by
+    forcing a /loop registration on the first turn (the pre-#11512 #9725
+    behavior), or event mode is never reached when the harness is up.
+    """
+
+    @staticmethod
+    def _spawn_cmd(tmp_path, role="skill"):
+        sqdir = tmp_path / ".squidsquad" / role
         sqdir.mkdir(parents=True)
         captured_cmd = []
 
@@ -140,90 +148,37 @@ class TestSpawnPromptIsLoopRegistration:
         with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
              patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
              patch("thin_launcher._get_effort_level", return_value="high"), \
-             patch("thin_launcher._get_interval", return_value="30"), \
-             patch("sys.argv", ["thin_launcher.py", "skill"]):
+             patch("sys.argv", ["thin_launcher.py", role]):
             thin_launcher.main()
+        return captured_cmd
 
-        # Prompt is the final positional arg (after --dangerously-skip-permissions)
-        prompt = captured_cmd[-1]
-        assert prompt == "/loop 30m execute one Ralph Loop cycle"
+    def test_prompt_is_the_neutral_boot_trigger(self, tmp_path):
+        """Final positional arg is exactly _SPAWN_PROMPT."""
+        cmd = self._spawn_cmd(tmp_path)
+        assert cmd[-1] == thin_launcher._SPAWN_PROMPT
+
+    def test_prompt_does_not_force_loop_mode(self, tmp_path):
+        """No argument in the spawned command is a /loop directive."""
+        cmd = self._spawn_cmd(tmp_path)
+        assert not any(isinstance(a, str) and a.startswith("/loop") for a in cmd), (
+            f"spawn command must not contain a /loop directive; got {cmd!r}"
+        )
+
+    def test_prompt_defers_mode_to_boot_step_1(self, tmp_path):
+        """The neutral prompt directs the agent to the probe-then-decide boot step."""
+        cmd = self._spawn_cmd(tmp_path)
+        prompt = cmd[-1].lower()
+        assert "step 1" in prompt or "step:cycle/boot" in prompt
+        assert "probe" in prompt
 
     def test_legacy_boot_prompt_absent(self, tmp_path):
         """The pre-#9725 'Boot. Begin your first Ralph Loop cycle now.' prompt is gone."""
-        sqdir = tmp_path / ".squidsquad" / "skill"
-        sqdir.mkdir(parents=True)
-        captured_cmd = []
+        cmd = self._spawn_cmd(tmp_path)
+        assert "Boot. Begin your first Ralph Loop cycle now." not in cmd
 
-        def mock_popen(cmd, **kwargs):
-            captured_cmd.extend(cmd)
-            proc = MagicMock(); proc.pid = 99999; proc.wait.return_value = 0
-            return proc
-
-        with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
-             patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
-             patch("thin_launcher._get_effort_level", return_value="high"), \
-             patch("thin_launcher._get_interval", return_value="30"), \
-             patch("sys.argv", ["thin_launcher.py", "skill"]):
-            thin_launcher.main()
-
-        assert "Boot. Begin your first Ralph Loop cycle now." not in captured_cmd
-
-    def test_interval_substituted_from_config(self, tmp_path):
-        """Interval value flows from _get_interval() into the spawn prompt."""
-        sqdir = tmp_path / ".squidsquad" / "skill"
-        sqdir.mkdir(parents=True)
-        captured_cmd = []
-
-        def mock_popen(cmd, **kwargs):
-            captured_cmd.extend(cmd)
-            proc = MagicMock(); proc.pid = 99999; proc.wait.return_value = 0
-            return proc
-
-        with patch("thin_launcher.subprocess.Popen", side_effect=mock_popen), \
-             patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
-             patch("thin_launcher._get_effort_level", return_value="high"), \
-             patch("thin_launcher._get_interval", return_value="15"), \
-             patch("sys.argv", ["thin_launcher.py", "skill"]):
-            thin_launcher.main()
-
-        assert captured_cmd[-1] == "/loop 15m execute one Ralph Loop cycle"
-
-
-class TestGetInterval:
-    """#9725: _get_interval reads from config.md and falls back safely."""
-
-    def test_reads_interval_from_config(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value="20"):
-            assert thin_launcher._get_interval() == "20"
-
-    def test_defaults_to_30_when_missing(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value=None):
-            assert thin_launcher._get_interval() == "30"
-
-    def test_defaults_to_30_on_empty_string(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value=""):
-            assert thin_launcher._get_interval() == "30"
-
-    def test_defaults_to_30_when_config_raises(self):
-        def boom(_):
-            raise RuntimeError("config unreadable")
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", side_effect=boom):
-            assert thin_launcher._get_interval() == "30"
-
-    def test_handles_systemexit_from_config_get(self):
-        """config.get_field calls sys.exit(1) on missing field — must not propagate."""
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", side_effect=SystemExit(1)):
-            assert thin_launcher._get_interval() == "30"
-
-    def test_strips_whitespace(self):
-        with patch.dict("sys.modules", {"config": MagicMock()}), \
-             patch("config.get_field", return_value="  45  "):
-            assert thin_launcher._get_interval() == "45"
+    def test_no_interval_helper_remains(self):
+        """#11512: _get_interval was removed with the /loop spawn prompt."""
+        assert not hasattr(thin_launcher, "_get_interval")
 
 
 class TestThinLauncherBoot:
