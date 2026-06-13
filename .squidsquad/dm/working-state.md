@@ -2,30 +2,35 @@
 
 - **Task**: none
 - **Status**: idle
-- **Last Processed Event ID**: 55f645cecd099ad2
 - **Quiet Cycle Counter**: 0
 
-## Session Context (checkpoint after v0.44.0 cutover)
-- Version: **v0.44.0** (bumped from v0.43.0 this cycle, commit `7758a96be`)
-- Shipped count: **0/10** — reset on bump. Bump fired on operator cutover signal + PM ship-auth (#11331 c-2311).
-- Last bump: this cycle (v0.44.0, ~36-item compose-polish cutover bundle)
-- Release: https://github.com/WallyDoodlez/SquidSquad/releases/tag/v0.44.0 (tag v0.44.0 → `7758a96be`)
-- Harness: reachable (polling mode)
+## Improvement Scan
+Status: idle
+Last completed: (none this session)
+Next scan after: (eligible)
 
-## v0.44.0 cutover — DONE this cycle
-- PR #11402 auto-merged to main (squash `f8d867a9d`); QA-verified reconciliation HEAD `347f666e4`.
-- Bundle items shipped (pending-ship→shipped): #11331, #11227, #11139, #11137, #11401, #11404, #11166. Already-shipped bundle: #11329/#11328/#11330/#11334/#11381/#11382/#11383/#11403/#11165.
-- #11227 ship-gate: deleted superseded stale branch `squidsquad/task/11227` (squash-merge proof-window aged past PR #11431; deliverable on main).
-- Parent issue #11144 closed.
-- CHANGELOG.md v0.44.0 section authored (Added/Changed/Fixed, user-value framing).
-- Test gate: run_tests.py 54/54 green.
+## Session Context (POLLING-mode boot 2026-06-12 20:46)
+- **Wake mode: POLLING** — harness UNREACHABLE on :11838 (curl exit 7 / connection refused). Booted into polling mode, NOT event mode. Scheduled `/loop 30m` cron (job 5511ad76) per boot-bootstrap. check-gh OK.
+- Prior session was EVENT mode (boot 17:42); harness has since gone down. Event-mode observation window (operator "rest at idle before exercising event-mode end-to-end") is now moot — no event-mode path to exercise in polling mode.
+- Version: **v0.44.0**; Shipped Since Last Bump: **1/10** (incremented this cycle for #11394).
 
-## OPEN FOLLOW-UPS
-- **Reboot pending**: release restructured L1-L3 sources / sub-skills across ALL roles. Running agents should reboot to pick up new composed CLAUDE.md. Flagged on #11331 for operator/PM; DM did NOT self-reboot mid-cycle. Consider `reboot_agent.py` for skill/pm/qa next cycle if operator confirms.
-- Pre-existing ungated test failures (baseline, NOT release blockers): test_cycle_pre ×2 (#6274 qa→verifier migration window), test_event_mode_fragments 4+6 (boot-bootstrap moved to runtime-inline; stale manifest assertion) — worth filing as a follow-up cleanup task.
-- 10 pre-v0.41.0 items remain in closed+pending-ship status — needs PM/operator triage.
-- Pending approval (DM tracker): #8702, #7447, #9933 (+ low-priority, awaiting PM).
+## SHIPPED THIS CYCLE — #11394 (PR #11504) ✅
+- #11394 (sev:high, role:skill) pending-ship → **shipped**. Fix = run_tests.py static-gate auto-discovery (gate was collecting ZERO tests since v0.44.0 cutover).
+- Merged PR #11504 → main as merge commit `5f6caffbf` (PR auto-closed MERGED). Harness down → local merge path: synced main to origin/main (9e8cf53fc), `git merge --no-ff origin/squidsquad/task/11394`, pushed. `merge-tree --write-tree` clean (exit 0) at current SHAs; GitHub CONFLICTING flag was the stale-mergeability flap (#11511 class), per PM-lead 17:41 ground-truth.
+- Post-merge sanity: `python tests/run_tests.py` exits 0, collects+runs full static suite (`OK skipped=2`) — dead-gate fix confirmed live.
+- No reboot triggered (dev tooling, not template/sub-skill). Counter 0→1. CHANGELOG entry prepared (held for next bump): "Test gate now self-maintains — new test files auto-covered; deleting one test file no longer silently disables the whole gate."
+- Hold cleared: prior event-mode session deferred this to operator observation window; window scoped to event-mode end-to-end which doesn't apply in polling mode, and PM-lead had issued explicit ship directive (#11394 21:41Z).
+
+## OPEN FOLLOW-UPS (carried)
+- **#11503** (high-sev umbrella) — 23 KNOWN_FAILURES test-debt quarantined by #11394's gate fix; 4 flagged as possibly-real masked regressions (test_statusline_schema, test_manifest_registry, test_feat328_coverage, test_comms_sub_skills). PM/operator triage. Not DM-owned. PM routed test-debt master plan to #11505 + #11503 (cycle 2323).
+- **#11511** — durable squad-wide fix for transient-state merge flap (skill-filed). Watch: if it lands, the stale-CONFLICTING ship friction goes away.
+- **Reboot pending** (from v0.44.0 cutover): restructured L1-L3 sources/sub-skills released; running agents should reboot to pick up new composed CLAUDE.md. Flagged on #11331 for operator/PM. (Separate from #11394 — that one needs no reboot.)
+- ~31 items sit in pending-ship across roles (mostly old role:skill tasks #605..#9965) — large carried backlog; PM/operator triage, not auto-shippable without verification.
+- 10 pre-v0.41.0 items remain in closed+pending-ship — PM/operator triage.
+- Pending approval (DM tracker): #8702, #7447, #9933 (awaiting PM).
 
 ## Next-cycle notes
-- Cutover is COMPLETE. Bundle was the entire critical path; no DM ship work queued.
-- Session cron 30m. Quiet counter reset to 0 (major release ≠ quiet cycle).
+- Polling mode: `/loop 30m` fires next cycle. No primary queued ship work after #11394.
+- Bump gate: 1/10, far from threshold; also requires PM/operator signal (feedback_bump_requires_pm_signal) — do not auto-fire.
+- If harness comes back up, next session boot will re-probe and flip to event mode automatically.
+- Old leftover git stashes (stash@{0}-{7}) are pre-existing cruft from prior sessions — not this session's; left untouched.
