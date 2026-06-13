@@ -2,12 +2,12 @@
 
 - **Task**: none
 - **Status**: idle
-- **Quiet Cycle Counter**: 2
+- **Quiet Cycle Counter**: 3 (doc-scan GATED — see below)
 
 ## Improvement Scan
-Status: idle
-Last completed: (none this session)
-Next scan after: (eligible)
+Status: **GATED** — doc-improvement-loop issue-gate trips on open #10540 (status:open, role:dm). Per gate + [[feedback_bug_gate_interpretation]] (open/in-progress block; pending do not), skip scan until #10540 resolved/routed. #10540 is NOT DM-actionable (no open→in-progress authority) → effectively parked on PM routing; scan stays gated meanwhile.
+Last completed: R73 (cycle 1715, 2026-05-31) — 0 findings, full 7-file rotation. rotation_count=74.
+Next scan after: #10540 routed/closed (then quiet-gate resumes).
 
 ## Session Context (POLLING-mode, boot @ 2026-06-13 14:05)
 - **Wake mode: POLLING** — harness DOWN (curl :59999 → exit 7 conn-refused). `/loop 30m` scheduled (cron fe435afd, session-only, 7-day expiry). Mode sticky for session.
@@ -41,9 +41,9 @@ Next scan after: (eligible)
 - **POLLING is the correct/expected stance** for this session and near future — event mode blocked until #10855 resolves. Do not re-probe mode mid-session (sticky).
 
 ## Next-cycle notes
-- pending-ship queue EMPTY (cycles 418–419 quiet, counter 2). No new forge activity since c418.
-- **Quiet counter at 2 — if cycle 420 is also quiet, run doc-improvement-loop**: scan README/SKILL.md/CHANGELOG.md for staleness vs current behavior, max 3 fixes, rotate files, file findings as tracker tasks (do NOT auto-fix prod docs beyond DM-owned user-facing files).
-- Next /loop fire (~30m): pull, re-scan pending-ship first.
+- pending-ship queue EMPTY (cycles 418–420 quiet). Doc-scan would have fired at counter 3 (c420) but is GATED by open #10540.
+- c420 productive action: posted consolidated 7-ship local-merge evidence on #10540 to help PM route it (last DM comment was c411).
+- Next /loop fire (~30m): pull, re-scan pending-ship first. Doc-scan stays gated until #10540 moves.
 - Scan timing race: qa transition → pending-ship can lag the git push by seconds; if a fresh qa-ship commit appears in `git log origin/main` but the label scan shows 0, re-scan / check the issue directly before declaring quiet.
 - **Primary next action: ship bump v0.45.0 ON operator green-light only (counter 12/10).**
 - Boot pull pattern: use `git merge --ff-only origin/main || git merge --no-ff origin/main` (cycle-416 boot did an unnecessary --no-ff bubble because the `--is-ancestor` guard mislabels behind-state as DIVERGED).
