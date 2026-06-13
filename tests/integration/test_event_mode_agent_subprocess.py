@@ -18,10 +18,12 @@ Scope this file:
   "agent picks up real work" half is agent-decision territory
   (covered by ``8694_spec.json`` Q1 — boot-path resume logic).
 - §4.5 Harness-down boot — event_bus.emit() is silent no-op when
-  the harness port is missing; event_poll exits with the
-  no-events code without crashing when the harness is unreachable.
-  Together these prove the agent's boot path doesn't crash when
-  harness is down (AC-2 M-2.1/M-2.2).
+  the harness port is missing or the harness refuses the connection.
+  (Post-#11601, a missing .harness-port no longer fails event_poll —
+  _discover_port falls back to default port 7373; that resolution
+  contract is covered in tests/test_event_poll.py, not here.) These
+  prove the agent's boot path doesn't crash when harness is down
+  (AC-2 M-2.1/M-2.2).
 
 Scope deliberately NOT in this file yet (PR3 follow-up cycles):
 
@@ -518,54 +520,26 @@ class TestHarnessDownBoot(unittest.TestCase):
                     f"the 500ms cap so boot path doesn't stall.",
             )
 
-    def test_event_poll_exits_cleanly_when_harness_unreachable(self):
-        """event_poll.py with no .harness-port at all must exit
-        non-zero with an ERROR to stderr but not crash with a
-        traceback. The agent's wrapper script reads stderr and
-        decides whether to retry (handled by the retry-backoff
-        path already in event_poll's --wait loop)."""
-        import subprocess
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Run event_poll with a SQUID_DIR override via env var if
-            # supported; otherwise use the role-specific isolation
-            # pattern from test_event_mode_e2e.py — but we want NO
-            # port file at all. Easiest: use a unique role name whose
-            # working-state lives in the real .squidsquad/ but
-            # temporarily mask out .harness-port via a backup.
-            squid_dir = REPO_ROOT / ".squidsquad"
-            port_file = squid_dir / ".harness-port"
-            backup = port_file.read_bytes() if port_file.exists() else None
-            try:
-                if port_file.exists():
-                    port_file.unlink()
-                result = subprocess.run(
-                    [
-                        __import__("sys").executable,
-                        str(SCRIPTS / "event_poll.py"),
-                        "test-harness-down-role",
-                    ],
-                    capture_output=True, text=True,
-                    cwd=str(REPO_ROOT), timeout=15,
-                )
-            finally:
-                if backup is not None:
-                    port_file.write_bytes(backup)
-
-            # Spec: non-zero exit (fatal/no-port branch).
-            self.assertEqual(
-                result.returncode, 2,
-                msg=f"event_poll should exit 2 when port file is "
-                    f"missing. stderr={result.stderr!r}",
-            )
-            self.assertIn("harness port not found", result.stderr)
-            # Crucially: no Python traceback in stderr.
-            self.assertNotIn(
-                "Traceback", result.stderr,
-                msg="event_poll must not crash with a traceback when "
-                    "the harness is down — the agent's wrapper "
-                    "interprets the exit code, not the stack trace.",
-            )
+    # NOTE (#11657): the former ``test_event_poll_exits_cleanly_when_
+    # harness_unreachable`` was removed here. It asserted the pre-#11601
+    # contract — missing ``.harness-port`` -> event_poll exits 2 with
+    # "harness port not found". #11601 (d0986cb7e) deliberately changed
+    # ``_discover_port()`` to fall back to the default port 7373 (+ a
+    # parent-dir walk) instead of returning None, fixing #11586 (agents
+    # could not sustain event mode in clones lacking the gitignored
+    # port file). That made the old assertion impossible and the
+    # subprocess approach flaky: with no port file, single-shot
+    # event_poll resolves 7373 and either polls a live default-port
+    # harness (exit 1, no events) or retries a refused port forever.
+    # The surviving #11601 contract is covered deterministically in
+    # tests/test_event_poll.py (``test_defaults_to_7373_when_file_absent``,
+    # ``test_garbage_content_defaults_to_7373``,
+    # ``test_poll_returns_none_when_discover_port_returns_none``); the
+    # harness-down-boot no-crash intent is covered by the two
+    # ``test_event_bus_emit_silent_noop_*`` tests above and by
+    # test_9398_real_agent_subprocess.py. The old test also deleted the
+    # live ``.harness-port`` and only restored it in a ``finally`` — a
+    # killed run left the file gone.
 
 
 if __name__ == "__main__":

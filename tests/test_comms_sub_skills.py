@@ -29,9 +29,21 @@ class TestSubSkillFiles:
         "consensus-protocol",
     ])
     def test_sub_skill_has_heading(self, name):
-        """Each sub-skill starts with a ## heading."""
+        """Each sub-skill has a ## heading as its first non-frontmatter line.
+
+        v2 sub-skill files use YAML frontmatter (--- ... ---) before the
+        heading. Strip the frontmatter block (if present) before checking
+        for the ## heading.
+        """
         content = (SUB_SKILLS_DIR / f"{name}.md").read_text(encoding="utf-8")
-        assert content.startswith("## "), f"{name}.md must start with ## heading"
+        # Strip YAML frontmatter (--- ... ---) if present
+        if content.startswith("---"):
+            end = content.find("\n---\n", 3)
+            if end != -1:
+                content = content[end + 5:]  # skip past closing ---\n
+        assert content.lstrip("\n").startswith("## "), (
+            f"{name}.md must have a ## heading (after optional frontmatter)"
+        )
 
     @pytest.mark.parametrize("name", [
         "chat-etiquette",
