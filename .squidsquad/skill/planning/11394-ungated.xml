@@ -1,0 +1,1499 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="76" skipped="4" tests="483" time="65.412" timestamp="2026-06-12T16:01:26.319366-04:00" hostname="WallacePC"><testcase classname="tests.test_9242_harness_wedge_fixes.TestNoAutoStartFlag" name="test_argparse_accepts_no_auto_start" time="0.001" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestNoAutoStartFlag" name="test_module_exposes_no_auto_start_switch" time="0.000" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestAsyncSaveStateOffEventLoop" name="test_no_bare_save_state_inside_async_handlers" time="0.002" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestAsyncSaveStateOffEventLoop" name="test_sync_save_state_calls_remain_bare" time="0.002" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestAsyncSaveStateOffEventLoop" name="test_to_thread_wraps_present" time="0.001" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestGitOpsNeverEmitsUnknownRole" name="test_emit_drops_when_argv_cannot_yield_role" time="0.001" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestGitOpsNeverEmitsUnknownRole" name="test_emit_infers_role_from_named_subcommand" time="0.001" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestGitOpsNeverEmitsUnknownRole" name="test_emit_uses_explicit_role_when_passed" time="0.001" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestHarnessRejectsUnknownRoleAtBoundary" name="test_event_with_configured_role_passes_through" time="0.106" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestHarnessRejectsUnknownRoleAtBoundary" name="test_event_with_unknown_role_is_dropped" time="0.002" /><testcase classname="tests.test_9242_harness_wedge_fixes.TestHarnessRejectsUnknownRoleAtBoundary" name="test_pm_role_is_allowed_even_though_not_in_dev_agents" time="0.003" /><testcase classname="tests.test_9357_eventlifecycle_load_thread_safety.TestLoadIdempotencyGuardLockProtected" name="test_concurrent_load_double_dispatch_does_not_double_append" time="0.009" /><testcase classname="tests.test_9357_eventlifecycle_load_thread_safety.TestLoadIdempotencyGuardLockProtected" name="test_loaded_flag_set_before_body_runs" time="0.002" /><testcase classname="tests.test_9357_eventlifecycle_load_thread_safety.TestLoadIdempotencyGuardLockProtected" name="test_second_load_is_silent_noop" time="0.002" /><testcase classname="tests.test_9357_eventlifecycle_load_thread_safety.TestLoadIdempotencyGuardLockProtected" name="test_single_load_appends_events_once" time="0.002" /><testcase classname="tests.test_9357_eventlifecycle_load_thread_safety.TestLoadStaticInvariant" name="test_loaded_check_is_inside_lock" time="0.001" /><testcase classname="tests.test_9562_selector_event_loop_policy.TestSelectorEventLoopPolicySetInMain" name="test_policy_call_is_gated_by_win32" time="0.001" /><testcase classname="tests.test_9562_selector_event_loop_policy.TestSelectorEventLoopPolicySetInMain" name="test_policy_call_precedes_uvicorn_server" time="0.001" /><testcase classname="tests.test_9562_selector_event_loop_policy.TestSelectorEventLoopPolicySetInMain" name="test_policy_call_present_in_main" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestRunnerExitsNonZeroOnEmptyAgentOutput" name="test_empty_agent_text_causes_nonzero_exit" time="0.005" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestRunnerExitsNonZeroOnEmptyAgentOutput" name="test_no_placeholder_answers_file_on_empty_output" time="0.004" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestRunnerExitsNonZeroOnEmptyAgentOutput" name="test_valid_agent_output_writes_files_from_python" time="0.007" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestRunAgentUsesJsonOutputFormat" name="test_allowed_tools_omitted_when_empty" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestRunAgentUsesJsonOutputFormat" name="test_output_format_precedes_allowed_tools" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestRunAgentUsesJsonOutputFormat" name="test_run_agent_passes_json_output_format" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestRunAgentUsesJsonOutputFormat" name="test_run_agent_returns_empty_on_is_error" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestRunAgentUsesJsonOutputFormat" name="test_run_agent_returns_empty_on_malformed_json" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestPromptDoesNotAskForWriteTool" name="test_forbidden_list_actually_matches_prefix_phrasing" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestPromptDoesNotAskForWriteTool" name="test_runner_source_does_not_instruct_write_tool" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestPromptDoesNotAskForWriteTool" name="test_runner_source_uses_json_output_contract" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestFindClaudeWindowsPreference" name="test_non_win32_uses_shutil_which" time="0.001" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestFindClaudeWindowsPreference" name="test_win32_returns_cmd_only_if_no_exe_anywhere" time="0.002" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestFindClaudeWindowsPreference" name="test_win32_returns_hardcoded_npm_exe_when_present" time="0.002" /><testcase classname="tests.test_9574_comprehension_runner_write_contract.TestFindClaudeWindowsPreference" name="test_win32_sibling_exe_returned_when_path_yields_cmd" time="0.002" /><testcase classname="tests.test_agent_boundaries" name="test_ac4_composed_contains_l1_awareness_and_l2[pm]" time="0.025"><failure message="AssertionError: L1 awareness instruction missing from composed pm&#10;assert &quot;Know each other's responsibilities&quot; in '## Identity\n\nYou are the **PM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).'">role = 'pm'
+
+    @pytest.mark.parametrize("role", ["pm", "verifier", "dm", "skill"])
+    def test_ac4_composed_contains_l1_awareness_and_l2(role):
+        """For each of pm/verifier/dm/worker (skill is the worker variant), the
+        composed output must contain the L1 awareness instruction, the roster
+        header, and the role's own L2 'What this role does' header (#9925 AC4).
+        """
+        composed = _v2_compose_for(role)
+&gt;       assert "Know each other's responsibilities" in composed, (
+            f"L1 awareness instruction missing from composed {role}"
+        )
+E       AssertionError: L1 awareness instruction missing from composed pm
+E       assert "Know each other's responsibilities" in '## Identity\n\nYou are the **PM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).'
+
+tests\test_agent_boundaries.py:39: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac4_composed_contains_l1_awareness_and_l2[verifier]" time="0.019"><failure message="AssertionError: L1 awareness instruction missing from composed verifier&#10;assert &quot;Know each other's responsibilities&quot; in '## Identity\n\nYou are the **VERIFIER** agent on SquidSquad — a multi-agent team that builds software autonomously. Y...ivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).'">role = 'verifier'
+
+    @pytest.mark.parametrize("role", ["pm", "verifier", "dm", "skill"])
+    def test_ac4_composed_contains_l1_awareness_and_l2(role):
+        """For each of pm/verifier/dm/worker (skill is the worker variant), the
+        composed output must contain the L1 awareness instruction, the roster
+        header, and the role's own L2 'What this role does' header (#9925 AC4).
+        """
+        composed = _v2_compose_for(role)
+&gt;       assert "Know each other's responsibilities" in composed, (
+            f"L1 awareness instruction missing from composed {role}"
+        )
+E       AssertionError: L1 awareness instruction missing from composed verifier
+E       assert "Know each other's responsibilities" in '## Identity\n\nYou are the **VERIFIER** agent on SquidSquad — a multi-agent team that builds software autonomously. Y...ivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).'
+
+tests\test_agent_boundaries.py:39: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac4_composed_contains_l1_awareness_and_l2[dm]" time="0.021"><failure message="AssertionError: L1 awareness instruction missing from composed dm&#10;assert &quot;Know each other's responsibilities&quot; in '## Identity\n\nYou are the **DM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).'">role = 'dm'
+
+    @pytest.mark.parametrize("role", ["pm", "verifier", "dm", "skill"])
+    def test_ac4_composed_contains_l1_awareness_and_l2(role):
+        """For each of pm/verifier/dm/worker (skill is the worker variant), the
+        composed output must contain the L1 awareness instruction, the roster
+        header, and the role's own L2 'What this role does' header (#9925 AC4).
+        """
+        composed = _v2_compose_for(role)
+&gt;       assert "Know each other's responsibilities" in composed, (
+            f"L1 awareness instruction missing from composed {role}"
+        )
+E       AssertionError: L1 awareness instruction missing from composed dm
+E       assert "Know each other's responsibilities" in '## Identity\n\nYou are the **DM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).'
+
+tests\test_agent_boundaries.py:39: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac4_composed_contains_l1_awareness_and_l2[skill]" time="0.021"><failure message="AssertionError: L1 awareness instruction missing from composed skill&#10;assert &quot;Know each other's responsibilities&quot; in '## Identity\n\nYou are the **SKILL** agent on SquidSquad — a multi-agent team that builds software autonomously. Your...ivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).'">role = 'skill'
+
+    @pytest.mark.parametrize("role", ["pm", "verifier", "dm", "skill"])
+    def test_ac4_composed_contains_l1_awareness_and_l2(role):
+        """For each of pm/verifier/dm/worker (skill is the worker variant), the
+        composed output must contain the L1 awareness instruction, the roster
+        header, and the role's own L2 'What this role does' header (#9925 AC4).
+        """
+        composed = _v2_compose_for(role)
+&gt;       assert "Know each other's responsibilities" in composed, (
+            f"L1 awareness instruction missing from composed {role}"
+        )
+E       AssertionError: L1 awareness instruction missing from composed skill
+E       assert "Know each other's responsibilities" in '## Identity\n\nYou are the **SKILL** agent on SquidSquad — a multi-agent team that builds software autonomously. Your...ivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).'
+
+tests\test_agent_boundaries.py:39: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac4_roster_has_exactly_active_roles" time="0.022"><failure message="assert -1 != -1">def test_ac4_roster_has_exactly_active_roles():
+        """AC4: for the current install (`Workers: skill` + mandatory
+        PM/Verifier/DM), the roster MUST contain exactly 4 entries — one per
+        pm/verifier/dm/worker. Roles whose manifest exists but are NOT active
+        in config.md must NOT appear (F4 lock). #10156: post-#6274.2 rename."""
+        composed = _v2_compose_for("pm")
+        # Each rendered entry uses a `### &lt;DisplayName&gt;` header inside the
+        # 'Your Teammates' Responsibilities' block. Slice the roster section
+        # and count its level-3 headers.
+        start = composed.find("## Your Teammates' Responsibilities")
+&gt;       assert start != -1
+E       assert -1 != -1
+
+tests\test_agent_boundaries.py:63: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_dont_do_qa_job-references/sub-skills/roles/pm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists">source = 'feedback_dont_do_qa_job'
+filename = 'references/sub-skills/roles/pm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_bugs_behavior_only-references/sub-skills/roles/pm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists">source = 'feedback_bugs_behavior_only'
+filename = 'references/sub-skills/roles/pm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_auto_approve_bugs-references/sub-skills/roles/pm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists">source = 'feedback_auto_approve_bugs'
+filename = 'references/sub-skills/roles/pm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_dm_optional-references/sub-skills/roles/pm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists">source = 'feedback_dm_optional'
+filename = 'references/sub-skills/roles/pm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_no_ship_failed_tc-references/sub-skills/roles/verifier/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/verifier/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/verifier/responsibility.md').exists">source = 'feedback_no_ship_failed_tc'
+filename = 'references/sub-skills/roles/verifier/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/verifier/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/verifier/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_no_ship_with_gaps-references/sub-skills/roles/verifier/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/verifier/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/verifier/responsibility.md').exists">source = 'feedback_no_ship_with_gaps'
+filename = 'references/sub-skills/roles/verifier/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/verifier/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/verifier/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_dm_optional-references/sub-skills/roles/dm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/dm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/responsibility.md').exists">source = 'feedback_dm_optional'
+filename = 'references/sub-skills/roles/dm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/dm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_no_ship_failed_tc-references/sub-skills/roles/dm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/dm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/responsibility.md').exists">source = 'feedback_no_ship_failed_tc'
+filename = 'references/sub-skills/roles/dm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/dm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_no_ship_with_gaps-references/sub-skills/roles/dm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/dm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/responsibility.md').exists">source = 'feedback_no_ship_with_gaps'
+filename = 'references/sub-skills/roles/dm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/dm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_test_workflow_separation-references/sub-skills/roles/pm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists">source = 'feedback_test_workflow_separation'
+filename = 'references/sub-skills/roles/pm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/pm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_test_workflow_separation-references/sub-skills/roles/verifier/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/verifier/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/verifier/responsibility.md').exists">source = 'feedback_test_workflow_separation'
+filename = 'references/sub-skills/roles/verifier/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/verifier/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/verifier/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_test_workflow_separation-references/sub-skills/roles/dm/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/dm/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/responsibility.md').exists">source = 'feedback_test_workflow_separation'
+filename = 'references/sub-skills/roles/dm/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/dm/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac6_memory_absorption_lineage_tag[feedback_test_workflow_separation-references/sub-skills/roles/worker/responsibility.md]" time="0.001"><failure message="AssertionError: L2 file missing: references/sub-skills/roles/worker/responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/worker/responsibility.md').exists">source = 'feedback_test_workflow_separation'
+filename = 'references/sub-skills/roles/worker/responsibility.md'
+
+    @pytest.mark.parametrize("source,filename", [
+        # PM L2 absorptions
+        ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
+        # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
+        # DM L2 absorptions
+        ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
+        # Cross-role test_workflow_separation
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
+        ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
+    ])
+    def test_ac6_memory_absorption_lineage_tag(source, filename):
+        """AC6: each memory entry from D5 is absorbed into the indicated L2
+        file with an HTML-comment lineage tag `&lt;!-- absorbed from &lt;name&gt; --&gt;`.
+        """
+        path = REPO / filename
+&gt;       assert path.exists(), f"L2 file missing: {filename}"
+E       AssertionError: L2 file missing: references/sub-skills/roles/worker/responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/worker/responsibility.md').exists
+
+tests\test_agent_boundaries.py:107: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[android-worker]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\android\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/android/responsibility.md').exists">role = 'worker', variant = 'android'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\android\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/android/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[android-dm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\android\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/android/responsibility.md').exists">role = 'dm', variant = 'android'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\android\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/android/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[android-pm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\android\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/android/responsibility.md').exists">role = 'pm', variant = 'android'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\android\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/android/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[android-verifier]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\android\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/android/responsibility.md').exists">role = 'verifier', variant = 'android'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\android\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/android/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[fullstack-worker]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\fullstack\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/fullstack/responsibility.md').exists">role = 'worker', variant = 'fullstack'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\fullstack\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/fullstack/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[fullstack-dm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\fullstack\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/fullstack/responsibility.md').exists">role = 'dm', variant = 'fullstack'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\fullstack\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/fullstack/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[fullstack-pm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\fullstack\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/fullstack/responsibility.md').exists">role = 'pm', variant = 'fullstack'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\fullstack\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/fullstack/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[fullstack-verifier]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\fullstack\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/fullstack/responsibility.md').exists">role = 'verifier', variant = 'fullstack'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\fullstack\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/fullstack/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[ios-worker]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\ios\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/ios/responsibility.md').exists">role = 'worker', variant = 'ios'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\ios\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/ios/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[ios-dm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\ios\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/ios/responsibility.md').exists">role = 'dm', variant = 'ios'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\ios\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/ios/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[ios-pm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\ios\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/ios/responsibility.md').exists">role = 'pm', variant = 'ios'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\ios\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/ios/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[ios-verifier]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\ios\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/ios/responsibility.md').exists">role = 'verifier', variant = 'ios'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\ios\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/ios/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[skill-worker]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\skill\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/skill/responsibility.md').exists">role = 'worker', variant = 'skill'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\skill\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/skill/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[skill-dm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\skill\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/skill/responsibility.md').exists">role = 'dm', variant = 'skill'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\skill\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/skill/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[skill-pm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\skill\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/skill/responsibility.md').exists">role = 'pm', variant = 'skill'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\skill\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/skill/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[skill-verifier]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\skill\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/skill/responsibility.md').exists">role = 'verifier', variant = 'skill'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\skill\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/skill/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[web-worker]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\web\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/web/responsibility.md').exists">role = 'worker', variant = 'web'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\worker\web\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/worker/web/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[web-dm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\web\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/web/responsibility.md').exists">role = 'dm', variant = 'web'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\dm\web\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/dm/web/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[web-pm]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\web\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/web/responsibility.md').exists">role = 'pm', variant = 'web'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\pm\web\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/pm/web/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac7_l3_stub_exists_and_matches_template[web-verifier]" time="0.001"><failure message="AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\web\responsibility.md&#10;assert False&#10; +  where False = exists()&#10; +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/web/responsibility.md').exists">role = 'verifier', variant = 'web'
+
+    @pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
+    @pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
+    def test_ac7_l3_stub_exists_and_matches_template(role, variant):
+        """AC7: all 20 L3 stub files exist and match the D6a template
+        (literal string match for 'No variant-specific responsibility
+        narrowing'). None are wired into includes_yml's additional_includes.
+        """
+        stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
+&gt;       assert stub.exists(), f"L3 stub missing: {stub}"
+E       AssertionError: L3 stub missing: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\web\responsibility.md
+E       assert False
+E        +  where False = exists()
+E        +    where exists = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/roles/verifier/web/responsibility.md').exists
+
+tests\test_agent_boundaries.py:128: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_seed_stub_exists[pm]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_seed_stub_exists[verifier]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_seed_stub_exists[dm]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_seed_stub_exists[worker]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_seed_stub_exists[shared]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_live_stub_exists[pm]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_live_stub_exists[verifier]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_live_stub_exists[dm]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_live_stub_exists[worker]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac8_l4_live_stub_exists[shared]" time="0.001" /><testcase classname="tests.test_agent_boundaries" name="test_ac10_byte_identical_recompose_agent_compose_off" time="0.045" /><testcase classname="tests.test_agent_boundaries" name="test_ac11_missing_display_name_raises_systemexit" time="0.002" /><testcase classname="tests.test_agent_boundaries" name="test_ac11_missing_marker_emits_warning_and_continues" time="0.001"><failure message="AssertionError: assert 'WARNING' in ''&#10; +  where '' = CaptureResult(out='', err='').err">capsys = &lt;_pytest.capture.CaptureFixture object at 0x000001BE690EE090&gt;
+
+    def test_ac11_missing_marker_emits_warning_and_continues(capsys):
+        """AC11/D8: if `{{role-roster}}` marker is absent from composed
+        content, compose emits a stderr warning and continues (does NOT
+        crash). This covers the agent-boundaries-not-included edge case.
+        """
+        out = compose._inject_role_roster("hello world\n", "pm")
+        assert out == "hello world\n", "no marker → content unchanged"
+        captured = capsys.readouterr()
+&gt;       assert "WARNING" in captured.err
+E       AssertionError: assert 'WARNING' in ''
+E        +  where '' = CaptureResult(out='', err='').err
+
+tests\test_agent_boundaries.py:227: AssertionError</failure></testcase><testcase classname="tests.test_agent_boundaries" name="test_ac11_missing_tagline_or_description_warns_but_succeeds" time="0.005" /><testcase classname="tests.test_catalog_drift_d4.TestCleanRun" name="test_all_rows_resolve_and_all_files_have_rows" time="0.018" /><testcase classname="tests.test_catalog_drift_d4.TestOrphanCatalogRow" name="test_missing_source_file_reported" time="0.006" /><testcase classname="tests.test_catalog_drift_d4.TestOrphanSourceFile" name="test_orphan_file_reported" time="0.007" /><testcase classname="tests.test_catalog_drift_d4.TestBothDirections" name="test_both_directions_listed" time="0.006" /><testcase classname="tests.test_catalog_drift_d4.TestDeadCodeCandidate" name="test_unreferenced_row_warns_but_does_not_abort" time="0.006" /><testcase classname="tests.test_catalog_drift_d4.TestExclusions" name="test_manifest_md_at_subskills_root_is_not_an_orphan" time="0.007" /><testcase classname="tests.test_catalog_drift_d4.TestExclusions" name="test_project_subdir_excluded_from_source_scan" time="0.007" /><testcase classname="tests.test_catalog_drift_d4.TestExclusions" name="test_capabilities_subdir_excluded_from_source_scan" time="0.007" /><testcase classname="tests.test_catalog_drift_d4.TestSlashBearingName" name="test_slash_bearing_name_resolves" time="0.011" /><testcase classname="tests.test_catalog_drift_d4.TestVariantManifests" name="test_variant_additional_includes_satisfies_reference" time="0.008" /><testcase classname="tests.test_catalog_drift_d4.TestMalformedManifest" name="test_malformed_manifest_warns_to_stderr" time="0.008" /><testcase classname="tests.test_catalog_drift_d4.TestNestedManifestMdIsNotExcluded" name="test_nested_manifest_md_treated_as_source_file" time="0.007" /><testcase classname="tests.test_catalog_drift_d4.TestDeadCodeMatchTightening" name="test_slash_bearing_catalog_name_requires_exact_match" time="0.007" /><testcase classname="tests.test_catalog_drift_d4.TestCLI" name="test_clean_returns_zero" time="0.131" /><testcase classname="tests.test_catalog_drift_d4.TestCLI" name="test_drift_returns_nonzero_with_stderr_report" time="0.128" /><testcase classname="tests.test_catalog_drift_d4.TestCLI" name="test_dead_code_only_returns_zero_with_warning" time="0.125" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestDeployAliasV2NoTokenLeaks" name="test_no_unresolved_tokens_in_assembled_output[pm]" time="0.030" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestDeployAliasV2NoTokenLeaks" name="test_no_unresolved_tokens_in_assembled_output[dm]" time="0.018" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestDeployAliasV2NoTokenLeaks" name="test_no_unresolved_tokens_in_assembled_output[verifier]" time="0.018" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestDeployAliasV2NoTokenLeaks" name="test_role_placeholder_substituted_with_alias" time="0.019" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestDeployAliasV2NoTokenLeaks" name="test_included_sub_skill_body_inlined" time="0.018" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestDeployRoleV2NoTokenLeaks" name="test_no_unresolved_tokens_in_assembled_output" time="0.019" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestResolveIncludesV2" name="test_expands_valid_include_directive" time="0.003" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestResolveIncludesV2" name="test_missing_include_emits_error_marker" time="0.002" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestResolveIncludesV2" name="test_runtime_read_fragment_directive_is_dropped" time="0.001" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestResolveIncludesV2" name="test_strips_yaml_frontmatter_from_included_body" time="0.008" /><testcase classname="tests.test_compose_10981_deploy_alias_v2_token_leaks.TestResolveIncludesV2" name="test_strips_outer_sub_skill_markers_to_avoid_doubling" time="0.003" /><testcase classname="tests.test_compose_11144_role_conditionals" name="test_block_for_matching_role_is_kept_without_markers" time="0.000" /><testcase classname="tests.test_compose_11144_role_conditionals" name="test_block_for_non_matching_role_is_removed_entirely" time="0.000" /><testcase classname="tests.test_compose_11144_role_conditionals" name="test_multiple_blocks_each_evaluated_independently" time="0.000" /><testcase classname="tests.test_compose_11144_role_conditionals" name="test_multiline_block_body_preserved_when_role_matches" time="0.000" /><testcase classname="tests.test_compose_11144_role_conditionals" name="test_content_without_conditionals_is_unchanged" time="0.000" /><testcase classname="tests.test_compose_11144_role_conditionals" name="test_non_matching_role_block_leaves_no_blank_line_gap" time="0.000" /><testcase classname="tests.test_compose_11144_role_conditionals" name="test_role_conditional_runs_inside_substitute_placeholders" time="0.003" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_writes_triple_under_output_name" time="0.018" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_defaults_output_name_to_role_name" time="0.018" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_header_uses_output_name" time="0.017" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_seeds_soul_when_missing" time="0.018" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_preserves_existing_soul" time="0.019" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_requires_no_aliases_registry" time="0.017" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_resolves_variant_to_role_and_l3" time="0.019" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_wizard_contract_source_root_split" time="0.046" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_no_variant_l3_is_none" time="0.017" /><testcase classname="tests.test_compose_deploy_role_v2_10685" name="test_deploy_role_v2_alias_role_name_derives_l3_domain" time="0.023" /><testcase classname="tests.test_config_aliases_registry_10385.TestValidTable" name="test_returns_dict_of_tuples" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestValidTable" name="test_canonical_table_round_trips" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestValidTable" name="test_em_dash_l3_becomes_none" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestValidTable" name="test_non_dash_l3_preserved_verbatim" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestValidTable" name="test_all_four_role_classes_accepted" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_missing_aliases_section" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_empty_aliases_section" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_wrong_column_count_in_header" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_wrong_column_names_in_header" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_missing_separator_row" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_data_row_wrong_column_count" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_unknown_role_class_rejected" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_duplicate_alias_rejected" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_empty_alias_cell_rejected" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_empty_role_class_cell_rejected" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestMalformedInputs" name="test_header_only_no_data_rejected" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestExportedConstants" name="test_role_classes_frozenset_matches_spec" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestExportedConstants" name="test_l3_none_sentinel_is_em_dash" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestExportedConstants" name="test_error_is_value_error_subclass" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestBulletFormFallback" name="test_canonical_pm_and_dm_bullets" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestBulletFormFallback" name="test_qa_bullet_maps_to_verifier_via_shim" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestBulletFormFallback" name="test_dev_bullet_maps_to_worker_via_shim" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestBulletFormFallback" name="test_skill_bullet_maps_to_worker_skill_variant" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestBulletFormFallback" name="test_full_live_repo_install_bullets" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestBulletFormFallback" name="test_unrecognized_value_raises_with_diagnostic" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestBulletFormFallback" name="test_mixed_recognized_and_typo_raises_not_silently_drops" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestBulletFormFallback" name="test_duplicate_alias_in_bullet_form_raises" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestTableFormShim" name="test_qa_role_class_in_table_maps_to_verifier" time="0.000" /><testcase classname="tests.test_config_aliases_registry_10385.TestTableFormShim" name="test_dev_role_class_in_table_maps_to_worker" time="0.000" /><testcase classname="tests.test_config_functions.TestParseSections" name="test_parses_sections" time="0.000" /><testcase classname="tests.test_config_functions.TestParseSections" name="test_content_before_first_heading" time="0.000" /><testcase classname="tests.test_config_functions.TestParseSections" name="test_empty_text" time="0.000" /><testcase classname="tests.test_config_functions.TestParseFieldInText" name="test_finds_field" time="0.000" /><testcase classname="tests.test_config_functions.TestParseFieldInText" name="test_missing_field" time="0.000" /><testcase classname="tests.test_config_functions.TestParseFieldInText" name="test_field_with_special_chars" time="0.000" /><testcase classname="tests.test_config_functions.TestParseField" name="test_scoped_to_section" time="0.000" /><testcase classname="tests.test_config_functions.TestParseField" name="test_wrong_section" time="0.000" /><testcase classname="tests.test_config_functions.TestParseField" name="test_no_section_searches_all" time="0.000" /><testcase classname="tests.test_config_functions.TestGetField" name="test_get_by_short_name" time="0.003" /><testcase classname="tests.test_config_functions.TestGetField" name="test_get_project_name" time="0.003" /><testcase classname="tests.test_config_functions.TestGetField" name="test_get_pr_flow" time="0.003" /><testcase classname="tests.test_config_functions.TestGetField" name="test_get_shipped_since_bump" time="0.003" /><testcase classname="tests.test_config_functions.TestGetField" name="test_missing_field_exits" time="0.003" /><testcase classname="tests.test_config_functions.TestGetField" name="test_missing_config_exits" time="0.002" /><testcase classname="tests.test_config_functions.TestSetField" name="test_set_interval" time="0.004" /><testcase classname="tests.test_config_functions.TestSetField" name="test_set_shipped_since_bump" time="0.005" /><testcase classname="tests.test_config_functions.TestSetField" name="test_set_preserves_other_fields" time="0.005" /><testcase classname="tests.test_config_functions.TestSetField" name="test_set_missing_field_exits" time="0.003" /><testcase classname="tests.test_config_functions.TestGetAlias" name="test_returns_alias" time="0.003" /><testcase classname="tests.test_config_functions.TestGetAlias" name="test_falls_back_to_role_name" time="0.003" /><testcase classname="tests.test_config_functions.TestDetectSchemaVersion" name="test_v1" time="0.000" /><testcase classname="tests.test_config_functions.TestDetectSchemaVersion" name="test_v2" time="0.000" /><testcase classname="tests.test_config_functions.TestDetectSchemaVersion" name="test_missing_field_defaults_v1" time="0.000" /><testcase classname="tests.test_config_functions.TestDetectSchemaVersion" name="test_malformed_value_defaults_v1" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[agent-compose]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[alias-designer]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[alias-dm]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[alias-pm]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[alias-qa]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[alias-skill]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[api-timeout-seconds]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[arch-version]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[auto-merge]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[branch-pattern]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[briefing-token-budget]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[code-review-model]" time="0.001"><failure message="AssertionError: FIELD_MAP['code-review-model'] → section='Model Routing', field='Code Review Model' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A719A0&gt;
+key = 'code-review-model'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['code-review-model'] → section='Model Routing', field='Code Review Model' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[comprehension-model]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[confidence-decay-days]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[context-threshold]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[default-model]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[dev-agents]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[diagnostics]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[discussion-prep-model]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[e2e-tests]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[effort-dm]" time="0.001"><failure message="AssertionError: FIELD_MAP['effort-dm'] → section='Agent Effort', field='dm' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A70C80&gt;
+key = 'effort-dm'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['effort-dm'] → section='Agent Effort', field='dm' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[effort-pm]" time="0.001"><failure message="AssertionError: FIELD_MAP['effort-pm'] → section='Agent Effort', field='pm' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A70C20&gt;
+key = 'effort-pm'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['effort-pm'] → section='Agent Effort', field='pm' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[effort-qa]" time="0.001"><failure message="AssertionError: FIELD_MAP['effort-qa'] → section='Agent Effort', field='qa' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A70740&gt;
+key = 'effort-qa'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['effort-qa'] → section='Agent Effort', field='qa' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[effort-skill]" time="0.001"><failure message="AssertionError: FIELD_MAP['effort-skill'] → section='Agent Effort', field='skill' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A702F0&gt;
+key = 'effort-skill'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['effort-skill'] → section='Agent Effort', field='skill' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[event-driven]" time="0.001"><failure message="AssertionError: FIELD_MAP['event-driven'] → section='Event Driven', field='Enabled' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A708C0&gt;
+key = 'event-driven'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['event-driven'] → section='Event Driven', field='Enabled' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[event-max-retries]" time="0.001"><failure message="AssertionError: FIELD_MAP['event-max-retries'] → section='Event Driven', field='Max Retries' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A72ED0&gt;
+key = 'event-max-retries'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['event-max-retries'] → section='Event Driven', field='Max Retries' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[event-poll-interval]" time="0.001"><failure message="AssertionError: FIELD_MAP['event-poll-interval'] → section='Event Driven', field='Poll Interval' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A72F90&gt;
+key = 'event-poll-interval'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['event-poll-interval'] → section='Event Driven', field='Poll Interval' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[event-queue-cap]" time="0.001"><failure message="AssertionError: FIELD_MAP['event-queue-cap'] → section='Event Driven', field='Queue Cap' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A73050&gt;
+key = 'event-queue-cap'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['event-queue-cap'] → section='Event Driven', field='Queue Cap' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[event-timeout-minutes]" time="0.001"><failure message="AssertionError: FIELD_MAP['event-timeout-minutes'] → section='Event Driven', field='Timeout Minutes' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A73110&gt;
+key = 'event-timeout-minutes'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['event-timeout-minutes'] → section='Event Driven', field='Timeout Minutes' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[fallback-model]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[forge-endpoint]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[forge-owner]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[forge-provider]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[forge-repo]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[harness-enabled]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[harness-port]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[improvement-scan-cool-down]" time="0.001"><failure message="AssertionError: FIELD_MAP['improvement-scan-cool-down'] → section='Improvement Scanning', field='Improvement Scan Cool-Down' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A73710&gt;
+key = 'improvement-scan-cool-down'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['improvement-scan-cool-down'] → section='Improvement Scanning', field='Improvement Scan Cool-Down' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[improvement-scan-model]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[improvement-scanning]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[interval]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[mandatory-human-approval]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[pr-flow]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[project-intent]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[project-name]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[qa-execution-model]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[repo]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[research-model]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[scan-cooldown]" time="0.001"><failure message="AssertionError: FIELD_MAP['scan-cooldown'] → section='Event Driven', field='Scan Cooldown' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A73F50&gt;
+key = 'scan-cooldown'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['scan-cooldown'] → section='Event Driven', field='Scan Cooldown' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[scan-idle-timeout]" time="0.001"><failure message="AssertionError: FIELD_MAP['scan-idle-timeout'] → section='Event Driven', field='Scan Idle Timeout' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A94050&gt;
+key = 'scan-idle-timeout'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['scan-idle-timeout'] → section='Event Driven', field='Scan Idle Timeout' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[ship-threshold]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[shipped-since-bump]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[skill-tests]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[state-branch]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[test-plan-model]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[tracker]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[upstream-reporting]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[vault-optimize]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[vault-remember]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[vault-writes-per-cycle]" time="0.001" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[version]" time="0.000" /><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[workers]" time="0.001"><failure message="AssertionError: FIELD_MAP['workers'] → section='Agents', field='Workers' not found in SAMPLE_CONFIG. Update the fixture.&#10;assert None is not None">self = &lt;test_config_functions.TestFieldMapCoverage object at 0x000001BE68A94950&gt;
+key = 'workers'
+
+    @pytest.mark.parametrize("key", sorted(config.FIELD_MAP.keys()))
+    def test_field_map_entry_resolves(self, key):
+        """Every FIELD_MAP key must find its section+field in SAMPLE_CONFIG."""
+        section, field = config.FIELD_MAP[key]
+        value = config._parse_field(SAMPLE_CONFIG, section, field)
+&gt;       assert value is not None, (
+            f"FIELD_MAP['{key}'] → section='{section}', field='{field}' "
+            f"not found in SAMPLE_CONFIG. Update the fixture."
+        )
+E       AssertionError: FIELD_MAP['workers'] → section='Agents', field='Workers' not found in SAMPLE_CONFIG. Update the fixture.
+E       assert None is not None
+
+tests\test_config_functions.py:295: AssertionError</failure></testcase><testcase classname="tests.test_config_functions.TestFieldMapCoverage" name="test_field_map_entry_resolves[working-branch]" time="0.001" /><testcase classname="tests.test_config_functions.TestSyncAgents" name="test_sync_agents_no_name_error" time="0.008" /><testcase classname="tests.test_config_functions.TestSyncAgents" name="test_sync_agents_without_dm" time="0.005" /><testcase classname="tests.test_feat_10348_verifier" name="test_tc_01_system_exit_returns_default" time="0.001" /><testcase classname="tests.test_feat_10348_verifier" name="test_tc_02_live_no_exit_1_on_missing_interval" time="0.092" /><testcase classname="tests.test_feat_10348_verifier" name="test_tc_03_value_error_still_returns_default" time="0.001" /><testcase classname="tests.test_feat_10348_verifier" name="test_tc_04_keyboard_interrupt_propagates" time="0.000" /><testcase classname="tests.test_feat_10348_verifier" name="test_tc_05_dead_imports_dropped" time="0.002" /><testcase classname="tests.test_feat_10348_verifier" name="test_tc_06_worker_regression_suite_passes" time="0.562" /><testcase classname="tests.test_feat_1328_blocked_skip.TestPMVerificationBlockedCheck" name="test_pm_does_not_verify_directly" time="0.001" /><testcase classname="tests.test_feat_1328_blocked_skip.TestPMVerificationBlockedCheck" name="test_pm_has_no_verification_steps" time="0.000" /><testcase classname="tests.test_feat_1328_blocked_skip.TestShipCounterOwnership" name="test_qa_owns_ship_counter" time="0.001" /><testcase classname="tests.test_feat_1328_blocked_skip.TestShipCounterOwnership" name="test_pm_does_not_own_ship_counter" time="0.000" /><testcase classname="tests.test_feat_1328_blocked_skip.TestQAVerificationBlockedCheck" name="test_step4_has_blocked_check" time="0.001" /><testcase classname="tests.test_feat_1328_blocked_skip.TestQAVerificationBlockedCheck" name="test_step5_has_blocked_check" time="0.001" /><testcase classname="tests.test_feat_1328_blocked_skip.TestQAVerificationBlockedCheck" name="test_no_status_transition_for_blocked" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_01_skill_md_rewritten" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_02_skill_file_rewritten" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_03_skill_md_and_skill_file_agree" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_04_compose_deploy_all_is_primary" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_05_soul_md_preservation_documented" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_06_config_v1_v2_patching" time="0.003" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_07_no_install_spec_fallback" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_08_ensure_labels_included" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_09_clone_isolation_documented" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_10_tracker_schema_check_removed" time="0.001" /><testcase classname="tests.test_feat_2495_upgrade_rewrite" name="test_tc_11_no_claude_dir_in_commit" time="0.001" /><testcase classname="tests.test_feat_3645_auto_merge.TestQAVerificationAutoMerge" name="test_checks_auto_merge_config" time="0.001" /><testcase classname="tests.test_feat_3645_auto_merge.TestQAVerificationAutoMerge" name="test_checks_human_required_label" time="0.001" /><testcase classname="tests.test_feat_3645_auto_merge.TestQAVerificationAutoMerge" name="test_auto_merge_on_merges_directly" time="0.001" /><testcase classname="tests.test_feat_3645_auto_merge.TestQAVerificationAutoMerge" name="test_auto_merge_off_routes_to_review" time="0.001" /><testcase classname="tests.test_feat_3645_auto_merge.TestQAVerificationAutoMerge" name="test_per_ticket_override" time="0.001" /><testcase classname="tests.test_feat_3645_auto_merge.TestPMDelegatesToVerifier" name="test_pm_does_not_carry_auto_merge_gate" time="0.000" /><testcase classname="tests.test_feat_3645_auto_merge.TestPMDelegatesToVerifier" name="test_pm_does_not_check_human_required_label" time="0.000" /><testcase classname="tests.test_feat_3645_auto_merge.TestPMDelegatesToVerifier" name="test_pm_delegates_to_verifier" time="0.000" /><testcase classname="tests.test_feat_3645_auto_merge.TestTrackerLabelTaxonomy" name="test_special_labels_includes_review_human_required" time="0.000" /><testcase classname="tests.test_feat_3663_pr_conflict_check.TestPRConflictCheck" name="test_checks_mergeable_status" time="0.000" /><testcase classname="tests.test_feat_3663_pr_conflict_check.TestPRConflictCheck" name="test_merges_conflicting_prs" time="0.000" /><testcase classname="tests.test_feat_3663_pr_conflict_check.TestPRConflictCheck" name="test_push_after_merge" time="0.001" /><testcase classname="tests.test_feat_3663_pr_conflict_check.TestPRConflictCheck" name="test_abort_on_conflict" time="0.000" /><testcase classname="tests.test_feat_3663_pr_conflict_check.TestPRConflictCheck" name="test_only_own_branches" time="0.000" /><testcase classname="tests.test_feat_3663_pr_conflict_check.TestPRConflictCheck" name="test_gated_on_pr_flow" time="0.000" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_01_preset_manifest_variants" time="0.002" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_02_all_roles_get_variant" time="0.001" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_03_scaffold_install_writes_l4_files" time="0.060" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_04_wizard_md_l4_instructions" time="0.001" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_05_custom_project_type_no_variant" time="0.000" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_06_design_preset_empty_role_install_order" time="0.002" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_07_generate_default_spec_manifest_driven" time="0.002" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_08_scaffold_overwrite_guard" time="0.105" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_10_test_wizard_no_old_preset_constant" time="0.001" /><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_10b_run_tests_exit_zero" time="57.002"><failure message="AssertionError: tests/run_tests.py exited with code 1.&#10;  stdout:&#10;  ============================= test session starts =============================&#10;  platform win32 -- Python 3.12.10, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\naaht\AppData\Local\Programs\Python\Python312\python.exe&#10;  cachedir: .pytest_cache&#10;  rootdir: D:\Dev\Dev\SquidSquad-2&#10;  plugins: anyio-4.12.1, asyncio-1.3.0, cov-7.0.0&#10;  asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function&#10;  collecting ... collected 0 items&#10;  &#10;  ============================ no tests ran in 0.01s ============================&#10;  [ðŸ¦‘ 16:02:19] test-bootup: bootup-complete â€” event dispatch unlocked&#10;  [16:02:19] test-bootup bootup-complete    &#10;  [ðŸ¦‘ 16:02:19] test-bootup: bootup-complete â€” event dispatch unlocked&#10;  [16:02:19] test-bootup bootup-complete    &#10;  [ðŸ¦‘ 16:02:19] test-bootup: bootup-complete â€” event dispatch unlocked&#10;  [16:02:19] test-bootup bootup-complete    &#10;  [ðŸ¦‘ 16:02:19] test-bootup: bootup-complete â€” event dispatch unlocked&#10;  [16:02:19] test-bootup bootup-complete    &#10;  [16:02:19] test-bootup status-transition  #5 approved â†’ in-progress&#10;  [ðŸ¦‘ 16:02:20] Stopped test-stop-req (intent=stopping)&#10;    Harness intent=stopping. Agent will exit for stop.&#10;  [ðŸ¦‘ 16:02:20] Stopped test-stop-req (intent=stopping)&#10;  [16:02:20] test-stop-req stop-requested     &#10;  [16:02:20] test-stop-req stop-requested     &#10;  [16:02:20] test-stop-req stop-requested     &#10;  [16:02:20] test-stop-req stop-requested     &#10;  [16:02:20] test-stop-req stop-requested     &#10;  [16:02:20] test-stop-req stop-requested     &#10;  [16:02:20] test-stop-req stop-requested     &#10;  &#10;  --- Post-test cleanup ---&#10;    Issues: 0, Branches: 0, Files: 0&#10;    All test artifacts cleaned up.&#10;  &#10;  stderr:&#10;  hout_harness (integration.test_9398_real_agent_subprocess.TestAgentDegradedModeWithoutHarness.test_tracker_work_queue_works_without_harness)&#10;  AC-2 M-2.3 subprocess half â€” tracker.work_queue does ... ok&#10;  test_agent_finds_canned_approved_task_and_transitions (integration.test_9398_real_agent_subprocess.TestAgentWorkPickupThroughGhShim.test_agent_finds_canned_approved_task_and_transitions)&#10;  End-to-end work-pickup slice: ... ok&#10;  test_real_subprocess_bootup_flips_agent_state_flag (integration.test_9398_real_agent_subprocess.TestBootupCompleteAcrossRealSubprocesses.test_real_subprocess_bootup_flips_agent_state_flag) ... ok&#10;  test_real_subprocess_bootup_is_idempotent (integration.test_9398_real_agent_subprocess.TestBootupCompleteAcrossRealSubprocesses.test_real_subprocess_bootup_is_idempotent)&#10;  Per the L1 base spec: multiple bootup-complete posts are ... ok&#10;  test_live_port_file_not_touched (integration.test_9398_real_agent_subprocess.TestRealHarnessFixtureWritesPortFileToIsolatedDir.test_live_port_file_not_touched)&#10;  The live repo's ``.squidsquad/.harness-port`` must not ... skipped 'no live .harness-port to guard against'&#10;  test_port_file_lives_under_isolated_squid_dir (integration.test_9398_real_agent_subprocess.TestRealHarnessFixtureWritesPortFileToIsolatedDir.test_port_file_lives_under_isolated_squid_dir) ... ok&#10;  test_check_gh_passes_through_shim (integration.test_9398_gh_shim_tracker_integration.TestCheckGhThroughShim.test_check_gh_passes_through_shim) ... ok&#10;  test_list_tasks_returns_canned_approved_task (integration.test_9398_gh_shim_tracker_integration.TestTrackerListTasksThroughShim.test_list_tasks_returns_canned_approved_task) ... ok&#10;  test_list_tasks_returns_empty_when_no_fixture (integration.test_9398_gh_shim_tracker_integration.TestTrackerListTasksThroughShim.test_list_tasks_returns_empty_when_no_fixture)&#10;  With the shim active but no fixture file, tracker.py ... ok&#10;  &#10;  ----------------------------------------------------------------------&#10;  Ran 54 tests in 54.907s&#10;  &#10;  OK (skipped=2)&#10;  &#10;assert 1 == 0&#10; +  where 1 = CompletedProcess(args=['C:\\Users\\naaht\\AppData\\Local\\Programs\\Python\\Python312\\python.exe', 'D:\\Dev\\Dev\\Squ...\n----------------------------------------------------------------------\nRan 54 tests in 54.907s\n\nOK (skipped=2)\n&quot;).returncode">def test_tc_10b_run_tests_exit_zero():
+        """TC-10b: python tests/run_tests.py exits 0 (full test suite passes)."""
+        run_tests_path = TESTS_DIR / "run_tests.py"
+        if not run_tests_path.exists():
+            pytest.skip(f"tests/run_tests.py not found at {run_tests_path}")
+    
+        result = subprocess.run(
+            [sys.executable, str(run_tests_path)],
+            cwd=str(REPO),
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+&gt;       assert result.returncode == 0, (
+            f"tests/run_tests.py exited with code {result.returncode}.\n"
+            f"stdout:\n{result.stdout[-3000:]}\n"
+            f"stderr:\n{result.stderr[-2000:]}"
+        )
+E       AssertionError: tests/run_tests.py exited with code 1.
+E         stdout:
+E         ============================= test session starts =============================
+E         platform win32 -- Python 3.12.10, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\naaht\AppData\Local\Programs\Python\Python312\python.exe
+E         cachedir: .pytest_cache
+E         rootdir: D:\Dev\Dev\SquidSquad-2
+E         plugins: anyio-4.12.1, asyncio-1.3.0, cov-7.0.0
+E         asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+E         collecting ... collected 0 items
+E         
+E         ============================ no tests ran in 0.01s ============================
+E         [ðŸ¦‘ 16:02:19] test-bootup: bootup-complete â€” event dispatch unlocked
+E         [16:02:19] test-bootup bootup-complete    
+E         [ðŸ¦‘ 16:02:19] test-bootup: bootup-complete â€” event dispatch unlocked
+E         [16:02:19] test-bootup bootup-complete    
+E         [ðŸ¦‘ 16:02:19] test-bootup: bootup-complete â€” event dispatch unlocked
+E         [16:02:19] test-bootup bootup-complete    
+E         [ðŸ¦‘ 16:02:19] test-bootup: bootup-complete â€” event dispatch unlocked
+E         [16:02:19] test-bootup bootup-complete    
+E         [16:02:19] test-bootup status-transition  #5 approved â†’ in-progress
+E         [ðŸ¦‘ 16:02:20] Stopped test-stop-req (intent=stopping)
+E           Harness intent=stopping. Agent will exit for stop.
+E         [ðŸ¦‘ 16:02:20] Stopped test-stop-req (intent=stopping)
+E         [16:02:20] test-stop-req stop-requested     
+E         [16:02:20] test-stop-req stop-requested     
+E         [16:02:20] test-stop-req stop-requested     
+E         [16:02:20] test-stop-req stop-requested     
+E         [16:02:20] test-stop-req stop-requested     
+E         [16:02:20] test-stop-req stop-requested     
+E         [16:02:20] test-stop-req stop-requested     
+E         
+E         --- Post-test cleanup ---
+E           Issues: 0, Branches: 0, Files: 0
+E           All test artifacts cleaned up.
+E         
+E         stderr:
+E         hout_harness (integration.test_9398_real_agent_subprocess.TestAgentDegradedModeWithoutHarness.test_tracker_work_queue_works_without_harness)
+E         AC-2 M-2.3 subprocess half â€” tracker.work_queue does ... ok
+E         test_agent_finds_canned_approved_task_and_transitions (integration.test_9398_real_agent_subprocess.TestAgentWorkPickupThroughGhShim.test_agent_finds_canned_approved_task_and_transitions)
+E         End-to-end work-pickup slice: ... ok
+E         test_real_subprocess_bootup_flips_agent_state_flag (integration.test_9398_real_agent_subprocess.TestBootupCompleteAcrossRealSubprocesses.test_real_subprocess_bootup_flips_agent_state_flag) ... ok
+E         test_real_subprocess_bootup_is_idempotent (integration.test_9398_real_agent_subprocess.TestBootupCompleteAcrossRealSubprocesses.test_real_subprocess_bootup_is_idempotent)
+E         Per the L1 base spec: multiple bootup-complete posts are ... ok
+E         test_live_port_file_not_touched (integration.test_9398_real_agent_subprocess.TestRealHarnessFixtureWritesPortFileToIsolatedDir.test_live_port_file_not_touched)
+E         The live repo's ``.squidsquad/.harness-port`` must not ... skipped 'no live .harness-port to guard against'
+E         test_port_file_lives_under_isolated_squid_dir (integration.test_9398_real_agent_subprocess.TestRealHarnessFixtureWritesPortFileToIsolatedDir.test_port_file_lives_under_isolated_squid_dir) ... ok
+E         test_check_gh_passes_through_shim (integration.test_9398_gh_shim_tracker_integration.TestCheckGhThroughShim.test_check_gh_passes_through_shim) ... ok
+E         test_list_tasks_returns_canned_approved_task (integration.test_9398_gh_shim_tracker_integration.TestTrackerListTasksThroughShim.test_list_tasks_returns_canned_approved_task) ... ok
+E         test_list_tasks_returns_empty_when_no_fixture (integration.test_9398_gh_shim_tracker_integration.TestTrackerListTasksThroughShim.test_list_tasks_returns_empty_when_no_fixture)
+E         With the shim active but no fixture file, tracker.py ... ok
+E         
+E         ----------------------------------------------------------------------
+E         Ran 54 tests in 54.907s
+E         
+E         OK (skipped=2)
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['C:\\Users\\naaht\\AppData\\Local\\Programs\\Python\\Python312\\python.exe', 'D:\\Dev\\Dev\\Squ...\n----------------------------------------------------------------------\nRan 54 tests in 54.907s\n\nOK (skipped=2)\n").returncode
+
+tests\test_feat_6581_wizard_reframing.py:458: AssertionError</failure></testcase><testcase classname="tests.test_feat_6581_wizard_reframing" name="test_tc_11_fresh_install_smoke" time="0.139" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: ralph-loop-overview --&gt;-skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: ralph-loop-overview --&gt;-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: ralph-loop-overview --&gt;-qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: ralph-loop-overview --&gt;-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: event-driven-workflow --&gt;-skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: event-driven-workflow --&gt;-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: event-driven-workflow --&gt;-qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: event-driven-workflow --&gt;-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: event-mode-contract --&gt;-skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: event-mode-contract --&gt;-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: event-mode-contract --&gt;-qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: event-mode-contract --&gt;-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: cursor-management --&gt;-skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: cursor-management --&gt;-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: cursor-management --&gt;-qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: cursor-management --&gt;-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: forge-read-pattern --&gt;-skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: forge-read-pattern --&gt;-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: forge-read-pattern --&gt;-qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: forge-read-pattern --&gt;-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: idle-cooldown-loop --&gt;-skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: idle-cooldown-loop --&gt;-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: idle-cooldown-loop --&gt;-qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: idle-cooldown-loop --&gt;-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: comment-handling --&gt;-skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: comment-handling --&gt;-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: comment-handling --&gt;-qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: comment-handling --&gt;-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: pr-merge-wait --&gt;-skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: pr-merge-wait --&gt;-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: pr-merge-wait --&gt;-qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_01_no_mode_specific_markers_inlined[&lt;!-- sub-skill: pr-merge-wait --&gt;-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_02_bootstrap_present[skill]" time="0.001"><failure message="AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **SKILL** agent on SquidSquad — a multi-agent team that builds software autonomously. Your...ery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).\n'">role = 'skill'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_02_bootstrap_present(role):
+        text = _composed(role)
+        assert "&lt;!-- sub-skill: boot-bootstrap --&gt;" in text
+&gt;       assert "## Boot — Mode Detection (#9588)" in text
+E       AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **SKILL** agent on SquidSquad — a multi-agent team that builds software autonomously. Your...ery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:89: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_02_bootstrap_present[pm]" time="0.001"><failure message="AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **PM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).\n'">role = 'pm'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_02_bootstrap_present(role):
+        text = _composed(role)
+        assert "&lt;!-- sub-skill: boot-bootstrap --&gt;" in text
+&gt;       assert "## Boot — Mode Detection (#9588)" in text
+E       AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **PM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:89: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_02_bootstrap_present[qa]" time="0.001"><failure message="AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **QA** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).\n'">role = 'qa'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_02_bootstrap_present(role):
+        text = _composed(role)
+        assert "&lt;!-- sub-skill: boot-bootstrap --&gt;" in text
+&gt;       assert "## Boot — Mode Detection (#9588)" in text
+E       AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **QA** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:89: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_02_bootstrap_present[dm]" time="0.001"><failure message="AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **DM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).\n'">role = 'dm'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_02_bootstrap_present(role):
+        text = _composed(role)
+        assert "&lt;!-- sub-skill: boot-bootstrap --&gt;" in text
+&gt;       assert "## Boot — Mode Detection (#9588)" in text
+E       AssertionError: assert '## Boot — Mode Detection (#9588)' in '## Identity\n\nYou are the **DM** agent on SquidSquad — a multi-agent team that builds software autonomously. Your te...ery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:89: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_03_polling_fragment_substituted_per_role[skill-worker]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_03_polling_fragment_substituted_per_role[pm-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_03_polling_fragment_substituted_per_role[qa-verifier]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_03_polling_fragment_substituted_per_role[dm-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_04_event_fragments_referenced_in_bootstrap[skill]" time="0.001"><failure message="AssertionError: skill: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md&#10;assert 'references/sub-skills/common-events/event-driven-workflow.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">role = 'skill'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_04_event_fragments_referenced_in_bootstrap(role):
+        block = _bootstrap_block(_composed(role))
+        for frag in EVENT_FRAGMENTS:
+            path = f"references/sub-skills/{frag}.md"
+&gt;           assert path in block, (
+                f"{role}: bootstrap missing reference to {path}"
+            )
+E           AssertionError: skill: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md
+E           assert 'references/sub-skills/common-events/event-driven-workflow.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:112: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_04_event_fragments_referenced_in_bootstrap[pm]" time="0.001"><failure message="AssertionError: pm: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md&#10;assert 'references/sub-skills/common-events/event-driven-workflow.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">role = 'pm'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_04_event_fragments_referenced_in_bootstrap(role):
+        block = _bootstrap_block(_composed(role))
+        for frag in EVENT_FRAGMENTS:
+            path = f"references/sub-skills/{frag}.md"
+&gt;           assert path in block, (
+                f"{role}: bootstrap missing reference to {path}"
+            )
+E           AssertionError: pm: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md
+E           assert 'references/sub-skills/common-events/event-driven-workflow.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:112: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_04_event_fragments_referenced_in_bootstrap[qa]" time="0.001"><failure message="AssertionError: qa: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md&#10;assert 'references/sub-skills/common-events/event-driven-workflow.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">role = 'qa'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_04_event_fragments_referenced_in_bootstrap(role):
+        block = _bootstrap_block(_composed(role))
+        for frag in EVENT_FRAGMENTS:
+            path = f"references/sub-skills/{frag}.md"
+&gt;           assert path in block, (
+                f"{role}: bootstrap missing reference to {path}"
+            )
+E           AssertionError: qa: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md
+E           assert 'references/sub-skills/common-events/event-driven-workflow.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:112: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_04_event_fragments_referenced_in_bootstrap[dm]" time="0.001"><failure message="AssertionError: dm: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md&#10;assert 'references/sub-skills/common-events/event-driven-workflow.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">role = 'dm'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_04_event_fragments_referenced_in_bootstrap(role):
+        block = _bootstrap_block(_composed(role))
+        for frag in EVENT_FRAGMENTS:
+            path = f"references/sub-skills/{frag}.md"
+&gt;           assert path in block, (
+                f"{role}: bootstrap missing reference to {path}"
+            )
+E           AssertionError: dm: bootstrap missing reference to references/sub-skills/common-events/event-driven-workflow.md
+E           assert 'references/sub-skills/common-events/event-driven-workflow.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:112: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_04_dm_pr_merge_wait_present_only_in_dm" time="0.001"><failure message="AssertionError: assert 'roles/dm/events/pr-merge-wait.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">def test_tc_04_dm_pr_merge_wait_present_only_in_dm():
+        dm_block = _bootstrap_block(_composed("dm"))
+&gt;       assert "roles/dm/events/pr-merge-wait.md" in dm_block
+E       AssertionError: assert 'roles/dm/events/pr-merge-wait.md' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:122: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_05_bootstrap_uses_127_0_0_1_and_no_dev_null" time="0.000"><failure message="FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\common\\boot-bootstrap.md'">def test_tc_05_bootstrap_uses_127_0_0_1_and_no_dev_null():
+&gt;       src = (SUB_SKILLS / "common" / "boot-bootstrap.md").read_text(encoding="utf-8")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_feat_9588_lazy_load_bootstrap.py:141: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/common/boot-bootstrap.md')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\common\\boot-bootstrap.md'
+
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1013: FileNotFoundError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_06_event_mode_contract_degraded_branch_removed" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_07_bootstrap_reads_config_at_runtime[skill]" time="0.001"><failure message="AssertionError: skill: bootstrap must instruct agent to Read config.md at runtime&#10;assert 'Read `.squidsquad/config.md`' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">role = 'skill'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_07_bootstrap_reads_config_at_runtime(role):
+        block = _bootstrap_block(_composed(role))
+&gt;       assert "Read `.squidsquad/config.md`" in block, (
+            f"{role}: bootstrap must instruct agent to Read config.md at runtime"
+        )
+E       AssertionError: skill: bootstrap must instruct agent to Read config.md at runtime
+E       assert 'Read `.squidsquad/config.md`' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:166: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_07_bootstrap_reads_config_at_runtime[pm]" time="0.001"><failure message="AssertionError: pm: bootstrap must instruct agent to Read config.md at runtime&#10;assert 'Read `.squidsquad/config.md`' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">role = 'pm'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_07_bootstrap_reads_config_at_runtime(role):
+        block = _bootstrap_block(_composed(role))
+&gt;       assert "Read `.squidsquad/config.md`" in block, (
+            f"{role}: bootstrap must instruct agent to Read config.md at runtime"
+        )
+E       AssertionError: pm: bootstrap must instruct agent to Read config.md at runtime
+E       assert 'Read `.squidsquad/config.md`' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:166: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_07_bootstrap_reads_config_at_runtime[qa]" time="0.001"><failure message="AssertionError: qa: bootstrap must instruct agent to Read config.md at runtime&#10;assert 'Read `.squidsquad/config.md`' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">role = 'qa'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_07_bootstrap_reads_config_at_runtime(role):
+        block = _bootstrap_block(_composed(role))
+&gt;       assert "Read `.squidsquad/config.md`" in block, (
+            f"{role}: bootstrap must instruct agent to Read config.md at runtime"
+        )
+E       AssertionError: qa: bootstrap must instruct agent to Read config.md at runtime
+E       assert 'Read `.squidsquad/config.md`' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:166: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_07_bootstrap_reads_config_at_runtime[dm]" time="0.001"><failure message="AssertionError: dm: bootstrap must instruct agent to Read config.md at runtime&#10;assert 'Read `.squidsquad/config.md`' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'">role = 'dm'
+
+    @pytest.mark.parametrize("role", ROLES)
+    def test_tc_07_bootstrap_reads_config_at_runtime(role):
+        block = _bootstrap_block(_composed(role))
+&gt;       assert "Read `.squidsquad/config.md`" in block, (
+            f"{role}: bootstrap must instruct agent to Read config.md at runtime"
+        )
+E       AssertionError: dm: bootstrap must instruct agent to Read config.md at runtime
+E       assert 'Read `.squidsquad/config.md`' in '&lt;!-- sub-skill: boot-bootstrap --&gt;\n### Step 1 — step:cycle/boot\n\n**This block is your FIRST instruction to execute...** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.\n\n'
+
+tests\test_feat_9588_lazy_load_bootstrap.py:166: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_08_loop_invocation_in_bootstrap_with_substituted_interval[skill]" time="0.083" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_08_loop_invocation_in_bootstrap_with_substituted_interval[pm]" time="0.080" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_08_loop_invocation_in_bootstrap_with_substituted_interval[qa]" time="0.079" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_08_loop_invocation_in_bootstrap_with_substituted_interval[dm]" time="0.081" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_08_polling_fragment_source_has_no_loop[skill-worker]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_08_polling_fragment_source_has_no_loop[pm-pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_08_polling_fragment_source_has_no_loop[qa-verifier]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_08_polling_fragment_source_has_no_loop[dm-dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_09_composed_size_within_locked_tolerance" time="0.075" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_10_regression_suite_green" time="1.517" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_11_changed_area_test_suites_green" time="1.857" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_12_bootstrap_teaches_runtime_substitution[skill]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_12_bootstrap_teaches_runtime_substitution[pm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_12_bootstrap_teaches_runtime_substitution[qa]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_12_bootstrap_teaches_runtime_substitution[dm]" time="0.001" /><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_13_manifest_no_runtime_read_entries[includes.yml-skill]" time="0.002"><failure message="AssertionError: D:\Dev\Dev\SquidSquad-2\references\roles\worker\includes.yml: boot-bootstrap must be the first include&#10;assert 'common/cycle-runner' == 'common/boot-bootstrap'&#10;  &#10;  #x1B[0m#x1B[91m- common/boot-bootstrap#x1B[39;49;00m#x1B[90m#x1B[39;49;00m&#10;  #x1B[92m+ common/cycle-runner#x1B[39;49;00m#x1B[90m#x1B[39;49;00m">role = 'skill', manifest_file = 'includes.yml'
+
+    @pytest.mark.parametrize("role", ROLES)
+    @pytest.mark.parametrize("manifest_file", ["includes.yml", "includes-events.yml"])
+    def test_tc_13_manifest_no_runtime_read_entries(role, manifest_file):
+        entry = ROLE_TO_ENTRY[role]
+        manifest_path = ROLES_DIR / entry / manifest_file
+        if not manifest_path.exists():
+            pytest.skip(f"{manifest_path.name} not present for {entry}")
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        assert isinstance(data, dict)
+        includes = data.get("includes", [])
+        assert includes, f"{manifest_path}: empty includes list"
+&gt;       assert includes[0] == "common/boot-bootstrap", (
+            f"{manifest_path}: boot-bootstrap must be the first include"
+        )
+E       AssertionError: D:\Dev\Dev\SquidSquad-2\references\roles\worker\includes.yml: boot-bootstrap must be the first include
+E       assert 'common/cycle-runner' == 'common/boot-bootstrap'
+E         
+E         #x1B[0m#x1B[91m- common/boot-bootstrap#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+E         #x1B[92m+ common/cycle-runner#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+
+tests\test_feat_9588_lazy_load_bootstrap.py:311: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_13_manifest_no_runtime_read_entries[includes.yml-pm]" time="0.002"><failure message="AssertionError: D:\Dev\Dev\SquidSquad-2\references\roles\pm\includes.yml: boot-bootstrap must be the first include&#10;assert 'common/cycle-runner' == 'common/boot-bootstrap'&#10;  &#10;  #x1B[0m#x1B[91m- common/boot-bootstrap#x1B[39;49;00m#x1B[90m#x1B[39;49;00m&#10;  #x1B[92m+ common/cycle-runner#x1B[39;49;00m#x1B[90m#x1B[39;49;00m">role = 'pm', manifest_file = 'includes.yml'
+
+    @pytest.mark.parametrize("role", ROLES)
+    @pytest.mark.parametrize("manifest_file", ["includes.yml", "includes-events.yml"])
+    def test_tc_13_manifest_no_runtime_read_entries(role, manifest_file):
+        entry = ROLE_TO_ENTRY[role]
+        manifest_path = ROLES_DIR / entry / manifest_file
+        if not manifest_path.exists():
+            pytest.skip(f"{manifest_path.name} not present for {entry}")
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        assert isinstance(data, dict)
+        includes = data.get("includes", [])
+        assert includes, f"{manifest_path}: empty includes list"
+&gt;       assert includes[0] == "common/boot-bootstrap", (
+            f"{manifest_path}: boot-bootstrap must be the first include"
+        )
+E       AssertionError: D:\Dev\Dev\SquidSquad-2\references\roles\pm\includes.yml: boot-bootstrap must be the first include
+E       assert 'common/cycle-runner' == 'common/boot-bootstrap'
+E         
+E         #x1B[0m#x1B[91m- common/boot-bootstrap#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+E         #x1B[92m+ common/cycle-runner#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+
+tests\test_feat_9588_lazy_load_bootstrap.py:311: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_13_manifest_no_runtime_read_entries[includes.yml-qa]" time="0.002"><failure message="AssertionError: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\includes.yml: boot-bootstrap must be the first include&#10;assert 'common/cycle-runner' == 'common/boot-bootstrap'&#10;  &#10;  #x1B[0m#x1B[91m- common/boot-bootstrap#x1B[39;49;00m#x1B[90m#x1B[39;49;00m&#10;  #x1B[92m+ common/cycle-runner#x1B[39;49;00m#x1B[90m#x1B[39;49;00m">role = 'qa', manifest_file = 'includes.yml'
+
+    @pytest.mark.parametrize("role", ROLES)
+    @pytest.mark.parametrize("manifest_file", ["includes.yml", "includes-events.yml"])
+    def test_tc_13_manifest_no_runtime_read_entries(role, manifest_file):
+        entry = ROLE_TO_ENTRY[role]
+        manifest_path = ROLES_DIR / entry / manifest_file
+        if not manifest_path.exists():
+            pytest.skip(f"{manifest_path.name} not present for {entry}")
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        assert isinstance(data, dict)
+        includes = data.get("includes", [])
+        assert includes, f"{manifest_path}: empty includes list"
+&gt;       assert includes[0] == "common/boot-bootstrap", (
+            f"{manifest_path}: boot-bootstrap must be the first include"
+        )
+E       AssertionError: D:\Dev\Dev\SquidSquad-2\references\roles\verifier\includes.yml: boot-bootstrap must be the first include
+E       assert 'common/cycle-runner' == 'common/boot-bootstrap'
+E         
+E         #x1B[0m#x1B[91m- common/boot-bootstrap#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+E         #x1B[92m+ common/cycle-runner#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+
+tests\test_feat_9588_lazy_load_bootstrap.py:311: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_13_manifest_no_runtime_read_entries[includes.yml-dm]" time="0.002"><failure message="AssertionError: D:\Dev\Dev\SquidSquad-2\references\roles\dm\includes.yml: boot-bootstrap must be the first include&#10;assert 'common/capability-check' == 'common/boot-bootstrap'&#10;  &#10;  #x1B[0m#x1B[91m- common/boot-bootstrap#x1B[39;49;00m#x1B[90m#x1B[39;49;00m&#10;  #x1B[92m+ common/capability-check#x1B[39;49;00m#x1B[90m#x1B[39;49;00m">role = 'dm', manifest_file = 'includes.yml'
+
+    @pytest.mark.parametrize("role", ROLES)
+    @pytest.mark.parametrize("manifest_file", ["includes.yml", "includes-events.yml"])
+    def test_tc_13_manifest_no_runtime_read_entries(role, manifest_file):
+        entry = ROLE_TO_ENTRY[role]
+        manifest_path = ROLES_DIR / entry / manifest_file
+        if not manifest_path.exists():
+            pytest.skip(f"{manifest_path.name} not present for {entry}")
+        data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+        assert isinstance(data, dict)
+        includes = data.get("includes", [])
+        assert includes, f"{manifest_path}: empty includes list"
+&gt;       assert includes[0] == "common/boot-bootstrap", (
+            f"{manifest_path}: boot-bootstrap must be the first include"
+        )
+E       AssertionError: D:\Dev\Dev\SquidSquad-2\references\roles\dm\includes.yml: boot-bootstrap must be the first include
+E       assert 'common/capability-check' == 'common/boot-bootstrap'
+E         
+E         #x1B[0m#x1B[91m- common/boot-bootstrap#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+E         #x1B[92m+ common/capability-check#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
+
+tests\test_feat_9588_lazy_load_bootstrap.py:311: AssertionError</failure></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_13_manifest_no_runtime_read_entries[includes-events.yml-skill]" time="0.001"><skipped type="pytest.skip" message="includes-events.yml not present for worker">D:\Dev\Dev\SquidSquad-2\tests\test_feat_9588_lazy_load_bootstrap.py:306: includes-events.yml not present for worker</skipped></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_13_manifest_no_runtime_read_entries[includes-events.yml-pm]" time="0.001"><skipped type="pytest.skip" message="includes-events.yml not present for pm">D:\Dev\Dev\SquidSquad-2\tests\test_feat_9588_lazy_load_bootstrap.py:306: includes-events.yml not present for pm</skipped></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_13_manifest_no_runtime_read_entries[includes-events.yml-qa]" time="0.001"><skipped type="pytest.skip" message="includes-events.yml not present for verifier">D:\Dev\Dev\SquidSquad-2\tests\test_feat_9588_lazy_load_bootstrap.py:306: includes-events.yml not present for verifier</skipped></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_13_manifest_no_runtime_read_entries[includes-events.yml-dm]" time="0.000"><skipped type="pytest.skip" message="includes-events.yml not present for dm">D:\Dev\Dev\SquidSquad-2\tests\test_feat_9588_lazy_load_bootstrap.py:306: includes-events.yml not present for dm</skipped></testcase><testcase classname="tests.test_feat_9588_lazy_load_bootstrap" name="test_tc_14_compose_runtime_read_frozenset_present" time="0.001" /><testcase classname="tests.test_feat_9687_remote_branch_retry.TestVerifyRemoteBranchRetry" name="test_returns_true_when_branch_present_on_first_attempt" time="0.001" /><testcase classname="tests.test_feat_9687_remote_branch_retry.TestVerifyRemoteBranchRetry" name="test_retries_once_when_branch_missing_then_appears" time="0.001" /><testcase classname="tests.test_feat_9687_remote_branch_retry.TestVerifyRemoteBranchRetry" name="test_returns_false_when_branch_missing_on_both_attempts" time="0.001" /><testcase classname="tests.test_feat_9687_remote_branch_retry.TestVerifyRemoteBranchRetry" name="test_network_failure_on_first_attempt_returns_none" time="0.001" /><testcase classname="tests.test_feat_9687_remote_branch_retry.TestVerifyRemoteBranchRetry" name="test_network_failure_on_retry_returns_none" time="0.001" /><testcase classname="tests.test_feat_9687_remote_branch_retry.TestVerifyRemoteBranchRetry" name="test_default_sleep_is_time_sleep" time="0.001" /><testcase classname="tests.test_feat_9742_retry_ceiling.TestRetryCeiling" name="test_returns_none_after_max_consecutive_failures" time="0.014" /><testcase classname="tests.test_feat_9742_retry_ceiling.TestRetryCeiling" name="test_single_success_resets_counter" time="0.001" /><testcase classname="tests.test_feat_9742_retry_ceiling.TestRetryCeiling" name="test_default_unlimited_retries_preserved" time="0.001" /><testcase classname="tests.test_feat_9742_retry_ceiling.TestRetryCeiling" name="test_ceiling_value_constant" time="0.000" /><testcase classname="tests.test_feat_9742_retry_ceiling.TestRetryCeiling" name="test_ceiling_message_includes_failure_count" time="0.001" /><testcase classname="tests.test_feat_9742_retry_ceiling.TestRetryCeiling" name="test_non_retryable_error_returns_none_immediately" time="0.001" /><testcase classname="tests.test_feat_9742_retry_ceiling.TestMainWaitModePassesCeiling" name="test_wait_mode_passes_max_consecutive_failures" time="0.003" /><testcase classname="tests.test_feat_9742_retry_ceiling.TestMainWaitModePassesCeiling" name="test_single_shot_mode_does_not_pass_ceiling" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_returns_none_when_no_regression" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_detects_and_restores_regression" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_dedupes_dm_and_qa_ships_of_same_issue" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_ignores_non_ship_commits" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_returns_none_when_no_tag" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_returns_none_when_git_log_fails" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_returns_none_when_config_unreadable" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_writes_correct_format_to_config" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestReconcileShipCounter" name="test_repair_emits_warning_to_stderr" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestRoleGating" name="test_helper_exists_and_is_callable" time="0.000" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestRoleGating" name="test_no_other_callsite_in_cycle_pre" time="0.001" /><testcase classname="tests.test_feat_9772_ship_counter_self_heal.TestRoleGating" name="test_callsite_is_role_dm_gated" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestUniversalShipperStatuses" name="test_pending_ship_uses_state_all_in_gh_path" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestUniversalShipperStatuses" name="test_pending_ship_drops_role_filter_in_gh_path" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestUniversalShipperStatuses" name="test_shipped_uses_state_all_in_gh_path" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestUniversalShipperStatuses" name="test_shipped_drops_role_filter_in_gh_path" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestUniversalShipperStatuses" name="test_pending_ship_uses_state_all_in_adapter_path" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestNonUniversalStatusesUnchanged" name="test_status_keeps_state_open_and_role_filter[approved]" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestNonUniversalStatusesUnchanged" name="test_status_keeps_state_open_and_role_filter[in-progress]" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestNonUniversalStatusesUnchanged" name="test_status_keeps_state_open_and_role_filter[pending-test]" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestNonUniversalStatusesUnchanged" name="test_status_keeps_state_open_and_role_filter[planning]" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestNonUniversalStatusesUnchanged" name="test_status_keeps_state_open_and_role_filter[planned]" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestNonUniversalStatusesUnchanged" name="test_status_keeps_state_open_and_role_filter[open]" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestNonUniversalStatusesUnchanged" name="test_status_keeps_state_open_and_role_filter[pending]" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestNonUniversalStatusesUnchanged" name="test_no_status_filter_keeps_state_open_and_role_filter" time="0.001" /><testcase classname="tests.test_feat_9837_pending_ship_visibility.TestDmReproducer" name="test_dm_pending_ship_query_returns_role_skill_items" time="0.001" /><testcase classname="tests.test_l1_your_cycle_indexing" name="test_your_cycle_h4s_are_indexed_contiguously_from_one" time="0.001" /><testcase classname="tests.test_l1_your_cycle_indexing" name="test_lifetime_diagram_section_labels_match_h4_titles" time="0.001" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestNonOpH3UnderNonInstructionsSlot" name="test_h3_under_soul_treated_as_prose_append" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestNonOpH3UnderNonInstructionsSlot" name="test_multiple_h3_subheadings_under_one_slot_share_one_append" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestNonOpH3UnderNonInstructionsSlot" name="test_empty_non_instructions_slot_emits_no_op" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestNonOpH3UnderInstructionsSlot" name="test_prose_h3_in_instructions_opens_implicit_append" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestNonOpH3UnderInstructionsSlot" name="test_explicit_op_still_parsed_as_op_in_instructions_slot" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestNonOpH3UnderInstructionsSlot" name="test_prose_h3_then_explicit_op_both_captured" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestNonOpH3UnderInstructionsSlot" name="test_explicit_op_then_prose_h3_both_captured" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestNonOpH3UnderInstructionsSlot" name="test_plain_prose_before_first_h3_in_instructions_not_lost" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestImplicitAppendExemptFromR4Validation" name="test_implicit_append_op_is_marked_implicit" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestImplicitAppendExemptFromR4Validation" name="test_explicit_append_op_is_not_marked_implicit" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestImplicitAppendExemptFromR4Validation" name="test_r4_skips_implicit_append_op" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestImplicitAppendExemptFromR4Validation" name="test_r4_still_rejects_explicit_append_without_sub_skill_ref" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[instructions-### replace step:cycle/]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[instructions-### insert-before]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[instructions-### replace step:cycle/foo extra]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[instructions-### insert-after step:cycle/]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[soul-### replace step:cycle/]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[soul-### insert-before]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[soul-### replace step:cycle/foo extra]" time="0.001" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[soul-### insert-after step:cycle/]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[identity-### replace step:cycle/]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[identity-### insert-before]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[identity-### replace step:cycle/foo extra]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestOpLikeH3StillStrict" name="test_op_like_malformed_still_rejected[identity-### insert-after step:cycle/]" time="0.000" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestLiveProductionL4Files" name="test_live_l4_file_parses[pm]" time="0.001" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestLiveProductionL4Files" name="test_live_l4_file_parses[dm]" time="0.001" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestLiveProductionL4Files" name="test_live_l4_file_parses[verifier]" time="0.001" /><testcase classname="tests.test_l4_parser_10987_prose_h3.TestLiveProductionL4Files" name="test_live_l4_file_parses[worker]" time="0.001" /><testcase classname="tests.test_runtime_requirements" name="test_requirements_txt_exists" time="0.000" /><testcase classname="tests.test_runtime_requirements" name="test_runtime_third_party_imports_are_declared" time="0.033" /><testcase classname="tests.test_runtime_requirements" name="test_known_harness_deps_present" time="0.001" /><testcase classname="tests.test_stale_tracker_files_ref.TestNoStaleTrackerFilesRef" name="test_prohibitions_no_stale_tracker_files[pm]" time="0.001"><failure message="FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\pm\\prohibitions.md'">self = &lt;test_stale_tracker_files_ref.TestNoStaleTrackerFilesRef object at 0x000001BE66DE65D0&gt;
+role = 'pm'
+
+    @pytest.mark.parametrize("role", ["pm", "dm"])
+    def test_prohibitions_no_stale_tracker_files(self, role):
+        """Prohibition 'Never delete entries from tracker files' must not exist."""
+        path = PROHIBITIONS_DIR / role / "prohibitions.md"
+&gt;       content = path.read_text(encoding="utf-8")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_stale_tracker_files_ref.py:22: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/prohibitions.md')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\pm\\prohibitions.md'
+
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1013: FileNotFoundError</failure></testcase><testcase classname="tests.test_stale_tracker_files_ref.TestNoStaleTrackerFilesRef" name="test_prohibitions_no_stale_tracker_files[dm]" time="0.001"><failure message="FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\dm\\prohibitions.md'">self = &lt;test_stale_tracker_files_ref.TestNoStaleTrackerFilesRef object at 0x000001BE66DE6300&gt;
+role = 'dm'
+
+    @pytest.mark.parametrize("role", ["pm", "dm"])
+    def test_prohibitions_no_stale_tracker_files(self, role):
+        """Prohibition 'Never delete entries from tracker files' must not exist."""
+        path = PROHIBITIONS_DIR / role / "prohibitions.md"
+&gt;       content = path.read_text(encoding="utf-8")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_stale_tracker_files_ref.py:22: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/prohibitions.md')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\dm\\prohibitions.md'
+
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1013: FileNotFoundError</failure></testcase><testcase classname="tests.test_stale_tracker_files_ref.TestNoStaleTrackerFilesRef" name="test_pm_prohibitions_names_actual_files" time="0.000"><failure message="FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\pm\\prohibitions.md'">self = &lt;test_stale_tracker_files_ref.TestNoStaleTrackerFilesRef object at 0x000001BE66DE64B0&gt;
+
+    def test_pm_prohibitions_names_actual_files(self):
+        """PM prohibitions must name qa-log.md and enhancements.md."""
+        path = PROHIBITIONS_DIR / "pm" / "prohibitions.md"
+&gt;       content = path.read_text(encoding="utf-8")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_stale_tracker_files_ref.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/pm/prohibitions.md')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\pm\\prohibitions.md'
+
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1013: FileNotFoundError</failure></testcase><testcase classname="tests.test_stale_tracker_files_ref.TestNoStaleTrackerFilesRef" name="test_dm_prohibitions_names_actual_files" time="0.000"><failure message="FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\dm\\prohibitions.md'">self = &lt;test_stale_tracker_files_ref.TestNoStaleTrackerFilesRef object at 0x000001BE66DE5C40&gt;
+
+    def test_dm_prohibitions_names_actual_files(self):
+        """DM prohibitions must name actual append-only files."""
+        path = PROHIBITIONS_DIR / "dm" / "prohibitions.md"
+&gt;       content = path.read_text(encoding="utf-8")
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_stale_tracker_files_ref.py:36: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1027: in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors) as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = WindowsPath('D:/Dev/Dev/SquidSquad-2/references/sub-skills/roles/dm/prohibitions.md')
+mode = 'r', buffering = -1, encoding = 'utf-8', errors = None, newline = None
+
+    def open(self, mode='r', buffering=-1, encoding=None,
+             errors=None, newline=None):
+        """
+        Open the file pointed to by this path and return a file object, as
+        the built-in open() function does.
+        """
+        if "b" not in mode:
+            encoding = io.text_encoding(encoding)
+&gt;       return io.open(self, mode, buffering, encoding, errors, newline)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\dm\\prohibitions.md'
+
+C:\Users\naaht\AppData\Local\Programs\Python\Python312\Lib\pathlib.py:1013: FileNotFoundError</failure></testcase><testcase classname="tests.test_statusline_data.TestGetWakeMode" name="test_delegates_to_canonical_helper" time="0.001" /><testcase classname="tests.test_statusline_data.TestGetWakeMode" name="test_falls_back_to_polling_on_import_failure" time="0.000" /><testcase classname="tests.test_statusline_data.TestReadCurrentStateFile" name="test_returns_first_line" time="0.009" /><testcase classname="tests.test_statusline_data.TestReadCurrentStateFile" name="test_missing_file_returns_empty" time="0.002" /><testcase classname="tests.test_statusline_data.TestCmdPhasePolling" name="test_returns_file_contents_in_polling_mode" time="0.004" /><testcase classname="tests.test_statusline_data.TestCmdPhaseEventDriven" name="test_queries_agents_endpoint_not_health" time="0.002" /><testcase classname="tests.test_statusline_data.TestCmdPhaseEventDriven" name="test_surfaces_non_running_intent_when_phase_empty" time="0.002" /><testcase classname="tests.test_statusline_data.TestCmdPhaseEventDriven" name="test_phase_wins_over_intent" time="0.002" /><testcase classname="tests.test_statusline_data.TestCmdPhaseEventDriven" name="test_running_intent_with_no_phase_does_not_surface" time="0.004" /><testcase classname="tests.test_statusline_data.TestCmdPhaseEventDriven" name="test_falls_back_to_file_when_harness_unreachable" time="0.003" /><testcase classname="tests.test_statusline_data.TestCmdPhaseEventDriven" name="test_no_state_anywhere_prints_nothing" time="0.002" /><testcase classname="tests.test_statusline_data.TestCmdMode" name="test_prints_wake_mode" time="0.001" /><testcase classname="tests.test_statusline_data.TestHarnessPort" name="test_reads_port_file" time="0.002" /><testcase classname="tests.test_statusline_data.TestHarnessPort" name="test_falls_back_to_default" time="0.002" /><testcase classname="tests.test_statusline_data.TestHarnessPort" name="test_corrupt_port_file_falls_back" time="0.003" /><testcase classname="tests.test_statusline_data.TestCLI" name="test_usage_error_on_missing_args" time="0.001" /><testcase classname="tests.test_statusline_data.TestCLI" name="test_unknown_command" time="0.001" /><testcase classname="tests.test_statusline_data.TestCLI" name="test_phase_dispatches_to_cmd_phase" time="0.001" /><testcase classname="tests.test_v2_test_helpers" name="test_expand_inlines_existing_include" time="0.008" /><testcase classname="tests.test_v2_test_helpers" name="test_expand_skips_runtime_fragments" time="0.004" /><testcase classname="tests.test_v2_test_helpers" name="test_expand_emits_error_for_missing_file" time="0.003" /><testcase classname="tests.test_v2_test_helpers" name="test_expand_strips_outer_markers" time="0.009" /><testcase classname="tests.test_v2_test_helpers" name="test_expand_strips_yaml_frontmatter" time="0.009" /><testcase classname="tests.test_v2_test_helpers" name="test_expand_passes_non_include_lines_through" time="0.005" /></testsuite></testsuites>

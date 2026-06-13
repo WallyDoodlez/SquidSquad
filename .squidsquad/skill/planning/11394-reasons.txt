@@ -1,0 +1,23 @@
+test_references :: E   AssertionError: Missing agent-instructions.md in references/
+test_manifest_registry :: E   AssertionError: Shipped registry has 1 error(s):
+test_statusline_schema :: E   AssertionError: references/statusline.sh and .squidsquad/statusline.sh are out of sync � edit references/ and `cp` it to .squidsquad/
+test_feat328_coverage :: E   AssertionError: ["ERROR: references/roles/dm/manifest.yaml:requires_sub_skills.any_of � unknown capability id 'local_delivery'; known capabilities: []"]
+test_state_bus :: E   AssertionError: retry pull missing --rebase: ['git', '-c', 'credential.helper=!gh auth git-credential', 'pull', '--no-rebase', '--no-edit', 'origin', 'squid
+test_comms_sub_skills :: E   AssertionError: chat-etiquette.md must start with ## heading
+test_event_mode_fragments :: E   AssertionError: references/roles/worker/includes.yml must list `common/boot-bootstrap` � #9588 made it the manifest entry that gets the agent into event mod
+test_cycle_pre :: E   AssertionError: assert 'verifier' in ['dm', 'pm', 'qa', 'skill']
+test_4792_fragment_hygiene :: E   AssertionError: assert 'sole liveness signal' in '## Identity\\n\\nYou are the **SKILL** agent on SquidSquad \u2014 a multi-agent team that builds software 
+test_deterministic_qa_framework :: E   assert ('"Deferred"' in '## Identity\\n\\nYou are the **QA** agent on SquidSquad \u2014 a multi-agent team that builds software autonomously. Your te...ery 
+test_dm_verify_before_block :: E   FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\dm\\prohibitions.md'
+test_own_domain_autofix :: E   AssertionError: assert '{{include: roles/pm/own-domain-autofix}}' in '---\nslot: instructions\nordinal: 20\nroles: [pm]\nstep-ids: [step:cycle/check-in, ste
+test_vault_synthesis :: E   AssertionError: assert 'create-task' in '---\nslot: instructions\nordinal: 20\nroles: [pm]\n---\n\n### Step � Vault Synthesis (Quiet Cycle)\n\nDuring quiet 
+test_pickup_comment_fidelity_9946 :: E   FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\roles\\dev\\includes.yml'
+test_terminology_dual_aware_6274 :: E   AssertionError: dev-skill should resolve to ('dev', 'skill') pre-rename; got ('worker', 'skill')
+test_compose_a2f_10492 :: E   AssertionError: assert ['## Identity...', '## Vault'] == ['## Identity...', '## Vault']
+test_atomic_emit_b7 :: E   AssertionError: assert ['## Identity...', '## Vault'] == ['## Identity...', '## Vault']
+test_a3_golden_link_stage :: 
+test_compose_author_comments_11142 :: E   AssertionError: boot-bootstrap wrapper marker missing from worker/instructions.md � #11142 strip should not touch sub-skill wrappers.
+test_config_functions :: E   AssertionError: FIELD_MAP['code-review-model'] \u2192 section='Model Routing', field='Code Review Model' not found in SAMPLE_CONFIG. Update the fixture.
+test_agent_boundaries :: E   AssertionError: L1 awareness instruction missing from composed pm
+test_feat_9588_lazy_load_bootstrap :: E   AssertionError: assert '## Boot \u2014 Mode Detection (#9588)' in '## Identity\\n\\nYou are the **SKILL** agent on SquidSquad \u2014 a multi-agent team that
+test_stale_tracker_files_ref :: E   FileNotFoundError: [Errno 2] No such file or directory: 'D:\\Dev\\Dev\\SquidSquad-2\\references\\sub-skills\\roles\\pm\\prohibitions.md'
