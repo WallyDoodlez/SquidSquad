@@ -16,8 +16,11 @@
 - Harness `POST /agents/dm/restart` was ineffective (intent never flipped, intent_set_at=None, no kill) → filed **#11538** (sev:high, role:skill).
 - **Operator manually killed PID 43320 + restarted DM**. Confirmed new claude_pid=46736 (old process gone). DM up ~1 min, not yet cycled.
 - skill cycle 1641 cleared a merge=ours flap on #11518/#11530 → PRs now mergeable for DM.
-- **VERIFYING**: background poll (begezon01) watches pending-ship count + DM commits for ~6 min. Do NOT declare recovered until DM ships. If fresh DM wedges again → systemic loop-mode issue (#11512/#11538), re-escalate.
+- **RECOVERY CONFIRMED working**: restarted DM (pid 46736) IS cycling + shipping. current-state progressed: "merging PR #11504" → "🚀 #11394 push to main". The 6-min flat poll was just DM booting + grinding the flappiest PR (#11504) first. Earlier "wedged again" read was premature.
+- DM tackling #11504 (#11394) first — the CONFLICTING merge-flap one; slow but progressing. Other 3 PRs (#11536/#11518/#11530) UNKNOWN-but-likely-clean.
+- **VERIFYING ship lands**: poll bgssuaj02 watches pending-ship drop below 4.
 - **4 items pending-ship → DM**: #10836 (PR #11536, R1 QA-PASS), #11512 (PR #11518, loop-fix), #11519 (PR #11530), #11394 (PR #11504). All QA-PASS.
+- **Related**: #10540 (open, role:dm) describes this exact batch-ship-after-outage failure mode — surfaced in DM's work-queue. #11511 (durable merge-flap fix) still open.
 
 ## Pipeline
 
