@@ -85,13 +85,47 @@ _NUDGE_LINE = "NUDGE"
 
 
 def _discover_port():
+    """Discover the harness port — default 7373 + parent-dir walk for
+    `.harness-port` (#11601). Mirrors cycle_post._discover_harness_port so the
+    wake-mechanism poller agrees with the boot probe (CLAUDE.md Step 1) and the
+    cycle wrapper on port resolution. Always returns an int.
+
+    `.harness-port` is gitignored (.gitignore:20), so it is NOT synced across
+    sibling agent clones — only the clone the harness wrote it in has it.
+    Returning None here (the pre-#11601 behavior) made event_poll print
+    'harness port not found' and exit 2 in every clone lacking the file, which
+    kills the Monitor and (per #9742) the agent session — so event mode could
+    never *sustain* even though the boot probe selected it (the symptom behind
+    #11586). Falling back to the default port closes that gap.
+
+    Resolution order: this repo's `.squidsquad/`, then a 5-level parent-dir walk
+    for an inherited `.harness-port` (clone isolation), finally default 7373.
+    """
+    # First: this repo's .squidsquad/.harness-port
     port_file = SQUID_DIR / ".harness-port"
     if port_file.exists():
         try:
             return int(port_file.read_text(encoding="utf-8").strip())
         except (ValueError, OSError):
             pass
-    return None
+
+    # Second: walk parent directories (agent clone may be a child of the
+    # primary repo) — matches cycle_post._discover_harness_port.
+    current = REPO_ROOT.parent
+    for _ in range(5):  # max 5 levels up
+        candidate = current / ".squidsquad" / ".harness-port"
+        if candidate.exists():
+            try:
+                return int(candidate.read_text(encoding="utf-8").strip())
+            except (ValueError, OSError):
+                pass
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+
+    # Fall back to the harness default port.
+    return 7373
 
 
 def _backoff_seconds(attempt):
