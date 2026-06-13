@@ -1678,3 +1678,52 @@ class TestGitPush:
         git_ops._git_push([])
         cmd = mock_run.call_args[0][0]
         assert cmd == ["git", "push"]
+
+
+class TestCheckRealConflict11511:
+    """#11511: deterministic ground truth for whether a PR's CONFLICTING flag
+    is a REAL conflict or a cosmetic flap (GitHub honors no user .gitattributes
+    merge driver server-side). Runs `git merge-tree --write-tree` both ways;
+    a real conflict in either direction is a real conflict.
+    """
+
+    @patch("git_ops._run_list")
+    def test_clean_returns_true(self, mock_run):
+        # rev-parse base, rev-parse head, merge-tree both ways — all clean
+        mock_run.side_effect = [
+            _mock_result(returncode=0),   # rev-parse base
+            _mock_result(returncode=0),   # rev-parse head
+            _mock_result(returncode=0),   # merge-tree base head
+            _mock_result(returncode=0),   # merge-tree head base
+        ]
+        assert git_ops.check_real_conflict("origin/main", "origin/feat") is True
+
+    @patch("git_ops._run_list")
+    def test_real_conflict_returns_false(self, mock_run):
+        mock_run.side_effect = [
+            _mock_result(returncode=0),   # rev-parse base
+            _mock_result(returncode=0),   # rev-parse head
+            _mock_result(stdout="CONFLICT (content): Merge conflict in foo.py",
+                         returncode=1),   # merge-tree base head
+            _mock_result(returncode=0),   # merge-tree head base
+        ]
+        assert git_ops.check_real_conflict("origin/main", "origin/feat") is False
+
+    @patch("git_ops._run_list")
+    def test_conflict_in_either_direction_is_conflict(self, mock_run):
+        # First direction clean, reverse direction conflicts — still a conflict.
+        mock_run.side_effect = [
+            _mock_result(returncode=0),   # rev-parse base
+            _mock_result(returncode=0),   # rev-parse head
+            _mock_result(returncode=0),   # merge-tree base head (clean)
+            _mock_result(stdout="CONFLICT (content): Merge conflict in bar.py",
+                         returncode=1),   # merge-tree head base
+        ]
+        assert git_ops.check_real_conflict("origin/main", "origin/feat") is False
+
+    @patch("git_ops._run_list")
+    def test_unresolvable_ref_returns_none(self, mock_run):
+        # rev-parse of the base ref fails -> short-circuit, no merge-tree runs.
+        mock_run.side_effect = [_mock_result(returncode=128)]  # rev-parse base fails
+        assert git_ops.check_real_conflict("origin/nope", "origin/feat") is None
+        assert mock_run.call_count == 1   # short-circuited before head/merge-tree

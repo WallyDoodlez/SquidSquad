@@ -22,6 +22,7 @@ Usage:
     python scripts/git_ops.py task-end <role> <number>    # return to working branch
     python scripts/git_ops.py has-changes               # check if working tree dirty
     python scripts/git_ops.py last-hash                 # print last commit hash (short)
+    python scripts/git_ops.py check-real-conflict <base> <head>  # real conflict? exit 0=clean/1=conflict/2=err
     python scripts/git_ops.py --help
 """
 
@@ -985,6 +986,52 @@ def last_hash():
     return h
 
 
+def check_real_conflict(base, head):
+    """Report whether merging <head> into <base> has a REAL content conflict.
+
+    GitHub flags a PR ``CONFLICTING`` whenever transient files (e.g.
+    ``working-state.md``) differ across branch and base — even when there is no
+    real conflict — because GitHub honors NO user ``.gitattributes`` merge
+    driver server-side (community discussion #9288; see
+    [[learning-pr-conflicting-flag-can-be-cosmetic]]). This helper is the
+    deterministic ground truth so agents/DM treat GitHub's flag as ADVISORY and
+    stop burning cycles hand-nudging cosmetic flaps (#11511).
+
+    Runs ``git merge-tree --write-tree`` (a non-destructive, in-memory three-way
+    merge) in BOTH directions; a real conflict in either is a real conflict.
+    Refs should be ``origin/*`` so the comparison matches what GitHub evaluates
+    — callers should ``git fetch`` first.
+
+    Returns True (clean), False (real conflict), or None (a ref won't resolve).
+    main() maps these to exit 0 / 1 / 2.
+    """
+    for ref in (base, head):
+        rc = _run_list(["git", "rev-parse", "--verify", "--quiet", ref], check=False)
+        if rc.returncode != 0:
+            print(f"ERROR: cannot resolve ref '{ref}' -- fetch first "
+                  f"(e.g. `git fetch origin`)?", file=sys.stderr)
+            return None
+
+    conflict_lines = []
+    real_conflict = False
+    for a, b in ((base, head), (head, base)):
+        result = _run_list(["git", "merge-tree", "--write-tree", a, b], check=False)
+        if result.returncode != 0:
+            real_conflict = True
+            conflict_lines += [l for l in result.stdout.splitlines()
+                               if "CONFLICT" in l or l.startswith("Conflict")]
+
+    if not real_conflict:
+        print(f"CLEAN: no real conflict merging {head} into {base} "
+              f"(any GitHub CONFLICTING flag is cosmetic -- merge on content)")
+        return True
+
+    print(f"CONFLICT: real merge conflict merging {head} into {base}")
+    for l in dict.fromkeys(conflict_lines):  # de-dup, preserve order
+        print(f"  {l}")
+    return False
+
+
 def _parse_args():
     args = sys.argv[1:]
     if not args or args[0] == "--help":
@@ -1085,6 +1132,15 @@ def main():
         has_changes()
     elif cmd == "last-hash":
         last_hash()
+    elif cmd == "check-real-conflict":
+        if len(rest) < 2:
+            print("Usage: git_ops.py check-real-conflict <base-ref> <head-ref>",
+                  file=sys.stderr)
+            sys.exit(2)
+        verdict = check_real_conflict(rest[0], rest[1])
+        if verdict is None:
+            sys.exit(2)        # could not resolve a ref
+        sys.exit(0 if verdict else 1)   # 0 = clean, 1 = real conflict
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(1)
