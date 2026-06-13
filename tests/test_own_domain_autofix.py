@@ -39,18 +39,23 @@ class TestOwnDomainAutofix:
         assert "roles/pm/own-domain-autofix" in data["includes"]
 
     def test_included_in_pm_template(self):
-        """PM CLAUDE.md template has the include directive."""
+        """PM instructions.md wires the sub-skill via a v2 run-marker.
+        (#11049 Path A retired the v1 `{{include:}}` directive syntax —
+        sub-skills are now invoked by `→ run sub-skill:` markers.)"""
         tmpl_path = REFERENCES_DIR / "roles" / "pm" / "instructions.md"
         text = tmpl_path.read_text(encoding="utf-8")
-        assert "{{include: roles/pm/own-domain-autofix}}" in text
+        assert "→ run sub-skill: own-domain-autofix" in text
 
     def test_composed_pm_has_autofix_section(self):
-        """Composed PM CLAUDE.md contains the Own-Domain Auto-Fix section."""
+        """Composed PM CLAUDE.md references the own-domain-autofix step.
+        (Sub-skill bodies are loaded at runtime via the run-marker, not
+        inlined — the composed output carries the step anchor, not the
+        sub-skill heading.)"""
         path = SQUIDSQUAD_DIR / "pm" / "CLAUDE.md"
         if not path.exists():
             pytest.skip("Composed PM CLAUDE.md not deployed")
         text = path.read_text(encoding="utf-8")
-        assert "Own-Domain Auto-Fix" in text
+        assert "step:cycle/own-domain-autofix" in text
 
     def test_autofix_after_pipeline_sentinel(self):
         """own-domain-autofix appears after pipeline-sentinel in includes."""

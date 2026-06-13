@@ -191,7 +191,10 @@ class TestShippedRegistry:
         )
         # v2 shape guarantee (post-#6274.2: dev→worker, qa→verifier)
         assert set(roles) >= {"pm", "dm", "worker", "verifier"}
-        assert set(tools) >= {"figma", "google_stitch", "local_html", "local_delivery"}
+        # capabilities/ removed as deadwood (INSTALLER-ARCH §8.3, superseded by
+        # per-agent L4 tool config) → the shipped registry now loads zero tools.
+        # Full capability-mechanism teardown tracked in #11505. (#11503)
+        assert tools == {}
         assert set(presets) >= {"software-dev", "design"}
 
     def test_shipped_pipelines_match_spec(self):

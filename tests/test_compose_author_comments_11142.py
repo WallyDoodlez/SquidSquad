@@ -124,13 +124,19 @@ def test_sub_skill_wrapper_markers_preserved(_deploy_all):
     """``<!-- sub-skill: NAME -->`` / ``<!-- /sub-skill: NAME -->`` wrapper
     markers around inlined sub-skill bodies (preserved through #11137)
     must survive the #11142 cleanup — they're not author commentary,
-    they're inlined-block boundary markers."""
-    path = REPO_ROOT / "references" / "roles" / "worker" / "instructions.md"
+    they're inlined-block boundary markers.
+
+    (#11331 compose-polish centralised the boot-bootstrap inline into the
+    shared L1 base ``references/roles/instructions.md`` rather than the
+    role-specific ``worker/instructions.md`` — the wrapper marker moved
+    with it. This test now asserts the marker survives in its current,
+    correct home.)"""
+    path = REPO_ROOT / "references" / "roles" / "instructions.md"
     text = path.read_text(encoding="utf-8")
     # boot-bootstrap is the one mandatory-inline that #11137 kept
     assert "<!-- sub-skill: boot-bootstrap -->" in text, (
-        "boot-bootstrap wrapper marker missing from worker/instructions.md "
-        "— #11142 strip should not touch sub-skill wrappers."
+        "boot-bootstrap wrapper marker missing from references/roles/"
+        "instructions.md — the strip must not touch sub-skill wrappers."
     )
 
 

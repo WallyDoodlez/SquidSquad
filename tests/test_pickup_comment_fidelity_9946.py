@@ -29,11 +29,13 @@ import compose  # noqa: E402
 from _v2_test_helpers import v2_compose_for as _v2_compose_for  # noqa: E402
 
 FRAGMENT = REPO / "references" / "sub-skills" / "common" / "pickup-comment-fidelity.md"
-DEV_TEMPLATE = REPO / "references" / "roles" / "dev" / "instructions.md"
-DEV_POLL_MANIFEST = REPO / "references" / "roles" / "dev" / "includes.yml"
-DEV_EVENT_MANIFEST = REPO / "references" / "roles" / "dev" / "includes-events.yml"
-IMPLEMENT_TASKS = REPO / "references" / "sub-skills" / "roles" / "dev" / "implement-tasks.md"
-TRIAGE_ISSUES = REPO / "references" / "sub-skills" / "roles" / "dev" / "triage-issues.md"
+# #11503 rebind: role `dev` was renamed to `worker` in #6274; paths updated accordingly.
+WORKER_TEMPLATE = REPO / "references" / "roles" / "worker" / "instructions.md"
+# #11503 rebind: v2 (E6 #10685) merged includes.yml + includes-events.yml into a
+# single unified includes.yml; includes-events.yml no longer exists.
+WORKER_MANIFEST = REPO / "references" / "roles" / "worker" / "includes.yml"
+IMPLEMENT_TASKS = REPO / "references" / "sub-skills" / "roles" / "worker" / "implement-tasks.md"
+TRIAGE_ISSUES = REPO / "references" / "sub-skills" / "roles" / "worker" / "triage-issues.md"
 
 
 def test_fragment_file_exists():
@@ -57,26 +59,36 @@ def test_fragment_covers_both_failure_modes():
     )
 
 
-def test_fragment_in_dev_polling_manifest():
-    manifest = yaml.safe_load(DEV_POLL_MANIFEST.read_text(encoding="utf-8"))
+def test_fragment_in_worker_manifest():
+    """pickup-comment-fidelity must be in the unified worker manifest.
+
+    #11503 rebind: role `dev` renamed to `worker` (#6274); split poll/event
+    manifests merged into a single includes.yml in E6 (#10685).  Both the
+    old polling-manifest and event-manifest guarantees are now covered by
+    the single WORKER_MANIFEST check.
+    """
+    manifest = yaml.safe_load(WORKER_MANIFEST.read_text(encoding="utf-8"))
     assert "common/pickup-comment-fidelity" in manifest["includes"], (
-        "common/pickup-comment-fidelity missing from dev polling manifest"
+        "common/pickup-comment-fidelity missing from worker unified manifest"
     )
 
 
-def test_fragment_in_dev_events_manifest():
-    manifest = yaml.safe_load(DEV_EVENT_MANIFEST.read_text(encoding="utf-8"))
-    assert "common/pickup-comment-fidelity" in manifest["includes"], (
-        "common/pickup-comment-fidelity missing from dev events manifest"
+def test_fragment_referenced_in_worker_template():
+    """The worker instructions.md must wire the pickup-comment-fidelity step.
+
+    #11503 rebind: role `dev` renamed to `worker` (#6274).  In v2 the
+    instructions.md uses a runtime ``→ run sub-skill:`` marker at a named
+    step anchor (step:cycle/pickup-comment-fidelity), not the v1-style
+    ``{{include:}}`` compile-time directive.  Assert the runtime wiring
+    exists and the step ID is present — the manifest entry alone is
+    insufficient without the step anchor in the template.
+    """
+    template = WORKER_TEMPLATE.read_text(encoding="utf-8")
+    assert "→ run sub-skill: pickup-comment-fidelity" in template, (
+        "→ run sub-skill: pickup-comment-fidelity missing from worker instructions.md"
     )
-
-
-def test_fragment_referenced_in_dev_template():
-    """The dev instructions.md template must have the include directive — without it,
-    the manifest entry is dead weight (compose only inlines what the template requests)."""
-    template = DEV_TEMPLATE.read_text(encoding="utf-8")
-    assert "{{include: common/pickup-comment-fidelity}}" in template, (
-        "{{include: common/pickup-comment-fidelity}} missing from dev template"
+    assert "step:cycle/pickup-comment-fidelity" in template, (
+        "step:cycle/pickup-comment-fidelity step anchor missing from worker instructions.md"
     )
 
 
@@ -113,26 +125,27 @@ def test_triage_issues_crossref_to_implement_tasks_not_off_by_one():
 
 
 @pytest.mark.parametrize("role", ["skill"])
-def test_fragment_renders_in_composed_dev_variant_claude_md(role):
-    """End-to-end: composing the dev variant CLAUDE.md must inline the full
-    fragment, not just the 8b-bis / 7b-bis pointer lines.
+def test_fragment_renders_in_composed_worker_variant_claude_md(role):
+    """End-to-end: composing the worker (skill) variant CLAUDE.md must wire
+    the pickup-comment-fidelity runtime marker and its step anchor.
 
-    Post-E6 (#10685) this uses ``_v2_compose_for`` — v2 link stage +
-    the deterministic ``expand_v2_includes`` helper that gives the
-    test the same expanded ``<!-- sub-skill: X --> body -->`` shape
-    v1's ``compose_role`` produced. The invariant set is identical
-    to the pre-cutover version (marker + three body-text checks).
+    #11503 rebind: role `dev` renamed to `worker` (#6274).  In v2
+    (post-E6 #10685) sub-skill bodies are NOT inlined at compose time —
+    they are loaded at runtime via ``→ run sub-skill:`` markers.  The
+    old assertions for ``<!-- sub-skill: pickup-comment-fidelity -->`` and
+    body-text fragments (State-file filter, Test-result fidelity,
+    Prior-cycle phantoms) no longer apply.
+
+    The v2 invariant: the composed CLAUDE.md must contain both the
+    step-anchor line (``step:cycle/pickup-comment-fidelity``) and the
+    runtime ``→ run sub-skill: pickup-comment-fidelity`` marker — these
+    confirm the fragment is wired into the agent's cycle, not merely listed
+    in the manifest as dead weight.
     """
     composed = _v2_compose_for(role)
-    assert "<!-- sub-skill: pickup-comment-fidelity -->" in composed, (
-        f"sub-skill marker for pickup-comment-fidelity missing from {role}"
+    assert "step:cycle/pickup-comment-fidelity" in composed, (
+        f"step anchor step:cycle/pickup-comment-fidelity missing from composed {role}"
     )
-    assert "State-file filter" in composed, (
-        f"fragment content (State-file filter) missing from composed {role}"
-    )
-    assert "Test-result fidelity" in composed, (
-        f"fragment content (Test-result fidelity) missing from composed {role}"
-    )
-    assert "Prior-cycle phantoms" in composed, (
-        f"fragment content (Prior-cycle phantoms) missing from composed {role}"
+    assert "→ run sub-skill: pickup-comment-fidelity" in composed, (
+        f"runtime sub-skill marker for pickup-comment-fidelity missing from composed {role}"
     )

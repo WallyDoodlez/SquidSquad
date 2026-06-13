@@ -78,21 +78,24 @@ def test_ac1_1_dual_aware_constant_is_frozenset():
 
 
 def test_ac1_2_dev_skill_resolves_pre_rename():
-    """Pre-6274.2 state: `references/roles/dev/skill/` exists. The
-    canonical form resolves directly."""
+    """#6274.2 cutover landed: the on-disk dir is now
+    `references/roles/worker/skill/` (no `dev/`). The legacy `dev-`
+    prefix is still accepted as a dual-aware INPUT alias, but the
+    return tracks disk (F3 contract) → ('worker', 'skill')."""
     result = compose._resolve_variant("dev-skill")
-    assert result == ("dev", "skill"), (
-        f"dev-skill should resolve to ('dev', 'skill') pre-rename; got {result}"
+    assert result == ("worker", "skill"), (
+        f"dev-skill should resolve to ('worker', 'skill') post-cutover "
+        f"(return tracks disk per F3); got {result}"
     )
 
 
 def test_ac1_2_worker_skill_resolves_pre_rename_via_alias():
-    """Pre-6274.2 state: `worker-skill` is input-normalized to the
-    on-disk `dev/skill/` directory via the dual-aware alias. F3
-    contract: input independent of disk; return tracks disk."""
+    """Post-6274.2 cutover: `worker-skill` resolves directly to the
+    on-disk `worker/skill/` directory. F3 contract: input independent
+    of disk; return tracks disk."""
     result = compose._resolve_variant("worker-skill")
-    assert result == ("dev", "skill"), (
-        f"worker-skill should resolve to ('dev', 'skill') pre-rename "
+    assert result == ("worker", "skill"), (
+        f"worker-skill should resolve to ('worker', 'skill') post-cutover "
         f"(return tracks disk per F3); got {result}"
     )
 
@@ -108,9 +111,9 @@ def test_ac1_2_qa_and_verifier_resolve_identically():
         f"qa-skill and verifier-skill must resolve identically; "
         f"got qa={qa_result}, verifier={verifier_result}"
     )
-    # Both should resolve to a qa-rooted tuple pre-rename
+    # Post-6274.2 cutover: on-disk dir is verifier/ → return tracks disk.
     assert qa_result is not None
-    assert qa_result[0] == "qa"
+    assert qa_result[0] == "verifier"
 
 
 def test_ac1_2_non_variant_inputs_return_none():

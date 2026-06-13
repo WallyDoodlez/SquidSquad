@@ -29,10 +29,11 @@ claude_template: instructions.md
 # Terminal node — DM is where every path ends.
 routes_to: []
 
-# DM needs exactly one delivery tool. `local_delivery` is the always-available
-# fallback; richer delivery channels (email, Slack, Drive, etc.) are added to
-# this list as tools ship in future registries.
-requires_sub_skills:
-  any_of: [local_delivery]
+# No capability requirements. The capability mechanism (capabilities/ dir) was
+# removed as deadwood (INSTALLER-ARCH §8.3) and superseded by per-agent L4 tool
+# config, so the registry now loads zero capabilities. The former
+# `any_of: [local_delivery]` was an orphan reference into that deleted registry
+# (#11503). Matches the empty form used by pm/verifier/worker manifests.
+requires_sub_skills: {}
 
 setup_requirements: []
