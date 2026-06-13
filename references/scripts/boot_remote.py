@@ -416,52 +416,65 @@ def _spawn_terminal(clone_root, role, boot_script, script_type):
 
 
 def _spawn_windows(clone_root, role, script_path, script_type):
-    """Spawn on Windows using wt.exe or fallback. Returns (success, message, terminal_pid)."""
-    wt = shutil.which("wt")
-    if wt:
-        try:
-            if script_type == "thin":
-                cmd = [wt, "new-tab", "--title", f"squidsquad-{role}",
-                       "-d", str(clone_root),
-                       "python", script_path, role]
-            elif script_type == "ps1":
-                cmd = [wt, "new-tab", "--title", f"squidsquad-{role}",
-                       "-d", str(clone_root),
-                       "pwsh", "-NoExit", "-File", script_path]
-            else:
-                cmd = [wt, "new-tab", "--title", f"squidsquad-{role}",
-                       "-d", str(clone_root),
-                       "bash", script_path]
-            proc = subprocess.Popen(
-                cmd,
-                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-                cwd=str(clone_root),
-            )
-            launcher = "thin launcher" if script_type == "thin" else "wt.exe"
-            # wt.exe exits after creating the tab — proc.pid is short-lived (#7630 P-5)
-            return True, f"spawned via {launcher} (Windows Terminal)", proc.pid
-        except Exception as e:
-            return False, f"wt.exe spawn failed: {e}", None
+    """Spawn on Windows in a self-closing console window. Returns (success, message, terminal_pid).
 
-    # Fallback: cmd /c start
+    #11745 (operator-ratified Option A, 2026-06-13): spawn via ``cmd /c start``
+    rather than ``wt new-tab``. A Windows Terminal tab's close behavior is
+    governed solely by the profile's ``closeOnExit`` (default ``automatic``,
+    which for a directly-launched command behaves as ``graceful`` → the tab
+    stays open on a non-zero/killed exit), and there is NO wt CLI flag to
+    override it (microsoft/terminal#15747). So a killed agent orphaned its tab,
+    and orphans piled up across reboots. ``start`` instead opens a standalone
+    console window whose lifetime IS the spawned process's: the OS closes the
+    window when the process exits with ANY code — no orphan accumulation. The
+    trade-off (separate windows instead of unified wt tabs) was accepted by the
+    operator. ``/D`` sets the window's working directory (replaces wt's ``-d``).
+    """
+    title = f"squidsquad-{role}"
+    if script_type == "thin":
+        inner = ["python", script_path, role]
+    elif script_type == "ps1":
+        # Drop -NoExit (#11745): it pinned pwsh open forever after the boot
+        # script returned, which is itself a guaranteed-orphan source.
+        inner = ["pwsh", "-File", script_path]
+    else:
+        inner = ["bash", script_path]
+
+    def _q(value):
+        """Quote a token for the cmd.exe command line if it has spaces/is empty."""
+        text = str(value)
+        return '"' + text + '"' if (" " in text or not text) else text
+
     try:
-        if script_type == "thin":
-            cmd = ["cmd", "/c", "start", f"squidsquad-{role}",
-                   "python", script_path, role]
-        elif script_type == "ps1":
-            cmd = ["cmd", "/c", "start", f"squidsquad-{role}",
-                   "pwsh", "-NoExit", "-File", script_path]
-        else:
-            cmd = ["cmd", "/c", "start", f"squidsquad-{role}",
-                   "bash", script_path]
+        # Build the command line BY HAND and pass it to Popen as a string so
+        # Windows uses it verbatim. A list would route through list2cmdline,
+        # which does NOT quote a no-space token — and `START`'s syntax is
+        # `start ["title"] [/D dir] command`: an UNquoted first token is taken
+        # as the *program to run*, not the window title. So `start squidsquad-skill
+        # python ...` would try to exec `squidsquad-skill` and the agent would
+        # never launch. The title MUST be quoted (#11745 DS Finding 1).
+        #
+        # Known limitation (#11745 DS Finding 2): because this routes through
+        # `cmd /c`, cmd.exe interprets metacharacters (& | < > ^ %) in the
+        # path/args. Clone roots and script paths come from the controlled
+        # project filesystem and role names are [\w-]+, so such characters do
+        # not occur in practice — this is a documented unsupported input class,
+        # not a silent break.
+        start_cmd = " ".join(
+            ["cmd", "/c", "start", '"' + title + '"', "/D", _q(clone_root)]
+            + [_q(arg) for arg in inner]
+        )
         proc = subprocess.Popen(
-            cmd,
+            start_cmd,
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
             cwd=str(clone_root),
         )
-        return True, "spawned via cmd /c start (fallback)", proc.pid
+        # cmd.exe exits after issuing `start` — proc.pid is short-lived, as the
+        # prior wt path also noted (#7630 P-5). The self-closing console it
+        # spawned owns the agent process.
+        return True, "spawned via cmd /c start (self-closing window, #11745)", proc.pid
     except Exception as e:
-        return False, f"Windows fallback spawn failed: {e}", None
+        return False, f"Windows spawn failed: {e}", None
 
 
 def _spawn_macos(clone_root, role, script_path, script_type):
