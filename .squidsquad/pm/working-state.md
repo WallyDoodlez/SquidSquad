@@ -3,6 +3,31 @@
 - **Task**: cycle 2344 — overnight stabilization (operator asleep, expects: reboot issue resolved + team in event mode)
 - **Status (02:42)**: ALL 4 AGENTS RUNNING & STABLE — NOTHING looping. dm=EVENT(working); skill=LOOP pinned(stable+working, pid 32432); qa=LOOP(own clone, working); pm healthy. Lock-watchdog active. Reboot issue RESOLVED (both fast stale-lock + slow event-mode loops neutralized).
 
+## >>> UPDATE 05:31 — DM STARVED (event-mode work-delivery gap); durable-fix chain deferred to MORNING <<<
+
+- **DM not shipping #11503/#11657** (pending-ship 42min). Root: DM has **0 events past cursor** + transcript 16h old (yesterday 13:47). NOT broken — STARVED: QA's pending-ship transition emitted no dm-targeted work event. Concrete **#11586 symptom** (event-mode work-delivery gap). Bare-comment nudge can't wake event-mode agent → pipeline-sentinel ineffective here.
+- **DECISION: do NOT pin/restart DM tonight.** Reboot is protected by scaffolding (watchdog+pin-keeper). The DURABLE fix = #11641 landing on main, which needs a 4-step chain (DM ship bundle→main green→skill push #11641→QA verify→DM ship #11641). Multi-agent delivery + PR merges + version bumps = consequential; doing it autonomously at 5am with flaky event mode risks a half-merged mess. **Complete the chain in the MORNING with operator.**
+- **CAVEAT — scaffolding is BABYSITTING, not durable**: watchdog (bsj1gq479) + pin-keeper (bm5wzho27) only run while THIS PM session runs. If session ends, they die → skill can revert to looping. Durable resolution REQUIRES #11641 on main. Morning priority.
+- **MORNING CHAIN TO DRIVE**: (1) get DM to ship #11683 (likely pin DM→loop like skill/qa, OR fix #11586 event delivery); (2) skill pushes squidsquad/task/11641 (unpushed local cff818eb7) on green main; (3) QA verify; (4) DM ship → #11641 on main → remove scaffolding + restore ports to 7373.
+
+## >>> UPDATE 05:05 — loop-pin CLEARED → slow loop resumed → RE-PINNED; chain advancing <<<
+
+- **CHAIN PROGRESS (good)**: skill pushed bundle → PR #11683 (MERGEABLE/CLEAN) → QA VERIFIED #11503+#11657 → **both pending-ship** (awaiting DM). QA working correctly in own clone.
+- **WATCHDOG FIRED ONCE** (04:42, cleared skill stale lock pid 32432) — protection worked; clean single reboot, not a masked loop.
+- **PIN FRAGILITY (problem)**: skill's .harness-port 59999 pin got CLEARED to EMPTY (~04:42 reboot) → defaulted to 7373 → EVENT mode → **slow loop resumed** (48988→6088→47308, ~2min reboots). Watchdog does NOT catch event-mode loops (no stale lock). cycle_post only READS .harness-port (not the clearer — empty was a reboot-time fluke).
+- **RE-PINNED 05:05 + PIN-KEEPER deployed**: skill stable loop-mode (pid 15068, 0 reboots). KEY INSIGHT: mode is sticky PER-SESSION — skill probes .harness-port only AT BOOT. Empty port only harms if empty AT a reboot. So **pin-keeper.sh** (bg bm5wzho27, maintains 59999 every 30s for ~7.5h, log ~/.squidsquad-pin-keeper.log) guarantees any future reboot lands loop-mode. **DUAL PROTECTION now**: lock-watchdog (fast crash loop) + pin-keeper (slow event-mode loop). Both temporary until #11586 fixed → then delete both + restore port to 7373.
+- **#11641 BRANCH NOT PUSHED** (local commit cff818eb7 on skill clone only) → skill MUST stay alive to push the reboot fix once main is green. Do NOT stop skill. Bundle branch IS pushed (#11683).
+- **DM not yet shipping**: #11503/#11657 pending-ship since 08:49Z; 0 events in dm queue (event-mode nudge may not have reached it — #11586-adjacent). Only ~14min old at check → not a stall yet. If >90min, pipeline-sentinel nudge DM. Chain to land #11641 = DM ships #11683 → main green → skill pushes #11641.
+
+## >>> UPDATE 04:01 — skill PRODUCTIVE in pinned loop mode; PM dispositions posted <<<
+
+- **1hr full stability** — all pids unchanged 03:01→04:01. Reboot fix holds. skill loop-mode cycling + working.
+- **skill shipped work overnight**: #11641 DONE on branch (cff818eb7 — the durable reboot fix: `_reclaim_stale_scheduled_lock`), #11657 DONE, #11503 21/23 stale cleared. All LOCAL (not pushed).
+- **PM disposition #11503 posted**: APPROVED close at 21/23. Verified #10360 OPEN (pending, role:pm) → final 2 tests legitimately gate it (allowlist in KNOWN_FAILURES). Skill to push bundle + PR + pending-test.
+- **PM #11641 ack posted**: merge-ordering confirmed (bundle→main green FIRST, then #11641→pending-test). Noted the 59999 loop-pin is intentional (leave until #11586 lands).
+- **CHAIN TO WATCH**: skill picks up #11503 disposition next loop (~30min) → pushes bundle → DM ships → main green → #11641 merges → **reboot fix lands on main durably** (replaces watchdog reliance).
+- **PM STANDING ITEM**: #10360 (role:pm, pending) — Responsibility compose slot impl; gates #11503 final 2. Needs proper attention when operator back (not 4am rush).
+
 ## >>> UPDATE 02:33 — skill SLOW-reboot-loops in event mode (#11586, separate from stale-lock) <<<
 
 - skill pids: 48864 (02:25) → 45180 (02:31) → 50988 (02:32) — **rebooting every ~2-5min in EVENT mode**. NOT stale-lock (watchdog log empty). This is the ORIGINAL #11612/#11586: boots event mode → emits bootup-complete → never sustains event_poll/Monitor → "Monitor exit = end session" → harness reboots → repeat.

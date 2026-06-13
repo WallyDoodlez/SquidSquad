@@ -51,3 +51,40 @@ Either way the change is one diff in `tests/test_event_mode_fragments.py` plus a
 ## Recommendation
 
 Re-transition `pending-test → in-progress`. Test-update fallout from an intentional contract rewrite must ride with the rewrite — same pattern PM enforced on #11139 (test_a3_golden_link_stage fixture update rode with the parser change) and #11066 (test_corrupted_l4 fixture update rode with the parser semantics change).
+
+---
+
+## Round 2 — Post-route-back (cycle 1037, 2026-06-07)
+
+**Trigger**: Skill addressed the R1 reject at commit `dc4d34939` ("skill: #11330 R7 — update AC7 topic-coverage test to match canonical post-D1-D4 headers"). Per the R1 recipe, the two superseded parametrize cases were replaced with assertions pinning the new canonical headers:
+
+- `r"atomic update protocol"` → **`r"POST.*ack-cursor|how to advance"`** (matches the new section `How to advance the cursor — POST /events ack-cursor`, which IS the mechanism that replaced the dropped `.tmp + mv` agent-side write).
+- `r"per-event advance|per-batch"` → **`r"where the cursor lives"`** (matches the new section `Where the cursor lives`, which carries the harness-owned framing that replaced the agent-side atomicity contract).
+
+R7 also added an inline comment in the test explaining the supersession with #11330 D1-D4 — the same kind of "why this changed" trail PM enforced on #11139.
+
+### Re-verification
+
+- **TestAc7TopicCoverage** sweep — **16/16 PASS** in 0.12s on the PR branch. Both R1-failing cases now PASS with the new parametrize values.
+- **Wider sweep apples-to-apples** (`pytest tests/test_event_mode_fragments.py tests/test_compose_author_comments_11142.py tests/test_manifest.py -q`):
+  - polish-session base @ `9ff6b8341`: **9 failed / 160 passed**
+  - PR R2 branch @ `dc4d34939`: **9 failed / 160 passed**
+  - **Net-new failures: 0.** The 9 pre-existing failures on polish-session base are pre-existing event-fragment manifest-wiring drift, out of scope for #11330.
+
+### Content drift check (R1 rewrites still intact)
+
+- `cursor-management.md` line 12 — harness-owned framing unchanged: "The cursor is **harness-owned**. It is persisted in `.squidsquad/.event-state.json`...". ✓
+- `POST /events {event_type: "ack-cursor"...}` block still present in `cursor-management.md` (1 distinctive `event_type.*ack-cursor` match). ✓
+- `.tmp + mv` discipline still dropped from `cursor-management.md` (zero matches). ✓
+- `event-mode-contract.md` line 97 still reads: "Cursor advance is per-event and agent-initiated. You POST `ack-cursor {event_id, role}` after tending each event...". ✓
+- `event-driven-workflow.md` line 8 still: "POST `ack-cursor` to the harness after each tended event so it advances your cursor in `.squidsquad/.event-state.json`". ✓
+
+### DS audit trail (delta from R1)
+
+R1 saw 6 audit rounds (`DS-AUDIT-11330.md` + `-r2/3/4/5/6`); R2 adds the R7 round implied by `dc4d34939`. The `R2-R5` commits between original `R1` and `R6` are DS-driven content fixes (cursor URL form, factual bugs, `current_head→oldest_id` leftover) that don't touch the verifier's R1 content checks — those still hold as listed above.
+
+### Decision
+
+**Verdict**: PASS. Transition `pending-test → pending-ship`.
+
+Skill applied the exact fix recipe from the R1 reject (same shape PM enforced on #11139 and #11066). Zero net-new failures, content rewrites intact, test pinning the new canonical headers. R2 ships.
