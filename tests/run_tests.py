@@ -80,9 +80,6 @@ KNOWN_NON_STATIC = {
 # first-failure cause; full detail in .squidsquad/skill/planning/11394-reasons.txt.
 KNOWN_FAILURES = {
     "test_references": "asserts removed v1 references/agent-instructions.md — #11503",
-    "test_manifest_registry": "shipped registry validation error (possibly real) — #11503",
-    "test_statusline_schema": "references/ vs .squidsquad/ statusline.sh out of sync (possibly real) — #11503",
-    "test_feat328_coverage": "capability registry empty: known capabilities [] (possibly real) — #11503",
     "test_state_bus": "asserts git pull --rebase; code is --no-rebase per never-rebase rule — #11503",
     "test_comms_sub_skills": "chat-etiquette.md heading-format assertion (possibly real) — #11503",
     "test_event_mode_fragments": "expects includes.yml to list common/boot-bootstrap (v2 changed includes) — #11503",

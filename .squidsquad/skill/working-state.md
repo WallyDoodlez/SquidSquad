@@ -1,28 +1,42 @@
 # Working State
 
-- **Task**: none active — on main (#11538 fix shipped to pending-test, PR #11564)
-- **Status**: none (idle)
-- **Updated**: 2026-06-12 21:06
-- **Last Processed Event ID**: 9d7c2489
-- **Quiet Cycle Counter**: 0
+- **Task**: #11503 (high, in-progress, role:skill) — post-cutover test-debt: 23 static tests red since v0.44.0 cutover
+- **Status**: Group C (4 possibly-real) DONE & committed; working Group A (stale-structure tests) next
+- **Branch**: squidsquad/skill/post-cutover-cleanup (bundle branch per operator decision c-2026-06-12; even with origin/main). NOTE: upstream is misconfigured to origin/main — push must target origin/post-cutover-cleanup explicitly, NEVER main.
+- **Updated**: 2026-06-13 01:24 (fresh boot; #11601 verified shipped/closed → cleared)
 
-## ⚠️ Session note
-Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). Harness DOWN (port 7373 exit 7) — loop-mode this session.
+## Improvement Scan
+Status: idle
+Last completed: (none this session)
+Next scan after: (eligible — defer until #11503 ships)
 
-## Last cycle (1642, iter-451): fixed #11538 harness restart bug
-update_health reset RESTARTING→RUNNING on every poll where the same claude PID was alive (no pid_changed guard) → HEALTH_POLL_INTERVAL=5s silently reverted any restart of a still-alive/wedged agent AND disarmed the 60s force-kill net. Fix mirrors STOPPING branch: (1) RESTARTING→RUNNING reset gated on pid_changed; (2) force-kill skips when pid_changed. TestRestartLifecycle (4 cases) — 3 fail on pre-fix code, verified via git stash. 184 harness tests + run_tests.py green. → pending-test, PR #11564, back on main.
+## #11503 — plan (front-loaded)
+23 static tests quarantined in KNOWN_FAILURES (tests/run_tests.py) when the gate went dead at v0.44.0 cutover (#11394). Fix each, remove its KNOWN_FAILURES entry, gate re-includes it.
+- **Group A** — stale tests asserting pre-v2/pre-rename/pre-cutover structure → update test to v2 reality. ~16 files.
+- **Group B** — fixture drift: test_config_functions (SAMPLE_CONFIG missing FIELD_MAP entries). 1 file.
+- **Group C** — possibly-real masked regressions (triage first). DONE (see below).
 
-## Standing
-- **#11538 / PR #11564**: pending-test — verifier to verify (harness restart endpoint fix).
-- **#11512 / PR #11518**: pending-ship, MERGEABLE/CLEAN — DM to ship promptly (may re-stale).
-- **#11519 / PR #11530**: pending-ship — DM to ship.
-- **#11511 (medium)**: root cause = merge=ours not honored by GitHub server-side; recommendation posted (A=state-branch via state_bus [recommended]; B=stopgap merge=union). Awaiting PM/operator decision. NOT implementing (high blast radius).
+## #11503 — Group C: DONE (committed this cycle)
+4 flags triaged:
+- test_manifest_registry + test_feat328_coverage: REAL orphan — dm/manifest.yaml `any_of: [local_delivery]` referenced the deleted capabilities registry (removed as deadwood, INSTALLER-ARCH §8.3, full teardown #11505). Fix: manifest `requires_sub_skills: {}`; tests assert `tools == {}`. Verified 98 passed.
+- test_statusline_schema: REAL deploy-sync gap — .squidsquad/statusline.sh stale vs references/ (#11144 G10). Fix: synced deploy copy (now identical). Verified green.
+- test_comms_sub_skills: chat-etiquette heading-format — STILL in KNOWN_FAILURES (Group A/source-format, deferred to next batch).
 
-## Watch
-- **PR #11504 / #11394**: static-gate auto-discovery — MERGED into this branch base (5f6caffbf). On confirmed merge → #11503/#11505 ungated.
-- #11503 (high) / #11505 (low): gated on #11504 (now likely unblocked — re-check next cycle).
-- #10690 / #10686 (E7): operator-gated.
-- #11329 (approved): runtime per-event ack-cursor.
+## #11503 — Group A remaining (KNOWN_FAILURES, ~17)
+test_references, test_state_bus, test_comms_sub_skills, test_event_mode_fragments, test_cycle_pre,
+test_4792_fragment_hygiene, test_deterministic_qa_framework, test_dm_verify_before_block,
+test_own_domain_autofix, test_vault_synthesis, test_pickup_comment_fidelity_9946,
+test_terminology_dual_aware_6274, test_compose_a2f_10492, test_atomic_emit_b7,
+test_a3_golden_link_stage, test_compose_author_comments_11142, test_agent_boundaries,
+test_feat_9588_lazy_load_bootstrap, test_stale_tracker_files_ref
++ Group B: test_config_functions
 
-## ⚠️ Recurring conflict note
-PR CONFLICTING-while-locally-clean = merge=ours custom driver not honored by GitHub server-side (#11511). Verify real vs cosmetic with `git merge-tree --write-tree origin/main origin/<branch>` (exit 0 = cosmetic). Real fix = state-branch (state_bus, unwired). See [[learning-pr-conflicting-flag-can-be-cosmetic]].
+## Tree cruft (NOT #11503, leave untracked)
+- .claude/scheduled_tasks.lock.stale-bak — relates to #11641 (stale lock crash); separate issue
+- .squidsquad/skill/planning/CODE-REVIEW-11601.md — #11601 leftover (shipped); harmless
+
+## Standing items (post-#11503)
+- #11641 (high, open) — stale scheduled_tasks.lock crashes claude → reboot loop
+- #11640 (high, open) — boot_remote REPO_ROOT fallback must fail-closed
+- #11586 (high, open) — agents don't reach event mode on reboot
+- #11587 (medium), #11511 (medium), #11505 (capabilities teardown)
