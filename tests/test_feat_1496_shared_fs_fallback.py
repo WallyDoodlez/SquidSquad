@@ -4,6 +4,11 @@ Originally verified that _parse_local_config reads clone paths from the shared
 filesystem (~/.squidsquad/clones/) as a fallback. The global fallback was removed
 in #3100 — .local-config is now mandatory. Tests updated to reflect the new
 behavior: missing .local-config exits with code 2.
+
+#11640: the remaining per-role REPO_ROOT fallback in _get_clone_path was also
+removed — an unregistered role now raises CloneResolutionError instead of
+silently resolving to REPO_ROOT (which corrupts another agent's clone on a
+wrong-realm boot).
 """
 
 import sys
@@ -86,8 +91,12 @@ class TestSharedFsFallback:
                 boot_remote._parse_local_config()
         assert exc_info.value.code == 2
 
-    def test_get_clone_path_falls_back_to_repo_root(self):
-        """#1496: _get_clone_path returns REPO_ROOT (as str) when role not in config."""
+    def test_get_clone_path_raises_when_role_not_in_config(self):
+        """#11640: the #1496 REPO_ROOT fallback was removed — an unregistered role
+        now raises CloneResolutionError rather than silently resolving to REPO_ROOT
+        (a wrong-realm boot corrupts another agent's clone). Comprehensive coverage
+        of the new behavior lives in test_boot_remote.py; this asserts the reversal
+        of the historical #1496 fallback at its original site."""
         with patch.object(boot_remote, "_parse_local_config", return_value={}):
-            result = boot_remote._get_clone_path("unknown_role")
-        assert result == str(boot_remote.REPO_ROOT)
+            with pytest.raises(boot_remote.CloneResolutionError):
+                boot_remote._get_clone_path("unknown_role")
