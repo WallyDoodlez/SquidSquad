@@ -161,9 +161,9 @@ def test_deploy_alias_v2_output_contains_six_canonical_h2_sections(tmp_path):
     assert h2_lines == [
         "## Identity",
         "## Responsibility",
+        "## Project Context",
         "## Soul",
         "## Agent Functions",
-        "## Project Context",
         "## Vault",
     ]
 

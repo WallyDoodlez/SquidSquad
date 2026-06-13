@@ -13,8 +13,15 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 class TestDmVerifyBeforeBlock:
     def test_prohibitions_has_verify_requirement(self):
-        """DM prohibitions sub-skill must require verification before human-block."""
-        path = REPO_ROOT / "references" / "sub-skills" / "roles" / "dm" / "prohibitions.md"
+        """DM prohibitions content must require verification before human-block.
+
+        #11503 rebind: references/sub-skills/roles/dm/prohibitions.md was
+        retired in #11087 (prohibitions inlined into each role's instructions.md
+        per #11049 Path A D1 with <!-- sub-skill: prohibitions --> markers).
+        The guarantee — DM must verify before declaring human-blocked — now
+        lives in references/roles/dm/instructions.md.
+        """
+        path = REPO_ROOT / "references" / "roles" / "dm" / "instructions.md"
         content = path.read_text(encoding="utf-8")
         assert "verify" in content.lower()
         assert "pending-human-setup" in content

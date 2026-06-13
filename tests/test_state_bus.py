@@ -313,8 +313,10 @@ class TestCommitAndPushFailedCommit:
 class TestPushHardening9930:
     """#9930: commit_and_push must (a) bypass credential.helper=manager
     via `gh auth git-credential`, (b) bound every git op with a timeout
-    so a wedged helper can't hang the cycle, and (c) use `pull --rebase`
-    instead of default-merge so retry divergence keeps history linear.
+    so a wedged helper can't hang the cycle, and (c) use `pull --no-rebase`
+    (explicit merge strategy) per the standing "always merge, never rebase"
+    operator rule — history linearity is less important than safety on
+    Windows/MSYS2.
     """
 
     def test_default_git_timeout_is_bounded(self):
@@ -407,25 +409,27 @@ class TestPushHardening9930:
     @patch("state_bus._worktree_exists", return_value=True)
     @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
     @patch("state_bus._run")
-    def test_retry_pull_uses_rebase(self, mock_run, mock_config, mock_wt):
-        """On push failure, the retry pull must use `--rebase` (not the
-        default merge) so divergent state-branch history stays linear
-        instead of accumulating `Merge branch 'squid-squad'` commits.
+    def test_retry_pull_uses_no_rebase(self, mock_run, mock_config, mock_wt):
+        """On push failure, the retry pull must use `--no-rebase` (explicit
+        merge strategy) per the standing "always merge, never rebase" rule.
+        State-branch history accumulates `Merge branch 'squid-squad'` commits;
+        that is accepted because merge is safer than rebase (no history
+        rewrite, less fragile on Windows/MSYS2).
         """
         mock_run.side_effect = [
             MagicMock(stdout="", returncode=0),                 # add -A
             MagicMock(stdout=" M file.md\n", returncode=0),     # status
             MagicMock(stdout="", stderr="", returncode=0),      # commit
             MagicMock(stdout="", returncode=1),                 # push FAILS
-            MagicMock(stdout="", returncode=0),                 # pull --rebase
+            MagicMock(stdout="", returncode=0),                 # pull --no-rebase
             MagicMock(stdout="", returncode=0),                 # push retry SUCCEEDS
         ]
         state_bus.commit_and_push("msg", role="skill")
-        # 5th call should be the pull --rebase.
+        # 5th call should be the pull --no-rebase.
         pull_call = mock_run.call_args_list[4]
         cmd = pull_call.args[0]
         assert "pull" in cmd
-        assert "--rebase" in cmd, f"retry pull missing --rebase: {cmd}"
+        assert "--no-rebase" in cmd, f"retry pull missing --no-rebase: {cmd}"
 
     @patch("state_bus._worktree_exists", return_value=True)
     @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
@@ -540,31 +544,33 @@ class TestPushHardening9930:
     @patch("state_bus._worktree_exists", return_value=True)
     @patch("state_bus._read_branch_config", return_value=("main", "squid-squad"))
     @patch("state_bus._run")
-    def test_rebase_abort_on_pull_failure(self, mock_run, mock_config, mock_wt):
-        """If the retry `pull --rebase` itself fails (e.g., real
-        conflict), the loop must `git rebase --abort` so the worktree
-        is left clean for the next attempt — leaving a half-rebased
+    def test_merge_abort_on_pull_failure(self, mock_run, mock_config, mock_wt):
+        """If the retry `pull --no-rebase` itself fails (e.g., real
+        conflict), the loop must `git merge --abort` so the worktree
+        is left clean for the next attempt — leaving a half-merged
         state was part of the #9930 'leaked state across attempts' bug.
+        The code uses merge (not rebase) per the standing "always merge,
+        never rebase" rule.
         """
         mock_run.side_effect = [
             MagicMock(stdout="", returncode=0),                 # add -A
             MagicMock(stdout=" M file.md\n", returncode=0),     # status
             MagicMock(stdout="", stderr="", returncode=0),      # commit
             MagicMock(stdout="", returncode=1),                 # push FAILS (1)
-            MagicMock(stdout="", returncode=1),                 # pull --rebase FAILS
-            MagicMock(stdout="", returncode=0),                 # rebase --abort
+            MagicMock(stdout="", returncode=1),                 # pull --no-rebase FAILS
+            MagicMock(stdout="", returncode=0),                 # merge --abort
             MagicMock(stdout="", returncode=0),                 # push retry SUCCEEDS (2)
         ]
         state_bus.commit_and_push("msg", role="skill")
-        # Check that one of the calls is `git rebase --abort`.
+        # Check that one of the calls is `git merge --abort`.
         abort_seen = any(
-            (lambda cmd: "--abort" in cmd and "rebase" in cmd)(
+            (lambda cmd: "--abort" in cmd and "merge" in cmd)(
                 c.args[0] if c.args else []
             )
             for c in mock_run.call_args_list
         )
         assert abort_seen, (
-            f"Expected `git rebase --abort` after failed pull --rebase, "
+            f"Expected `git merge --abort` after failed pull --no-rebase, "
             f"saw: {[c.args[0] for c in mock_run.call_args_list]}"
         )
 

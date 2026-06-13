@@ -79,24 +79,12 @@ KNOWN_NON_STATIC = {
 # (gate went dead at the v0.44.0 cutover, masking these). Reasons are the
 # first-failure cause; full detail in .squidsquad/skill/planning/11394-reasons.txt.
 KNOWN_FAILURES = {
-    "test_references": "asserts removed v1 references/agent-instructions.md — #11503",
-    "test_state_bus": "asserts git pull --rebase; code is --no-rebase per never-rebase rule — #11503",
-    "test_comms_sub_skills": "chat-etiquette.md heading-format assertion (possibly real) — #11503",
     "test_cycle_pre": "asserts 'verifier' in alias set; #6274 rename partial — #11503 / #6274",
-    "test_4792_fragment_hygiene": "asserts removed 'sole liveness signal' phrase in composed skill — #11503",
-    "test_deterministic_qa_framework": "asserts '\"Deferred\"' in composed QA (drifted) — #11503",
-    "test_dm_verify_before_block": "reads removed references/sub-skills/roles/dm/prohibitions.md — #11503",
     "test_own_domain_autofix": "asserts removed v1 {{include:}} directive syntax (#11049 Path A) — #11503",
     "test_vault_synthesis": "asserts 'create-task' in restructured pm source (drifted) — #11503",
-    "test_pickup_comment_fidelity_9946": "reads removed references/roles/dev/includes.yml (pre-rename) — #11503",
     "test_terminology_dual_aware_6274": "asserts pre-rename ('dev','skill'); #6274 landed → ('worker','skill') — #11503",
-    "test_compose_a2f_10492": "compose section-list golden drifted — #11503",
-    "test_atomic_emit_b7": "compose section-list golden drifted — #11503",
-    "test_a3_golden_link_stage": "compose golden drifted — #11503",
     "test_compose_author_comments_11142": "asserts boot-bootstrap wrapper marker in restructured worker/instructions.md — #11503",
-    "test_config_functions": "SAMPLE_CONFIG fixture missing new FIELD_MAP entries (code-review-model, effort-*, event-driven) — #11503",
     "test_agent_boundaries": "asserts removed responsibility.md + 'Know each other's responsibilities' phrase — #11503",
-    "test_stale_tracker_files_ref": "reads removed references/sub-skills/roles/pm/prohibitions.md — #11503",
 }
 
 
