@@ -14,6 +14,7 @@ Exit codes:
 
 import json
 import re
+import socket
 import subprocess
 import sys
 import time
@@ -751,41 +752,67 @@ def _do_version_bump(data, role):
     print(f"  Version v{new_version} tagged and pushed")
 
 
-def _discover_harness_port():
-    """Discover harness port — default 7373 + parent-dir walk for .harness-port (#4966).
+_HARNESS_DEFAULT_PORT = 7373
 
-    Always returns an int. Resolution order: this repo's `.squidsquad/`,
-    then a 5-level parent-directory walk for an inherited `.harness-port`,
-    finally falls back to the default port 7373. The downstream callers
-    still defensively check `if port is None` to keep the call shape
-    consistent with other harness HTTP helpers in case this function
-    grows a None-returning failure mode in the future.
+
+def _port_is_live(port, timeout=0.5):
+    """True if something is accepting TCP connections on 127.0.0.1:port (#11723).
+
+    Lets discovery skip a stale/leaked `.harness-port` (a dead port a test
+    harness distributed into real clones via `harness._deferred_init`) instead
+    of trusting it blindly. Live localhost port connects in ~1ms; dead refuses.
     """
-    # First try: read .harness-port from this repo's .squidsquad/
-    port_file = SQUID_DIR / ".harness-port"
-    if port_file.exists():
-        try:
-            return int(port_file.read_text(encoding="utf-8").strip())
-        except (ValueError, OSError):
-            pass
+    try:
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=timeout):
+            return True
+    except (OSError, ValueError, TypeError, OverflowError):
+        return False
 
-    # Second try: walk parent directories to find .squidsquad/.harness-port
-    # (clone isolation — agent clone may be a child of the primary repo)
+
+def _read_port_file(path):
+    """Return the int port in `path`, or None if absent/unreadable/invalid."""
+    try:
+        if path.exists():
+            return int(path.read_text(encoding="utf-8").strip())
+    except (ValueError, OSError):
+        pass
+    return None
+
+
+def _discover_harness_port():
+    """Discover harness port — liveness-aware (#4966, #11723). Always returns
+    an int. Mirrors event_poll._discover_port / cycle_pre._discover_harness_port.
+
+    Resolution order, returning the FIRST candidate that is actually LISTENING:
+    this repo's `.squidsquad/.harness-port`, a 5-level parent-dir walk for an
+    inherited `.harness-port`, then the default 7373. A candidate whose port is
+    not accepting connections is SKIPPED (#11723) so a stale/leaked port file
+    cannot point the cycle wrapper at a dead harness. If nothing is listening,
+    returns the default 7373 (caller's HTTP helpers fail safe → None).
+    """
+    candidates = []
+    local = _read_port_file(SQUID_DIR / ".harness-port")
+    if local is not None:
+        candidates.append(local)
+
     current = REPO_ROOT.parent
     for _ in range(5):  # max 5 levels up
-        candidate = current / ".squidsquad" / ".harness-port"
-        if candidate.exists():
-            try:
-                return int(candidate.read_text(encoding="utf-8").strip())
-            except (ValueError, OSError):
-                pass
+        inherited = _read_port_file(current / ".squidsquad" / ".harness-port")
+        if inherited is not None:
+            candidates.append(inherited)
         parent = current.parent
         if parent == current:
             break
         current = parent
 
-    # Fall back to default port
-    return 7373
+    if _HARNESS_DEFAULT_PORT not in candidates:
+        candidates.append(_HARNESS_DEFAULT_PORT)
+
+    for port in candidates:
+        if _port_is_live(port):
+            return port
+
+    return _HARNESS_DEFAULT_PORT
 
 
 def _query_harness_intent(role):
