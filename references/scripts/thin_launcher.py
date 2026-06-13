@@ -20,6 +20,7 @@ Exit codes:
     3  — refused: another agent of this role is already running in this clone (#8692)
 """
 
+import json
 import os
 import shutil
 import subprocess
@@ -185,6 +186,57 @@ def _check_singleton(clone_path, role):
         # Defensive: our own PID shouldn't be there, but if it is, treat as stale.
         return None
     return pid if _is_process_alive(pid) else None
+
+
+def _reclaim_stale_scheduled_lock(clone_path):
+    """#11641: reclaim a stale ``.claude/scheduled_tasks.lock`` before launch.
+
+    claude-code's scheduler writes ``.claude/scheduled_tasks.lock`` (JSON with
+    a ``pid`` holder) when a session schedules a task — e.g. an agent that ran
+    ``/loop`` in polling mode. If that session dies UNcleanly the lock is left
+    behind, and claude-code does NOT reclaim a dead-holder lock: it aborts
+    startup with exit 1, BEFORE any session transcript. Under the harness
+    auto-reboot loop (#4949) that becomes a crash loop — every respawn hits the
+    same stale lock and the crashed startup never cleans it (root cause of the
+    #11612 reboot loop; confirmed by PM repro on 2026-06-13).
+
+    Contract (AC #11641):
+      - lock exists + holder PID not alive  -> remove it, log the reclamation.
+      - lock exists + holder PID IS alive   -> leave it (never stomp a live lock).
+      - no lock                              -> no-op.
+      - lock present but pid unreadable      -> leave it + warn. We cannot prove
+        the holder dead, and the proven failure mode is a dead-but-parseable
+        PID; clearing an unparseable lock risks stomping a live holder, so we
+        stay conservative and surface it instead.
+
+    Returns True iff a stale lock was reclaimed.
+    """
+    lock_path = Path(clone_path) / ".claude" / "scheduled_tasks.lock"
+    if not lock_path.exists():
+        return False
+    try:
+        data = json.loads(lock_path.read_text(encoding="utf-8"))
+        holder_pid = data.get("pid") if isinstance(data, dict) else None
+    except (ValueError, OSError):
+        holder_pid = None
+    if not isinstance(holder_pid, int):
+        print(f"[thin-launcher] WARNING: scheduled-tasks lock {lock_path} has no "
+              f"readable holder pid; leaving it in place (cannot prove it stale)",
+              file=sys.stderr)
+        return False
+    if _is_process_alive(holder_pid):
+        return False  # live holder — never stomp
+    try:
+        lock_path.unlink()
+    except FileNotFoundError:
+        return False  # raced with another reclaimer — already gone, fine
+    except OSError as e:
+        print(f"[thin-launcher] WARNING: could not remove stale scheduled-tasks "
+              f"lock {lock_path}: {e}", file=sys.stderr)
+        return False
+    print(f"[thin-launcher] reclaimed stale scheduled-tasks lock {lock_path} "
+          f"(holder pid {holder_pid} not alive) — #11641")
+    return True
 
 
 def _resolve_claude_exe_pid(wrapper_pid, claude_exe_used,
@@ -464,6 +516,12 @@ def main():
             file=sys.stderr,
         )
         return 3
+
+    # #11641: clear a stale claude-code scheduler lock left by a previous
+    # session that died uncleanly — otherwise claude aborts startup with exit 1
+    # and the harness auto-reboot turns it into a crash loop. Only reclaims a
+    # dead-holder lock; a live-held lock is left untouched.
+    _reclaim_stale_scheduled_lock(clone_path)
 
     # Set environment
     env = os.environ.copy()

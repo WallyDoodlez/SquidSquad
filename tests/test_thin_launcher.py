@@ -1,5 +1,6 @@
 """Tests for references/scripts/thin_launcher.py (#4966)."""
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -408,3 +409,79 @@ class TestWritePidFailure:
         err = capsys.readouterr().err
         assert "WARNING" in err and "pid file" in err
         assert str(tmp_path / ".squidsquad" / "skill" / ".claude-pid") in err
+
+
+class TestStaleScheduledLockReclaim:
+    """#11641: before launch, thin_launcher clears a stale claude-code
+    scheduler lock (.claude/scheduled_tasks.lock with a DEAD holder PID) so a
+    crashed-startup loop can't persist — but never stomps a LIVE-held lock."""
+
+    def _write_lock(self, clone_path, pid):
+        lock = Path(clone_path) / ".claude" / "scheduled_tasks.lock"
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        # Mirror the real claude-code lock shape (see #11641 repro backup).
+        body = {"sessionId": "abc", "pid": pid,
+                "procStart": "639168942179987460", "acquiredAt": 1781312891613}
+        lock.write_text(json.dumps(body), encoding="utf-8")
+        return lock
+
+    def test_dead_holder_lock_reclaimed(self, tmp_path, capsys):
+        """Dead holder PID -> lock removed, reclamation logged."""
+        lock = self._write_lock(tmp_path, 25628)
+        with patch("thin_launcher._is_process_alive", return_value=False):
+            reclaimed = thin_launcher._reclaim_stale_scheduled_lock(str(tmp_path))
+        assert reclaimed is True
+        assert not lock.exists()
+        assert "reclaimed stale scheduled-tasks lock" in capsys.readouterr().out
+
+    def test_live_holder_lock_preserved(self, tmp_path):
+        """Live holder PID -> lock left untouched (never stomp a live lock)."""
+        lock = self._write_lock(tmp_path, 4242)
+        with patch("thin_launcher._is_process_alive", return_value=True):
+            reclaimed = thin_launcher._reclaim_stale_scheduled_lock(str(tmp_path))
+        assert reclaimed is False
+        assert lock.exists()
+
+    def test_no_lock_is_noop(self, tmp_path):
+        """No lock file (no .claude dir) -> no error, nothing reclaimed."""
+        assert thin_launcher._reclaim_stale_scheduled_lock(str(tmp_path)) is False
+
+    def test_unparseable_lock_preserved(self, tmp_path, capsys):
+        """Corrupt lock (no readable pid) -> conservative: leave it + warn.
+        We cannot prove the holder dead, and the proven #11641 failure mode is
+        a dead-but-parseable PID; clearing risks stomping a live holder."""
+        lock = Path(tmp_path) / ".claude" / "scheduled_tasks.lock"
+        lock.parent.mkdir(parents=True)
+        lock.write_text("}{ not json", encoding="utf-8")
+        with patch("thin_launcher._is_process_alive", return_value=False):
+            reclaimed = thin_launcher._reclaim_stale_scheduled_lock(str(tmp_path))
+        assert reclaimed is False
+        assert lock.exists()
+        assert "WARNING" in capsys.readouterr().err
+
+    def test_missing_pid_field_preserved(self, tmp_path):
+        """Valid JSON but no `pid` key -> cannot prove dead -> leave it."""
+        lock = Path(tmp_path) / ".claude" / "scheduled_tasks.lock"
+        lock.parent.mkdir(parents=True)
+        lock.write_text(json.dumps({"sessionId": "abc"}), encoding="utf-8")
+        assert thin_launcher._reclaim_stale_scheduled_lock(str(tmp_path)) is False
+        assert lock.exists()
+
+    def test_main_launch_path_invokes_reclaim(self, tmp_path):
+        """Wiring: the spawn path actually calls the reclaimer before Popen —
+        the fix is worthless if it ships unwired (#11641 names the spawn path
+        as the runtime actor)."""
+        (tmp_path / ".squidsquad" / "skill").mkdir(parents=True)
+        proc = MagicMock()
+        proc.pid = 11111
+        proc.wait.return_value = 0
+        with patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
+             patch("thin_launcher.subprocess.Popen", return_value=proc), \
+             patch("thin_launcher._get_effort_level", return_value="high"), \
+             patch("thin_launcher._resolve_claude_exe_pid", return_value=11111), \
+             patch("thin_launcher.shutil.which", return_value="/usr/bin/claude"), \
+             patch("thin_launcher._reclaim_stale_scheduled_lock") as mock_reclaim, \
+             patch("sys.argv", ["thin_launcher.py", "skill"]):
+            rc = thin_launcher.main()
+        assert rc == 0
+        mock_reclaim.assert_called_once_with(str(tmp_path))
