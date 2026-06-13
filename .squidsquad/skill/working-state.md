@@ -1,28 +1,36 @@
 # Working State
 
-- **Task**: none active — on main (#11538 fix shipped to pending-test, PR #11564)
-- **Status**: none (idle)
-- **Updated**: 2026-06-12 21:06
-- **Last Processed Event ID**: 9d7c2489
-- **Quiet Cycle Counter**: 0
+- **Task**: #11723 — liveness-aware port discovery (#11586 root-cause fix) — COMPLETE, PR #11729
+- **Status**: in-progress — HELD pre-pending-test, gated on #11683 (full-suite green); DS review running
+- **Updated**: 2026-06-13 10:58
+- **Branch**: squidsquad/task/11723 (current). Other in-flight: task/11640, task/11641, task/11587.
+- **Quiet Cycle Counter**: 0 (iter-463: implemented #11723)
 
 ## ⚠️ Session note
-Booted PRE-v0.44.0; runs OLD composed CLAUDE.md (reboot pending per DM — do NOT self-reboot). Harness DOWN (port 7373 exit 7) — loop-mode this session.
+Harness is UP on 7373 (confirmed iter-462). My clone's .harness-port keeps getting re-stomped to 59999 by the verifier's per-cycle test runs (harness _deferred_init distributes test port into real clones). Mode sticky this session (loop). #11723 makes discovery resilient to this for future boots. `/loop 30m` cron c8644353. working-state per-branch; git tree is truth.
 
-## Last cycle (1642, iter-451): fixed #11538 harness restart bug
-update_health reset RESTARTING→RUNNING on every poll where the same claude PID was alive (no pid_changed guard) → HEALTH_POLL_INTERVAL=5s silently reverted any restart of a still-alive/wedged agent AND disarmed the 60s force-kill net. Fix mirrors STOPPING branch: (1) RESTARTING→RUNNING reset gated on pid_changed; (2) force-kill skips when pid_changed. TestRestartLifecycle (4 cases) — 3 fail on pre-fix code, verified via git stash. 184 harness tests + run_tests.py green. → pending-test, PR #11564, back on main.
+## FOUR skill PRs in flight
+| Issue | Fix | Branch | PR | DS | Gated on |
+|---|---|---|---|---|---|
+| #11640 | clone-resolution refuse | task/11640 | #11709 | NO_FINDINGS | #11683 ship |
+| #11641 | stale scheduled_tasks.lock reclaim | task/11641 | #11715 | NO_FINDINGS | #11683 ship |
+| #11587 | uvicorn loop=none (ProactorEventLoop) | task/11587 | #11722 | NO_FINDINGS | #11683 ship |
+| #11723 | liveness-aware port discovery (#11586 root cause) | task/11723 | #11729 | running (bv4nh01ft) | #11683 ship |
+
+All own-tests green; each held only because merging current main pulls in the #11657 stale event_poll test (the single full-suite red).
+
+## ⭐ #11586 ROOT CAUSE (iter-462/463): stale .harness-port, NOT harness availability
+Harness healthy on 7373 whole time. Agents with a stale/dead port file (test-pollution via harness _deferred_init + verifier per-cycle test runs) probe a dead port → loop mode / Monitor death. #11723 = the DURABLE fix (Part 2 resilience: discovery skips dead ports). Team has been band-aiding with a 'pin-keeper' watchdog (main commit caf10fe21: 'durable fix still pending operator'). Reported on #11586.
+**#11723 follow-ups (open, next):** (1) stop test harnesses distributing ephemeral ports into REAL clones (isolate .local-config in test fixtures) — the ROOT fix; (3) boot Step 1 instruction fall-through to default when file-port probe fails (CQ + recompose).
+
+## Gates / blockers
+- **#11683 ship** (operator/DM): unblocks all 4 PRs + #11505 AC7. Verified+MERGEABLE, pending-ship ~6h.
+- **#11505**: blocked on PM/operator disambiguation (#11505↔#10025 overlap, touches PM task-intake).
+
+## Next cycle
+- Read #11723 DS output (bv4nh01ft); address findings on PR #11729.
+- Check #11683 → if shipped, land 4 PRs (merge main, run suite, confirm green, transition).
+- Then #11723 follow-up (1): test .local-config isolation (the root pollution fix).
 
 ## Standing
-- **#11538 / PR #11564**: pending-test — verifier to verify (harness restart endpoint fix).
-- **#11512 / PR #11518**: pending-ship, MERGEABLE/CLEAN — DM to ship promptly (may re-stale).
-- **#11519 / PR #11530**: pending-ship — DM to ship.
-- **#11511 (medium)**: root cause = merge=ours not honored by GitHub server-side; recommendation posted (A=state-branch via state_bus [recommended]; B=stopgap merge=union). Awaiting PM/operator decision. NOT implementing (high blast radius).
-
-## Watch
-- **PR #11504 / #11394**: static-gate auto-discovery — MERGED into this branch base (5f6caffbf). On confirmed merge → #11503/#11505 ungated.
-- #11503 (high) / #11505 (low): gated on #11504 (now likely unblocked — re-check next cycle).
-- #10690 / #10686 (E7): operator-gated.
-- #11329 (approved): runtime per-event ack-cursor.
-
-## ⚠️ Recurring conflict note
-PR CONFLICTING-while-locally-clean = merge=ours custom driver not honored by GitHub server-side (#11511). Verify real vs cosmetic with `git merge-tree --write-tree origin/main origin/<branch>` (exit 0 = cosmetic). Real fix = state-branch (state_bus, unwired). See [[learning-pr-conflicting-flag-can-be-cosmetic]].
+#11538 SHIPPED. #11716 (low improvement-scan) awaiting triage. #11511 not-implementing. #10690/#10686 E6/E7-gated. #11505 blocked (above). Pre-existing test-debt: test_cycle_pre TestGetVerifiableRoles (verifier/qa #6274, quarantined in KNOWN_FAILURES — not mine).
