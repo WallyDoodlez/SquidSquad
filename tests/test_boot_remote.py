@@ -569,6 +569,104 @@ class TestSpawnMacosTempFile:
 
 
 # ---------------------------------------------------------------------------
+# #11745 — _spawn_windows uses a self-closing console window, not a wt tab
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(sys.platform != "win32",
+                    reason="_spawn_windows evaluates Windows-only subprocess "
+                           "creation flags (DETACHED_PROCESS); Windows-only path")
+class TestSpawnWindows11745:
+    """#11745: a killed agent must not leave an orphan terminal. The Windows
+    spawn was switched from ``wt new-tab`` (whose tab close is governed by the
+    profile's closeOnExit and stays open on a non-zero/killed exit, with no CLI
+    override — microsoft/terminal#15747) to ``cmd /c start``, which opens a
+    standalone console the OS closes on ANY exit code. These tests lock the
+    spawn-command construction; the live spawn→kill→window-gone cycle is
+    verifier/operator manual verification (per the issue AC).
+    """
+
+    @patch("boot_remote.subprocess.Popen")
+    def test_thin_spawns_self_closing_cmd_start(self, mock_popen, tmp_path):
+        """thin launcher → `cmd /c start "title" /D <dir> python <script> <role>`.
+
+        Popen receives a STRING (not a list) so Windows uses it verbatim — and
+        the title MUST be quoted (DS Finding 1: an unquoted no-space first token
+        is taken by START as the program to run, not the window title).
+        """
+        mock_popen.return_value.pid = 4321
+        script = str(tmp_path / "thin_launcher.py")
+        ok, msg, pid = boot_remote._spawn_windows(tmp_path, "skill", script, "thin")
+
+        assert ok is True
+        assert pid == 4321
+        cmd = mock_popen.call_args[0][0]
+        assert isinstance(cmd, str)
+        # Title MUST be quoted, else START misreads it as the program (Finding 1)
+        assert 'cmd /c start "squidsquad-skill"' in cmd
+        assert "/D" in cmd                          # working directory flag
+        assert "python" in cmd
+        assert script in cmd
+        assert cmd.rstrip().endswith("skill")       # the role arg
+
+    @patch("boot_remote.subprocess.Popen")
+    def test_does_not_use_wt_new_tab(self, mock_popen, tmp_path):
+        """The orphaning wt-tab path must be gone — no `wt new-tab` invocation."""
+        mock_popen.return_value.pid = 1
+        script = str(tmp_path / "thin_launcher.py")
+        boot_remote._spawn_windows(tmp_path, "skill", script, "thin")
+
+        cmd = mock_popen.call_args[0][0]
+        assert "new-tab" not in cmd
+        assert "wt " not in cmd and "wt.exe" not in cmd
+
+    @patch("boot_remote.subprocess.Popen")
+    def test_ps1_path_drops_noexit(self, mock_popen, tmp_path):
+        """Legacy ps1 path must NOT carry -NoExit (a guaranteed-orphan source)."""
+        mock_popen.return_value.pid = 2
+        script = str(tmp_path / "start-skill.ps1")
+        ok, _msg, _pid = boot_remote._spawn_windows(tmp_path, "skill", script, "ps1")
+
+        assert ok is True
+        cmd = mock_popen.call_args[0][0]
+        assert "-NoExit" not in cmd
+        assert "pwsh" in cmd and "-File" in cmd
+        assert 'start "squidsquad-skill"' in cmd     # title still quoted
+
+    @patch("boot_remote.subprocess.Popen")
+    def test_detached_creation_flags_preserved(self, mock_popen, tmp_path):
+        """Spawn stays detached so the parent harness isn't bound to the window."""
+        mock_popen.return_value.pid = 3
+        script = str(tmp_path / "thin_launcher.py")
+        boot_remote._spawn_windows(tmp_path, "skill", script, "thin")
+
+        flags = mock_popen.call_args[1]["creationflags"]
+        assert flags & boot_remote.subprocess.DETACHED_PROCESS
+        assert flags & boot_remote.subprocess.CREATE_NEW_PROCESS_GROUP
+
+    @patch("boot_remote.subprocess.Popen")
+    def test_clone_root_with_spaces_is_quoted(self, mock_popen, tmp_path):
+        """A clone path containing spaces must be quoted after /D (Finding 1 sibling)."""
+        mock_popen.return_value.pid = 9
+        spaced = tmp_path / "clone with space"
+        spaced.mkdir()
+        script = str(spaced / "thin_launcher.py")
+        boot_remote._spawn_windows(spaced, "skill", script, "thin")
+
+        cmd = mock_popen.call_args[0][0]
+        assert f'/D "{spaced}"' in cmd
+
+    def test_spawn_failure_returns_false(self, tmp_path):
+        """When subprocess.Popen raises, _spawn_windows returns (False, error, None)."""
+        script = str(tmp_path / "thin_launcher.py")
+        with patch("boot_remote.subprocess.Popen", side_effect=OSError("boom")):
+            ok, msg, pid = boot_remote._spawn_windows(tmp_path, "skill", script, "thin")
+        assert ok is False
+        assert "Windows spawn failed" in msg
+        assert pid is None
+
+
+# ---------------------------------------------------------------------------
 # #9941 — _write_booting_sentinel atomic create-or-fail
 # ---------------------------------------------------------------------------
 
