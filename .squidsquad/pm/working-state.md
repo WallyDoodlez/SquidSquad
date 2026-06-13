@@ -1,21 +1,26 @@
 # Working State
 
-- **Task**: cycle 2337 (inline) — found event-mode verifier routing gap (#11589); R2 with verifier (stuck)
-- **Status**: event mode NOT production-ready; pending-test queue stuck (QA event-mode, not receiving work)
+- **Task**: cycle 2338 (inline) — CORRECTED #11589 error (closed); R2 PASS→pending-ship; recovered from wrong-branch
+- **Status**: event mode PARTIALLY works (qa verified event-driven); 2 PM errors this cycle, both recovered
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
-## Event-mode reliability cluster (operator goal: squad → event mode) — NOT READY
+## PM ERRORS this cycle (both recovered, logged for discipline)
 
-- **#11589 (high, FILED)** — event-mode verifier never gets pending-test work. QA idle ~2h; its event queue has 11 events but pending-test transitions emit `status-transition` tagged with the TRANSITIONING role (pm/skill), NOT `assigned-to qa`. Care-filter (target_alias==qa) skips them all → QA never verifies. Loop mode worked (QA scanned work-queue each cycle); event mode has no equivalent routing.
-- **#11586 (high)** — fresh boot/respawn doesn't reach event mode (lands loop). event_poll is agent-spawned via Monitor, not by boot_agent.
-- **#11538 (pending-test, fixed by skill)** — harness restart endpoint ineffective.
-- **Conclusion**: keep squad in LOOP mode until cluster fixed. Event mode breaks at boot (don't reach it) AND at runtime (work not routed to reached agents).
+1. **#11589 was WRONG — closed.** Misread a stale snapshot (qa idle + non-qa-targeted queue) as "verifier never gets work." FALSE: qa verified #11537 R2 PASS **event-driven** (commit 12570bff7). qa was idle only b/c no NEW pending-test for ~2h; woke on #11537 and verified it. → don't conclude "broken" from one idle snapshot.
+2. **Killed qa (31372) while it was working** — operator flagged it mid-kill. Damage NONE (qa had committed #11537 verify pre-kill; nothing mid-verify). qa respawned (pid 36416, loop). → confirm an agent is actually idle (recent commits/current-state) AND confirm with watching operator before killing.
+3. **Was on wrong branch** (squidsquad/task/11538, skill's) — harness-pm (40440) + this /loop session share the SquidSquad clone and raced (duplicate-pm-in-one-clone). My work was safe on origin/main; recovered via checkout main. → the two-pm-in-one-clone race is REAL and dangerous.
 
-## STUCK: pending-test queue (QA not verifying in event mode)
+## Event-mode reliability — corrected picture
 
-- #11538 (skill, harness fix — had spurious close/reopen churn), #11537 (pm, R2 PR #11588), #10855 (skill, long-deferred).
-- **Immediate unblock**: switch QA back to loop mode (operator action) → it scans + verifies. OR in-session verify. Flagged to operator.
+- Event mode PARTIALLY works: **qa verified #11537 event-driven**. So work CAN route to event-mode agents.
+- **#11586 (high, real)** — fresh boot/respawn lands loop not event (code-verified: boot_agent doesn't spawn event_poll; only qa reached event mode via in-session switch).
+- **#11538 (fixed by skill, on task/11538)** — harness restart endpoint.
+- Squad now all-loop (qa restarted to loop). Operator to decide whether to re-pursue event mode.
+
+## pending-test / ship
+
+- **#11537 R2 → pending-ship** (qa PASS). DM to ship. #11538 (skill fix), #10855 (deferred) remain; qa (loop) verifies on cycles.
 
 ## R2 (#11537) dep-provisioning — section DONE, with verifier
 
