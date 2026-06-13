@@ -15,11 +15,13 @@
 - **QA**: STOPPED (#11600 clone fix pending). Verification paused.
 - **Instrumentation gap**: restart-log.txt stale since 2026-04-15; harness not logging respawns (#11612 step-1 respawn-reason logging still worth doing).
 
-## >>> REBOOT FIX SHIPPED (cycle 2344) + skill recovered <<<
+## >>> REBOOT LOOP — TRUE ROOT CAUSE FOUND + FIXED (cycle 2344) <<<
 
-- **#11601 MERGED to main** (PR #11639, 04:49Z) — 7373 fallback now on main; reboot loop fixed.
-- **skill rebooted clean** — pid 22968 stable, bootup=True, current-state idle. No loop. (No event_poll seen → likely loop-mode fallback; verify next cycle it picks up #11503/#11640.)
-- **#11612 + #11601 CLOSED** (auto-closed via PR).
+- **ACTUAL cause: stale `.claude/scheduled_tasks.lock`** in skill clone (held dead pid 25628) → claude crashes at STARTUP with exit 1 (no transcript) → harness #4949 reboots → lock persists → loop. Confirmed by minimal repro: removed lock → skill stable 2+ min (pid 41048) vs exit-1 every ~60-80s.
+- **Interim fix applied**: removed stale lock (backup: scheduled_tasks.lock.stale-bak). skill boots clean, loop-mode, idle.
+- **Durable fix #11641 FILED (role:skill)**: spawn path must clear stale lock (dead holder PID) before exec'ing claude. Recurs after any unclean agent death until fixed.
+- **CORRECTION**: #11601 (event_poll None→7373) was a SEPARATE latent bug, NOT the reboot cause. My earlier "#11601 is THE reboot fix" was wrong — corrected on #11612. #11601 still legitimately merged (PR #11639). Lesson: no respawn exit-code logging → inferred wrong mechanism from code; operator's exit-1 evidence corrected it.
+- **#11612 CLOSED** (loop resolved); corrected comment posted. #11601 CLOSED (legit, separate).
 
 ## QA "wrong realm" (#11600) — diagnosed + routed; QA stays DOWN
 
