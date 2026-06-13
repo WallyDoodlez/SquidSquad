@@ -9,10 +9,13 @@ Status: **GATED** — doc-improvement-loop issue-gate trips on open #10540 (stat
 Last completed: R73 (cycle 1715, 2026-05-31) — 0 findings, full 7-file rotation. rotation_count=74.
 Next scan after: #10540 routed/closed (then quiet-gate resumes).
 
-## Session Context (POLLING-mode, boot @ 2026-06-13 14:05)
-- **Wake mode: POLLING** — harness DOWN (curl :59999 → exit 7 conn-refused). `/loop 30m` scheduled (cron fe435afd, session-only, 7-day expiry). Mode sticky for session.
+## Session Context (LOOP-mode, boot @ 2026-06-13 14:05)
+- **Wake mode: LOOP** — `/loop 30m` (cron fe435afd, session-only, 7-day expiry). Mode sticky.
+- **CORRECTED @ cycle 421 (22:3x): harness is UP & HEALTHY on :7373** (2h+ uptime, my c416 code). My boot probed :59999 and failed → loop mode — but that is **PM's DELIBERATE pin, NOT a dead harness.** `.squidsquad/pm/pin-keeper.sh` writes `.harness-port=59999` (dead port) to skill/dm/qa clones every 30s so boots fall to LOOP (functional) and dodge EVENT mode (INERT — #10855). Loop mode IS the intended/working mode this session. **DO NOT "self-heal" .harness-port to 7373** — that breaks the pin (I did this in c421; pin-keeper + I reverted it within 30s, no harm).
+- #10855 (agents boot INERT in event mode: spin, never arm event_poll, never cycle) is the SOLE event-mode blocker, `blocked:human-action`, PM-driven. #11587/#11641 (shipped this session) fixed the reboot loop but NOT the inert boot.
+- **Operator decision (22:35): leave harness alone; DM keeps shipping via loop session.** Do not restart harness/agents (PM owns pin + #10855 workflow).
 - Version: **v0.44.0**; Shipped Since Last Bump: **13/10** (config.md authoritative — OVER threshold).
-- Local-merge fallback in use (harness down) — see #10540 / [[learning-dm-local-merge-when-harness-down]].
+- Local-merge ship path in use (loop mode, no harness /merge from this session) — see #10540 / [[learning-dm-local-merge-when-harness-down]].
 
 ## >>> BUMP GATE OPEN (13/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
 - Counter **13/10**, over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ cycles 415 & 416 — no green-light yet; keep shipping, counter accrues until bump resets it.
@@ -34,13 +37,13 @@ Next scan after: #10540 routed/closed (then quiet-gate resumes).
 - event_poll.py port-file bug — likely SUBSUMED by #11723 Part-2 (liveness walk + 7373 default). Verify before re-filing.
 - #11503/#11657 final-2 tests gate on OPEN #10360 (status:pending, role:pm).
 - pending DM-tracker approvals #8702/#7447/#9933 (awaiting PM).
-- Harness DOWN — #11641/#11723 fixes are ON main but only take effect on operator harness-restart.
+- Harness UP on :7373; #11587/#11641/#11640/#11745 fixes are live in its running code (booted @ c416 sha; #11745 lands on next harness restart). Reboot loop fixed; event-mode inert (#10855) is the remaining gap.
 
-## >>> PIPELINE STALLED UPSTREAM (observed cycle 421, 18:15) <<<
-- Last non-DM commit: **pm cycle 2351 @ 16:33** (~1h40m ago). skill/qa/pm have NOT cycled since. Only DM (this /loop session) is alive — other agents have no active /loop and the harness is DOWN, so they're effectively offline.
-- Consequence: **no new work will reach pending-ship** (no workers producing, no verifier verifying). DM autonomous queue is dry until harness/agents return OR operator acts.
-- **CHURN DISCIPLINE**: on identical no-change quiet cycles, SKIP the commit (just pull+scan+idle) — do not emit a counter-bump commit every 30m. Only commit when something material changes (new pending-ship, forge signal, operator action).
-- **Operator levers**: (1) restart harness (picks up this session's 7 fixes + re-enables agents/event-mode work on #10855); (2) green-light v0.45.0 bump (13/10 staged); (3) route #10540 (unblocks DM doc-scan + fallback encoding).
+## Other agents (corrected understanding, cycle 421)
+- skill/pm/qa showed `bootup_complete:false` in harness /status — these are EVENT-mode inert zombies (#10855), not a dead harness. PM keeps functional agents in LOOP mode via the pin. There is also a harness-spawned inert DM (pid 17008) in THIS clone alongside my working loop session (three-populations) — harmless while it's inert; PM/operator own any cleanup.
+- Net: team works in LOOP mode (proven — my 7 ships + PM control proof). Not "stalled" — gated on #10855 for EVENT mode only.
+- While other agents are inert (event-mode #10855) and only restarted-into-loop ones work, pending-ship inflow is sporadic — depends on PM/skill/qa being run in loop mode. DM queue may be dry for stretches; that's expected, not a stall.
+- **CHURN DISCIPLINE**: on identical no-change quiet cycles, SKIP the commit (just pull+scan+idle) — don't emit a counter-bump commit every 30m. Only commit when something material changes (new pending-ship, forge signal, operator action).
 
 ## Team mode (PM cycle 2351, 2026-06-13 ~16:4x)
 - PM attempted EVENT-mode switch after reboot fix landed durable on main → **event mode INERT (#10855, role:skill, pending-test)**; PM reverted team to working LOOP mode; lock-watchdog retired.
