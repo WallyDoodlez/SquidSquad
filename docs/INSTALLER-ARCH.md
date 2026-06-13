@@ -72,7 +72,7 @@ flowchart LR
 Three commitments:
 
 1. **Ephemeral agent.** The installer is a one-shot Claude Code session. It boots, talks to the human, runs helpers, commits the final state, prints "SquidSquad ready", and exits. No background process, no daemon, no long-lived install state.
-2. **Two halves — pure conversation, then writes-and-commit.** Phases 0–4 (per §4 below) are pure conversation + helper queries — no writes to the target repo. From Phase 5 onward the installer writes to the local filesystem; Phase 8 is the atomic git commit + push that publishes everything. The user can abort cleanly through Phase 4; aborting between Phase 5 and Phase 8 is also clean but requires re-running the installer (which detects the partial state per §11.1's interrupted-install recovery — user-initiated mid-flow abort is not a first-class supported path; the installer either completes or is re-run).
+2. **Two halves — pure conversation, then writes-and-commit.** Phases 0–4 (per §4 below) make **no writes to the target repo** — they are conversation + helper queries, with two host-level exceptions outside the repo: Phase 0 may provision system tools and Python packages on the host *with operator consent* (§4.1), and Phase 0a writes to `~/.squidsquad/` (§4.2). From Phase 5 onward the installer writes to the local filesystem; Phase 8 is the atomic git commit + push that publishes everything. The user can abort cleanly through Phase 4; aborting between Phase 5 and Phase 8 is also clean but requires re-running the installer (which detects the partial state per §11.1's interrupted-install recovery — user-initiated mid-flow abort is not a first-class supported path; the installer either completes or is re-run).
 3. **One flow, fresh and re-run.** There is no distinct "upgrade flow". Re-running the installer on a repo that already has `.squidsquad/` walks the same phases; the existing-install case is handled by a migration-walk step (§4.4) that consults per-version `references/migrations/v<N-1>-to-v<N>.md` files. Helpers like `shared_fs.py init` are idempotent — safe to run on re-installs.
 
 > **Restart step not shown.** The high-level diagram above ends at Phase 9 (exit). On a **re-run** (existing install), a per-agent harness restart fires *between* the Phase 8 commit and the Phase 9 exit — so running agents pick up the newly composed CLAUDE.md (see §10.3). It is omitted from this mental-model diagram because a fresh install has no running agents to restart (the squad boots later via `start.sh`); the restart is a re-run-only concern.
@@ -89,7 +89,7 @@ Three commitments:
 |---|---|
 | **Human conversation** | Project domain, **team preset** (which workers and verifiers to install — see §1.1), loop interval, model routing preferences, tracker backend (GitHub Issues default, Forgejo alt), git workflow preferences. **NOT collected at install: tool/MCP/CLI configuration** — those are per-agent decisions made post-install (see §8). |
 | **Repo state** | Git existence + branch + history; existing `.squidsquad/` (triggers the migration-walk step inside the standard flow — §4.4); language/stack hints from filesystem |
-| **Environment** | `gh` CLI installed + authenticated; Python 3 + `pip`; OS (Windows, macOS, Linux); `claude` CLI on PATH |
+| **Environment** | The full dependency set Phase 0 detects + provisions (§4.1): `gh` CLI installed + authenticated; Python 3 + `pip` + runtime packages; `claude` CLI on PATH; OS (Windows, macOS, Linux). Phase 0 reads this set in one gather-all pass — see §4.1 for the detect→consent→provision model. |
 | **`~/.squidsquad/`** | Cross-install shared filesystem — existing secrets and cross-install config. (Clone-path discovery is project-local in `.squidsquad/.local-config`, not here — see §3.2.) |
 
 ### 3.2 Outputs
@@ -146,16 +146,37 @@ flowchart TB
     style Migrate fill:#dff
 ```
 
-### 4.1 Phase 0 — Prerequisite check
+### 4.1 Phase 0 — Prerequisite detection & provisioning
 
-Verify the environment can run a SquidSquad install:
+Phase 0 ensures the environment can run a SquidSquad install. It follows a **gather-all → present → consent → provision** model — it never fails fast on the first missing dependency.
 
-- `gh` CLI installed AND authenticated (`gh auth status`) — required for tracker
-- Python 3 + `pip` — required for helpers
-- `claude` CLI on PATH — required to spawn agents
-- Git repo present + clean working tree (or operator-acknowledged)
+**Dependencies in scope:**
 
-Helper: `references/scripts/wizard.py check-gh` returns a JSON envelope with `ok: true | false` and a `stage: ready | installed | authenticated` field. The installer agent acts on the JSON, never invents environment checks.
+| Dependency | Why needed | Provisioning |
+|---|---|---|
+| `gh` CLI (installed) | tracker (GitHub Issues) | auto — per-platform package manager |
+| `gh` auth | tracker API calls | **guided** — `gh auth login` is interactive; cannot be silently forced |
+| Python 3 | runs all helpers | auto — per-platform package manager |
+| `pip` | installs Python packages | auto — `apt` / `ensurepip` |
+| Runtime Python packages — `requirements.txt` (fastapi, starlette, uvicorn, watchdog) **plus `pyyaml`** (used at runtime by `manifest.py` / `capability_check.py` / `source_frontmatter.py` / `wizard.py`; **currently declared only in `requirements-dev.txt`** — moving it to `requirements.txt` is part of the target implementation) | harness + helpers | auto — `pip install -r requirements.txt` |
+| `claude` CLI on PATH | spawns agents | **guided** — npm global (`npm i -g @anthropic-ai/claude-code`); attempt only when npm is present, else instruct |
+| Git repo present + clean working tree | install target | operator-acknowledged (not auto) |
+
+**The flow:**
+
+1. **Gather-all detect** — a single pass enumerates **every** missing or unsatisfied dependency above without bailing on the first. It produces the complete missing-set, each item annotated with the exact per-OS provisioning action.
+2. **Present + consent** — the installer shows the human the full missing-set in plain language with what it proposes to do for each, then asks **one** permission ("Install these N items?"). Nothing is installed before consent. (Per operator direction: gather all, then ask once — not a prompt per dependency.)
+3. **Provision on approval** — for each approved item the installer runs its per-platform action:
+   - **System tools** (`gh`, Python, pip): per-platform package manager — `winget` / `choco` (Windows), `brew` (macOS), `apt` / `dnf` (Linux).
+   - **Python packages**: `pip install -r requirements.txt` (**target**: a single unified read — the implementation must replace the current 2-of-4 hard-coded subset in `start.sh` / `start.ps1` with this).
+   - **Guided, not auto**: `claude` CLI (npm global) and `gh auth login` (interactive) are surfaced as guided steps the installer runs *with* the human, rather than silently forcing.
+4. **Re-verify** — after provisioning, re-run the gather-all detect. Anything still missing → instruct the human and stop cleanly (no partial scaffold; Phase 0 is still pre-Phase-5, so abort leaves no repo writes).
+
+**Install-time vs runtime split** (operator-locked): the gather-all + consent + provision runs **here at install time** — the human is present to consent once. `start.sh` keeps a **silent re-ensure** safety net at every boot: it re-checks the same dependency set and installs the auto-provisionable ones *without* prompting (a boot-time guard, not a consent gate), so a clone that drifts still comes up. The consent gate lives only at install time; boot-time re-ensure is unattended by design.
+
+**Platform strategy**: provisioning dispatches on detected OS; the per-platform system-tool install commands are encoded in a single helper, not scattered across the flow. The runtime boot path already has both a bash `start.sh` and a Windows `start.ps1` for the re-ensure step — but both currently hard-code a 2-of-4 package subset and need updating to the unified `requirements.txt` read.
+
+> **Current state (target vs today)**: today `references/scripts/wizard.py` checks **only `gh`** (install + auth), fail-fast, and *instructs* the human (returns a JSON envelope with `ok: true | false` and a `stage: ready | installed | authenticated` field, plus a `fix` list). Python 3 / pip / packages are auto-installed only later by `start.sh` (bash) and `start.ps1` (PowerShell) at runtime boot — both hard-code 2 of the 4 runtime packages — and `claude` is only warned about. The **gather-all collector, per-platform install dispatch, consent prompt, unified-`requirements.txt` read, and `pyyaml` runtime-requirement move** described above are the **target design — not yet implemented**. Implementation is a separate worker (skill) task filed off #11537; this section is the contract for that work. The installer agent acts on the helper JSON and never invents environment checks; the gather-all detector extends that single-helper-JSON pattern to every dependency.
 
 ### 4.2 Phase 0a — Shared filesystem init
 
@@ -551,7 +572,7 @@ Operators on consuming installs never write migration files — they consume the
 
 The installer is designed to be safe to re-run:
 
-- **Phases 0–4** make no changes the user can see in the target repo. (Phase 0a `shared_fs.py init` writes to `~/.squidsquad/` but is idempotent — creates dirs only if absent — and is shared across all installs, not specific to this one.)
+- **Phases 0–4** make no changes the user can see in the target repo. (Two host-level exceptions, both outside the repo: Phase 0 provisioning installs system tools + Python packages on the host OS — but only after explicit operator consent per §4.1, and the abort path before consent leaves nothing changed; and Phase 0a `shared_fs.py init` writes to `~/.squidsquad/` but is idempotent — creates dirs only if absent — and is shared across all installs, not specific to this one.)
 - **Phase 5 (local scaffold + forge labels)** is the first phase that writes to the target repo. It uses a "scaffold then write" pattern — failures partway leave the filesystem in a state the next re-run can clean up via WIZARD's Step 7.1 ("Full rebuild cleanup if applicable") cleanup path.
 - **Phase 5 label creation on the forge** is per-label idempotent (`gh label create` skips existing labels).
 - **Phase 6 compose** is deterministic *for a given set of inputs* — the same L1-L3 sources + L4 file always produce the same composed CLAUDE.md. During an upgrade (§10), the L1-L3 sources change because the installer pulls newer SquidSquad releases, so the composed output legitimately changes; that is not a determinism violation, just a reflection of the input change. Re-running Phase 6 against an unchanged source set is safely idempotent.
@@ -599,6 +620,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 
 ## 14. Revision log
 
+- **2026-06-12 (#11537 R2 — dependency provisioning)** — Rewrote §4.1 Phase 0 from a flat 4-bullet "prerequisite check" into the full **dependency detection & provisioning** design (operator-locked option-b-with-consent, 2026-06-12). New model: **gather-all detect → present full missing-set → one consent prompt → per-platform provision → re-verify**. Locks: provision at **install time** (consent gate) with `start.sh` silent re-ensure at boot; `claude` CLI + `gh auth` stay **guided** (not silently forced); **full scope** (system tools + Python packages, instruct-fallback for the un-installable). Per-dependency provisioning table + platform-dispatch strategy added. Fixed §3.1 Environment-row drift (it listed deps as if all were checked; today only `gh` is — now points to §4.1's gather-all model). Honest target-vs-today callout: gather-all collector, per-platform dispatch, consent prompt, unified-`requirements.txt` read, and `pyyaml` runtime-requirement move are **not yet implemented** — implementation is a separate skill task off #11537. (Note: `start.ps1` already exists alongside `start.sh`; both hard-code a 2-of-4 package subset that the unified read replaces.) §2 commitment 2 + §11.1 updated to carve out Phase 0 host-level provisioning from the 'no writes during Phases 0–4' invariant (repo-write invariant preserved; host installs are consent-gated). Research: `.squidsquad/pm/planning/RESEARCH-INSTALLER-DEPROV-11537.md`. (R2 is the original #10836 scope, split out when R1 absorbed the drift sweep.)
 - **2026-06-12 (#10836 R1 reconciliation — in progress)** — Post-cutover drift sweep against the stabilized arch docs (audit: `.squidsquad/pm/planning/AUDIT-INSTALLER-ARCH-2026-06-12.md`). **Architectural-drift findings resolved (4 ERROR + 2 WARNING):**
   - **E1+W2 (clone registry)**: doc claimed `~/.squidsquad/clones/<alias>` is the boot-time clone-path registry, contradicting HARNESS-ARCH §7.2 (`.squidsquad/.local-config`). Code confirms `boot_remote.py` reads `.local-config` exclusively; the global `~/.squidsquad/clones/` fallback was removed in #3100; `shared_fs.py init` still *creates* the dir but nothing consumes it for boot. Fixed §1.2, §3.1, §3.2, §4.2 + §5 trees → `.local-config` canonical, `~/.squidsquad/clones/` marked vestigial. Code-cleanup follow-up: #11519 (retire unused `shared_fs.py` clones helpers).
   - **E4 (L4 write model)**: §8.2 step 3 said post-install directives persist to a *new* L4 file; COMPOSE §7.5 says one unified file per role-class, ops accumulate as H3 sub-sections. Fixed → append H3 op-block to `.squidsquad/project/<role-class>.md`.
