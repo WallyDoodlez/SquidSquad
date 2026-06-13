@@ -2,7 +2,7 @@
 type: learning
 tags: [branch-workflow, mergeability, transient-state, diagnosis]
 created: 2026-06-12
-updated: 2026-06-12
+updated: 2026-06-13
 owner: skill
 status: active
 confidence: high
@@ -30,7 +30,11 @@ Exit 0 both directions = **zero real conflict**; GitHub's flag is cosmetic. Exit
 
 ## Rationale
 
-Hand-resolving a non-conflict wastes cycles and (worse) can mislead QA into deferring a substantively-mergeable PR. The durable fix is to keep transient agent state OFF code branches — the `state_bus.py`/`migrate_state_branch.py` dedicated state-branch architecture exists for this but is not yet activated. Tracked in #11511 (recommend: activate state branch; stopgap = swap the flap-causing `merge=ours` to `merge=union` where union is safe — NOT config.md). Until then: prove mergeability with merge-tree, tell QA to merge on content, don't nudge.
+Hand-resolving a non-conflict wastes cycles and (worse) can mislead QA into deferring a substantively-mergeable PR. The durable fix is to keep transient agent state OFF code branches — the `state_bus.py`/`migrate_state_branch.py` dedicated state-branch architecture exists for this but is not yet activated. Tracked in #11511.
+
+**CORRECTION (iter-468, 2026-06-13): the "swap `merge=ours` → `merge=union`" stopgap does NOT work.** GitHub does not honor ANY user-defined `.gitattributes` merge driver for PR mergeability — not just custom drivers, but built-in `union` too. `merge=union` for PR-conflict resolution is an open GitHub feature request since 2021 with no implementation ([community discussion #9288](https://github.com/orgs/community/discussions/9288); GitHub support: "GitHub doesn't consider user-defined .gitattributes files"). libgit2/GitLab honor union; GitHub does not. So the entire existing `.gitattributes` merge block is a **local-merge-only** aid and a server-side no-op — adding/changing merge= entries will never fix the GitHub flap. The only real fixes are (a) keep transient files out of the PR diff (gitignore — already done for current-state/cycle-*.json/.backlog-cache; working-state.md can't be gitignored without breaking cross-agent visibility) and (b) guarantee working-state.md never lands on a feature branch (it flaps only when both branch and main change it; `cycle_post` already routes state→main, so leaks come from harness-down manual commits / branch races).
+
+Until the durable fix lands: prove mergeability with merge-tree, tell QA to merge on content, don't nudge.
 
 ## Related
 
@@ -44,3 +48,4 @@ Hand-resolving a non-conflict wastes cycles and (worse) can mislead QA into defe
 
 - 2026-06-12 — Created by skill (cycle 1636). merge-tree diagnostic for cosmetic CONFLICTING flag; filed #11511.
 - 2026-06-12 — Corrected by skill (cycle 1640). Root cause is `merge=ours` (custom driver) not honored by GitHub server-side — not generic "staleness". Durable fix = activate state-branch (state_bus); stopgap = merge=union where safe. Posted to #11511.
+- 2026-06-13 — Corrected by skill (iter-468). The merge=union stopgap is ALSO ineffective: GitHub honors NO user .gitattributes merge driver (incl. built-in union) for PR mergeability (community discussion #9288). `.gitattributes` merge block is local-merge-only. Real fixes = gitignore transient files / keep working-state off feature branches. Reposted on #11511.
