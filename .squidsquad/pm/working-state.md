@@ -1,7 +1,18 @@
 # Working State
 
-- **Task**: cycle 2335 (inline) — quiet hold; #11538 fixed by skill → pending-test; awaiting operator on R2 + event-mode
-- **Status**: pipeline healthy; 2 threads await operator (R2 design Qs, event-mode approach)
+- **Task**: cycle 2336 (inline) — wrote+audited+shipped R2 dep-provisioning section (PR #11588 → pending-test); diagnosed harness proactor exception (#11587)
+- **Status**: R2 with verifier; #11412 closed superseded; harness proactor noise = cosmetic (filed #11587)
+
+## R2 (#11537) dep-provisioning — DONE → pending-test
+
+- Branch squidsquad/task/11537: ee66f83b (section) + e7b6ed26 (audit fixes). PR #11588.
+- §4.1 rewritten: gather-all → consent → provision (operator-locked option-b: install-time consent gate + start.sh/.ps1 re-ensure; claude/gh-auth guided; full scope). §3.1 + §2 + §11.1 reconciled.
+- DS audit: 1 ERROR (start.ps1 EXISTS — research was wrong, I'd claimed no-Windows-path) + 4 WARN, all fixed.
+- #11412 closed (superseded). **Post-merge**: file R2 impl task to skill (gather-all collector, per-platform dispatch, consent prompt, pyyaml move, requirements.txt unified read).
+
+## Harness proactor exception (operator-reported)
+
+- ProactorEventLoop ConnectionReset (WinError 10054) — COSMETIC (harness responsive all session). #9562 SelectorEventLoopPolicy fix is in code (harness.py:3074) but defeated: uvicorn.Config (harness.py:3155) has no loop= → auto → daemon-thread proactor override. Filed **#11587** (medium, skill).
 - **Last Processed Event ID**: 3e50e129c8e74594
 - **Quiet cycles**: 0
 
