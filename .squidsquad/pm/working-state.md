@@ -1,5 +1,12 @@
 # Working State
 
+## >>> UPDATE ~07:45 (Jun 14) — qa CHURNED+ZOMBIED in event mode → stabilized to LOOP (hybrid) <<<
+
+- **qa event-mode instability**: stable ~4h (02:57-07:13) then 4 auto-reboots in 18min (07:13-07:30, all "was running, intent=running" = crashes), then the last respawn (696) went INERT (bootup=False 11min, #10855 zombie state). skill/dm stayed event-stable (qa-specific).
+- **#12244 backoff DID NOT catch it**: deaths were >60s apart → fast-death streak resets → no backoff. Slow reboot loops slip through. Filed **#12409** (skill, high): add frequency-based breaker + SessionEnd-reason capture (#12271 slice) + orphan event_poll/claude accumulation (13 claude/12 event_poll for 4 agents).
+- **STABILIZED qa to LOOP mode** (pinned 59999 + reboot → pid 52188 holding): loop polls/verifies on 30min cadence, no event-mode-sustaining dependency. **Current = HYBRID: skill/dm EVENT (stable), qa LOOP (stable), pm inline.**
+- **Strategic finding for operator**: event mode is NOT yet production-reliable (qa churn+zombie; #12342 routing not activated). Hybrid is the pragmatic stable state. Operator decision needed: push event-mode fixes (#12409 stability + #12342 activation + #12271 liveness) OR accept hybrid / broader loop revert. NOTE: re-introduced a qa loop-pin (the hack I'd cleaned) — intentional, until event-mode-qa is fixed.
+
 ## >>> UPDATE ~05:40 (Jun 14) — REBOOT SAGA CLOSED OUT (all 3 fixes shipped) <<<
 
 - **All shipped to main**: #12282 (trigger/test-isolation leak), #12244 (crash-loop backoff), #12342 (EAD auto-routes pending-test→verifier / pending-ship→dm). Reboot incident fully resolved on the delivery side.
