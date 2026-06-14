@@ -219,3 +219,11 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - dm(17008)/qa(40328)/pm(40440) ADOPTED (same pids, running). If one dies, harness will NOT respawn (manual control). skill DOWN (0 procs, not spawned).
 - CAVEAT: this is a runtime flag state — if harness is restarted WITHOUT the flags, reboot ability returns. To make durable, the flags/behavior would need to be the default or config-gated.
 - STEP 2 (open): find the REAL skill-reboot root cause. quota RULED OUT (symptom). Persistent signal = skill claude exits EARLY (no transcript since 16:04) every few min, loop mode, low context (8%). Now that reboots are OFF + quota reset, a CONTROLLED single manual skill spawn can capture the real exit code/stderr without churn. Then review harness arch gap (#11612/#11586 cluster).
+
+## >>> 23:10 — SYNTHESIS: arch gap found; exit-1 crash narrowed (operator was right re quota) <<<
+- CONTROLLED post-quota-reset run: skill claude ran ~2-3min of REAL work (transcripts 23:03/23:04), then EXITED CODE 1 with NO error output + NO quota message. So there IS a genuine recurring exit-1 ~2-3min into the cycle (the deeper cause); quota was an earlier masking layer (now reset). Operator correct: quota != the reboot cause.
+- Exit-1 cause NOT fully pinned (no claude stderr captured) — candidates: rate/usage limit re-hit after several API calls, OR claude-code crash. Needs claude's own error output.
+- ARCH GAP (operator's target) = harness reboots on ANY exit with NO backoff/cause-awareness → any transient exit becomes infinite tight churn. = #12244 (filed). THE durable fix.
+- Reboots remain DISABLED (--no-auto-reboot --no-auto-start). Safe to investigate calmly. skill DOWN (stopped manual spawns; no quota burn).
+- Secondary: get_field('effort-skill') returns not-found despite config.md line 121 having it — config-parser gap, non-fatal (defaults high). Worth separate look.
+- NEXT (operator choice): draft #12244 backoff design / hand to skill / operator reviews arch.
