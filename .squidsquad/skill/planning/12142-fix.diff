@@ -1,0 +1,298 @@
+commit 2cacb74c2811ab6f5e191b89816aea443dd6920d
+Author: Wallace Chan <naahtec@hotmail.com>
+Date:   Sat Jun 13 22:02:55 2026 -0400
+
+    fix(#12142): preserve uncommitted WIP across context-pressure reboots
+    
+    Add _preserve_wip() to cycle_pre.main(), run BEFORE _enforce_branch and
+    _do_pull. When the tree is dirty AND working-state names an in-progress
+    task #N, commit code WIP to that task feature branch via git_ops
+    commit-code (state/ephemeral files stay on the normal state->main route).
+    Fail-open no-op on a clean tree (the normal post-commit case), so it only
+    fires after a genuine mid-cycle reboot.
+    
+    Also align _get_branch_name fallback default to squidsquad/task/{number}
+    (the #6526 git_ops canonical) so an independently-computed branch matches
+    the one task-begin actually created.
+    
+    Tests: 8 TestPreserveWip cases (dirty/clean/not-in-progress/no-task/
+    unparseable/state-only/fail-open/ordering) + QA-input branch-hint tests
+    retargeted to the canonical pattern. 134 passed.
+    
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+diff --git a/references/scripts/cycle_pre.py b/references/scripts/cycle_pre.py
+index f4bbd30b6..338805700 100644
+--- a/references/scripts/cycle_pre.py
++++ b/references/scripts/cycle_pre.py
+@@ -181,13 +181,83 @@ def _do_pull(role=None):
+ 
+ 
+ def _get_branch_name(role, number):
+-    """Get branch name using configured pattern (#5040)."""
++    """Get branch name using configured pattern (#5040).
++
++    Fallback default is ``squidsquad/task/{number}`` to match
++    ``git_ops.get_branch_name`` (the #6526 canonical) — the two must agree so
++    helpers that compute a branch independently of ``task-begin`` (e.g.
++    ``_preserve_wip``, #12142) target the same feature branch the agent is
++    actually on.
++    """
+     pattern = _config_get("branch-pattern")
+     if not pattern:
+-        pattern = "squidsquad/{role}/{number}"
++        pattern = "squidsquad/task/{number}"
+     return pattern.format(role=role, number=number)
+ 
+ 
++def _preserve_wip(role, working_state):
++    """Commit uncommitted CODE WIP to the in-progress task's feature branch
++    BEFORE any branch switch or pull (#12142).
++
++    A task that exceeds one context window can reboot (context pressure)
++    mid-cycle, BEFORE ``cycle_post`` reaches its commit step. The uncommitted
++    WIP then survives into the next ``cycle_pre``, where ``_enforce_branch``
++    (``git checkout`` of the working branch when status != in-progress) can
++    ORPHAN it and ``_do_pull`` (git_ops stash/pop/drop) can STRAND it — so the
++    next cycle sees a clean tree and restarts the task from zero (an infinite
++    no-progress loop). Committing that WIP first preserves it deterministically,
++    independent of agent commit discipline.
++
++    Only fires when (a) ``working_state`` names an in-progress task with a
++    parseable issue number AND (b) the tree is dirty with CODE changes. State /
++    ephemeral files (``.squidsquad/``, ``.claude/``) are left untouched for the
++    normal state->main routing — ``git_ops commit-code`` excludes them. In the
++    normal (non-reboot) case ``cycle_post`` already committed, so the tree is
++    clean here and this is a cheap no-op.
++
++    Fail-open: any error logs and returns ``None``, leaving the tree no worse
++    than before — this guard must never break the cycle.
++
++    Returns ``{"committed": True, "branch": ..., "task": ...}`` when a WIP
++    commit was made, else ``None``.
++    """
++    try:
++        task = working_state.get("task", "none")
++        status = working_state.get("status", "none")
++        if task == "none" or status != "in-progress":
++            return None
++
++        # Extract issue number — same anchored pattern as _enforce_branch
++        # (#10072): tolerates "#9965", "9965", "#9965 — desc", "# 9965".
++        m = re.match(r"#*\s*(\d+)(?:\s|—|$)", task.lstrip())
++        if not m:
++            return None
++        number = m.group(1)
++
++        # Dirty check — skip the branch dance entirely on a clean tree.
++        changes = _run_script("git_ops.py", "has-changes")
++        if "true" not in (changes.stdout or "").lower():
++            return None
++
++        branch = _get_branch_name(role, number)
++        msg = (f"WIP checkpoint (#{number}) — auto-preserved by cycle_pre "
++               f"(#12142): committing mid-cycle work so a context-pressure "
++               f"reboot resumes instead of restarting")
++        result = _run_script("git_ops.py", "commit-code", role, branch, msg)
++        committed = result.returncode == 0 and "Committed code" in (result.stdout or "")
++        if committed:
++            print(f"  WIP preserved (#12142): committed code WIP to {branch} "
++                  f"before sync.")
++            return {"committed": True, "branch": branch, "task": number}
++        # commit-code is a no-op when only state/ephemeral files are dirty —
++        # that is the expected clean path, not an error.
++        return None
++    except Exception as exc:  # fail-open — never break the cycle
++        print(f"  WARNING: _preserve_wip raised {type(exc).__name__}: {exc} "
++              f"(continuing; WIP left as-is).", file=sys.stderr)
++        return None
++
++
+ def _enforce_branch(role, working_state):
+     """Ensure the agent is on the correct branch before pull (#4942, #5208).
+ 
+@@ -1349,6 +1419,12 @@ def main():
+     # 1a. Read working state early to determine correct branch (#4942)
+     working_state = _read_working_state(role)
+ 
++    # 1a-pre. Preserve uncommitted WIP from a mid-cycle context-pressure reboot
++    # (#12142) — commit code WIP to the in-progress task's feature branch BEFORE
++    # _enforce_branch (checkout can orphan) or _do_pull (stash drop can strand).
++    # Fail-open no-op on a clean tree (the normal case).
++    wip_preservation = _preserve_wip(role, working_state)
++
+     # 1b. Enforce correct branch before pull (#4942, #5208)
+     branch_correction = _enforce_branch(role, working_state)
+ 
+@@ -1424,6 +1500,10 @@ def main():
+     if branch_correction:
+         cycle_input["branch_correction"] = branch_correction
+ 
++    # Add WIP preservation if one was made (#12142)
++    if wip_preservation:
++        cycle_input["wip_preservation"] = wip_preservation
++
+     # Add ship-counter repair if one was made (#9772)
+     if ship_counter_repair:
+         cycle_input["ship_counter_repair"] = ship_counter_repair
+diff --git a/tests/test_cycle_pre.py b/tests/test_cycle_pre.py
+index c5dc20c46..f097b961e 100644
+--- a/tests/test_cycle_pre.py
++++ b/tests/test_cycle_pre.py
+@@ -235,6 +235,128 @@ class TestDoPull:
+         assert cycle_pre._do_pull() == "error"
+ 
+ 
++# ---------------------------------------------------------------------------
++# WIP preservation across mid-cycle context-pressure reboot (#12142)
++# ---------------------------------------------------------------------------
++
++
++class TestPreserveWip:
++    """#12142: a mid-cycle reboot must not lose uncommitted WIP.
++
++    ``_preserve_wip`` commits code WIP to the in-progress task's feature branch
++    BEFORE _enforce_branch/_do_pull can orphan or strand it, so the next cycle
++    resumes the task instead of restarting from zero.
++    """
++
++    @staticmethod
++    def _dispatch(has_changes="true", commit_stdout="Committed code to squidsquad/task/12142: WIP",
++                  commit_rc=0):
++        """Build a _run_script stub that dispatches on the git_ops subcommand."""
++        calls = []
++
++        def fake(*args, **kw):
++            calls.append(args)
++            r = MagicMock()
++            r.stderr = ""
++            sub = args[1] if len(args) > 1 else ""
++            if sub == "has-changes":
++                r.returncode = 0
++                r.stdout = has_changes
++            elif sub == "commit-code":
++                r.returncode = commit_rc
++                r.stdout = commit_stdout
++            else:
++                r.returncode = 0
++                r.stdout = ""
++            return r
++
++        fake.calls = calls
++        return fake
++
++    def test_preserves_code_wip_when_in_progress_and_dirty(self, monkeypatch):
++        """In-progress task + dirty code tree → commit-code called, dict returned."""
++        fake = self._dispatch()
++        monkeypatch.setattr(cycle_pre, "_run_script", fake)
++        result = cycle_pre._preserve_wip(
++            "skill", {"task": "#12142 — fix WIP loss", "status": "in-progress"})
++        assert result == {"committed": True, "branch": "squidsquad/task/12142",
++                          "task": "12142"}
++        # commit-code was invoked with the role and resolved branch (the #6526
++        # canonical squidsquad/task/{number} — must match task-begin's branch).
++        commit_calls = [c for c in fake.calls if len(c) > 1 and c[1] == "commit-code"]
++        assert len(commit_calls) == 1
++        assert commit_calls[0][2] == "skill"
++        assert commit_calls[0][3] == "squidsquad/task/12142"
++
++    def test_noop_on_clean_tree(self, monkeypatch):
++        """Clean tree (has-changes false) → no commit-code, returns None."""
++        fake = self._dispatch(has_changes="false")
++        monkeypatch.setattr(cycle_pre, "_run_script", fake)
++        result = cycle_pre._preserve_wip(
++            "skill", {"task": "#12142", "status": "in-progress"})
++        assert result is None
++        assert not any(len(c) > 1 and c[1] == "commit-code" for c in fake.calls)
++
++    def test_noop_when_not_in_progress(self, monkeypatch):
++        """status != in-progress → no git calls at all (never reaches has-changes)."""
++        fake = self._dispatch()
++        monkeypatch.setattr(cycle_pre, "_run_script", fake)
++        result = cycle_pre._preserve_wip(
++            "skill", {"task": "#12142", "status": "idle"})
++        assert result is None
++        assert fake.calls == []
++
++    def test_noop_when_no_task(self, monkeypatch):
++        """task == none → no git calls."""
++        fake = self._dispatch()
++        monkeypatch.setattr(cycle_pre, "_run_script", fake)
++        result = cycle_pre._preserve_wip(
++            "skill", {"task": "none", "status": "in-progress"})
++        assert result is None
++        assert fake.calls == []
++
++    def test_noop_when_task_number_unparseable(self, monkeypatch):
++        """A task string with no issue number → no git calls."""
++        fake = self._dispatch()
++        monkeypatch.setattr(cycle_pre, "_run_script", fake)
++        result = cycle_pre._preserve_wip(
++            "skill", {"task": "investigate flaky thing", "status": "in-progress"})
++        assert result is None
++        assert fake.calls == []
++
++    def test_noop_when_only_state_files_dirty(self, monkeypatch):
++        """commit-code no-ops on state-only changes (returns False / no 'Committed
++        code' in stdout) → _preserve_wip returns None, no exception."""
++        fake = self._dispatch(commit_stdout="No code changes to commit (only state/ephemeral changes)",
++                              commit_rc=1)
++        monkeypatch.setattr(cycle_pre, "_run_script", fake)
++        result = cycle_pre._preserve_wip(
++            "skill", {"task": "#12142", "status": "in-progress"})
++        assert result is None
++
++    def test_fail_open_on_exception(self, monkeypatch):
++        """Any error in the git boundary must not raise — returns None."""
++        def boom(*a, **kw):
++            raise RuntimeError("git exploded")
++        monkeypatch.setattr(cycle_pre, "_run_script", boom)
++        # Must not raise
++        result = cycle_pre._preserve_wip(
++            "skill", {"task": "#12142", "status": "in-progress"})
++        assert result is None
++
++    def test_runs_before_enforce_branch_in_main(self):
++        """Source-level guard: _preserve_wip must be wired before _enforce_branch
++        and _do_pull in main() (ordering is the whole point of the fix)."""
++        import inspect
++        src = inspect.getsource(cycle_pre.main)
++        i_preserve = src.find("_preserve_wip(")
++        i_enforce = src.find("_enforce_branch(")
++        i_pull = src.find("_do_pull(")
++        assert i_preserve != -1, "_preserve_wip not called in main()"
++        assert i_preserve < i_enforce, "_preserve_wip must run before _enforce_branch"
++        assert i_preserve < i_pull, "_preserve_wip must run before _do_pull"
++
++
+ # ---------------------------------------------------------------------------
+ # Sub-process timeout guard (#9904)
+ # ---------------------------------------------------------------------------
+@@ -1085,10 +1207,14 @@ class TestQAInputMultiRole:
+         dm_items = [i for i in result["verification_queue"]["pending_test_issues"]
+                      if i.get("source_role") == "dm"]
+         assert len(dm_items) == 1
+-        assert dm_items[0]["branch"] == "squidsquad/dm/3969"
+-
+-    def test_qa_branch_uses_correct_role_prefix(self, patch_dirs, squid_dir, monkeypatch):
+-        """Branch path uses the item's source role, not hardcoded 'skill'."""
++        # Branch is the #6526 canonical squidsquad/task/{number} — role-
++        # independent, so it matches the branch task-begin actually created.
++        assert dm_items[0]["branch"] == "squidsquad/task/3969"
++
++    def test_qa_branch_uses_canonical_task_pattern(self, patch_dirs, squid_dir, monkeypatch):
++        """Branch hint is derived from the item's number via the #6526 canonical
++        squidsquad/task/{number} pattern (role-independent), and the item is
++        still attributed by its source role label."""
+         items = [{
+             "number": 5000, "title": "QA task",
+             "labels": [{"name": "squidsquad"}, {"name": "role:qa"},
+@@ -1100,7 +1226,7 @@ class TestQAInputMultiRole:
+         qa_items = [i for i in result["verification_queue"]["pending_test_tasks"]
+                     if i.get("source_role") == "qa"]
+         assert len(qa_items) == 1
+-        assert qa_items[0]["branch"] == "squidsquad/qa/5000"
++        assert qa_items[0]["branch"] == "squidsquad/task/5000"
+ 
+ 
+ class TestPMInputMultiRole:
