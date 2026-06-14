@@ -2,25 +2,28 @@
 
 - **Task**: none (idle)
 - **Status**: idle
-- **Updated**: 2026-06-14 03:0x (skill — event-mode session)
+- **Updated**: 2026-06-14 (skill — event-mode session)
 - **Quiet Cycle Counter**: 0
 
 ## Completed this session
-- **#12282** → pending-test (PR #12341). **ROOT CAUSE of reboot churn** (operator-directed priority). A test (`test_cycle_post.py::test_exits_on_context_pressure`) POSTed a real `/restart` to the LIVE harness (7373) every full-suite run: mocked `_query_harness_intent`→None + `exceeded:True` but left `_post_harness_restart` unmocked; `_discover_harness_port()` falls back to default 7373 when patch_dirs has no `.harness-port`. Fix: mock the call + autouse urlopen guard (`_block_live_harness_egress`) + `TestNoLiveHarnessRestartLeak12282` regression. test_cycle_post.py 114 passed; full suite green; ran suite live → no new restart-diag capture. QA owns. Vault: [[learning-default-port-fallback-is-live-egress-trap-in-tests]].
-- **#12244** → pending-test (re-marked from stuck in-progress). QA had bounced it to in-progress over durable scope; PM's 05:58 disposition **amended the AC** (cause-agnostic backoff supersedes session-limit-specific; literal labelling routed to #12271) and cleared for DM ship. No new code — re-entered verify/ship lane so it can reach DM.
+- **#12282** → SHIPPED (PR #12341). Root cause of reboot churn: a test POSTed a real /restart to the live harness every full-suite run. Vault: [[learning-default-port-fallback-is-live-egress-trap-in-tests]].
+- **#12244** → SHIPPED (re-marked from stuck in-progress per PM AC-amendment).
+- **#12342** → pending-test (PR #12364). Event-mode EAD work-routing fix: routes approved/open→worker, pending-test→verifier, pending-ship→dm; **DS review caught a back-transition starvation regression** in my first dedup design → refactored to one-entry-per-issue (last-status), so reject loops re-emit. 14 EAD tests + full suite green. QA owns. DS-REVIEW-12342.md committed.
+- **#12363** (NEW) filed — orphan claude/event_poll process accumulation (#12342 ask #3 split-off, medium).
 
 ## Next pickups (queue order, actionable)
-- **#10690** (approved, medium, **gate lifted** 06-02) — Wiki-link cross-ref rework + documentation-linkage sub-skill. NEW sub-skill = LLM-consumed → front-loaded planning + CQ coverage AC (ask PM if missing) + DS-review + manifest/compose. **Next pickup.**
-- **#10686** (approved, medium, **gate cleared** — E6/#10685 shipped) — PRD-E E7 V2 migration smoke (manual, this repo, post-E6).
+- **#10690** (approved, medium, gate lifted) — Wiki-link cross-ref rework + documentation-linkage sub-skill (NEW sub-skill = LLM-consumed → front-loaded planning + CQ coverage AC + DS-review + manifest/compose).
+- **#10686** (approved, medium, gate cleared) — PRD-E E7 V2 migration smoke (manual).
 
 ## Blocked / not mine
-- **#11505** (in-progress, low) — BLOCKED on PM/operator decision: capability-check removal deferred to #10025 (OPEN) by manifest.md:149 + sub-skill-catalog. Thorough blocking analysis posted (06-14 03:40), flagged for PM pipeline-sentinel. No skill action until PM disambiguates.
-- **#12294** (open, P3) — keep .claude-pid authoritative across harness restart. Lower priority follow-up.
-- **#11716** (open, low) — improvement-scan: run_tests.py integration_only target drift.
+- **#11505** (in-progress, low) — BLOCKED on PM/#10025 (capability-check removal). Analysis posted; flagged for PM sentinel.
+- **#12294** (open, P3) — .claude-pid authority across harness restart.
+- **#11716** (open, low) — run_tests.py integration_only target drift.
 
 ## Notes
-- restart-diag armed on live harness (PM); disarm after QA confirms #12282.
-- Reboot-churn cluster: #12244 (backoff, pending-test→ship) + #12282 (test leak, pending-test) + #12271 (progress-based liveness + SessionEnd-reason, design) + #12294 (pid authority, P3).
+- restart-diag armed on live harness (PM); disarm after QA confirms #12282 (shipped).
+- #12342 chicken-and-egg: QA can't be event-routed for #12342's OWN pending-test until the fix ships — QA polling/idle-rescan or manual nudge needed for the first pickup.
+- Reboot-churn cluster status: #12282 shipped, #12244 shipped, #12342 pending-test, #12271 (liveness, design), #12294/#12363 (P3/medium follow-ups).
 
 ## Improvement Scan
 Status: idle
