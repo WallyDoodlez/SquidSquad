@@ -3132,6 +3132,154 @@ class TestReviewFixes(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# EAD status-aware work routing — #12342
+# ---------------------------------------------------------------------------
+
+class TestEADStatusRouting12342(unittest.TestCase):
+    """#12342: the External Activity Detector must route work by status so
+    event-mode QA/DM no longer starve:
+
+    - status:approved / status:open → the issue's role:* worker alias
+    - status:pending-test           → the install's verifier alias
+    - status:pending-ship           → the install's dm alias
+
+    and dedup per (issue, status) so each transition emits once (keying by
+    issue number alone meant an issue emitted at most one assigned-to ever).
+    """
+
+    _REGISTRY = {
+        "skill": ("worker", "skill"),
+        "web": ("worker", "web"),
+        "pm": ("pm", None),
+        "verifier": ("verifier", None),
+        "dm": ("dm", None),
+    }
+
+    def _issue(self, num, status, role="skill", updated="2099-01-01T00:00:00Z"):
+        labels = [{"name": "squidsquad"}, {"name": f"status:{status}"}]
+        if role:
+            labels.append({"name": f"role:{role}"})
+        return {"number": num, "title": f"ISSUE: thing {num}",
+                "labels": labels, "updatedAt": updated}
+
+    def _run(self, issues, det=None, registry=None):
+        """Run _check_for_changes once against a faked `gh issue list`,
+        returning (detector, [emitted assigned-to payloads])."""
+        from harness import ExternalActivityDetector
+        import config as _cfg
+        det = det or ExternalActivityDetector()
+        gh_result = MagicMock()
+        gh_result.returncode = 0
+        gh_result.stdout = json.dumps(issues)
+        emitted = []
+
+        def fake_emit(event_type, role, payload=None, **extra):
+            if event_type == "assigned-to":
+                emitted.append(payload or {})
+
+        with patch("harness.subprocess.run", return_value=gh_result), \
+             patch("harness._emit_event", side_effect=fake_emit), \
+             patch.object(_cfg, "parse_aliases_registry",
+                          return_value=registry or self._REGISTRY):
+            det._check_for_changes()
+        return det, emitted
+
+    def test_pending_test_routes_to_verifier(self):
+        _, emitted = self._run([self._issue(1, "pending-test", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "verifier",
+                         "pending-test must route to the verifier alias, NOT "
+                         "the issue's role:skill worker label (#12342)")
+
+    def test_pending_ship_routes_to_dm(self):
+        _, emitted = self._run([self._issue(2, "pending-ship", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "dm")
+
+    def test_approved_routes_to_worker_label(self):
+        _, emitted = self._run([self._issue(3, "approved", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "skill")
+
+    def test_open_routes_to_worker_label(self):
+        _, emitted = self._run([self._issue(4, "open", role="web")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "web")
+
+    def test_in_progress_emits_nothing(self):
+        """in-progress (worker already on it) and other unmapped statuses must
+        not emit — only approved/open/pending-test/pending-ship route."""
+        _, emitted = self._run([self._issue(5, "in-progress", role="skill")])
+        self.assertEqual(emitted, [])
+        _, emitted2 = self._run([self._issue(6, "planned", role="skill")])
+        self.assertEqual(emitted2, [])
+
+    def test_dedup_per_issue_status_across_transitions(self):
+        """The SAME issue must emit once per STATUS — once at approved (worker),
+        again at pending-test (verifier) — not be deduped to a single lifetime
+        emit (the pre-#12342 per-issue-number dedup bug)."""
+        det, emitted1 = self._run(
+            [self._issue(7, "approved", role="skill",
+                         updated="2099-01-01T00:00:00Z")])
+        self.assertEqual([e["target_alias"] for e in emitted1], ["skill"])
+
+        # Same issue, still approved, newer updatedAt → deduped (no re-emit).
+        _, emitted_dup = self._run(
+            [self._issue(7, "approved", role="skill",
+                         updated="2099-02-01T00:00:00Z")], det=det)
+        self.assertEqual(emitted_dup, [],
+                         "same (issue, status) must not re-emit even when a "
+                         "comment bumps updatedAt")
+
+        # Issue transitions to pending-test → emits once, to verifier.
+        _, emitted2 = self._run(
+            [self._issue(7, "pending-test", role="skill",
+                         updated="2099-03-01T00:00:00Z")], det=det)
+        self.assertEqual([e["target_alias"] for e in emitted2], ["verifier"])
+
+    def test_time_filter_skips_unupdated_issues(self):
+        det, _ = self._run([self._issue(8, "approved", role="skill",
+                                        updated="2000-01-01T00:00:00Z")])
+        # _last_check_epoch advanced to ~now; an old updatedAt is skipped.
+        _, emitted = self._run([self._issue(9, "pending-test", role="skill",
+                                            updated="2000-01-01T00:00:00Z")],
+                               det=det)
+        self.assertEqual(emitted, [])
+
+    def test_alias_for_role_class_resolves_from_registry(self):
+        """Verifier/dm targets are resolved from the install's alias registry,
+        not hardcoded — a non-default alias name must be honored."""
+        from harness import ExternalActivityDetector
+        import config as _cfg
+        reg = {"skill": ("worker", "skill"), "tester": ("verifier", None),
+               "shipper": ("dm", None)}
+        with patch.object(_cfg, "parse_aliases_registry", return_value=reg):
+            self.assertEqual(
+                ExternalActivityDetector._alias_for_role_class("verifier"),
+                "tester")
+            self.assertEqual(
+                ExternalActivityDetector._alias_for_role_class("dm"),
+                "shipper")
+
+    def test_alias_for_role_class_falls_back_to_class_name(self):
+        """If config is unreadable, fall back to the role-class name (a valid
+        bare alias in singleton installs)."""
+        from harness import ExternalActivityDetector
+        import config as _cfg
+        with patch.object(_cfg, "parse_aliases_registry",
+                          side_effect=Exception("config boom")):
+            self.assertEqual(
+                ExternalActivityDetector._alias_for_role_class("verifier"),
+                "verifier")
+
+    def test_is_agent_update_removed(self):
+        """The broken title-prefix `_is_agent_update` skip is gone (#12342) —
+        it matched every SquidSquad issue and made the EAD emit nothing."""
+        from harness import ExternalActivityDetector
+        self.assertFalse(hasattr(ExternalActivityDetector, "_is_agent_update"))
+
+
+# ---------------------------------------------------------------------------
 # /human/queue endpoint — #8704
 # ---------------------------------------------------------------------------
 
