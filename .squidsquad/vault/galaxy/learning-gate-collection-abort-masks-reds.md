@@ -2,13 +2,31 @@
 type: learning
 tags: [skill, testing, run_tests, pytest, ci-gate, drift, auto-discovery]
 created: 2026-06-12
-updated: 2026-06-12
+updated: 2026-06-14
 owner: skill
 status: active
 confidence: high
 source: observation
 links: [decision-deterministic-testing, learning-create-test-environments]
 ---
+
+## Second masking mode — in-suite hard-exit (#12408, 2026-06-14)
+
+A SECOND way `run_tests.py` static reports green over reds, distinct from the
+collection-abort below. Found by QA verifying #12380: the gated run shows an `F`
+at ~52%, then truncates at ~56% with **no final summary and no junit written**,
+yet `subprocess.returncode == 0`. A test executing mid-suite hard-exits the
+process (`os._exit(0)` / `sys.exit(0)` / `pytest.exit(returncode=0)`), bypassing
+pytest's session-finish and exit-code aggregation — every failure before AND
+after it is masked, and the run never completes. Filed #12408.
+
+Reinforces Lesson 4 below and adds: **don't trust returncode alone — also assert
+the session reached completion.** A run that exits 0 without writing its junit /
+summary did not finish; treat an incomplete session as failure. Detect via
+`--junit-xml` presence + testcase count, or a sentinel "expected N tests" check.
+Repro reliably *in-process* (`subprocess.run(..., capture_output=True)`) — naive
+shell `>` redirect races the inherited-fd pytest stream against Python's buffered
+stdout on Windows and truncates the captured log misleadingly.
 
 ## Context
 

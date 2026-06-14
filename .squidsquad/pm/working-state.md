@@ -1,5 +1,19 @@
 # Working State
 
+## >>> UPDATE ~10:25 (Jun 14) — OPERATOR DECISIONS LOCKED; #12342 ACTIVATED <<<
+
+- **Decision 1 = B (staged)**: push event mode to production-ready. **DONE step 1: #12342 ACTIVATED** — restarted harness from main (sha 93fc162c, loads EAD pending-test→verifier / pending-ship→dm auto-routing), killed 9 orphan claudes, re-added qa to .local-config (#11600 band-aid recurs), re-pinned qa loop (59999). Hybrid healthy: skill/dm event (7373), qa loop, all 4 alive. **PM nudging should now be unnecessary** — verify on next pending-test/ship transition. Step 2 (next): skill lands #12409 (qa stability) before re-attempting qa in event mode.
+- **Decision 2 = ping+hooks, SessionEnd-slice first — BUT operator reviews sequence diagram first.** Added **§15.2 "Liveness signal flow" Mermaid sequence diagram** (HARNESS-ARCH v11) showing push emitters + pull ping/pong + SessionEnd-reason + last_seen/timeout reboot decision, with a reading-guide mapping the scope choice to diagram boxes. **#12271 stays pending until operator reviews the diagram.**
+- **Decision 3 = DEFER #12300** (work-discovery process) until event-mode + harness-arch changes land.
+- **Open**: operator reviews §15.2 diagram → then approve #12271 scope → break into tasks. skill: #12409 (qa stability), #11600 (compose alias), #10855 (inert-boot). Optional doc-debt (audit §4 findings) not filed yet.
+
+## >>> UPDATE ~07:45 (Jun 14) — qa CHURNED+ZOMBIED in event mode → stabilized to LOOP (hybrid) <<<
+
+- **qa event-mode instability**: stable ~4h (02:57-07:13) then 4 auto-reboots in 18min (07:13-07:30, all "was running, intent=running" = crashes), then the last respawn (696) went INERT (bootup=False 11min, #10855 zombie state). skill/dm stayed event-stable (qa-specific).
+- **#12244 backoff DID NOT catch it**: deaths were >60s apart → fast-death streak resets → no backoff. Slow reboot loops slip through. Filed **#12409** (skill, high): add frequency-based breaker + SessionEnd-reason capture (#12271 slice) + orphan event_poll/claude accumulation (13 claude/12 event_poll for 4 agents).
+- **STABILIZED qa to LOOP mode** (pinned 59999 + reboot → pid 52188 holding): loop polls/verifies on 30min cadence, no event-mode-sustaining dependency. **Current = HYBRID: skill/dm EVENT (stable), qa LOOP (stable), pm inline.**
+- **Strategic finding for operator**: event mode is NOT yet production-reliable (qa churn+zombie; #12342 routing not activated). Hybrid is the pragmatic stable state. Operator decision needed: push event-mode fixes (#12409 stability + #12342 activation + #12271 liveness) OR accept hybrid / broader loop revert. NOTE: re-introduced a qa loop-pin (the hack I'd cleaned) — intentional, until event-mode-qa is fixed.
+
 ## >>> UPDATE ~05:40 (Jun 14) — REBOOT SAGA CLOSED OUT (all 3 fixes shipped) <<<
 
 - **All shipped to main**: #12282 (trigger/test-isolation leak), #12244 (crash-loop backoff), #12342 (EAD auto-routes pending-test→verifier / pending-ship→dm). Reboot incident fully resolved on the delivery side.
