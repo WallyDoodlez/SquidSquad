@@ -523,7 +523,7 @@ Previously the health-poll respawn path re-spawned a dead `intent=running` agent
 
 ## 14. Proposed simplification: `wt → claude` direct spawn
 
-> **Scope reminder:** §§1–13 describe the harness as it exists in code today. §14 is a **proposed simplification — not implemented**. The current process tree (with `thin_launcher.py` as a load-bearing intermediate) is documented in [AGENT-RUNTIME.md §4.2](AGENT-RUNTIME.md) and remains authoritative for the current runtime. AGENT-RUNTIME describes the current state; this section describes a target. If §14 lands, AGENT-RUNTIME §4.2 ships an updated process tree in the same change.
+> **Scope reminder:** §§1–13 describe the harness as it exists in code today. §14 is a **proposed simplification — not implemented**; implementation (the landing outline) is tracked in **#12416**. The current process tree (with `thin_launcher.py` as a load-bearing intermediate) is documented in [AGENT-RUNTIME.md §4.2](AGENT-RUNTIME.md) and remains authoritative for the current runtime. AGENT-RUNTIME describes the current state; this section describes a target. If §14 lands, AGENT-RUNTIME §4.2 ships an updated process tree in the same change.
 >
 > **Platform scope:** the simplification described in this section is Windows-specific (`wt.exe`/`cmd.exe`/`thin_launcher.py` chain). POSIX (macOS/Linux) boots agents via the system terminal emulator + direct `claude` invocation today — the equivalent simplification on POSIX is a no-op or a much smaller delta; we treat POSIX-side cleanup as a separate follow-up if §14 lands.
 
@@ -606,17 +606,6 @@ Supporting prototypes under `references/experiments/`:
 2. **`resolve_claude.py` shim variants not end-to-end-tested.** The prototype handles the multi-line `%dp0%` Windows shim (verified on the dev machine), the older one-line `%~dp0` form, `.bat`, `.ps1`, and POSIX bash shims. Only the multi-line form was validated against a real install. Integration tests against the other variants need to land alongside.
 3. **Operator ergonomics gap.** A lingering Windows Terminal tab (owned by `WindowsTerminal.exe`, not the short-lived `wt.exe` CLI client) after its child claude process exits. The tab persists in the daemon until the user closes it. This is the operator-confusion source that triggered this investigation. Solve this either by (a) making the spawned command a wrapper that closes the tab on child exit, or (b) configuring `wt`'s profile to non-persistent mode. Trivial change, but needs to land alongside #14 or the operator confusion stays.
 
-### 14.6 Implementation outline
-
-In landing order:
-
-1. Productize `references/experiments/resolve_claude.py` into `references/scripts/resolve_claude.py`. Add tests for each shim variant (real or fixture).
-2. Add helper to `boot_remote.py` (Windows) that constructs the `wt new-tab … claude.exe …` argv. POSIX equivalents follow.
-3. Move the singleton check into `harness.py:start_agent` (uses existing `AgentState`).
-4. Move post-spawn PID resolution into `boot_remote.boot_agent` (process snapshot + filter). The parameter rename `role` → `alias` per the §3 caveat / #10358 lands in the same change.
-5. Cut the spawn path over to direct-claude. Validate live on `skill` agent first.
-6. Once stable: delete `thin_launcher.py`, `tests/test_thin_launcher_10101.py`, and dead references in `boot_remote.py`.
-
 ---
 
 ## 15. Agent liveness model (progress signals)
@@ -653,16 +642,15 @@ sequenceDiagram
     participant H as Harness
     participant A as Agent
 
-    H->>A: nudge / assign work
-    Note over H,A: heartbeat = the agent's own activity
+    H->>A: nudge or assign work
+    Note over H,A: heartbeat is the agent's own activity
     loop each tool call while working
         A->>H: PreToolUse - tool, task, phase - sets in-flight, heartbeat
-        A->>H: PostToolUse / PostToolUseFailure - clears in-flight, heartbeat
+        A->>H: PostToolUse or PostToolUseFailure - clears in-flight, heartbeat
     end
     A->>H: cycle_post - heartbeat
     A->>H: SessionEnd - reason recorded
-
-    Note over H: After dispatch, expect activity within a window.<br/>A hook explains the silence - mid-call, waiting via Notification, rate-limited via StopFailure - do NOT kill.<br/>Silent and no explaining hook - dead, reboot; SessionEnd reason picks respawn / backoff / stop.<br/>Idle with no work dispatched - not actively checked. PID used only to kill.
+    Note over H: after dispatch, dead only if silent AND no hook explains it - see 15.1 for the pause states
 ```
 
 ### 15.4 `SessionEnd` reason
@@ -735,6 +723,7 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 
 ## 17. Revision log
 
+- **2026-06-14 (v19)** — Moved §14.6 "Implementation outline" out of the doc into its task ticket **#12416** (build-sequencing belongs in the task, not the arch doc); §14 scope note now points to #12416. Re-fixed the §15.3 Mermaid Note (removed `;` / `/` and the multi-clause note that broke GitHub's parser — the decision logic stays in §15.1 prose; the diagram shows the flow + a one-line pointer).
 - **2026-06-14 (v18)** — Context pressure handled by Claude Code **auto-compaction** (operator), not a harness restart: §15.1 adds "compacting" as a pause state and a note that the agent auto-compacts in place (session continues; tuned per-clone via `CLAUDE_CODE_AUTO_COMPACT_WINDOW` / `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` + a `## Compact Instructions` CLAUDE.md block); §15.4 exit-42 is now intent-flip only; §16 `PreCompact`/`PostCompact` reframed as compaction telemetry. Also fixed the §15.3 Mermaid diagram render (removed parens in the participant alias and the `→`/`·`/`•` glyphs that broke GitHub's renderer).
 - **2026-06-14 (v17)** — Scrubbed §15/§16 of back-references and motivational/incident framing (operator): removed "the original incident", "previously lacked", "currently cause-agnostic", "upgrades #12244 / answers #12409", and the "recommended first landing" sequencing. §15/§16 now read purely as the target architecture; delta, migration, and landing order live in #12271.
 - **2026-06-14 (v16)** — §15 **pause-aware guard** (operator): generalised the in-flight guard so silence is a death signal *only when no hook explains it*. Three hook-reported pause states never lose life — mid-tool-call (`Pre`/`PostToolUse`, bounded by `tool_call_max`), waiting on input/permission/elicitation (`Notification`), and rate-limited/API-error (`StopFailure` → **back off, do not reboot** — rebooting hits the same limit, the original incident). Rule is now "no activity AND no explaining hook → dead." Intro, §15.1, and diagram updated.
