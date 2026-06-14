@@ -5,59 +5,41 @@
 - **Quiet Cycle Counter**: 3 (doc-scan GATED — see below)
 
 ## Improvement Scan
-Status: **GATED** — doc-improvement-loop issue-gate trips on open #10540 (status:open, role:dm). Per gate + [[feedback_bug_gate_interpretation]] (open/in-progress block; pending do not), skip scan until #10540 resolved/routed. #10540 is NOT DM-actionable (no open→in-progress authority) → effectively parked on PM routing; scan stays gated meanwhile.
+Status: **GATED** — doc-improvement-loop issue-gate trips on open #10540 (status:open, role:dm). Per gate + [[feedback_bug_gate_interpretation]] (open/in-progress block; pending do not), skip scan until #10540 resolved/routed. #10540 is NOT DM-actionable (no open→in-progress authority) → parked on PM routing; scan stays gated meanwhile.
 Last completed: R73 (cycle 1715, 2026-05-31) — 0 findings, full 7-file rotation. rotation_count=74.
 Next scan after: #10540 routed/closed (then quiet-gate resumes).
 
-## Session Context (LOOP-mode, boot @ 2026-06-13 14:05)
-- **Wake mode: LOOP** — `/loop 30m` (cron fe435afd, session-only, 7-day expiry). Mode sticky.
-- **CORRECTED @ cycle 421 (22:3x): harness is UP & HEALTHY on :7373** (2h+ uptime, my c416 code). My boot probed :59999 and failed → loop mode — but that is **PM's DELIBERATE pin, NOT a dead harness.** `.squidsquad/pm/pin-keeper.sh` writes `.harness-port=59999` (dead port) to skill/dm/qa clones every 30s so boots fall to LOOP (functional) and dodge EVENT mode (INERT — #10855). Loop mode IS the intended/working mode this session. **DO NOT "self-heal" .harness-port to 7373** — that breaks the pin (I did this in c421; pin-keeper + I reverted it within 30s, no harm).
-- #10855 (agents boot INERT in event mode: spin, never arm event_poll, never cycle) is the SOLE event-mode blocker, `blocked:human-action`, PM-driven. #11587/#11641 (shipped this session) fixed the reboot loop but NOT the inert boot.
-- **Operator decision (22:35): leave harness alone; DM keeps shipping via loop session.** Do not restart harness/agents (PM owns pin + #10855 workflow).
-- Version: **v0.44.0**; Shipped Since Last Bump: **15/10** (config.md authoritative — OVER threshold).
-- Local-merge ship path in use (loop mode, no harness /merge from this session) — see #10540 / [[learning-dm-local-merge-when-harness-down]].
+## Session Context (EVENT-mode, boot @ 2026-06-14)
+- **Wake mode: EVENT** — boot probe succeeded on :7373 (port file = 7373, NOT the old 59999 pin). Prior session's PM port-pin (forced LOOP via dead :59999) is GONE this session. Mode is sticky — do NOT re-probe mid-session, do NOT self-heal .harness-port.
+- Booted cleanly: drained 5 boot events, queried forge, armed Monitor — i.e. NOT inert. #10855 (event-mode inert boot) either resolved or doesn't bite this manual-spawn path. Functional in event mode.
+- Cursor advanced to `15399ccc39154b8f` (past all 5 boot-drain events; all terminal/no-op: #11745 already shipped, #87654 skill-lane, #11511 now shipped+closed).
+- Version: **v0.44.0**; Shipped Since Last Bump: **17/10** (config.md authoritative — OVER threshold).
 
-## >>> BUMP GATE OPEN (13/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
-- Counter **13/10**, over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ cycles 415 & 416 — no green-light yet; keep shipping, counter accrues until bump resets it.
+## SHIPPED THIS SESSION (2026-06-14)
+- **#12282** (PR #12341, test-isolation leak fix; test-only tests/test_cycle_post.py; merge 3a37845). Verifier PASS + live E2E (zero /restart leaks). Transition-only ship (qa-side pre-merged). Counter 15→16.
+- **#12244** (PR #12293, harness crash-loop backoff P0 restart-safe intent clock + P2 fast-death backoff; harness.py+test_harness.py; merge bb1af12). Verifier PASS ×2 after PM AC-amendment; PM cleared. Transition-only ship. Counter 16→17. Deferrals tracked: session-limit label→#12271; P3→#12294.
+- Both internal-reliability → CHANGELOG batched to bump (added to held list below). Neither merge touched config.md (counter safe). No template/sub-skill change → no reboots.
+
+## >>> BUMP GATE OPEN (17/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
+- Counter **17/10**, well over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ prior cycles 415 & 416 — no green-light yet. Not re-flagging (avoid churn; operator is aware). Hold until explicit PM/operator signal.
 - On green-light: bump minor v0.44.0→v0.45.0 (config.md + SKILL.md frontmatter + CHANGELOG.md), git tag, push, reset counter→0.
-- **CHANGELOG held (operator/internal-reliability framing; all 13 are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511), WIP-preservation across reboots (#12142).
+- **CHANGELOG held (operator/internal-reliability framing; bump-window items are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511), WIP-preservation across reboots (#12142), harness crash-loop backoff (#12244), test-isolation /restart-leak fix (#12282).
 
-## SHIPPED THIS SESSION (9 items)
-- **cycle 433** — #12142 (cycle_pre preserves WIP across reboots, PR #12270). **Transition-only ship** — PR was already merged by qa during verification (mergeCommit d1e0f4ff7); I did pending-ship→shipped + counter. Merge did NOT touch config.md → no regression. Counter 14→15. Process-noted that the DM merge step was bypassed (qa-side merge).
-- **cycle 429** — #11511 (real-conflict detection + state-file pre-commit guard, PR #12223). Verifier PASS. Counter 13→14.
-  - **Counter-regression reconcile**: branch had stale Shipped-Since=12 (pre-guard Part-1 artifact); main=13. Did `merge --no-commit` → `checkout HEAD -- config.md` → set 14 → commit. config.md NOT in .gitattributes merge=ours (the gap). **@pm flagged**: consider adding `.squidsquad/config.md merge=ours`.
-- **cycle 413** — #11503 + #11657 via PR #11683 (bundle). Counter 6→8.
-- **cycle 415** — #11641 (PR #11715) + #11723 (PR #11729). Counter 8→10.
-  - #11723 Part-2 only. **@pm flagged**: Parts 1 (boot_remote env-honor) & 3 (boot-bootstrap CQ) uncovered — PM to file follow-ups.
-- **cycle 416** — #11587 (Windows ConnectionReset, PR #11722) + #11640 (unregistered-clone refusal, PR #11709). Both verifier-PASS (#11587 verified LIVE), local-merged serially. Counter 10→12.
-  - #11640 closes only the DEFENSIVE half of #11600; clone-registration half stays OPEN on #11600.
-- **cycle 417** — #11745 (self-closing agent terminals, Windows Option A, PR #11811). Verifier PASS. Counter 12→13.
-  - **@pm flagged**: macOS/Linux terminal-orphan handling is follow-up — PM to file before auto-close (same as #11723).
+## Queue state (boot @ 2026-06-14)
+- **pending-ship: 0 open** — `list-tasks dm --status pending-ship` returns ~30 results but ALL are CLOSED issues carrying stale `status:pending-ship` labels (verified get-state on #605/#9965/#11511 = CLOSED). The `--status` filter does NOT exclude closed; the no-filter `list-tasks dm` (open-only) returns 17, all status:pending. So real DM delivery queue = EMPTY.
+- 17 open DM-relevant tasks all status:pending (await PM approval — not DM-actionable).
+- 1 open DM-owned issue: #10540 (local-merge fallback; awaiting PM routing).
 
 ## Watch / carried
-- **qa-side merges bypassing DM gate — RECURRED (c435)**: #12142/PR#12270 (c433) + #12244/PR#12293 (qa c136 "PASS+merged"). Skips DM counter-reconcile (caught real 13→12 on #11511), citation gate, CHANGELOG capture. No regression slipped yet. **Raise with PM AFTER the P0 firefight (#12244/#12282/#12271) settles** — fast-merge may be intentional mid-emergency. Meanwhile: on any transition-only ship, ALWAYS `git show <mergeCommit> --stat` for config.md before trusting the counter.
+- **qa-side merges bypassing DM gate** (observed prior session on #12142/#12244): skips DM counter-reconcile, citation gate, CHANGELOG capture. On any transition-only ship, ALWAYS `git show <mergeCommit> --stat` for config.md before trusting the counter. Raise with PM once P0 firefight settles (may be intentional mid-emergency).
 - **#10540 OPEN** (DM-domain: local-merge fallback; awaiting PM routing to encode degraded-mode in delivery-packaging.md). DM cannot self-pickup (open→in-progress needs worker authority).
 - **#11723 Parts 1 & 3** — flagged @pm to file follow-ups (boot_remote env-honor + test-fixture isolation; boot-bootstrap CQ).
-- event_poll.py port-file bug — likely SUBSUMED by #11723 Part-2 (liveness walk + 7373 default). Verify before re-filing.
 - #11503/#11657 final-2 tests gate on OPEN #10360 (status:pending, role:pm).
 - pending DM-tracker approvals #8702/#7447/#9933 (awaiting PM).
-- Harness UP on :7373; #11587/#11641/#11640/#11745 fixes are live in its running code (booted @ c416 sha; #11745 lands on next harness restart). Reboot loop fixed; event-mode inert (#10855) is the remaining gap.
-
-## Other agents (corrected understanding, cycle 421)
-- skill/pm/qa showed `bootup_complete:false` in harness /status — these are EVENT-mode inert zombies (#10855), not a dead harness. PM keeps functional agents in LOOP mode via the pin. There is also a harness-spawned inert DM (pid 17008) in THIS clone alongside my working loop session (three-populations) — harmless while it's inert; PM/operator own any cleanup.
-- Net: team works in LOOP mode (proven — my 7 ships + PM control proof). Not "stalled" — gated on #10855 for EVENT mode only.
-- While other agents are inert (event-mode #10855) and only restarted-into-loop ones work, pending-ship inflow is sporadic — depends on PM/skill/qa being run in loop mode. DM queue may be dry for stretches; that's expected, not a stall.
-- **CHURN DISCIPLINE**: on identical no-change quiet cycles, SKIP the commit (just pull+scan+idle) — don't emit a counter-bump commit every 30m. Only commit when something material changes (new pending-ship, forge signal, operator action).
-
-## Team mode (PM cycle 2351, 2026-06-13 ~16:4x)
-- PM attempted EVENT-mode switch after reboot fix landed durable on main → **event mode INERT (#10855, role:skill, pending-test)**; PM reverted team to working LOOP mode; lock-watchdog retired.
-- **POLLING is the correct/expected stance** for this session and near future — event mode blocked until #10855 resolves. Do not re-probe mode mid-session (sticky).
+- `.squidsquad/config.md merge=ours` gap — flagged @pm prior session (config.md not in .gitattributes merge=ours → counter-regression risk on merges).
 
 ## Next-cycle notes
-- pending-ship queue EMPTY (cycles 418–420 quiet). Doc-scan would have fired at counter 3 (c420) but is GATED by open #10540.
-- c420 productive action: posted consolidated 7-ship local-merge evidence on #10540 to help PM route it (last DM comment was c411).
-- Next /loop fire (~30m): pull, re-scan pending-ship first. Doc-scan stays gated until #10540 moves.
-- Scan timing race: qa transition → pending-ship can lag the git push by seconds; if a fresh qa-ship commit appears in `git log origin/main` but the label scan shows 0, re-scan / check the issue directly before declaring quiet.
-- **Primary next action: ship bump v0.45.0 ON operator green-light only (counter 12/10).**
-- Boot pull pattern: use `git merge --ff-only origin/main || git merge --no-ff origin/main` (cycle-416 boot did an unnecessary --no-ff bubble because the `--is-ancestor` guard mislabels behind-state as DIVERGED).
-- Avoid blind `git stash pop` — old cruft stashes exist; edit working-state directly.
+- Event mode: react to NUDGE → GET /events/for/dm?since=<cursor> → forge-read → act → ack-cursor per event.
+- On a pending-ship NUDGE: run pr-merge-wait readiness check (CI/review/mergeable), then ship per delivery-packaging.
+- Doc-scan stays gated until #10540 moves.
+- Primary deferred action: ship bump v0.45.0 ON operator green-light only (counter 15/10).
