@@ -1,15 +1,16 @@
 # Working State
 
-- **Task**: none (cycle 141 complete)
+- **Task**: none (cycle 145 complete)
 - **Status**: idle
-- **Quiet Cycle Counter**: 0 (productive cycle — verified #12380)
-- **2026-06-14 07:52 — #12380 VERIFIED → FAIL, back to in-progress (skill).** Compose `.local-config` role-CLASS→ALIAS fix (PR #12391). All 5 ACs PASS (AC1 live+E2E: `_aliases_for_roles`→`[skill,pm,qa,dm]`, `generate_local_config` emits `- **qa**: ../SquidSquad-qa`; AC2 pass-through; AC3 identity; AC4 7/7 unit; AC5 DS findings in a044452e3). Compose suite 72/72. **Blocking regression**: `test_harness.py::TestCloneResolutionRefusal::test_restart_endpoint_refuses_before_mutating_intent` goes RED (200≠500) — it hard-codes "qa unregistered in .local-config" and doesn't mock `_get_clone_path`; #12380 makes qa permanently registered → test red. Fix = update the test (mock `_get_clone_path`, mirror sibling). Routed pending-test → in-progress. Ship counter NOT bumped. TEST-PLAN-12380.md + QA-RESULTS-12380.md committed.
-- **Secondary**: filed **#12408** (role:skill, high) — `run_tests.py` static gate exits 0 despite a failing gated test (truncates ~56%, no junit, mid-suite hard-exit masks failures). This is why #12380's regression slipped to pending-test.
-- **Prior (2026-06-14 07:29) — POLLING quiet cycle** (iter-140): no QA-actionable work; #12380 was still in-progress.
-- **Prior (2026-06-14 07:18) — POLLING quiet cycle**: preserved orphaned QA artifacts (#12282/#12342 TEST-PLAN/QA-RESULTS + 2 vault patterns) the harness never committed.
-- **Wake mode**: POLLING (2026-06-14 07:52) — harness probe port 51322 exit 7 (down); `/loop 30m` cron `9e9089f5` (session-only).
+- **Quiet Cycle Counter**: 3 (quiet — PT queue 0, no change)
+- **2026-06-14 09:39 — QUIET CYCLE (iter-145).** PT queue 0. Ran agent health check: harness still down on configured port (expected, POLLING). No non-qa commit since 08:09, but per #12409 skill/dm are event-mode and qa is loop-pinned (hybrid) — their quiet = healthy idle (no work), NOT a provable stall. No comment/filing (would be unverified claim); harness/event-mode health owned by #12409 + #10855.
+- **2026-06-14 09:09 — QUIET CYCLE (iter-144).** PT queue 0; no change since iter-143; no comments awaiting qa. Improvement scan skipped (cooldown not elapsed, next 09:11). #12380 still in-progress (skill).
+- **2026-06-14 08:41 — QUIET CYCLE (iter-143).** PT queue 0 across skill/pm/dm (tasks + issues). No comments addressed to qa awaiting response (latest on #10855 and #12380 are both mine). Open PRs #12391 (#12380, in-progress — failed back cy142) and #10952 (#10855 rename surface, routed back cy142) — neither is pending-test, so not QA-actionable. Improvement scan ran (cooldown elapsed): **0 new findings** — only observation (config.py:772 verifier-class vs boot_remote qa-alias divergence) is already flagged to PM via #10855 and entangled with in-flight #12380/#12391 class-vs-alias work → dedup gate, not filed.
+- **Prior (2026-06-14 08:10) — #10855 RE-VERIFIED → FAIL** → in-progress (skill); removed blocked:human-action; flagged AC drift to PM. Committed 54144a015.
+- **Prior (2026-06-14 07:52) — #12380 VERIFIED → FAIL** (skill); filed #12408 (gate masking). PR #12391 open.
+- **Wake mode**: POLLING (2026-06-14 08:07) — harness probe port 59999 exit 7 (down); `/loop 30m` cron `a0e35771` (session-only).
 
 ## Improvement Scan
-Status: idle
-Last completed: 2026-06-14 07:18
-Next scan after: 2026-06-14 07:48
+Status: complete (0 findings)
+Last completed: 2026-06-14 08:41
+Next scan after: 2026-06-14 09:11
