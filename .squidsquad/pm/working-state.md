@@ -212,3 +212,10 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - **#12244 FILED** (high, skill): harness must detect session-limit exit and BACK OFF (pause respawn until reset), not hammer-reboot + burn quota.
 - **OPERATOR/ACCOUNT matter**: the Claude plan is hitting session caps with 4 concurrent agents. Options: wait for quota recovery (skill down meanwhile), check/upgrade plan, or reduce concurrent agent count. Restart skill once quota recovers.
 - Session real wins (unrelated, shipped): #11587+#11641 on main; #11745 shipped; #11511 committed→pending-test (PR #12223).
+
+## >>> 23:00 — REBOOT ABILITY DISABLED (operator directive) <<<
+- Operator: quota already reset; quota was NOT the reboot cause (recent symptom). Directive: turn off harness booting/reboot logic entirely, then revisit harness arch for the gap.
+- DONE: harness restarted with `--no-auto-start --no-auto-reboot`. Harness CANNOT auto-reboot or auto-spawn any agent now. Reboot churn structurally impossible.
+- dm(17008)/qa(40328)/pm(40440) ADOPTED (same pids, running). If one dies, harness will NOT respawn (manual control). skill DOWN (0 procs, not spawned).
+- CAVEAT: this is a runtime flag state — if harness is restarted WITHOUT the flags, reboot ability returns. To make durable, the flags/behavior would need to be the default or config-gated.
+- STEP 2 (open): find the REAL skill-reboot root cause. quota RULED OUT (symptom). Persistent signal = skill claude exits EARLY (no transcript since 16:04) every few min, loop mode, low context (8%). Now that reboots are OFF + quota reset, a CONTROLLED single manual skill spawn can capture the real exit code/stderr without churn. Then review harness arch gap (#11612/#11586 cluster).
