@@ -163,3 +163,10 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - REVERTED: re-pinned skill+dm+qa to 59999 loop; restarted skill → immediately WORKING (current-state "implementing #11511" fresh). Loop=functional, event=inert. Pin-keeper relaunched (b1pcn6g7h, skill+dm+qa). Lock-watchdog RETIRED (reclaim-fn on main; reboot crash can't recur).
 - **EVENT MODE BLOCKER = #10855 (inert boot).** Reboot fixes necessary-not-sufficient. Switch to event only after #10855 fixed. Operator informed.
 - Team now: skill/dm/qa working LOOP (pinned), reboot durably fixed, scaffolding reduced to just pin-keeper (for inert-dodge, not reboot).
+
+## >>> UPDATE 20:27 — skill REBOOT CHURN diagnosed: #11511 Part 2 no-progress loop (operator-flagged) <<<
+- Operator: "skill rebooting many times still". CORRECTED my earlier "progressing" read: skill has completed ZERO iterations since iter-470 (16:05) = ~4h churn.
+- ROOT: #11511 Part 1 committed (82e8d4ba6, 16:38). Part 2 churning ~4h with NO commits → each cycle: start Part 2 → context fills (gates+DS-review output) → exit-42 reboot → uncommitted Part 2 LOST → restart from scratch → repeat. context-pressure=8 only because it resets post-reboot. NOT a reboot-infra bug (#11641/#11587 fixed).
+- POSSIBLE deeper angle (skill to check): does cycle_pre git-sync discard uncommitted WIP each cycle? If so, framework issue. Either way fix = commit incrementally.
+- ACTION: commented #11511 (PM pipeline-sentinel) — decompose Part 2 into small committable sub-steps + checkpoint working-state every Step 5, so reboots RESUME not restart. skill's lane.
+- Reboots are harmless to stability (no crash/corruption) but Part 2 won't finish until chunked+checkpointed. Watching for iter-471+.
