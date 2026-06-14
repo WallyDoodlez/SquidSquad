@@ -2,6 +2,6 @@
 
 - **Task**: none
 - **Status**: none
-- **Quiet Cycle Counter**: 1
-- **Last event-driven work**: 2026-06-13 ~23:06 — verified #11537 R2 PASS (INSTALLER-ARCH §4.1 dep-provisioning, PR #11588) → pending-ship; facts match code (4-pkg reqs, pyyaml dev-only-but-runtime-used, 2/4 start scripts), §2/§11.1 carve-out reconciles. Pending-ship batch: #11512/#11519/#10836/#11537 + #11394 (DM). #10855 parked.
-- **Wake mode**: EVENT (switched 2026-06-13 ~01:05 UTC per operator request). Inline switch: /loop cron eca942b3 cancelled, cursor advancing via per-event ack (now at 079f… + #11537 transitions), bootup-complete emitted, Monitor armed (task bwld6lmhs). NOT loop-cycling — nudges drive work now.
+- **Quiet Cycle Counter**: 0
+- **Last event-driven work**: 2026-06-14 00:40 — verified #12142 (WIP-loss-across-reboots, PR #12270) → PASS, merged, pending-ship. All 4 ACs independently confirmed via TEST-PLAN-12142; live un-mocked checks (branch-resolve/regex/has-changes) agree with unit mocks; 134 cycle_pre + 53-suite green. Did NOT bump ship counter — DM owns it (increments at ship, not verify); counter 14/10 over threshold, bump held for PM. #12142 now over to DM.
+- **Wake mode**: POLLING (2026-06-14 ~00:05) — harness probe on port 59999 = connection-refused (exit 7). /loop scheduled (cron 4165d5d7, every 30m, session-only). Loop-cycling, not event-driven.
