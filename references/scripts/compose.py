@@ -1841,18 +1841,41 @@ def _aliases_for_roles(roles: list) -> list:
         return list(roles)
     alias_keys = set(registry)
     by_class: dict = {}
+    ambiguous: set = set()  # role-classes with >1 alias (multi-instance workers)
     for alias, rc_tuple in registry.items():
         rc = rc_tuple[0] if isinstance(rc_tuple, (list, tuple)) else rc_tuple
-        by_class.setdefault(rc, alias)
+        if rc in by_class and by_class[rc] != alias:
+            ambiguous.add(rc)  # first-seen wins; flag for a resolution-time warn
+        else:
+            by_class[rc] = alias
     resolved = []
     for role in roles:
         if role in alias_keys:
             resolved.append(role)            # already an alias
         elif role in by_class:
+            # Warn ONLY when actually resolving an ambiguous role-class — not
+            # during the registry scan, else a normal multi-worker install
+            # (two `worker` aliases) would warn on every compose even though
+            # `worker` is never passed here (DS-REVIEW Finding 2).
+            if role in ambiguous:
+                print(f"WARNING: role-class {role!r} has multiple aliases; "
+                      f".local-config keying uses first-seen {by_class[role]!r}",
+                      file=sys.stderr)
             resolved.append(by_class[role])  # role-class → its alias
         else:
             resolved.append(role)            # unknown — leave as-is
-    return resolved
+    # Dedup, preserving first-occurrence order (DS-REVIEW Finding 1). A legacy
+    # `workers: qa, ...` field lists the verifier alias `qa` AND _collect_all_roles
+    # still appends the role-class `verifier` (its membership test is by literal
+    # string), so both resolve to `qa` — without this, .local-config would carry
+    # two `- **qa**:` lines.
+    seen = set()
+    deduped = []
+    for r in resolved:
+        if r not in seen:
+            seen.add(r)
+            deduped.append(r)
+    return deduped
 
 
 

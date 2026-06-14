@@ -461,6 +461,20 @@ class TestAliasesForRoles12380:
             out = compose._aliases_for_roles(["skill", "pm", "verifier", "dm"])
         assert out == ["skill", "pm", "verifier", "dm"]
 
+    def test_no_duplicate_when_workers_lists_verifier_alias(self):
+        """DS-REVIEW-12380 Finding 1: a legacy `workers: qa` lists the verifier
+        alias, and _collect_all_roles still appends the role-class `verifier`
+        (its membership test is literal). Both resolve to `qa` — the output
+        must dedup to a single `qa`, not produce two `- **qa**:` lines."""
+        registry = {"qa": ("verifier", None), "skill": ("worker", "skill"),
+                    "pm": ("pm", None), "dm": ("dm", None)}
+        with self._patch_registry(registry):
+            out = compose._aliases_for_roles(
+                ["qa", "skill", "pm", "verifier", "dm"])
+        assert out == ["qa", "skill", "pm", "dm"], (
+            f"verifier+qa must collapse to one qa, got {out}")
+        assert out.count("qa") == 1
+
     def test_end_to_end_local_config_has_qa_not_verifier(self, tmp_path):
         """Integration: resolved aliases produce a `qa` key with the
         ../project-qa default path, and no `verifier` key."""
