@@ -1,5 +1,12 @@
 # Working State
 
+## >>> UPDATE ~00:45 (Jun 14) — REBOOT TRIGGER CAUGHT (likely): skill's #12142 suite leaks /restart to LIVE harness → #12282 <<<
+
+- **Armed restart-diag CAPTURED 2 restart requests** (00:35:34, 00:38:04, ~2.5min apart). Both: `current-state='implementing|implement-tasks — #12142 running full suite'`, intent=running, **ctx exceeded=FALSE (53<70)**. → DEFINITIVELY not cycle_post context-pressure (the only documented /restart caller). Something POSTs real /restart to LIVE harness :7373 DURING skill's #12142 full-suite run.
+- **HYPOTHESIS (strong, not yet confirmed — skill's RCA)**: a #12142 test exercises restart/cycle_post/squidsquad_cli-restart WITHOUT mocking network/port → discovers LIVE harness (default 7373) → real restart. (test_cycle_post.py::TestPostHarnessRestart IS properly mocked; culprit elsewhere — integration/E2E or in-suite harness on 7373.) This = the engine of the "crazy reboots": leak→restart→force-kill→respawn→re-run suite→loop (~2.5min cadence). Currently non-fatal (162aa29a2 refuses under no-auto-reboot) but live.
+- **Filed #12282** (role:skill, high) with the captured evidence + repro + RCA lead. Engine of the reboot churn; complements #12244 (backoff) + #12271 (progress-liveness makes reboot robust regardless of trigger).
+- diag stays ARMED on live harness. Per minimal-repro discipline: reported OBSERVED behavior as fact, hypothesis as lead (not declared root cause).
+
 ## >>> UPDATE 00:32 (Jun 14) — trigger NOT reproduced; qa zombie recovered; liveness redesign filed #12271 <<<
 
 - **skill stable ~1hr** (pid 55000, harness up 45m) — **ZERO restart-diag captured** since the hatch-fix harness restart. The single 23:29:57 restart did NOT recur. Conclusion: the "crazy reboots" trigger is **intermittent/state-dependent** (stale intent=restarting wedge + no-backoff amplification during quota-burn), NOT a continuously-firing bug. **Diagnostic left ARMED** in running harness (restart_agent logs ctx+current-state on any /restart) → auto-captures if it recurs. Honest status: STOPPED, not yet root-caused, instrumented.
