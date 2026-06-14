@@ -35,6 +35,7 @@ Next scan after: #10540 routed/closed (then quiet-gate resumes).
   - **@pm flagged**: macOS/Linux terminal-orphan handling is follow-up — PM to file before auto-close (same as #11723).
 
 ## Watch / carried
+- **qa-side merges bypassing DM gate — RECURRED (c435)**: #12142/PR#12270 (c433) + #12244/PR#12293 (qa c136 "PASS+merged"). Skips DM counter-reconcile (caught real 13→12 on #11511), citation gate, CHANGELOG capture. No regression slipped yet. **Raise with PM AFTER the P0 firefight (#12244/#12282/#12271) settles** — fast-merge may be intentional mid-emergency. Meanwhile: on any transition-only ship, ALWAYS `git show <mergeCommit> --stat` for config.md before trusting the counter.
 - **#10540 OPEN** (DM-domain: local-merge fallback; awaiting PM routing to encode degraded-mode in delivery-packaging.md). DM cannot self-pickup (open→in-progress needs worker authority).
 - **#11723 Parts 1 & 3** — flagged @pm to file follow-ups (boot_remote env-honor + test-fixture isolation; boot-bootstrap CQ).
 - event_poll.py port-file bug — likely SUBSUMED by #11723 Part-2 (liveness walk + 7373 default). Verify before re-filing.
