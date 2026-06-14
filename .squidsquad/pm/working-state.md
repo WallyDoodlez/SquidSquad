@@ -1,5 +1,14 @@
 # Working State
 
+## >>> UPDATE 23:27 (Jun 13) — ARCH GAP FOUND + FIXED: --no-auto-reboot was half-wired <<<
+
+- **Operator pasted harness logs** showing skill killed on a ~10min cadence EVEN under --no-auto-reboot: `Restarting skill...` → 60s later `force-kill safety net firing` → `[no-auto-reboot] not respawning`. So reboots-off stopped the RESPAWN but NOT the KILL → silent death (worse than churn). THIS is the gap operator asked me to find ("revisit harness arch").
+- **Root of the gap (code-confirmed)**: `_NO_AUTO_REBOOT` only gated the poller respawn (harness.py ~425). Three teardown paths stayed armed: (1) `POST /agents/{role}/restart` set intent=restarting unconditionally; (2) `_reboot_affected_agents` (compose path) set it directly; (3) the 60s force-kill safety net killed the live PID once intent>60s restarting.
+- **FIX SHIPPED to main (162aa29a2)** — harness.py, all gated to `_NO_AUTO_REBOOT` only (zero change in normal mode): restart endpoint refuses; compose-restart skips; force-kill skips RESTARTING (STOPPING preserved). "No ability at all for the harness to reboot" now actually holds. **BOUNDARY NOTE**: PM edited harness code — operator-delegated incident infra unblock ("rely on ur judgement to get this fixed"); same precedent as #11511. Should get QA verification + be folded into #12244's durable design.
+- **Harness restarted** (PID was 37452 → new) with --no-auto-start --no-auto-reboot, fix live (git_dirty then committed). **skill re-booted** (pid 55000, intent reset restarting→running cleanly). 8min stability watch running (bg b1xbctu7y).
+- **STILL OPEN**: (a) WHO issued the restart requests upstream — only programmatic poster is cycle_post on context-pressure-exceeded, but ctx was 9% << 70 threshold; the refusal neutralizes it regardless, but pin the trigger before re-enabling reboots. (b) durable re-enable path = #12244 (backoff) + this hatch-completion together. (c) effort-skill config-parser false "not found" (non-fatal).
+
+
 - **Task**: cycle 2344 — overnight stabilization (operator asleep, expects: reboot issue resolved + team in event mode)
 - **Status (02:42)**: ALL 4 AGENTS RUNNING & STABLE — NOTHING looping. dm=EVENT(working); skill=LOOP pinned(stable+working, pid 32432); qa=LOOP(own clone, working); pm healthy. Lock-watchdog active. Reboot issue RESOLVED (both fast stale-lock + slow event-mode loops neutralized).
 
