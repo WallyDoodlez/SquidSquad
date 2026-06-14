@@ -655,6 +655,43 @@ The liveness check becomes: "did any emitter touch `last_seen` within `liveness_
 
 So pull-ping and push-heartbeat are **complementary, not alternatives**: the ping catches frozen/unresponsive processes on the harness's schedule; the hooks catch a responsive-but-wedged work loop. A robust model runs both — `last_seen` is bumped by *either* a pong or any push emitter, and a missed ping (no pong within the deadline) is an independent dead-signal. The trade-off to decide (§15.6): ping-only is simpler and catches the frozen-process case, but leaves the LLM-wedge zombie uncaught; ping + hooks covers both.
 
+#### Liveness signal flow (proposed)
+
+Every signal below bumps `last_seen[alias]`. The harness's liveness check (every 5s) is simply: `now − last_seen > liveness_timeout` → dead → reboot decision, with the `SessionEnd` reason (when present) choosing respawn vs backoff (§15.3).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as Harness (liveness)
+    participant Hk as claude-code hooks
+    participant A as Agent (LLM loop)
+    participant EP as event_poll / pong responder
+
+    Note over H,EP: PUSH — emitters fire only when the real loop runs
+    A->>Hk: session starts
+    Hk->>H: SessionStart → bump last_seen (boot)
+    loop active work (one per tool call)
+        A->>Hk: tool call
+        Hk->>H: Pre/PostToolUse → bump last_seen
+    end
+    loop idle wait
+        EP->>H: event_poll tick (GET /events/for/alias) → bump last_seen
+    end
+
+    rect rgb(235,238,255)
+    Note over H,EP: PULL — harness-initiated, any time (even mid-task)
+    H->>EP: ping (no-op)
+    EP-->>H: pong (out-of-band responder) → bump last_seen
+    end
+
+    A->>Hk: session exits
+    Hk->>H: SessionEnd (+reason) → record exit cause
+
+    Note over H: every 5s — now - last_seen > liveness_timeout?<br/>yes → dead → reboot decision<br/>(SessionEnd reason → respawn vs backoff vs stop)<br/>PID used only to KILL, never to prove life
+```
+
+> **Reading the diagram for the scope decision (§15.6):** "ping-only" keeps just the PULL box (catches frozen processes — stronger than PID, but a wedged LLM whose out-of-band responder still pongs would pass). "ping + hooks" keeps both boxes — the PUSH hooks stop firing when the LLM loop wedges, closing the zombie gap. `SessionEnd`-reason (the recommended first slice) is the bottom interaction alone.
+
 ### 15.3 `SessionEnd`-reason — the highest-value first slice
 
 Today the harness reboots on "dead PID + intent=`running`" with no idea *why* the process died — the exact ambiguity at the centre of the #12244 reboot saga (it cannot tell cooperative exit-42 from a crash from a usage-limit exit). A `SessionEnd` hook reporting the exit reason turns that inference into a fact:
@@ -688,6 +725,7 @@ This slice is independently valuable and shippable before the full heartbeat wor
 
 ## 16. Revision log
 
+- **2026-06-14 (v11)** — Added §15.2 "Liveness signal flow" Mermaid sequence diagram (operator review request before #12271 task breakdown): shows PUSH emitters (SessionStart / Pre+PostToolUse hooks / event_poll ticks), the PULL ping→pong box, SessionEnd-reason, and the `last_seen`/timeout reboot decision — with a reading guide mapping the ping-only vs ping+hooks scope choice to the diagram boxes.
 - **2026-06-14 (v10)** — DS-audit reconciliation (work-discovery audit step; DeepSeek internal + cross-ref + workflow passes). Internal fix: §7.5 `status` enum now includes `crash-looping` (was omitted despite §7.1.1/§7.3 using it). Cross-ref fixes vs AGENT-RUNTIME §8.2: force-kill timeout reconciled to code truth (single 60s `FORCE_KILL_TIMEOUT_SECONDS`; AGENT-RUNTIME's stale "30s→SIGTERM→10s→SIGKILL" corrected) and `crash-looping`/`restarting` added to the agent-side state machine. Pre-existing doc-debt surfaced (out of scope here): §§1–13 snapshot-vs-aspirational drift in §4.1/§4.4; §4.3-vs-§13.5 work-assign permission (tracked #10182). Workflow pass re-confirmed known gaps (#12342 routing, #12271 zombie, event_poll death) + flagged crash-looping-block persisting across host reboot.
 - **2026-06-14 (v9)** — Operator doc-review pass. §7.3: dropped the inline ticket ref; spelled out `kill -0` on Linux/macOS (POSIX); added a Mermaid flowchart of the health-poll backoff decision; extended the PID-source disambiguation with the POSIX/bash case (no `cmd.exe` shim → launched PID *is* the `claude` PID, no descendant walk). §15.2: added the operator's **harness→agent liveness ping (pull)** as a complement to the push emitters, with analysis of what a pong proves (process-responsive, catches frozen processes — stronger than PID) vs what it doesn't (LLM-wedge zombie, which needs the push signals); §15.6 gains the ping-scope and pong-responder open questions.
 - **2026-06-14 (v8)** — Post-merge sync for #12293 (#12244 backoff, now on main). §7.3 health poll documents the crash-loop backoff algorithm (`last_spawn_at`, `FAST_DEATH_WINDOW_SECONDS`=60, `FAST_DEATH_THRESHOLD`=3, exponential `30s·2^over` capped 1800s, `reboot_blocked_until`, streak reset on survival); §7.1.1 adds the `crash-looping` status; §7.5 adds `last_spawn_at` / `consecutive_fast_deaths` / `reboot_blocked_until` to the state shape; §11 PID-death row updated; §13.8 flipped from open gap → RESOLVED. Also §10 step 6 documents the #12293 **P0** stale-`restarting`→`running` reset on harness-restart load (force-kill clock not inherited; stale `stopping` preserved). Default-operation behavior now matches shipped code.
