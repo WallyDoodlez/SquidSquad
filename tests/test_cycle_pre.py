@@ -236,6 +236,128 @@ class TestDoPull:
 
 
 # ---------------------------------------------------------------------------
+# WIP preservation across mid-cycle context-pressure reboot (#12142)
+# ---------------------------------------------------------------------------
+
+
+class TestPreserveWip:
+    """#12142: a mid-cycle reboot must not lose uncommitted WIP.
+
+    ``_preserve_wip`` commits code WIP to the in-progress task's feature branch
+    BEFORE _enforce_branch/_do_pull can orphan or strand it, so the next cycle
+    resumes the task instead of restarting from zero.
+    """
+
+    @staticmethod
+    def _dispatch(has_changes="true", commit_stdout="Committed code to squidsquad/task/12142: WIP",
+                  commit_rc=0):
+        """Build a _run_script stub that dispatches on the git_ops subcommand."""
+        calls = []
+
+        def fake(*args, **kw):
+            calls.append(args)
+            r = MagicMock()
+            r.stderr = ""
+            sub = args[1] if len(args) > 1 else ""
+            if sub == "has-changes":
+                r.returncode = 0
+                r.stdout = has_changes
+            elif sub == "commit-code":
+                r.returncode = commit_rc
+                r.stdout = commit_stdout
+            else:
+                r.returncode = 0
+                r.stdout = ""
+            return r
+
+        fake.calls = calls
+        return fake
+
+    def test_preserves_code_wip_when_in_progress_and_dirty(self, monkeypatch):
+        """In-progress task + dirty code tree → commit-code called, dict returned."""
+        fake = self._dispatch()
+        monkeypatch.setattr(cycle_pre, "_run_script", fake)
+        result = cycle_pre._preserve_wip(
+            "skill", {"task": "#12142 — fix WIP loss", "status": "in-progress"})
+        assert result == {"committed": True, "branch": "squidsquad/task/12142",
+                          "task": "12142"}
+        # commit-code was invoked with the role and resolved branch (the #6526
+        # canonical squidsquad/task/{number} — must match task-begin's branch).
+        commit_calls = [c for c in fake.calls if len(c) > 1 and c[1] == "commit-code"]
+        assert len(commit_calls) == 1
+        assert commit_calls[0][2] == "skill"
+        assert commit_calls[0][3] == "squidsquad/task/12142"
+
+    def test_noop_on_clean_tree(self, monkeypatch):
+        """Clean tree (has-changes false) → no commit-code, returns None."""
+        fake = self._dispatch(has_changes="false")
+        monkeypatch.setattr(cycle_pre, "_run_script", fake)
+        result = cycle_pre._preserve_wip(
+            "skill", {"task": "#12142", "status": "in-progress"})
+        assert result is None
+        assert not any(len(c) > 1 and c[1] == "commit-code" for c in fake.calls)
+
+    def test_noop_when_not_in_progress(self, monkeypatch):
+        """status != in-progress → no git calls at all (never reaches has-changes)."""
+        fake = self._dispatch()
+        monkeypatch.setattr(cycle_pre, "_run_script", fake)
+        result = cycle_pre._preserve_wip(
+            "skill", {"task": "#12142", "status": "idle"})
+        assert result is None
+        assert fake.calls == []
+
+    def test_noop_when_no_task(self, monkeypatch):
+        """task == none → no git calls."""
+        fake = self._dispatch()
+        monkeypatch.setattr(cycle_pre, "_run_script", fake)
+        result = cycle_pre._preserve_wip(
+            "skill", {"task": "none", "status": "in-progress"})
+        assert result is None
+        assert fake.calls == []
+
+    def test_noop_when_task_number_unparseable(self, monkeypatch):
+        """A task string with no issue number → no git calls."""
+        fake = self._dispatch()
+        monkeypatch.setattr(cycle_pre, "_run_script", fake)
+        result = cycle_pre._preserve_wip(
+            "skill", {"task": "investigate flaky thing", "status": "in-progress"})
+        assert result is None
+        assert fake.calls == []
+
+    def test_noop_when_only_state_files_dirty(self, monkeypatch):
+        """commit-code no-ops on state-only changes (returns False / no 'Committed
+        code' in stdout) → _preserve_wip returns None, no exception."""
+        fake = self._dispatch(commit_stdout="No code changes to commit (only state/ephemeral changes)",
+                              commit_rc=1)
+        monkeypatch.setattr(cycle_pre, "_run_script", fake)
+        result = cycle_pre._preserve_wip(
+            "skill", {"task": "#12142", "status": "in-progress"})
+        assert result is None
+
+    def test_fail_open_on_exception(self, monkeypatch):
+        """Any error in the git boundary must not raise — returns None."""
+        def boom(*a, **kw):
+            raise RuntimeError("git exploded")
+        monkeypatch.setattr(cycle_pre, "_run_script", boom)
+        # Must not raise
+        result = cycle_pre._preserve_wip(
+            "skill", {"task": "#12142", "status": "in-progress"})
+        assert result is None
+
+    def test_runs_before_enforce_branch_in_main(self):
+        """Source-level guard: _preserve_wip must be wired before _enforce_branch
+        and _do_pull in main() (ordering is the whole point of the fix)."""
+        import inspect
+        src = inspect.getsource(cycle_pre.main)
+        i_preserve = src.find("_preserve_wip(")
+        i_enforce = src.find("_enforce_branch(")
+        i_pull = src.find("_do_pull(")
+        assert i_preserve != -1, "_preserve_wip not called in main()"
+        assert i_preserve < i_enforce, "_preserve_wip must run before _enforce_branch"
+        assert i_preserve < i_pull, "_preserve_wip must run before _do_pull"
+
+
+# ---------------------------------------------------------------------------
 # Sub-process timeout guard (#9904)
 # ---------------------------------------------------------------------------
 
@@ -1085,10 +1207,14 @@ class TestQAInputMultiRole:
         dm_items = [i for i in result["verification_queue"]["pending_test_issues"]
                      if i.get("source_role") == "dm"]
         assert len(dm_items) == 1
-        assert dm_items[0]["branch"] == "squidsquad/dm/3969"
+        # Branch is the #6526 canonical squidsquad/task/{number} — role-
+        # independent, so it matches the branch task-begin actually created.
+        assert dm_items[0]["branch"] == "squidsquad/task/3969"
 
-    def test_qa_branch_uses_correct_role_prefix(self, patch_dirs, squid_dir, monkeypatch):
-        """Branch path uses the item's source role, not hardcoded 'skill'."""
+    def test_qa_branch_uses_canonical_task_pattern(self, patch_dirs, squid_dir, monkeypatch):
+        """Branch hint is derived from the item's number via the #6526 canonical
+        squidsquad/task/{number} pattern (role-independent), and the item is
+        still attributed by its source role label."""
         items = [{
             "number": 5000, "title": "QA task",
             "labels": [{"name": "squidsquad"}, {"name": "role:qa"},
@@ -1100,7 +1226,7 @@ class TestQAInputMultiRole:
         qa_items = [i for i in result["verification_queue"]["pending_test_tasks"]
                     if i.get("source_role") == "qa"]
         assert len(qa_items) == 1
-        assert qa_items[0]["branch"] == "squidsquad/qa/5000"
+        assert qa_items[0]["branch"] == "squidsquad/task/5000"
 
 
 class TestPMInputMultiRole:
