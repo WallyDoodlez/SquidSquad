@@ -348,9 +348,20 @@ class HarnessState:
                 # freshly-booted replacement for that stale timer is wrong (the
                 # RESTARTING→RUNNING reset just below clears the intent on this
                 # same poll).
+                # #10538 (gap-fix): defense in depth. Under no-auto-reboot a
+                # RESTARTING force-kill would tear down a working agent that
+                # cannot respawn, so skip it (the two paths above should already
+                # prevent intent=restarting being set, but a stale on-disk
+                # intent from before the hatch was armed must not leak through).
+                # STOPPING force-kill is preserved — an explicit operator stop
+                # legitimately wants the process dead even with reboots off.
+                _no_reboot_restart = (
+                    _NO_AUTO_REBOOT
+                    and agent.intent == AgentState.INTENT_RESTARTING
+                )
                 if alive and pid and not pid_changed and agent.intent in (
                     AgentState.INTENT_STOPPING, AgentState.INTENT_RESTARTING,
-                ) and agent.intent_set_at is not None and (
+                ) and not _no_reboot_restart and agent.intent_set_at is not None and (
                     time.time() - agent.intent_set_at
                     > FORCE_KILL_TIMEOUT_SECONDS
                 ):
@@ -2376,6 +2387,24 @@ async def restart_agent(role: str):
     its next cycle boundary (#4966 graceful-restart behavior preserved)."""
     _validate_role(role)
 
+    # #10538 (gap-fix): when auto-reboot is disabled there is NO respawn path,
+    # so a "restart" degenerates into kill-with-no-recovery — the force-kill
+    # safety net tears down a live, working agent that then stays dead. That is
+    # strictly worse than the churn the hatch was meant to stop. Honor the
+    # operator directive "no ability at all for the harness to reboot" by
+    # refusing the restart outright. Operators wanting a true restart under this
+    # mode must use explicit /stop then /start.
+    if _NO_AUTO_REBOOT:
+        _log(f"  {role}: restart refused — SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT "
+             f"active (no respawn possible; agent left running)")
+        return {
+            "role": role,
+            "action": "restart",
+            "success": False,
+            "message": "Restart refused — no-auto-reboot active; agent left "
+                       "running. Use /stop then /start for an explicit cycle.",
+        }
+
     _log(f"Restarting {role}...")
 
     # #11640: resolve the clone path BEFORE mutating any state. An
@@ -2775,6 +2804,14 @@ def _reboot_affected_agents(pr_number, files_changed):
 
     Checks which agents' composed output was updated and reboots only those.
     """
+    # #10538 (gap-fix): the no-auto-reboot hatch must also suppress the
+    # compose-affected restart path. Otherwise a recompose silently flips
+    # intent=restarting → the force-kill net tears the agent down with no
+    # respawn. Same reasoning as restart_agent's refusal above.
+    if _NO_AUTO_REBOOT:
+        _log("[no-auto-reboot] compose-affected restart skipped per "
+             "SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT")
+        return
     affected_roles = set()
     for f in files_changed:
         # Check if the changed file is a role template or sub-skill
