@@ -8,10 +8,8 @@
 ## Shipped this session
 - **#12282** SHIPPED — reboot-churn root cause (test POSTing real /restart to live harness). Vault: [[learning-default-port-fallback-is-live-egress-trap-in-tests]].
 - **#12244** SHIPPED — re-marked from stuck per PM AC-amendment (cause-agnostic backoff).
-- **#12342** SHIPPED — event-mode EAD routes pending-test→qa / pending-ship→dm (was starving QA/DM). NOW LIVE (harness restarted — confirmed by receiving a real assigned-to event). Vault: [[learning-ead-status-routing-and-back-transition-dedup]], [[learning-runtime-resolves-by-alias-not-role-class]].
-
-## Pending-test (QA owns)
-- **#12380** → pending-test (PR #12391). compose `.local-config` alias-keying (QA boots into PM's clone). **QA rejected once** (a clone-refusal test relied on the qa-absent BUG as its premise) → fixed by mocking `_get_clone_path` (commit 4e39f0750), re-submitted. DS-reviewed (dedup/multi-alias/wizard). #11600 (role:pm) closes as tracked-under-#12380.
+- **#12342** SHIPPED — event-mode EAD routes pending-test→qa / pending-ship→dm (was starving QA/DM). NOW LIVE (harness restarted — confirmed by receiving real routed assigned-to events; QA/DM pipeline now works end-to-end). Vault: [[learning-ead-status-routing-and-back-transition-dedup]], [[learning-runtime-resolves-by-alias-not-role-class]].
+- **#12380** SHIPPED (PR #12391) — compose `.local-config` alias-keying (QA boots into PM's clone). QA rejected once (a clone-refusal test asserted the qa-absent BUG as its premise) → fixed by mocking `_get_clone_path`, re-verified, shipped. #11600 (role:pm) can close as tracked-under-#12380. PM can stop band-aiding `.local-config`.
 
 ## Filed (my domain, deferred to fresh cycle — all reboot-churn cluster)
 - **#12409** (open, high) — slow reboot loop (>60s, #12244 backoff misses it). **Ask 1 = frequency-based breaker = my next pickup.** Ask 2 → #12271 (SessionEnd-reason); Ask 3 → #12363 (orphans). Triaged. qa stable on loop-mode stopgap.
