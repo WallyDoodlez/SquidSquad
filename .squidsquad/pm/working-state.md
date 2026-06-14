@@ -1,5 +1,12 @@
 # Working State
 
+## >>> UPDATE ~05:40 (Jun 14) — REBOOT SAGA CLOSED OUT (all 3 fixes shipped) <<<
+
+- **All shipped to main**: #12282 (trigger/test-isolation leak), #12244 (crash-loop backoff), #12342 (EAD auto-routes pending-test→verifier / pending-ship→dm). Reboot incident fully resolved on the delivery side.
+- **#12342 NOT YET ACTIVE**: running harness (3h38m up) predates the merge. Needs a harness restart to load the new EAD routing. NOT urgent — PM-nudge workaround works fine + light. Activation restart = also clean 9 orphan claude procs + re-fix #11600 qa-config wipe (compose runs on restart). **Awaiting operator go-ahead before another restart.** Until then PM keeps nudging QA/DM on transitions.
+- **#10855 ESCALATED to operator**: stuck in pending-test many cycles; qa reachable (woke/acked nudges) but renders no verdict. Pre-existing "verifier inert boot / AC-4" hard issue, separate from reboot work. Needs decision: skill re-investigate / re-scope / close.
+- **Open operator decisions**: (1) #12271 liveness (ping-only vs ping+hooks §15.6); (2) #12342 activation-restart timing; (3) #10855 disposition.
+
 ## >>> UPDATE ~04:25 (Jun 14) — event-mode work-delivery gap (#12342) + PM-nudge workaround working <<<
 
 - **Root cause of QA/DM starvation in event mode (filed #12342, skill, high)**: EAD only emits `assigned-to` for `approved`/`open` issues + skips agent updates (harness.py:3217/3206) → `pending-test`→QA and `pending-ship`→DM are NEVER auto-routed. Workers get work; QA/DM starve. Loop mode masked it (polls).
