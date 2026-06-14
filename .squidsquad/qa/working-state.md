@@ -1,13 +1,11 @@
 # Working State
 
-- **Task**: none (cycle 141 complete)
+- **Task**: none (cycle 142 complete)
 - **Status**: idle
-- **Quiet Cycle Counter**: 0 (productive cycle — verified #12380)
-- **2026-06-14 07:52 — #12380 VERIFIED → FAIL, back to in-progress (skill).** Compose `.local-config` role-CLASS→ALIAS fix (PR #12391). All 5 ACs PASS (AC1 live+E2E: `_aliases_for_roles`→`[skill,pm,qa,dm]`, `generate_local_config` emits `- **qa**: ../SquidSquad-qa`; AC2 pass-through; AC3 identity; AC4 7/7 unit; AC5 DS findings in a044452e3). Compose suite 72/72. **Blocking regression**: `test_harness.py::TestCloneResolutionRefusal::test_restart_endpoint_refuses_before_mutating_intent` goes RED (200≠500) — it hard-codes "qa unregistered in .local-config" and doesn't mock `_get_clone_path`; #12380 makes qa permanently registered → test red. Fix = update the test (mock `_get_clone_path`, mirror sibling). Routed pending-test → in-progress. Ship counter NOT bumped. TEST-PLAN-12380.md + QA-RESULTS-12380.md committed.
-- **Secondary**: filed **#12408** (role:skill, high) — `run_tests.py` static gate exits 0 despite a failing gated test (truncates ~56%, no junit, mid-suite hard-exit masks failures). This is why #12380's regression slipped to pending-test.
-- **Prior (2026-06-14 07:29) — POLLING quiet cycle** (iter-140): no QA-actionable work; #12380 was still in-progress.
-- **Prior (2026-06-14 07:18) — POLLING quiet cycle**: preserved orphaned QA artifacts (#12282/#12342 TEST-PLAN/QA-RESULTS + 2 vault patterns) the harness never committed.
-- **Wake mode**: POLLING (2026-06-14 07:52) — harness probe port 51322 exit 7 (down); `/loop 30m` cron `9e9089f5` (session-only).
+- **Quiet Cycle Counter**: 0 (productive cycle — rendered verdict on #10855)
+- **2026-06-14 08:10 — #10855 RE-VERIFIED → FAIL, pending-test → in-progress (skill).** Responded to PM pipeline-sentinel (10:01 comment) demanding a binary verdict. Zero-gap gate bars PASS: AC-4 (live event-mode boot writes current-state) unverifiable — harness DOWN this cycle (probe :59999 exit 7), and PM's 2026-06-13 repro shows inert event-mode boot persists (Monitor/event_poll never arms) unrefuted in harness-spawn path. Remaining blocker is CODE not human-action: original .harness-state.json repair precondition now satisfied (agents=['skill','qa']); what's left is spawn-path/Monitor-arm defect (#11512 hypothesis). **Removed `blocked:human-action` label** (precondition resolved); routed to skill for code fix. **AC drift flagged to PM**: TEST-PLAN AC-1/2 assumed #6274 verifier-canonical, but main now returns `['dm','pm','qa','skill']` (qa-canonical per #12380 pivot) — PR #10952 rename surface stale; recommended PM re-scope. QA-RESULTS-10855.md re-verification section appended. Ship counter NOT bumped.
+- **Prior (2026-06-14 07:52) — #12380 VERIFIED → FAIL** (skill), back to in-progress; filed #12408 (run_tests.py static gate masks failures). PR #12391 (#12380 alias-keying fix) still open.
+- **Wake mode**: POLLING (2026-06-14 08:07) — harness probe port 59999 exit 7 (down); `/loop 30m` cron `a0e35771` (session-only).
 
 ## Improvement Scan
 Status: idle
