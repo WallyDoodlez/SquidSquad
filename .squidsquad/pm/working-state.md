@@ -1,5 +1,13 @@
 # Working State
 
+## >>> UPDATE ~02:58 (Jun 14) — TEAM MOVED TO EVENT MODE + status cleaned (operator request) <<<
+
+- **Root cause of loop-pinning found+killed**: leftover **pin-keeper.sh (PID 6036)** was STILL running, re-writing `.harness-port=59999` to skill/qa/dm every 30s → forced loop mode on every boot. Killed it; ports now stick at 7373.
+- **Re-enabled harness auto-reboot**: restarted harness in NORMAL mode (dropped `--no-auto-reboot --no-auto-start`). Event mode REQUIRES auto-reboot (agents exit on Monitor-exit/ctx-pressure and need respawn); the incident that justified disabling it is resolved (#12244 backoff merged → churn impossible). Backoff is the safety net.
+- **skill/qa/dm now in EVENT mode** (bootup-complete + acking cursors confirmed in harness log: qa 02:57:05, dm 02:57:39, skill 02:58:11). pm=this inline operator session (configured event/7373, bootup False because interactive, not autonomous loop — expected).
+- **Status bar "showing 3" → cleaned**: removed 2 stray `test-*` entries polluting `.harness-state.json` (test-isolation leak, #12282 class). squidsquad_cli status now shows exactly 4 (dm/pm/qa/skill).
+- **#11600 RECURRENCE**: harness restart ran compose → wiped `qa` from `.local-config` again (regenerates class `verifier`, not alias `qa`) → qa auto-respawn FAILED once until I re-added qa. **Will recur on every compose/harness-restart. #11600 (role:pm, open) needs the real fix.** Re-added qa for now.
+
 ## >>> UPDATE ~06:05 (Jun 14) — HARNESS-ARCH v8 post-merge sync (#12293 backoff landed) <<<
 
 - **#12293 MERGED to main** (#12244 backoff). Synced HARNESS-ARCH to shipped code: §7.3 documents backoff algo (last_spawn_at, 60s fast-death window, 3-threshold, exp 30s·2^over cap 1800s, reboot_blocked_until, streak-reset-on-survival); §7.1.1 +`crash-looping` status; §7.5 +3 state fields; §11 row; **§13.8 flipped open-gap→RESOLVED**. Doc now matches code; the post-merge TODO I flagged is DONE.
