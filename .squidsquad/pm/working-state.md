@@ -1,5 +1,11 @@
 # Working State
 
+## >>> UPDATE ~01:55 (Jun 14) — HARNESS-ARCH contradiction polish (v7) + #12282 nudged + liveness breakdown given <<<
+
+- **Operator decision posture**: fix root cause (#12282) first; #12271 liveness redesign is "still better" ONLY for zombie self-healing (real but manually-recoverable) — recommended layering = **#12282 (trigger) + #12244 (backoff) core; #12271 SessionEnd-slice cheap; full hook-heartbeat deferred**. Operator chose: NUDGE skill onto #12282 (done — priority comment posted); and asked to **polish arch doc for contradictions BEFORE any status moves** (in progress → DONE this cycle).
+- **HARNESS-ARCH polished to v7** (commit pending): the `--no-auto-reboot`/`--no-auto-start` hatches were UNDOCUMENTED while §7.1/§7.3/§7.4/§10/§11 read auto-respawn+force-kill as UNCONDITIONAL → direct contradiction with shipped 162aa29a2. Fixed: new **§7.6** (hatches; no-auto-reboot is teardown-complete: refuse restart + skip compose-restart + skip RESTARTING force-kill + no respawn; STOPPING force-kill preserved); qualified §7.4/§7.1/§10/§11; new **§13.8** (no-backoff/crash-loop gap → grounds §15.3's #12244; separates amplifier from trigger #12282). No default-semantics change.
+- **STILL pending operator**: #12271 status decision (held until doc polish reviewed). #12282 with skill (nudged). #12244 not yet filed-as-approved (backoff). diag still ARMED (4 leak captures).
+
 ## >>> UPDATE ~00:45 (Jun 14) — REBOOT TRIGGER CAUGHT (likely): skill's #12142 suite leaks /restart to LIVE harness → #12282 <<<
 
 - **Armed restart-diag CAPTURED 2 restart requests** (00:35:34, 00:38:04, ~2.5min apart). Both: `current-state='implementing|implement-tasks — #12142 running full suite'`, intent=running, **ctx exceeded=FALSE (53<70)**. → DEFINITIVELY not cycle_post context-pressure (the only documented /restart caller). Something POSTs real /restart to LIVE harness :7373 DURING skill's #12142 full-suite run.
