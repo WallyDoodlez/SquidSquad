@@ -557,6 +557,39 @@ class TestStatusTransitionEventEmission:
         assert emitted[0]["payload"]["from"] == "approved"
         assert emitted[0]["payload"]["to"] == "in-progress"
 
+    def test_emit_role_strips_parenthetical_alias(self, monkeypatch):
+        """#12342: the emit role must be the BARE alias. A decorated role like
+        "skill (skill)" is not a registered bare alias, so the harness
+        ingestion allowlist 204-drops the event — the agent never sees it.
+        `split(" ")[0]` strips the parenthetical (and `-lead`), matching the
+        other emit site. This was the #12342 secondary 'decorated-role drop'."""
+        emitted = []
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        monkeypatch.setattr(tracker, "_run_list", lambda *a, **kw: FakeResult())
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
+
+        import types
+        fake_bus = types.ModuleType("event_bus")
+        fake_bus.emit = lambda event_type, role, payload=None, cycle_number=None: emitted.append(
+            {"event_type": event_type, "role": role}
+        )
+        monkeypatch.setitem(sys.modules, "event_bus", fake_bus)
+
+        tracker.transition(7, "in-progress", "pending-test",
+                           role="skill (skill)", force=True)
+
+        assert len(emitted) == 1
+        assert emitted[0]["role"] == "skill", (
+            f"emit role must be the bare alias, got {emitted[0]['role']!r} — a "
+            f"decorated role is dropped by the harness ingestion allowlist"
+        )
+        assert " " not in emitted[0]["role"] and "(" not in emitted[0]["role"]
+
     def test_emits_on_all_transitions_not_just_in_progress(self, monkeypatch):
         """Emission happens for pending-test, pending-ship, shipped — not just in-progress."""
         emitted = []

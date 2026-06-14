@@ -3090,13 +3090,33 @@ def _print_banner(port: int):
 # External activity detector (#7630 2-4)
 # ---------------------------------------------------------------------------
 
+# #12342: sentinel distinguishing "issue never seen" from "issue last seen at
+# status=None" in ExternalActivityDetector._emitted_issues.get(...).
+_UNSEEN = object()
+
+
 class ExternalActivityDetector:
     """Polls GitHub for external changes and emits assigned-to events (#7630 2-4).
 
-    Runs as a daemon thread. Detects new/updated issues with status:approved
-    or status:open that are assigned to agent roles. Filters out SquidSquad's
-    own changes by checking recent comment authors against agent role names.
-    Deduplicates by tracking previously emitted issue numbers.
+    Runs as a daemon thread. Detects new/updated issues and routes work to the
+    right alias by status (#12342):
+
+    - ``status:approved`` / ``status:open`` → the issue's ``role:*`` worker alias
+    - ``status:pending-test``               → the install's **verifier** alias
+    - ``status:pending-ship``               → the install's **dm** alias
+
+    Without the pending-test/pending-ship routes (the pre-#12342 behavior),
+    event-mode QA and DM starved: the EAD only ever emitted for worker statuses,
+    so verification/delivery work produced no wake event.
+
+    Dedup records ONE entry per issue — its last observed status — and emits
+    only when the current status differs from that record (#12342). Keying by
+    issue number alone (pre-#12342) meant an issue emitted at most one
+    assigned-to in its whole lifecycle; a naive ``(issue_num, status)`` set
+    instead permanently suppressed re-entry to a status, starving QA on every
+    re-verification after a reject (DS-REVIEW-12342 Finding 1). Recording the
+    intermediate (unmapped) ``in-progress`` lets a back-transition
+    ``pending-test -> in-progress -> pending-test`` re-emit correctly.
     """
 
     # #6274: qa→verifier per D5. AGENT_ROLES is currently unused (issue
@@ -3105,12 +3125,38 @@ class ExternalActivityDetector:
     # Flipping in lockstep with config.py:486/591 and cycle_pre.py:1037.
     AGENT_ROLES = {"skill", "pm", "verifier", "dm"}
 
+    # #12342: status → routing target. ("label", None) routes to the issue's
+    # own role:* worker alias; ("role_class", <class>) routes to the install's
+    # alias for that role-class (resolved via config.parse_aliases_registry).
+    # Statuses absent from this map (in-progress, planned, pending, planning)
+    # intentionally emit nothing — the owning agent is already on it or a human
+    # gate applies. shipped is closed, so the --state open query never sees it.
+    _STATUS_ROUTING = {
+        "status:open": ("label", None),
+        "status:approved": ("label", None),
+        "status:pending-test": ("role_class", "verifier"),
+        "status:pending-ship": ("role_class", "dm"),
+    }
+
     def __init__(self, poll_interval: int = 60):
         self._poll_interval = poll_interval
         self._running = False
         self._thread = None
         self._last_check_epoch = 0.0  # epoch seconds — avoids ISO string comparison
-        self._emitted_issues: dict[int, None] = {}  # ordered dedup: issues already emitted
+        # #12342: one entry per issue — issue_num → the LAST status this issue
+        # was observed at (the status we emitted for, or an unmapped status we
+        # recorded as we passed through it). We emit only when the observed
+        # status differs from the recorded one, so:
+        #   - a comment that bumps updatedAt without changing status → no
+        #     re-emit (status unchanged), and
+        #   - a back-transition pending-test → in-progress → pending-test
+        #     DOES re-emit, because the intermediate in-progress is recorded
+        #     and the second pending-test differs from it.
+        # The earlier (issue_num, status) tuple-set permanently suppressed
+        # re-entry to a status (DS-REVIEW-12342 Finding 1: QA starved on every
+        # re-verification after a reject). One entry/issue also keeps the 500
+        # eviction cap at 500 *issues* rather than ~125 (Finding 5).
+        self._emitted_issues: dict = {}
         # Lock guards _emitted_issues against concurrent mutation. The
         # detector's own poller thread is the only writer now that #8914
         # removed TrackerHandoffDispatcher, but the lock stays — the
@@ -3118,18 +3164,47 @@ class ExternalActivityDetector:
         # if another thread is ever added.
         self._emitted_lock = threading.Lock()
 
-    def is_emitted(self, issue_num):
-        """Thread-safe membership check on _emitted_issues."""
+    def is_emitted(self, issue_num, status=None):
+        """True iff the LAST recorded status for ``issue_num`` equals
+        ``status`` (#12342) — i.e. we already emitted/observed this exact
+        status and nothing has changed since. An unseen issue is never
+        'emitted'."""
         with self._emitted_lock:
-            return issue_num in self._emitted_issues
+            return self._emitted_issues.get(issue_num, _UNSEEN) == status
 
-    def mark_emitted(self, issue_num):
-        """Thread-safe insert + bounded eviction on _emitted_issues (#8694)."""
+    def mark_emitted(self, issue_num, status=None):
+        """Record ``status`` as the last observed status for ``issue_num``
+        (#8694 thread-safe + bounded eviction; #12342 one entry/issue)."""
         with self._emitted_lock:
-            self._emitted_issues[issue_num] = None
+            # Refresh recency: delete+reinsert so the FIFO eviction order
+            # tracks last-touch, not first-insert (an issue actively cycling
+            # statuses should not be evicted ahead of a stale one).
+            self._emitted_issues.pop(issue_num, None)
+            self._emitted_issues[issue_num] = status
             while len(self._emitted_issues) > 500:
                 oldest = next(iter(self._emitted_issues))
                 del self._emitted_issues[oldest]
+
+    @staticmethod
+    def _alias_for_role_class(role_class):
+        """Resolve the install's alias for a role-class (#12342).
+
+        Reads the ``## Aliases`` registry via config.parse_aliases_registry()
+        ({alias: (role_class, l3_domain)}) and returns the first alias whose
+        role-class matches. Singleton installs have exactly one verifier and
+        one dm. Falls back to the role-class name itself (a valid bare alias in
+        singleton installs: verifier→verifier, dm→dm) if config is unreadable.
+        """
+        try:
+            import config as _cfg
+            registry = _cfg.parse_aliases_registry()
+            for alias, rc_tuple in registry.items():
+                rc = rc_tuple[0] if isinstance(rc_tuple, (list, tuple)) else rc_tuple
+                if rc == role_class:
+                    return alias
+        except Exception:
+            pass
+        return role_class
 
     def start(self):
         """Start the detector daemon thread."""
@@ -3168,12 +3243,12 @@ class ExternalActivityDetector:
         except (ValueError, AttributeError):
             return 0.0
 
-    def _is_agent_update(self, issue: dict) -> bool:
-        """Check if the most recent comment was from a SquidSquad agent."""
-        # gh returns comments in the issue JSON if requested — but we only
-        # have labels and updatedAt. Check if the title starts with agent prefixes.
-        title = issue.get("title", "")
-        return title.startswith(("ISSUE:", "TASK:"))  # all agent-filed issues have these prefixes
+    # #12342: `_is_agent_update` removed. Its implementation
+    # (`title.startswith(("ISSUE:","TASK:"))`) matched EVERY SquidSquad issue
+    # — every issue title carries one of those prefixes — so it skipped all
+    # issues and the EAD emitted nothing. Loop-prevention against
+    # comment-bumped updatedAt is now handled correctly by the per-(issue,
+    # status) dedup in `_check_for_changes`.
 
     def _check_for_changes(self):
         """Poll GitHub for actionable changes since last check."""
@@ -3197,45 +3272,71 @@ class ExternalActivityDetector:
 
         for issue in issues:
             issue_num = issue.get("number", 0)
+            labels = {l.get("name", "") for l in issue.get("labels", [])}
 
-            # Dedup: skip issues already emitted (thread-safe via #8694)
-            if self.is_emitted(issue_num):
+            # The issue's current status label (exactly one expected).
+            status = next((l for l in labels if l.startswith("status:")), None)
+            if status is None:
                 continue
 
-            # Skip agent-filed issues to prevent self-triggering loops
-            if self._is_agent_update(issue):
+            # Dedup (#12342): skip when the issue is still at the SAME status we
+            # last recorded — nothing changed (e.g. a comment bumped updatedAt
+            # without a transition). A different status falls through and will
+            # re-record below, so a back-transition (pending-test → in-progress
+            # → pending-test) correctly re-emits — see DS-REVIEW-12342 Finding 1.
+            if self.is_emitted(issue_num, status):
                 continue
 
-            # Time filter: only process issues updated since last check
+            # Time filter: only process issues updated since last check. A
+            # status transition bumps updatedAt, so a freshly-transitioned
+            # issue passes; a bare comment that does NOT change status is
+            # absorbed by the dedup above on later polls (this is why removing
+            # the old title-prefix `_is_agent_update` skip is safe — dedup,
+            # not a heuristic, prevents re-triggering).
             updated_epoch = self._parse_iso_epoch(issue.get("updatedAt", ""))
             if updated_epoch <= self._last_check_epoch:
                 continue
 
-            labels = {l.get("name", "") for l in issue.get("labels", [])}
-
-            # Only emit for actionable statuses
-            if not (labels & {"status:approved", "status:open"}):
+            # Status → routing target (#12342). Unmapped statuses (in-progress,
+            # planned, pending, planning) emit nothing — but we still RECORD
+            # the status so a later re-entry to a routed status differs from
+            # it and re-emits (the back-transition support; DS Finding 1).
+            routing = self._STATUS_ROUTING.get(status)
+            if routing is None:
+                self.mark_emitted(issue_num, status)
                 continue
-
-            # Determine target alias (first role label sorted; multi-role emits for first only).
-            # In single-instance teams the value following `role:` is the alias;
-            # in multi-instance teams the `role:*` label always carries the
-            # routed alias per AGENT-RUNTIME.md §8.3 (the harness rewrites
-            # `role:*` on every `/work/assign`). Either way the extracted
-            # string IS the alias.
-            role_labels = sorted(l for l in labels if l.startswith("role:"))
-            if not role_labels:
-                continue
-            target_alias = role_labels[0].replace("role:", "")
+            kind, role_class = routing
+            if kind == "label":
+                # Worker statuses (approved/open) route to the issue's own
+                # role:* alias. In single-instance teams the value following
+                # `role:` is the alias; in multi-instance teams the `role:*`
+                # label always carries the routed alias per AGENT-RUNTIME.md
+                # §8.3 (the harness rewrites `role:*` on every `/work/assign`).
+                # Either way the extracted string IS the alias. NOTE (#12342 /
+                # DS Finding 3): a multi-role issue wakes only the alphabetically
+                # first role:* alias — single-worker-per-issue is the assumed
+                # model; multi-role fan-out is out of scope and pre-dates this
+                # change.
+                role_labels = sorted(l for l in labels if l.startswith("role:"))
+                if not role_labels:
+                    continue
+                target_alias = role_labels[0].replace("role:", "")
+            else:
+                # pending-test → verifier, pending-ship → dm (#12342). These do
+                # NOT route to the issue's role:* label (that is the worker who
+                # built it); they route to the install's verifier/dm alias.
+                target_alias = self._alias_for_role_class(role_class)
+                if not target_alias:
+                    continue
 
             # Emit assigned-to event
             _emit_event("assigned-to", "harness", payload={
                 "issue_number": str(issue_num),
                 "title": issue.get("title", ""),
                 "target_alias": target_alias,
-                "event_context": f"Issue #{issue_num} updated",
+                "event_context": f"Issue #{issue_num} {status.replace('status:', '')}",
             })
-            self.mark_emitted(issue_num)
+            self.mark_emitted(issue_num, status)
 
         self._last_check_epoch = check_time
         # Eviction now happens inside mark_emitted() under _emitted_lock.
