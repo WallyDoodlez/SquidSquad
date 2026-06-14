@@ -1,0 +1,164 @@
+commit d0b468dabf2310a32854c4b57b7bb97d03c05ec2
+Author: Wallace Chan <naahtec@hotmail.com>
+Date:   Sun Jun 14 00:58:48 2026 -0400
+
+    fix(#12244) P0: don't resurrect RESTARTING intent across harness restart
+    
+    A RESTARTING intent is a transient in-flight state owned by the harness
+    session that issued it. load_state restored it as-is across a harness
+    restart; against an agent whose claude.exe outlived the restart, its stale
+    intent_set_at (already past FORCE_KILL_TIMEOUT) made the first health poll
+    force-kill a HEALTHY agent, then auto-reboot it — the operator-reported
+    'working agent killed + respawned, repeatedly' loop.
+    
+    Fix: reset RESTARTING->RUNNING (clear intent_set_at) on load_state. A dead
+    agent still auto-reboots (RUNNING is in should_reboot); a live one is left
+    alone. STOPPING is preserved (an operator stop must survive a restart).
+    
+    Tests: reset-to-running for legacy (no key) + present-stale-timestamp cases;
+    round-trip test retargeted to STOPPING (the intent that DOES survive). 188 passed.
+    
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+diff --git a/references/scripts/harness.py b/references/scripts/harness.py
+index 6ba42c8d3..7a6ff40a4 100644
+--- a/references/scripts/harness.py
++++ b/references/scripts/harness.py
+@@ -744,19 +744,33 @@ class HarnessState:
+                     )
+                 agent = self.agents[role]
+                 agent.intent = agent_data.get("intent", AgentState.INTENT_RUNNING)
+-                # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1.
+-                # We distinguish absent key from explicit null so an explicit
+-                # null is always honored (case b: "load as-is") and only an
+-                # absent key triggers the migration seed (case a):
+-                #   (a) legacy state file: intent is STOPPING/RESTARTING and
+-                #       the `intent_set_at` key is ABSENT → seed with
+-                #       time.time() so the force-kill clock starts now rather
+-                #       than firing immediately on a pre-existing intent.
+-                #   (b) present state file: load as-is (may be None when the
+-                #       intent is RUNNING/STOPPED, or a float when STOPPING/
+-                #       RESTARTING).
+-                if "intent_set_at" not in agent_data and agent.intent in (
+-                    AgentState.INTENT_STOPPING, AgentState.INTENT_RESTARTING,
++                # #12244 P0 — a RESTARTING intent does NOT survive a harness
++                # restart. "restart in progress" is a transient state owned by
++                # the harness session that issued it; resurrecting it across a
++                # restart force-kills (the 60s safety net below) a HEALTHY agent
++                # whose claude.exe outlived the harness — its restored
++                # intent_set_at predates the restart and is already past the
++                # timeout, so the first health poll kills it, then auto-reboots
++                # it (the operator-reported "working agent killed + respawned,
++                # repeatedly" loop). Reset to RUNNING: a still-dead agent is
++                # auto-rebooted anyway (RUNNING is in should_reboot); a live one
++                # is left alone. A genuinely-wanted restart can be re-requested
++                # against THIS harness. STOPPING is deliberately NOT reset — an
++                # explicit operator stop MUST survive a harness restart.
++                if agent.intent == AgentState.INTENT_RESTARTING:
++                    agent.intent = AgentState.INTENT_RUNNING
++                    agent.intent_set_at = None
++                # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1,
++                # now STOPPING-only (RESTARTING handled above). Distinguish an
++                # absent key from an explicit null: an explicit null is honored
++                # (case b "load as-is"); only an absent key seeds (case a):
++                #   (a) legacy state file: intent STOPPING, `intent_set_at` key
++                #       ABSENT → seed time.time() so the force-kill clock starts
++                #       now rather than firing immediately on a stale intent.
++                #   (b) present state file: load as-is (None when RUNNING/
++                #       STOPPED, or a float when STOPPING).
++                elif "intent_set_at" not in agent_data and (
++                    agent.intent == AgentState.INTENT_STOPPING
+                 ):
+                     agent.intent_set_at = time.time()
+                 else:
+diff --git a/tests/test_harness.py b/tests/test_harness.py
+index 9aa3c33a9..3ad2e844e 100644
+--- a/tests/test_harness.py
++++ b/tests/test_harness.py
+@@ -188,7 +188,13 @@ class TestIntentSetAt(unittest.TestCase):
+                 )
+ 
+     def test_load_state_round_trips_intent_set_at(self):
+-        """A state file written by save_state loads back with intent_set_at."""
++        """A state file written by save_state loads back with intent_set_at.
++
++        Uses STOPPING — a STOPPING intent (and its force-kill clock) must
++        survive a harness restart so an operator stop is not lost. (RESTARTING
++        is intentionally NOT round-tripped — see
++        test_load_state_resets_restarting_to_running, #12244 P0.)
++        """
+         import tempfile
+         from harness import HarnessState, AgentState
+         with tempfile.TemporaryDirectory() as tmpdir:
+@@ -196,7 +202,7 @@ class TestIntentSetAt(unittest.TestCase):
+             with patch("harness.HARNESS_STATE_FILE", state_file):
+                 hs = HarnessState()
+                 agent = AgentState("pm")
+-                agent.intent = AgentState.INTENT_RESTARTING
++                agent.intent = AgentState.INTENT_STOPPING
+                 agent.intent_set_at = 555.0
+                 hs.set_agent("pm", agent)
+                 hs.save_state()
+@@ -205,6 +211,7 @@ class TestIntentSetAt(unittest.TestCase):
+                 with patch("harness._log"):
+                     hs2.load_state()
+                 loaded = hs2.get_agent("pm")
++                self.assertEqual(loaded.intent, AgentState.INTENT_STOPPING)
+                 self.assertEqual(loaded.intent_set_at, 555.0)
+ 
+     def test_load_state_migrates_legacy_stopping_without_intent_set_at(self):
+@@ -242,8 +249,11 @@ class TestIntentSetAt(unittest.TestCase):
+                 loaded = hs.get_agent("skill")
+                 self.assertEqual(loaded.intent_set_at, 9999.0)
+ 
+-    def test_load_state_migrates_legacy_restarting_without_intent_set_at(self):
+-        """Same migration applies to RESTARTING intent (Q7 PM lock)."""
++    def test_load_state_resets_legacy_restarting_to_running(self):
++        """#12244 P0: a restored RESTARTING intent (legacy file, no
++        intent_set_at key) is reset to RUNNING with intent_set_at cleared —
++        NOT seeded. RESTARTING is a transient in-flight state that must not
++        survive a harness restart (it would force-kill a healthy agent)."""
+         import tempfile
+         from harness import HarnessState, AgentState
+         with tempfile.TemporaryDirectory() as tmpdir:
+@@ -262,7 +272,39 @@ class TestIntentSetAt(unittest.TestCase):
+                  patch("harness.time.time", return_value=4242.0):
+                 hs = HarnessState()
+                 hs.load_state()
+-                self.assertEqual(hs.get_agent("qa").intent_set_at, 4242.0)
++                self.assertEqual(
++                    hs.get_agent("qa").intent, AgentState.INTENT_RUNNING)
++                self.assertIsNone(hs.get_agent("qa").intent_set_at)
++
++    def test_load_state_resets_restarting_to_running(self):
++        """#12244 P0: a restored RESTARTING intent WITH a present (stale)
++        intent_set_at is reset to RUNNING and the force-kill clock cleared.
++        This is the core fix for the operator-reported 'working agent killed +
++        respawned' loop: without it, the stale timestamp (< now -
++        FORCE_KILL_TIMEOUT) makes the first health poll force-kill a healthy
++        agent that outlived the harness restart, then respawn it."""
++        import tempfile
++        from harness import HarnessState, AgentState
++        with tempfile.TemporaryDirectory() as tmpdir:
++            state_file = Path(tmpdir) / ".harness-state.json"
++            state_file.write_text(json.dumps({
++                "harness_pid": 1, "start_time": 0.0, "port": 7373,
++                "agents": {
++                    "skill": {"intent": "restarting",
++                              "intent_set_at": 100.0,  # stale, pre-restart
++                              "status": "running", "boot_time": None,
++                              "clone_path": "", "claude_pid": 4321,
++                              "terminal_pid": None},
++                },
++            }), encoding="utf-8")
++            with patch("harness.HARNESS_STATE_FILE", state_file), \
++                 patch("harness._log"), \
++                 patch("harness.time.time", return_value=9999.0):
++                hs = HarnessState()
++                hs.load_state()
++                loaded = hs.get_agent("skill")
++                self.assertEqual(loaded.intent, AgentState.INTENT_RUNNING)
++                self.assertIsNone(loaded.intent_set_at)
+ 
+     def test_load_state_preserves_none_for_running_intent(self):
+         """Legacy state with intent=RUNNING and no intent_set_at must NOT
