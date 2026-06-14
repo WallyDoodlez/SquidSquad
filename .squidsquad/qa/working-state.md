@@ -1,7 +1,14 @@
 # Working State
 
 - **Task**: none
-- **Status**: none
-- **Quiet Cycle Counter**: 2
-- **Last event-driven work**: 2026-06-14 01:42 — #12244 (harness reboot-loop): verified PR #12293 (P0 restart-safe clock + P2 crash-loop backoff) PASS → merged; AC1/2/3 met (live P0 load_state check + 197 harness + 53 integration). ALSO verified PM emergency fix 162aa29a2 (--no-auto-reboot teardown gates) LIVE — force-kill gate behaviorally correct (no-reboot+RESTARTING→no kill; +STOPPING→kill; normal→kill) BUT shipped 0 tests. Routed #12244 → in-progress (skill) for PM's remaining durable scope: [add hatch regression tests] + [trace upstream /restart trigger]. Flagged AC1/2 cause-agnostic-vs-session-limit-literal as PM contract-feasibility note. Prior: 2026-06-14 00:40 verified #12142 → pending-ship. (WIP-loss-across-reboots, PR #12270) → PASS, merged, pending-ship. All 4 ACs independently confirmed via TEST-PLAN-12142; live un-mocked checks (branch-resolve/regex/has-changes) agree with unit mocks; 134 cycle_pre + 53-suite green. Did NOT bump ship counter — DM owns it (increments at ship, not verify); counter 14/10 over threshold, bump held for PM. #12142 now over to DM.
-- **Wake mode**: POLLING (2026-06-14 ~00:05) — harness probe on port 59999 = connection-refused (exit 7). /loop scheduled (cron 4165d5d7, every 30m, session-only). Loop-cycling, not event-driven.
+- **Status**: idle (quiet cycle)
+- **Quiet Cycle Counter**: 1
+- **2026-06-14 07:18 — POLLING-mode cycle (harness DOWN).** Boot probe: port file=36117, `curl /status` exit 7 (connection refused) → harness unreachable → fell through to POLLING mode (`/loop 30m`, cron cf850c63). check-gh PASS. Pickup scan: NO pending-test work across all role trackers (skill/pm/dm/qa). Only pending-test issue is #10855 (blocked:human-action, AC4 HUMAN-REQUIRED) — already fully handled 05:02, awaiting operator greenlight, NOT QA-actionable. No pending-ship (DM lane). Most-recent activity = #12380 in-progress (skill-owned, not yet pending-test), #11600 open (role:pm). Quiet cycle → no verification. Improvement scan: cooldown elapsed (last 02:57) but ran NO production code this cycle → no new findings; existing test-gap already tracked as #11716. Did NOT bump ship counter. **Preserved orphaned artifacts**: prior cycles wrote TEST-PLAN/QA-RESULTS for #12282 + #12342 and 2 vault patterns but harness/cycle_post never committed them (harness was going down) — committed them this cycle to save the audit trail.
+- **Prior (2026-06-14 05:37) — #12342 (EAD starves QA/DM in event mode) VERIFIED PASS → pending-ship (DM).** PR #12364 (harness.py EAD + tracker.py emit). EAD status-routes approved/open→worker, pending-test→verifier, pending-ship→dm; dedup=last-status-per-issue emits-on-change. LIVE check: _alias_for_role_class('verifier')→'qa'. test_harness 209 + integration 53 + consumer sweep 343 passed. QA-RESULTS/TEST-PLAN-12342 published. Vault: +pattern-resolve-config-against-live-install-not-test-fixture.
+- **Prior (2026-06-14 04:20) — #12282 + #12244 VERIFIED PASS → pending-ship → DM shipped/CLOSED.** #12282 (/restart leak): PR #12341 test-only, live E2E showed skill agent byte-identical before/after → ZERO restarts. #12244 (reboot backoff): re-verified after PM AC-amendment, PASS stands. #10855 (inert-boot): blocked:human-action, sole event-mode blocker. Vault: +pattern-prove-side-effect-absence-via-live-state-snapshot.
+- **Wake mode**: POLLING (2026-06-14 07:16) — harness probe port 36117 exit 7 (down); `/loop 30m` cron cf850c63 (session-only). Supersedes prior EVENT-mode line.
+
+## Improvement Scan
+Status: idle
+Last completed: 2026-06-14 07:18
+Next scan after: 2026-06-14 07:48
