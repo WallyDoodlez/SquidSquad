@@ -175,3 +175,9 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - Confirmed cycle_pre git-sync can lose WIP: _enforce_branch does `git checkout main` if working-state status!=in-progress (cycle_pre.py:226); git_ops pull stash-pop-conflict strands WIP (cycle_pre.py:172). So uncommitted Part 2 WIP doesn't reliably survive a context-pressure reboot → #11511 churn.
 - FILED #12142 (high, skill): generalizes the WIP-loss bug (affects any large task). #11511 = live instance (checkpoint/decompose guidance posted there).
 - WATCH: iter-471+ = skill broke the loop. If it can't (framework eats WIP), #12142 fix is the real cure. Reboots harmless to stability throughout.
+
+## >>> UPDATE 20:59 — skill STOPPED per operator (reboots halted) <<<
+- Operator: "seeing many reboots, stop it". STOPPED skill (intent=stopped, 0 procs, confirmed no respawn 40s). Reboots HALTED. dm/qa/pm unaffected.
+- skill now intentionally DOWN (no work while down). Reboots were #11511 Part2 churn (too big for context window, WIP lost per reboot — #12142 framework + #11511 decompose).
+- TO RESTART skill without churn (operator choice): (a) fix #12142/land #11511-decompose first; (b) restart but clear #11511 from skill working-state → steer to smaller work; (c) leave down.
+- NOTE: skill is the worker that fixes #12142/#11511 — chicken/egg. With skill down those don't progress. Discuss with operator.
