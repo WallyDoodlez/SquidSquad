@@ -1811,6 +1811,50 @@ def _check_mandatory_roles(roles: list) -> list[str]:
     return [r for r in MANDATORY_ROLES if r not in roles]
 
 
+def _aliases_for_roles(roles: list) -> list:
+    """Map role identities to the install's ALIASES for ``.local-config`` keying
+    (#11600 / #12380).
+
+    ``.local-config`` MUST be keyed by aliases — that is what every runtime
+    consumer resolves clone paths by (``boot_remote._get_clone_path``, the
+    harness ``restart_agent`` path, ``_get_all_roles``). But
+    ``_collect_all_roles()`` includes the mandatory **role-CLASSES**
+    ``pm``/``verifier``/``dm``; for a legacy-renamed install the verifier
+    class's alias is ``qa`` (config ``## Aliases`` declares ``- **qa**: qa``).
+    Writing the role-class ``verifier`` produces a key no consumer looks up, so
+    the ``qa`` agent silently drops out of ``.local-config`` on every
+    compose/restart and boots into the fallback (PM's clone) or refuses to boot.
+
+    Resolution: a role already present as an alias key (``skill``/``pm``/``dm``)
+    passes through unchanged; a role-class (``verifier``) resolves to the alias
+    whose role-class matches (``qa``). If the registry can't be read, return the
+    input unchanged (identity) so compose still produces *something* — same
+    behavior as before this fix. Inverse of the harness-side
+    ``ExternalActivityDetector._alias_for_role_class`` added for #12342.
+    """
+    try:
+        import config as _cfg
+        registry = _cfg.parse_aliases_registry()  # {alias: (role_class, l3)}
+    except Exception:
+        return list(roles)
+    if not registry:
+        return list(roles)
+    alias_keys = set(registry)
+    by_class: dict = {}
+    for alias, rc_tuple in registry.items():
+        rc = rc_tuple[0] if isinstance(rc_tuple, (list, tuple)) else rc_tuple
+        by_class.setdefault(rc, alias)
+    resolved = []
+    for role in roles:
+        if role in alias_keys:
+            resolved.append(role)            # already an alias
+        elif role in by_class:
+            resolved.append(by_class[role])  # role-class → its alias
+        else:
+            resolved.append(role)            # unknown — leave as-is
+    return resolved
+
+
 
 def main():
     args = sys.argv[1:]
@@ -1994,8 +2038,12 @@ def main():
             print(f"Every SquidSquad team requires PM, Verifier, and DM.", file=sys.stderr)
             print(f"Add missing roles with: /squidsquad-setup or manually create .squidsquad/{missing[0]}/", file=sys.stderr)
             sys.exit(1)
-        lc = generate_local_config(roles)
-        print(f"  .local-config: {len(roles)} agents -> {lc.relative_to(REPO_ROOT)}")
+        # #11600/#12380: key .local-config by ALIASES (qa), not role-classes
+        # (verifier) — the role-class form produces a key no runtime consumer
+        # resolves, dropping qa out of the config on every compose/restart.
+        alias_roles = _aliases_for_roles(roles)
+        lc = generate_local_config(alias_roles)
+        print(f"  .local-config: {len(alias_roles)} agents -> {lc.relative_to(REPO_ROOT)}")
 
     elif cmd == "upgrade-soul":
         if len(args) < 2:
