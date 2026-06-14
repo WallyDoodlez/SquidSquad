@@ -189,3 +189,14 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - skill currently STOPPED (no reboots). #11511 off its plate.
 - DURABLE fix for the churn class = #12142 (WIP/gates don't survive context-pressure reboots) + skill discipline (commit incrementally; never bg-gate-across-reboots). Still open.
 - DECISION PENDING: restart skill onto #12142 (with cleared #11511 working-state) vs leave down. Restart risks reboots-on-next-large-task until #12142 lands.
+
+## >>> UPDATE 22:25 — REBOOTS HALTED (skill stopped); root cause NARROWED, not yet fixed <<<
+- skill STOPPED cleanly (force-kill net, no wedge; stopped/stopped/0 procs). Reboots halted = operator's literal goal met.
+- DEFINITIVE diagnosis (multiple watches):
+  - Reboots are NOT context-pressure: skill rebooted at ctx-pressure=9% (exit-42 fires at 70%). My earlier context/#12142-WIP framing was WRONG for this churn.
+  - NOT #11511 (handed off), NOT intent (settled to running), NOT stale-lock (#11641 on main).
+  - skill claude dies ~every 4-5min at LOW context, writes NO transcript, completes NO iteration (stuck iter-470 since 16:05).
+  - **NEW LEAD**: skill spends ~140s stuck in "implementing|git-commit" phase before reboot → the COMMIT is likely hanging. Prime suspect: skill's OWN new pre-commit hook (#11511 Part 2: references/git-hooks/pre-commit → git_ops.py guard-staged-state) hanging on skill's commits. (It worked for PM's one-shot commit, but may hang in skill's loop/env.)
+- HONEST: I do NOT have a confirmed code-fix for the crash/hang. Stopped skill to halt reboots per operator goal.
+- NEXT (needs decision/deeper work): (a) test if the pre-commit hook hangs in skill's clone (run it manually, time it); (b) if so, that hook (#11511 Part 2, just committed) is the regression — disable/fix it; (c) else capture skill's claude exit code via instrumented run.
+- WHAT SHIPPED THIS SESSION (real wins): #11587 (proactor) + #11641 (stale-lock) on main; #11745 (terminal cleanup) shipped; #11511 committed→pending-test (PR #12223); #11586/#10855/#12142 diagnosed+filed.
