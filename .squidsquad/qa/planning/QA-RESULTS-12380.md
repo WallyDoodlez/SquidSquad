@@ -36,3 +36,25 @@ The static test gate (`tests/run_tests.py`) **exits 0 despite the failing gated 
 ## Recommendation
 
 Back to in-progress (skill). Update `test_restart_endpoint_refuses_before_mutating_intent` to not depend on `qa` being unregistered (the very condition #12380 removes). Re-submit to pending-test; QA re-verifies TC-5/TC-7 + full compose suite. Ship counter NOT bumped.
+
+---
+
+## Re-verification — 2026-06-14 12:42 (qa cycle 151, POLLING)
+
+**Verdict: ✅ PASS → pending-ship.** Skill fixed the cy141 blocking regression in commit `4e39f0750`. Verified on branch `squidsquad/task/12380` (HEAD `4e39f0750`).
+
+| TC | AC | Result | Evidence (this run) |
+|----|----|--------|---------------------|
+| TC-1 | AC1 | ✅ PASS | LIVE `_aliases_for_roles(['skill','pm','verifier','dm'])` → `['skill','pm','qa','dm']`; verifier absent, qa present. |
+| TC-5 | AC4 | ✅ PASS | `TestAliasesForRoles12380` 7/7. |
+| TC-7 | regression | ✅ **PASS (fixed)** | `test_restart_endpoint_refuses_before_mutating_intent` now GREEN (1 passed). Full `test_harness.py` + `test_compose.py` = **281 passed**, 1 warning. |
+
+(AC1-E2E/AC2/AC3/AC5 were PASS in the cy141 run and the underlying code is unchanged; the only delta this cycle is the test-isolation fix.)
+
+**Regression-fix quality check (not masking).** Diff `4e39f0750` on `test_harness.py`: the test now `patch.object(boot_remote, "_get_clone_path", side_effect=CloneResolutionError(...))` so it CONTROLS the resolution failure instead of depending on the incidental #11600 live-config state. All original assertions preserved (`status_code == 500`, `"clone resolution failed"`, no restarting-state created). The behavior under test (resolve-clone-BEFORE-mutating-intent refusal path) is intact — this is exactly the fix prescribed in the cy141 FAIL. Proper isolation, not a masked/deleted assertion.
+
+**1 warning (non-blocking, pre-existing):** `PytestUnhandledThreadExceptionWarning` — a shutdown thread in `harness.py:_log` prints the 🦑 emoji which the Windows cp1252 console can't encode. Environment encoding quirk, not introduced by #12380, test still passes.
+
+**Merge + state note.** Approved (GitHub blocked self-approve — single-account multi-agent setup, formality only) and squash-merged PR #12391 to main per the Merge & Ship gate (MERGEABLE/CLEAN, no `review:human-required`). The PR carried a closing-keyword for #12380 → GitHub AUTO-CLOSED the issue while the tracker label was still `pending-test` (inconsistent state; bypassed DM). Corrected: re-opened + transitioned `pending-test → pending-ship` so DM completes the ship ceremony (counter bump + changelog) and closes via `tracker.py` (shipped). **Ship counter NOT bumped** (DM owns it).
+
+**Process flag for PM/DM (not a verdict):** QA-merging a PR that contains a `fixes #N` closing keyword short-circuits the pending-ship→DM gate by auto-closing the issue on merge. Either QA shouldn't carry the closing keyword, or the merge step should belong to DM. Surfacing for process clarification.
