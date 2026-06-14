@@ -458,14 +458,26 @@ class HarnessState:
                         agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
                         _log(f"{role}: alive with new PID (stale intent={old_intent}), reset to running (#7637)")
-                elif agent.status not in ("starting", "crash-looping"):
+                elif agent.status == "crash-looping":
+                    # #12244 P2: a dead agent waiting out its backoff normally
+                    # KEEPS the "crash-looping" status (preserved like
+                    # "starting") so the resume branch below recognises it and
+                    # operators see the real reason — instead of being
+                    # relabelled "unknown" on the next poll. BUT an operator
+                    # stop wins over a backoff: when intent is STOPPING/STOPPED,
+                    # abandon the wait and settle to "stopped" so the STOPPING
+                    # fulfillment below can finish it (otherwise a crash-looping
+                    # agent + /stop would wedge forever — neither is_dead nor
+                    # the resume branch fire for STOPPING intent).
+                    if agent.intent in (
+                        AgentState.INTENT_STOPPING, AgentState.INTENT_STOPPED
+                    ):
+                        agent.status = "stopped"
+                        agent.reboot_blocked_until = None
+                        state_changed = True
+                elif agent.status != "starting":
                     # #4792: stop is now expressed via intent (INTENT_STOPPING
                     # → INTENT_STOPPED), not a sentinel file.
-                    # #12244 P2: "crash-looping" is preserved like "starting" —
-                    # a dead agent waiting out its backoff must keep that status
-                    # so the resume branch below recognises it (and operators
-                    # see the real reason) rather than being relabelled
-                    # "unknown" on the next poll.
                     if agent.intent in (
                         AgentState.INTENT_STOPPING, AgentState.INTENT_STOPPED
                     ):
@@ -598,15 +610,18 @@ class HarnessState:
             _log(f"Auto-rebooting {role} (was running, intent={self.agents[role].intent})")
             try:
                 result = boot_remote.boot_agent(role)
-                if result.get("success") and result.get("terminal_pid"):
+                if result.get("success"):
                     with self._lock:
                         agent = self.agents.get(role)
                         if agent:
-                            agent.terminal_pid = result["terminal_pid"]
+                            agent.terminal_pid = result.get("terminal_pid")
                             # #12244 P2 — stamp the (re)spawn time so the next
                             # death's lifetime is measured from here; this is
                             # what makes the fast-death streak accumulate across
                             # auto-reboots (boot_time is not refreshed here).
+                            # Gated on success (not terminal_pid) to match the
+                            # other three spawn paths — a successful spawn always
+                            # stamps, even if terminal_pid is absent.
                             agent.last_spawn_at = time.time()
                 elif result.get("action") == "error":
                     # #11640: boot_agent refused (e.g. unregistered/missing

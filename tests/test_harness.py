@@ -782,6 +782,25 @@ class TestCrashLoopBackoff(unittest.TestCase):
         self.assertIsNone(agent.reboot_blocked_until)
         self.assertEqual(agent.status, "running")
 
+    def test_crash_looping_agent_can_still_be_stopped(self):
+        """#12244 P2 (DS-review finding 1): an operator stop must win over a
+        backoff. A crash-looping agent whose intent flips to STOPPING settles to
+        stopped/STOPPED instead of wedging forever (is_dead and the resume
+        branch never fire for STOPPING)."""
+        from harness import AgentState, FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, agent = self._make_dead_agent(
+            last_spawn_at=now - 500, fast_deaths=FAST_DEATH_THRESHOLD,
+            status="crash-looping", reboot_blocked_until=now + 120,
+            claude_pid=None)
+        agent.intent = AgentState.INTENT_STOPPING
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        settled = hs.get_agent("skill")
+        self.assertEqual(settled.intent, AgentState.INTENT_STOPPED)
+        self.assertEqual(settled.status, "stopped")
+        self.assertIsNone(settled.reboot_blocked_until)
+
     def test_new_fields_round_trip_through_state_file(self):
         """to_dict + load_state persist the P2 fields across a harness restart."""
         import tempfile
