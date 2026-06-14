@@ -1214,6 +1214,14 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
     except ImportError:
         pass
     else:
+        # #11600/#12380: this path is already alias-keyed and does NOT need
+        # compose._aliases_for_roles. By construction `agent["id"]` IS the
+        # alias (it is the agent's directory name and the clone-dir suffix),
+        # and `clone_paths` above is keyed by the same `agent["id"]` — so
+        # .local-config keys and clone-path keys already agree on the alias.
+        # The role-class→alias bug fixed in compose.deploy-all only arises
+        # there because `_collect_all_roles()` injects role-CLASSES; the wizard
+        # spec never does.
         all_roles = [a["id"] for a in spec["agents"]]
         generate_local_config(all_roles, target_root=target_root,
                               clone_paths=clone_paths)
