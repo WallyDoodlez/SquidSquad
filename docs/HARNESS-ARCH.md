@@ -635,8 +635,11 @@ Liveness rests on two mechanisms, both **by-products of normal agent operation**
    - **Mid-tool-call** — `PreToolUse` with no matching `PostToolUse` (a long `Bash`, slow build, or **subagent call**). Treat as working; bounded only by a generous `tool_call_max` (to catch a genuinely hung tool).
    - **Waiting on a human / external input** — `Notification` (`permission_prompt`, `idle_prompt`, MCP elicitation). The agent is blocked on input, not dead; surface it (operators may need to act) but do not kill it.
    - **Rate-limited / API error** — `StopFailure` (`rate_limit`, `overloaded`, `billing_error`, …). The agent is throttled, not faulty: **back off until the limit clears rather than reboot** (a reboot would re-hit the same limit). See §13.8.
+   - **Compacting** — `PreCompact` with no `PostCompact` yet. The agent is summarising context in place and continues the same session; not dead.
 
-The whole rule: **after dispatch, no activity AND no hook explaining the silence → dead.** A wedged loop has no explaining hook → caught; a busy / waiting / rate-limited agent has one → protected (and a rate-limited one is backed off, not rebooted).
+The whole rule: **after dispatch, no activity AND no hook explaining the silence → dead.** A wedged loop has no explaining hook → caught; a busy / waiting / rate-limited / compacting agent has one → protected.
+
+**Context pressure is the agent's concern, not the harness's.** Claude Code auto-compacts in place when context fills — the session continues, so context pressure never causes a restart. The harness only observes it (`PreCompact` / `PostCompact`). Compaction is tuned per-clone in `settings.json` (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) to compact early with headroom, and a `## Compact Instructions` block in each role's CLAUDE.md preserves the tracker state and current task across a compaction.
 
 ### 15.2 Enriched tool-call signal
 
@@ -648,25 +651,25 @@ The `PreToolUse` / `PostToolUse` hook payload carries **what the agent is doing*
 sequenceDiagram
     autonumber
     participant H as Harness
-    participant A as Agent (LLM loop)
+    participant A as Agent
 
     H->>A: nudge / assign work
-    Note over H,A: HEARTBEAT = the agent's own activity
+    Note over H,A: heartbeat = the agent's own activity
     loop each tool call while working
-        A->>H: PreToolUse(tool, task/issue, phase) → in-flight=true · heartbeat
-        A->>H: PostToolUse(result) / PostToolUseFailure → in-flight=false · heartbeat
+        A->>H: PreToolUse - tool, task, phase - sets in-flight, heartbeat
+        A->>H: PostToolUse / PostToolUseFailure - clears in-flight, heartbeat
     end
-    A->>H: cycle_post (cycle complete) → heartbeat
-    A->>H: SessionEnd(+reason) → record exit cause
+    A->>H: cycle_post - heartbeat
+    A->>H: SessionEnd - reason recorded
 
-    Note over H: after dispatch, expect activity within a window:<br/> • a hook explains the silence? → mid-call (don't kill, until tool_call_max) ·<br/>   waiting on input (Notification: don't kill) · rate-limited (StopFailure: back off, don't reboot)<br/> • silent & no explaining hook? → dead → reboot (SessionEnd reason → respawn/backoff/stop)<br/>idle (no work dispatched) → not actively checked · PID only to KILL
+    Note over H: After dispatch, expect activity within a window.<br/>A hook explains the silence - mid-call, waiting via Notification, rate-limited via StopFailure - do NOT kill.<br/>Silent and no explaining hook - dead, reboot; SessionEnd reason picks respawn / backoff / stop.<br/>Idle with no work dispatched - not actively checked. PID used only to kill.
 ```
 
 ### 15.4 `SessionEnd` reason
 
 The `SessionEnd` hook reports the exit reason; the harness's reboot decision keys off it:
 
-- cooperative exit-42 (context pressure / intent flip) → respawn, fresh session
+- cooperative exit-42 (intent flip) → respawn, fresh session  *(context pressure no longer exits — it auto-compacts in place, §15.1)*
 - clean stop (intent=`stopping`) → mark stopped
 - crash / non-zero / usage-limit → apply backoff (§13.8); do **not** tight-loop
 
@@ -706,14 +709,14 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 | `Stop` (`stop_hook_active`) | agent finishes a turn | turn-complete heartbeat |
 | `StopFailure` (matcher: `rate_limit`/`overloaded`/`billing_error`/`authentication_failed`/…) | a turn ends on an API error | **names the failure** — usage/rate-limit, billing, auth → cause-aware reboot/backoff |
 | `Notification` (`notification_type`: `permission_prompt`/`idle_prompt`/…) | agent needs attention | **stuck-on-permission** + idle detection |
-| `PreCompact` (`manual`/`auto`) | before context compaction | **context-pressure early warning** (predict the exit-42 restart) |
+| `PreCompact` / `PostCompact` (`manual`/`auto`) | around context compaction | **compaction telemetry** — agent summarising context in place and continuing (self-managed, not a restart) |
 | `SessionEnd` (`exit_reason`) | session terminates | exit cause for the reboot decision (§15.4) |
 
 ### 16.2 High-value signals
 
 - **`StopFailure` → cause-aware reboot.** It names the API error (`rate_limit`, `overloaded`, `billing_error`, …), so the reboot decision is cause-aware: `rate_limit` → back off until reset; `server_error` → quick retry (§13.8).
 - **`Notification` → stall detection.** An agent blocked waiting on a permission / input decision is directly visible.
-- **`PreCompact(auto)` → context-pressure warning.** The harness sees context pressure building ahead of the cooperative exit-42.
+- **`PreCompact` / `PostCompact` → compaction telemetry.** The agent is compacting context in place and continuing the same session — observational; context pressure is self-managed, not a restart (§15.1).
 - **`PostToolUseFailure` → tool-error stream** for diagnosis and display.
 
 ### 16.3 Constraints
@@ -732,6 +735,7 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 
 ## 17. Revision log
 
+- **2026-06-14 (v18)** — Context pressure handled by Claude Code **auto-compaction** (operator), not a harness restart: §15.1 adds "compacting" as a pause state and a note that the agent auto-compacts in place (session continues; tuned per-clone via `CLAUDE_CODE_AUTO_COMPACT_WINDOW` / `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` + a `## Compact Instructions` CLAUDE.md block); §15.4 exit-42 is now intent-flip only; §16 `PreCompact`/`PostCompact` reframed as compaction telemetry. Also fixed the §15.3 Mermaid diagram render (removed parens in the participant alias and the `→`/`·`/`•` glyphs that broke GitHub's renderer).
 - **2026-06-14 (v17)** — Scrubbed §15/§16 of back-references and motivational/incident framing (operator): removed "the original incident", "previously lacked", "currently cause-agnostic", "upgrades #12244 / answers #12409", and the "recommended first landing" sequencing. §15/§16 now read purely as the target architecture; delta, migration, and landing order live in #12271.
 - **2026-06-14 (v16)** — §15 **pause-aware guard** (operator): generalised the in-flight guard so silence is a death signal *only when no hook explains it*. Three hook-reported pause states never lose life — mid-tool-call (`Pre`/`PostToolUse`, bounded by `tool_call_max`), waiting on input/permission/elicitation (`Notification`), and rate-limited/API-error (`StopFailure` → **back off, do not reboot** — rebooting hits the same limit, the original incident). Rule is now "no activity AND no explaining hook → dead." Intro, §15.1, and diagram updated.
 - **2026-06-14 (v15)** — §15 finalised to the **activity-heartbeat** model (operator): liveness = the agent's own activity (`PostToolUse`/`PostToolUseFailure` + `cycle_post`) evaluated *relative to dispatched work* (silence after a nudge, not mid-call → dead; idle agents checked on next dispatch) + the in-flight guard. **Dropped the pong / harness-ping and the L1 ping-priority rule entirely** — the tool-call hook is a deterministic, more-reliable heartbeat than an LLM-answered ping. Diagram + constraints updated. Added **§16 "Agent observability via hooks"** — the curated hook catalog (the telemetry stream the harness consumes; liveness is one consumer, display #12410 another), highlighting `StopFailure` (cause-aware reboot → upgrades #12244, answers #12409), `Notification(permission_prompt)` (stall), `PreCompact(auto)` (context-pressure warning). Revision log renumbered §16→§17.
