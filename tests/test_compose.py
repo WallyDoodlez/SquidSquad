@@ -406,6 +406,94 @@ class TestCollectAllRoles:
 
 
 # ---------------------------------------------------------------------------
+# _aliases_for_roles — #11600 / #12380
+# ---------------------------------------------------------------------------
+
+class TestAliasesForRoles12380:
+    """#11600/#12380: .local-config must be keyed by ALIASES (qa), not the
+    role-CLASSES (verifier) that _collect_all_roles() emits — else the runtime
+    clone-path lookup by alias misses and qa boots into PM's clone."""
+
+    def _patch_registry(self, registry):
+        import config as _cfg
+        return patch.object(_cfg, "parse_aliases_registry", return_value=registry)
+
+    def test_verifier_role_class_resolves_to_qa_alias(self):
+        """The core bug: the mandatory role-class `verifier` must map to the
+        install's alias `qa`; aliases (skill/pm/dm) pass through."""
+        registry = {"skill": ("worker", "skill"), "pm": ("pm", None),
+                    "dm": ("dm", None), "qa": ("verifier", None)}
+        with self._patch_registry(registry):
+            out = compose._aliases_for_roles(["skill", "pm", "verifier", "dm"])
+        assert out == ["skill", "pm", "qa", "dm"], (
+            "verifier role-class must resolve to the qa alias; everything else "
+            "passes through (#12380)"
+        )
+        assert "verifier" not in out
+
+    def test_aliases_pass_through_unchanged(self):
+        registry = {"skill": ("worker", "skill"), "pm": ("pm", None),
+                    "dm": ("dm", None), "qa": ("verifier", None)}
+        with self._patch_registry(registry):
+            out = compose._aliases_for_roles(["skill", "pm", "dm"])
+        assert out == ["skill", "pm", "dm"]
+
+    def test_non_renamed_install_is_identity(self):
+        """An install whose verifier alias IS literally `verifier` must be
+        unaffected — resolution is identity there."""
+        registry = {"skill": ("worker", "skill"), "pm": ("pm", None),
+                    "dm": ("dm", None), "verifier": ("verifier", None)}
+        with self._patch_registry(registry):
+            out = compose._aliases_for_roles(["skill", "pm", "verifier", "dm"])
+        assert out == ["skill", "pm", "verifier", "dm"]
+
+    def test_registry_unreadable_returns_input(self):
+        """If the registry can't be parsed, return the input unchanged so
+        compose still produces a .local-config (no worse than pre-fix)."""
+        import config as _cfg
+        with patch.object(_cfg, "parse_aliases_registry",
+                          side_effect=Exception("boom")):
+            out = compose._aliases_for_roles(["skill", "pm", "verifier", "dm"])
+        assert out == ["skill", "pm", "verifier", "dm"]
+
+    def test_empty_registry_returns_input(self):
+        with self._patch_registry({}):
+            out = compose._aliases_for_roles(["skill", "pm", "verifier", "dm"])
+        assert out == ["skill", "pm", "verifier", "dm"]
+
+    def test_no_duplicate_when_workers_lists_verifier_alias(self):
+        """DS-REVIEW-12380 Finding 1: a legacy `workers: qa` lists the verifier
+        alias, and _collect_all_roles still appends the role-class `verifier`
+        (its membership test is literal). Both resolve to `qa` — the output
+        must dedup to a single `qa`, not produce two `- **qa**:` lines."""
+        registry = {"qa": ("verifier", None), "skill": ("worker", "skill"),
+                    "pm": ("pm", None), "dm": ("dm", None)}
+        with self._patch_registry(registry):
+            out = compose._aliases_for_roles(
+                ["qa", "skill", "pm", "verifier", "dm"])
+        assert out == ["qa", "skill", "pm", "dm"], (
+            f"verifier+qa must collapse to one qa, got {out}")
+        assert out.count("qa") == 1
+
+    def test_end_to_end_local_config_has_qa_not_verifier(self, tmp_path):
+        """Integration: resolved aliases produce a `qa` key with the
+        ../project-qa default path, and no `verifier` key."""
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        registry = {"skill": ("worker", "skill"), "pm": ("pm", None),
+                    "dm": ("dm", None), "qa": ("verifier", None)}
+        with self._patch_registry(registry), \
+             patch.object(compose, "_read_config_value",
+                          side_effect=lambda f: "SquidSquad" if f == "project-name" else ""):
+            alias_roles = compose._aliases_for_roles(
+                ["skill", "pm", "verifier", "dm"])
+            path = compose.generate_local_config(alias_roles, target_root=tmp_path)
+        content = path.read_text(encoding="utf-8")
+        assert "- **qa**: ../SquidSquad-qa" in content
+        assert "verifier" not in content
+
+
+# ---------------------------------------------------------------------------
 # Layered role architecture (#3465)
 # ---------------------------------------------------------------------------
 
