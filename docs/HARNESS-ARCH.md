@@ -417,6 +417,7 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 | **`.squidsquad/.event-state.json` corrupt** | Cursors reset to `null`; agents re-consume from deque head on next read. No crash. |
 | **`.squidsquad/.harness-port` file missing** | Operator's start command writes a new file; if not run, agents treat harness as unreachable (silent no-op). |
 | **Agent PID dies unexpectedly** | Health poller catches it within 5s; auto-respawn if intent=`running`. |
+| **Agent process alive but inert (zombie)** | NOT detected today — PID-liveness reports it healthy indefinitely (§13.7, #10855). Recovery is operator-triggered restart. Proposed fix: progress-based liveness (§15). |
 | **Port collision at startup** | Harness logs warning, picks next free port (probes upward from 7373). Updates `.squidsquad/.harness-port`. |
 | **uvicorn / FastAPI exception** | Logged; the affected endpoint returns 500; other endpoints continue to serve. |
 
@@ -466,6 +467,10 @@ EAD's polling loop hard-codes the GitHub `gh api` shape. Non-GitHub backends (Fo
 ### 13.6 Work-queue endpoint is special-cased to human only
 
 §4.3 documents the principled `/queue/{alias}` shape. Current code only implements `/human/queue` (`harness.py:2046`, ticket #8704). The work-queue logic itself (priority sort, status filter) already lives in `tracker.py work-queue` and is alias-parameterized; the harness route just needs to be renamed and the status-label filter generalized so it derives from the alias's responsibility set rather than hard-coding `status:pending-human-*`. Land-time work: rename the route, parameterize the filter, update any TUI clients polling the old path. Migration plan keeps the legacy `/human/queue` path as a **301 redirect** to `/queue/human` for one release cycle so TUI clients can update without coordinated downtime.
+
+### 13.7 PID-based liveness cannot detect inert agents (zombies)
+
+Health-poll (§7.3) treats "`claude_pid` alive" as "agent alive". A wedged `claude.exe` — process up, but the agent loop processing no events and completing no cycles — is reported healthy indefinitely. Observed in production 2026-06-14: a verifier agent ran ~22h with `current-state` frozen at `Building work queue…` and no completed cycle while health-poll reported it healthy throughout (live reproduction of #10855). The signal is structurally wrong: PID proves a *process exists*, not that the *agent functions*. Proposed fix: progress-based liveness (§15, tracked by #12271). Until it lands, inert agents are recovered only by operator-triggered restart.
 
 ---
 
@@ -567,8 +572,67 @@ In landing order:
 
 ---
 
-## 15. Revision log
+## 15. Proposed: progress-based agent liveness (hooks + heartbeat)
 
+> **Scope reminder:** like §14, this is a **proposed redesign — not implemented**. §§7.3–7.5, §10, and §11 remain authoritative for the current PID-based liveness model. Tracked by #12271 (gated on human approval). If this lands, §7.3 (health poll), §7.4 (cooperative exit), §7.5 (state file), §10 (restart safety), and §11 (failure modes) are rewritten in the same change, and AGENT-RUNTIME §8.2 (status state machine) ships the matching agent-side view.
+>
+> **Relationship to §14:** §14 keeps PID-based liveness and merely moves PID *resolution* into the harness. This section goes further — it removes PID from the *liveness decision* entirely. The two compose: if liveness is progress-based, even more of the PID machinery §14 relocates can be deleted rather than relocated (see §15.5).
+
+### 15.1 The problem: PID answers the wrong question
+
+The health poll (§7.3) equates "the `claude_pid` process is alive" with "the agent is functioning." These are different questions:
+
+- **False-positive (zombie).** A `claude.exe` can be alive while the agent loop is wedged — processing no events, completing no cycles. See §13.7 / #10855 (the ~22h inert verifier observed 2026-06-14). PID-liveness is structurally blind to this.
+- **False-negative + accidental complexity.** `_resolve_claude_exe_pid`'s descendant walk, the `toolhelp32` ctypes binding (#10440), and the `tasklist`-avoidance work (#9904/#9903) exist *only* to make PID-liveness reliable past the Windows `cmd.exe` shim. A large share of the harness's Windows-specific fragility serves a signal that still cannot detect a zombie.
+- **The proof-of-life signals already arrive — and are ignored for liveness.** The harness already receives `booted` (ack-boot), `cursor-advanced`/`ack-cursor`, and `event_poll`'s per-tick `GET /events/for/{alias}`. Today these gate event dispatch only; the lifecycle/reboot logic consults PID instead.
+
+### 15.2 The model: liveness = recent progress; PID demoted to teardown-only
+
+An agent is **alive** iff its real work/wait loop emitted a progress signal within a bounded `liveness_timeout`. The emitters must be ones that *only fire when the live path actually runs* — an independent heartbeat thread would merely re-create PID-liveness (it pings happily while the LLM is wedged). PID is retained solely to *kill* a process during teardown, never to *prove* it alive.
+
+Coverage regimes, each with an emitter that runs through the real loop:
+
+| Regime | Emitter | Why it proves life |
+|---|---|---|
+| Boot | `SessionStart` hook → harness | Process reached the claude session and ran its first hook |
+| Active work | `PreToolUse` / `PostToolUse` hooks → harness | Fires on every tool call; a wedged LLM makes no tool calls → no hook → correctly seen dead. Covers the window `event_poll` cannot (Monitor is not armed while the LLM works) |
+| Idle wait | `event_poll` poll-ticks (already received) + `ack-cursor` on real events | The idle loop stops ticking if it wedges — exactly where the 22h zombie died |
+| Teardown | `SessionEnd` hook (+ exit code) → harness | Clean, *reasoned* exit signal (see §15.3) |
+
+The liveness check becomes: "did any emitter touch `last_seen` within `liveness_timeout`?" Dead = none did. Reboot decisions key off this, not off `OpenProcess`.
+
+### 15.3 `SessionEnd`-reason — the highest-value first slice
+
+Today the harness reboots on "dead PID + intent=`running`" with no idea *why* the process died — the exact ambiguity at the centre of the #12244 reboot saga (it cannot tell cooperative exit-42 from a crash from a usage-limit exit). A `SessionEnd` hook reporting the exit reason turns that inference into a fact:
+
+- cooperative exit-42 (context pressure / intent flip) → respawn, fresh session
+- clean stop (intent=`stopping`) → mark stopped
+- crash / non-zero / usage-limit → apply backoff (#12244); do **not** tight-loop
+
+This slice is independently valuable and shippable before the full heartbeat work, and is the recommended first landing.
+
+### 15.4 Design constraints (non-negotiable)
+
+1. **Heartbeat hooks are fire-and-forget and fail-open.** `PreToolUse` can *block* a tool call; a heartbeat hook that hangs or errors on a harness blip would stall every tool the agent runs. Hard rule: bounded timeout, backgrounded, always exit 0. Liveness instrumentation must never gate real work.
+2. **Long-single-call gap.** Hooks fire on tool-call *boundaries*; a single long call (e.g. a 5-minute test) emits nothing between `PreToolUse` and `PostToolUse`. Mitigation: `PreToolUse` announces a long op so the harness *suspends* the liveness timeout until `PostToolUse` clears it. Until that exists, `liveness_timeout` must exceed the longest legitimate single op — otherwise the harness reboots a healthy, busy agent (the opposite failure, arguably worse than the zombie).
+3. **Hook config is deployed per-clone.** `settings.json` hook wiring is written by compose/installer into each agent clone — an integration point with COMPOSE-ARCHITECTURE / INSTALLER-ARCH.
+4. **Overhead is acceptable.** A localhost POST per tool call is cheap; the harness bumps `last_seen` and does not log each tick.
+
+### 15.5 Interaction with §14 and migration
+
+§14 relocates PID resolution into the harness but keeps it load-bearing for liveness. Under this proposal PID is no longer the liveness signal, so the post-spawn descendant/PID-resolution machinery §14 preserves is needed only for *teardown* (knowing which PID to kill) — a weaker requirement tolerant of approximate resolution. Suggested landing order: ship `SessionEnd`-reason (§15.3) first (smallest, de-risks reboot); then the heartbeat emitters + `last_seen` liveness; then collapse the remaining PID machinery in concert with §14.
+
+### 15.6 Open questions
+
+- `liveness_timeout` value, and whether it is per-regime (idle vs active) — depends on the long-op-suspend mechanism (constraint 2) being settled first.
+- Whether `event_poll`'s existing polls are counted directly as heartbeats or a dedicated heartbeat ping is added (reuse-existing vs explicit).
+- Hook-failure observability: how the harness distinguishes "no heartbeat because dead" from "no heartbeat because the hook is misconfigured."
+
+---
+
+## 16. Revision log
+
+- **2026-06-14 (v6)** — Added §15 "Proposed: progress-based agent liveness (hooks + heartbeat)" (#12271): documents PID-liveness's zombie false-positive (#10855) and the accidental Windows complexity it carries; specifies a progress-based model (`SessionStart`/`Pre`+`PostToolUse`/`Stop`/`SessionEnd` hooks + `event_poll` idle-ticks + acks) with PID demoted to teardown-only, and `SessionEnd`-reason as the first slice (de-risks the #12244 reboot decision). Added §13.7 (zombie known-gap) and the §11 zombie failure-mode row. Revision log renumbered §15→§16. Marked proposal-only, consistent with §14's convention.
 - **2026-05-30 (v5)** — Root-cause fix #3: boot sequence cross-doc fragmentation. §7.2 designated canonical authoritative source for agent boot sequence; expanded from 5 to 6 prose steps with explicit parallel-spawn language; added Mermaid sequence diagram (first and only process-spawn diagram in the docs). AGENT-RUNTIME §8.0 spawn-ordering sentence removed and replaced with cross-reference. AGENT-RUNTIME §8.2 full sequence diagram removed; replaced with agent-side-only 5-step list + cross-reference to this section.
 - **2026-05-30 (v4)** — PR #10378 round-5 audit pass. H1: moved `event_poll.py` INTO the §14.1 "Before" tree as an explicit sibling subtree under harness (was blockquote-only). H2: added "First-boot discovery" subsection in §7.2 documenting `.local-config` as the bootstrap source when `.harness-state.json` does not exist. M1: tightened §2 start.sh trigger wording to "unreachable (port file missing or HTTP probe fails)" — removes ambiguous "not running OR". M2: updated §9 `.event-state.json` Purpose column to explicitly exclude the deque (deque is in-memory only per §5.1).
 - **2026-05-30 (v3)** — PR #10378 round-4 audit pass. H1: annotated `event_poll.py` as a separate sibling subtree in §14.1 (was absent from the "Before" tree). Cross/INSTALLER M1: tightened §2 start.sh trigger wording to distinguish "not running OR unreachable" from "running-and-reachable" upgrade path. M1: added one-time `boot_agent(role)` alias-value clarification on first occurrence in §3 (rename tracked in #10358). H2 (§9 `.event-state.json` row): pre-existing on this branch — no change needed.
