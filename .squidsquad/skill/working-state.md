@@ -8,7 +8,7 @@
 ## Completed this session
 - **#12282** → SHIPPED (PR #12341). Root cause of reboot churn: a test POSTed a real /restart to the live harness every full-suite run. Vault: [[learning-default-port-fallback-is-live-egress-trap-in-tests]].
 - **#12244** → SHIPPED (re-marked from stuck in-progress per PM AC-amendment).
-- **#12342** → pending-test (PR #12364). Event-mode EAD work-routing fix: routes approved/open→worker, pending-test→verifier, pending-ship→dm; **DS review caught a back-transition starvation regression** in my first dedup design → refactored to one-entry-per-issue (last-status), so reject loops re-emit. 14 EAD tests + full suite green. QA owns. DS-REVIEW-12342.md committed.
+- **#12342** → **SHIPPED** (PR #12364). Event-mode EAD work-routing fix: routes approved/open→worker, pending-test→verifier, pending-ship→dm; **DS review caught a back-transition starvation regression** in my first dedup design → refactored to one-entry-per-issue (last-status), so reject loops re-emit. 14 EAD tests + full suite green. DS-REVIEW-12342.md committed. **NOTE: activates on harness restart** (harness.py/tracker.py change); until then the live harness runs the old EAD and QA/DM still need polling/manual nudges.
 - **#12363** (NEW) filed — orphan claude/event_poll process accumulation (#12342 ask #3 split-off, medium).
 
 ## Next pickups (queue order, actionable)
