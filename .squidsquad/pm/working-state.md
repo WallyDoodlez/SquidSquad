@@ -200,3 +200,15 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - HONEST: I do NOT have a confirmed code-fix for the crash/hang. Stopped skill to halt reboots per operator goal.
 - NEXT (needs decision/deeper work): (a) test if the pre-commit hook hangs in skill's clone (run it manually, time it); (b) if so, that hook (#11511 Part 2, just committed) is the regression — disable/fix it; (c) else capture skill's claude exit code via instrumented run.
 - WHAT SHIPPED THIS SESSION (real wins): #11587 (proactor) + #11641 (stale-lock) on main; #11745 (terminal cleanup) shipped; #11511 committed→pending-test (PR #12223); #11586/#10855/#12142 diagnosed+filed.
+
+## >>> RESOLVED-DIAGNOSIS 22:45 — skill reboots = CLAUDE SESSION/USAGE LIMIT <<<
+- **DEFINITIVE ROOT CAUSE** (captured via manual thin_launcher run, /tmp/skill-diag.log):
+  `You've hit your session limit · resets 10:30pm (America/Toronto)` → `[thin-launcher] claude exited with code 1`.
+  Every fresh skill claude spawn hits the account session/usage cap → exit 1 → harness #4949 reboots → spawn → exit 1 → infinite loop. NOT a SquidSquad code bug; NOT context-pressure (8%); NOT #11511/#12142/#10855/stale-lock. Those were red herrings.
+- Why invisible: the limit message only prints to thin_launcher's wt tab, not to any harness/tracker state → looked like "reboots for no reason."
+- Post-22:30-reset: skill ran ~4min then re-hit cap (the churn itself burns sessions → re-caps). Vicious cycle.
+- dm/qa/pm survive because their sessions PREDATE the cap; only NEW spawns die.
+- **ACTION**: skill STOPPED (0 procs, intent=stopped) → halts quota burn + churn so the account can recover. dm/qa/pm still up.
+- **#12244 FILED** (high, skill): harness must detect session-limit exit and BACK OFF (pause respawn until reset), not hammer-reboot + burn quota.
+- **OPERATOR/ACCOUNT matter**: the Claude plan is hitting session caps with 4 concurrent agents. Options: wait for quota recovery (skill down meanwhile), check/upgrade plan, or reduce concurrent agent count. Restart skill once quota recovers.
+- Session real wins (unrelated, shipped): #11587+#11641 on main; #11745 shipped; #11511 committed→pending-test (PR #12223).
