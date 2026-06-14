@@ -181,11 +181,81 @@ def _do_pull(role=None):
 
 
 def _get_branch_name(role, number):
-    """Get branch name using configured pattern (#5040)."""
+    """Get branch name using configured pattern (#5040).
+
+    Fallback default is ``squidsquad/task/{number}`` to match
+    ``git_ops.get_branch_name`` (the #6526 canonical) — the two must agree so
+    helpers that compute a branch independently of ``task-begin`` (e.g.
+    ``_preserve_wip``, #12142) target the same feature branch the agent is
+    actually on.
+    """
     pattern = _config_get("branch-pattern")
     if not pattern:
-        pattern = "squidsquad/{role}/{number}"
+        pattern = "squidsquad/task/{number}"
     return pattern.format(role=role, number=number)
+
+
+def _preserve_wip(role, working_state):
+    """Commit uncommitted CODE WIP to the in-progress task's feature branch
+    BEFORE any branch switch or pull (#12142).
+
+    A task that exceeds one context window can reboot (context pressure)
+    mid-cycle, BEFORE ``cycle_post`` reaches its commit step. The uncommitted
+    WIP then survives into the next ``cycle_pre``, where ``_enforce_branch``
+    (``git checkout`` of the working branch when status != in-progress) can
+    ORPHAN it and ``_do_pull`` (git_ops stash/pop/drop) can STRAND it — so the
+    next cycle sees a clean tree and restarts the task from zero (an infinite
+    no-progress loop). Committing that WIP first preserves it deterministically,
+    independent of agent commit discipline.
+
+    Only fires when (a) ``working_state`` names an in-progress task with a
+    parseable issue number AND (b) the tree is dirty with CODE changes. State /
+    ephemeral files (``.squidsquad/``, ``.claude/``) are left untouched for the
+    normal state->main routing — ``git_ops commit-code`` excludes them. In the
+    normal (non-reboot) case ``cycle_post`` already committed, so the tree is
+    clean here and this is a cheap no-op.
+
+    Fail-open: any error logs and returns ``None``, leaving the tree no worse
+    than before — this guard must never break the cycle.
+
+    Returns ``{"committed": True, "branch": ..., "task": ...}`` when a WIP
+    commit was made, else ``None``.
+    """
+    try:
+        task = working_state.get("task", "none")
+        status = working_state.get("status", "none")
+        if task == "none" or status != "in-progress":
+            return None
+
+        # Extract issue number — same anchored pattern as _enforce_branch
+        # (#10072): tolerates "#9965", "9965", "#9965 — desc", "# 9965".
+        m = re.match(r"#*\s*(\d+)(?:\s|—|$)", task.lstrip())
+        if not m:
+            return None
+        number = m.group(1)
+
+        # Dirty check — skip the branch dance entirely on a clean tree.
+        changes = _run_script("git_ops.py", "has-changes")
+        if "true" not in (changes.stdout or "").lower():
+            return None
+
+        branch = _get_branch_name(role, number)
+        msg = (f"WIP checkpoint (#{number}) — auto-preserved by cycle_pre "
+               f"(#12142): committing mid-cycle work so a context-pressure "
+               f"reboot resumes instead of restarting")
+        result = _run_script("git_ops.py", "commit-code", role, branch, msg)
+        committed = result.returncode == 0 and "Committed code" in (result.stdout or "")
+        if committed:
+            print(f"  WIP preserved (#12142): committed code WIP to {branch} "
+                  f"before sync.")
+            return {"committed": True, "branch": branch, "task": number}
+        # commit-code is a no-op when only state/ephemeral files are dirty —
+        # that is the expected clean path, not an error.
+        return None
+    except Exception as exc:  # fail-open — never break the cycle
+        print(f"  WARNING: _preserve_wip raised {type(exc).__name__}: {exc} "
+              f"(continuing; WIP left as-is).", file=sys.stderr)
+        return None
 
 
 def _enforce_branch(role, working_state):
@@ -1349,6 +1419,12 @@ def main():
     # 1a. Read working state early to determine correct branch (#4942)
     working_state = _read_working_state(role)
 
+    # 1a-pre. Preserve uncommitted WIP from a mid-cycle context-pressure reboot
+    # (#12142) — commit code WIP to the in-progress task's feature branch BEFORE
+    # _enforce_branch (checkout can orphan) or _do_pull (stash drop can strand).
+    # Fail-open no-op on a clean tree (the normal case).
+    wip_preservation = _preserve_wip(role, working_state)
+
     # 1b. Enforce correct branch before pull (#4942, #5208)
     branch_correction = _enforce_branch(role, working_state)
 
@@ -1423,6 +1499,10 @@ def main():
     # Add branch correction if one was made (#5208)
     if branch_correction:
         cycle_input["branch_correction"] = branch_correction
+
+    # Add WIP preservation if one was made (#12142)
+    if wip_preservation:
+        cycle_input["wip_preservation"] = wip_preservation
 
     # Add ship-counter repair if one was made (#9772)
     if ship_counter_repair:
