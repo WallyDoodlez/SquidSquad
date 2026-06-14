@@ -56,7 +56,7 @@ The harness is **distinct from**:
 - **Runtime**: Python 3.12+, FastAPI + uvicorn for HTTP server, asyncio for event handling.
 - **Threading**: predominantly single asyncio event loop. A small number of background tasks (`ack-cursor consumer`, `timeout_scan`, `health_poll`, `EAD poller`) run as asyncio coroutines on the same loop; no thread pool.
 - **HTTP server**: uvicorn binds `127.0.0.1:<port>` (default `7373`; alternate port if occupied — see §6). FastAPI routes are coroutine handlers.
-- **Subprocess spawning**: `boot_agent(role)` shells out to a platform-appropriate launcher (cmd.exe on Windows, AppleScript on macOS, terminal-emulator on Linux) which spawns `thin_launcher.py` per agent. **Separately**, `boot_agent(role)` also spawns `event_poll.py` as a **direct child of the harness process** (per §7.2 step 4) — `event_poll` is NOT inside the launcher chain. See `boot_remote.py` for platform details. *(The signature `boot_agent(role)` accepts an alias value — legacy parameter name; rename tracked in #10358 along with the wire-format change.)*
+- **Subprocess spawning**: `boot_agent(role)` shells out to a platform-appropriate launcher (`cmd /c start` on Windows, `osascript`/Terminal.app on macOS, `tmux` on Linux) which runs `thin_launcher.py` per agent (see §14). **Separately**, `boot_agent(role)` also spawns `event_poll.py` as a **direct child of the harness process** (per §7.2 step 4) — `event_poll` is NOT inside the launcher chain. See `boot_remote.py` for platform details. *(The signature `boot_agent(role)` accepts an alias value — legacy parameter name; rename tracked in #10358 along with the wire-format change.)*
 - **Shutdown**: Ctrl+C triggers graceful shutdown — sets all agent intents to `stopping`, waits up to 60s for cooperative exits, then exits. `POST /shutdown` accepts an HTTP shutdown request with same semantics.
 
 ---
@@ -257,7 +257,7 @@ Crash transitions: `booting → crashed` (boot failure — `booted` event never 
 This is the **canonical step-by-step ordering** for the agent boot sequence. All other docs defer here for process-spawn ordering.
 
 1. Resolve clone path for the alias from in-memory `AgentState` (loaded from `.squidsquad/.harness-state.json` at harness start; on first boot, populated from `.squidsquad/.local-config` per §7.2 "First-boot discovery" below).
-2. Spawn the platform-appropriate launcher (`cmd /c start` self-closing console on Windows per #11745 / Terminal on macOS / x-terminal-emulator on Linux) → `thin_launcher.py` in the agent's clone dir.
+2. Spawn the platform-appropriate launcher (`cmd /c start` self-closing console on Windows per #11745 / Terminal.app via `osascript` on macOS / `tmux new-session` on Linux) running `python thin_launcher.py <alias>` in the agent's clone dir (see §14).
 3. `thin_launcher.py` writes its PID to `.squidsquad/<alias>/.claude-pid` (sentinel: "harness has spawned this alias"), then spawns `claude` (Anthropic CLI) as its child.
 4. **Concurrently with steps 2–3** (no causal ordering between them — `event_poll` does not depend on `claude` existing, and `claude` does not depend on `event_poll` existing): the harness spawns `event_poll.py --wait --role <alias>` as a **direct child of the `harness.py` process** (via `subprocess.Popen`), not under the agent's launcher chain. In code this is a `subprocess.Popen` call right after the launcher invocation; both processes are racing for spawn-time, neither blocks on the other. If the sequence diagram below shows step 4 after step 3, that's diagram-rendering order, not causal dependency. `event_poll` begins polling the harness HTTP API immediately on spawn (status-gated empty responses while `status=booting` per AGENT-RUNTIME §8.0). **Note on placement**: `event_poll` lives outside the agent's `wt → cmd → thin_launcher → claude` subprocess tree entirely; its parent is `harness.py`. The harness pairs it with a specific agent via the `--role <alias>` argument and terminates it on agent stop. Before flushing the port file and spawning `event_poll`, the harness ensures `.squidsquad/.harness-port` has been written and flushed to disk so `event_poll`'s discovery read succeeds on its first poll. No automatic respawn if `event_poll` dies mid-session — agent restart is the recovery path. On harness death, `event_poll` is orphaned (silent no-ops once the HTTP target is gone) and full team reboot is required.
 5. The harness awaits the `booted` event from the agent (cursor-clean handshake). Until `booted` arrives, the agent is in `status=booting`; any `assigned-to` events queued for this alias remain in the harness deque and are delivered only after `status=ready`.
@@ -521,24 +521,23 @@ Previously the health-poll respawn path re-spawned a dead `intent=running` agent
 
 ---
 
-## 14. Windows spawn chain
+## 14. Agent spawn chain
 
-> POSIX boots `claude` more directly via the system terminal; this section describes the Windows chain.
+The harness (`boot_remote.py`) spawns each agent in a fresh terminal/console that runs **`python thin_launcher.py <alias>`**, which in turn launches `claude`. The launcher differs per platform; the rest of the chain is identical:
 
-The harness spawns each agent (`boot_remote.py`) via `cmd /c start "<title>" /D <clone> bash <script>`, which opens a **self-closing console** (#11745). That console runs `thin_launcher.py` → `cmd.exe` (npm `claude.CMD` shim) → `claude.exe`:
+| Platform | Launcher | Chain |
+|---|---|---|
+| Windows | `cmd /c start` — self-closing console (#11745) | console → `python thin_launcher.py` → `cmd.exe` (npm `claude.CMD` shim) → `claude.exe` |
+| macOS | `osascript` → Terminal.app (`do script`) | Terminal → `python thin_launcher.py` → `claude` |
+| Linux | `tmux new-session -d` (no tmux → prints a manual-boot command) | tmux session → `python thin_launcher.py` → `claude` |
 
-```
-cmd /c start
- └ console (self-closing)
-   └ bash
-     └ python (thin_launcher)
-       └ cmd.exe (npm claude.CMD shim)
-         └ claude.exe
-```
+The launcher gives `claude` a real terminal/TTY, which keeps it on the interactive subscription billing model — piping stdin/stdout would demote it to the Agent-SDK pool, so every platform spawns into a real terminal.
 
-`event_poll.py` runs as a separate sibling under the harness (`harness → python event_poll.py`, §7.2 step 4), not in this chain. The console provides the TTY that keeps `claude` on the interactive subscription billing model — piping stdin/stdout would demote it to the Agent-SDK billing pool — so the spawn keeps a real console.
+The **only platform asymmetry** is the extra `cmd.exe` hop on Windows: `shutil.which("claude")` returns the npm `claude.CMD` shim there (which itself spawns `cmd.exe → claude.exe`), whereas on POSIX it returns the real binary directly. That shim is why Windows needs the descendant-walk PID resolution noted in §7.3.
 
-`thin_launcher.py` is a load-bearing intermediate today (singleton check, `SQUIDSQUAD_ROLE` env, claude arg-list, `.claude-pid` write). Collapsing it — having the console launch `claude.exe` directly, with those jobs moving to the harness / `boot_remote` — is a tracked cleanup in **#12416** (low priority; the lingering-tab problem that motivated it is already solved by #11745). It composes with §15: once liveness is not PID-based, the PID resolution is needed only for teardown.
+`event_poll.py` runs as a separate sibling under the harness on all platforms (`harness → python event_poll.py`, §7.2 step 4) — not inside the launcher chain.
+
+`thin_launcher.py` is a load-bearing intermediate (singleton check, `SQUIDSQUAD_ROLE` env, claude arg-list, `.claude-pid` write). Collapsing it — launching `claude` directly from the launcher, with those jobs moving to the harness / `boot_remote` — is a tracked cleanup in **#12416** (low priority; the Windows lingering-tab problem that motivated it is already solved by #11745). It composes with §15: once liveness is not PID-based, the PID resolution is needed only for teardown.
 
 ---
 
@@ -657,6 +656,7 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 
 ## 17. Revision log
 
+- **2026-06-14 (v22)** — §14 made OS-agnostic and corrected against `boot_remote.py` (operator flagged). It was Windows-only and the chain was wrong (`bash <script>`); the actual default on every platform is `python thin_launcher.py <alias>`, with platform launchers `cmd /c start` (Windows) / `osascript`+Terminal.app (macOS) / `tmux` (Linux) — now a per-platform table, with the Windows `cmd.exe` npm-shim hop called out as the only asymmetry. Also corrected §7.2 step 2 and §3 (Linux launcher is `tmux`, not `x-terminal-emulator`/`terminal-emulator`).
 - **2026-06-14 (v21)** — De-"proposed" §14 and cleared the residual `wt.exe` drift (operator flagged). §14 retitled "Windows spawn chain" — a descriptive how-it-works section (cleanup → #12416, not a "proposed" section). Top status banner now reads §§1–14 = current code, §15–16 = target architecture (#12271). Fixed §7.2 step 2 + its diagram (`wt.exe` → `cmd /c start`), and the dangling `§14.2` / "§14 proposal" cross-refs in §7.3 / §9 / §10.
 - **2026-06-14 (v20)** — §14 corrected for accuracy (operator flagged): it was written around the `wt.exe` spawn chain, which #11745 (2026-06-13) replaced with `cmd /c start` (self-closing console). Rewrote §14 to the actual chain, removed the stale wt-tree / wt-validation / wt-tab-risk, and re-scoped it as a **low-priority cleanup** (its original driver — lingering wt tabs — is already solved by #11745). Detailed move/validation/risks consolidated in #12416.
 - **2026-06-14 (v19)** — Moved §14.6 "Implementation outline" out of the doc into its task ticket **#12416** (build-sequencing belongs in the task, not the arch doc); §14 scope note now points to #12416. Re-fixed the §15.3 Mermaid Note (removed `;` / `/` and the multi-clause note that broke GitHub's parser — the decision logic stays in §15.1 prose; the diagram shows the flow + a one-line pointer).
