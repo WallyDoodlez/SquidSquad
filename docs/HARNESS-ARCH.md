@@ -621,7 +621,7 @@ In landing order:
 
 ## 15. Agent liveness model (progress signals)
 
-> **Status:** this is the target architecture for agent liveness; the health poll today is PID-based (§7.3). Implementation is tracked by **#12271**. This section describes how the model *works* — the delta from the PID model and the migration plan live in #12271, not here.
+> **Status:** target architecture; implementation tracked by **#12271**.
 
 The harness determines whether an agent is alive from the **activity the agent already produces** — its tool calls and cycle reports — plus **awareness of when the agent is legitimately paused** (mid-tool-call, waiting on input, or rate-limited), which the hooks report directly. PID is used only to terminate a process, never to determine liveness.
 
@@ -634,7 +634,7 @@ Liveness rests on two mechanisms, both **by-products of normal agent operation**
 2. **Pause-aware guard.** Silence is *only* a death signal when nothing explains it. An agent is legitimately silent in several states — and in every case a **hook tells the harness which state it is in**, so these never lose life:
    - **Mid-tool-call** — `PreToolUse` with no matching `PostToolUse` (a long `Bash`, slow build, or **subagent call**). Treat as working; bounded only by a generous `tool_call_max` (to catch a genuinely hung tool).
    - **Waiting on a human / external input** — `Notification` (`permission_prompt`, `idle_prompt`, MCP elicitation). The agent is blocked on input, not dead; surface it (operators may need to act) but do not kill it.
-   - **Rate-limited / API error** — `StopFailure` (`rate_limit`, `overloaded`, `billing_error`, …). The agent is throttled, not faulty — **back off until the limit clears; do NOT reboot** (rebooting just hits the same wall — the original incident). See §13.8 / §16.2.
+   - **Rate-limited / API error** — `StopFailure` (`rate_limit`, `overloaded`, `billing_error`, …). The agent is throttled, not faulty: **back off until the limit clears rather than reboot** (a reboot would re-hit the same limit). See §13.8.
 
 The whole rule: **after dispatch, no activity AND no hook explaining the silence → dead.** A wedged loop has no explaining hook → caught; a busy / waiting / rate-limited agent has one → protected (and a rate-limited one is backed off, not rebooted).
 
@@ -664,13 +664,11 @@ sequenceDiagram
 
 ### 15.4 `SessionEnd` reason
 
-The `SessionEnd` hook reports the exit reason so the harness's reboot decision is a fact, not an inference:
+The `SessionEnd` hook reports the exit reason; the harness's reboot decision keys off it:
 
 - cooperative exit-42 (context pressure / intent flip) → respawn, fresh session
 - clean stop (intent=`stopping`) → mark stopped
 - crash / non-zero / usage-limit → apply backoff (§13.8); do **not** tight-loop
-
-Independently valuable and shippable ahead of the heartbeat work — the recommended first landing.
 
 ### 15.5 Constraints
 
@@ -713,9 +711,9 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 
 ### 16.2 High-value signals
 
-- **`StopFailure` → cause-aware reboot.** It names the API error (`rate_limit`, `overloaded`, `billing_error`, …) — the signal the harness previously lacked. Today's backoff (§13.8 / #12244) is cause-*agnostic* (it can't tell a usage-limit from a crash); `StopFailure` makes it cause-*aware* (rate-limit → back off until reset; `server_error` → quick retry). It is also the missing "why did it crash" for #12409.
-- **`Notification(permission_prompt)` → stall detection.** An agent blocked waiting on a permission decision becomes directly visible (a real hang cause).
-- **`PreCompact(auto)` → context-pressure warning** ahead of the cooperative exit-42 — the harness can anticipate rather than react.
+- **`StopFailure` → cause-aware reboot.** It names the API error (`rate_limit`, `overloaded`, `billing_error`, …), so the reboot decision is cause-aware: `rate_limit` → back off until reset; `server_error` → quick retry (§13.8).
+- **`Notification` → stall detection.** An agent blocked waiting on a permission / input decision is directly visible.
+- **`PreCompact(auto)` → context-pressure warning.** The harness sees context pressure building ahead of the cooperative exit-42.
 - **`PostToolUseFailure` → tool-error stream** for diagnosis and display.
 
 ### 16.3 Constraints
@@ -727,13 +725,14 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 ### 16.4 Consumers
 
 - **Liveness (§15)** — heartbeat + in-flight from `Pre`/`PostToolUse` + `cycle_post`; reboot reason from `SessionEnd` / `StopFailure`.
-- **Reboot decision (§13.8 / #12244)** — cause-aware backoff from `StopFailure` / `SessionEnd`.
+- **Reboot decision (§13.8)** — cause-aware backoff from `StopFailure` / `SessionEnd`.
 - **Display (#12410)** — status line, dashboard, event highlights.
 
 ---
 
 ## 17. Revision log
 
+- **2026-06-14 (v17)** — Scrubbed §15/§16 of back-references and motivational/incident framing (operator): removed "the original incident", "previously lacked", "currently cause-agnostic", "upgrades #12244 / answers #12409", and the "recommended first landing" sequencing. §15/§16 now read purely as the target architecture; delta, migration, and landing order live in #12271.
 - **2026-06-14 (v16)** — §15 **pause-aware guard** (operator): generalised the in-flight guard so silence is a death signal *only when no hook explains it*. Three hook-reported pause states never lose life — mid-tool-call (`Pre`/`PostToolUse`, bounded by `tool_call_max`), waiting on input/permission/elicitation (`Notification`), and rate-limited/API-error (`StopFailure` → **back off, do not reboot** — rebooting hits the same limit, the original incident). Rule is now "no activity AND no explaining hook → dead." Intro, §15.1, and diagram updated.
 - **2026-06-14 (v15)** — §15 finalised to the **activity-heartbeat** model (operator): liveness = the agent's own activity (`PostToolUse`/`PostToolUseFailure` + `cycle_post`) evaluated *relative to dispatched work* (silence after a nudge, not mid-call → dead; idle agents checked on next dispatch) + the in-flight guard. **Dropped the pong / harness-ping and the L1 ping-priority rule entirely** — the tool-call hook is a deterministic, more-reliable heartbeat than an LLM-answered ping. Diagram + constraints updated. Added **§16 "Agent observability via hooks"** — the curated hook catalog (the telemetry stream the harness consumes; liveness is one consumer, display #12410 another), highlighting `StopFailure` (cause-aware reboot → upgrades #12244, answers #12409), `Notification(permission_prompt)` (stall), `PreCompact(auto)` (context-pressure warning). Revision log renumbered §16→§17.
 - **2026-06-14 (v14)** — §15 **simplified to two mechanisms** (redundancy review): liveness = the agent-answered **pong heartbeat** (no pong → dead) + the **in-flight tool-call guard** (don't kill mid-call). Removed as redundant — now that the pong is the L1 agent-answered heartbeat: the multi-signal `last_seen` table (SessionStart / event_poll-ticks / ack-cursor as liveness inputs), the out-of-band pong responder (it would mask a wedged-loop zombie), and the separate `liveness_timeout` (collapsed into the pong deadline). Kept for their own jobs: enriched Pre/PostToolUse hooks (activity context + the in-flight flag), `SessionEnd`-reason (reboot decision), `tool_call_max`. Diagram reduced to 2 participants.
