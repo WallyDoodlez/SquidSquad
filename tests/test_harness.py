@@ -188,7 +188,13 @@ class TestIntentSetAt(unittest.TestCase):
                 )
 
     def test_load_state_round_trips_intent_set_at(self):
-        """A state file written by save_state loads back with intent_set_at."""
+        """A state file written by save_state loads back with intent_set_at.
+
+        Uses STOPPING — a STOPPING intent (and its force-kill clock) must
+        survive a harness restart so an operator stop is not lost. (RESTARTING
+        is intentionally NOT round-tripped — see
+        test_load_state_resets_restarting_to_running, #12244 P0.)
+        """
         import tempfile
         from harness import HarnessState, AgentState
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -196,7 +202,7 @@ class TestIntentSetAt(unittest.TestCase):
             with patch("harness.HARNESS_STATE_FILE", state_file):
                 hs = HarnessState()
                 agent = AgentState("pm")
-                agent.intent = AgentState.INTENT_RESTARTING
+                agent.intent = AgentState.INTENT_STOPPING
                 agent.intent_set_at = 555.0
                 hs.set_agent("pm", agent)
                 hs.save_state()
@@ -205,6 +211,7 @@ class TestIntentSetAt(unittest.TestCase):
                 with patch("harness._log"):
                     hs2.load_state()
                 loaded = hs2.get_agent("pm")
+                self.assertEqual(loaded.intent, AgentState.INTENT_STOPPING)
                 self.assertEqual(loaded.intent_set_at, 555.0)
 
     def test_load_state_migrates_legacy_stopping_without_intent_set_at(self):
@@ -242,8 +249,11 @@ class TestIntentSetAt(unittest.TestCase):
                 loaded = hs.get_agent("skill")
                 self.assertEqual(loaded.intent_set_at, 9999.0)
 
-    def test_load_state_migrates_legacy_restarting_without_intent_set_at(self):
-        """Same migration applies to RESTARTING intent (Q7 PM lock)."""
+    def test_load_state_resets_legacy_restarting_to_running(self):
+        """#12244 P0: a restored RESTARTING intent (legacy file, no
+        intent_set_at key) is reset to RUNNING with intent_set_at cleared —
+        NOT seeded. RESTARTING is a transient in-flight state that must not
+        survive a harness restart (it would force-kill a healthy agent)."""
         import tempfile
         from harness import HarnessState, AgentState
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -262,11 +272,44 @@ class TestIntentSetAt(unittest.TestCase):
                  patch("harness.time.time", return_value=4242.0):
                 hs = HarnessState()
                 hs.load_state()
-                self.assertEqual(hs.get_agent("qa").intent_set_at, 4242.0)
+                self.assertEqual(
+                    hs.get_agent("qa").intent, AgentState.INTENT_RUNNING)
+                self.assertIsNone(hs.get_agent("qa").intent_set_at)
+
+    def test_load_state_resets_restarting_to_running(self):
+        """#12244 P0: a restored RESTARTING intent WITH a present (stale)
+        intent_set_at is reset to RUNNING and the force-kill clock cleared.
+        This is the core fix for the operator-reported 'working agent killed +
+        respawned' loop: without it, the stale timestamp (< now -
+        FORCE_KILL_TIMEOUT) makes the first health poll force-kill a healthy
+        agent that outlived the harness restart, then respawn it."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            state_file.write_text(json.dumps({
+                "harness_pid": 1, "start_time": 0.0, "port": 7373,
+                "agents": {
+                    "skill": {"intent": "restarting",
+                              "intent_set_at": 100.0,  # stale, pre-restart
+                              "status": "running", "boot_time": None,
+                              "clone_path": "", "claude_pid": 4321,
+                              "terminal_pid": None},
+                },
+            }), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file), \
+                 patch("harness._log"), \
+                 patch("harness.time.time", return_value=9999.0):
+                hs = HarnessState()
+                hs.load_state()
+                loaded = hs.get_agent("skill")
+                self.assertEqual(loaded.intent, AgentState.INTENT_RUNNING)
+                self.assertIsNone(loaded.intent_set_at)
 
     def test_load_state_preserves_none_for_running_intent(self):
         """Legacy state with intent=RUNNING and no intent_set_at must NOT
-        be seeded — the migration only applies to STOPPING/RESTARTING."""
+        be seeded — the migration only applies to STOPPING (RESTARTING is
+        reset to RUNNING before the seeding path, #12244 P0)."""
         import tempfile
         from harness import HarnessState
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -592,6 +635,194 @@ class TestForceKillSafetyNet(unittest.TestCase):
                     p.stop()
         # intent_set_at is still cleared on best-effort attempt
         self.assertIsNone(hs.get_agent("skill").intent_set_at)
+
+
+class TestCrashLoopBackoff(unittest.TestCase):
+    """#12244 P2: repeated fast deaths back off (exponential, capped) instead
+    of a tight respawn loop — protects against the Claude session/usage-limit
+    exit-1 loop and any other fast-crash cause without parsing claude output."""
+
+    def _make_dead_agent(self, last_spawn_at, fast_deaths=0, status="running",
+                         reboot_blocked_until=None, claude_pid=12345):
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/clone")
+        agent.status = status
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.claude_pid = claude_pid
+        agent.last_spawn_at = last_spawn_at
+        agent.consecutive_fast_deaths = fast_deaths
+        agent.reboot_blocked_until = reboot_blocked_until
+        hs.set_agent("skill", agent)
+        return hs, agent
+
+    def _run(self, hs, fake_now, pid_alive=False):
+        """Run one update_health with the claude PID dead (unless pid_alive).
+        Returns the boot_agent mock so callers can assert respawn vs backoff."""
+        boot = patch("harness.boot_remote.boot_agent",
+                     return_value={"success": True, "terminal_pid": 999,
+                                   "action": "spawn"})
+        patches = [
+            patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path", return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent._read_claude_pid",
+                  return_value=(None, False)),
+            patch("harness.time.time", return_value=fake_now),
+            patch("harness._log"),
+            patch.object(hs, "save_state"),
+        ]
+        boot_mock = boot.start()
+        for p in patches:
+            p.start()
+        try:
+            hs.update_health()
+        finally:
+            for p in patches:
+                p.stop()
+            boot.stop()
+        return boot_mock
+
+    def test_fast_death_below_threshold_still_reboots(self):
+        """The first/second fast death reboots immediately — backoff only
+        engages once the streak crosses the threshold."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(last_spawn_at=now - 10, fast_deaths=0)
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+        agent = hs.get_agent("skill")
+        self.assertEqual(agent.consecutive_fast_deaths, 1)
+        self.assertLess(1, FAST_DEATH_THRESHOLD)
+
+    def test_streak_crossing_threshold_backs_off_instead_of_rebooting(self):
+        """The Nth consecutive fast death (N == threshold) holds off the
+        respawn, sets a backoff deadline, and surfaces 'crash-looping'."""
+        from harness import (FAST_DEATH_THRESHOLD, CRASH_BACKOFF_BASE_SECONDS)
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        agent = hs.get_agent("skill")
+        self.assertEqual(agent.consecutive_fast_deaths, FAST_DEATH_THRESHOLD)
+        self.assertEqual(agent.status, "crash-looping")
+        self.assertEqual(
+            agent.reboot_blocked_until, now + CRASH_BACKOFF_BASE_SECONDS)
+
+    def test_backoff_is_exponential_and_capped(self):
+        """Deeper streaks back off exponentially up to the cap."""
+        from harness import (FAST_DEATH_THRESHOLD, CRASH_BACKOFF_BASE_SECONDS,
+                             CRASH_BACKOFF_CAP_SECONDS)
+        now = 10_000.0
+        # streak after this death = threshold + 2 → over=2 → base * 4
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 5, fast_deaths=FAST_DEATH_THRESHOLD + 1)
+        self._run(hs, now)
+        agent = hs.get_agent("skill")
+        expected = min(CRASH_BACKOFF_BASE_SECONDS * 4, CRASH_BACKOFF_CAP_SECONDS)
+        self.assertEqual(agent.reboot_blocked_until, now + expected)
+
+    def test_slow_death_resets_streak_and_reboots(self):
+        """A death AFTER the window is a one-off, not a crash loop — the streak
+        resets and the agent reboots immediately."""
+        from harness import FAST_DEATH_WINDOW_SECONDS
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - (FAST_DEATH_WINDOW_SECONDS + 60),
+            fast_deaths=5)
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+        self.assertEqual(hs.get_agent("skill").consecutive_fast_deaths, 0)
+
+    def test_backoff_resumes_after_window_elapses(self):
+        """A crash-looping agent whose backoff deadline has passed retries the
+        respawn (streak preserved so a still-failing agent backs off longer)."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 500, fast_deaths=FAST_DEATH_THRESHOLD,
+            status="crash-looping", reboot_blocked_until=now - 1,
+            claude_pid=None)
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+        agent = hs.get_agent("skill")
+        self.assertIsNone(agent.reboot_blocked_until)
+        self.assertEqual(agent.status, "starting")
+        # streak is NOT reset by a resume — only a surviving spawn resets it
+        self.assertEqual(agent.consecutive_fast_deaths, FAST_DEATH_THRESHOLD)
+
+    def test_backoff_does_not_resume_before_window(self):
+        """Before the deadline, a crash-looping agent stays paused (no respawn,
+        status preserved, not relabelled 'unknown')."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 500, fast_deaths=FAST_DEATH_THRESHOLD,
+            status="crash-looping", reboot_blocked_until=now + 120,
+            claude_pid=None)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
+
+    def test_recovered_agent_clears_streak(self):
+        """An agent that has been alive past the window clears its streak so a
+        later isolated death reboots immediately."""
+        from harness import FAST_DEATH_WINDOW_SECONDS, FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - (FAST_DEATH_WINDOW_SECONDS + 30),
+            fast_deaths=FAST_DEATH_THRESHOLD, status="crash-looping",
+            claude_pid=777)
+        # pid_alive=True → the agent is alive again and has survived the window
+        self._run(hs, now, pid_alive=True)
+        agent = hs.get_agent("skill")
+        self.assertEqual(agent.consecutive_fast_deaths, 0)
+        self.assertIsNone(agent.reboot_blocked_until)
+        self.assertEqual(agent.status, "running")
+
+    def test_crash_looping_agent_can_still_be_stopped(self):
+        """#12244 P2 (DS-review finding 1): an operator stop must win over a
+        backoff. A crash-looping agent whose intent flips to STOPPING settles to
+        stopped/STOPPED instead of wedging forever (is_dead and the resume
+        branch never fire for STOPPING)."""
+        from harness import AgentState, FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, agent = self._make_dead_agent(
+            last_spawn_at=now - 500, fast_deaths=FAST_DEATH_THRESHOLD,
+            status="crash-looping", reboot_blocked_until=now + 120,
+            claude_pid=None)
+        agent.intent = AgentState.INTENT_STOPPING
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        settled = hs.get_agent("skill")
+        self.assertEqual(settled.intent, AgentState.INTENT_STOPPED)
+        self.assertEqual(settled.status, "stopped")
+        self.assertIsNone(settled.reboot_blocked_until)
+
+    def test_new_fields_round_trip_through_state_file(self):
+        """to_dict + load_state persist the P2 fields across a harness restart."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            with patch("harness.HARNESS_STATE_FILE", state_file):
+                hs = HarnessState()
+                agent = AgentState("skill", "/p")
+                agent.last_spawn_at = 123.0
+                agent.consecutive_fast_deaths = 4
+                agent.reboot_blocked_until = 456.0
+                hs.set_agent("skill", agent)
+                hs.save_state()
+
+                hs2 = HarnessState()
+                with patch("harness._log"):
+                    hs2.load_state()
+                loaded = hs2.get_agent("skill")
+                self.assertEqual(loaded.last_spawn_at, 123.0)
+                self.assertEqual(loaded.consecutive_fast_deaths, 4)
+                self.assertEqual(loaded.reboot_blocked_until, 456.0)
 
 
 class TestRestartLifecycle(unittest.TestCase):

@@ -231,6 +231,8 @@ Per-agent, persisted in `.squidsquad/.harness-state.json`:
 
 Transitions are HTTP-API-driven (`POST /agents/{role}/start|stop|restart`). The harness writes the new intent immediately and the health poller observes process state to drive auto-respawn vs no-respawn decisions.
 
+> The "Auto-respawn on death?" column describes **default** operation. The `--no-auto-reboot` escape hatch (§7.6) suppresses respawn — and the restart-driven teardown paths — entirely; when it is set, no row in this table auto-respawns.
+
 ### 7.1.1 Status state machine
 
 `status` reflects what the agent is actually doing, driven by health-poller observations and lifecycle events. Valid values:
@@ -242,6 +244,7 @@ Transitions are HTTP-API-driven (`POST /agents/{role}/start|stop|restart`). The 
 | `stopping` | Stop in progress; harness waiting for cooperative exit or force-kill window |
 | `stopped` | Agent exited as intended (intent was `stopping`) |
 | `crashed` | Agent died unexpectedly (intent was `running` or `booting`) |
+| `crash-looping` | ≥3 consecutive fast deaths (each <60s lifetime) detected; respawn is paused under exponential backoff (§7.3, #12293). Not terminal — resumes automatically when the backoff window elapses. |
 
 Normal lifecycle: `booting → ready → stopping → stopped`
 
@@ -287,11 +290,30 @@ sequenceDiagram
 Every 5 seconds, for each agent with intent=`running`:
 
 1. Read `claude_pid` (and `terminal_pid` for diagnostics) from in-memory `AgentState` — loaded at boot from `.harness-state.json`'s per-alias record (§7.5). The on-disk `.squidsquad/<alias>/.claude-pid` file is the singleton handle written by `thin_launcher` (contents = `cmd.exe` / shell PID, per §9); it is NOT what health-poll reads.
-2. Check process liveness of `claude_pid` (`OpenProcess` on Windows, `kill -0` on POSIX). The §5.5 "per-agent `claude` PID" check refers to this in-memory `claude_pid` value, not the `.claude-pid` file.
-3. If dead AND intent=`running`: re-spawn (auto-respawn).
+2. Check process liveness of `claude_pid` — `OpenProcess` on Windows, `kill -0` on Linux/macOS (POSIX). The §5.5 "per-agent `claude` PID" check refers to this in-memory `claude_pid` value, not the `.claude-pid` file.
+3. If dead AND intent=`running`: re-spawn (auto-respawn) — **with crash-loop backoff** (§13.8). The harness records `last_spawn_at` per agent. A death whose lifetime was ≥ `FAST_DEATH_WINDOW_SECONDS` (60s), or any one-off death, respawns immediately and resets `consecutive_fast_deaths` to 0. A death with lifetime < 60s increments `consecutive_fast_deaths`; once it reaches `FAST_DEATH_THRESHOLD` (3), respawn is held off for `min(30s · 2^over, 1800s)` (exponential, 30-minute cap; `over = count − 3`), `status` flips to `crash-looping`, and `reboot_blocked_until` records the resume time. A later poll past that time clears the block and respawns; an agent that survives the window resets the streak. (Entire respawn path — including this backoff — is suppressed under the `--no-auto-reboot` hatch, §7.6.)
 4. If dead AND intent=`stopping` or `restarting`: handle per intent.
 
+```mermaid
+flowchart TD
+    A["every 5s · agent intent=running"] --> B{"claude_pid alive?"}
+    B -->|yes| Z["ok — keep monitoring"]
+    B -->|no| C{"--no-auto-reboot set?"}
+    C -->|yes| D["log death · clear PID · no respawn (§7.6)"]
+    C -->|no| E{"lifetime ≥ 60s, or one-off?"}
+    E -->|yes| F["reset streak=0 · respawn immediately"]
+    E -->|no| G["consecutive_fast_deaths += 1"]
+    G --> H{"streak ≥ 3?"}
+    H -->|no| F
+    H -->|yes| I["status=crash-looping · reboot_blocked_until = now + min(30s·2^over, 1800s) · no respawn"]
+    I --> J{"later poll: now ≥ reboot_blocked_until?"}
+    J -->|yes| F
+    J -->|no| I
+```
+
 > **PID-source disambiguation** (recap): four distinct PID locations exist today — (a) `.squidsquad/<alias>/.claude-pid` on disk = `cmd.exe`/shell wrapper PID, written by `thin_launcher`, used by `thin_launcher`'s own singleton check; (b) `.harness-state.json` → per-alias `claude_pid` = the `claude.exe` PID resolved via descendant walk; (c) `.harness-state.json` → per-alias `terminal_pid` = wrapper PID, kept for diagnostics; (d) `.harness-state.json` → per-alias `event_poll_pid` = harness-spawned `event_poll.py` PID (the harness has the `subprocess.Popen` handle directly). Health-poll checks (b) for `claude` liveness and (d) for `event_poll` liveness — `claude` death triggers respawn; `event_poll` death is logged only (no auto-respawn; recovery is operator-triggered agent restart per §7.0). Under the §14 proposal, (a) goes away — `thin_launcher` is deleted and the harness owns `claude_pid` resolution directly.
+>
+> **On Linux/macOS (bash):** the four-PID tangle above is Windows-specific — it exists because the npm `claude.CMD` shim spawns `cmd.exe → claude.exe`, so the launched PID (the `cmd.exe`/shell wrapper) is not the `claude` PID, forcing the descendant-walk resolution (§14.2). On POSIX, `thin_launcher` (under bash) launches `claude` directly (`shutil.which("claude")` returns the real binary, no shim), so the launched PID **is** the `claude` PID — no wrapper, no descendant walk. There `claude_pid` (b) and the wrapper PID (c) coincide, and the on-disk `.claude-pid` (a) holds the same value. The liveness check is the same `kill -0` on that one PID. (`event_poll_pid` (d) is identical on both platforms — it is a direct `subprocess.Popen` child of the harness.)
 
 ### 7.4 Cooperative exit (exit-42)
 
@@ -301,7 +323,7 @@ When `cycle_post.py` detects context-pressure exceeded OR harness intent has fli
 - intent=`stopping` + exit 42: mark stopped; no respawn.
 - intent=`restarting` + exit 42: respawn.
 
-A **60-second force-kill safety net** fires if the agent doesn't exit within the cooperative window (intent set time + 60s).
+A **60-second force-kill safety net** fires if the agent doesn't exit within the cooperative window (intent set time + 60s) — except under the `--no-auto-reboot` hatch, where it is skipped for intent=`restarting` (a kill with no respawn is pure harm) and preserved for intent=`stopping` (see §7.6).
 
 **`event_poll` lifetime across claude respawn**: when the harness respawns a `claude` process (intent=running + exit 42, or intent=restarting + exit 42), the paired `event_poll.py` is **NOT** killed and re-spawned — it keeps running across the agent respawn. `event_poll` lives for the lifetime of the alias's registration with the harness (spawned at first `boot_agent`, killed only on agent stop or harness exit). The new `claude` process inherits the existing `event_poll`'s stdout pipe via Monitor; the cursor state is harness-side and unaffected by claude respawn; the new claude's boot step 4 drain (AGENT-RUNTIME §8.0 / §8.2) catches up to the cursor. This avoids unnecessary process churn during high-frequency context-pressure respawns.
 
@@ -325,7 +347,10 @@ One file per install (at the install root). Persisted across harness restarts. S
       "claude_pid": 23456,
       "terminal_pid": 34567,
       "event_poll_pid": 45678,
-      "bootup_complete": true
+      "bootup_complete": true,
+      "last_spawn_at": 1748371260.0,
+      "consecutive_fast_deaths": 0,
+      "reboot_blocked_until": null
     }
   }
 }
@@ -343,6 +368,24 @@ Two fields, not one, so recovery semantics are explicit: after a host reboot the
 **PID fields**: the state file carries three per-alias PID fields — `claude_pid`, `terminal_pid`, and `event_poll_pid`. `claude_pid` is the agent process and is what `health_poll` uses for liveness checks (respawn on death). `terminal_pid` is the wrapper process, kept for diagnostics only. `event_poll_pid` is the harness-spawned `event_poll.py` paired with this agent (§7.2 step 4) — `health_poll` checks its liveness too, but death is logged only (no auto-respawn; recovery is operator-triggered agent restart per §7.0). The API response's post-#10358 single `pid` field (see §4.1) is a derived view: `pid = claude_pid`; `terminal_pid` and `event_poll_pid` remain in the state file for diagnostics and lifecycle management but are not exposed via HTTP.
 
 Atomic writes (`.tmp` + `mv`). On harness restart, the file is read; each agent is checked for liveness (PIDs still alive?); intents are preserved. Note: the outer agent key is the **alias** (e.g. `skill`, `verifier`); each agent's *categorical* role-class is not currently persisted in this file — it's derived from `.squidsquad/config.md` at boot. Source of truth: `HarnessState.save_state()` in `references/scripts/harness.py`.
+
+### 7.6 Auto-respawn escape hatches
+
+Two operator-facing flags (each with a matching env var) gate the auto-spawn / auto-respawn paths for diagnosis and incident control. Both are **off by default** — normal operation is exactly as §§7.1–7.4 describe.
+
+| Flag / env var | Effect when set |
+|---|---|
+| `--no-auto-start` / `SQUIDSQUAD_HARNESS_NO_AUTO_START=1` (#9242) | The boot-time "spawn all configured agents" pass is skipped. The harness comes up and serves HTTP but spawns nothing; operators start agents manually via `POST /agents/{alias}/start`. Isolates the auto-start path from HTTP wedges during diagnosis. |
+| `--no-auto-reboot` / `SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT=1` (#10538) | The harness **observes** agent death and updates state honestly (PID cleared, `bootup_complete` reset) but does **not** respawn — "no ability at all for the harness to reboot". |
+
+**`--no-auto-reboot` is teardown-complete, not respawn-only.** Suppressing respawn alone would still let a restart *request* tear an agent down (intent=`restarting` → the §7.4 60s force-kill) and then leave it dead — silent death, strictly worse than churn. So under `--no-auto-reboot` the harness suppresses **all four** teardown/respawn paths, so a running agent is never disrupted:
+
+1. **Health-poll respawn (§7.3)** — death is logged, not respawned (the original #10538 behavior).
+2. **Restart endpoint** — `POST /agents/{alias}/restart` is **refused** (returns `success:false`, agent left running); operators use explicit `/stop` then `/start` for a real cycle.
+3. **Compose-affected restart** — `_reboot_affected_agents` (the post-merge recompose path) is **skipped**.
+4. **Force-kill safety net (§7.4)** — skipped for intent=`restarting` (a kill with no respawn is pure harm). **Preserved for intent=`stopping`** — an explicit operator stop legitimately wants the process dead even with reboots off.
+
+This is the shipped behavior (ref 162aa29a2). It is an incident/diagnostic control, not steady-state; normal runs leave both hatches off and §§7.1–7.4 apply unmodified.
 
 ---
 
@@ -395,12 +438,12 @@ When the harness restarts (operator-driven or after a crash):
 1b. **Compose freshness check** — recompute the checksum over `.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`; compare against `last_compose_checksum`. If they differ or the field is absent (first boot, post-`git pull`, post-installer migration walk), run `compose.py deploy-all` BEFORE proceeding to step 2 and write the new checksum back to state. See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md).
 2. **Verify live PIDs** — for each agent with intent=`running`, check if the recorded PID is still alive.
    - Alive: resume monitoring.
-   - Dead: respawn (since intent=`running`).
+   - Dead: respawn (since intent=`running`) — default; suppressed under the `--no-auto-reboot` hatch (§7.6).
    Today, per-spawn singleton checks live inside `thin_launcher.py` and consult the on-disk `.claude-pid` + descendant walk (§9, §14.2 "Today" column). Under the §14 proposal those checks move into the harness and consult the loaded in-memory `AgentState` directly — see §14.2.
 3. **Read `.squidsquad/.event-state.json`** — recover cursors and in-flight events.
 4. **Rebuild empty deque** — past events are lost; new events accumulate from the restart point forward.
 5. **Resume EAD** — read `ead_last_seen`; forge poll resumes from that timestamp (5-minute fallback if file missing/corrupt).
-6. **Honor intent** — agents marked `stopping` or `stopped` are NOT respawned; agents marked `restarting` are respawned per state-machine.
+6. **Honor intent** — agents marked `stopping` or `stopped` are NOT respawned. A stale `intent=restarting` carried across the harness restart is **reset to `running`** (with `intent_set_at` cleared) on load (#12293 P0), so the §7.4 force-kill clock cannot fire against the old process's timer; the agent is then respawned if its PID is dead, per the state machine. (A stale `intent=stopping` is preserved so an operator stop survives a harness restart.)
 
 Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cursor-evicted protocol.
 
@@ -416,7 +459,7 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 | **`.squidsquad/.harness-state.json` corrupt** | Harness logs the error, treats the file as missing, starts fresh state. Operator may need to re-issue `start` commands. |
 | **`.squidsquad/.event-state.json` corrupt** | Cursors reset to `null`; agents re-consume from deque head on next read. No crash. |
 | **`.squidsquad/.harness-port` file missing** | Operator's start command writes a new file; if not run, agents treat harness as unreachable (silent no-op). |
-| **Agent PID dies unexpectedly** | Health poller catches it within 5s; auto-respawn if intent=`running`. |
+| **Agent PID dies unexpectedly** | Health poller catches it within 5s; auto-respawn if intent=`running` (default; suppressed under the `--no-auto-reboot` hatch, §7.6). One-off/slow deaths respawn immediately; ≥3 consecutive fast deaths (<60s each) trigger exponential backoff (30s→30m cap, `status=crash-looping`) per §7.3 / #12293. |
 | **Agent process alive but inert (zombie)** | NOT detected today — PID-liveness reports it healthy indefinitely (§13.7, #10855). Recovery is operator-triggered restart. Proposed fix: progress-based liveness (§15). |
 | **Port collision at startup** | Harness logs warning, picks next free port (probes upward from 7373). Updates `.squidsquad/.harness-port`. |
 | **uvicorn / FastAPI exception** | Logged; the affected endpoint returns 500; other endpoints continue to serve. |
@@ -471,6 +514,10 @@ EAD's polling loop hard-codes the GitHub `gh api` shape. Non-GitHub backends (Fo
 ### 13.7 PID-based liveness cannot detect inert agents (zombies)
 
 Health-poll (§7.3) treats "`claude_pid` alive" as "agent alive". A wedged `claude.exe` — process up, but the agent loop processing no events and completing no cycles — is reported healthy indefinitely. Observed in production 2026-06-14: a verifier agent ran ~22h with `current-state` frozen at `Building work queue…` and no completed cycle while health-poll reported it healthy throughout (live reproduction of #10855). The signal is structurally wrong: PID proves a *process exists*, not that the *agent functions*. Proposed fix: progress-based liveness (§15, tracked by #12271). Until it lands, inert agents are recovered only by operator-triggered restart.
+
+### 13.8 Auto-reboot backoff / crash-loop breaker — RESOLVED (#12293, 2026-06-14)
+
+Previously the health-poll respawn path re-spawned a dead `intent=running` agent **immediately**, with no backoff and no consecutive-failure breaker — amplifying a persistent death (bad commit, stale lock, spurious restart) into a tight loop. **Resolved** by #12293 (implements #12244): the harness now tracks consecutive fast deaths and applies exponential backoff (30s base → 30-minute cap) with a `crash-looping` status once 3 deaths under 60s stack up — see §7.3 for the algorithm and §7.5 for the persisted fields. This fixes the reboot *amplifier*; the *trigger* of any given loop is separate (see #12282, a test-isolation leak). The cause-agnostic backoff was a deliberate choice (the harness cannot observe *why* claude died without death-reason capture — that capability is the `SessionEnd`-reason slice of the §15 proposal). Entry retained as a pointer since §15.3 and the §16 v7 log reference this section.
 
 ---
 
@@ -601,6 +648,13 @@ Coverage regimes, each with an emitter that runs through the real loop:
 
 The liveness check becomes: "did any emitter touch `last_seen` within `liveness_timeout`?" Dead = none did. Reboot decisions key off this, not off `OpenProcess`.
 
+**Pull complement — a harness→agent liveness ping (operator proposal).** The emitters above are agent-initiated (push). The harness can also *pull*: send the agent a special **no-op ping** and expect an immediate **pong**, even mid-task. Two advantages over pure push — the *harness* controls the probe cadence (no dependence on the agent remembering to emit), and the pong's round-trip latency is itself a health signal. What a pong *proves* depends on who answers it (mirrors the §15.4 long-call gap):
+
+- To pong **"even within a task"** — while the LLM is blocked mid-tool-call — the pong must be answered **out-of-band**, by the agent's `event_poll` sidecar or a tiny dedicated responder, *not* by the LLM turn loop (which is busy). Such a pong proves the **process is alive and responsive** (it executed code and replied) — strictly **stronger than PID-exists**, because it catches a *hung/frozen* process that `OpenProcess`/`kill -0` still report as alive.
+- It does **not**, on its own, prove the **LLM work-loop is progressing** — a process whose responder pongs while the agent loop is wedged would still pass (the deep zombie, §13.7 / qa's case). Closing *that* is exactly what the push signals (tool-call hooks, `ack-cursor`) do.
+
+So pull-ping and push-heartbeat are **complementary, not alternatives**: the ping catches frozen/unresponsive processes on the harness's schedule; the hooks catch a responsive-but-wedged work loop. A robust model runs both — `last_seen` is bumped by *either* a pong or any push emitter, and a missed ping (no pong within the deadline) is an independent dead-signal. The trade-off to decide (§15.6): ping-only is simpler and catches the frozen-process case, but leaves the LLM-wedge zombie uncaught; ping + hooks covers both.
+
 ### 15.3 `SessionEnd`-reason — the highest-value first slice
 
 Today the harness reboots on "dead PID + intent=`running`" with no idea *why* the process died — the exact ambiguity at the centre of the #12244 reboot saga (it cannot tell cooperative exit-42 from a crash from a usage-limit exit). A `SessionEnd` hook reporting the exit reason turns that inference into a fact:
@@ -627,11 +681,16 @@ This slice is independently valuable and shippable before the full heartbeat wor
 - `liveness_timeout` value, and whether it is per-regime (idle vs active) — depends on the long-op-suspend mechanism (constraint 2) being settled first.
 - Whether `event_poll`'s existing polls are counted directly as heartbeats or a dedicated heartbeat ping is added (reuse-existing vs explicit).
 - Hook-failure observability: how the harness distinguishes "no heartbeat because dead" from "no heartbeat because the hook is misconfigured."
+- **Pull-ping scope:** is ping + pong (out-of-band responder) *sufficient on its own* (simpler; catches frozen processes but not the LLM-wedge zombie), or is it layered with the push hooks for full coverage? Operator leans toward the ping mechanism — decide whether hooks are still required for the wedge case.
+- **Pong responder location:** does the pong come from the `event_poll` sidecar (reuses an existing process) or a dedicated lightweight endpoint in the agent? And the ping cadence + pong deadline.
 
 ---
 
 ## 16. Revision log
 
+- **2026-06-14 (v9)** — Operator doc-review pass. §7.3: dropped the inline ticket ref; spelled out `kill -0` on Linux/macOS (POSIX); added a Mermaid flowchart of the health-poll backoff decision; extended the PID-source disambiguation with the POSIX/bash case (no `cmd.exe` shim → launched PID *is* the `claude` PID, no descendant walk). §15.2: added the operator's **harness→agent liveness ping (pull)** as a complement to the push emitters, with analysis of what a pong proves (process-responsive, catches frozen processes — stronger than PID) vs what it doesn't (LLM-wedge zombie, which needs the push signals); §15.6 gains the ping-scope and pong-responder open questions.
+- **2026-06-14 (v8)** — Post-merge sync for #12293 (#12244 backoff, now on main). §7.3 health poll documents the crash-loop backoff algorithm (`last_spawn_at`, `FAST_DEATH_WINDOW_SECONDS`=60, `FAST_DEATH_THRESHOLD`=3, exponential `30s·2^over` capped 1800s, `reboot_blocked_until`, streak reset on survival); §7.1.1 adds the `crash-looping` status; §7.5 adds `last_spawn_at` / `consecutive_fast_deaths` / `reboot_blocked_until` to the state shape; §11 PID-death row updated; §13.8 flipped from open gap → RESOLVED. Also §10 step 6 documents the #12293 **P0** stale-`restarting`→`running` reset on harness-restart load (force-kill clock not inherited; stale `stopping` preserved). Default-operation behavior now matches shipped code.
+- **2026-06-14 (v7)** — Contradiction polish ahead of the §15 liveness decision. Added **§7.6** (auto-respawn escape hatches: `--no-auto-start` / `--no-auto-reboot`; the latter now teardown-complete per 162aa29a2 — refuses the restart endpoint, skips compose-restart, skips the §7.4 force-kill for intent=`restarting`, no respawn). Qualified the §7.4 force-kill sentence and the §7.1 auto-respawn column with the hatch exception; qualified §10 step 2 and the §11 PID-death row likewise. Added **§13.8** (auto-reboot has no backoff / crash-loop breaker, #12244) to ground §15.3's backoff reference and to separate the reboot *amplifier* from any given *trigger* (#12282). No change to default-operation semantics.
 - **2026-06-14 (v6)** — Added §15 "Proposed: progress-based agent liveness (hooks + heartbeat)" (#12271): documents PID-liveness's zombie false-positive (#10855) and the accidental Windows complexity it carries; specifies a progress-based model (`SessionStart`/`Pre`+`PostToolUse`/`Stop`/`SessionEnd` hooks + `event_poll` idle-ticks + acks) with PID demoted to teardown-only, and `SessionEnd`-reason as the first slice (de-risks the #12244 reboot decision). Added §13.7 (zombie known-gap) and the §11 zombie failure-mode row. Revision log renumbered §15→§16. Marked proposal-only, consistent with §14's convention.
 - **2026-05-30 (v5)** — Root-cause fix #3: boot sequence cross-doc fragmentation. §7.2 designated canonical authoritative source for agent boot sequence; expanded from 5 to 6 prose steps with explicit parallel-spawn language; added Mermaid sequence diagram (first and only process-spawn diagram in the docs). AGENT-RUNTIME §8.0 spawn-ordering sentence removed and replaced with cross-reference. AGENT-RUNTIME §8.2 full sequence diagram removed; replaced with agent-side-only 5-step list + cross-reference to this section.
 - **2026-05-30 (v4)** — PR #10378 round-5 audit pass. H1: moved `event_poll.py` INTO the §14.1 "Before" tree as an explicit sibling subtree under harness (was blockquote-only). H2: added "First-boot discovery" subsection in §7.2 documenting `.local-config` as the bootstrap source when `.harness-state.json` does not exist. M1: tightened §2 start.sh trigger wording to "unreachable (port file missing or HTTP probe fails)" — removes ambiguous "not running OR". M2: updated §9 `.event-state.json` Purpose column to explicitly exclude the deque (deque is in-memory only per §5.1).

@@ -901,6 +901,8 @@ State semantics:
 
 Two fields, not one, so recovery semantics are explicit. After a host reboot, the harness reads `.squidsquad/.harness-state.json`, sees `intent=running` but no live PID → respawn. If collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed."
 
+> **Proposed redesign (not implemented — #12271):** the `ready → crashed` edge above is driven today by **PID death-detection** in the harness health poll, which cannot distinguish a *functioning* agent from an *inert* one — a process can be alive while the agent loop is wedged (see [HARNESS-ARCH.md §13.7](HARNESS-ARCH.md) / #10855, the ~22h zombie). A proposed redesign replaces PID-liveness with **progress signals emitted by the agent's real loop** — `SessionStart` / `Pre`+`PostToolUse` / `Stop` / `SessionEnd` claude-code hooks plus `event_poll` idle-ticks and acks — demoting PID to teardown-only. If it lands, the agent-side emitter wiring is documented in this section and the harness-side liveness/reboot decision in [HARNESS-ARCH.md §15](HARNESS-ARCH.md). Full model: HARNESS-ARCH §15.
+
 ### 8.3 Work handoff: explicit `/work/assign`
 
 ```mermaid
