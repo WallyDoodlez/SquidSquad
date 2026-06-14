@@ -170,3 +170,8 @@ harness responsive; QA stopped intentionally; skill reboot-prone.
 - POSSIBLE deeper angle (skill to check): does cycle_pre git-sync discard uncommitted WIP each cycle? If so, framework issue. Either way fix = commit incrementally.
 - ACTION: commented #11511 (PM pipeline-sentinel) — decompose Part 2 into small committable sub-steps + checkpoint working-state every Step 5, so reboots RESUME not restart. skill's lane.
 - Reboots are harmless to stability (no crash/corruption) but Part 2 won't finish until chunked+checkpointed. Watching for iter-471+.
+
+## >>> UPDATE 20:31 — filed #12142 (framework WIP-loss across reboots); cycle_pre mechanism found <<<
+- Confirmed cycle_pre git-sync can lose WIP: _enforce_branch does `git checkout main` if working-state status!=in-progress (cycle_pre.py:226); git_ops pull stash-pop-conflict strands WIP (cycle_pre.py:172). So uncommitted Part 2 WIP doesn't reliably survive a context-pressure reboot → #11511 churn.
+- FILED #12142 (high, skill): generalizes the WIP-loss bug (affects any large task). #11511 = live instance (checkpoint/decompose guidance posted there).
+- WATCH: iter-471+ = skill broke the loop. If it can't (framework eats WIP), #12142 fix is the real cure. Reboots harmless to stability throughout.
