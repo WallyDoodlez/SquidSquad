@@ -3721,12 +3721,24 @@ class TestCloneResolutionRefusal(unittest.TestCase):
 
     def test_restart_endpoint_refuses_before_mutating_intent(self):
         """POST /agents/{role}/restart resolves the clone BEFORE setting
-        intent=restarting, so an unregistered role is refused (500) and is
-        NOT left in a restarting state. `qa` is unregistered in this clone's
-        .local-config, so this exercises the real _get_clone_path raise."""
+        intent=restarting, so an UNRESOLVABLE role is refused (500) and is NOT
+        left in a restarting state.
+
+        #12380: this test must MOCK `_get_clone_path` to raise rather than
+        depend on the live `.local-config` keying. Its prior premise — "qa is
+        unregistered in this clone's .local-config" — was the #11600 bug
+        itself: compose keyed `.local-config` by the role-class `verifier`, so
+        `qa` was absent and resolution happened to raise. #12380 fixes that
+        (qa is now correctly registered), so the test can no longer rely on
+        qa-absence; it controls resolution directly, like its siblings."""
         from fastapi.testclient import TestClient
         client = TestClient(self.harness.app)
-        resp = client.post("/agents/qa/restart")
+        with patch.object(
+            self.harness.boot_remote, "_get_clone_path",
+            side_effect=self.harness.boot_remote.CloneResolutionError(
+                "role 'qa' is not registered — refusing to fall back to REPO_ROOT"),
+        ):
+            resp = client.post("/agents/qa/restart")
         self.assertEqual(resp.status_code, 500)
         self.assertIn("clone resolution failed", resp.json()["message"])
         # No restarting state was created for the refused role.
