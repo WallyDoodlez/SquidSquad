@@ -1,5 +1,7 @@
 # Working State
 
+> **RESTART (2026-06-14):** Honored harness `restart-required` event (reason: l4-recompose, target_alias=dm) at a clean idle boundary — cooperative /quit so respawn picks up recomposed CLAUDE.md. Acked the event (cursor→fb59c7bc3ca82f31) BEFORE quitting to avoid a re-trigger reboot loop. Intent was still `running` (not restarting) → harness auto-reboots on death. All 3 ships this session (#12282/#12244/#12342) are committed+pushed to main; counter 18/10 (bump still held). If respawn re-fires restart-required with a NEW event id → possible harness recompose-reboot bug, surface to PM.
+
 - **Task**: none
 - **Status**: idle
 - **Quiet Cycle Counter**: 3 (doc-scan GATED — see below)
