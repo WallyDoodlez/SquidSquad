@@ -1,12 +1,13 @@
 # Working State
 
-- **Task**: none
-- **Status**: idle (quiet cycle)
-- **Quiet Cycle Counter**: 1
-- **2026-06-14 07:18 — POLLING-mode cycle (harness DOWN).** Boot probe: port file=36117, `curl /status` exit 7 (connection refused) → harness unreachable → fell through to POLLING mode (`/loop 30m`, cron cf850c63). check-gh PASS. Pickup scan: NO pending-test work across all role trackers (skill/pm/dm/qa). Only pending-test issue is #10855 (blocked:human-action, AC4 HUMAN-REQUIRED) — already fully handled 05:02, awaiting operator greenlight, NOT QA-actionable. No pending-ship (DM lane). Most-recent activity = #12380 in-progress (skill-owned, not yet pending-test), #11600 open (role:pm). Quiet cycle → no verification. Improvement scan: cooldown elapsed (last 02:57) but ran NO production code this cycle → no new findings; existing test-gap already tracked as #11716. Did NOT bump ship counter. **Preserved orphaned artifacts**: prior cycles wrote TEST-PLAN/QA-RESULTS for #12282 + #12342 and 2 vault patterns but harness/cycle_post never committed them (harness was going down) — committed them this cycle to save the audit trail.
-- **Prior (2026-06-14 05:37) — #12342 (EAD starves QA/DM in event mode) VERIFIED PASS → pending-ship (DM).** PR #12364 (harness.py EAD + tracker.py emit). EAD status-routes approved/open→worker, pending-test→verifier, pending-ship→dm; dedup=last-status-per-issue emits-on-change. LIVE check: _alias_for_role_class('verifier')→'qa'. test_harness 209 + integration 53 + consumer sweep 343 passed. QA-RESULTS/TEST-PLAN-12342 published. Vault: +pattern-resolve-config-against-live-install-not-test-fixture.
-- **Prior (2026-06-14 04:20) — #12282 + #12244 VERIFIED PASS → pending-ship → DM shipped/CLOSED.** #12282 (/restart leak): PR #12341 test-only, live E2E showed skill agent byte-identical before/after → ZERO restarts. #12244 (reboot backoff): re-verified after PM AC-amendment, PASS stands. #10855 (inert-boot): blocked:human-action, sole event-mode blocker. Vault: +pattern-prove-side-effect-absence-via-live-state-snapshot.
-- **Wake mode**: POLLING (2026-06-14 07:16) — harness probe port 36117 exit 7 (down); `/loop 30m` cron cf850c63 (session-only). Supersedes prior EVENT-mode line.
+- **Task**: none (cycle 141 complete)
+- **Status**: idle
+- **Quiet Cycle Counter**: 0 (productive cycle — verified #12380)
+- **2026-06-14 07:52 — #12380 VERIFIED → FAIL, back to in-progress (skill).** Compose `.local-config` role-CLASS→ALIAS fix (PR #12391). All 5 ACs PASS (AC1 live+E2E: `_aliases_for_roles`→`[skill,pm,qa,dm]`, `generate_local_config` emits `- **qa**: ../SquidSquad-qa`; AC2 pass-through; AC3 identity; AC4 7/7 unit; AC5 DS findings in a044452e3). Compose suite 72/72. **Blocking regression**: `test_harness.py::TestCloneResolutionRefusal::test_restart_endpoint_refuses_before_mutating_intent` goes RED (200≠500) — it hard-codes "qa unregistered in .local-config" and doesn't mock `_get_clone_path`; #12380 makes qa permanently registered → test red. Fix = update the test (mock `_get_clone_path`, mirror sibling). Routed pending-test → in-progress. Ship counter NOT bumped. TEST-PLAN-12380.md + QA-RESULTS-12380.md committed.
+- **Secondary**: filed **#12408** (role:skill, high) — `run_tests.py` static gate exits 0 despite a failing gated test (truncates ~56%, no junit, mid-suite hard-exit masks failures). This is why #12380's regression slipped to pending-test.
+- **Prior (2026-06-14 07:29) — POLLING quiet cycle** (iter-140): no QA-actionable work; #12380 was still in-progress.
+- **Prior (2026-06-14 07:18) — POLLING quiet cycle**: preserved orphaned QA artifacts (#12282/#12342 TEST-PLAN/QA-RESULTS + 2 vault patterns) the harness never committed.
+- **Wake mode**: POLLING (2026-06-14 07:52) — harness probe port 51322 exit 7 (down); `/loop 30m` cron `9e9089f5` (session-only).
 
 ## Improvement Scan
 Status: idle
