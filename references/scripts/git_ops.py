@@ -22,6 +22,9 @@ Usage:
     python scripts/git_ops.py task-end <role> <number>    # return to working branch
     python scripts/git_ops.py has-changes               # check if working tree dirty
     python scripts/git_ops.py last-hash                 # print last commit hash (short)
+    python scripts/git_ops.py check-real-conflict <base> <head>  # real conflict? exit 0=clean/1=conflict/2=err
+    python scripts/git_ops.py guard-staged-state         # pre-commit hook: unstage state files on a feature branch (fail-open)
+    python scripts/git_ops.py install-hooks              # activate the pre-commit state guard (core.hooksPath)
     python scripts/git_ops.py --help
 """
 
@@ -985,6 +988,216 @@ def last_hash():
     return h
 
 
+def check_real_conflict(base, head):
+    """Report whether merging <head> into <base> has a REAL content conflict.
+
+    GitHub flags a PR ``CONFLICTING`` whenever transient files (e.g.
+    ``working-state.md``) differ across branch and base — even when there is no
+    real conflict — because GitHub honors NO user ``.gitattributes`` merge
+    driver server-side (community discussion #9288; see
+    [[learning-pr-conflicting-flag-can-be-cosmetic]]). This helper is the
+    deterministic ground truth so agents/DM treat GitHub's flag as ADVISORY and
+    stop burning cycles hand-nudging cosmetic flaps (#11511).
+
+    Runs ``git merge-tree --write-tree`` (a non-destructive, in-memory three-way
+    merge) in BOTH directions; a real conflict in either is a real conflict.
+    Refs should be ``origin/*`` so the comparison matches what GitHub evaluates
+    — callers should ``git fetch`` first.
+
+    Returns True (clean), False (real conflict), or None (a ref won't resolve).
+    main() maps these to exit 0 / 1 / 2.
+    """
+    for ref in (base, head):
+        rc = _run_list(["git", "rev-parse", "--verify", "--quiet", ref], check=False)
+        if rc.returncode != 0:
+            print(f"ERROR: cannot resolve ref '{ref}' -- fetch first "
+                  f"(e.g. `git fetch origin`)?", file=sys.stderr)
+            return None
+
+    conflict_lines = []
+    real_conflict = False
+    for a, b in ((base, head), (head, base)):
+        result = _run_list(["git", "merge-tree", "--write-tree", a, b], check=False)
+        if result.returncode != 0:
+            real_conflict = True
+            conflict_lines += [l for l in result.stdout.splitlines()
+                               if "CONFLICT" in l or l.startswith("Conflict")]
+
+    if not real_conflict:
+        print(f"CLEAN: no real conflict merging {head} into {base} "
+              f"(any GitHub CONFLICTING flag is cosmetic -- merge on content)")
+        return True
+
+    print(f"CONFLICT: real merge conflict merging {head} into {base}")
+    for l in dict.fromkeys(conflict_lines):  # de-dup, preserve order
+        print(f"  {l}")
+    return False
+
+
+# Path to the tracked git-hooks directory, repo-relative (the value we set
+# core.hooksPath to). Tracked in-repo so the hook is version-controlled and
+# ships via installer-files.txt — no copy-into-.git/hooks step needed.
+_HOOKS_DIR_REL = "references/git-hooks"
+
+
+def guard_staged_state():
+    """Unstage transient state/ephemeral files when committing to a feature branch (#11511).
+
+    git_ops' own commit paths already route state correctly: ``commit_code``
+    stages code only, ``commit_role_scoped`` refuses off the working branch
+    (#11083), ``commit_state`` errors off it. The remaining leak is a RAW
+    ``git add -A && git commit`` (POLLING mode / branch races) that bypasses
+    git_ops and sweeps ``.squidsquad/<role>/working-state.md`` (and siblings)
+    onto a feature branch. That is what flaps PR mergeability to CONFLICTING
+    (the file differs across the branch and main on overlapping lines, and
+    GitHub honors no user .gitattributes merge driver server-side — see
+    [[learning-pr-conflicting-flag-can-be-cosmetic]]).
+
+    Installed as a ``pre-commit`` hook, this guard fires on every commit:
+
+    - On the configured working branch (or a detached/unknown HEAD): no-op.
+    - On any other (feature) branch: unstage every staged file classified as
+      state/ephemeral by ``_is_state_file`` (the SAME classifier ``commit_code``
+      uses, so routing stays single-source). The files stay in the working
+      tree for the next working-branch cycle to commit: ``.squidsquad/`` files
+      via ``commit_state``; ``.claude/`` files via the working branch's normal
+      state-commit path (``commit_state`` stages only ``.squidsquad/``).
+
+    FAIL-OPEN: always returns normally (exit 0 at the call site). A pre-commit
+    hook that aborts could wedge every agent's cycle, so this guard only ever
+    *narrows* a commit, never blocks one.
+
+    Returns the list of paths it unstaged (empty when it was a no-op).
+    """
+    working = _get_working_branch()
+    # check=False: a failing `git branch --show-current` (corrupt HEAD, perms)
+    # must not raise mid-commit -- empty `current` falls through to fail-open.
+    current = _run("git branch --show-current", check=False).stdout.strip()
+    # Empty current = detached HEAD or no branch -> can't classify; stay out of
+    # the way (fail-open). On the working branch, state belongs here -> no-op.
+    if not current or current == working:
+        return []
+
+    staged = _run_list(["git", "diff", "--cached", "--name-only"], check=False)
+    if staged.returncode != 0:
+        return []
+    state_staged = [p.strip().strip('"') for p in staged.stdout.splitlines()
+                    if p.strip() and _is_state_file(p.strip().strip('"'))]
+    if not state_staged:
+        return []
+
+    # Unstage (reset, not restore --staged: works on older git and leaves the
+    # working-tree copy untouched). Per-path so one bad path can't drop the lot.
+    for p in state_staged:
+        _run_list(["git", "reset", "-q", "HEAD", "--", p], check=False)
+
+    print(
+        f"WARNING: pre-commit guard unstaged {len(state_staged)} transient "
+        f"state file(s) from feature branch '{current}' (state belongs on "
+        f"'{working}', not in a PR -- #11511):",
+        file=sys.stderr,
+    )
+    for p in state_staged[:20]:
+        print(f"  {p}", file=sys.stderr)
+    if len(state_staged) > 20:
+        print(f"  ... and {len(state_staged) - 20} more", file=sys.stderr)
+    return state_staged
+
+
+def install_hooks():
+    """Activate the tracked pre-commit guard by pointing core.hooksPath at it (#11511).
+
+    Idempotent. Sets ``core.hooksPath`` to the in-repo ``references/git-hooks``
+    directory (tracked, version-controlled) and makes the ``pre-commit`` shim
+    executable. Because the hooks live in-repo, there is nothing to copy into
+    ``.git/hooks`` and the activation survives a fresh clone the moment this
+    runs.
+
+    Safety: if ``core.hooksPath`` is already set to a DIFFERENT (foreign,
+    non-SquidSquad) value, leave it alone and warn — we never clobber a user's
+    own hooks configuration.
+
+    Returns True if the guard is active after the call, False on a skip/error.
+    """
+    hook = REPO_ROOT / _HOOKS_DIR_REL / "pre-commit"
+    if not hook.exists():
+        print(f"WARNING: hook not found at {hook}; skipping install-hooks",
+              file=sys.stderr)
+        return False
+
+    current = _run("git config --get core.hooksPath", check=False).stdout.strip()
+    if current and current != _HOOKS_DIR_REL:
+        print(
+            f"WARNING: core.hooksPath already set to '{current}' (not "
+            f"'{_HOOKS_DIR_REL}') -- leaving it; SquidSquad state guard not "
+            f"activated. Set it manually if intended.",
+            file=sys.stderr,
+        )
+        return False
+
+    if current != _HOOKS_DIR_REL:
+        rc = _run_list(["git", "config", "core.hooksPath", _HOOKS_DIR_REL], check=False)
+        # A failed write (read-only .git/config, perms) leaves the guard
+        # inactive -- honor the docstring contract and report False, don't
+        # claim the guard is live when core.hooksPath never took.
+        if rc.returncode != 0:
+            print(
+                f"WARNING: failed to set core.hooksPath to '{_HOOKS_DIR_REL}' "
+                f"(git config exited {rc.returncode}); state guard not activated.",
+                file=sys.stderr,
+            )
+            return False
+
+    # Executable bit. On POSIX git only fires a hook whose exec bit is set, so a
+    # chmod failure means the guard is installed but won't run -- report False
+    # and warn. On Windows git ignores the exec bit (the shim runs via sh), so a
+    # chmod failure there is benign and the guard is still active.
+    try:
+        import os
+        import stat
+        os.chmod(hook, os.stat(hook).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+    except OSError as e:
+        if os.name == "posix":
+            print(
+                f"WARNING: core.hooksPath set but could not make {hook} "
+                f"executable ({e}); pre-commit state guard may not fire.",
+                file=sys.stderr,
+            )
+            return False
+    return True
+
+
+def _ensure_hooks_installed():
+    """Self-heal hook activation on every git_ops invocation (#11511).
+
+    git_ops is the deterministic git entry point every agent uses each cycle in
+    BOTH wake modes, so calling this once per invocation guarantees the
+    pre-commit guard is active in every clone — covering already-provisioned
+    installs with zero installer/wizard/upgrade surgery. Fully wrapped: a hook
+    that won't install must never break a git operation.
+    """
+    try:
+        current = _run("git config --get core.hooksPath", check=False).stdout.strip()
+        if not current:
+            # Unset -> activate our guard (covers fresh / already-provisioned
+            # clones with zero installer surgery).
+            install_hooks()
+        # When core.hooksPath is already ours we noop here: the hook is tracked
+        # with mode 100755, so git restores its exec bit on every checkout/pull
+        # -- no per-invocation chmod is needed and re-running install_hooks()
+        # would add a pointless os.chmod to every git_ops call (#11511 DS
+        # re-review2). The shipped-executable invariant is locked by
+        # TestHookShippedExecutable11511.
+        # A foreign (non-empty, non-ours) hooksPath is the operator's own
+        # config: respect it SILENTLY on the self-heal path. install_hooks()
+        # would re-emit its foreign-hooksPath WARNING on every git_ops
+        # invocation (each call is a fresh process, so a warn-once flag can't
+        # help). The explicit `install-hooks` command still surfaces that
+        # warning when the operator asks for it directly.
+    except Exception:
+        pass
+
+
 def _parse_args():
     args = sys.argv[1:]
     if not args or args[0] == "--help":
@@ -995,6 +1208,14 @@ def _parse_args():
 
 def main():
     cmd, rest = _parse_args()
+
+    # Self-heal the pre-commit state guard on every invocation except the guard
+    # itself (which the hook calls mid-commit) and `install-hooks` (which calls
+    # install_hooks() explicitly in dispatch -- self-healing first would emit a
+    # duplicate foreign-hooksPath WARNING). Keeps the commit path lean and
+    # avoids re-checking what's already active (#11511).
+    if cmd not in ("guard-staged-state", "install-hooks"):
+        _ensure_hooks_installed()
 
     if cmd == "pull":
         pull(role=rest[0] if rest else None)
@@ -1085,6 +1306,21 @@ def main():
         has_changes()
     elif cmd == "last-hash":
         last_hash()
+    elif cmd == "check-real-conflict":
+        if len(rest) < 2:
+            print("Usage: git_ops.py check-real-conflict <base-ref> <head-ref>",
+                  file=sys.stderr)
+            sys.exit(2)
+        verdict = check_real_conflict(rest[0], rest[1])
+        if verdict is None:
+            sys.exit(2)        # could not resolve a ref
+        sys.exit(0 if verdict else 1)   # 0 = clean, 1 = real conflict
+    elif cmd == "guard-staged-state":
+        guard_staged_state()
+        sys.exit(0)            # FAIL-OPEN: the guard never blocks a commit
+    elif cmd == "install-hooks":
+        ok = install_hooks()
+        sys.exit(0 if ok else 1)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(1)

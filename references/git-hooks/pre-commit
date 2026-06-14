@@ -1,0 +1,19 @@
+#!/bin/sh
+# SquidSquad pre-commit guard (#11511) — keep transient state off feature branches.
+#
+# When a commit lands on a non-working (feature) branch, any staged
+# .squidsquad/ or .claude/ state/ephemeral file is UNSTAGED before the commit
+# is created. This backstops the raw-git path (POLLING mode / branch races)
+# that bypasses git_ops' already-safe commit-code / commit-state routing, which
+# is what flaps PR mergeability to CONFLICTING (transient state on main + the
+# feature branch -> GitHub sees an overlapping-line conflict).
+#
+# FAIL-OPEN by design: the guard never blocks a commit (a blocking hook could
+# wedge every agent's cycle). All logic lives in the tested git_ops subcommand;
+# this shim only invokes it and always exits 0.
+# No 2>&1: the guard prints its unstaged-file notice to stderr on purpose, and
+# merging it into stdout would hide it (git only reliably surfaces hook stderr).
+python references/scripts/git_ops.py guard-staged-state \
+  || python3 references/scripts/git_ops.py guard-staged-state \
+  || true
+exit 0

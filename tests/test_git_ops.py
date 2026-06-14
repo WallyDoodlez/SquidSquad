@@ -1678,3 +1678,322 @@ class TestGitPush:
         git_ops._git_push([])
         cmd = mock_run.call_args[0][0]
         assert cmd == ["git", "push"]
+
+
+class TestCheckRealConflict11511:
+    """#11511: deterministic ground truth for whether a PR's CONFLICTING flag
+    is a REAL conflict or a cosmetic flap (GitHub honors no user .gitattributes
+    merge driver server-side). Runs `git merge-tree --write-tree` both ways;
+    a real conflict in either direction is a real conflict.
+    """
+
+    @patch("git_ops._run_list")
+    def test_clean_returns_true(self, mock_run):
+        # rev-parse base, rev-parse head, merge-tree both ways — all clean
+        mock_run.side_effect = [
+            _mock_result(returncode=0),   # rev-parse base
+            _mock_result(returncode=0),   # rev-parse head
+            _mock_result(returncode=0),   # merge-tree base head
+            _mock_result(returncode=0),   # merge-tree head base
+        ]
+        assert git_ops.check_real_conflict("origin/main", "origin/feat") is True
+
+    @patch("git_ops._run_list")
+    def test_real_conflict_returns_false(self, mock_run):
+        mock_run.side_effect = [
+            _mock_result(returncode=0),   # rev-parse base
+            _mock_result(returncode=0),   # rev-parse head
+            _mock_result(stdout="CONFLICT (content): Merge conflict in foo.py",
+                         returncode=1),   # merge-tree base head
+            _mock_result(returncode=0),   # merge-tree head base
+        ]
+        assert git_ops.check_real_conflict("origin/main", "origin/feat") is False
+
+    @patch("git_ops._run_list")
+    def test_conflict_in_either_direction_is_conflict(self, mock_run):
+        # First direction clean, reverse direction conflicts — still a conflict.
+        mock_run.side_effect = [
+            _mock_result(returncode=0),   # rev-parse base
+            _mock_result(returncode=0),   # rev-parse head
+            _mock_result(returncode=0),   # merge-tree base head (clean)
+            _mock_result(stdout="CONFLICT (content): Merge conflict in bar.py",
+                         returncode=1),   # merge-tree head base
+        ]
+        assert git_ops.check_real_conflict("origin/main", "origin/feat") is False
+
+    @patch("git_ops._run_list")
+    def test_unresolvable_ref_returns_none(self, mock_run):
+        # rev-parse of the base ref fails -> short-circuit, no merge-tree runs.
+        mock_run.side_effect = [_mock_result(returncode=128)]  # rev-parse base fails
+        assert git_ops.check_real_conflict("origin/nope", "origin/feat") is None
+        assert mock_run.call_count == 1   # short-circuited before head/merge-tree
+
+
+class TestGuardStagedState11511:
+    """#11511 Part 2: the pre-commit guard that keeps transient state off
+    feature branches even on the raw-git path (POLLING mode / branch races).
+    FAIL-OPEN — it only ever unstages state files, never blocks a commit.
+    """
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("git_ops._get_working_branch", return_value="main")
+    def test_on_working_branch_is_noop(self, _wb, mock_run, mock_run_list):
+        mock_run.return_value = _mock_result(stdout="main\n")  # current branch
+        assert git_ops.guard_staged_state() == []
+        # No diff/reset attempted when already on the working branch.
+        mock_run_list.assert_not_called()
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("git_ops._get_working_branch", return_value="main")
+    def test_detached_head_is_noop(self, _wb, mock_run, mock_run_list):
+        mock_run.return_value = _mock_result(stdout="\n")  # empty = detached/unknown
+        assert git_ops.guard_staged_state() == []
+        mock_run_list.assert_not_called()
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("git_ops._get_working_branch", return_value="main")
+    def test_branch_lookup_is_fail_open(self, _wb, mock_run, mock_run_list):
+        # The branch-current probe must run with check=False so a failing git
+        # (corrupt HEAD, perms) can't raise mid-commit and break fail-open.
+        mock_run.return_value = _mock_result(stdout="\n")
+        git_ops.guard_staged_state()
+        assert mock_run.call_count == 1
+        assert mock_run.call_args.kwargs.get("check") is False
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("git_ops._get_working_branch", return_value="main")
+    def test_branch_lookup_failure_is_fail_open(self, _wb, mock_run, mock_run_list):
+        # Behavioral fail-open: a *failing* `git branch --show-current` (corrupt
+        # HEAD -> returncode 128, empty stdout) must return [] without raising
+        # and without attempting any diff/reset -- not just pass check=False.
+        mock_run.return_value = _mock_result(returncode=128, stdout="")
+        assert git_ops.guard_staged_state() == []
+        mock_run_list.assert_not_called()
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("git_ops._get_working_branch", return_value="main")
+    def test_feature_branch_unstages_state_files(self, _wb, mock_run, mock_run_list):
+        mock_run.return_value = _mock_result(stdout="squidsquad/task/11511\n")
+        # diff --cached lists both code and state; only state should be unstaged.
+        mock_run_list.side_effect = [
+            _mock_result(stdout="references/scripts/git_ops.py\n"
+                                ".squidsquad/skill/working-state.md\n"
+                                ".claude/scheduled_tasks.json\n"),  # diff --cached
+            _mock_result(returncode=0),  # reset working-state.md
+            _mock_result(returncode=0),  # reset scheduled_tasks.json
+        ]
+        unstaged = git_ops.guard_staged_state()
+        assert unstaged == [".squidsquad/skill/working-state.md",
+                            ".claude/scheduled_tasks.json"]
+        # One diff call + one reset per state file; code file left staged.
+        reset_calls = [c for c in mock_run_list.call_args_list
+                       if c.args[0][:2] == ["git", "reset"]]
+        assert len(reset_calls) == 2
+        reset_paths = [c.args[0][-1] for c in reset_calls]
+        assert "references/scripts/git_ops.py" not in reset_paths
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("git_ops._get_working_branch", return_value="main")
+    def test_feature_branch_code_only_is_noop(self, _wb, mock_run, mock_run_list):
+        mock_run.return_value = _mock_result(stdout="squidsquad/task/11511\n")
+        mock_run_list.return_value = _mock_result(
+            stdout="references/scripts/git_ops.py\ntests/test_git_ops.py\n")
+        assert git_ops.guard_staged_state() == []
+        # Only the diff ran; nothing to reset.
+        assert mock_run_list.call_count == 1
+
+
+class TestInstallHooks11511:
+    """#11511 Part 2: activation of the pre-commit guard via core.hooksPath.
+    Idempotent; never clobbers a foreign hooksPath value.
+    """
+
+    def _make_hook(self, tmp_path):
+        hook_dir = tmp_path / git_ops._HOOKS_DIR_REL
+        hook_dir.mkdir(parents=True)
+        (hook_dir / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_missing_hook_returns_false(self, mock_run, mock_run_list, tmp_path, monkeypatch):
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)  # no hook created
+        assert git_ops.install_hooks() is False
+        mock_run_list.assert_not_called()
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_sets_hookspath_when_unset(self, mock_run, mock_run_list, tmp_path, monkeypatch):
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)
+        self._make_hook(tmp_path)
+        mock_run.return_value = _mock_result(stdout="\n")  # core.hooksPath unset
+        mock_run_list.return_value = _mock_result(returncode=0)  # config write OK
+        assert git_ops.install_hooks() is True
+        set_calls = [c for c in mock_run_list.call_args_list
+                     if c.args[0][:3] == ["git", "config", "core.hooksPath"]]
+        assert len(set_calls) == 1
+        assert set_calls[0].args[0][-1] == git_ops._HOOKS_DIR_REL
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_idempotent_when_already_ours(self, mock_run, mock_run_list, tmp_path, monkeypatch):
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)
+        self._make_hook(tmp_path)
+        mock_run.return_value = _mock_result(stdout=git_ops._HOOKS_DIR_REL + "\n")
+        assert git_ops.install_hooks() is True
+        # Already ours -> no re-set of core.hooksPath.
+        set_calls = [c for c in mock_run_list.call_args_list
+                     if c.args[0][:3] == ["git", "config", "core.hooksPath"]]
+        assert not set_calls
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_foreign_hookspath_not_clobbered(self, mock_run, mock_run_list, tmp_path, monkeypatch):
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)
+        self._make_hook(tmp_path)
+        mock_run.return_value = _mock_result(stdout=".husky\n")  # user's own hooks
+        assert git_ops.install_hooks() is False
+        set_calls = [c for c in mock_run_list.call_args_list
+                     if c.args[0][:3] == ["git", "config", "core.hooksPath"]]
+        assert not set_calls  # left the foreign value alone
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_returns_false_when_config_write_fails(self, mock_run, mock_run_list, tmp_path, monkeypatch):
+        # Contract: "Returns True if the guard is active after the call." A
+        # failed `git config core.hooksPath` write (read-only .git/config) must
+        # report False, not claim activation that never took.
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)
+        self._make_hook(tmp_path)
+        mock_run.return_value = _mock_result(stdout="\n")  # core.hooksPath unset
+        mock_run_list.return_value = _mock_result(returncode=1)  # write fails
+        assert git_ops.install_hooks() is False
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_chmod_failure_returns_false_on_posix(
+        self, mock_run, mock_run_list, tmp_path, monkeypatch
+    ):
+        # On POSIX git only fires a hook with the exec bit set. If chmod fails
+        # the guard is installed but won't run -> report False, not a false
+        # "active" (#11511 DS re-review Finding 1).
+        import os
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)
+        self._make_hook(tmp_path)
+        mock_run.return_value = _mock_result(stdout="\n")  # core.hooksPath unset
+        mock_run_list.return_value = _mock_result(returncode=0)  # config write OK
+        monkeypatch.setattr(os, "name", "posix")
+        monkeypatch.setattr(os, "chmod", lambda *a, **k: (_ for _ in ()).throw(OSError("noexec")))
+        assert git_ops.install_hooks() is False
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_chmod_failure_benign_on_windows(
+        self, mock_run, mock_run_list, tmp_path, monkeypatch
+    ):
+        # On Windows git ignores the exec bit (the shim runs via sh), so a chmod
+        # failure is benign and the guard is still active -> True.
+        import os
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)
+        self._make_hook(tmp_path)
+        mock_run.return_value = _mock_result(stdout="\n")
+        mock_run_list.return_value = _mock_result(returncode=0)
+        monkeypatch.setattr(os, "name", "nt")
+        monkeypatch.setattr(os, "chmod", lambda *a, **k: (_ for _ in ()).throw(OSError("denied")))
+        assert git_ops.install_hooks() is True
+
+
+class TestHookShippedExecutable11511:
+    """#11511 DS re-review2: the pre-commit hook must be tracked with the
+    executable mode (100755). On POSIX git only fires a hook whose exec bit is
+    set, and `git checkout`/`pull` restore a tracked file to its RECORDED mode.
+    If the hook were tracked 100644, a later checkout would silently drop the
+    exec bit and the guard would stop firing -- the self-heal noops when
+    core.hooksPath is already ours, so nothing would restore it. Tracking the
+    hook 100755 fixes the exec bit at the source so it survives every checkout.
+    This is a repo invariant, so it reads the real git index (not a mock).
+    """
+
+    def test_hook_tracked_executable(self):
+        import subprocess
+        out = subprocess.run(
+            ["git", "ls-files", "-s", "--", "references/git-hooks/pre-commit"],
+            cwd=str(git_ops.REPO_ROOT),
+            capture_output=True,
+            text=True,
+        )
+        assert out.returncode == 0, out.stderr
+        line = out.stdout.strip()
+        assert line, "pre-commit hook is not tracked in git"
+        mode = line.split()[0]
+        assert mode == "100755", (
+            f"pre-commit hook tracked as mode {mode}, expected 100755 "
+            f"(POSIX needs the exec bit or git silently skips the guard)"
+        )
+
+
+class TestEnsureHooksInstalled11511:
+    """#11511 DS re-review Finding 4: the self-heal path installs our guard when
+    core.hooksPath is unset, but respects a foreign value SILENTLY (no per-
+    invocation WARNING -- each git_ops call is a fresh process, so a warn-once
+    flag can't help). The explicit `install-hooks` command still warns.
+    """
+
+    @patch("git_ops.install_hooks")
+    @patch("git_ops._run")
+    def test_installs_when_unset(self, mock_run, mock_install):
+        mock_run.return_value = _mock_result(stdout="\n")  # hooksPath unset
+        git_ops._ensure_hooks_installed()
+        mock_install.assert_called_once()
+
+    @patch("git_ops.install_hooks")
+    @patch("git_ops._run")
+    def test_noop_when_already_ours(self, mock_run, mock_install):
+        mock_run.return_value = _mock_result(stdout=git_ops._HOOKS_DIR_REL + "\n")
+        git_ops._ensure_hooks_installed()
+        mock_install.assert_not_called()
+
+    @patch("git_ops.install_hooks")
+    @patch("git_ops._run")
+    def test_silent_skip_on_foreign(self, mock_run, mock_install):
+        # Foreign hooksPath -> do NOT call install_hooks (which would warn every
+        # invocation). Respect the operator's config silently.
+        mock_run.return_value = _mock_result(stdout=".husky\n")
+        git_ops._ensure_hooks_installed()
+        mock_install.assert_not_called()
+
+
+class TestEnsureHooksDispatch11511:
+    """#11511 Part 2: main() self-heals hooks on every invocation EXCEPT the
+    guard (called mid-commit) and install-hooks (which installs explicitly --
+    self-healing first would double the foreign-hooksPath WARNING).
+    """
+
+    @patch("git_ops.install_hooks", return_value=True)
+    @patch("git_ops._ensure_hooks_installed")
+    def test_install_hooks_cmd_skips_self_heal(self, mock_ensure, mock_install, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["git_ops.py", "install-hooks"])
+        with pytest.raises(SystemExit):
+            git_ops.main()
+        mock_ensure.assert_not_called()   # no duplicate self-heal pass
+        mock_install.assert_called_once()  # explicit dispatch still installs
+
+    @patch("git_ops.guard_staged_state")
+    @patch("git_ops._ensure_hooks_installed")
+    def test_guard_cmd_skips_self_heal(self, mock_ensure, _mock_guard, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["git_ops.py", "guard-staged-state"])
+        with pytest.raises(SystemExit):
+            git_ops.main()
+        mock_ensure.assert_not_called()
+
+    @patch("git_ops.has_changes")
+    @patch("git_ops._ensure_hooks_installed")
+    def test_other_cmd_self_heals(self, mock_ensure, _mock_has, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["git_ops.py", "has-changes"])
+        git_ops.main()
+        mock_ensure.assert_called_once()
