@@ -3237,6 +3237,38 @@ class TestEADStatusRouting12342(unittest.TestCase):
                          updated="2099-03-01T00:00:00Z")], det=det)
         self.assertEqual([e["target_alias"] for e in emitted2], ["verifier"])
 
+    def test_back_transition_reemits_to_verifier(self):
+        """DS-REVIEW-12342 Finding 1 regression: a reject loop
+        pending-test → in-progress → pending-test MUST re-emit to the verifier
+        each time it re-enters pending-test. A naive (issue, status) dedup set
+        would suppress the second pending-test and starve QA on re-verification.
+        """
+        det, e1 = self._run([self._issue(10, "pending-test", role="skill",
+                                         updated="2099-01-01T00:00:00Z")])
+        self.assertEqual([e["target_alias"] for e in e1], ["verifier"])
+
+        # QA rejects → in-progress: no emit, but the status is recorded.
+        det, e2 = self._run([self._issue(10, "in-progress", role="skill",
+                                         updated="2099-02-01T00:00:00Z")], det=det)
+        self.assertEqual(e2, [])
+
+        # Worker resubmits → pending-test: MUST re-emit to verifier.
+        det, e3 = self._run([self._issue(10, "pending-test", role="skill",
+                                         updated="2099-03-01T00:00:00Z")], det=det)
+        self.assertEqual([e["target_alias"] for e in e3], ["verifier"],
+                         "re-entry to pending-test after a reject must re-wake "
+                         "the verifier (DS Finding 1)")
+
+    def test_comment_bump_same_status_does_not_reemit(self):
+        """A comment that bumps updatedAt without changing status must NOT
+        re-emit (the dedup's core job)."""
+        det, e1 = self._run([self._issue(11, "pending-test", role="skill",
+                                         updated="2099-01-01T00:00:00Z")])
+        self.assertEqual(len(e1), 1)
+        _, e2 = self._run([self._issue(11, "pending-test", role="skill",
+                                       updated="2099-02-01T00:00:00Z")], det=det)
+        self.assertEqual(e2, [], "same status + comment bump must not re-emit")
+
     def test_time_filter_skips_unupdated_issues(self):
         det, _ = self._run([self._issue(8, "approved", role="skill",
                                         updated="2000-01-01T00:00:00Z")])

@@ -3090,6 +3090,11 @@ def _print_banner(port: int):
 # External activity detector (#7630 2-4)
 # ---------------------------------------------------------------------------
 
+# #12342: sentinel distinguishing "issue never seen" from "issue last seen at
+# status=None" in ExternalActivityDetector._emitted_issues.get(...).
+_UNSEEN = object()
+
+
 class ExternalActivityDetector:
     """Polls GitHub for external changes and emits assigned-to events (#7630 2-4).
 
@@ -3104,10 +3109,14 @@ class ExternalActivityDetector:
     event-mode QA and DM starved: the EAD only ever emitted for worker statuses,
     so verification/delivery work produced no wake event.
 
-    Dedup is keyed by ``(issue_num, status)`` so each *transition* of an issue
-    emits exactly once — keying by issue number alone (pre-#12342) meant an
-    issue emitted at most one assigned-to in its whole lifecycle (it fired at
-    ``approved`` and every later transition was deduped away).
+    Dedup records ONE entry per issue — its last observed status — and emits
+    only when the current status differs from that record (#12342). Keying by
+    issue number alone (pre-#12342) meant an issue emitted at most one
+    assigned-to in its whole lifecycle; a naive ``(issue_num, status)`` set
+    instead permanently suppressed re-entry to a status, starving QA on every
+    re-verification after a reject (DS-REVIEW-12342 Finding 1). Recording the
+    intermediate (unmapped) ``in-progress`` lets a back-transition
+    ``pending-test -> in-progress -> pending-test`` re-emit correctly.
     """
 
     # #6274: qa→verifier per D5. AGENT_ROLES is currently unused (issue
@@ -3134,10 +3143,20 @@ class ExternalActivityDetector:
         self._running = False
         self._thread = None
         self._last_check_epoch = 0.0  # epoch seconds — avoids ISO string comparison
-        # Ordered dedup keyed by (issue_num, status) (#12342) so each
-        # transition emits once. `status=None` keys are accepted for
-        # backward-compatible single-arg callers (tests, future reuse).
-        self._emitted_issues: dict[tuple, None] = {}
+        # #12342: one entry per issue — issue_num → the LAST status this issue
+        # was observed at (the status we emitted for, or an unmapped status we
+        # recorded as we passed through it). We emit only when the observed
+        # status differs from the recorded one, so:
+        #   - a comment that bumps updatedAt without changing status → no
+        #     re-emit (status unchanged), and
+        #   - a back-transition pending-test → in-progress → pending-test
+        #     DOES re-emit, because the intermediate in-progress is recorded
+        #     and the second pending-test differs from it.
+        # The earlier (issue_num, status) tuple-set permanently suppressed
+        # re-entry to a status (DS-REVIEW-12342 Finding 1: QA starved on every
+        # re-verification after a reject). One entry/issue also keeps the 500
+        # eviction cap at 500 *issues* rather than ~125 (Finding 5).
+        self._emitted_issues: dict = {}
         # Lock guards _emitted_issues against concurrent mutation. The
         # detector's own poller thread is the only writer now that #8914
         # removed TrackerHandoffDispatcher, but the lock stays — the
@@ -3146,16 +3165,22 @@ class ExternalActivityDetector:
         self._emitted_lock = threading.Lock()
 
     def is_emitted(self, issue_num, status=None):
-        """Thread-safe membership check on _emitted_issues (#12342: keyed by
-        (issue_num, status))."""
+        """True iff the LAST recorded status for ``issue_num`` equals
+        ``status`` (#12342) — i.e. we already emitted/observed this exact
+        status and nothing has changed since. An unseen issue is never
+        'emitted'."""
         with self._emitted_lock:
-            return (issue_num, status) in self._emitted_issues
+            return self._emitted_issues.get(issue_num, _UNSEEN) == status
 
     def mark_emitted(self, issue_num, status=None):
-        """Thread-safe insert + bounded eviction on _emitted_issues (#8694;
-        #12342: keyed by (issue_num, status))."""
+        """Record ``status`` as the last observed status for ``issue_num``
+        (#8694 thread-safe + bounded eviction; #12342 one entry/issue)."""
         with self._emitted_lock:
-            self._emitted_issues[(issue_num, status)] = None
+            # Refresh recency: delete+reinsert so the FIFO eviction order
+            # tracks last-touch, not first-insert (an issue actively cycling
+            # statuses should not be evicted ahead of a stale one).
+            self._emitted_issues.pop(issue_num, None)
+            self._emitted_issues[issue_num] = status
             while len(self._emitted_issues) > 500:
                 oldest = next(iter(self._emitted_issues))
                 del self._emitted_issues[oldest]
@@ -3254,27 +3279,31 @@ class ExternalActivityDetector:
             if status is None:
                 continue
 
-            # Dedup per (issue, status) (#12342): each transition emits once.
-            # Keying by issue number alone (pre-#12342) meant an issue emitted
-            # at most one assigned-to ever — it fired at `approved` and every
-            # later transition (pending-test, pending-ship) was deduped away.
+            # Dedup (#12342): skip when the issue is still at the SAME status we
+            # last recorded — nothing changed (e.g. a comment bumped updatedAt
+            # without a transition). A different status falls through and will
+            # re-record below, so a back-transition (pending-test → in-progress
+            # → pending-test) correctly re-emits — see DS-REVIEW-12342 Finding 1.
             if self.is_emitted(issue_num, status):
                 continue
 
             # Time filter: only process issues updated since last check. A
             # status transition bumps updatedAt, so a freshly-transitioned
             # issue passes; a bare comment that does NOT change status is
-            # absorbed by the per-(issue,status) dedup above on later polls
-            # (this is why removing the old title-prefix `_is_agent_update`
-            # skip is safe — dedup, not a heuristic, prevents re-triggering).
+            # absorbed by the dedup above on later polls (this is why removing
+            # the old title-prefix `_is_agent_update` skip is safe — dedup,
+            # not a heuristic, prevents re-triggering).
             updated_epoch = self._parse_iso_epoch(issue.get("updatedAt", ""))
             if updated_epoch <= self._last_check_epoch:
                 continue
 
-            # Status → routing target (#12342). Unmapped statuses
-            # (in-progress, planned, pending, planning) emit nothing.
+            # Status → routing target (#12342). Unmapped statuses (in-progress,
+            # planned, pending, planning) emit nothing — but we still RECORD
+            # the status so a later re-entry to a routed status differs from
+            # it and re-emits (the back-transition support; DS Finding 1).
             routing = self._STATUS_ROUTING.get(status)
             if routing is None:
+                self.mark_emitted(issue_num, status)
                 continue
             kind, role_class = routing
             if kind == "label":
@@ -3283,7 +3312,11 @@ class ExternalActivityDetector:
                 # `role:` is the alias; in multi-instance teams the `role:*`
                 # label always carries the routed alias per AGENT-RUNTIME.md
                 # §8.3 (the harness rewrites `role:*` on every `/work/assign`).
-                # Either way the extracted string IS the alias.
+                # Either way the extracted string IS the alias. NOTE (#12342 /
+                # DS Finding 3): a multi-role issue wakes only the alphabetically
+                # first role:* alias — single-worker-per-issue is the assumed
+                # model; multi-role fan-out is out of scope and pre-dates this
+                # change.
                 role_labels = sorted(l for l in labels if l.startswith("role:"))
                 if not role_labels:
                     continue

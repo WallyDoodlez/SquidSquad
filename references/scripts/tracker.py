@@ -1260,6 +1260,18 @@ def transition(number, from_status, to_status, role=None, force=False):
         # so the harness ingestion allowlist (harness.py receive-event) drops
         # it (204). `split(" ")[0]` takes the bare alias — matching the other
         # emit site below (the inconsistency was the #12342 secondary bug).
+        #
+        # KNOWN EDGE (DS-REVIEW-12342 Finding 4): during the #6274 dual-aware
+        # window a caller passing the role-CLASS form ("verifier"/"worker")
+        # rather than its alias still emits that form, which is not in the
+        # allowlist when the install registers the legacy alias (qa/dev). Using
+        # `_canonicalize_role` would map verifier→qa but spams a deprecation
+        # warning for the qa/dev aliases this install actually uses, so it is
+        # NOT used here. Agents pass their own alias (skill/pm/qa/dm) in
+        # practice, so the common path is covered; the role-class-form edge is
+        # left to the #6274.3 cutover that removes the dual mapping. This is the
+        # SECONDARY path anyway — primary work delivery is the EAD assigned-to
+        # event, which resolves the alias from the registry directly.
         emit_role = (role or "unknown").split(" ")[0].replace("-lead", "")
         _emit_event("status-transition", emit_role, payload={
             "issue_number": str(number),
