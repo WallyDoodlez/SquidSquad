@@ -80,6 +80,22 @@ L4_WATCHER_SUPERVISE_INTERVAL = 5  # seconds
 FORCE_KILL_TIMEOUT_SECONDS = 60
 HARNESS_STATE_FILE = SQUIDSQUAD_DIR / ".harness-state.json"
 
+# #12244 P2 — crash-loop / session-limit backoff. A spawn that dies within
+# FAST_DEATH_WINDOW_SECONDS of (re)spawn counts as a "fast death". After
+# FAST_DEATH_THRESHOLD consecutive fast deaths the auto-reboot path stops tight-
+# looping and applies exponential backoff (capped) before the next respawn,
+# surfacing a paused status instead of silently burning quota. This is timing-
+# based and cause-agnostic — it catches the Claude session/usage-limit exit-1
+# loop (the #12244 trigger) AND any other fast-crash cause (stale lock, bad
+# compose) without parsing claude's terminal output (which thin_launcher does
+# not capture). A spawn that survives past the window resets the counter
+# (genuine recovery). A one-off crash (first fast death, or a long-lived agent
+# that finally dies) reboots immediately as before.
+FAST_DEATH_WINDOW_SECONDS = 60
+FAST_DEATH_THRESHOLD = 3
+CRASH_BACKOFF_BASE_SECONDS = 30
+CRASH_BACKOFF_CAP_SECONDS = 1800  # 30m — a sane ceiling, not infinite
+
 # #9242: Diagnostic escape hatch. When True (set by `main()` from
 # `--no-auto-start` or `SQUIDSQUAD_HARNESS_NO_AUTO_START=1`), the
 # deferred-init thread skips the auto-spawn-all-agents block. Lets
@@ -139,7 +155,10 @@ class AgentState:
                  "last_health_check", "boot_time",
                  "clone_path", "claude_pid", "terminal_pid",
                  "current_cycle", "current_phase", "last_cycle_start",
-                 "last_cycle_end", "last_cycle_type", "bootup_complete")
+                 "last_cycle_end", "last_cycle_type", "bootup_complete",
+                 # #12244 P2 — crash-loop / session-limit backoff
+                 "last_spawn_at", "consecutive_fast_deaths",
+                 "reboot_blocked_until")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -177,6 +196,13 @@ class AgentState:
         # sequence. The harness does NOT gate, queue, or hold events on this
         # flag — CONTEXT.md §2 + §5.2 lock the harness as a pure broadcast pipe.
         self.bootup_complete = False
+        # #12244 P2 — crash-loop backoff bookkeeping. last_spawn_at is stamped
+        # on every (re)spawn so the poller can measure how long the process
+        # lived; consecutive_fast_deaths counts back-to-back fast deaths;
+        # reboot_blocked_until holds off the next respawn while backing off.
+        self.last_spawn_at = None
+        self.consecutive_fast_deaths = 0
+        self.reboot_blocked_until = None
 
     def to_dict(self):
         return {
@@ -195,6 +221,10 @@ class AgentState:
             "last_cycle_end": self.last_cycle_end,
             "last_cycle_type": self.last_cycle_type,
             "bootup_complete": self.bootup_complete,
+            # #12244 P2
+            "last_spawn_at": self.last_spawn_at,
+            "consecutive_fast_deaths": self.consecutive_fast_deaths,
+            "reboot_blocked_until": self.reboot_blocked_until,
         }
 
 
@@ -389,6 +419,21 @@ class HarnessState:
                 # Update status
                 if alive:
                     agent.status = "running"
+                    # #12244 P2 — a spawn that has been alive past the fast-death
+                    # window is a genuine recovery: clear the crash-loop streak
+                    # and any pending backoff so a later isolated death reboots
+                    # immediately instead of inheriting a stale backoff.
+                    if (agent.consecutive_fast_deaths > 0
+                            and agent.last_spawn_at is not None
+                            and (time.time() - agent.last_spawn_at)
+                            >= FAST_DEATH_WINDOW_SECONDS):
+                        _log(f"{role}: survived "
+                             f">{FAST_DEATH_WINDOW_SECONDS}s — clearing "
+                             f"crash-loop streak "
+                             f"({agent.consecutive_fast_deaths}->0)")
+                        agent.consecutive_fast_deaths = 0
+                        agent.reboot_blocked_until = None
+                        state_changed = True
                     # #11538: only clear a RESTARTING intent once a NEW claude
                     # PID has appeared (pid_changed) — i.e. the old process
                     # actually died and the agent rebooted. Resetting whenever
@@ -413,6 +458,23 @@ class HarnessState:
                         agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
                         _log(f"{role}: alive with new PID (stale intent={old_intent}), reset to running (#7637)")
+                elif agent.status == "crash-looping":
+                    # #12244 P2: a dead agent waiting out its backoff normally
+                    # KEEPS the "crash-looping" status (preserved like
+                    # "starting") so the resume branch below recognises it and
+                    # operators see the real reason — instead of being
+                    # relabelled "unknown" on the next poll. BUT an operator
+                    # stop wins over a backoff: when intent is STOPPING/STOPPED,
+                    # abandon the wait and settle to "stopped" so the STOPPING
+                    # fulfillment below can finish it (otherwise a crash-looping
+                    # agent + /stop would wedge forever — neither is_dead nor
+                    # the resume branch fire for STOPPING intent).
+                    if agent.intent in (
+                        AgentState.INTENT_STOPPING, AgentState.INTENT_STOPPED
+                    ):
+                        agent.status = "stopped"
+                        agent.reboot_blocked_until = None
+                        state_changed = True
                 elif agent.status != "starting":
                     # #4792: stop is now expressed via intent (INTENT_STOPPING
                     # → INTENT_STOPPED), not a sentinel file.
@@ -447,13 +509,77 @@ class HarnessState:
                         agent.bootup_complete = False
                         state_changed = True
                     else:
-                        reboot_roles.append(role)
-                        agent.status = "starting"
-                        agent.claude_pid = None  # Clear stale PID
-                        # #8695: the replacement process needs to re-emit
-                        # bootup-complete before we'll dispatch events to it.
-                        agent.bootup_complete = False
-                        state_changed = True
+                        # #12244 P2 — crash-loop / session-limit backoff. Count
+                        # back-to-back fast deaths; once they cross the
+                        # threshold, hold off the respawn (exponential, capped)
+                        # and surface a paused status instead of tight-looping
+                        # and burning quota.
+                        now = time.time()
+                        lifetime = (
+                            now - agent.last_spawn_at
+                            if agent.last_spawn_at is not None else None
+                        )
+                        if (lifetime is not None
+                                and lifetime < FAST_DEATH_WINDOW_SECONDS):
+                            agent.consecutive_fast_deaths += 1
+                        else:
+                            # Lived long enough (or no spawn record) — not a
+                            # crash loop; a one-off death reboots immediately.
+                            agent.consecutive_fast_deaths = 0
+
+                        if (agent.consecutive_fast_deaths
+                                >= FAST_DEATH_THRESHOLD):
+                            over = (agent.consecutive_fast_deaths
+                                    - FAST_DEATH_THRESHOLD)
+                            backoff = min(
+                                CRASH_BACKOFF_BASE_SECONDS * (2 ** over),
+                                CRASH_BACKOFF_CAP_SECONDS,
+                            )
+                            agent.reboot_blocked_until = now + backoff
+                            agent.status = "crash-looping"
+                            agent.claude_pid = None
+                            agent.bootup_complete = False
+                            state_changed = True
+                            _log(
+                                f"{role}: {agent.consecutive_fast_deaths} "
+                                f"consecutive fast deaths "
+                                f"(<{FAST_DEATH_WINDOW_SECONDS}s each) — "
+                                f"backing off {backoff:.0f}s before respawn "
+                                f"(status=crash-looping). Likely a Claude "
+                                f"session/usage limit or a startup crash; not "
+                                f"hammering the respawn."
+                            )
+                        else:
+                            reboot_roles.append(role)
+                            agent.status = "starting"
+                            agent.claude_pid = None  # Clear stale PID
+                            # #8695: the replacement process needs to re-emit
+                            # bootup-complete before we'll dispatch events to it.
+                            agent.bootup_complete = False
+                            state_changed = True
+
+                # #12244 P2 — resume from crash-loop backoff once the window
+                # elapses. A paused ("crash-looping") agent is not is_dead and
+                # was not prev-running, so the branch above won't re-fire — this
+                # is its dedicated wake path. The fast-death streak is kept (so a
+                # still-failing agent backs off longer next time); it only
+                # resets once a respawn survives the window (the alive branch).
+                elif (agent.status == "crash-looping" and not alive
+                        and should_reboot
+                        and agent.reboot_blocked_until is not None
+                        and time.time() >= agent.reboot_blocked_until):
+                    reboot_roles.append(role)
+                    agent.status = "starting"
+                    agent.claude_pid = None
+                    agent.bootup_complete = False
+                    agent.reboot_blocked_until = None
+                    state_changed = True
+                    _log(
+                        f"{role}: crash-loop backoff elapsed — retrying "
+                        f"respawn (streak still "
+                        f"{agent.consecutive_fast_deaths}; resets after a "
+                        f"spawn survives >{FAST_DEATH_WINDOW_SECONDS}s)."
+                    )
 
                 # Stopping intent fulfilled — agent died as requested (#4966)
                 if is_dead and agent.intent == AgentState.INTENT_STOPPING:
@@ -484,11 +610,19 @@ class HarnessState:
             _log(f"Auto-rebooting {role} (was running, intent={self.agents[role].intent})")
             try:
                 result = boot_remote.boot_agent(role)
-                if result.get("success") and result.get("terminal_pid"):
+                if result.get("success"):
                     with self._lock:
                         agent = self.agents.get(role)
                         if agent:
-                            agent.terminal_pid = result["terminal_pid"]
+                            agent.terminal_pid = result.get("terminal_pid")
+                            # #12244 P2 — stamp the (re)spawn time so the next
+                            # death's lifetime is measured from here; this is
+                            # what makes the fast-death streak accumulate across
+                            # auto-reboots (boot_time is not refreshed here).
+                            # Gated on success (not terminal_pid) to match the
+                            # other three spawn paths — a successful spawn always
+                            # stamps, even if terminal_pid is absent.
+                            agent.last_spawn_at = time.time()
                 elif result.get("action") == "error":
                     # #11640: boot_agent refused (e.g. unregistered/missing
                     # clone). Never spawned in REPO_ROOT — surface the refusal
@@ -700,6 +834,12 @@ class HarnessState:
                         # harness restart, since boot_remote skips already-alive
                         # agents and the agent has no way to know we restarted.
                         "bootup_complete": a.bootup_complete,
+                        # #12244 P2: persist crash-loop backoff state so a
+                        # harness restart mid-backoff doesn't reset the streak
+                        # and immediately re-enter a tight respawn loop.
+                        "last_spawn_at": a.last_spawn_at,
+                        "consecutive_fast_deaths": a.consecutive_fast_deaths,
+                        "reboot_blocked_until": a.reboot_blocked_until,
                     }
                     for role, a in self.agents.items()
                 },
@@ -744,19 +884,33 @@ class HarnessState:
                     )
                 agent = self.agents[role]
                 agent.intent = agent_data.get("intent", AgentState.INTENT_RUNNING)
-                # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1.
-                # We distinguish absent key from explicit null so an explicit
-                # null is always honored (case b: "load as-is") and only an
-                # absent key triggers the migration seed (case a):
-                #   (a) legacy state file: intent is STOPPING/RESTARTING and
-                #       the `intent_set_at` key is ABSENT → seed with
-                #       time.time() so the force-kill clock starts now rather
-                #       than firing immediately on a pre-existing intent.
-                #   (b) present state file: load as-is (may be None when the
-                #       intent is RUNNING/STOPPED, or a float when STOPPING/
-                #       RESTARTING).
-                if "intent_set_at" not in agent_data and agent.intent in (
-                    AgentState.INTENT_STOPPING, AgentState.INTENT_RESTARTING,
+                # #12244 P0 — a RESTARTING intent does NOT survive a harness
+                # restart. "restart in progress" is a transient state owned by
+                # the harness session that issued it; resurrecting it across a
+                # restart force-kills (the 60s safety net below) a HEALTHY agent
+                # whose claude.exe outlived the harness — its restored
+                # intent_set_at predates the restart and is already past the
+                # timeout, so the first health poll kills it, then auto-reboots
+                # it (the operator-reported "working agent killed + respawned,
+                # repeatedly" loop). Reset to RUNNING: a still-dead agent is
+                # auto-rebooted anyway (RUNNING is in should_reboot); a live one
+                # is left alone. A genuinely-wanted restart can be re-requested
+                # against THIS harness. STOPPING is deliberately NOT reset — an
+                # explicit operator stop MUST survive a harness restart.
+                if agent.intent == AgentState.INTENT_RESTARTING:
+                    agent.intent = AgentState.INTENT_RUNNING
+                    agent.intent_set_at = None
+                # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1,
+                # now STOPPING-only (RESTARTING handled above). Distinguish an
+                # absent key from an explicit null: an explicit null is honored
+                # (case b "load as-is"); only an absent key seeds (case a):
+                #   (a) legacy state file: intent STOPPING, `intent_set_at` key
+                #       ABSENT → seed time.time() so the force-kill clock starts
+                #       now rather than firing immediately on a stale intent.
+                #   (b) present state file: load as-is (None when RUNNING/
+                #       STOPPED, or a float when STOPPING).
+                elif "intent_set_at" not in agent_data and (
+                    agent.intent == AgentState.INTENT_STOPPING
                 ):
                     agent.intent_set_at = time.time()
                 else:
@@ -767,6 +921,12 @@ class HarnessState:
                 # #8695: restore so already-running agents stay ungated after
                 # a harness restart. Defaults to False for older state files.
                 agent.bootup_complete = agent_data.get("bootup_complete", False)
+                # #12244 P2 — restore crash-loop backoff state (defaults safe
+                # for older state files / fresh agents).
+                agent.last_spawn_at = agent_data.get("last_spawn_at")
+                agent.consecutive_fast_deaths = agent_data.get(
+                    "consecutive_fast_deaths", 0) or 0
+                agent.reboot_blocked_until = agent_data.get("reboot_blocked_until")
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -1360,6 +1520,7 @@ async def lifespan(app: FastAPI):
                         # before events flow — match the other spawn paths.
                         agent_state.bootup_complete = False
                         agent_state.boot_time = time.time()
+                        agent_state.last_spawn_at = time.time()  # #12244 P2
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
@@ -1604,6 +1765,7 @@ async def start_all():
                 # must re-assert bootup-complete before we'll dispatch events.
                 agent_state.bootup_complete = False
                 agent_state.boot_time = time.time()
+                agent_state.last_spawn_at = time.time()  # #12244 P2
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
@@ -1715,6 +1877,7 @@ async def start_agent(role: str):
             agent_state.intent = AgentState.INTENT_RUNNING
             agent_state.intent_set_at = None  # #4792 Phase 1
             agent_state.boot_time = time.time()
+            agent_state.last_spawn_at = time.time()  # #12244 P2
             agent_state.terminal_pid = result.get("terminal_pid")
             # #8695: spawning a fresh agent → bootup-complete must be re-asserted
             # by the new process before we'll dispatch any events to it.
