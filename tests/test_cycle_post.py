@@ -55,6 +55,46 @@ def _write_output(squid_dir, role, data):
     return output_path
 
 
+@pytest.fixture(autouse=True)
+def _block_live_harness_egress(monkeypatch):
+    """#12282 regression guard — no test in this module may issue a REAL
+    request to the live harness on the default port (7373).
+
+    The leak: ``cycle_post._discover_harness_port()`` falls back to
+    ``_HARNESS_DEFAULT_PORT`` (7373) when no ``.harness-port`` file is
+    present (the ``patch_dirs`` tmp dir has none). A test that reaches the
+    real ``_post_harness_restart`` therefore resolves the LIVE production
+    harness and fires ``POST /agents/<role>/restart`` against it — the
+    self-inflicted reboot churn in #12282. The single offender was
+    ``test_exits_on_context_pressure`` (it mocked the intent query but not
+    ``_post_harness_restart``).
+
+    This autouse fixture wraps ``urllib.request.urlopen`` with a guard that
+    raises if any request targets the default harness port, converting a
+    silent live-harness POST into a loud test failure. Tests that
+    legitimately exercise ``urlopen`` against a stub port
+    (``TestPostHarnessRestart``) re-patch ``urlopen`` inside the test body,
+    which overrides this guard. Belt-and-braces, mirroring conftest's
+    ``_snapshot_restore_live_config_md`` precedent for subprocess/live-state
+    leaks.
+    """
+    real_urlopen = cycle_post.urllib.request.urlopen
+    default_port = cycle_post._HARNESS_DEFAULT_PORT
+
+    def _guard(req, *args, **kwargs):
+        url = getattr(req, "full_url", str(req))
+        if f":{default_port}/" in url:
+            raise AssertionError(
+                f"#12282: test issued a REAL request to the live harness "
+                f"default port ({default_port}): {url!r}. Mock "
+                f"_post_harness_restart / _discover_harness_port / urlopen "
+                f"so the suite never POSTs to the production harness."
+            )
+        return real_urlopen(req, *args, **kwargs)
+
+    monkeypatch.setattr(cycle_post.urllib.request, "urlopen", _guard)
+
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
@@ -418,13 +458,26 @@ class TestStopAfterCycleCheck:
     """#4966: API-based intent check replaces .stop-after-cycle sentinel."""
 
     def test_exits_on_context_pressure(self, patch_dirs, squid_dir):
-        """cycle_post returns True when context pressure exceeded (#4966)."""
+        """cycle_post returns True when context pressure exceeded (#4966).
+
+        #12282: `_post_harness_restart` MUST be mocked. With intent=None
+        (harness "unreachable" via the intent query) and exceeded=True, the
+        exceeded branch calls the real `_post_harness_restart`, whose
+        `_discover_harness_port()` falls back to the default port 7373 when
+        the patch_dirs tmp dir has no .harness-port — firing a real
+        `POST /agents/skill/restart` at the LIVE production harness. That
+        leak was the engine of the self-inflicted reboot churn in #12282.
+        """
         data = {
             "context_pressure": {"used_pct": 85, "threshold": 70, "exceeded": True},
         }
-        with patch.object(cycle_post, "_query_harness_intent", return_value=None):
+        with patch.object(cycle_post, "_query_harness_intent", return_value=None), \
+             patch.object(cycle_post, "_post_harness_restart") as post:
             result = cycle_post._do_stop_after_cycle_check(data, "skill")
         assert result is True
+        # Intent=None falls through the short-circuit guard, so the restart
+        # IS routed — but to the mock, never the live harness (#12282).
+        post.assert_called_once_with("skill")
 
     def test_no_exit_below_threshold(self, patch_dirs, squid_dir):
         """No exit when context pressure is below threshold."""
@@ -528,6 +581,36 @@ class TestContextPressureRestartRouting:
             result = cycle_post._do_stop_after_cycle_check(data, "skill")
         assert result is False
         post.assert_not_called()
+
+
+class TestNoLiveHarnessRestartLeak12282:
+    """#12282: lock the regression guard. A test that reaches the real
+    ``_post_harness_restart`` with the default-port fallback in play must
+    fail loudly (guard AssertionError) instead of silently POSTing
+    ``/restart`` at the live production harness on 7373."""
+
+    def test_unmocked_restart_to_default_port_is_blocked(self, patch_dirs,
+                                                          squid_dir):
+        """Reproduce the exact #12282 leak: exceeded pressure + intent=None
+        + un-mocked ``_post_harness_restart`` + port resolving to the live
+        default (7373). The autouse ``_block_live_harness_egress`` guard
+        must convert the would-be live POST into an AssertionError.
+
+        Pre-#12282 (no guard, un-mocked) this path fired a real
+        ``POST http://127.0.0.1:7373/agents/skill/restart`` every full-suite
+        run. With the guard, the same un-mocked path can never reach the
+        live harness again — it fails the test instead.
+        """
+        data = {
+            "context_pressure": {"used_pct": 85, "threshold": 70,
+                                 "exceeded": True},
+        }
+        with patch.object(cycle_post, "_query_harness_intent",
+                          return_value=None), \
+             patch.object(cycle_post, "_discover_harness_port",
+                          return_value=cycle_post._HARNESS_DEFAULT_PORT):
+            with pytest.raises(AssertionError, match="live harness"):
+                cycle_post._do_stop_after_cycle_check(data, "skill")
 
 
 class TestPostHarnessRestart:
