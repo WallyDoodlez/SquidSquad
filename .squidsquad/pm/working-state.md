@@ -1,5 +1,11 @@
 # Working State
 
+## >>> UPDATE ~06:05 (Jun 14) — HARNESS-ARCH v8 post-merge sync (#12293 backoff landed) <<<
+
+- **#12293 MERGED to main** (#12244 backoff). Synced HARNESS-ARCH to shipped code: §7.3 documents backoff algo (last_spawn_at, 60s fast-death window, 3-threshold, exp 30s·2^over cap 1800s, reboot_blocked_until, streak-reset-on-survival); §7.1.1 +`crash-looping` status; §7.5 +3 state fields; §11 row; **§13.8 flipped open-gap→RESOLVED**. Doc now matches code; the post-merge TODO I flagged is DONE.
+- Also from log: QA verified my emergency-fix 162aa29a2 = "correct but 0 tests" → routed #12244 back to in-progress for skill to add durable tests (handled by skill). DM flagged QA merged #12293 bypassing DM gate (process note, dm-owned).
+- **Open**: #12271 liveness (operator reviewing — links given). #12282 trigger (skill). Saga: backoff DONE+merged · trigger w/skill · liveness pending-approval.
+
 ## >>> UPDATE ~01:55 (Jun 14) — HARNESS-ARCH contradiction polish (v7) + #12282 nudged + liveness breakdown given <<<
 
 - **Operator decision posture**: fix root cause (#12282) first; #12271 liveness redesign is "still better" ONLY for zombie self-healing (real but manually-recoverable) — recommended layering = **#12282 (trigger) + #12244 (backoff) core; #12271 SessionEnd-slice cheap; full hook-heartbeat deferred**. Operator chose: NUDGE skill onto #12282 (done — priority comment posted); and asked to **polish arch doc for contradictions BEFORE any status moves** (in progress → DONE this cycle).

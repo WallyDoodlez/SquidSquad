@@ -244,6 +244,7 @@ Transitions are HTTP-API-driven (`POST /agents/{role}/start|stop|restart`). The 
 | `stopping` | Stop in progress; harness waiting for cooperative exit or force-kill window |
 | `stopped` | Agent exited as intended (intent was `stopping`) |
 | `crashed` | Agent died unexpectedly (intent was `running` or `booting`) |
+| `crash-looping` | ≥3 consecutive fast deaths (each <60s lifetime) detected; respawn is paused under exponential backoff (§7.3, #12293). Not terminal — resumes automatically when the backoff window elapses. |
 
 Normal lifecycle: `booting → ready → stopping → stopped`
 
@@ -290,7 +291,7 @@ Every 5 seconds, for each agent with intent=`running`:
 
 1. Read `claude_pid` (and `terminal_pid` for diagnostics) from in-memory `AgentState` — loaded at boot from `.harness-state.json`'s per-alias record (§7.5). The on-disk `.squidsquad/<alias>/.claude-pid` file is the singleton handle written by `thin_launcher` (contents = `cmd.exe` / shell PID, per §9); it is NOT what health-poll reads.
 2. Check process liveness of `claude_pid` (`OpenProcess` on Windows, `kill -0` on POSIX). The §5.5 "per-agent `claude` PID" check refers to this in-memory `claude_pid` value, not the `.claude-pid` file.
-3. If dead AND intent=`running`: re-spawn (auto-respawn).
+3. If dead AND intent=`running`: re-spawn (auto-respawn) — **with crash-loop backoff** (#12293, §13.8). The harness records `last_spawn_at` per agent. A death whose lifetime was ≥ `FAST_DEATH_WINDOW_SECONDS` (60s), or any one-off death, respawns immediately and resets `consecutive_fast_deaths` to 0. A death with lifetime < 60s increments `consecutive_fast_deaths`; once it reaches `FAST_DEATH_THRESHOLD` (3), respawn is held off for `min(30s · 2^over, 1800s)` (exponential, 30-minute cap; `over = count − 3`), `status` flips to `crash-looping`, and `reboot_blocked_until` records the resume time. A later poll past that time clears the block and respawns; an agent that survives the window resets the streak. (Entire respawn path — including this backoff — is suppressed under the `--no-auto-reboot` hatch, §7.6.)
 4. If dead AND intent=`stopping` or `restarting`: handle per intent.
 
 > **PID-source disambiguation** (recap): four distinct PID locations exist today — (a) `.squidsquad/<alias>/.claude-pid` on disk = `cmd.exe`/shell wrapper PID, written by `thin_launcher`, used by `thin_launcher`'s own singleton check; (b) `.harness-state.json` → per-alias `claude_pid` = the `claude.exe` PID resolved via descendant walk; (c) `.harness-state.json` → per-alias `terminal_pid` = wrapper PID, kept for diagnostics; (d) `.harness-state.json` → per-alias `event_poll_pid` = harness-spawned `event_poll.py` PID (the harness has the `subprocess.Popen` handle directly). Health-poll checks (b) for `claude` liveness and (d) for `event_poll` liveness — `claude` death triggers respawn; `event_poll` death is logged only (no auto-respawn; recovery is operator-triggered agent restart per §7.0). Under the §14 proposal, (a) goes away — `thin_launcher` is deleted and the harness owns `claude_pid` resolution directly.
@@ -327,7 +328,10 @@ One file per install (at the install root). Persisted across harness restarts. S
       "claude_pid": 23456,
       "terminal_pid": 34567,
       "event_poll_pid": 45678,
-      "bootup_complete": true
+      "bootup_complete": true,
+      "last_spawn_at": 1748371260.0,
+      "consecutive_fast_deaths": 0,
+      "reboot_blocked_until": null
     }
   }
 }
@@ -436,7 +440,7 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 | **`.squidsquad/.harness-state.json` corrupt** | Harness logs the error, treats the file as missing, starts fresh state. Operator may need to re-issue `start` commands. |
 | **`.squidsquad/.event-state.json` corrupt** | Cursors reset to `null`; agents re-consume from deque head on next read. No crash. |
 | **`.squidsquad/.harness-port` file missing** | Operator's start command writes a new file; if not run, agents treat harness as unreachable (silent no-op). |
-| **Agent PID dies unexpectedly** | Health poller catches it within 5s; auto-respawn if intent=`running` (default; suppressed under the `--no-auto-reboot` hatch, §7.6). Respawn is immediate — no backoff today (§13.8). |
+| **Agent PID dies unexpectedly** | Health poller catches it within 5s; auto-respawn if intent=`running` (default; suppressed under the `--no-auto-reboot` hatch, §7.6). One-off/slow deaths respawn immediately; ≥3 consecutive fast deaths (<60s each) trigger exponential backoff (30s→30m cap, `status=crash-looping`) per §7.3 / #12293. |
 | **Agent process alive but inert (zombie)** | NOT detected today — PID-liveness reports it healthy indefinitely (§13.7, #10855). Recovery is operator-triggered restart. Proposed fix: progress-based liveness (§15). |
 | **Port collision at startup** | Harness logs warning, picks next free port (probes upward from 7373). Updates `.squidsquad/.harness-port`. |
 | **uvicorn / FastAPI exception** | Logged; the affected endpoint returns 500; other endpoints continue to serve. |
@@ -492,9 +496,9 @@ EAD's polling loop hard-codes the GitHub `gh api` shape. Non-GitHub backends (Fo
 
 Health-poll (§7.3) treats "`claude_pid` alive" as "agent alive". A wedged `claude.exe` — process up, but the agent loop processing no events and completing no cycles — is reported healthy indefinitely. Observed in production 2026-06-14: a verifier agent ran ~22h with `current-state` frozen at `Building work queue…` and no completed cycle while health-poll reported it healthy throughout (live reproduction of #10855). The signal is structurally wrong: PID proves a *process exists*, not that the *agent functions*. Proposed fix: progress-based liveness (§15, tracked by #12271). Until it lands, inert agents are recovered only by operator-triggered restart.
 
-### 13.8 Auto-reboot has no backoff / crash-loop breaker
+### 13.8 Auto-reboot backoff / crash-loop breaker — RESOLVED (#12293, 2026-06-14)
 
-The health-poll respawn path (§7.3) re-spawns a dead `intent=running` agent **immediately**, with no backoff and no consecutive-failure breaker. If an agent dies repeatedly for a persistent reason (a bad commit, a stale lock, a spurious restart request), the harness respawns it in a tight loop — amplifying a single death into churn rather than containing it. This is independent of the *trigger* of any given loop (see #12282 for one concrete trigger: a test-isolation leak that POSTs a real `/restart` to the live harness). Proposed fix: exponential backoff + crash-loop breaker, paired with `SessionEnd`-reason (§15.3) so the harness can tell a crash worth backing off from a cooperative exit. Tracked by **#12244**. The `--no-auto-reboot` hatch (§7.6) is the current blunt mitigation — it stops the loop by stopping all respawn, at the cost of the agent staying down.
+Previously the health-poll respawn path re-spawned a dead `intent=running` agent **immediately**, with no backoff and no consecutive-failure breaker — amplifying a persistent death (bad commit, stale lock, spurious restart) into a tight loop. **Resolved** by #12293 (implements #12244): the harness now tracks consecutive fast deaths and applies exponential backoff (30s base → 30-minute cap) with a `crash-looping` status once 3 deaths under 60s stack up — see §7.3 for the algorithm and §7.5 for the persisted fields. This fixes the reboot *amplifier*; the *trigger* of any given loop is separate (see #12282, a test-isolation leak). The cause-agnostic backoff was a deliberate choice (the harness cannot observe *why* claude died without death-reason capture — that capability is the `SessionEnd`-reason slice of the §15 proposal). Entry retained as a pointer since §15.3 and the §16 v7 log reference this section.
 
 ---
 
@@ -656,6 +660,7 @@ This slice is independently valuable and shippable before the full heartbeat wor
 
 ## 16. Revision log
 
+- **2026-06-14 (v8)** — Post-merge sync for #12293 (#12244 backoff, now on main). §7.3 health poll documents the crash-loop backoff algorithm (`last_spawn_at`, `FAST_DEATH_WINDOW_SECONDS`=60, `FAST_DEATH_THRESHOLD`=3, exponential `30s·2^over` capped 1800s, `reboot_blocked_until`, streak reset on survival); §7.1.1 adds the `crash-looping` status; §7.5 adds `last_spawn_at` / `consecutive_fast_deaths` / `reboot_blocked_until` to the state shape; §11 PID-death row updated; §13.8 flipped from open gap → RESOLVED. Default-operation behavior now matches shipped code.
 - **2026-06-14 (v7)** — Contradiction polish ahead of the §15 liveness decision. Added **§7.6** (auto-respawn escape hatches: `--no-auto-start` / `--no-auto-reboot`; the latter now teardown-complete per 162aa29a2 — refuses the restart endpoint, skips compose-restart, skips the §7.4 force-kill for intent=`restarting`, no respawn). Qualified the §7.4 force-kill sentence and the §7.1 auto-respawn column with the hatch exception; qualified §10 step 2 and the §11 PID-death row likewise. Added **§13.8** (auto-reboot has no backoff / crash-loop breaker, #12244) to ground §15.3's backoff reference and to separate the reboot *amplifier* from any given *trigger* (#12282). No change to default-operation semantics.
 - **2026-06-14 (v6)** — Added §15 "Proposed: progress-based agent liveness (hooks + heartbeat)" (#12271): documents PID-liveness's zombie false-positive (#10855) and the accidental Windows complexity it carries; specifies a progress-based model (`SessionStart`/`Pre`+`PostToolUse`/`Stop`/`SessionEnd` hooks + `event_poll` idle-ticks + acks) with PID demoted to teardown-only, and `SessionEnd`-reason as the first slice (de-risks the #12244 reboot decision). Added §13.7 (zombie known-gap) and the §11 zombie failure-mode row. Revision log renumbered §15→§16. Marked proposal-only, consistent with §14's convention.
 - **2026-05-30 (v5)** — Root-cause fix #3: boot sequence cross-doc fragmentation. §7.2 designated canonical authoritative source for agent boot sequence; expanded from 5 to 6 prose steps with explicit parallel-spawn language; added Mermaid sequence diagram (first and only process-spawn diagram in the docs). AGENT-RUNTIME §8.0 spawn-ordering sentence removed and replaced with cross-reference. AGENT-RUNTIME §8.2 full sequence diagram removed; replaced with agent-side-only 5-step list + cross-reference to this section.
