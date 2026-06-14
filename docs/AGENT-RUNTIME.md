@@ -865,8 +865,8 @@ sequenceDiagram
 For the full process spawn ordering across harness, launcher, claude, and event_poll, see [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md). This section focuses on the **agent-side boot** — what the `claude` process does once it's running.
 
 The harness tracks each agent with two distinct fields in `.squidsquad/.harness-state.json`:
-- **`intent`** = what the operator wants (`running` | `stopping` | `stopped`)
-- **`status`** = what the agent is actually doing (`booting` | `ready` | `stopping` | `stopped` | `crashed`)
+- **`intent`** = what the operator wants (`running` | `stopping` | `restarting` | `stopped`)
+- **`status`** = what the agent is actually doing (`booting` | `ready` | `stopping` | `stopped` | `crashed` | `crash-looping`)
 
 These move independently. The operator sets `intent`; the harness updates `status` as it observes lifecycle transitions.
 
@@ -889,15 +889,18 @@ stateDiagram-v2
     stopping --> stopped: ack-stop or timeout
     ready --> crashed: process death detected
     crashed --> booting: harness auto-respawn
+    crashed --> crash-looping: 3+ fast deaths (<60s each)
+    crash-looping --> booting: backoff window elapsed
     crashed --> stopped: operator gives up
 ```
 
 State semantics:
 - **`booting`** — `intent=running`, subprocess spawned, `booted` event NOT yet received. Health poller does NOT count agent as alive yet (boot-grace window applies). Any `assigned-to` events for the alias queue but are NOT delivered until status flips to `ready`.
 - **`ready`** — `intent=running`, `booted` received, agent listening for nudges. Steady-state "alive". Both idle and actively-working agents are `ready`.
-- **`stopping`** — `intent=stopping`; harness emits `assigned-to(role, event_context="stop-intent")` so the agent finishes current work and emits `ack-stop`. Timeout: 30s grace → SIGTERM → 10s → SIGKILL.
+- **`stopping`** — `intent=stopping`; harness emits `assigned-to(role, event_context="stop-intent")` so the agent finishes current work and emits `ack-stop`. Timeout: the harness's **60s force-kill safety net** (HARNESS-ARCH §7.4) — if the process hasn't exited 60s after the intent was set, the harness force-kills it (`FORCE_KILL_TIMEOUT_SECONDS = 60`).
 - **`stopped`** — process is dead AND `intent=stopped`. Terminal until operator restarts.
 - **`crashed`** — process death detected by health poller but `intent=running`. Harness auto-respawns; status flips back to `booting`.
+- **`crash-looping`** — ≥3 consecutive fast deaths (each <60s lifetime) detected; the harness pauses respawn under exponential backoff (30s→30min cap) instead of tight-looping. Not terminal — resumes (→`booting`) when the backoff window elapses. Harness-side detail; see HARNESS-ARCH §7.3 / §7.1.1. (Note: `restarting` is a harness-internal *intent* — a graceful restart that auto-respawns — not a distinct agent-visible status; the agent simply exits at its cycle boundary and re-boots.)
 
 Two fields, not one, so recovery semantics are explicit. After a host reboot, the harness reads `.squidsquad/.harness-state.json`, sees `intent=running` but no live PID → respawn. If collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed."
 

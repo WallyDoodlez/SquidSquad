@@ -361,7 +361,7 @@ One file per install (at the install root). Persisted across harness restarts. S
 **Two distinct fields per agent** (per [AGENT-RUNTIME.md §8.2](AGENT-RUNTIME.md)):
 
 - **`intent`** — what the operator wants. Values: `running` | `stopping` | `restarting` | `stopped`. Transitions are HTTP-API-driven (per §7.1); the harness writes the new intent immediately on `POST /agents/{role}/{start|stop|restart}`.
-- **`status`** — what the agent is actually doing. Values: `booting` | `ready` | `stopping` | `stopped` | `crashed`. Driven by the health poller's observations of process state and by lifecycle events emitted from the agent (`booted`, `ack-stop`). Moves independently of intent. Transitions enumerated in §7.1.1.
+- **`status`** — what the agent is actually doing. Values: `booting` | `ready` | `stopping` | `stopped` | `crashed` | `crash-looping`. Driven by the health poller's observations of process state and by lifecycle events emitted from the agent (`booted`, `ack-stop`). Moves independently of intent. Transitions enumerated in §7.1.1.
 
 Two fields, not one, so recovery semantics are explicit: after a host reboot the harness reads this file, sees `intent=running` but no live PID → respawn. If `intent` and `status` were collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed". Full state machine documented in [AGENT-RUNTIME.md §8.2](AGENT-RUNTIME.md).
 
@@ -619,75 +619,82 @@ In landing order:
 
 ---
 
-## 15. Proposed: progress-based agent liveness (hooks + heartbeat)
+## 15. Agent liveness model (progress signals)
 
-> **Scope reminder:** like §14, this is a **proposed redesign — not implemented**. §§7.3–7.5, §10, and §11 remain authoritative for the current PID-based liveness model. Tracked by #12271 (gated on human approval). If this lands, §7.3 (health poll), §7.4 (cooperative exit), §7.5 (state file), §10 (restart safety), and §11 (failure modes) are rewritten in the same change, and AGENT-RUNTIME §8.2 (status state machine) ships the matching agent-side view.
->
-> **Relationship to §14:** §14 keeps PID-based liveness and merely moves PID *resolution* into the harness. This section goes further — it removes PID from the *liveness decision* entirely. The two compose: if liveness is progress-based, even more of the PID machinery §14 relocates can be deleted rather than relocated (see §15.5).
+> **Status:** this is the target architecture for agent liveness; the health poll today is PID-based (§7.3). Implementation is tracked by **#12271**. This section describes how the model *works* — the delta from the PID model and the migration plan live in #12271, not here.
 
-### 15.1 The problem: PID answers the wrong question
+The harness determines whether an agent is alive from a **heartbeat the agent answers**, plus **awareness of when the agent is legitimately busy**. PID is used only to terminate a process, never to determine liveness.
 
-The health poll (§7.3) equates "the `claude_pid` process is alive" with "the agent is functioning." These are different questions:
+### 15.1 The model: heartbeat + in-flight guard
 
-- **False-positive (zombie).** A `claude.exe` can be alive while the agent loop is wedged — processing no events, completing no cycles. See §13.7 / #10855 (the ~22h inert verifier observed 2026-06-14). PID-liveness is structurally blind to this.
-- **False-negative + accidental complexity.** `_resolve_claude_exe_pid`'s descendant walk, the `toolhelp32` ctypes binding (#10440), and the `tasklist`-avoidance work (#9904/#9903) exist *only* to make PID-liveness reliable past the Windows `cmd.exe` shim. A large share of the harness's Windows-specific fragility serves a signal that still cannot detect a zombie.
-- **The proof-of-life signals already arrive — and are ignored for liveness.** The harness already receives `booted` (ack-boot), `cursor-advanced`/`ack-cursor`, and `event_poll`'s per-tick `GET /events/for/{alias}`. Today these gate event dispatch only; the lifecycle/reboot logic consults PID instead.
+Liveness rests on two mechanisms:
 
-### 15.2 The model: liveness = recent progress; PID demoted to teardown-only
+1. **Heartbeat — the liveness signal.** The harness **pings** each agent on a fixed cadence; the agent **pongs**. The pong is the agent's heartbeat and is **highest priority at all times — an agent must never drop, defer, or deprioritise a ping** (a universal **L1 behavioral rule**, every role). The agent answers from its own loop — between tool calls and **while waiting on a subagent call** — so a responsive agent always pongs, while a *wedged* agent (loop stuck, not inside a tool call) simply stops ponging and is detected. Because the agent itself answers, a pong proves the agent loop is progressing, not merely that the process exists. **No pong by its deadline → candidate-dead.**
 
-An agent is **alive** iff its real work/wait loop emitted a progress signal within a bounded `liveness_timeout`. The emitters must be ones that *only fire when the live path actually runs* — an independent heartbeat thread would merely re-create PID-liveness (it pings happily while the LLM is wedged). PID is retained solely to *kill* a process during teardown, never to *prove* it alive.
+2. **In-flight tool-call guard — the one exception.** The only time a live agent legitimately cannot pong is while blocked *inside* a single tool call (e.g. a long `Bash`). The harness learns this from the `Pre`/`PostToolUse` pair (§15.2): a `PreToolUse` with no matching `PostToolUse` means **mid-tool-call**. While that flag is set the harness treats the agent as working and does **not** kill it, however long the call runs — bounded only by a generous `tool_call_max` (to catch a genuinely hung tool).
 
-Coverage regimes, each with an emitter that runs through the real loop:
+The whole rule is therefore: **no pong → dead, unless mid-tool-call.** A wedged loop is not mid-call → no pong → caught; a busy agent is mid-call → protected.
 
-| Regime | Emitter | Why it proves life |
-|---|---|---|
-| Boot | `SessionStart` hook → harness | Process reached the claude session and ran its first hook |
-| Active work | `PreToolUse` / `PostToolUse` hooks → harness | Fires on every tool call; a wedged LLM makes no tool calls → no hook → correctly seen dead. Covers the window `event_poll` cannot (Monitor is not armed while the LLM works) |
-| Idle wait | `event_poll` poll-ticks (already received) + `ack-cursor` on real events | The idle loop stops ticking if it wedges — exactly where the 22h zombie died |
-| Teardown | `SessionEnd` hook (+ exit code) → harness | Clean, *reasoned* exit signal (see §15.3) |
+### 15.2 Enriched tool-call signal
 
-The liveness check becomes: "did any emitter touch `last_seen` within `liveness_timeout`?" Dead = none did. Reboot decisions key off this, not off `OpenProcess`.
+The `PreToolUse` / `PostToolUse` hook payload carries **what the agent is doing** — the tool name, the task/issue being worked, and the current phase — giving the harness live activity context (e.g. `skill: Bash for #12409 (phase: implement-tasks)`) for the status line, operator visibility, and stall detection. The same pair supplies the **in-flight flag** used in §15.1. Activity context is a separate concern from liveness — the heartbeat alone decides liveness.
 
-**Pull complement — a harness→agent liveness ping (operator proposal).** The emitters above are agent-initiated (push). The harness can also *pull*: send the agent a special **no-op ping** and expect an immediate **pong**, even mid-task. Two advantages over pure push — the *harness* controls the probe cadence (no dependence on the agent remembering to emit), and the pong's round-trip latency is itself a health signal. What a pong *proves* depends on who answers it (mirrors the §15.4 long-call gap):
+### 15.3 Liveness decision
 
-- To pong **"even within a task"** — while the LLM is blocked mid-tool-call — the pong must be answered **out-of-band**, by the agent's `event_poll` sidecar or a tiny dedicated responder, *not* by the LLM turn loop (which is busy). Such a pong proves the **process is alive and responsive** (it executed code and replied) — strictly **stronger than PID-exists**, because it catches a *hung/frozen* process that `OpenProcess`/`kill -0` still report as alive.
-- It does **not**, on its own, prove the **LLM work-loop is progressing** — a process whose responder pongs while the agent loop is wedged would still pass (the deep zombie, §13.7 / qa's case). Closing *that* is exactly what the push signals (tool-call hooks, `ack-cursor`) do.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as Harness
+    participant A as Agent (LLM loop)
 
-So pull-ping and push-heartbeat are **complementary, not alternatives**: the ping catches frozen/unresponsive processes on the harness's schedule; the hooks catch a responsive-but-wedged work loop. A robust model runs both — `last_seen` is bumped by *either* a pong or any push emitter, and a missed ping (no pong within the deadline) is an independent dead-signal. The trade-off to decide (§15.6): ping-only is simpler and catches the frozen-process case, but leaves the LLM-wedge zombie uncaught; ping + hooks covers both.
+    Note over H,A: HEARTBEAT (the liveness signal)
+    loop every ping cadence
+        H->>A: ping
+        A-->>H: pong (L1 top priority — answered between calls<br/>and while waiting on a subagent call)
+    end
 
-### 15.3 `SessionEnd`-reason — the highest-value first slice
+    Note over H,A: ACTIVITY + in-flight guard
+    A->>H: PreToolUse(tool, task/issue, phase) → in-flight = true
+    A->>H: PostToolUse → in-flight = false
+    A->>H: SessionEnd(+reason) → record exit cause
 
-Today the harness reboots on "dead PID + intent=`running`" with no idea *why* the process died — the exact ambiguity at the centre of the #12244 reboot saga (it cannot tell cooperative exit-42 from a crash from a usage-limit exit). A `SessionEnd` hook reporting the exit reason turns that inference into a fact:
+    Note over H: pong overdue?<br/> • in-flight (mid tool call)? → working, do NOT kill (until tool_call_max)<br/> • else → dead → reboot (SessionEnd reason → respawn/backoff/stop)<br/>PID only to KILL
+```
+
+### 15.4 `SessionEnd` reason
+
+The `SessionEnd` hook reports the exit reason so the harness's reboot decision is a fact, not an inference:
 
 - cooperative exit-42 (context pressure / intent flip) → respawn, fresh session
 - clean stop (intent=`stopping`) → mark stopped
-- crash / non-zero / usage-limit → apply backoff (#12244); do **not** tight-loop
+- crash / non-zero / usage-limit → apply backoff (§13.8); do **not** tight-loop
 
-This slice is independently valuable and shippable before the full heartbeat work, and is the recommended first landing.
+Independently valuable and shippable ahead of the heartbeat work — the recommended first landing.
 
-### 15.4 Design constraints (non-negotiable)
+### 15.5 Constraints
 
-1. **Heartbeat hooks are fire-and-forget and fail-open.** `PreToolUse` can *block* a tool call; a heartbeat hook that hangs or errors on a harness blip would stall every tool the agent runs. Hard rule: bounded timeout, backgrounded, always exit 0. Liveness instrumentation must never gate real work.
-2. **Long-single-call gap.** Hooks fire on tool-call *boundaries*; a single long call (e.g. a 5-minute test) emits nothing between `PreToolUse` and `PostToolUse`. Mitigation: `PreToolUse` announces a long op so the harness *suspends* the liveness timeout until `PostToolUse` clears it. Until that exists, `liveness_timeout` must exceed the longest legitimate single op — otherwise the harness reboots a healthy, busy agent (the opposite failure, arguably worse than the zombie).
-3. **Hook config is deployed per-clone.** `settings.json` hook wiring is written by compose/installer into each agent clone — an integration point with COMPOSE-ARCHITECTURE / INSTALLER-ARCH.
-4. **Overhead is acceptable.** A localhost POST per tool call is cheap; the harness bumps `last_seen` and does not log each tick.
+1. **The pong is the agent's top priority (L1).** An agent never drops, defers, or deprioritises a ping — losing a heartbeat is losing liveness.
+2. **Hooks are fire-and-forget and fail-open.** `PreToolUse` can *block* a tool call; a hook that hangs or errors on a harness blip must never stall or fail the agent's tools. Bounded timeout, backgrounded, always exit 0.
+3. **Hook config is deployed per-clone** via `settings.json` (compose / installer integration).
 
-### 15.5 Interaction with §14 and migration
+### 15.6 Migration
 
-§14 relocates PID resolution into the harness but keeps it load-bearing for liveness. Under this proposal PID is no longer the liveness signal, so the post-spawn descendant/PID-resolution machinery §14 preserves is needed only for *teardown* (knowing which PID to kill) — a weaker requirement tolerant of approximate resolution. Suggested landing order: ship `SessionEnd`-reason (§15.3) first (smallest, de-risks reboot); then the heartbeat emitters + `last_seen` liveness; then collapse the remaining PID machinery in concert with §14.
+The migration from the PID-based health poll (§7.3) to this model — landing order (`SessionEnd`-reason first), the interaction with the §14 spawn simplification, and which PID machinery is retired — is tracked in **#12271**.
 
-### 15.6 Open questions
+### 15.7 Open questions
 
-- `liveness_timeout` value, and whether it is per-regime (idle vs active) — depends on the long-op-suspend mechanism (constraint 2) being settled first.
-- Whether `event_poll`'s existing polls are counted directly as heartbeats or a dedicated heartbeat ping is added (reuse-existing vs explicit).
-- Hook-failure observability: how the harness distinguishes "no heartbeat because dead" from "no heartbeat because the hook is misconfigured."
-- **Pull-ping scope:** is ping + pong (out-of-band responder) *sufficient on its own* (simpler; catches frozen processes but not the LLM-wedge zombie), or is it layered with the push hooks for full coverage? Operator leans toward the ping mechanism — decide whether hooks are still required for the wedge case.
-- **Pong responder location:** does the pong come from the `event_poll` sidecar (reuses an existing process) or a dedicated lightweight endpoint in the agent? And the ping cadence + pong deadline.
+- Ping cadence + pong deadline, and the `tool_call_max` value.
+- Heartbeat-failure observability: distinguishing "no pong because the agent is dead" from "no pong because the ping path / hook is misconfigured."
 
 ---
 
 ## 16. Revision log
 
+- **2026-06-14 (v14)** — §15 **simplified to two mechanisms** (redundancy review): liveness = the agent-answered **pong heartbeat** (no pong → dead) + the **in-flight tool-call guard** (don't kill mid-call). Removed as redundant — now that the pong is the L1 agent-answered heartbeat: the multi-signal `last_seen` table (SessionStart / event_poll-ticks / ack-cursor as liveness inputs), the out-of-band pong responder (it would mask a wedged-loop zombie), and the separate `liveness_timeout` (collapsed into the pong deadline). Kept for their own jobs: enriched Pre/PostToolUse hooks (activity context + the in-flight flag), `SessionEnd`-reason (reboot decision), `tool_call_max`. Diagram reduced to 2 participants.
+- **2026-06-14 (v13)** — §15 adaptive-liveness refinements (operator). The harness derives an **in-flight tool-call flag** from the `Pre`/`PostToolUse` pair and **never force-kills a mid-tool-call agent** (covers long ops incl. subagent calls) — `liveness_timeout` governs only the idle/between-calls state, with a generous `tool_call_max` as the sole single-call ceiling. The **pong is the heartbeat: highest priority, never dropped — a universal L1 behavioral rule** (agent answers a ping even while waiting on a subagent call), so a mid-call agent that keeps ponging is positively confirmed alive. Diagram note + constraints updated. (L1 pong-priority instruction is a deliverable under #12271.)
+- **2026-06-14 (v12)** — §15 reframed from proposal-narrative to **declarative architecture spec** (operator review): removed the PID-problem / improvement / before-after framing (the delta vs the PID model now lives in #12271, not the doc); dropped the long-op announce / timeout-suspend mechanism (`PreToolUse` fires at op-*start*, so a `liveness_timeout` above the longest single op suffices — no suspension needed); added §15.2 **enriched tool-call signal** (the hook carries tool + task/issue + phase, giving the harness activity context, not just a liveness bump). §15.5 reduced to a migration pointer; the ping-only-vs-ping+hooks open question is resolved (model uses both).
+- **2026-06-14 (v11)** — Added §15.2 "Liveness signal flow" Mermaid sequence diagram (operator review request before #12271 task breakdown): shows PUSH emitters (SessionStart / Pre+PostToolUse hooks / event_poll ticks), the PULL ping→pong box, SessionEnd-reason, and the `last_seen`/timeout reboot decision — with a reading guide mapping the ping-only vs ping+hooks scope choice to the diagram boxes.
+- **2026-06-14 (v10)** — DS-audit reconciliation (work-discovery audit step; DeepSeek internal + cross-ref + workflow passes). Internal fix: §7.5 `status` enum now includes `crash-looping` (was omitted despite §7.1.1/§7.3 using it). Cross-ref fixes vs AGENT-RUNTIME §8.2: force-kill timeout reconciled to code truth (single 60s `FORCE_KILL_TIMEOUT_SECONDS`; AGENT-RUNTIME's stale "30s→SIGTERM→10s→SIGKILL" corrected) and `crash-looping`/`restarting` added to the agent-side state machine. Pre-existing doc-debt surfaced (out of scope here): §§1–13 snapshot-vs-aspirational drift in §4.1/§4.4; §4.3-vs-§13.5 work-assign permission (tracked #10182). Workflow pass re-confirmed known gaps (#12342 routing, #12271 zombie, event_poll death) + flagged crash-looping-block persisting across host reboot.
 - **2026-06-14 (v9)** — Operator doc-review pass. §7.3: dropped the inline ticket ref; spelled out `kill -0` on Linux/macOS (POSIX); added a Mermaid flowchart of the health-poll backoff decision; extended the PID-source disambiguation with the POSIX/bash case (no `cmd.exe` shim → launched PID *is* the `claude` PID, no descendant walk). §15.2: added the operator's **harness→agent liveness ping (pull)** as a complement to the push emitters, with analysis of what a pong proves (process-responsive, catches frozen processes — stronger than PID) vs what it doesn't (LLM-wedge zombie, which needs the push signals); §15.6 gains the ping-scope and pong-responder open questions.
 - **2026-06-14 (v8)** — Post-merge sync for #12293 (#12244 backoff, now on main). §7.3 health poll documents the crash-loop backoff algorithm (`last_spawn_at`, `FAST_DEATH_WINDOW_SECONDS`=60, `FAST_DEATH_THRESHOLD`=3, exponential `30s·2^over` capped 1800s, `reboot_blocked_until`, streak reset on survival); §7.1.1 adds the `crash-looping` status; §7.5 adds `last_spawn_at` / `consecutive_fast_deaths` / `reboot_blocked_until` to the state shape; §11 PID-death row updated; §13.8 flipped from open gap → RESOLVED. Also §10 step 6 documents the #12293 **P0** stale-`restarting`→`running` reset on harness-restart load (force-kill clock not inherited; stale `stopping` preserved). Default-operation behavior now matches shipped code.
 - **2026-06-14 (v7)** — Contradiction polish ahead of the §15 liveness decision. Added **§7.6** (auto-respawn escape hatches: `--no-auto-start` / `--no-auto-reboot`; the latter now teardown-complete per 162aa29a2 — refuses the restart endpoint, skips compose-restart, skips the §7.4 force-kill for intent=`restarting`, no respawn). Qualified the §7.4 force-kill sentence and the §7.1 auto-respawn column with the hatch exception; qualified §10 step 2 and the §11 PID-death row likewise. Added **§13.8** (auto-reboot has no backoff / crash-loop breaker, #12244) to ground §15.3's backoff reference and to separate the reboot *amplifier* from any given *trigger* (#12282). No change to default-operation semantics.
