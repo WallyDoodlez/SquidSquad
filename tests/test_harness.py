@@ -308,7 +308,8 @@ class TestIntentSetAt(unittest.TestCase):
 
     def test_load_state_preserves_none_for_running_intent(self):
         """Legacy state with intent=RUNNING and no intent_set_at must NOT
-        be seeded — the migration only applies to STOPPING/RESTARTING."""
+        be seeded — the migration only applies to STOPPING (RESTARTING is
+        reset to RUNNING before the seeding path, #12244 P0)."""
         import tempfile
         from harness import HarnessState
         with tempfile.TemporaryDirectory() as tmpdir:
