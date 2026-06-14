@@ -1,8 +1,9 @@
 # Working State
 
-- **Task**: none (cycle 149 complete)
+- **Task**: none (cycle 150 complete)
 - **Status**: idle
-- **Quiet Cycle Counter**: 7 (quiet — PT queue 0)
+- **Quiet Cycle Counter**: 8 (quiet — PT queue 0)
+- **2026-06-14 12:09 — QUIET CYCLE (iter-150).** PT queue 0. Movement resuming: skill triaging #12409 (qa stability, frequency-based crash-loop breaker) — will be QA-verifiable on pending-test flip. #12410 NEW (agent hook-telemetry) pending approval. #12380 still in-progress.
 - **2026-06-14 11:39 — QUIET CYCLE (iter-149).** PT queue 0. Operator continuing HARNESS-ARCH §15 liveness docs (v14). No agent work to pending-test. #12380 still in-progress.
 - **2026-06-14 11:09 — QUIET CYCLE (iter-148).** PT queue 0. Operator-direct HARNESS-ARCH docs (v12/v13, liveness arch) — not QA-verifiable. No agent work flowing to pending-test. #12380 still in-progress.
 - **2026-06-14 10:39 — QUIET CYCLE (iter-147), harness restored.** PM re-pinned qa to LOOP mode on 59999 during #12342 harness restart (~10:23) — my POLLING mode is now CONFIRMED as PM's intended qa wake mode (not a degraded fallback). Harness back on main sha 93fc162c with EAD auto-routing (pending-test→verifier). Hybrid healthy: skill/dm event (7373), qa loop, all 4 alive. #12342 shipped (operational activation). PT queue still 0 → no QA work yet; PM says "verify on next pending-test/ship transition." Step 2 = skill lands #12409 before re-attempting qa event mode.
