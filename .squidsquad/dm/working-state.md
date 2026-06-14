@@ -14,15 +14,16 @@ Next scan after: #10540 routed/closed (then quiet-gate resumes).
 - **CORRECTED @ cycle 421 (22:3x): harness is UP & HEALTHY on :7373** (2h+ uptime, my c416 code). My boot probed :59999 and failed → loop mode — but that is **PM's DELIBERATE pin, NOT a dead harness.** `.squidsquad/pm/pin-keeper.sh` writes `.harness-port=59999` (dead port) to skill/dm/qa clones every 30s so boots fall to LOOP (functional) and dodge EVENT mode (INERT — #10855). Loop mode IS the intended/working mode this session. **DO NOT "self-heal" .harness-port to 7373** — that breaks the pin (I did this in c421; pin-keeper + I reverted it within 30s, no harm).
 - #10855 (agents boot INERT in event mode: spin, never arm event_poll, never cycle) is the SOLE event-mode blocker, `blocked:human-action`, PM-driven. #11587/#11641 (shipped this session) fixed the reboot loop but NOT the inert boot.
 - **Operator decision (22:35): leave harness alone; DM keeps shipping via loop session.** Do not restart harness/agents (PM owns pin + #10855 workflow).
-- Version: **v0.44.0**; Shipped Since Last Bump: **14/10** (config.md authoritative — OVER threshold).
+- Version: **v0.44.0**; Shipped Since Last Bump: **15/10** (config.md authoritative — OVER threshold).
 - Local-merge ship path in use (loop mode, no harness /merge from this session) — see #10540 / [[learning-dm-local-merge-when-harness-down]].
 
 ## >>> BUMP GATE OPEN (13/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
 - Counter **13/10**, over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ cycles 415 & 416 — no green-light yet; keep shipping, counter accrues until bump resets it.
 - On green-light: bump minor v0.44.0→v0.45.0 (config.md + SKILL.md frontmatter + CHANGELOG.md), git tag, push, reset counter→0.
-- **CHANGELOG held (operator/internal-reliability framing; all 13 are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511).
+- **CHANGELOG held (operator/internal-reliability framing; all 13 are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511), WIP-preservation across reboots (#12142).
 
-## SHIPPED THIS SESSION (8 items)
+## SHIPPED THIS SESSION (9 items)
+- **cycle 433** — #12142 (cycle_pre preserves WIP across reboots, PR #12270). **Transition-only ship** — PR was already merged by qa during verification (mergeCommit d1e0f4ff7); I did pending-ship→shipped + counter. Merge did NOT touch config.md → no regression. Counter 14→15. Process-noted that the DM merge step was bypassed (qa-side merge).
 - **cycle 429** — #11511 (real-conflict detection + state-file pre-commit guard, PR #12223). Verifier PASS. Counter 13→14.
   - **Counter-regression reconcile**: branch had stale Shipped-Since=12 (pre-guard Part-1 artifact); main=13. Did `merge --no-commit` → `checkout HEAD -- config.md` → set 14 → commit. config.md NOT in .gitattributes merge=ours (the gap). **@pm flagged**: consider adding `.squidsquad/config.md merge=ours`.
 - **cycle 413** — #11503 + #11657 via PR #11683 (bundle). Counter 6→8.
