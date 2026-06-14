@@ -1,5 +1,12 @@
 # Working State
 
+## >>> UPDATE ~04:25 (Jun 14) — event-mode work-delivery gap (#12342) + PM-nudge workaround working <<<
+
+- **Root cause of QA/DM starvation in event mode (filed #12342, skill, high)**: EAD only emits `assigned-to` for `approved`/`open` issues + skips agent updates (harness.py:3217/3206) → `pending-test`→QA and `pending-ship`→DM are NEVER auto-routed. Workers get work; QA/DM starve. Loop mode masked it (polls).
+- **PM-nudge workaround WORKS**: injecting `assigned-to(role=pm, target=<alias>)` via POST /events wakes the agent (latency ~10-12min — qa woke 04:20 from my 04:08 inject). qa then verified **#12282 + #12244 → pending-ship**; injected a DM wake to ship them. So event-mode delivery functions when nudged; the gap is purely auto-routing.
+- **REVISED recommendation** (supersedes "revert QA/DM to loop"): KEEP full event mode (honors operator directive, no hacky dead-port pins); **PM acts as interim manual router** — inject wake events on pending-test/pending-ship transitions — until #12342 auto-routes. Babysitting but clean and short-term.
+- **Process hygiene**: 9 orphan claude.exe + ~8 orphan event_poll from this session's reboot churn (not causing active churn, but should be cleaned — flagged in #12342). #10855 still pending-test (may need another qa nudge). #11600 still recurs on compose.
+
 ## >>> UPDATE ~02:58 (Jun 14) — TEAM MOVED TO EVENT MODE + status cleaned (operator request) <<<
 
 - **Root cause of loop-pinning found+killed**: leftover **pin-keeper.sh (PID 6036)** was STILL running, re-writing `.harness-port=59999` to skill/qa/dm every 30s → forced loop mode on every boot. Killed it; ports now stick at 7373.
