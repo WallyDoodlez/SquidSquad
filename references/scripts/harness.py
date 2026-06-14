@@ -744,19 +744,33 @@ class HarnessState:
                     )
                 agent = self.agents[role]
                 agent.intent = agent_data.get("intent", AgentState.INTENT_RUNNING)
-                # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1.
-                # We distinguish absent key from explicit null so an explicit
-                # null is always honored (case b: "load as-is") and only an
-                # absent key triggers the migration seed (case a):
-                #   (a) legacy state file: intent is STOPPING/RESTARTING and
-                #       the `intent_set_at` key is ABSENT → seed with
-                #       time.time() so the force-kill clock starts now rather
-                #       than firing immediately on a pre-existing intent.
-                #   (b) present state file: load as-is (may be None when the
-                #       intent is RUNNING/STOPPED, or a float when STOPPING/
-                #       RESTARTING).
-                if "intent_set_at" not in agent_data and agent.intent in (
-                    AgentState.INTENT_STOPPING, AgentState.INTENT_RESTARTING,
+                # #12244 P0 — a RESTARTING intent does NOT survive a harness
+                # restart. "restart in progress" is a transient state owned by
+                # the harness session that issued it; resurrecting it across a
+                # restart force-kills (the 60s safety net below) a HEALTHY agent
+                # whose claude.exe outlived the harness — its restored
+                # intent_set_at predates the restart and is already past the
+                # timeout, so the first health poll kills it, then auto-reboots
+                # it (the operator-reported "working agent killed + respawned,
+                # repeatedly" loop). Reset to RUNNING: a still-dead agent is
+                # auto-rebooted anyway (RUNNING is in should_reboot); a live one
+                # is left alone. A genuinely-wanted restart can be re-requested
+                # against THIS harness. STOPPING is deliberately NOT reset — an
+                # explicit operator stop MUST survive a harness restart.
+                if agent.intent == AgentState.INTENT_RESTARTING:
+                    agent.intent = AgentState.INTENT_RUNNING
+                    agent.intent_set_at = None
+                # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1,
+                # now STOPPING-only (RESTARTING handled above). Distinguish an
+                # absent key from an explicit null: an explicit null is honored
+                # (case b "load as-is"); only an absent key seeds (case a):
+                #   (a) legacy state file: intent STOPPING, `intent_set_at` key
+                #       ABSENT → seed time.time() so the force-kill clock starts
+                #       now rather than firing immediately on a stale intent.
+                #   (b) present state file: load as-is (None when RUNNING/
+                #       STOPPED, or a float when STOPPING).
+                elif "intent_set_at" not in agent_data and (
+                    agent.intent == AgentState.INTENT_STOPPING
                 ):
                     agent.intent_set_at = time.time()
                 else:

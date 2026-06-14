@@ -188,7 +188,13 @@ class TestIntentSetAt(unittest.TestCase):
                 )
 
     def test_load_state_round_trips_intent_set_at(self):
-        """A state file written by save_state loads back with intent_set_at."""
+        """A state file written by save_state loads back with intent_set_at.
+
+        Uses STOPPING — a STOPPING intent (and its force-kill clock) must
+        survive a harness restart so an operator stop is not lost. (RESTARTING
+        is intentionally NOT round-tripped — see
+        test_load_state_resets_restarting_to_running, #12244 P0.)
+        """
         import tempfile
         from harness import HarnessState, AgentState
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -196,7 +202,7 @@ class TestIntentSetAt(unittest.TestCase):
             with patch("harness.HARNESS_STATE_FILE", state_file):
                 hs = HarnessState()
                 agent = AgentState("pm")
-                agent.intent = AgentState.INTENT_RESTARTING
+                agent.intent = AgentState.INTENT_STOPPING
                 agent.intent_set_at = 555.0
                 hs.set_agent("pm", agent)
                 hs.save_state()
@@ -205,6 +211,7 @@ class TestIntentSetAt(unittest.TestCase):
                 with patch("harness._log"):
                     hs2.load_state()
                 loaded = hs2.get_agent("pm")
+                self.assertEqual(loaded.intent, AgentState.INTENT_STOPPING)
                 self.assertEqual(loaded.intent_set_at, 555.0)
 
     def test_load_state_migrates_legacy_stopping_without_intent_set_at(self):
@@ -242,8 +249,11 @@ class TestIntentSetAt(unittest.TestCase):
                 loaded = hs.get_agent("skill")
                 self.assertEqual(loaded.intent_set_at, 9999.0)
 
-    def test_load_state_migrates_legacy_restarting_without_intent_set_at(self):
-        """Same migration applies to RESTARTING intent (Q7 PM lock)."""
+    def test_load_state_resets_legacy_restarting_to_running(self):
+        """#12244 P0: a restored RESTARTING intent (legacy file, no
+        intent_set_at key) is reset to RUNNING with intent_set_at cleared —
+        NOT seeded. RESTARTING is a transient in-flight state that must not
+        survive a harness restart (it would force-kill a healthy agent)."""
         import tempfile
         from harness import HarnessState, AgentState
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -262,7 +272,39 @@ class TestIntentSetAt(unittest.TestCase):
                  patch("harness.time.time", return_value=4242.0):
                 hs = HarnessState()
                 hs.load_state()
-                self.assertEqual(hs.get_agent("qa").intent_set_at, 4242.0)
+                self.assertEqual(
+                    hs.get_agent("qa").intent, AgentState.INTENT_RUNNING)
+                self.assertIsNone(hs.get_agent("qa").intent_set_at)
+
+    def test_load_state_resets_restarting_to_running(self):
+        """#12244 P0: a restored RESTARTING intent WITH a present (stale)
+        intent_set_at is reset to RUNNING and the force-kill clock cleared.
+        This is the core fix for the operator-reported 'working agent killed +
+        respawned' loop: without it, the stale timestamp (< now -
+        FORCE_KILL_TIMEOUT) makes the first health poll force-kill a healthy
+        agent that outlived the harness restart, then respawn it."""
+        import tempfile
+        from harness import HarnessState, AgentState
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_file = Path(tmpdir) / ".harness-state.json"
+            state_file.write_text(json.dumps({
+                "harness_pid": 1, "start_time": 0.0, "port": 7373,
+                "agents": {
+                    "skill": {"intent": "restarting",
+                              "intent_set_at": 100.0,  # stale, pre-restart
+                              "status": "running", "boot_time": None,
+                              "clone_path": "", "claude_pid": 4321,
+                              "terminal_pid": None},
+                },
+            }), encoding="utf-8")
+            with patch("harness.HARNESS_STATE_FILE", state_file), \
+                 patch("harness._log"), \
+                 patch("harness.time.time", return_value=9999.0):
+                hs = HarnessState()
+                hs.load_state()
+                loaded = hs.get_agent("skill")
+                self.assertEqual(loaded.intent, AgentState.INTENT_RUNNING)
+                self.assertIsNone(loaded.intent_set_at)
 
     def test_load_state_preserves_none_for_running_intent(self):
         """Legacy state with intent=RUNNING and no intent_set_at must NOT
