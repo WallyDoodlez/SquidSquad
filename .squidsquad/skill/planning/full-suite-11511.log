@@ -1,0 +1,144 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\naaht\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Dev\Dev\SquidSquad-2
+plugins: anyio-4.12.1, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... test_create_and_delete_branch (integration.test_harness.TestBranchHarness.test_create_and_delete_branch) ... ok
+test_cleanup_and_verify (integration.test_harness.TestCleanup.test_cleanup_and_verify) ... ok
+test_temp_file_lifecycle (integration.test_harness.TestFileHarness.test_temp_file_lifecycle) ... ok
+test_create_and_delete_issue (integration.test_harness.TestIssueHarness.test_create_and_delete_issue) ... ok
+test_issue_title_prefix (integration.test_harness.TestIssueHarness.test_issue_title_prefix) ... ok
+test_01_initial_state (integration.test_status_flow.TestBugStatusFlow.test_01_initial_state) ... ok
+test_02_open_to_pending_test (integration.test_status_flow.TestBugStatusFlow.test_02_open_to_pending_test) ... ok
+test_03_pending_test_to_pending_ship (integration.test_status_flow.TestBugStatusFlow.test_03_pending_test_to_pending_ship) ... ok
+test_04_shipped_and_closed (integration.test_status_flow.TestBugStatusFlow.test_04_shipped_and_closed) ... ok
+test_01_initial_state (integration.test_status_flow.TestFeatureStatusFlow.test_01_initial_state)
+Issue starts with status:pending. ... ok
+test_02_pending_to_planning (integration.test_status_flow.TestFeatureStatusFlow.test_02_pending_to_planning)
+Transition: pending → planning. ... ok
+test_03_planning_to_approved (integration.test_status_flow.TestFeatureStatusFlow.test_03_planning_to_approved)
+Transition: planning → approved. ... ok
+test_04_approved_to_in_progress (integration.test_status_flow.TestFeatureStatusFlow.test_04_approved_to_in_progress)
+Transition: approved → in-progress. ... ok
+test_05_in_progress_to_pending_test (integration.test_status_flow.TestFeatureStatusFlow.test_05_in_progress_to_pending_test)
+Transition: in-progress → pending-test. ... ok
+test_06_pending_test_to_pending_ship (integration.test_status_flow.TestFeatureStatusFlow.test_06_pending_test_to_pending_ship)
+Transition: pending-test → pending-ship. ... ok
+test_07_pending_ship_to_shipped_and_closed (integration.test_status_flow.TestFeatureStatusFlow.test_07_pending_ship_to_shipped_and_closed)
+Transition: pending-ship → shipped + close. ... ok
+test_08_no_stale_labels (integration.test_status_flow.TestFeatureStatusFlow.test_08_no_stale_labels)
+Final state should only have shipped + type + priority + role + test labels. ... ok
+test_bare_comment_delivered_to_pm_and_skill (integration.test_event_mode_e2e.TestCommentHandlingDMException.test_bare_comment_delivered_to_pm_and_skill)
+Positive control: PM and skill (which DO react to tracker-comment) ... ok
+test_bare_comment_not_delivered_to_dm (integration.test_event_mode_e2e.TestCommentHandlingDMException.test_bare_comment_not_delivered_to_dm)
+tracker-comment events are filtered out of /events/for/dm. ... ok
+test_status_transition_still_reaches_dm_during_comment_burst (integration.test_event_mode_e2e.TestCommentHandlingDMException.test_status_transition_still_reaches_dm_during_comment_burst)
+While a burst of bare comments is filtered out, a real status ... ok
+test_cursor_at_head_returns_empty (integration.test_event_mode_e2e.TestCursorLongLag.test_cursor_at_head_returns_empty)
+Cursor already at head: GET returns no events; event_poll emits ... ok
+test_event_poll_nudges_when_work_pending (integration.test_event_mode_e2e.TestCursorLongLag.test_event_poll_nudges_when_work_pending)
+event_poll's model-B job: emit a single NUDGE (no payload) when ... ok
+test_single_get_within_limit (integration.test_event_mode_e2e.TestCursorLongLag.test_single_get_within_limit)
+One GET catches the agent up when lag fits in `limit`. ... ok
+test_skim_then_advance_does_not_jump_to_latest (integration.test_event_mode_e2e.TestCursorLongLag.test_skim_then_advance_does_not_jump_to_latest)
+Long lag exceeding `limit` is skimmed across successive GETs. ... ok
+test_event_poll_nudges_and_logs_single_eviction (integration.test_event_mode_e2e.TestEvictionGap.test_event_poll_nudges_and_logs_single_eviction)
+event_poll model-B role on an eviction gap: one NUDGE, one ... ok
+test_recovered_cursor_get_has_no_eviction (integration.test_event_mode_e2e.TestEvictionGap.test_recovered_cursor_get_has_no_eviction)
+Once the agent has acked forward into the retained window, its ... ok
+test_stale_cursor_get_surfaces_eviction_markers_oldest_first (integration.test_event_mode_e2e.TestEvictionGap.test_stale_cursor_get_surfaces_eviction_markers_oldest_first)
+The agent's GET past a stale cursor returns eviction markers + ... ok
+test_live_squidsquad_harness_port_untouched (integration.test_event_mode_e2e.TestLiveHarnessPortNotTouched.test_live_squidsquad_harness_port_untouched) ... ok
+test_test_port_file_is_in_isolated_tmpdir (integration.test_event_mode_e2e.TestLiveHarnessPortNotTouched.test_test_port_file_is_in_isolated_tmpdir)
+The test's own port file must live under the isolated ... ok
+test_fixture_matches_live_config (integration.test_event_mode_e2e.TestReactsToFixtureMatchesConfig.test_fixture_matches_live_config) ... ok
+test_filter_is_by_consumer_reacts_to_not_emitter_role (integration.test_event_mode_e2e.TestTransitionOnHandoff.test_filter_is_by_consumer_reacts_to_not_emitter_role)
+Filter is keyed on the consumer's reacts-to list, NOT on the ... ok
+test_skill_to_qa_handoff_visible_via_target_feed (integration.test_event_mode_e2e.TestTransitionOnHandoff.test_skill_to_qa_handoff_visible_via_target_feed)
+skill transitions in-progress → pending-test; QA's feed sees it. ... ok
+test_bootup_complete_event_flips_agent_state_flag (integration.test_event_mode_agent_subprocess.TestHappyPathBootup.test_bootup_complete_event_flips_agent_state_flag)
+POST bootup-complete → harness flips AgentState.bootup_complete ... 
+=== Static Analysis Tests (pytest) ===
+
+NOTICE: gating 159 static test file(s); 10 excluded by allowlist + 6 *_live (run separately):
+  - test_comprehension_1428 [non-static]: spawns live model via run_comprehension_test.py — CQ harness, not static
+  - test_comprehension_2181 [non-static]: spawns live model via run_comprehension_test.py — CQ harness, not static
+  - test_comprehension_2183 [non-static]: spawns live model via run_comprehension_test.py — CQ harness, not static
+  - test_comprehension_2195 [non-static]: spawns live model via run_comprehension_test.py — CQ harness, not static
+  - test_comprehension_361 [non-static]: spawns live model via run_comprehension_test.py — CQ harness, not static
+  - test_comprehension_4792 [non-static]: spawns live model via run_comprehension_test.py — CQ harness, not static
+  - test_comprehension_9184 [non-static]: spawns live model via run_comprehension_test.py — CQ harness, not static
+  - test_feat_6581_wizard_reframing [non-static]: test_tc_10b recursively invokes run_tests.py (full suite incl integration) — unsuitable for static gate; #11503
+  - test_agent_boundaries [known-failure]: test_ac7: 20 L3 variant responsibility stubs missing (COMPOSE-ARCH §5.2) — blocked on OPEN #10360. The other 19 assertions (ac4/ac6/ac11) are superseded by the agent-boundaries sub-skill retirement; rewrite the file together once #10360 unblocks it
+  - test_compose_author_comments_11142 [known-failure]: test_10360_cleanup_markers_preserved: #10360-cleanup breadcrumbs (future-work pointers for OPEN #10360) dropped by #11331 rewrite — blocked on #10360 (the stale boot-bootstrap-marker half is fixed)
+
+
+=== Integration Tests (unittest) ===
+
+[🦑 20:59:53] test-bootup: bootup-complete — event dispatch unlocked
+[20:59:53] test-bootup bootup-complete    
+ok
+test_bootup_complete_is_idempotent (integration.test_event_mode_agent_subprocess.TestHappyPathBootup.test_bootup_complete_is_idempotent)
+Multiple bootup-complete posts are safe — re-asserting the ... [🦑 20:59:53] test-bootup: bootup-complete — event dispatch unlocked
+[20:59:53] test-bootup bootup-complete    
+[🦑 20:59:53] test-bootup: bootup-complete — event dispatch unlocked
+[20:59:53] test-bootup bootup-complete    
+[🦑 20:59:53] test-bootup: bootup-complete — event dispatch unlocked
+[20:59:53] test-bootup bootup-complete    
+ok
+test_status_transition_delivered_independent_of_bootup_flag (integration.test_event_mode_agent_subprocess.TestHappyPathBootup.test_status_transition_delivered_independent_of_bootup_flag)
+CONTEXT.md §5.2: the harness is a pure broadcast pipe; ... [20:59:53] test-bootup status-transition  #5 approved → in-progress
+ok
+test_event_bus_emit_silent_noop_when_harness_refuses_connection (integration.test_event_mode_agent_subprocess.TestHarnessDownBoot.test_event_bus_emit_silent_noop_when_harness_refuses_connection)
+Port file exists but points at a closed port → silent ... ok
+test_event_bus_emit_silent_noop_when_port_file_missing (integration.test_event_mode_agent_subprocess.TestHarnessDownBoot.test_event_bus_emit_silent_noop_when_port_file_missing)
+No .harness-port → emit() returns without raising and ... ok
+test_cycle_post_query_harness_intent_returns_stopping (integration.test_event_mode_agent_subprocess.TestStopRequestedAtomicity.test_cycle_post_query_harness_intent_returns_stopping)
+End-to-end through the actual cycle_post helper that ... [🦑 20:59:54] Stopped test-stop-req (intent=stopping)
+ok
+test_intent_stop_set_via_api_visible_to_cycle_post (integration.test_event_mode_agent_subprocess.TestStopRequestedAtomicity.test_intent_stop_set_via_api_visible_to_cycle_post)
+At task boundary the agent honors the stop request via ...   Harness intent=stopping. Agent will exit for stop.
+[🦑 20:59:54] Stopped test-stop-req (intent=stopping)
+ok
+test_stop_requested_event_alone_does_not_trigger_cycle_post_exit (integration.test_event_mode_agent_subprocess.TestStopRequestedAtomicity.test_stop_requested_event_alone_does_not_trigger_cycle_post_exit)
+Mirror of the previous test: with stop-requested ONLY on ... [20:59:54] test-stop-req stop-requested     
+ok
+test_stop_requested_event_not_treated_as_immediate_kill (integration.test_event_mode_agent_subprocess.TestStopRequestedAtomicity.test_stop_requested_event_not_treated_as_immediate_kill)
+Posting many ``stop-requested`` events back-to-back must ... [20:59:54] test-stop-req stop-requested     
+[20:59:54] test-stop-req stop-requested     
+[20:59:54] test-stop-req stop-requested     
+[20:59:54] test-stop-req stop-requested     
+[20:59:54] test-stop-req stop-requested     
+ok
+test_stop_requested_event_recorded_without_flipping_intent (integration.test_event_mode_agent_subprocess.TestStopRequestedAtomicity.test_stop_requested_event_recorded_without_flipping_intent)
+POSTing a ``stop-requested`` event to the harness records ... [20:59:54] test-stop-req stop-requested     
+ok
+test_emit_succeeds_when_harness_comes_up (integration.test_9398_real_agent_subprocess.TestAgentDegradedModeWithoutHarness.test_emit_succeeds_when_harness_comes_up)
+AC-2 M-2.2 subprocess half — once the harness comes ... ok
+test_event_bus_emit_silent_noop_when_harness_down (integration.test_9398_real_agent_subprocess.TestAgentDegradedModeWithoutHarness.test_event_bus_emit_silent_noop_when_harness_down)
+AC-2 M-2.1 subprocess half — event_bus.emit() from an ... ok
+test_tracker_work_queue_works_without_harness (integration.test_9398_real_agent_subprocess.TestAgentDegradedModeWithoutHarness.test_tracker_work_queue_works_without_harness)
+AC-2 M-2.3 subprocess half — tracker.work_queue does ... ok
+test_agent_finds_canned_approved_task_and_transitions (integration.test_9398_real_agent_subprocess.TestAgentWorkPickupThroughGhShim.test_agent_finds_canned_approved_task_and_transitions)
+End-to-end work-pickup slice: ... ok
+test_real_subprocess_bootup_flips_agent_state_flag (integration.test_9398_real_agent_subprocess.TestBootupCompleteAcrossRealSubprocesses.test_real_subprocess_bootup_flips_agent_state_flag) ... ok
+test_real_subprocess_bootup_is_idempotent (integration.test_9398_real_agent_subprocess.TestBootupCompleteAcrossRealSubprocesses.test_real_subprocess_bootup_is_idempotent)
+Per the L1 base spec: multiple bootup-complete posts are ... ok
+test_live_port_file_not_touched (integration.test_9398_real_agent_subprocess.TestRealHarnessFixtureWritesPortFileToIsolatedDir.test_live_port_file_not_touched)
+The live repo's ``.squidsquad/.harness-port`` must not ... ok
+test_port_file_lives_under_isolated_squid_dir (integration.test_9398_real_agent_subprocess.TestRealHarnessFixtureWritesPortFileToIsolatedDir.test_port_file_lives_under_isolated_squid_dir) ... ok
+test_check_gh_passes_through_shim (integration.test_9398_gh_shim_tracker_integration.TestCheckGhThroughShim.test_check_gh_passes_through_shim) ... ok
+test_list_tasks_returns_canned_approved_task (integration.test_9398_gh_shim_tracker_integration.TestTrackerListTasksThroughShim.test_list_tasks_returns_canned_approved_task) ... ok
+test_list_tasks_returns_empty_when_no_fixture (integration.test_9398_gh_shim_tracker_integration.TestTrackerListTasksThroughShim.test_list_tasks_returns_empty_when_no_fixture)
+With the shim active but no fixture file, tracker.py ... ok
+
+----------------------------------------------------------------------
+Ran 53 tests in 52.267s
+
+OK
+
+--- Post-test cleanup ---
+  Issues: 0, Branches: 0, Files: 0
+  All test artifacts cleaned up.
+SUITE_EXIT:1
