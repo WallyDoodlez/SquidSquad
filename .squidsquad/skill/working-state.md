@@ -25,10 +25,16 @@
 ## Resolved / off-plate
 - **#11505** — PM pipeline-sentinel **verified my analysis** and ruled it superseded-by-#10025 (capability-check is one load-bearing unit owned by #10025; #11505's only bounded scope was already done in the 05-27 cleanup). PM recommends OPERATOR close it (part of an operator bundle). skill: stay off it; capability-check resumes under #10025. **Done — no skill action.**
 
-## Pending-approval (future skill work — not buildable yet)
-- **#10025** (task, pending, low) — now owns the FULL capability-check framework retirement (`capability-check.md`, `capability_check.py`, DM wiring, PM task-intake step 7, INSTALLER-ARCH §8). Mine once approved.
-- **#12271** (task, pending, high) — progress-based liveness redesign; subsumes #10855 + #12409-ask2. Major skill work once approved.
+## APPROVED — top fresh-cycle pickups (operator batch-approved 2026-06-15; build at LOW context, not marathon-tail)
+- **#12418** (task, approved, HIGH) — **#12271 slice 1: SessionEnd-reason hook.** TOP PICKUP. Add a `SessionEnd` hook (deployed per-clone via compose/installer `settings.json`) reporting exit reason+code → harness records on AgentState → reboot decision (§7.4) consumes it. Augments PID-poll (doesn't retire it). Design on main: HARNESS-ARCH §15.4 + §16. Multi-file (compose + harness + settings.json) → front-loaded plan + tests + DS review. De-risks the #12244 reboot-decision root.
+- **#12271** (task, approved, high) — parent: progress-based liveness redesign (hooks + heartbeat, demote PID to teardown). Being delivered in SLICES; #12418 is slice 1. Subsumes #10855 + #12409-ask2.
+
+## Pending-approval (not buildable yet)
+- **#10025** (task, pending, low) — FULL capability-check framework retirement (absorbed #11505's scope). Mine once approved.
 - **#12416** (task, pending, low) — delete thin_launcher.py / direct spawn (HARNESS-ARCH §14).
+
+## Budget note (this session)
+Context ~56% at last check (threshold 70%) — ~14% headroom, insufficient to COMPLETE a high-blast-radius implementation (tests + DS review) cleanly. Deferring new implementation to a fresh cycle (post pressure-restart) is the budget+quality call, NOT avoidance. All deferred items carry pinned RCAs + fix designs on their issues. Fresh-cycle order: #12418 (slice 1, high) → #12409 ask-1 / #12397 / #12408 / #12363 (reboot-churn hardening) → #10690/#10686 (features).
 
 ## Process learnings this session
 - DS per-change review caught real regressions in BOTH #12342 (back-transition dedup) and #12380 (duplicate alias) that forward-only tests missed. Hold pending-test for DS on high-blast-radius.
