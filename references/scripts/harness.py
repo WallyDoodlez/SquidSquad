@@ -96,6 +96,33 @@ FAST_DEATH_THRESHOLD = 3
 CRASH_BACKOFF_BASE_SECONDS = 30
 CRASH_BACKOFF_CAP_SECONDS = 1800  # 30m — a sane ceiling, not infinite
 
+# #12458 (#12271 slice c) — pause-aware liveness guard. Agent silence / a dead
+# PID is treated as death ONLY when no hook explains it. Each "explained pause"
+# carries a STALENESS CEILING so a stuck/never-cleared flag can never mask a
+# genuine death forever (the AC4 contract: past the ceiling, the agent is
+# wedged and the normal death path resumes). The ceilings are generous —
+# set above the longest LEGITIMATE duration of each state.
+#   tool_call_max — longest legit single tool call (full test suite, slow
+#     build, long subagent). PreToolUse sets an in-flight deadline; PostToolUse
+#     clears it. Within the deadline a silent/dead agent is "running a tool",
+#     past it (still no PostToolUse) it is wedged.
+TOOL_CALL_MAX_SECONDS = 900          # 15m hard ceiling for one tool call
+#   compacting — Claude Code summarising context in place (PreCompact, cleared
+#     by PostCompact). Bounded so a crash mid-compaction still reboots.
+COMPACTING_MAX_SECONDS = 300         # 5m
+#   waiting — blocked on a human/permission/idle prompt (Notification). Cleared
+#     by the next activity heartbeat. Bounded generously: a truly-waiting agent
+#     stays alive (it still heartbeats nothing, but it is not dead); a crashed
+#     agent whose stale "waiting" flag was never cleared falls through after
+#     the ceiling so the normal death path can reboot it.
+WAITING_MAX_SECONDS = 1800           # 30m
+#   StopFailure causes that mean "throttled, not faulty" → back off rather than
+#     immediately respawn (a tight respawn would re-hit the same limit). Folds
+#     into the #12244 backoff. Other causes (auth/billing) are surfaced but do
+#     NOT auto-backoff (they need operator action, not a wait).
+STOP_FAILURE_BACKOFF_CAUSES = frozenset({"rate_limit", "overloaded"})
+STOP_FAILURE_RECENT_SECONDS = 180    # a StopFailure older than this is stale
+
 # #9242: Diagnostic escape hatch. When True (set by `main()` from
 # `--no-auto-start` or `SQUIDSQUAD_HARNESS_NO_AUTO_START=1`), the
 # deferred-init thread skips the auto-spawn-all-agents block. Lets
@@ -162,7 +189,10 @@ class AgentState:
                  # #12418 — last SessionEnd hook reason (graceful-exit signal)
                  "last_session_end",
                  # #12443 — activity heartbeat (progress-based liveness)
-                 "last_activity_at", "last_activity")
+                 "last_activity_at", "last_activity",
+                 # #12458 — pause-aware liveness guard (explained-silence state)
+                 "in_flight_until", "waiting_since", "compacting_since",
+                 "last_stop_failure")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -224,6 +254,56 @@ class AgentState:
         # yet drive the reboot decision (that is #12271 slice d).
         self.last_activity_at = None
         self.last_activity = None
+        # #12458 — pause-aware liveness guard (HARNESS-ARCH §15.1). Each field
+        # is an "explained silence" set by a hook and consumed by the reboot
+        # decision via active_pause(); each has a staleness ceiling so a never-
+        # cleared flag cannot mask a genuine death forever (AC4/AC5).
+        #   in_flight_until — epoch deadline (PreToolUse set: now+tool_call_max;
+        #     PostToolUse/PostToolUseFailure clear). now < deadline → mid-call.
+        #   waiting_since — epoch a Notification (permission/idle prompt) fired;
+        #     cleared by the next activity heartbeat. Agent blocked on input.
+        #   compacting_since — epoch PreCompact fired (PostCompact clears).
+        #   last_stop_failure — {"cause": <str>, "at": <epoch>}; a recent
+        #     rate_limit/overloaded means "throttled" → back off, not respawn.
+        self.in_flight_until = None
+        self.waiting_since = None
+        self.compacting_since = None
+        self.last_stop_failure = None
+
+    def active_pause(self, now):
+        """#12458 — return a short reason string if a hook currently explains
+        this agent's silence/death (so the reboot decision should HOLD OFF), or
+        None if nothing explains it (→ treat as a candidate death).
+
+        Each branch is bounded by its staleness ceiling: an explained pause only
+        suppresses reboot for as long as that state could LEGITIMATELY last —
+        past the ceiling the flag is treated as stale and ignored, so a crash
+        that left a flag set still reboots once the ceiling elapses (AC4/AC5).
+        Order is by confidence: an in-flight tool call is the strongest signal.
+        """
+        if self.in_flight_until is not None and now < self.in_flight_until:
+            return "in-flight"
+        if (self.compacting_since is not None
+                and 0 <= now - self.compacting_since < COMPACTING_MAX_SECONDS):
+            return "compacting"
+        if (self.waiting_since is not None
+                and 0 <= now - self.waiting_since < WAITING_MAX_SECONDS):
+            return "waiting"
+        return None
+
+    def stopfailure_backoff_due(self, now):
+        """#12458 (AC3d) — True if the most recent StopFailure is a recent
+        throttle (rate_limit/overloaded), meaning a dead agent should BACK OFF
+        rather than respawn immediately (an immediate respawn would re-hit the
+        same limit). Stale or non-throttle causes (auth/billing) return False —
+        those need operator action, surfaced elsewhere, not an auto-wait."""
+        sf = self.last_stop_failure
+        if not isinstance(sf, dict):
+            return False
+        cause = sf.get("cause")
+        at = sf.get("at") or 0
+        return (cause in STOP_FAILURE_BACKOFF_CAUSES
+                and 0 <= now - at < STOP_FAILURE_RECENT_SECONDS)
 
     def to_dict(self):
         return {
@@ -251,6 +331,11 @@ class AgentState:
             # #12443 — activity heartbeat (progress-based liveness)
             "last_activity_at": self.last_activity_at,
             "last_activity": self.last_activity,
+            # #12458 — pause-aware liveness guard state
+            "in_flight_until": self.in_flight_until,
+            "waiting_since": self.waiting_since,
+            "compacting_since": self.compacting_since,
+            "last_stop_failure": self.last_stop_failure,
         }
 
 
@@ -917,6 +1002,13 @@ class HarnessState:
                         # last-known activity isn't lost on recovery.
                         "last_activity_at": a.last_activity_at,
                         "last_activity": a.last_activity,
+                        # #12458 — persist pause state so a harness restart
+                        # mid-pause doesn't immediately false-reboot a paused
+                        # agent (the ceilings still bound any stale flag).
+                        "in_flight_until": a.in_flight_until,
+                        "waiting_since": a.waiting_since,
+                        "compacting_since": a.compacting_since,
+                        "last_stop_failure": a.last_stop_failure,
                     }
                     for role, a in self.agents.items()
                 },
@@ -1011,6 +1103,12 @@ class HarnessState:
                 # state files / fresh agents).
                 agent.last_activity_at = agent_data.get("last_activity_at")
                 agent.last_activity = agent_data.get("last_activity")
+                # #12458 — restore pause state (defaults None for older state
+                # files / fresh agents).
+                agent.in_flight_until = agent_data.get("in_flight_until")
+                agent.waiting_since = agent_data.get("waiting_since")
+                agent.compacting_since = agent_data.get("compacting_since")
+                agent.last_stop_failure = agent_data.get("last_stop_failure")
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 

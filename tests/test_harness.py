@@ -4136,6 +4136,118 @@ class TestSessionEndHook12418(unittest.TestCase):
                     {"reason": "other", "at": 123.0})
 
 
+class TestPauseStateHelpers12458(unittest.TestCase):
+    """#12458 (#12271 slice c): AgentState.active_pause() returns the reason a
+    hook explains the agent's silence (so reboot should hold off), each bounded
+    by a staleness ceiling; stopfailure_backoff_due() flags a recent throttle."""
+
+    def setUp(self):
+        import harness
+        self.h = harness
+        self.a = harness.AgentState("skill", "/tmp/x")
+
+    def test_in_flight_within_deadline_is_paused(self):
+        now = 1000.0
+        self.a.in_flight_until = now + 100  # deadline in the future
+        self.assertEqual(self.a.active_pause(now), "in-flight")
+
+    def test_in_flight_past_deadline_not_paused(self):
+        now = 1000.0
+        self.a.in_flight_until = now - 1  # deadline elapsed (tool_call_max hit)
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_compacting_within_ceiling_is_paused(self):
+        now = 1000.0
+        self.a.compacting_since = now - 10
+        self.assertEqual(self.a.active_pause(now), "compacting")
+
+    def test_compacting_past_ceiling_not_paused(self):
+        now = 1000.0
+        self.a.compacting_since = now - (self.h.COMPACTING_MAX_SECONDS + 1)
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_waiting_within_ceiling_is_paused(self):
+        now = 1000.0
+        self.a.waiting_since = now - 10
+        self.assertEqual(self.a.active_pause(now), "waiting")
+
+    def test_waiting_past_ceiling_not_paused(self):
+        now = 1000.0
+        self.a.waiting_since = now - (self.h.WAITING_MAX_SECONDS + 1)
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_no_signals_not_paused(self):
+        self.assertIsNone(self.a.active_pause(1000.0))
+
+    def test_in_flight_takes_priority_over_waiting(self):
+        now = 1000.0
+        self.a.in_flight_until = now + 100
+        self.a.waiting_since = now - 10
+        self.assertEqual(self.a.active_pause(now), "in-flight")
+
+    def test_clock_skew_negative_age_not_paused(self):
+        """A flag stamped in the FUTURE (clock skew / corrupt state) must not
+        read as an indefinite pause — the `0 <= age` guard rejects it."""
+        now = 1000.0
+        self.a.compacting_since = now + 500
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_recent_rate_limit_backoff_due(self):
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "rate_limit", "at": now - 5}
+        self.assertTrue(self.a.stopfailure_backoff_due(now))
+
+    def test_recent_overloaded_backoff_due(self):
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "overloaded", "at": now - 5}
+        self.assertTrue(self.a.stopfailure_backoff_due(now))
+
+    def test_stale_rate_limit_not_due(self):
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "rate_limit",
+                                    "at": now - (self.h.STOP_FAILURE_RECENT_SECONDS + 1)}
+        self.assertFalse(self.a.stopfailure_backoff_due(now))
+
+    def test_non_throttle_cause_not_due(self):
+        """auth/billing failures need operator action, not an auto-backoff."""
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "authentication_failed", "at": now - 5}
+        self.assertFalse(self.a.stopfailure_backoff_due(now))
+
+    def test_missing_stop_failure_not_due(self):
+        self.assertFalse(self.a.stopfailure_backoff_due(1000.0))
+        self.a.last_stop_failure = "not-a-dict"
+        self.assertFalse(self.a.stopfailure_backoff_due(1000.0))
+
+    def test_null_at_does_not_crash(self):
+        """A {'at': null} from a hand-edited state file must not TypeError."""
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "rate_limit", "at": None}
+        self.assertFalse(self.a.stopfailure_backoff_due(now))
+
+    def test_pause_state_persisted_and_restored(self):
+        import json as _json, tempfile
+        from pathlib import Path as _Path
+        st = self.h.HarnessState()
+        a = self.h.AgentState("skill", "/tmp/x")
+        a.in_flight_until = 111.0
+        a.waiting_since = 222.0
+        a.compacting_since = 333.0
+        a.last_stop_failure = {"cause": "rate_limit", "at": 444.0}
+        st.agents["skill"] = a
+        with tempfile.TemporaryDirectory() as d:
+            sf = _Path(d) / ".harness-state.json"
+            with patch.object(self.h, "HARNESS_STATE_FILE", sf):
+                st.save_state()
+                st2 = self.h.HarnessState()
+                st2.load_state()
+        r = st2.agents["skill"]
+        self.assertEqual(r.in_flight_until, 111.0)
+        self.assertEqual(r.waiting_since, 222.0)
+        self.assertEqual(r.compacting_since, 333.0)
+        self.assertEqual(r.last_stop_failure, {"cause": "rate_limit", "at": 444.0})
+
+
 class TestActivityHook12443(unittest.TestCase):
     """#12443: POST /hooks/activity records the activity heartbeat
     (last_activity_at + enriched {event, tool, phase}) on AgentState, exposes it
