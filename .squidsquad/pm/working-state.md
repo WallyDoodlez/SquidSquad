@@ -10,9 +10,9 @@ _Condensed 2026-06-14. Prior incident narrative (reboot saga, event-mode stabili
 
 ### Active threads
 1. **#12417 — MERGED 2026-06-15** (merge commit 29643ca8). HARNESS-ARCH (v24–v26) + AGENT-RUNTIME event_poll/`.claude-pid` reconciliation on main. Full work-discovery flow completed: research → draft → human review → DS re-audit (step 4) → cross-ref (step 5) → "all okay" → merge. PM merged under explicit operator authorization (boundary deviation noted on PR). **Descriptive-corrective → no new impl tasks spawned** (docs now match existing code). PM merged (boundary exception, operator-authorized).
-2. **#12271** liveness scope — NEXT: present final scope for operator lock, then slice. Final design (this session): liveness = activity-heartbeat (PostToolUse/cycle_post) + event_poll polls + pause-guard; **PID demoted to teardown-only**; **no new PID-reporting needed** (harness already has resolved claude.exe PID); SessionEnd-reason slice first. PID-for-liveness (5s poll) dropped.
-3. **#12363** — `/T` teardown fix: root cause posted (kill without `/T` orphans event_poll subtree). role:skill, open, standalone (independent of #12271). Ready for skill pickup.
-4. **#11505 close** — PM ruling posted: capability-check retirement = one unit owned by **#10025**; recommend close-as-superseded (in 06-12 bundle). Awaiting operator confirm.
+2. **#12271** — **APPROVED + SLICED 2026-06-15** (operator "go ahead"). Umbrella, status:approved. Slice **(a) #12418 SessionEnd-reason hook** FILED + approved → skill. Slices (b) activity-heartbeat hooks, (c) pause-aware guard, (d) retire PID-poll — sequenced, file as predecessors land. Locked scope: liveness = activity-heartbeat + pause-guard; PID teardown-only; no new PID-reporting.
+3. **#12363** — `/T` teardown fix: skill ENGAGED (RCA confirmed, fix contained: taskkill /T + os.killpg in `_kill_process`, all 3 paths via shared helper). Queued by skill as front-loaded pickup. medium sev. No PM action.
+4. **#11505** — CLOSED 2026-06-15 as superseded-by-#10025 (operator-confirmed). Scope handed to #10025. Removed from 06-12 bundle.
 5. **#12300** work-discovery → L2 — DEFERRED (the process just proved itself on #12417).
 6. **DS finding #4** (`/work/assign` payload) — small follow-up doc task, NOT filed yet.
 
