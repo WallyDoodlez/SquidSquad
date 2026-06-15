@@ -63,9 +63,13 @@ Then ask **exactly one** permission question, e.g.
 
 **3. Provision on approval.**
 
-- If the user declines: explain that SquidSquad can't install without these
-  deps (the tracker, harness, and agent spawn all depend on them), then exit
-  cleanly with code 0 and "no changes made".
+- If the user declines: `gh`, Python, pip, and the harness packages are HARD
+  requirements (tracker, comments, audit trail, and harness all depend on
+  them) — if any of those is in the missing set, explain SquidSquad can't
+  install without them, then exit cleanly with code 0 and "no changes made".
+  If the ONLY missing item is the soft `claude` CLI, note that the install
+  could still proceed but agent spawn would be unavailable, and let the user
+  reconsider rather than treating it as a hard blocker.
 - If the user approves: run
   `python references/scripts/wizard.py provision-deps` (no args = provision
   every auto item). Parse the `results` — report each `id` as provisioned or
@@ -79,18 +83,22 @@ Then ask **exactly one** permission question, e.g.
 **4. Re-verify.** Re-run `python references/scripts/wizard.py gather-deps`.
 
 - **`ok: true`** → continue to Step 0a.
-- **`ok: false`** → show the still-missing items with their `instruct` lines,
-  tell the user plainly what to install, and exit cleanly with code 0 (Phase 0
-  is pre-Phase-5, so no repo writes happened — nothing to roll back). The user
-  fixes the environment and re-runs the installer.
+- **`ok: false`** → check WHAT is still missing:
+  - If any **hard-gated** dep (`gh` install + auth, Python, pip, packages) is
+    still missing → show the still-missing items with their `instruct` lines,
+    tell the user plainly what to install, and exit cleanly with code 0
+    (Phase 0 is pre-Phase-5, so no repo writes happened — nothing to roll
+    back). The user fixes the environment and re-runs the installer.
+  - If the **only** remaining missing item is the soft `claude` CLI → warn
+    prominently that agent spawn will not work until it's installed, then
+    continue to Step 0a anyway.
 
 `gh` (installed + authenticated) and Python/pip/packages are hard
 requirements — SquidSquad's tracker, comments, audit trail, and harness all
-depend on them, so the re-verify gate above must reach `ok: true` before the
-install proceeds. The `claude` CLI is needed at run time (agent spawn) but the
-install itself can complete without it; if it remains missing after re-verify,
-warn prominently but you MAY proceed past Step 0 as long as everything else is
-satisfied.
+depend on them, so the re-verify gate above must clear them before the install
+proceeds. The `claude` CLI is needed at run time (agent spawn) but the install
+itself can complete without it — it is the one dependency whose absence is a
+prominent warning, not a hard stop.
 
 ---
 

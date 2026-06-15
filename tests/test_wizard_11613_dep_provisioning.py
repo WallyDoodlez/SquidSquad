@@ -503,3 +503,114 @@ class TestCliExitCodes:
         src = inspect.getsource(wizard.main)
         assert '"gather-deps": cmd_gather_deps' in src
         assert '"provision-deps": cmd_provision_deps' in src
+
+
+# ---------------------------------------------------------------------------
+# DS-review hardening (chunk-2 findings)
+# ---------------------------------------------------------------------------
+
+class TestRunOSErrorHandling:
+    """Finding 1: _run must not let a missing/non-executable binary crash a
+    provision loop — it returns a synthetic 127 like the timeout branch."""
+
+    def test_file_not_found_returns_127(self, monkeypatch):
+        def _boom(cmd, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory")
+
+        monkeypatch.setattr(wizard.subprocess, "run", _boom)
+        result = wizard._run(["definitely-not-a-real-binary", "x"])
+        assert isinstance(result, subprocess.CompletedProcess)
+        assert result.returncode == 127
+        assert "failed to run" in result.stderr
+
+    def test_permission_error_returns_127(self, monkeypatch):
+        def _boom(cmd, **kwargs):
+            raise PermissionError(13, "Permission denied")
+
+        monkeypatch.setattr(wizard.subprocess, "run", _boom)
+        result = wizard._run(["brew", "install", "gh"])
+        assert result.returncode == 127
+
+    def test_provision_does_not_crash_on_vanished_binary(self, tmp_path, monkeypatch):
+        """The whole point: provision_deps still returns a structured dict.
+
+        Patches subprocess.run (not _run) so the REAL _run wrapper's OSError
+        catch is exercised end-to-end.
+        """
+        monkeypatch.setattr(wizard.platform, "system", lambda: "Linux")
+        monkeypatch.setattr(
+            wizard.shutil, "which",
+            _which_from({"python3", "pip", "claude", "apt-get"}),  # no gh
+        )
+
+        def _subproc_run(cmd, **kwargs):
+            if tuple(str(c) for c in cmd[:4]) == (
+                    sys.executable, "-m", "pip", "--version"):
+                return _fake_proc(0)
+            if cmd[0] == "apt-get":
+                raise FileNotFoundError(2, "apt-get vanished")
+            return _fake_proc(0)
+
+        monkeypatch.setattr(wizard.subprocess, "run", _subproc_run)
+        monkeypatch.setattr(
+            wizard.importlib.util, "find_spec", _find_spec_from({"fastapi"}))
+        (tmp_path / "requirements.txt").write_text("fastapi\n", encoding="utf-8")
+        result = wizard.provision_deps(ids=["gh"], base_dir=tmp_path)
+        # structured dict, not an exception
+        assert result["ok"] is False
+        gh = next(r for r in result["results"] if r["id"] == "gh")
+        assert gh["returncode"] == 127
+
+
+class TestPython3OnPath:
+    """Finding 3: a bare `python` is only accepted after a 3.x version probe."""
+
+    def test_python3_present_is_true(self, monkeypatch):
+        monkeypatch.setattr(wizard.shutil, "which", _which_from({"python3"}))
+        assert wizard._python3_on_path() is True
+
+    def test_no_python_at_all_is_false(self, monkeypatch):
+        monkeypatch.setattr(wizard.shutil, "which", _which_from(set()))
+        assert wizard._python3_on_path() is False
+
+    def test_python2_only_is_false(self, monkeypatch):
+        # `python` resolves but is NOT our interpreter and probes as py2.
+        monkeypatch.setattr(wizard.shutil, "which", _which_from({"python"}))
+        monkeypatch.setattr(wizard.os.path, "realpath", lambda p: f"/real/{p}")
+        monkeypatch.setattr(wizard, "_run",
+                            lambda cmd, **k: _fake_proc(1))  # py2 -> nonzero
+        assert wizard._python3_on_path() is False
+
+    def test_python3_via_version_probe_is_true(self, monkeypatch):
+        monkeypatch.setattr(wizard.shutil, "which", _which_from({"python"}))
+        monkeypatch.setattr(wizard.os.path, "realpath", lambda p: f"/real/{p}")
+        monkeypatch.setattr(wizard, "_run",
+                            lambda cmd, **k: _fake_proc(0))  # py3 -> zero
+        assert wizard._python3_on_path() is True
+
+
+class TestProvisionBrewEnv:
+    """Finding 2: provision passes HOMEBREW_NO_AUTO_UPDATE so `brew install`
+    doesn't run a slow auto-update."""
+
+    def test_homebrew_no_auto_update_forwarded(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(wizard.platform, "system", lambda: "Darwin")
+        monkeypatch.setattr(
+            wizard.shutil, "which",
+            _which_from({"python3", "pip", "claude", "brew"}),  # no gh
+        )
+        captured = {}
+
+        def _run(cmd, **kwargs):
+            if tuple(str(c) for c in cmd[:4]) == (
+                    sys.executable, "-m", "pip", "--version"):
+                return _fake_proc(0)
+            captured["env"] = kwargs.get("env")
+            return _fake_proc(0)
+
+        monkeypatch.setattr(wizard, "_run", _run)
+        monkeypatch.setattr(
+            wizard.importlib.util, "find_spec", _find_spec_from({"fastapi"}))
+        (tmp_path / "requirements.txt").write_text("fastapi\n", encoding="utf-8")
+        wizard.provision_deps(ids=["gh"], base_dir=tmp_path)
+        assert captured["env"]["HOMEBREW_NO_AUTO_UPDATE"] == "1"

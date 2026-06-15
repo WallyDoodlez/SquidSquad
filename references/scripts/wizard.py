@@ -154,6 +154,18 @@ def _run(cmd, *, timeout=30, **kwargs):
             stdout="",
             stderr=f"timeout after {timeout}s: {' '.join(str(c) for c in cmd[:2])}\n",
         )
+    except OSError as exc:
+        # Binary missing / not executable (e.g. a TOCTOU race where a tool
+        # vanishes between detection and provisioning). Return a synthetic
+        # failure like the timeout branch so callers that inspect
+        # ``.returncode`` / ``.stderr`` keep working instead of seeing an
+        # uncaught FileNotFoundError / PermissionError.
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=127,
+            stdout="",
+            stderr=f"failed to run {' '.join(str(c) for c in cmd[:2])}: {exc}\n",
+        )
 
 
 def check_gh():
@@ -307,6 +319,26 @@ def _pip_base_cmd():
     failure mode where ``pip`` points at a different Python than ``python3``.
     """
     return [sys.executable, "-m", "pip"]
+
+
+def _python3_on_path():
+    """True if a Python 3.x interpreter is invocable from the shell.
+
+    ``python3`` is unambiguous. A bare ``python`` is only accepted after a
+    version probe — on some systems ``python`` is still Python 2, and the
+    boot scripts / helpers need a real 3.x. If we are ourselves running under
+    the same ``python`` resolved on PATH, short-circuit via ``sys.version_info``
+    rather than spawning a subprocess.
+    """
+    if shutil.which("python3"):
+        return True
+    py = shutil.which("python")
+    if not py:
+        return False
+    if sys.version_info >= (3,) and os.path.realpath(py) == os.path.realpath(sys.executable):
+        return True
+    probe = _run([py, "-c", "import sys; sys.exit(0 if sys.version_info >= (3,) else 1)"])
+    return probe.returncode == 0
 
 
 def _choose_pkg_manager(os_token):
@@ -506,8 +538,8 @@ def gather_deps(base_dir=None):
             },
         )
 
-    # 3. Python 3 on PATH (python3 or python resolving to a 3.x).
-    if shutil.which("python3") or shutil.which("python"):
+    # 3. Python 3 on PATH (python3, or a `python` that is actually 3.x).
+    if _python3_on_path():
         satisfied.append("python3")
     else:
         _add_missing(
@@ -652,7 +684,11 @@ def provision_deps(ids=None, base_dir=None):
             continue
         cmd = action["command"]
         # Package installs and large downloads can be slow — give them room.
-        proc = _run(cmd, timeout=600)
+        # HOMEBREW_NO_AUTO_UPDATE keeps `brew install` from running a slow
+        # `brew update` first (the brew equivalent of the -y/--silent flags the
+        # other managers already carry); harmless for non-brew commands.
+        env = {**os.environ, "HOMEBREW_NO_AUTO_UPDATE": "1"}
+        proc = _run(cmd, timeout=600, env=env)
         ok = proc.returncode == 0
         attempted.append(dep_id)
         results.append({
