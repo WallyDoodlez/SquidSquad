@@ -128,7 +128,7 @@ Concrete consequences for an inline turn:
 
 ## 4. The agent process tree (shared)
 
-Both modes use the same `cmd → thin_launcher → claude` per-agent subprocess tree. **Event mode additionally pairs each agent with an `event_poll` process** for the nudge contract — `event_poll` is a **direct child of the harness**, NOT inside the agent's subprocess tree (see §4.2 diagram). Its stdout is piped to the agent's Monitor stdin so nudges wake the Claude session. Loop mode does not pair the agent with an `event_poll`; the harness does not spawn one and the harness-API edges from `event_poll` in §4.2 do not exist for that session. Differences inside the Claude session are otherwise mode-driven, not tree-driven.
+Both modes use the same `cmd → thin_launcher → claude` per-agent subprocess tree. **In event mode the agent additionally arms an `event_poll` process** (via its Monitor tool) for the nudge contract — `event_poll` runs **inside the agent's subprocess tree**, a child of `claude` via Monitor (see §4.2 diagram). Its stdout is read by Monitor so nudges wake the Claude session. Loop mode does not arm `event_poll`; the harness-API edges from `event_poll` in §4.2 do not exist for that session. Differences inside the Claude session are otherwise mode-driven, not tree-driven.
 
 ### 4.1 System overview
 
@@ -149,16 +149,16 @@ flowchart TB
     subgraph agents_row["Agents (one box per running alias; multi-instance installs add boxes here)"]
         direction LR
         subgraph pm_box["PM agent"]
-            PMTree["cmd → thin_launcher → claude<br/>+ harness-owned event_poll (paired, not in tree)"]
+            PMTree["cmd → thin_launcher → claude<br/>+ event_poll (Monitor child, in tree)"]
         end
         subgraph verifier_box["Verifier agent"]
-            VerifierTree["cmd → thin_launcher → claude<br/>+ harness-owned event_poll (paired, not in tree)"]
+            VerifierTree["cmd → thin_launcher → claude<br/>+ event_poll (Monitor child, in tree)"]
         end
         subgraph worker_box["Worker agent"]
-            WorkerTree["cmd → thin_launcher → claude<br/>+ harness-owned event_poll (paired, not in tree)"]
+            WorkerTree["cmd → thin_launcher → claude<br/>+ event_poll (Monitor child, in tree)"]
         end
         subgraph dm_box["DM agent"]
-            DMTree["cmd → thin_launcher → claude<br/>+ harness-owned event_poll (paired, not in tree)"]
+            DMTree["cmd → thin_launcher → claude<br/>+ event_poll (Monitor child, in tree)"]
         end
     end
 
@@ -188,27 +188,23 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    Harness[("harness.py<br/>(parent of event_poll)")]
-
     subgraph agent_tree["Per-agent subprocess tree (pm, verifier, worker, dm each look like this)"]
         Cmd["Entry process<br/>cmd.exe (Windows) /<br/>bash | zsh (macOS, Linux)"]
-        TL["thin_launcher.py<br/>· writes .claude-pid<br/>· singleton enforcement (#8692)<br/>· spawns claude, waits for exit"]
+        TL["thin_launcher.py<br/>· spawns claude, resolves claude.exe PID (#10101)<br/>· writes .claude-pid (the resolved claude.exe PID)<br/>· singleton enforcement (#8692)<br/>· waits for exit"]
         Claude["claude (the agent)<br/>· runs composed CLAUDE.md<br/>· has Monitor tool built in"]
-        Monitor["Monitor tool<br/>(inside claude)<br/>reads stdin → wakes session"]
+        Monitor["Monitor tool (inside claude)<br/>runs event_poll, reads its stdout, wakes session"]
+        Poll["event_poll.py alias --wait 5 --target<br/>(child of claude, via Monitor)<br/>· polls harness for events<br/>· writes one NUDGE line per batch to stdout"]
 
         Cmd --> TL
         TL --> Claude
         Claude -.- Monitor
+        Monitor --> Poll
     end
 
-    Poll["event_poll.py --wait --role <role><br/>(direct child of harness, NOT inside agent tree)<br/>· polls harness for events<br/>· writes one NUDGE line per batch to stdout"]
-
-    Harness -- spawns + owns lifecycle --> Poll
-    Poll -- "stdout pipe to Monitor's stdin" --> Monitor
-
     HarnessAPI[("Harness HTTP API")]
-    Poll -- "GET /events/for/{role}<br/>?since=cursor<br/>(event mode only)" --> HarnessAPI
-    Claude -- "POST /events<br/>(booted, ack)<br/>POST /work/assign" --> HarnessAPI
+    Poll -- "GET /events/for/alias ?since=cursor (event mode only)" --> HarnessAPI
+    Claude -- "POST /events (booted, ack-cursor); POST /work/assign" --> HarnessAPI
+    Poll -- "NUDGE on stdout" --> Monitor
 ```
 
 **OS variants** (tree shape is identical across platforms; only the entry-process differs):
@@ -225,18 +221,17 @@ flowchart TB
 
 **The composed `CLAUDE.md`** that `claude` reads at boot is the agent's full instruction artifact — produced by `compose.py` from L1 (base) + L2 (role class) + L3 (domain) + L4 (install overrides) + per-agent `SOUL.md`, selected per the agent's alias from `.squidsquad/config.md`. AGENT-RUNTIME is intentionally silent on the format itself — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) for the layering model, slot order, frontmatter spec, and how the L1-L4 + SOUL.md inputs become one composed file. **Compose is the agent compiler**; every runtime behavior described in this doc is downstream of what compose produced.
 
-`thin_launcher` and `event_poll` are intentionally separate processes (decided 2026-05-22):
+`event_poll` is a separate process from `claude` but lives **inside the agent's process tree** — the Monitor tool (inside `claude`) runs it and reads its stdout. Why a separate process rather than in-`claude` logic (decided 2026-05-22; lifecycle is agent-owned per [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md)):
 
-- Monitor needs a long-lived stdin source — `event_poll`'s exact job.
-- `thin_launcher` exits when Claude exits — wrong shape for Monitor's contract.
-- Failure isolation: an `event_poll` crash doesn't take Claude down.
-- Restart semantics: harness can restart `thin_launcher` to respawn Claude without losing polling state. This applies to the `cmd → thin_launcher → claude` chain — `event_poll` is a separate harness-owned child (per §8.0) and is NOT auto-respawned independently; if `event_poll` dies, agent restart is the recovery path.
+- Monitor needs a long-lived external stdin source it can block on — `event_poll`'s exact job; `claude` can't run a blocking poll loop and stay responsive.
+- `event_poll` is **bound to the `claude` session**: the agent arms it via Monitor at boot, and it dies with the session. It is **not** harness-owned and is **not** independently respawned.
+- Recovery is the session-level rule: if `event_poll` (and therefore Monitor) exits, the agent ends its session (the *"Monitor exit ⇒ exit session"* rule, §8.0), the harness sees the `claude` PID die, and respawns the whole agent — which arms a fresh `event_poll`.
 
-Conceptually they form "the agent's launcher subprocess tree." Implementation-wise they're two processes.
+Conceptually `event_poll` is "the agent's wake sensor"; implementation-wise it's a Monitor-spawned child process of `claude`.
 
 ### 4.3 The `.claude-pid` convention
 
-`thin_launcher` writes its own `cmd.exe` PID (not `claude.exe`'s PID) into `.squidsquad/<alias>/.claude-pid` at boot. This is the singleton handle the harness watches. See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the "three claude.exe populations" and orphan-reaping rules.
+`thin_launcher` resolves the actual `claude.exe` PID (descendant walk through the npm shim, #10101) and writes **that** into `.squidsquad/<alias>/.claude-pid` at boot — not its own wrapper PID. It is the singleton handle and the value the harness's health-poll reads as `claude_pid` (HARNESS-ARCH §7.2 step 3 / §7.3). See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the "three claude.exe populations" and orphan-reaping rules.
 
 In loop mode, `event_poll` is not spawned — only `cmd → thin_launcher → claude` runs.
 
@@ -334,7 +329,7 @@ flowchart TB
         end
 
         subgraph lifecycle["Agent lifecycle"]
-            BootAgent["boot_agent(role)<br/>spawns thin_launcher + event_poll"]
+            BootAgent["boot_agent(role)<br/>spawns thin_launcher (→ claude)"]
             StopAgent["stop_agent(role)"]
             HealthPoll["health poller<br/>(every 5s, OpenProcess)"]
             LifeState[(".harness-state.json<br/>intent · PID · clone · boot_time")]
@@ -751,9 +746,9 @@ Event mode is the **exclusive home** for event-bus consumption and cursor logic 
 
 ### 8.0 The `event_poll` sidecar
 
-A harness-spawned `event_poll.py --wait --role <role>` process polls the harness on the agent's behalf and writes a literal `NUDGE\n` line to its stdout whenever new events arrive past the agent's cursor. That stdout is wired to the Monitor tool's stdin, waking the Claude session.
+The agent arms an `event_poll.py <alias> --wait 5 --target` process via its **Monitor tool** once running; it polls the harness on the agent's behalf and writes a literal `NUDGE\n` line to its stdout whenever new events arrive past the agent's cursor. That stdout is read by Monitor (which spawned it), waking the Claude session.
 
-**`event_poll` is a direct child of the harness process**, not a sibling of `claude` under the agent's subprocess tree (see §4.3). The harness owns its full lifecycle — spawn at agent boot, kill on agent stop. There is no automatic respawn if `event_poll` itself dies mid-session; the agent restart is the recovery path. **There is no recovery path when the harness itself dies**: existing event_poll processes are orphaned (silently no-op once their HTTP target is gone), and full team reboot is required to restore event-mode operation (operator stops + restarts harness; then restarts each agent so its boot probe rebinds to event-mode wake).
+**`event_poll` runs inside the agent's process tree** — a child of `claude` via the Monitor tool, not a harness child (see §4.2 and HARNESS-ARCH §7.2 step 6). Its lifecycle is bound to the `claude` session: armed at boot, dies with the session. The harness does not spawn, track, or independently respawn it. If `event_poll` (and therefore Monitor) exits, the agent ends its session — the *"Monitor exit ⇒ exit session"* rule — the harness observes the `claude` PID death and respawns the whole agent, which arms a fresh `event_poll`. **If the harness itself dies**, the agent's polls fail; per the bounded-retry ceiling `event_poll` exits → Monitor exits → the session ends, and full team reboot restores event-mode operation.
 
 The `--role` flag accepts the **alias** value (e.g., `--role frontend-1` not `--role worker`). The flag name is `--role` for code-compat with the wire format described in §5.3; rename to `--alias` ships with #10358. (The earlier `--target stdout` flag is retired — `event_poll` always writes to its own stdout; nothing else was ever supported.)
 
@@ -774,17 +769,17 @@ Two-tier backoff: 5s → 30s → 60s. A drained queue stabilizes at 60s after �
 
 Nudge format is literal `NUDGE\n` with no payload — the agent always does `GET /events/for/{role}?since=cursor` to find out what's new. False positives (a `NUDGE` arriving when no relevant events exist) are harmless because the GET returns `[]`.
 
-`event_poll`'s lifecycle is harness-owned: spawned at first `boot_agent(alias)` (paired with the agent via `--role <alias>`), terminated by the harness on agent stop. **`event_poll` lives across `claude` respawns** — when the harness respawns the agent's `claude` process (context-pressure exit-42 or intent=restarting; see HARNESS-ARCH §7.4), the paired `event_poll` is NOT killed and re-spawned; it keeps running and feeds the new `claude` via the same stdout pipe to Monitor. **There is no automatic respawn for `event_poll` itself** — if `event_poll` dies mid-session, the health poller logs the death but does NOT restart it; the recovery path is operator-triggered agent stop+start (which spawns a fresh `event_poll`). If the harness itself dies, `event_poll` is left orphaned (silently no-ops once the HTTP target is gone); full team reboot is required to restore event-mode operation. `event_poll` discovers the harness port via the same mechanism documented for agents in §5.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. The harness does not pass a `--port` argument; the discovery file is sufficient and the harness flushes the port file to disk before spawning `event_poll` (HARNESS-ARCH §7.2 step 4).
+`event_poll`'s lifecycle is **session-bound**: the agent arms it via Monitor at boot and it dies with the `claude` session. It does **not** survive a `claude` respawn — when the harness respawns the agent's `claude` process (context-pressure exit-42 or intent=restarting; see HARNESS-ARCH §7.4), the old `event_poll` died with the old `claude`, and the fresh `claude` arms a new `event_poll`. Nothing is lost: cursor state is harness-side, and the new `claude`'s boot drain (§8.2) catches up before idling. The harness never independently respawns `event_poll` (it has no handle to it). If the harness itself dies, the agent's polls fail; per the bounded-retry ceiling `event_poll` exits → Monitor exits → the session ends, and full team reboot restores event-mode operation. `event_poll` discovers the harness port via the same mechanism documented for agents in §5.7 — reads `.squidsquad/.harness-port` from its CWD, walking up to 5 parent directories if needed. There is no `--port` argument; the discovery file is sufficient, and the harness flushes the port file to disk before spawning any agent (HARNESS-ARCH §7.2).
 
-`event_poll`'s spawn ordering relative to the rest of the boot sequence is canonical in [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md). In summary: `event_poll` is spawned by `harness.py` as a **direct child of the harness process** (NOT under the agent's `thin_launcher → claude` subprocess tree — see §4.2), begins polling immediately on spawn, and is unaffected by the `booted` handshake (which gates routed-work delivery, not `event_poll` activity).
+`event_poll`'s place in the boot sequence is canonical in [HARNESS-ARCH.md §7.2](HARNESS-ARCH.md). In summary: the agent arms `event_poll` via Monitor **after** the `booted` handshake, as it enters steady state (HARNESS-ARCH §7.2 step 6). So `event_poll` begins polling only once the agent is `ready`; boot-time-arrival events are caught by the agent's own inline drain (next), not by `event_poll`.
 
-**Initial-queue ordering invariant** (resolves the race between `event_poll` polls and the agent's boot sequence):
+**Initial-queue ordering invariant** (how boot-time-arrival events are caught without loss or double-processing):
 
-1. The harness returns **empty** `GET /events/for/{alias}` responses to `event_poll`'s polls **while `status=booting`** — regardless of whether events are queued for that alias. No nudges fire during this window.
-2. Once the agent emits `booted` and the harness transitions `status: booting → ready`, the agent enters the §8.1 eager main loop per §8.2 step 4. The loop's first iteration GET (`GET /events/for/{alias}?since=null`) runs **inline in the agent's main thread** and the loop drains queued events synchronously, processing them per-event with per-event acks before reaching the empty-queue branch and idling.
-3. From the moment step 4 returns, `event_poll`'s normal poll cycle (5s active / 30s idle, §8.0 cadence) handles all subsequent wake-ups. Any nudge `event_poll` writes between step 4's completion and the agent's `return-to-idle` is delivered via Monitor's stdin reader and queued behind the agent's current action — Monitor never preempts a mid-action read.
+1. While `status=booting`, the harness returns **empty** `GET /events/for/{alias}` responses regardless of what is queued for that alias — and the agent has not yet armed `event_poll`, so no nudges fire during boot.
+2. Once the agent emits `booted` and the harness transitions `status: booting → ready`, the agent runs its initial drain inline in its main loop (§8.1 / §8.2 step 4): `GET /events/for/{alias}?since=null` returns the queued events, which it processes synchronously with per-event acks before reaching the empty-queue branch.
+3. Only **then** does the agent arm `event_poll` (Monitor) for steady-state wake-ups (§8.0 cadence). Any nudge `event_poll` writes thereafter is delivered via Monitor's stdin reader, queued behind the agent's current action — Monitor never preempts a mid-action read.
 
-There is no race where queued events are lost; there is no double-processing because the harness only releases queued events to `event_poll` after `status=ready`, and step 4's drain runs *before* the agent returns control to Monitor's wake-on-nudge loop. The boot-step initial drain is the canonical mechanism for catching boot-time-arrival events; `event_poll` is the mechanism for ongoing wake-ups thereafter.
+There is no race where queued events are lost (the harness holds them until `status=ready`, and the agent's inline drain catches them) and no double-processing (the inline drain runs before `event_poll` is even armed). The boot-step inline drain is the canonical mechanism for catching boot-time-arrival events; `event_poll` is the mechanism for ongoing wake-ups thereafter.
 
 ### 8.1 The nudge contract
 
@@ -1157,7 +1152,7 @@ The v2 build ships as 6 grouped PRs. The **letters** (A–F) are logical-groupin
 
 | # | Group | What it does | Risk |
 |---|---|---|---|
-| 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher + event_poll; health poller watches both; cold start order. The boot-time harness probe + wake-mode bind (§9.3) runs **inside the claude (agent) process** as part of its own boot sequence — after reading composed `CLAUDE.md` and before the first cycle — NOT inside `thin_launcher`. | medium |
+| 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher (→ claude); the agent then arms event_poll via Monitor; health poller watches the `claude` PID; cold start order. The boot-time harness probe + wake-mode bind (§9.3) runs **inside the claude (agent) process** as part of its own boot sequence — after reading composed `CLAUDE.md` and before the first cycle — NOT inside `thin_launcher`. | medium |
 | 2 | **C — EAD + restart safety** | Last-seen-id recovery, in-flight cleanup, harness restart catch-up | low |
 | 3 | **D — alias-existence validation** | Harness validates `target_alias` against the install's registered aliases (per `.squidsquad/config.md` `## Aliases`); 404 on unknown. No class-from-class permissions. | low |
 | 4 | **B — Cursor + delivery wire** | Nudge format = literal `NUDGE\n`; forward-only ack; `HTTP 410 Gone` for cursor-evicted | low |
@@ -1274,7 +1269,7 @@ Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last P
 - **2026-05-30 (rev 12) — Q13 closed: `X-Squidsquad-Alias` header is the emitter identity for self-assign invariant.** The §8.3 self-assign rejection (`target_alias == emitter_alias` is forbidden) is now grounded by a concrete wire-format mechanism: every `POST /work/assign` call carries an `X-Squidsquad-Alias` HTTP request header naming the caller's alias. `tracker.py transition` and any direct caller MUST set it. EAD-emitted `assigned-to` events bypass the HTTP path (they're produced inside the harness from forge state changes) and use the sentinel `emitter_alias = "__ead__"` exempt from the check. §8.3 sequence diagram now shows the header; §8.3 self-assign bullet pins the mechanism. Q13 moves from Open → Closed in §9.
 - **2026-05-30 (rev 13) — Q12 closed: harness writes `role:*` label after `/work/assign`.** The §8.3 routing table's dependency on the `role:*` label reflecting the new owner is now satisfied by harness-side label writes. After validation passes on every `POST /work/assign` (and equivalently inside EAD when emitting `assigned-to`), the harness performs `gh issue edit --remove-label role:* --add-label role:<target_alias>` BEFORE appending the event to the deque. Callers of `/work/assign` provide `target_alias`; they do NOT need to know the next-owner mapping or maintain a state-machine table — the harness handles the label. This is the one forge-write the harness performs; HARNESS-ARCH §2 is updated accordingly ("reads + one specific write: `role:*` label on `/work/assign` calls"). §8.3 self-assign bullet expanded with the label-rewrite rule; §8.3 sequence diagram now shows the `gh issue edit` step between validation and `assigned-to` emission. Q12 moves from Open → Closed in §9.
 - **2026-05-30 (rev 15) — pre-existing-gap closure: event_poll placement, respawn semantics, `--target` retired, ordering rules locked.** Three architectural locks plus six mechanical disambiguations:
-  - **event_poll placement (Option B)**: `event_poll` is a **direct child of `harness.py`**, NOT a sibling of `claude` under the agent's subprocess tree. The harness owns its full lifecycle and pairs each `event_poll` to one agent via `--role <alias>`. §4 lead + §4.2 diagram + §4.1 system-overview tree labels + §8.0 prose updated. Aligns AGENT-RUNTIME with HARNESS-ARCH §7.2 step 4 + §14.1 (the previously documented placement; AGENT-RUNTIME's "sibling of claude" framing was wrong).
+  - **event_poll placement (Option B)**: `event_poll` is a **direct child of `harness.py`**, NOT a sibling of `claude` under the agent's subprocess tree. The harness owns its full lifecycle and pairs each `event_poll` to one agent via `--role <alias>`. §4 lead + §4.2 diagram + §4.1 system-overview tree labels + §8.0 prose updated. Aligns AGENT-RUNTIME with HARNESS-ARCH §7.2 step 4 + §14.1 (the previously documented placement; AGENT-RUNTIME's "sibling of claude" framing was wrong). **[SUPERSEDED 2026-06-15, PR #12417]** — this Option-B decision (and the rev-15 respawn-semantics + rev-14 event_poll/booted-race bullets that follow from it) was itself wrong against the code. Verified via DS audit + live process tree: `event_poll` is armed by the agent's **Monitor tool** and runs **inside the `claude` process tree**; the harness neither spawns, tracks, nor respawns it; recovery is Monitor-exit → claude-PID-death → agent respawn (which arms a fresh `event_poll`). Current model is in §4.2 / §8.0 and HARNESS-ARCH §7.2 step 6 / §17 v24. The "sibling of claude" framing rev 15 rejected was closer to correct than "direct child of harness."
   - **event_poll respawn semantics**: no automatic recovery. `event_poll` is single-spawn per agent process. If it dies mid-session, the recovery path is restarting the agent (which respawns the paired `event_poll`). If the harness itself dies, all `event_poll`s become orphaned (silent no-ops once the HTTP target is gone) and a full team reboot is required to restore event-mode operation — operator stops + restarts harness; then restarts each agent so its boot probe rebinds to event-mode wake.
   - **`--target stdout` flag retired**: dead code; `event_poll` always writes to its own stdout. Removed from §4.2 diagram + §8.0 prose. (`--target` was never used with any other value and the flag had no future-extensibility use case.)
   - **event_poll port discovery ordering**: harness writes `.squidsquad/.harness-port` and flushes to disk BEFORE spawning `event_poll`. HARNESS-ARCH §7.2 step 4 expanded with the ordering guarantee.
