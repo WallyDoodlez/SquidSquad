@@ -4136,5 +4136,152 @@ class TestSessionEndHook12418(unittest.TestCase):
                     {"reason": "other", "at": 123.0})
 
 
+class TestActivityHook12443(unittest.TestCase):
+    """#12443: POST /hooks/activity records the activity heartbeat
+    (last_activity_at + enriched {event, tool, phase}) on AgentState, exposes it
+    via GET /agents/{role}, throttles the state-FILE write (fires per tool
+    call), and is fail-open (always 200 — a telemetry hook must never block or
+    fail the agent)."""
+
+    def setUp(self):
+        import harness
+        from fastapi.testclient import TestClient
+        self.harness = harness
+        self.client = TestClient(harness.app, raise_server_exceptions=False)
+        harness.state.start_time = time.time()
+        self.role = "skill"
+        self._roles = patch.object(
+            harness.boot_remote, "_get_all_roles", return_value=[self.role])
+        self._roles.start()
+        self._save = patch.object(harness.state, "save_state")
+        self._save_mock = self._save.start()
+        self._uh = patch.object(harness.state, "update_health")
+        self._uh.start()
+        harness.state.agents.pop(self.role, None)
+        # Reset the persistence throttle so the first POST in each test persists.
+        harness._last_activity_save_at = 0.0
+
+    def tearDown(self):
+        self._uh.stop()
+        self._save.stop()
+        self._roles.stop()
+        self.harness.state.agents.pop(self.role, None)
+
+    def _hdr(self, role=None):
+        return {"X-Agent-Role": self.role if role is None else role}
+
+    def test_records_activity_on_agentstate(self):
+        resp = self.client.post(
+            "/hooks/activity", headers=self._hdr(),
+            json={"event": "PostToolUse", "tool": "Bash", "phase": "implement"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get("ok"))
+        agent = self.harness.state.agents.get(self.role)
+        self.assertIsNotNone(agent)
+        self.assertIsInstance(agent.last_activity_at, float)
+        self.assertEqual(agent.last_activity["event"], "PostToolUse")
+        self.assertEqual(agent.last_activity["tool"], "Bash")
+        self.assertEqual(agent.last_activity["phase"], "implement")
+
+    def test_accepts_raw_hook_payload_fields(self):
+        """A raw Claude Code hook payload uses hook_event_name / tool_name —
+        the endpoint falls back to those when event/tool aren't set."""
+        resp = self.client.post(
+            "/hooks/activity", headers=self._hdr(),
+            json={"hook_event_name": "PostToolUseFailure", "tool_name": "Edit"})
+        self.assertEqual(resp.status_code, 200)
+        act = self.harness.state.agents[self.role].last_activity
+        self.assertEqual(act["event"], "PostToolUseFailure")
+        self.assertEqual(act["tool"], "Edit")
+
+    def test_exposed_via_get_agent(self):
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "cycle_post"})
+        resp = self.client.get(f"/agents/{self.role}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIsInstance(data.get("last_activity_at"), float)
+        self.assertEqual(data["last_activity"]["event"], "cycle_post")
+
+    def test_no_role_header_dropped_but_200(self):
+        resp = self.client.post("/hooks/activity", json={"event": "PostToolUse"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get("ok"))
+        self.assertEqual(resp.json().get("dropped"), "no-role")
+
+    def test_uninterpolated_env_var_role_is_no_role(self):
+        resp = self.client.post("/hooks/activity",
+                                headers=self._hdr("${SQUIDSQUAD_ROLE}"),
+                                json={"event": "PostToolUse"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json().get("dropped"), "no-role")
+
+    def test_unknown_role_dropped_but_200(self):
+        resp = self.client.post("/hooks/activity",
+                                headers=self._hdr("bogus-role"),
+                                json={"event": "PostToolUse"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get("ok"))
+        self.assertNotIn("bogus-role", self.harness.state.agents)
+
+    def test_malformed_body_is_fail_open(self):
+        resp = self.client.post(
+            "/hooks/activity", content=b"not json",
+            headers={**self._hdr(), "Content-Type": "application/json"})
+        self.assertEqual(resp.status_code, 200)
+        # Still records the heartbeat (the activity FACT is the signal, not the
+        # body) — event is just None when the payload is unreadable.
+        self.assertIsInstance(
+            self.harness.state.agents[self.role].last_activity_at, float)
+
+    def test_save_failure_is_fail_open(self):
+        """Even if persistence raises, the hook still answers 200."""
+        self._save.stop()
+        with patch.object(self.harness.state, "save_state",
+                          side_effect=OSError("disk full")):
+            resp = self.client.post("/hooks/activity", headers=self._hdr(),
+                                    json={"event": "PostToolUse"})
+        self._save_mock = self._save.start()  # restore for tearDown balance
+        self.assertEqual(resp.status_code, 200)
+
+    def test_disk_write_is_throttled(self):
+        """Heartbeats fire per tool call — the in-memory value updates every
+        time, but the state-FILE write is rate-limited. Two rapid POSTs persist
+        at most once."""
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PostToolUse"})
+        first_at = self.harness.state.agents[self.role].last_activity_at
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PostToolUse"})
+        second_at = self.harness.state.agents[self.role].last_activity_at
+        # In-memory advanced on BOTH calls...
+        self.assertGreaterEqual(second_at, first_at)
+        # ...but save_state was called at most once (throttled).
+        self.assertLessEqual(self._save_mock.call_count, 1)
+
+    def test_persisted_and_restored(self):
+        """last_activity_at + last_activity survive a save/load round-trip."""
+        import json as _json
+        import tempfile
+        from pathlib import Path as _Path
+        st = self.harness.HarnessState()
+        agent = self.harness.AgentState(self.role, "/tmp/x")
+        agent.last_activity_at = 456.0
+        agent.last_activity = {"at": 456.0, "event": "PostToolUse", "tool": "Bash"}
+        st.agents[self.role] = agent
+        with tempfile.TemporaryDirectory() as d:
+            sf = _Path(d) / ".harness-state.json"
+            with patch.object(self.harness, "HARNESS_STATE_FILE", sf):
+                st.save_state()
+                raw = _json.loads(sf.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    raw["agents"][self.role]["last_activity_at"], 456.0)
+                st2 = self.harness.HarnessState()
+                st2.load_state()
+                self.assertEqual(st2.agents[self.role].last_activity_at, 456.0)
+                self.assertEqual(
+                    st2.agents[self.role].last_activity["tool"], "Bash")
+
+
 if __name__ == "__main__":
     unittest.main()

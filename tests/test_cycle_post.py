@@ -94,6 +94,19 @@ def _block_live_harness_egress(monkeypatch):
 
     monkeypatch.setattr(cycle_post.urllib.request, "urlopen", _guard)
 
+    # #12443: the step-8b cycle_post heartbeat calls activity_hook.post_activity,
+    # which has its OWN urllib (not cycle_post's) and would otherwise leak to the
+    # live harness on 7373 from any full-main() test (e.g.
+    # test_exits_on_context_pressure) — the same #12282 class. Neutralize the
+    # poster to a no-op by default; a test that wants to assert the heartbeat
+    # re-patches it inside its own body (overriding this).
+    try:
+        import activity_hook
+        monkeypatch.setattr(activity_hook, "post_activity",
+                            lambda *a, **k: False)
+    except ImportError:
+        pass
+
 
 # ---------------------------------------------------------------------------
 # Validation
@@ -519,6 +532,36 @@ class TestStopAfterCycleCheck:
     # test_legacy_restart_sentinel_still_works removed in #8918 — the
     # underlying function _do_restart_sentinel was deleted. Harness intent
     # API (#4966) is the sole restart authority.
+
+
+class TestActivityHeartbeat12443:
+    """#12443 AC3: cycle_post emits an activity heartbeat at cycle end (a
+    completed cycle is a liveness signal), reusing the liveness-aware port
+    discovery, and fail-open (telemetry must never break the cycle)."""
+
+    def test_emits_heartbeat_at_cycle_end(self, patch_dirs, squid_dir):
+        import activity_hook
+        # Re-patch over the autouse no-op to assert the call shape.
+        with patch.object(activity_hook, "post_activity") as m, \
+             patch.object(cycle_post, "_discover_harness_port", return_value=9999):
+            cycle_post._do_activity_heartbeat("skill")
+        m.assert_called_once()
+        args, kwargs = m.call_args
+        assert args[0] == "skill"
+        assert args[1] == "cycle_post"
+        assert kwargs.get("port") == 9999
+
+    def test_heartbeat_is_fail_open(self, patch_dirs, squid_dir):
+        """A telemetry failure (poster raises) must NOT propagate."""
+        import activity_hook
+        with patch.object(activity_hook, "post_activity",
+                          side_effect=RuntimeError("boom")):
+            cycle_post._do_activity_heartbeat("skill")  # must not raise
+
+    def test_heartbeat_import_error_is_fail_open(self, patch_dirs, squid_dir):
+        """Even if activity_hook can't be imported, the cycle continues."""
+        with patch.dict("sys.modules", {"activity_hook": None}):
+            cycle_post._do_activity_heartbeat("skill")  # must not raise
 
 
 class TestContextPressureRestartRouting:
