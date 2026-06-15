@@ -569,17 +569,19 @@ class HarnessState:
                         agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
                         _log(f"{role}: alive with new PID (stale intent={old_intent}), reset to running (#7637)")
-                elif agent.status == "crash-looping":
+                elif agent.status in ("crash-looping", "paused"):
                     # #12244 P2: a dead agent waiting out its backoff normally
                     # KEEPS the "crash-looping" status (preserved like
                     # "starting") so the resume branch below recognises it and
                     # operators see the real reason — instead of being
-                    # relabelled "unknown" on the next poll. BUT an operator
-                    # stop wins over a backoff: when intent is STOPPING/STOPPED,
-                    # abandon the wait and settle to "stopped" so the STOPPING
-                    # fulfillment below can finish it (otherwise a crash-looping
-                    # agent + /stop would wedge forever — neither is_dead nor
-                    # the resume branch fire for STOPPING intent).
+                    # relabelled "unknown" on the next poll. #12458: "paused"
+                    # (an explained-silence HOLD) is preserved the same way and
+                    # has its own resume branch below. BUT an operator stop wins
+                    # over either hold: when intent is STOPPING/STOPPED, abandon
+                    # the wait and settle to "stopped" so the STOPPING
+                    # fulfillment below can finish it (otherwise a held agent +
+                    # /stop would wedge forever — neither is_dead nor the resume
+                    # branch fire for STOPPING intent).
                     if agent.intent in (
                         AgentState.INTENT_STOPPING, AgentState.INTENT_STOPPED
                     ):
@@ -605,108 +607,163 @@ class HarnessState:
                     AgentState.INTENT_RUNNING,
                     AgentState.INTENT_RESTARTING,
                 )
-                if is_dead and was_alive and should_reboot:
-                    if _NO_AUTO_REBOOT:
-                        # #10538: observe-but-don't-respawn. State stays
-                        # honest (PID cleared, bootup gate reset) so the
-                        # next operator-driven `POST /agents/{role}/start`
-                        # behaves the same as a normal fresh spawn.
+                now = time.time()
+
+                # #12458 (#12271 slice c) — pause-aware guard. A death candidate
+                # is a FRESH death (PID died this poll) OR a previously-HELD
+                # "paused" agent still not alive. If a hook explains the silence
+                # (active_pause: mid-tool-call / compacting / waiting, each
+                # bounded by its staleness ceiling), HOLD instead of rebooting —
+                # re-evaluated every poll, released the moment the ceiling
+                # elapses (active_pause → None), after which the unexplained
+                # silence runs the normal death/backoff path. AC5: a genuine
+                # death with NO pause signal is unaffected (active_pause returns
+                # None immediately, so death_candidate falls straight through to
+                # the confirmed-death branch exactly as before #12458).
+                fresh_death = is_dead and was_alive
+                held = agent.status == "paused" and not alive
+                death_candidate = (fresh_death or held) and should_reboot
+                pause_reason = agent.active_pause(now) if death_candidate else None
+
+                if death_candidate and pause_reason is not None:
+                    # Explained silence → HOLD reboot (mirrors the crash-looping
+                    # hold: "paused" is preserved across polls by the status
+                    # block above and re-evaluated here each poll).
+                    if agent.status != "paused":
                         _log(
-                            f"[no-auto-reboot] {role} died; "
-                            f"intent={agent.intent}; not respawning per "
-                            f"SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT"
+                            f"{role}: dead/silent PID but '{pause_reason}' hook "
+                            f"active — holding off reboot (explained pause, "
+                            f"#12458)"
                         )
+                    agent.status = "paused"
+                    agent.claude_pid = None
+                    agent.bootup_complete = False
+                    state_changed = True
+                elif death_candidate and _NO_AUTO_REBOOT:
+                    # #10538: observe-but-don't-respawn. State stays
+                    # honest (PID cleared, bootup gate reset) so the
+                    # next operator-driven `POST /agents/{role}/start`
+                    # behaves the same as a normal fresh spawn.
+                    _log(
+                        f"[no-auto-reboot] {role} died; "
+                        f"intent={agent.intent}; not respawning per "
+                        f"SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT"
+                    )
+                    agent.claude_pid = None
+                    agent.bootup_complete = False
+                    state_changed = True
+                elif death_candidate and agent.stopfailure_backoff_due(now):
+                    # #12458 AC3d — the death coincides with a recent throttle
+                    # (rate_limit / overloaded). Respawning immediately would
+                    # re-hit the same limit, so back off via the crash-loop
+                    # timer (count it as a fast death so repeated throttles
+                    # escalate the wait) — NOT a tight respawn. Reuses the
+                    # crash-looping resume path below.
+                    agent.consecutive_fast_deaths += 1
+                    over = max(0, agent.consecutive_fast_deaths
+                               - FAST_DEATH_THRESHOLD)
+                    backoff = min(
+                        CRASH_BACKOFF_BASE_SECONDS * (2 ** over),
+                        CRASH_BACKOFF_CAP_SECONDS,
+                    )
+                    agent.reboot_blocked_until = now + backoff
+                    agent.status = "crash-looping"
+                    agent.claude_pid = None
+                    agent.bootup_complete = False
+                    state_changed = True
+                    sf = agent.last_stop_failure or {}
+                    _log(
+                        f"{role}: StopFailure cause={sf.get('cause')!r} "
+                        f"(throttle) — backing off {backoff:.0f}s before respawn "
+                        f"rather than re-hitting the limit (#12458)."
+                    )
+                elif death_candidate:
+                    # #12244 P2 — crash-loop / session-limit backoff. Count
+                    # back-to-back fast deaths; once they cross the
+                    # threshold, hold off the respawn (exponential, capped)
+                    # and surface a paused status instead of tight-looping
+                    # and burning quota.
+                    lifetime = (
+                        now - agent.last_spawn_at
+                        if agent.last_spawn_at is not None else None
+                    )
+                    # #12418 AC4 — graceful-vs-crash. A GRACEFUL exit (a
+                    # SessionEnd hook fired AFTER this spawn) is not a crash:
+                    # it must not accumulate the #12244 crash-loop streak, so
+                    # a legitimate cooperative restart is never throttled as
+                    # if it were a quota/startup crash. A CRASH (dead PID
+                    # with NO SessionEnd since last_spawn_at — the hook
+                    # couldn't run) still counts toward the streak → backoff.
+                    # The stale-SessionEnd case is handled by the
+                    # `>= last_spawn_at` guard: a prior spawn's SessionEnd
+                    # predates this spawn and reads as a crash. Augments the
+                    # PID path (AC6) — the respawn action itself is unchanged.
+                    se = agent.last_session_end
+                    # DS-REVIEW-12418-C F1: use `(se.get("at") or 0)` — a
+                    # `{"at": null}` from a hand-edited/corrupt state file
+                    # makes `.get("at", 0)` return None, and `None >= float`
+                    # raises TypeError, aborting the whole health poll.
+                    se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
+                    graceful = bool(
+                        agent.last_spawn_at is not None
+                        and se_at >= agent.last_spawn_at
+                    )
+                    if graceful:
+                        # #12418 AC4: a graceful exit is NOT a crash — do NOT
+                        # increment the streak. We deliberately do NOT reset
+                        # it to 0 either (DS-REVIEW-12418-C F2): a misbehaving
+                        # agent that POSTs SessionEnd then crashes must not be
+                        # able to ZERO accumulated real crashes and escape the
+                        # breaker. The legitimate reset is the survived-window
+                        # path above. (Residual: a pure SessionEnd-spammer can
+                        # still keep the streak from growing — a full
+                        # termination-correlation guard is a #12271 liveness
+                        # hardening follow-up; natural crash loops don't POST
+                        # SessionEnd, so the #12244 protection is intact.)
+                        _log(
+                            f"{role}: graceful exit (SessionEnd "
+                            f"reason={se.get('reason')!r}) — not counted as "
+                            f"a crash (streak stays "
+                            f"{agent.consecutive_fast_deaths}) (#12418)"
+                        )
+                    elif (lifetime is not None
+                            and lifetime < FAST_DEATH_WINDOW_SECONDS):
+                        agent.consecutive_fast_deaths += 1
+                    else:
+                        # Lived long enough (or no spawn record) — not a
+                        # crash loop; a one-off death reboots immediately.
+                        agent.consecutive_fast_deaths = 0
+
+                    if (agent.consecutive_fast_deaths
+                            >= FAST_DEATH_THRESHOLD):
+                        over = (agent.consecutive_fast_deaths
+                                - FAST_DEATH_THRESHOLD)
+                        backoff = min(
+                            CRASH_BACKOFF_BASE_SECONDS * (2 ** over),
+                            CRASH_BACKOFF_CAP_SECONDS,
+                        )
+                        agent.reboot_blocked_until = now + backoff
+                        agent.status = "crash-looping"
                         agent.claude_pid = None
                         agent.bootup_complete = False
                         state_changed = True
+                        _log(
+                            f"{role}: {agent.consecutive_fast_deaths} "
+                            f"consecutive fast deaths "
+                            f"(<{FAST_DEATH_WINDOW_SECONDS}s each) — "
+                            f"backing off {backoff:.0f}s before respawn "
+                            f"(status=crash-looping). Likely a Claude "
+                            f"session/usage limit or a startup crash; not "
+                            f"hammering the respawn."
+                        )
                     else:
-                        # #12244 P2 — crash-loop / session-limit backoff. Count
-                        # back-to-back fast deaths; once they cross the
-                        # threshold, hold off the respawn (exponential, capped)
-                        # and surface a paused status instead of tight-looping
-                        # and burning quota.
-                        now = time.time()
-                        lifetime = (
-                            now - agent.last_spawn_at
-                            if agent.last_spawn_at is not None else None
-                        )
-                        # #12418 AC4 — graceful-vs-crash. A GRACEFUL exit (a
-                        # SessionEnd hook fired AFTER this spawn) is not a crash:
-                        # it must not accumulate the #12244 crash-loop streak, so
-                        # a legitimate cooperative restart is never throttled as
-                        # if it were a quota/startup crash. A CRASH (dead PID
-                        # with NO SessionEnd since last_spawn_at — the hook
-                        # couldn't run) still counts toward the streak → backoff.
-                        # The stale-SessionEnd case is handled by the
-                        # `>= last_spawn_at` guard: a prior spawn's SessionEnd
-                        # predates this spawn and reads as a crash. Augments the
-                        # PID path (AC6) — the respawn action itself is unchanged.
-                        se = agent.last_session_end
-                        # DS-REVIEW-12418-C F1: use `(se.get("at") or 0)` — a
-                        # `{"at": null}` from a hand-edited/corrupt state file
-                        # makes `.get("at", 0)` return None, and `None >= float`
-                        # raises TypeError, aborting the whole health poll.
-                        se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
-                        graceful = bool(
-                            agent.last_spawn_at is not None
-                            and se_at >= agent.last_spawn_at
-                        )
-                        if graceful:
-                            # #12418 AC4: a graceful exit is NOT a crash — do NOT
-                            # increment the streak. We deliberately do NOT reset
-                            # it to 0 either (DS-REVIEW-12418-C F2): a misbehaving
-                            # agent that POSTs SessionEnd then crashes must not be
-                            # able to ZERO accumulated real crashes and escape the
-                            # breaker. The legitimate reset is the survived-window
-                            # path above. (Residual: a pure SessionEnd-spammer can
-                            # still keep the streak from growing — a full
-                            # termination-correlation guard is a #12271 liveness
-                            # hardening follow-up; natural crash loops don't POST
-                            # SessionEnd, so the #12244 protection is intact.)
-                            _log(
-                                f"{role}: graceful exit (SessionEnd "
-                                f"reason={se.get('reason')!r}) — not counted as "
-                                f"a crash (streak stays "
-                                f"{agent.consecutive_fast_deaths}) (#12418)"
-                            )
-                        elif (lifetime is not None
-                                and lifetime < FAST_DEATH_WINDOW_SECONDS):
-                            agent.consecutive_fast_deaths += 1
-                        else:
-                            # Lived long enough (or no spawn record) — not a
-                            # crash loop; a one-off death reboots immediately.
-                            agent.consecutive_fast_deaths = 0
-
-                        if (agent.consecutive_fast_deaths
-                                >= FAST_DEATH_THRESHOLD):
-                            over = (agent.consecutive_fast_deaths
-                                    - FAST_DEATH_THRESHOLD)
-                            backoff = min(
-                                CRASH_BACKOFF_BASE_SECONDS * (2 ** over),
-                                CRASH_BACKOFF_CAP_SECONDS,
-                            )
-                            agent.reboot_blocked_until = now + backoff
-                            agent.status = "crash-looping"
-                            agent.claude_pid = None
-                            agent.bootup_complete = False
-                            state_changed = True
-                            _log(
-                                f"{role}: {agent.consecutive_fast_deaths} "
-                                f"consecutive fast deaths "
-                                f"(<{FAST_DEATH_WINDOW_SECONDS}s each) — "
-                                f"backing off {backoff:.0f}s before respawn "
-                                f"(status=crash-looping). Likely a Claude "
-                                f"session/usage limit or a startup crash; not "
-                                f"hammering the respawn."
-                            )
-                        else:
-                            reboot_roles.append(role)
-                            agent.status = "starting"
-                            agent.claude_pid = None  # Clear stale PID
-                            # #8695: the replacement process needs to re-emit
-                            # bootup-complete before we'll dispatch events to it.
-                            agent.bootup_complete = False
-                            state_changed = True
+                        reboot_roles.append(role)
+                        agent.status = "starting"
+                        agent.claude_pid = None  # Clear stale PID
+                        # #8695: the replacement process needs to re-emit
+                        # bootup-complete before we'll dispatch events to it.
+                        agent.bootup_complete = False
+                        state_changed = True
 
                 # #12244 P2 — resume from crash-loop backoff once the window
                 # elapses. A paused ("crash-looping") agent is not is_dead and

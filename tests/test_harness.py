@@ -4248,6 +4248,141 @@ class TestPauseStateHelpers12458(unittest.TestCase):
         self.assertEqual(r.last_stop_failure, {"cause": "rate_limit", "at": 444.0})
 
 
+class TestPauseGuard12458(unittest.TestCase):
+    """#12458 (#12271 slice c): update_health's reboot decision is GUARDED — a
+    dead-PID agent is NOT rebooted while a hook explains the silence (in-flight /
+    waiting / compacting), and a recent throttle (StopFailure) backs off instead
+    of immediate respawn. AC5: a genuine death with NO pause signal still reboots
+    exactly as before."""
+
+    def _make_agent(self, status="running", **pause):
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/clone")
+        agent.status = status
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.claude_pid = 12345
+        agent.last_spawn_at = None  # avoid fast-death-window effects unless set
+        for k, v in pause.items():
+            setattr(agent, k, v)
+        hs.set_agent("skill", agent)
+        return hs, agent
+
+    def _run(self, hs, now):
+        """One update_health poll, claude PID dead. Returns the boot_agent mock."""
+        boot = patch("harness.boot_remote.boot_agent",
+                     return_value={"success": True, "terminal_pid": 999})
+        patches = [
+            patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path", return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive", return_value=False),
+            patch("harness.reboot_agent._read_claude_pid", return_value=(None, False)),
+            patch("harness.time.time", return_value=now),
+            patch("harness._log"),
+            patch.object(hs, "save_state"),
+        ]
+        boot_mock = boot.start()
+        for p in patches:
+            p.start()
+        try:
+            hs.update_health()
+        finally:
+            for p in patches:
+                p.stop()
+            boot.stop()
+        return boot_mock
+
+    # --- AC5: genuine death (no pause) still reboots ---
+    def test_genuine_death_no_pause_reboots(self):
+        now = 10_000.0
+        hs, _ = self._make_agent()
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+        self.assertEqual(hs.get_agent("skill").status, "starting")
+
+    # --- AC3a: in-flight within tool_call_max → HOLD ---
+    def test_in_flight_within_deadline_holds_reboot(self):
+        now = 10_000.0
+        hs, _ = self._make_agent(in_flight_until=now + 100)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "paused")
+
+    def test_in_flight_past_deadline_reboots(self):
+        """AC4: past tool_call_max (deadline elapsed) the agent IS wedged."""
+        now = 10_000.0
+        hs, _ = self._make_agent(in_flight_until=now - 1)
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+
+    # --- AC3b: waiting → HOLD ---
+    def test_waiting_holds_reboot(self):
+        now = 10_000.0
+        hs, _ = self._make_agent(waiting_since=now - 10)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "paused")
+
+    # --- AC3c: compacting → HOLD ---
+    def test_compacting_holds_reboot(self):
+        now = 10_000.0
+        hs, _ = self._make_agent(compacting_since=now - 10)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "paused")
+
+    # --- AC3d: StopFailure throttle → backoff, not immediate respawn ---
+    def test_stopfailure_rate_limit_backs_off(self):
+        from harness import CRASH_BACKOFF_BASE_SECONDS
+        now = 10_000.0
+        hs, _ = self._make_agent(
+            last_stop_failure={"cause": "rate_limit", "at": now - 5})
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        agent = hs.get_agent("skill")
+        self.assertEqual(agent.status, "crash-looping")
+        self.assertIsNotNone(agent.reboot_blocked_until)
+        self.assertGreater(agent.reboot_blocked_until, now)
+
+    def test_stale_stopfailure_does_not_backoff(self):
+        """An OLD StopFailure is not a current throttle → normal death path."""
+        from harness import STOP_FAILURE_RECENT_SECONDS
+        now = 10_000.0
+        hs, _ = self._make_agent(
+            last_stop_failure={"cause": "rate_limit",
+                               "at": now - (STOP_FAILURE_RECENT_SECONDS + 10)})
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")  # reboots as a normal death
+
+    # --- resume: a held agent whose ceiling has elapsed reboots ---
+    def test_held_agent_reboots_once_pause_clears(self):
+        now = 10_000.0
+        # already "paused", and its in-flight deadline is now in the past
+        hs, _ = self._make_agent(status="paused", in_flight_until=now - 1)
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+        self.assertEqual(hs.get_agent("skill").status, "starting")
+
+    def test_held_agent_stays_paused_while_pause_active(self):
+        now = 10_000.0
+        hs, _ = self._make_agent(status="paused", compacting_since=now - 10)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "paused")
+
+    # --- operator stop wins over a pause hold ---
+    def test_operator_stop_wins_over_pause(self):
+        from harness import AgentState
+        now = 10_000.0
+        hs, agent = self._make_agent(status="paused", in_flight_until=now + 100)
+        agent.intent = AgentState.INTENT_STOPPING
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        a = hs.get_agent("skill")
+        # settles to stopped (intent fulfilled), NOT held forever
+        self.assertEqual(a.intent, AgentState.INTENT_STOPPED)
+
+
 class TestActivityHook12443(unittest.TestCase):
     """#12443: POST /hooks/activity records the activity heartbeat
     (last_activity_at + enriched {event, tool, phase}) on AgentState, exposes it
