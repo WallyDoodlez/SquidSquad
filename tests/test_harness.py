@@ -3808,9 +3808,12 @@ class TestSessionEndHook12418(unittest.TestCase):
         self._roles.stop()
         self.harness.state.agents.pop(self.role, None)
 
+    def _hdr(self, role=None):
+        return {"X-Agent-Role": self.role if role is None else role}
+
     def test_records_reason_on_agentstate(self):
         resp = self.client.post(
-            f"/hooks/session-end/{self.role}",
+            "/hooks/session-end", headers=self._hdr(),
             json={"hook_event_name": "SessionEnd", "stop_reason": "other"})
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json().get("ok"))
@@ -3820,7 +3823,7 @@ class TestSessionEndHook12418(unittest.TestCase):
         self.assertIn("at", agent.last_session_end)
 
     def test_exposed_via_get_agent(self):
-        self.client.post(f"/hooks/session-end/{self.role}",
+        self.client.post("/hooks/session-end", headers=self._hdr(),
                          json={"stop_reason": "logout"})
         resp = self.client.get(f"/agents/{self.role}")
         self.assertEqual(resp.status_code, 200)
@@ -3829,23 +3832,30 @@ class TestSessionEndHook12418(unittest.TestCase):
         self.assertEqual(se["reason"], "logout")
 
     def test_missing_stop_reason_defaults_unknown(self):
-        resp = self.client.post(f"/hooks/session-end/{self.role}", json={})
+        resp = self.client.post("/hooks/session-end", headers=self._hdr(), json={})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
             self.harness.state.agents[self.role].last_session_end["reason"],
             "unknown")
 
     def test_malformed_body_is_fail_open(self):
-        resp = self.client.post(f"/hooks/session-end/{self.role}",
-                                content=b"not json",
-                                headers={"Content-Type": "application/json"})
+        resp = self.client.post(
+            "/hooks/session-end", content=b"not json",
+            headers={**self._hdr(), "Content-Type": "application/json"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
             self.harness.state.agents[self.role].last_session_end["reason"],
             "unknown")
 
+    def test_no_role_header_dropped_but_200(self):
+        resp = self.client.post("/hooks/session-end", json={"stop_reason": "other"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get("ok"))
+        self.assertEqual(resp.json().get("dropped"), "no-role")
+
     def test_unknown_role_dropped_but_200(self):
-        resp = self.client.post("/hooks/session-end/bogus-role",
+        resp = self.client.post("/hooks/session-end",
+                                headers=self._hdr("bogus-role"),
                                 json={"stop_reason": "other"})
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.json().get("ok"))
@@ -3857,7 +3867,7 @@ class TestSessionEndHook12418(unittest.TestCase):
         self._save.stop()  # replace with a raising stub
         with patch.object(self.harness.state, "save_state",
                                side_effect=OSError("disk full")):
-            resp = self.client.post(f"/hooks/session-end/{self.role}",
+            resp = self.client.post("/hooks/session-end", headers=self._hdr(),
                                     json={"stop_reason": "other"})
         self._save.start()  # restore so tearDown's stop() is balanced
         self.assertEqual(resp.status_code, 200)

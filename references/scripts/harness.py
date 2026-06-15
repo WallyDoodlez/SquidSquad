@@ -2059,27 +2059,35 @@ def _log_event(event: dict):
 # `type: http` hooks POST their payload here directly (no shell wrapper).
 # ---------------------------------------------------------------------------
 
-@app.post("/hooks/session-end/{role}")
-async def hook_session_end(role: str, request: Request):
+@app.post("/hooks/session-end")
+async def hook_session_end(request: Request):
     """#12418 — receive a Claude Code `SessionEnd` hook for an agent session.
 
-    The per-clone `settings.json` wires a native `type: http` SessionEnd hook
-    whose URL bakes in the role; Claude Code POSTs the SessionEnd payload here
-    (``{hook_event_name, session_id, stop_reason, ...}``). We record the
-    ``stop_reason`` + arrival time on AgentState — the PRESENCE of a record
-    stamped after ``last_spawn_at`` means the agent exited GRACEFULLY (a hook
-    ran); its ABSENCE before a dead PID means a crash. The reboot decision
-    (§7.4 / update_health) keys off that (#12418 AC4).
+    The git-tracked `.claude/settings.json` wires ONE native `type: http`
+    SessionEnd hook shared by every clone; it carries the agent's role in an
+    ``X-Agent-Role`` header interpolated from the ``$SQUIDSQUAD_ROLE`` env var
+    (set per-clone at spawn — thin_launcher / direct-spawn). Claude Code POSTs
+    the SessionEnd payload here (``{hook_event_name, session_id, stop_reason,
+    ...}``). We record the ``stop_reason`` + arrival time on AgentState — the
+    PRESENCE of a record stamped after ``last_spawn_at`` means the agent exited
+    GRACEFULLY (a hook ran); its ABSENCE before a dead PID means a crash. The
+    reboot decision (§7.4 / update_health) keys off that (#12418 AC4).
 
     Fail-open contract (HARNESS-ARCH §16.3): this endpoint ALWAYS returns 200
     quickly. A hook must never block or fail the agent's teardown, so we never
-    raise — a malformed body, unknown role, or write hiccup still answers 200.
+    raise — a malformed body, missing/unknown role, or write hiccup still
+    answers 200.
     """
+    role = (request.headers.get("X-Agent-Role") or "").strip()
     try:
         body = await request.json()
     except Exception:
         body = {}
     reason = (isinstance(body, dict) and body.get("stop_reason")) or "unknown"
+
+    if not role:
+        _log(f"SessionEnd hook DROPPED — no X-Agent-Role header (reason={reason!r})")
+        return JSONResponse(status_code=200, content={"ok": False, "dropped": "no-role"})
 
     # Defense-in-depth (mirrors receive_event #9242): ignore unknown roles so a
     # stray hook can't seed a ghost agent — but STILL 200 (fail-open).
