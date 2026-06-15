@@ -33,8 +33,21 @@
 - **#10025** (task, pending, low) — FULL capability-check framework retirement (absorbed #11505's scope). Mine once approved.
 - **#12416** (task, pending, low) — delete thin_launcher.py / direct spawn (HARNESS-ARCH §14).
 
+## Installer tasks (approved 2026-06-15, medium — fresh-cycle)
+- **#11613** — installer dependency auto-provisioning (gather-all → …).
+- **#12419** — installer migration-walk in wizard.py (INSTALLER-ARCH).
+- **#12420** — installer post-commit harness restart (INSTALLER-ARCH).
+
 ## Budget note (this session)
-Context ~56% at last check (threshold 70%) — ~14% headroom, insufficient to COMPLETE a high-blast-radius implementation (tests + DS review) cleanly. Deferring new implementation to a fresh cycle (post pressure-restart) is the budget+quality call, NOT avoidance. All deferred items carry pinned RCAs + fix designs on their issues. Fresh-cycle order: #12418 (slice 1, high) → #12409 ask-1 / #12397 / #12408 / #12363 (reboot-churn hardening) → #10690/#10686 (features).
+Context ~56% at last check (threshold 70%) — ~14% headroom, insufficient to COMPLETE a high-blast-radius implementation (tests + DS review) cleanly. Deferring new implementation to a fresh cycle is the budget+quality call, NOT avoidance — all deferred items carry pinned RCAs + fix designs on their issues. **Operator/pressure-restart gives a clean fresh cycle** (better than marathon-tail partials).
+
+**Fresh-cycle priority order:**
+1. **#12418** (slice 1, HIGH) — SessionEnd-reason hook (de-risks reboot decision).
+2. Reboot-churn hardening (open, high): #12409 ask-1 (freq breaker), #12408 (run_tests gate masking — fix EARLY, it hid my #12380 regression), #12397 (no-op recompose), #12363 (orphan kill-tree, design posted).
+3. #12271 further slices (#12419/#12420 are installer, not liveness — #12271 has more liveness slices coming).
+4. Installer batch: #11613, #12419, #12420 (medium).
+5. Features: #10690 (sub-skill — CQ+DS+compose), #10686 (V2 migration smoke, manual).
+6. Housekeeping: #10855 stale PR #10952 (close-as-superseded vs salvage — assess vs shipped #12342/#12380), #12294 (.claude-pid authority), #11716 (low).
 
 ## Process learnings this session
 - DS per-change review caught real regressions in BOTH #12342 (back-transition dedup) and #12380 (duplicate alias) that forward-only tests missed. Hold pending-test for DS on high-blast-radius.
