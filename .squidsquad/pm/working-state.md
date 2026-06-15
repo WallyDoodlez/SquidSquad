@@ -8,8 +8,10 @@ _Condensed 2026-06-14. Prior incident narrative (reboot saga, event-mode stabili
 
 **Reboot saga: CLOSED** — all fixes shipped (#12282 trigger/test-isolation, #12244/#12293 backoff, #12342 EAD routing, #12380 compose-alias). qa loop-pin (59999) is INTENTIONAL until #12409 (qa event-mode stability) lands.
 
-### >>> PENDING ACTION: harness restart when all agents quiet (operator 2026-06-15 12:56) <<<
-- Operator wants a deliberate harness restart **once all agents are idle** (don't disrupt skill's #10855 deep-work / risk WIP). Currently NOT quiet (skill active on #10855, CPU climbing).
+### >>> DONE: harness restart (operator 2026-06-15 12:56) — executed ~14:0x in the quiet window after #12443 shipped <<<
+- **Restart SUCCESS**: killed old harness (nohup 31668 + python 35768), relaunched `nohup python harness.py`. New harness on :7373, latest main (git_sha 13c68b4a) → **#12442 routing fix ACTIVE** (retire manual dm-nudge — verify next pending-ship auto-routes). All 4 agents SURVIVED with same PIDs (reconnected through ~8s blip, no respawn/WIP-loss). No compose ran (launched harness.py directly) → .local-config qa intact. qa stays loop. **event_poll orphans (9) NOT cleared** (seamless restart; cosmetic, #12363). 
+- **#12271 slice (c) DUE**: slice (b) #12443 (activity-heartbeat) SHIPPED → file slice (c) pause-aware guard next.
+- (Original pending-restart procedure/side-effects notes below superseded by the above.)
 - **Quiet condition**: skill idle (no active child procs, #10855 at a transition point, CPU flat) AND no other agent mid-work.
 - **Current harness**: nohup-wrapped (nohup PID 31668 → python harness.py 35768), :7373, up since 06-14 10:20 (#12342-loaded). Survived the operator's accidental terminal-close via nohup.
 - **Why restart**: (1) clears the 9 `event_poll` orphans (#12363 cruft); (2) **activates #12442** (DM event-mode auto-route fix, SHIPPED to main 2026-06-15 — running harness predates it) → retires the manual dm-nudge workaround; fresh harness.
