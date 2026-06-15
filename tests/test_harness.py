@@ -3775,5 +3775,116 @@ class TestCloneResolutionRefusal(unittest.TestCase):
         self.assertIsNone(st.agents["skill"].terminal_pid)
 
 
+# ---------------------------------------------------------------------------
+# SessionEnd hook ingestion — #12418 (HARNESS-ARCH §15.4 / §16)
+# ---------------------------------------------------------------------------
+
+class TestSessionEndHook12418(unittest.TestCase):
+    """#12418 AC3: POST /hooks/session-end/{role} records the SessionEnd
+    reason on AgentState (the graceful-exit signal), persists it, exposes it
+    via GET /agents/{role}, and is fail-open (always 200 — a hook must never
+    block/fail an agent's teardown)."""
+
+    def setUp(self):
+        import harness
+        from fastapi.testclient import TestClient
+        self.harness = harness
+        self.client = TestClient(harness.app, raise_server_exceptions=False)
+        harness.state.start_time = time.time()
+        self.role = "skill"
+        self._roles = patch.object(
+            harness.boot_remote, "_get_all_roles", return_value=[self.role])
+        self._roles.start()
+        self._save = patch.object(harness.state, "save_state")
+        self._save.start()
+        # GET /agents/{role} runs update_health (PID checks) — neutralize it.
+        self._uh = patch.object(harness.state, "update_health")
+        self._uh.start()
+        harness.state.agents.pop(self.role, None)
+
+    def tearDown(self):
+        self._uh.stop()
+        self._save.stop()
+        self._roles.stop()
+        self.harness.state.agents.pop(self.role, None)
+
+    def test_records_reason_on_agentstate(self):
+        resp = self.client.post(
+            f"/hooks/session-end/{self.role}",
+            json={"hook_event_name": "SessionEnd", "stop_reason": "other"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get("ok"))
+        agent = self.harness.state.agents.get(self.role)
+        self.assertIsNotNone(agent)
+        self.assertEqual(agent.last_session_end["reason"], "other")
+        self.assertIn("at", agent.last_session_end)
+
+    def test_exposed_via_get_agent(self):
+        self.client.post(f"/hooks/session-end/{self.role}",
+                         json={"stop_reason": "logout"})
+        resp = self.client.get(f"/agents/{self.role}")
+        self.assertEqual(resp.status_code, 200)
+        se = resp.json().get("last_session_end")
+        self.assertIsNotNone(se)
+        self.assertEqual(se["reason"], "logout")
+
+    def test_missing_stop_reason_defaults_unknown(self):
+        resp = self.client.post(f"/hooks/session-end/{self.role}", json={})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            self.harness.state.agents[self.role].last_session_end["reason"],
+            "unknown")
+
+    def test_malformed_body_is_fail_open(self):
+        resp = self.client.post(f"/hooks/session-end/{self.role}",
+                                content=b"not json",
+                                headers={"Content-Type": "application/json"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            self.harness.state.agents[self.role].last_session_end["reason"],
+            "unknown")
+
+    def test_unknown_role_dropped_but_200(self):
+        resp = self.client.post("/hooks/session-end/bogus-role",
+                                json={"stop_reason": "other"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get("ok"))
+        self.assertNotIn("bogus-role", self.harness.state.agents)
+
+    def test_save_failure_is_fail_open(self):
+        """Even if persistence raises, the hook still answers 200 — never
+        block teardown."""
+        self._save.stop()  # replace with a raising stub
+        with patch.object(self.harness.state, "save_state",
+                               side_effect=OSError("disk full")):
+            resp = self.client.post(f"/hooks/session-end/{self.role}",
+                                    json={"stop_reason": "other"})
+        self._save.start()  # restore so tearDown's stop() is balanced
+        self.assertEqual(resp.status_code, 200)
+
+    def test_persisted_and_restored(self):
+        """last_session_end survives a save_state/load_state round-trip."""
+        import json as _json
+        import tempfile
+        from pathlib import Path as _Path
+        st = self.harness.HarnessState()
+        agent = self.harness.AgentState(self.role, "/tmp/x")
+        agent.last_session_end = {"reason": "other", "at": 123.0}
+        st.agents[self.role] = agent
+        with tempfile.TemporaryDirectory() as d:
+            sf = _Path(d) / ".harness-state.json"
+            with patch.object(self.harness, "HARNESS_STATE_FILE", sf):
+                st.save_state()
+                raw = _json.loads(sf.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    raw["agents"][self.role]["last_session_end"],
+                    {"reason": "other", "at": 123.0})
+                st2 = self.harness.HarnessState()
+                st2.load_state()
+                self.assertEqual(
+                    st2.agents[self.role].last_session_end,
+                    {"reason": "other", "at": 123.0})
+
+
 if __name__ == "__main__":
     unittest.main()

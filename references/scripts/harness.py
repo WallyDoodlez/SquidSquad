@@ -158,7 +158,9 @@ class AgentState:
                  "last_cycle_end", "last_cycle_type", "bootup_complete",
                  # #12244 P2 — crash-loop / session-limit backoff
                  "last_spawn_at", "consecutive_fast_deaths",
-                 "reboot_blocked_until")
+                 "reboot_blocked_until",
+                 # #12418 — last SessionEnd hook reason (graceful-exit signal)
+                 "last_session_end")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -203,6 +205,13 @@ class AgentState:
         self.last_spawn_at = None
         self.consecutive_fast_deaths = 0
         self.reboot_blocked_until = None
+        # #12418 — last SessionEnd hook report: {"reason": <stop_reason>,
+        # "at": <epoch>}, or None if no SessionEnd seen since boot. The
+        # PRESENCE of an entry stamped after last_spawn_at means the agent
+        # exited GRACEFULLY (a hook ran); its ABSENCE before a dead PID means
+        # a crash. The reboot decision (update_health) keys off that to avoid
+        # counting graceful exits toward the #12244 crash-loop streak.
+        self.last_session_end = None
 
     def to_dict(self):
         return {
@@ -225,6 +234,8 @@ class AgentState:
             "last_spawn_at": self.last_spawn_at,
             "consecutive_fast_deaths": self.consecutive_fast_deaths,
             "reboot_blocked_until": self.reboot_blocked_until,
+            # #12418 — last SessionEnd hook reason (graceful-exit signal)
+            "last_session_end": self.last_session_end,
         }
 
 
@@ -840,6 +851,9 @@ class HarnessState:
                         "last_spawn_at": a.last_spawn_at,
                         "consecutive_fast_deaths": a.consecutive_fast_deaths,
                         "reboot_blocked_until": a.reboot_blocked_until,
+                        # #12418 — persist last SessionEnd reason so the
+                        # graceful-vs-crash signal survives a harness restart.
+                        "last_session_end": a.last_session_end,
                     }
                     for role, a in self.agents.items()
                 },
@@ -927,6 +941,9 @@ class HarnessState:
                 agent.consecutive_fast_deaths = agent_data.get(
                     "consecutive_fast_deaths", 0) or 0
                 agent.reboot_blocked_until = agent_data.get("reboot_blocked_until")
+                # #12418 — restore last SessionEnd reason (defaults None for
+                # older state files / fresh agents).
+                agent.last_session_end = agent_data.get("last_session_end")
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -2035,6 +2052,58 @@ def _log_event(event: dict):
         detail = payload.get("phase", "")
 
     print(f"[{ts}] {role:<6} {event_type:<18} {detail}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Agent observability hooks (#12418 / HARNESS-ARCH §16) — native Claude Code
+# `type: http` hooks POST their payload here directly (no shell wrapper).
+# ---------------------------------------------------------------------------
+
+@app.post("/hooks/session-end/{role}")
+async def hook_session_end(role: str, request: Request):
+    """#12418 — receive a Claude Code `SessionEnd` hook for an agent session.
+
+    The per-clone `settings.json` wires a native `type: http` SessionEnd hook
+    whose URL bakes in the role; Claude Code POSTs the SessionEnd payload here
+    (``{hook_event_name, session_id, stop_reason, ...}``). We record the
+    ``stop_reason`` + arrival time on AgentState — the PRESENCE of a record
+    stamped after ``last_spawn_at`` means the agent exited GRACEFULLY (a hook
+    ran); its ABSENCE before a dead PID means a crash. The reboot decision
+    (§7.4 / update_health) keys off that (#12418 AC4).
+
+    Fail-open contract (HARNESS-ARCH §16.3): this endpoint ALWAYS returns 200
+    quickly. A hook must never block or fail the agent's teardown, so we never
+    raise — a malformed body, unknown role, or write hiccup still answers 200.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    reason = (isinstance(body, dict) and body.get("stop_reason")) or "unknown"
+
+    # Defense-in-depth (mirrors receive_event #9242): ignore unknown roles so a
+    # stray hook can't seed a ghost agent — but STILL 200 (fail-open).
+    try:
+        allowed = set(boot_remote._get_all_roles()) | {"pm"}
+    except (SystemExit, Exception):
+        allowed = None
+    if allowed is not None and role not in allowed:
+        _log(f"SessionEnd hook DROPPED unknown role={role!r} (reason={reason!r})")
+        return JSONResponse(status_code=200, content={"ok": False, "dropped": "unknown-role"})
+
+    with state._lock:
+        agent = state.agents.get(role)
+        if agent is None:
+            agent = AgentState(role)
+            state.agents[role] = agent
+        agent.last_session_end = {"reason": reason, "at": time.time()}
+    # Persist off the event loop; swallow any error (fail-open).
+    try:
+        await asyncio.to_thread(state.save_state)
+    except Exception as e:  # pragma: no cover — defensive
+        _log(f"{role}: SessionEnd save_state failed (non-fatal): {e}")
+    _log(f"{role}: SessionEnd reason={reason!r} recorded (#12418)")
+    return JSONResponse(status_code=200, content={"ok": True})
 
 
 # ---------------------------------------------------------------------------
