@@ -5,8 +5,11 @@
 - **Updated**: 2026-06-15 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
-## Just shipped to QA
-- **#12418** → **PASSED QA → pending-ship** (PR #12441) but **stuck**: pending-ship→dm not waking DM (see #12442). A manual DM nudge ships it.
+## >>> ON RESUME (context-pressure restart at 80%, clean boundary 2026-06-15) <<<
+Operator directive (06-15, on #12418) stands: **proceed with the approved queue, WIP-safe (commit incrementally + checkpoint every step), DS-review-per-change.** Fresh-cycle pickup order: **#12442** (dm-routing gap — fast/high-value) → **#12363** (/T teardown, design posted) → #12409 ask-1 → #12408 → #12397 → installer batch (#11613/#12419/#12420 serial) → #10690/#10686. Got a SPURIOUS restart-required (#12397 no-op-recompose; CLAUDE.md unchanged) — restart taken for the 80% context, not the recompose.
+
+## Shipped to QA / SHIPPED
+- **#12418** → **SHIPPED** (PR #12441 merged) — SessionEnd-reason hook (#12271 liveness slice 1). 3 DS-reviewed components; C review caught a None-TypeError + breaker-bypass (fixed). Vault: [[learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker]].
 - **#12442** (NEW, open, medium, mine) — #12342 EAD gap: pending-ship→dm single-emit; if DM misses the one nudge there's no re-emit (same single-delivery limit as back-transitions). #12380 shipped fine (routing works), so likely emitted-but-missed → fix = delivery-robustness (re-emit cadence for unhandled pending-* / DM idle-rescan). **Fresh-cycle pickup** (don't debug EAD at 79% ctx).
 - (orig) **#12418** → pending-test (PR #12441). SessionEnd-reason hook (#12271 slice 1). 3 components, each DS-reviewed: A (compose+settings.json native type:http hook, role via X-Agent-Role header from $SQUIDSQUAD_ROLE), B (harness ingest — NO_FINDINGS), C (reboot decision graceful-vs-crash; **DS caught a None-TypeError ERROR + a crash-loop-breaker bypass** → graceful no longer resets the streak, last_session_end cleared on all spawn paths). ~30 tests; full suite green (pytest exit codes). Endpoint header-based /hooks/session-end (PM affirmed shape). AC1 verifies by RUNNING compose. Residual deliberate-spam gap → #12271 hardening. DS-REVIEW-12418-{A,B,C}.md on main. Vault: [[learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker]].
 
