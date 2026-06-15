@@ -65,6 +65,14 @@ EXPECTED_CALLERS = {
     ("GET",  "/human/queue"):                   _EXTERNAL,
     ("POST", "/shutdown"):                      ["squidsquad_cli"],
     ("POST", "/merge"):                         _EXTERNAL,
+    # #12418 — SessionEnd telemetry hook: POSTed only by Claude Code's native
+    # type:http hook wired in .claude/settings.json (no in-repo Python caller).
+    ("POST", "/hooks/session-end"):             _EXTERNAL,
+    # #12443 — activity heartbeat: POSTed by activity_hook.py (the PostToolUse/
+    # PostToolUseFailure command-hook entrypoint AND the post_activity() poster
+    # that cycle_post imports). activity_hook is the module that literally holds
+    # the route path; cycle_post reaches it via post_activity(), not a literal.
+    ("POST", "/hooks/activity"):                ["activity_hook"],
 }
 
 
