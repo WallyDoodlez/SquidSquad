@@ -8,7 +8,21 @@
 ## >>> ON RESUME (fresh-cycle pickup order) <<<
 **#12443 → SHIPPED + CLOSED (PR #12457 merged)** — #12271 slice b activity heartbeat (PostToolUse/PostToolUseFailure async-command hooks + cycle_post → harness /hooks/activity → AgentState.last_activity_at, throttled disk write). Observational only (AC5). DS: harness 1-warn-fixed, emitters NO_FINDINGS. Also closed slice-1's latent /hooks/session-end route-contract gap (#12408 masking hid it). **§16 doc-sync flagged to @pm** (native-http only for low-freq/teardown; high-freq telemetry = async command hooks). Vault: [[learning-claude-code-http-hooks-block-only-command-hooks-async]].
 **#12442 → SHIPPED + CLOSED (PR #12444 merged)** — EAD handoff re-emit. Vault: [[learning-single-emit-wake-nudge-needs-bounded-reemit-and-must-bypass-time-filter]].
-**Both shipped this session.** Next #12271 liveness slices NOT yet filed/approved: slice c (pause-aware guard: Notification/PreToolUse/StopFailure), slice d (retire PID-poll, consume heartbeat). Watch for them.
+**Both shipped this session.**
+
+## >>> TOP FRESH-CYCLE PICKUP: #12458 (#12271 slice c — pause-aware guard) — APPROVED, role:skill, HIGH <<<
+**Deferred to a FRESH context window on purpose** (build-at-low-context discipline): unlike slices a/b which were OBSERVATIONAL (record-only), slice c **MODIFIES THE REBOOT DECISION** (update_health / #12244 backoff / PID-death path) — highest-blast-radius harness code (the reboot-churn cluster's core; cf. #12418-C where DS caught a breaker-bypass). Do NOT build it at a long-session tail.
+
+**Front-loaded plan (context warm from slices a/b — reuse, don't re-derive):**
+- **Hooks (compose):** add PreToolUse + Notification + PreCompact + StopFailure to settings.json via the SAME `_ensure_hook_entries` helper I built (#12443). PreToolUse CAN block → MUST be async command hook (NOT http) — same lesson as [[learning-claude-code-http-hooks-block-only-command-hooks-async]]. Notification/PreCompact/StopFailure are low-freq → http is OK (but verify each can't block harmfully). Extend activity_hook.py OR a sibling poster; new harness endpoint(s) e.g. /hooks/pause (mirror /hooks/activity: X-Agent-Role, fail-open, unknown-role drop, throttle if hot).
+- **Harness records pause state** on AgentState: in_flight tool-call + tool_call_max deadline (PreToolUse sets; PostToolUse from #12443 CLEARS it — wire the clear), waiting (Notification), compacting (PreCompact, cleared by PostCompact), last StopFailure cause. New __slots__ + to_dict + save/load + route-contract manifest entries (don't repeat the #12443 orphan-route miss!).
+- **GUARD update_health (AC3, the sensitive part):** before the dead-PID/silence→reboot decision, suppress reboot if a pause signal active: (a) mid-tool-call within tool_call_max → suspend death timeout; (b) Notification-waiting → not dead; (c) compacting → not dead; (d) StopFailure rate_limit/overloaded → BACK OFF via the #12244 backoff (reboot_blocked_until), not tight respawn. AC5: genuinely-dead (PID dead + NO pause signal) still reboots exactly as today — regression-test this hard.
+- **tool_call_max** = hard ceiling above longest legit single call (full suite run, slow build, long subagent). Open Q in §15.7 — pick a generous default (e.g. 600-900s), make configurable.
+- DS-review-per-change MANDATORY (reboot decision). Tests per guard branch (AC6): in-flight, waiting, compacting, rate-limit-backoff, genuine-death.
+- Design refs: HARNESS-ARCH §15.1 + §16.2. Builds on slice-b last_activity_at.
+- **Next after c:** slice (d) retire PID-poll (the cutover — consumes heartbeat + this guard, removes #10101/#10440 from liveness path). PM files (d) when (c) lands.
+
+Then the rest of the queue: #12363 (/T teardown + killpg) → #12409 ask-1 → #12408 (fix EARLY) → #12397 → installer batch (#11613/#12419/#12420) → #10690/#10686.
 Next pickup order: **#12363** (/T teardown + killpg, design posted) → #12409 ask-1 → #12408 (fix EARLY — its masking hid the route-contract gap) → #12397 → installer batch (#11613/#12419/#12420 serial) → #10690/#10686.
 NOTE: a restart-required (recompose, .squidsquad/skill/CLAUDE.md changed) was acked but deferred — context healthy; honor at next clean boundary if it recurs.
 Operator directive (06-15) stands: **proceed WIP-safe (commit incrementally + checkpoint every step), DS-review-per-change.**
