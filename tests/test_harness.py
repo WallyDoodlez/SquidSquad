@@ -824,6 +824,88 @@ class TestCrashLoopBackoff(unittest.TestCase):
                 self.assertEqual(loaded.consecutive_fast_deaths, 4)
                 self.assertEqual(loaded.reboot_blocked_until, 456.0)
 
+    # --- #12418 AC4: SessionEnd graceful-vs-crash refinement ---
+
+    def _set_session_end(self, hs, at, reason="other", role="skill"):
+        hs.get_agent(role).last_session_end = {"reason": reason, "at": at}
+
+    def test_graceful_exit_not_counted_toward_streak(self):
+        """#12418 AC4: a GRACEFUL exit (SessionEnd stamped AFTER last_spawn) at
+        threshold-minus-one must NOT trip the crash-loop breaker — it does not
+        increment the streak, so it respawns immediately instead of backing off."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        self._set_session_end(hs, at=now - 5)  # after spawn (now-10) → graceful
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")  # respawned, NOT backed off
+        agent = hs.get_agent("skill")
+        # Not-incremented (DS-C F2: NOT reset to 0 — so accumulated real crashes
+        # aren't zeroable by a SessionEnd-spammer); stays below threshold.
+        self.assertEqual(agent.consecutive_fast_deaths, FAST_DEATH_THRESHOLD - 1)
+        self.assertNotEqual(agent.status, "crash-looping")
+
+    def test_graceful_does_not_reset_accumulated_crashes(self):
+        """DS-REVIEW-12418-C F2 guard: a graceful death must NOT zero an
+        accumulated streak — otherwise a SessionEnd-spammer could escape the
+        breaker. After a graceful death at streak N, the very next CRASH
+        increments to N+1 and (if that crosses the threshold) backs off."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        self._set_session_end(hs, at=now - 5)  # graceful
+        self._run(hs, now)  # respawn; streak still THRESHOLD-1
+        agent = hs.get_agent("skill")
+        # Now a real crash (no fresh SessionEnd — the spawn cleared it) crosses
+        # the threshold → backoff. (The reboot loop re-stamped last_spawn_at to
+        # `now`; advance the clock so the next death is still "fast".)
+        agent.status = "running"
+        agent.claude_pid = 12345
+        boot2 = self._run(hs, now + 5)
+        boot2.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
+
+    def test_sessionend_at_none_does_not_crash(self):
+        """DS-REVIEW-12418-C F1: a {"at": null} entry (from a corrupt/hand-edited
+        state file) must NOT raise TypeError in the graceful check — it is
+        treated as a crash and update_health completes normally."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        hs.get_agent("skill").last_session_end = {"reason": "x", "at": None}
+        boot = self._run(hs, now)  # must not raise
+        boot.assert_not_called()  # treated as crash → backoff
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
+
+    def test_crash_no_sessionend_still_backs_off(self):
+        """No SessionEnd (a real crash — the hook couldn't run) at
+        threshold-minus-one still trips the breaker. The graceful path must not
+        weaken crash protection (AC6 — PID path unchanged for crashes)."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        # last_session_end stays None (crash).
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
+
+    def test_stale_sessionend_treated_as_crash(self):
+        """A SessionEnd from a PRIOR spawn (at < last_spawn_at) is NOT graceful
+        for the current death — the >= last_spawn_at guard treats it as a crash
+        and still backs off."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        self._set_session_end(hs, at=now - 50)  # BEFORE last_spawn_at → stale
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
+
 
 class TestRestartLifecycle(unittest.TestCase):
     """#11538: update_health must not undo an in-flight RESTARTING intent.
@@ -3773,6 +3855,136 @@ class TestCloneResolutionRefusal(unittest.TestCase):
         self.assertEqual(st.agents["skill"].status, "error")
         # Refused boot left no terminal pid behind.
         self.assertIsNone(st.agents["skill"].terminal_pid)
+
+
+# ---------------------------------------------------------------------------
+# SessionEnd hook ingestion — #12418 (HARNESS-ARCH §15.4 / §16)
+# ---------------------------------------------------------------------------
+
+class TestSessionEndHook12418(unittest.TestCase):
+    """#12418 AC3: POST /hooks/session-end/{role} records the SessionEnd
+    reason on AgentState (the graceful-exit signal), persists it, exposes it
+    via GET /agents/{role}, and is fail-open (always 200 — a hook must never
+    block/fail an agent's teardown)."""
+
+    def setUp(self):
+        import harness
+        from fastapi.testclient import TestClient
+        self.harness = harness
+        self.client = TestClient(harness.app, raise_server_exceptions=False)
+        harness.state.start_time = time.time()
+        self.role = "skill"
+        self._roles = patch.object(
+            harness.boot_remote, "_get_all_roles", return_value=[self.role])
+        self._roles.start()
+        self._save = patch.object(harness.state, "save_state")
+        self._save.start()
+        # GET /agents/{role} runs update_health (PID checks) — neutralize it.
+        self._uh = patch.object(harness.state, "update_health")
+        self._uh.start()
+        harness.state.agents.pop(self.role, None)
+
+    def tearDown(self):
+        self._uh.stop()
+        self._save.stop()
+        self._roles.stop()
+        self.harness.state.agents.pop(self.role, None)
+
+    def _hdr(self, role=None):
+        return {"X-Agent-Role": self.role if role is None else role}
+
+    def test_records_reason_on_agentstate(self):
+        resp = self.client.post(
+            "/hooks/session-end", headers=self._hdr(),
+            json={"hook_event_name": "SessionEnd", "stop_reason": "other"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json().get("ok"))
+        agent = self.harness.state.agents.get(self.role)
+        self.assertIsNotNone(agent)
+        self.assertEqual(agent.last_session_end["reason"], "other")
+        self.assertIn("at", agent.last_session_end)
+
+    def test_exposed_via_get_agent(self):
+        self.client.post("/hooks/session-end", headers=self._hdr(),
+                         json={"stop_reason": "logout"})
+        resp = self.client.get(f"/agents/{self.role}")
+        self.assertEqual(resp.status_code, 200)
+        se = resp.json().get("last_session_end")
+        self.assertIsNotNone(se)
+        self.assertEqual(se["reason"], "logout")
+
+    def test_missing_stop_reason_defaults_unknown(self):
+        resp = self.client.post("/hooks/session-end", headers=self._hdr(), json={})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            self.harness.state.agents[self.role].last_session_end["reason"],
+            "unknown")
+
+    def test_malformed_body_is_fail_open(self):
+        resp = self.client.post(
+            "/hooks/session-end", content=b"not json",
+            headers={**self._hdr(), "Content-Type": "application/json"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(
+            self.harness.state.agents[self.role].last_session_end["reason"],
+            "unknown")
+
+    def test_no_role_header_dropped_but_200(self):
+        resp = self.client.post("/hooks/session-end", json={"stop_reason": "other"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get("ok"))
+        self.assertEqual(resp.json().get("dropped"), "no-role")
+
+    def test_uninterpolated_env_var_role_is_no_role(self):
+        """#12418 F5: if $SQUIDSQUAD_ROLE was unset, Claude Code sends the
+        literal '${SQUIDSQUAD_ROLE}' — treat it as no-role (not unknown-role)."""
+        resp = self.client.post("/hooks/session-end",
+                                headers=self._hdr("${SQUIDSQUAD_ROLE}"),
+                                json={"stop_reason": "other"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json().get("dropped"), "no-role")
+
+    def test_unknown_role_dropped_but_200(self):
+        resp = self.client.post("/hooks/session-end",
+                                headers=self._hdr("bogus-role"),
+                                json={"stop_reason": "other"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.json().get("ok"))
+        self.assertNotIn("bogus-role", self.harness.state.agents)
+
+    def test_save_failure_is_fail_open(self):
+        """Even if persistence raises, the hook still answers 200 — never
+        block teardown."""
+        self._save.stop()  # replace with a raising stub
+        with patch.object(self.harness.state, "save_state",
+                               side_effect=OSError("disk full")):
+            resp = self.client.post("/hooks/session-end", headers=self._hdr(),
+                                    json={"stop_reason": "other"})
+        self._save.start()  # restore so tearDown's stop() is balanced
+        self.assertEqual(resp.status_code, 200)
+
+    def test_persisted_and_restored(self):
+        """last_session_end survives a save_state/load_state round-trip."""
+        import json as _json
+        import tempfile
+        from pathlib import Path as _Path
+        st = self.harness.HarnessState()
+        agent = self.harness.AgentState(self.role, "/tmp/x")
+        agent.last_session_end = {"reason": "other", "at": 123.0}
+        st.agents[self.role] = agent
+        with tempfile.TemporaryDirectory() as d:
+            sf = _Path(d) / ".harness-state.json"
+            with patch.object(self.harness, "HARNESS_STATE_FILE", sf):
+                st.save_state()
+                raw = _json.loads(sf.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    raw["agents"][self.role]["last_session_end"],
+                    {"reason": "other", "at": 123.0})
+                st2 = self.harness.HarnessState()
+                st2.load_state()
+                self.assertEqual(
+                    st2.agents[self.role].last_session_end,
+                    {"reason": "other", "at": 123.0})
 
 
 if __name__ == "__main__":

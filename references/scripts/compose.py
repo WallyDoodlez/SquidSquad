@@ -1792,6 +1792,71 @@ def generate_local_config(roles: list, target_root: Path = None,
 
 
 
+# #12418 — the SessionEnd telemetry hook (HARNESS-ARCH §16). A native Claude
+# Code `type: http` hook that POSTs the SessionEnd payload to the harness; the
+# agent's role rides the X-Agent-Role header, interpolated per-clone from the
+# $SQUIDSQUAD_ROLE env var (set at spawn), so ONE committed .claude/settings.json
+# serves every clone. Fail-open by design (HTTP hooks never block; the short
+# timeout bounds the call). Port is the harness default 7373 — if the harness
+# runs on a non-default port the POST fails-open (no record → reboot decision
+# treats the exit as a crash, the safe default); a dynamic-port variant is a
+# later #12271 hardening slice.
+_SESSION_END_HOOK_URL = "http://127.0.0.1:7373/hooks/session-end"
+
+
+def _session_end_hook_group() -> dict:
+    """Return a fresh SessionEnd matcher-group (new objects each call so callers
+    never alias a shared mutable)."""
+    return {
+        "matcher": "",
+        "hooks": [{
+            "type": "http",
+            "url": _SESSION_END_HOOK_URL,
+            "timeout": 5,
+            "headers": {"X-Agent-Role": "${SQUIDSQUAD_ROLE}"},
+            "allowedEnvVars": ["SQUIDSQUAD_ROLE"],
+        }],
+    }
+
+
+def _ensure_session_end_hook(settings_path) -> bool:
+    """#12418 — idempotently ensure the SessionEnd hook is present in
+    ``.claude/settings.json``. Returns True iff the file was changed.
+
+    Preserves every other key (statusLine, permissions, other hooks); only the
+    ``hooks.SessionEnd`` entry is (re)set to the canonical group. Idempotent:
+    if the entry already matches, nothing is written — so a recompose does not
+    churn the tracked file (avoids the #12397 no-op-write class). A
+    missing/corrupt file is treated as empty and (re)written.
+    """
+    settings_path = Path(settings_path)
+    data = {}
+    if settings_path.exists():
+        try:
+            data = json.loads(settings_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                data = {}
+        except (OSError, json.JSONDecodeError):
+            data = {}
+    before = json.dumps(data, sort_keys=True)
+    hooks = data.get("hooks")
+    if not isinstance(hooks, dict):
+        # DS-REVIEW-12418-A F3: a valid-JSON file whose `hooks` is the wrong
+        # type (list/string/null) is replaced. Surface it if it held content,
+        # so the (rare, Claude-Code-invalid) data loss isn't silent.
+        if hooks:
+            print(f"WARNING: .claude/settings.json `hooks` was "
+                  f"{type(hooks).__name__}, not an object — replacing "
+                  f"(prior hooks dropped): {settings_path}", file=sys.stderr)
+        hooks = data["hooks"] = {}
+    hooks["SessionEnd"] = [_session_end_hook_group()]
+    if json.dumps(data, sort_keys=True) == before:
+        return False
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return True
+
+
 MANDATORY_ROLES = {"pm", "verifier", "dm"}  # #6055/#6274: always present (qa→verifier per D5)
 
 
@@ -2067,6 +2132,12 @@ def main():
         alias_roles = _aliases_for_roles(roles)
         lc = generate_local_config(alias_roles)
         print(f"  .local-config: {len(alias_roles)} agents -> {lc.relative_to(REPO_ROOT)}")
+        # #12418 — ensure the SessionEnd telemetry hook is in the committed
+        # .claude/settings.json (HARNESS-ARCH §16). Idempotent: writes only on
+        # change, so it never churns the tracked file on a no-op recompose.
+        se_settings = REPO_ROOT / ".claude" / "settings.json"
+        if _ensure_session_end_hook(se_settings):
+            print(f"  SessionEnd hook -> {se_settings.relative_to(REPO_ROOT)}")
 
     elif cmd == "upgrade-soul":
         if len(args) < 2:

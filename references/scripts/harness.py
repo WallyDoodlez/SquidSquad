@@ -158,7 +158,9 @@ class AgentState:
                  "last_cycle_end", "last_cycle_type", "bootup_complete",
                  # #12244 P2 — crash-loop / session-limit backoff
                  "last_spawn_at", "consecutive_fast_deaths",
-                 "reboot_blocked_until")
+                 "reboot_blocked_until",
+                 # #12418 — last SessionEnd hook reason (graceful-exit signal)
+                 "last_session_end")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -203,6 +205,13 @@ class AgentState:
         self.last_spawn_at = None
         self.consecutive_fast_deaths = 0
         self.reboot_blocked_until = None
+        # #12418 — last SessionEnd hook report: {"reason": <stop_reason>,
+        # "at": <epoch>}, or None if no SessionEnd seen since boot. The
+        # PRESENCE of an entry stamped after last_spawn_at means the agent
+        # exited GRACEFULLY (a hook ran); its ABSENCE before a dead PID means
+        # a crash. The reboot decision (update_health) keys off that to avoid
+        # counting graceful exits toward the #12244 crash-loop streak.
+        self.last_session_end = None
 
     def to_dict(self):
         return {
@@ -225,6 +234,8 @@ class AgentState:
             "last_spawn_at": self.last_spawn_at,
             "consecutive_fast_deaths": self.consecutive_fast_deaths,
             "reboot_blocked_until": self.reboot_blocked_until,
+            # #12418 — last SessionEnd hook reason (graceful-exit signal)
+            "last_session_end": self.last_session_end,
         }
 
 
@@ -519,7 +530,46 @@ class HarnessState:
                             now - agent.last_spawn_at
                             if agent.last_spawn_at is not None else None
                         )
-                        if (lifetime is not None
+                        # #12418 AC4 — graceful-vs-crash. A GRACEFUL exit (a
+                        # SessionEnd hook fired AFTER this spawn) is not a crash:
+                        # it must not accumulate the #12244 crash-loop streak, so
+                        # a legitimate cooperative restart is never throttled as
+                        # if it were a quota/startup crash. A CRASH (dead PID
+                        # with NO SessionEnd since last_spawn_at — the hook
+                        # couldn't run) still counts toward the streak → backoff.
+                        # The stale-SessionEnd case is handled by the
+                        # `>= last_spawn_at` guard: a prior spawn's SessionEnd
+                        # predates this spawn and reads as a crash. Augments the
+                        # PID path (AC6) — the respawn action itself is unchanged.
+                        se = agent.last_session_end
+                        # DS-REVIEW-12418-C F1: use `(se.get("at") or 0)` — a
+                        # `{"at": null}` from a hand-edited/corrupt state file
+                        # makes `.get("at", 0)` return None, and `None >= float`
+                        # raises TypeError, aborting the whole health poll.
+                        se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
+                        graceful = bool(
+                            agent.last_spawn_at is not None
+                            and se_at >= agent.last_spawn_at
+                        )
+                        if graceful:
+                            # #12418 AC4: a graceful exit is NOT a crash — do NOT
+                            # increment the streak. We deliberately do NOT reset
+                            # it to 0 either (DS-REVIEW-12418-C F2): a misbehaving
+                            # agent that POSTs SessionEnd then crashes must not be
+                            # able to ZERO accumulated real crashes and escape the
+                            # breaker. The legitimate reset is the survived-window
+                            # path above. (Residual: a pure SessionEnd-spammer can
+                            # still keep the streak from growing — a full
+                            # termination-correlation guard is a #12271 liveness
+                            # hardening follow-up; natural crash loops don't POST
+                            # SessionEnd, so the #12244 protection is intact.)
+                            _log(
+                                f"{role}: graceful exit (SessionEnd "
+                                f"reason={se.get('reason')!r}) — not counted as "
+                                f"a crash (streak stays "
+                                f"{agent.consecutive_fast_deaths}) (#12418)"
+                            )
+                        elif (lifetime is not None
                                 and lifetime < FAST_DEATH_WINDOW_SECONDS):
                             agent.consecutive_fast_deaths += 1
                         else:
@@ -623,6 +673,10 @@ class HarnessState:
                             # other three spawn paths — a successful spawn always
                             # stamps, even if terminal_pid is absent.
                             agent.last_spawn_at = time.time()
+                            # #12418 F3 — clear the prior lifecycle's SessionEnd
+                            # so only a hook from THIS spawn can mark the next
+                            # death graceful (closes the delayed-hook race).
+                            agent.last_session_end = None
                 elif result.get("action") == "error":
                     # #11640: boot_agent refused (e.g. unregistered/missing
                     # clone). Never spawned in REPO_ROOT — surface the refusal
@@ -840,6 +894,9 @@ class HarnessState:
                         "last_spawn_at": a.last_spawn_at,
                         "consecutive_fast_deaths": a.consecutive_fast_deaths,
                         "reboot_blocked_until": a.reboot_blocked_until,
+                        # #12418 — persist last SessionEnd reason so the
+                        # graceful-vs-crash signal survives a harness restart.
+                        "last_session_end": a.last_session_end,
                     }
                     for role, a in self.agents.items()
                 },
@@ -927,6 +984,9 @@ class HarnessState:
                 agent.consecutive_fast_deaths = agent_data.get(
                     "consecutive_fast_deaths", 0) or 0
                 agent.reboot_blocked_until = agent_data.get("reboot_blocked_until")
+                # #12418 — restore last SessionEnd reason (defaults None for
+                # older state files / fresh agents).
+                agent.last_session_end = agent_data.get("last_session_end")
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -1521,6 +1581,7 @@ async def lifespan(app: FastAPI):
                         agent_state.bootup_complete = False
                         agent_state.boot_time = time.time()
                         agent_state.last_spawn_at = time.time()  # #12244 P2
+                        agent_state.last_session_end = None  # #12418 F3
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
@@ -1766,6 +1827,7 @@ async def start_all():
                 agent_state.bootup_complete = False
                 agent_state.boot_time = time.time()
                 agent_state.last_spawn_at = time.time()  # #12244 P2
+                agent_state.last_session_end = None  # #12418 F3
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
@@ -1878,6 +1940,7 @@ async def start_agent(role: str):
             agent_state.intent_set_at = None  # #4792 Phase 1
             agent_state.boot_time = time.time()
             agent_state.last_spawn_at = time.time()  # #12244 P2
+            agent_state.last_session_end = None  # #12418 F3
             agent_state.terminal_pid = result.get("terminal_pid")
             # #8695: spawning a fresh agent → bootup-complete must be re-asserted
             # by the new process before we'll dispatch any events to it.
@@ -2035,6 +2098,71 @@ def _log_event(event: dict):
         detail = payload.get("phase", "")
 
     print(f"[{ts}] {role:<6} {event_type:<18} {detail}", flush=True)
+
+
+# ---------------------------------------------------------------------------
+# Agent observability hooks (#12418 / HARNESS-ARCH §16) — native Claude Code
+# `type: http` hooks POST their payload here directly (no shell wrapper).
+# ---------------------------------------------------------------------------
+
+@app.post("/hooks/session-end")
+async def hook_session_end(request: Request):
+    """#12418 — receive a Claude Code `SessionEnd` hook for an agent session.
+
+    The git-tracked `.claude/settings.json` wires ONE native `type: http`
+    SessionEnd hook shared by every clone; it carries the agent's role in an
+    ``X-Agent-Role`` header interpolated from the ``$SQUIDSQUAD_ROLE`` env var
+    (set per-clone at spawn — thin_launcher / direct-spawn). Claude Code POSTs
+    the SessionEnd payload here (``{hook_event_name, session_id, stop_reason,
+    ...}``). We record the ``stop_reason`` + arrival time on AgentState — the
+    PRESENCE of a record stamped after ``last_spawn_at`` means the agent exited
+    GRACEFULLY (a hook ran); its ABSENCE before a dead PID means a crash. The
+    reboot decision (§7.4 / update_health) keys off that (#12418 AC4).
+
+    Fail-open contract (HARNESS-ARCH §16.3): this endpoint ALWAYS returns 200
+    quickly. A hook must never block or fail the agent's teardown, so we never
+    raise — a malformed body, missing/unknown role, or write hiccup still
+    answers 200.
+    """
+    role = (request.headers.get("X-Agent-Role") or "").strip()
+    # DS-REVIEW-12418-A F5: if $SQUIDSQUAD_ROLE was unset at spawn, Claude Code
+    # sends the literal "${SQUIDSQUAD_ROLE}". Treat an uninterpolated token as
+    # no-role rather than an unknown-role drop, so logs stay honest.
+    if role.startswith("${"):
+        role = ""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    reason = (isinstance(body, dict) and body.get("stop_reason")) or "unknown"
+
+    if not role:
+        _log(f"SessionEnd hook DROPPED — no X-Agent-Role header (reason={reason!r})")
+        return JSONResponse(status_code=200, content={"ok": False, "dropped": "no-role"})
+
+    # Defense-in-depth (mirrors receive_event #9242): ignore unknown roles so a
+    # stray hook can't seed a ghost agent — but STILL 200 (fail-open).
+    try:
+        allowed = set(boot_remote._get_all_roles()) | {"pm"}
+    except (SystemExit, Exception):
+        allowed = None
+    if allowed is not None and role not in allowed:
+        _log(f"SessionEnd hook DROPPED unknown role={role!r} (reason={reason!r})")
+        return JSONResponse(status_code=200, content={"ok": False, "dropped": "unknown-role"})
+
+    with state._lock:
+        agent = state.agents.get(role)
+        if agent is None:
+            agent = AgentState(role)
+            state.agents[role] = agent
+        agent.last_session_end = {"reason": reason, "at": time.time()}
+    # Persist off the event loop; swallow any error (fail-open).
+    try:
+        await asyncio.to_thread(state.save_state)
+    except Exception as e:  # pragma: no cover — defensive
+        _log(f"{role}: SessionEnd save_state failed (non-fatal): {e}")
+    _log(f"{role}: SessionEnd reason={reason!r} recorded (#12418)")
+    return JSONResponse(status_code=200, content={"ok": True})
 
 
 # ---------------------------------------------------------------------------
