@@ -345,6 +345,14 @@ class AgentState:
         cutover (making this authoritative + demoting PID to teardown-only) is a
         later, separately-reviewed step once the shadow data confirms no false
         positives (killing a live agent) or false negatives (missing a death).
+
+        THREAD-SAFETY (DS-c1 F2): this reads several fields that other daemon
+        threads write under ``state._lock`` (the EAD writes ``last_dispatch_at``;
+        the activity/pause hooks write ``last_activity_at`` and the pause flags).
+        The verdict is a compound read across those fields, so callers MUST hold
+        ``state._lock`` for a consistent snapshot. The intended call site
+        (``update_health``) already holds it when it reads agent state for the
+        PID check, so wiring this in there satisfies the contract for free.
         """
         # A not-yet-booted agent has no heartbeat baseline — never judge it dead
         # by activity silence (it may be mid-boot). Treat as alive.
@@ -370,6 +378,24 @@ class AgentState:
         # Dispatched, grace elapsed, no activity since, nothing explains it →
         # wedged / zombie.
         return False, "wedged-no-activity-since-dispatch"
+
+    def should_advance_dispatch(self):
+        """#12271 slice d — whether an incoming dispatch should (re)stamp
+        last_dispatch_at (the progress-liveness grace clock).
+
+        Advance ONLY when the agent is RUNNING (DS-c1 F4: never stamp a
+        stopped/stopping agent) AND has caught up on prior dispatched work —
+        there's no prior dispatch, or the agent acted since it
+        (last_activity_at >= last_dispatch_at). A re-nudge of STILL-UNACTED work
+        (DS-c1 F1) returns False so the original dispatch clock keeps aging out;
+        otherwise a handoff re-emit (#12442, same 600s cadence as the grace)
+        would reset the clock forever and a wedged agent could never read dead.
+        """
+        if self.intent != self.INTENT_RUNNING:
+            return False
+        ld = self.last_dispatch_at
+        la = self.last_activity_at
+        return ld is None or (la is not None and la >= ld)
 
     def to_dict(self):
         return {
@@ -921,6 +947,11 @@ class HarnessState:
                             # so only a hook from THIS spawn can mark the next
                             # death graceful (closes the delayed-hook race).
                             agent.last_session_end = None
+                            # #12271 slice d (DS-c1 F4) — clear the dispatch
+                            # reference so a respawn starts with a clean activity
+                            # baseline (a stale last_dispatch_at from before the
+                            # death must not make the fresh agent read wedged).
+                            agent.last_dispatch_at = None
                 elif result.get("action") == "error":
                     # #11640: boot_agent refused (e.g. unregistered/missing
                     # clone). Never spawned in REPO_ROOT — surface the refusal
@@ -1854,6 +1885,7 @@ async def lifespan(app: FastAPI):
                         agent_state.boot_time = time.time()
                         agent_state.last_spawn_at = time.time()  # #12244 P2
                         agent_state.last_session_end = None  # #12418 F3
+                        agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
@@ -2100,6 +2132,7 @@ async def start_all():
                 agent_state.boot_time = time.time()
                 agent_state.last_spawn_at = time.time()  # #12244 P2
                 agent_state.last_session_end = None  # #12418 F3
+                agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
@@ -2213,6 +2246,7 @@ async def start_agent(role: str):
             agent_state.boot_time = time.time()
             agent_state.last_spawn_at = time.time()  # #12244 P2
             agent_state.last_session_end = None  # #12418 F3
+            agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
             agent_state.terminal_pid = result.get("terminal_pid")
             # #8695: spawning a fresh agent → bootup-complete must be re-asserted
             # by the new process before we'll dispatch any events to it.
@@ -3976,6 +4010,28 @@ class ExternalActivityDetector:
                 if not target_alias:
                     continue
 
+            # #12271 slice d — stamp the dispatch reference for progress-based
+            # liveness BEFORE emitting (DS-c1 F3: an emit failure must not leave
+            # the dispatch invisible to liveness; check_time is a past epoch, so
+            # the agent's later activity heartbeat still reads as >= it).
+            # An assigned-to is work dispatched to target_alias; progress_
+            # liveness() measures heartbeat silence relative to this.
+            #
+            # ADVANCE ONLY WHEN THE AGENT HAS CAUGHT UP on prior dispatched work
+            # (DS-c1 F1): a handoff re-emit (#12442) of STILL-UNACTED work must
+            # NOT reset the grace — _HANDOFF_REEMIT_SECONDS (600) == ACTIVITY_
+            # GRACE_SECONDS (600), so resetting on every re-nudge would keep a
+            # wedged verifier/dm perpetually in "dispatch-grace" and it could
+            # never read "wedged". Only stamp when there's no prior dispatch, or
+            # the agent acted since it (last_activity_at >= last_dispatch_at);
+            # an unacted re-nudge leaves the original dispatch clock aging out.
+            # Guard on RUNNING intent (DS-c1 F4): never stamp a stopped/stopping
+            # agent. OBSERVATIONAL — does not yet drive the reboot decision.
+            with state._lock:
+                _disp_agent = state.agents.get(target_alias)
+                if (_disp_agent is not None
+                        and _disp_agent.should_advance_dispatch()):
+                    _disp_agent.last_dispatch_at = check_time
             # Emit assigned-to event
             _emit_event("assigned-to", "harness", payload={
                 "issue_number": str(issue_num),
@@ -3984,18 +4040,6 @@ class ExternalActivityDetector:
                 "event_context": f"Issue #{issue_num} {status.replace('status:', '')}",
             })
             self.mark_emitted(issue_num, status)
-            # #12271 slice d — stamp the dispatch reference for progress-based
-            # liveness. An assigned-to is work dispatched to target_alias, so a
-            # healthy agent should heartbeat within ACTIVITY_GRACE_SECONDS;
-            # progress_liveness() measures heartbeat silence relative to this.
-            # (Handoff re-emits, #12442, refresh it too — for the shadow phase
-            # that's intended: the divergence data informs whether a re-emit
-            # should reset the grace at cutover.) OBSERVATIONAL — does not yet
-            # drive the reboot decision.
-            with state._lock:
-                _disp_agent = state.agents.get(target_alias)
-                if _disp_agent is not None:
-                    _disp_agent.last_dispatch_at = check_time
             # #12442: seed/refresh the re-emit timer so a stuck handoff item is
             # re-nudged only after _HANDOFF_REEMIT_SECONDS, not every poll.
             if is_handoff:

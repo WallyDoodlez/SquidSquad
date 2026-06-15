@@ -181,6 +181,79 @@ class TestDispatchReferencePersistence:
         assert restored is not None
         assert restored.last_dispatch_at == NOW
 
+    def test_clear_on_spawn_paths(self):
+        """All four (re)spawn paths clear last_dispatch_at so a restart starts
+        with a clean baseline (DS-c1 F4). Asserted structurally — every spawn
+        site that clears last_session_end must also clear last_dispatch_at."""
+        import inspect
+        src = inspect.getsource(harness)
+        se_clears = src.count("last_session_end = None")
+        ld_clears = src.count("last_dispatch_at = None")
+        # one __init__ + every spawn-path clear must be paired.
+        assert ld_clears >= se_clears, (
+            f"last_dispatch_at cleared {ld_clears}x but last_session_end "
+            f"{se_clears}x — a spawn path clears SessionEnd without the "
+            f"dispatch reference (DS-c1 F4 regression)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# should_advance_dispatch — DS-c1 F1 (re-nudge of unacted work must not reset
+# grace) + F4 (never stamp a stopped agent)
+# ---------------------------------------------------------------------------
+
+class TestShouldAdvanceDispatch:
+    def test_first_dispatch_advances(self):
+        a = _booted()
+        assert a.last_dispatch_at is None
+        assert a.should_advance_dispatch() is True
+
+    def test_reemit_of_unacted_work_does_not_advance(self):
+        """DS-c1 F1: the agent was dispatched but never acted (la < ld / None);
+        a handoff re-emit must NOT reset the grace — else a wedged verifier/dm
+        resets forever and never reads wedged."""
+        a = _booted("verifier")
+        a.last_dispatch_at = NOW
+        a.last_activity_at = None  # never acted
+        assert a.should_advance_dispatch() is False
+        # also: acted, but BEFORE the dispatch → still unacted on THIS work
+        a.last_activity_at = NOW - 50
+        assert a.should_advance_dispatch() is False
+
+    def test_advances_after_agent_caught_up(self):
+        """Agent acted since the last dispatch → new work resets the clock."""
+        a = _booted()
+        a.last_dispatch_at = NOW - 100
+        a.last_activity_at = NOW - 10  # acted after dispatch
+        assert a.should_advance_dispatch() is True
+
+    def test_stopped_agent_never_stamped(self):
+        """DS-c1 F4: a non-RUNNING agent is never stamped."""
+        a = _booted()
+        a.intent = AgentState.INTENT_STOPPED
+        assert a.should_advance_dispatch() is False
+        a.intent = AgentState.INTENT_STOPPING
+        assert a.should_advance_dispatch() is False
+
+    def test_grace_does_not_reset_forever_simulation(self):
+        """End-to-end F1: simulate the handoff re-emit loop. A wedged agent's
+        grace must age out to a wedged verdict despite repeated re-nudges."""
+        a = _booted("verifier")
+        # initial dispatch
+        if a.should_advance_dispatch():
+            a.last_dispatch_at = NOW
+        # never acts; simulate re-emits every ACTIVITY_GRACE_SECONDS
+        t = NOW
+        for _ in range(5):
+            t += ACTIVITY_GRACE_SECONDS
+            if a.should_advance_dispatch():  # False — never acted
+                a.last_dispatch_at = t
+        # last_dispatch_at stayed at the ORIGINAL dispatch; grace long elapsed
+        assert a.last_dispatch_at == NOW
+        alive, reason = a.progress_liveness(t + 1)
+        assert alive is False
+        assert reason == "wedged-no-activity-since-dispatch"
+
     def test_load_defaults_none_for_older_state_file(self, tmp_path, monkeypatch):
         """An older state file lacking last_dispatch_at restores to None, not a
         crash (back-compat)."""
