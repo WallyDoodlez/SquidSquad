@@ -18,6 +18,14 @@ _Condensed 2026-06-14. Prior incident narrative (reboot saga, event-mode stabili
 - **Side-effects to handle on restart**: (1) compose runs → verify `.local-config` still has `qa` (#11600; #12380 should've fixed — re-add if dropped); (2) port redistribution may un-pin qa's loop (59999→7373) → re-pin qa to 59999 (loop intentional until #12409); (3) confirm all 4 agents respawn + reach ready; (4) orphans cleared.
 - **Procedure**: stop harness (kill nohup+python, or POST /shutdown) → relaunch via start.sh (or nohup python harness.py) → verify agents + qa config + qa pin.
 
+### >>> DECISIONS RESOLVED 2026-06-15 ~22:35 (operator) <<<
+- **#12460** (#12271 slice 4 CUTOVER) — APPROVED (shadow-mode strategy). skill front-loading it.
+- **#12450** (installer unit-test detection) — APPROVED; L3/L4 split locked in-task (L3=behavior, L4-seed=specifics).
+- **#12451** (status-bar event-model) — APPROVED.
+- **#10855** — DEFERRED behind #12460 (operator "fine to defer"); likely superseded by the cutover (inert agent → no heartbeat → rebooted). Stays parked, do NOT resume; PM revisits/closes after #12460 lands. Status label still in-progress (parked) — clean up on revisit.
+- **#12271 status**: slices 1-3 SHIPPED; slice 4 (#12460) approved + front-loading → completes #12271 when it lands.
+- **skill approved queue**: #12460 (cutover, front-loading) · #11613 (installer, in-progress) · #12419/#12420 (installer) · #12450 · #12451 · #12363 (open).
+
 ### Active threads
 1. **#12417 — MERGED 2026-06-15** (merge commit 29643ca8). HARNESS-ARCH (v24–v26) + AGENT-RUNTIME event_poll/`.claude-pid` reconciliation on main. Full work-discovery flow completed: research → draft → human review → DS re-audit (step 4) → cross-ref (step 5) → "all okay" → merge. PM merged under explicit operator authorization (boundary deviation noted on PR). **Descriptive-corrective → no new impl tasks spawned** (docs now match existing code). PM merged (boundary exception, operator-authorized).
 2. **#12271** — **APPROVED + SLICED 2026-06-15** (operator "go ahead"). Umbrella, status:approved. Slice **(a) #12418 SessionEnd-reason hook** FILED + approved → skill. Slices (b) activity-heartbeat hooks, (c) pause-aware guard, (d) retire PID-poll — sequenced, file as predecessors land. Locked scope: liveness = activity-heartbeat + pause-guard; PID teardown-only; no new PID-reporting.
