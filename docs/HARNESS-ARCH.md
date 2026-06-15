@@ -588,11 +588,18 @@ sequenceDiagram
 
 ### 15.4 `SessionEnd` reason
 
-The `SessionEnd` hook reports the exit reason; the harness's reboot decision keys off it:
+The `SessionEnd` hook fires only on a **graceful** exit — a hard crash (OOM, `kill -9`, power loss) can't run a hook — so the load-bearing signal is **presence/absence**, not a rich exit code (verified against the Claude Code hook API, #12418):
 
-- cooperative exit-42 (intent flip) → respawn, fresh session  *(context pressure no longer exits — it auto-compacts in place, §15.1)*
-- clean stop (intent=`stopping`) → mark stopped
-- crash / non-zero / usage-limit → apply backoff (§13.8); do **not** tight-loop
+- **`SessionEnd` received since `last_spawn_at` → graceful exit.** Its payload carries `stop_reason` (`clear` | `resume` | `logout` | `prompt_input_exit` | `bypass_permissions_disabled` | `other`) — a UI-level reason — plus `session_id` / `transcript_path` / `cwd`. There is **no exit code** in the payload; the harness records `{stop_reason, received_at}`.
+- **Dead PID with NO `SessionEnd` since `last_spawn_at` → crash.** Absence is the crash signal.
+
+Reboot decision (refines the §13.8 / #12244 backoff):
+
+- **Graceful death** (a `SessionEnd` recorded since `last_spawn_at`) → respawn, and it does **not** count toward the consecutive-fast-death crash-loop streak (a cooperative exit-42 / compact-respawn or operator stop is not a crash).
+- **Crash** (no `SessionEnd`) → counts toward the fast-death streak → backoff (§13.8); do **not** tight-loop.
+- **intent=`stopping`** → mark stopped, no respawn (unchanged).
+
+This serves the slice's intent — turning the reboot "guess why it died" into a fact — within what the hook actually provides. Implementation: #12418.
 
 ### 15.5 Constraints
 
@@ -631,7 +638,7 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 | `StopFailure` (matcher: `rate_limit`/`overloaded`/`billing_error`/`authentication_failed`/…) | a turn ends on an API error | **names the failure** — usage/rate-limit, billing, auth → cause-aware reboot/backoff |
 | `Notification` (`notification_type`: `permission_prompt`/`idle_prompt`/…) | agent needs attention | **stuck-on-permission** + idle detection |
 | `PreCompact` / `PostCompact` (`manual`/`auto`) | around context compaction | **compaction telemetry** — agent summarising context in place and continuing (self-managed, not a restart) |
-| `SessionEnd` (`exit_reason`) | session terminates | exit cause for the reboot decision (§15.4) |
+| `SessionEnd` (`stop_reason`; graceful exits only) | session terminates gracefully | presence = graceful exit, absence = crash — keys the reboot decision (§15.4); no exit code in payload |
 
 ### 16.2 High-value signals
 
@@ -649,13 +656,14 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 ### 16.4 Consumers
 
 - **Liveness (§15)** — heartbeat + in-flight from `Pre`/`PostToolUse` + `cycle_post`; reboot reason from `SessionEnd` / `StopFailure`.
-- **Reboot decision (§13.8)** — cause-aware backoff from `StopFailure` / `SessionEnd`.
+- **Reboot decision (§13.8)** — backoff that is cause-aware from `StopFailure` (names the API error) and graceful-vs-crash (presence/absence) from `SessionEnd`.
 - **Display (#12410)** — status line, dashboard, event highlights.
 
 ---
 
 ## 17. Revision log
 
+- **2026-06-15 (v27)** — **§15.4/§16 `SessionEnd` doc-sync to the real hook API** (skill verified it while implementing #12418). The doc assumed a richer signal than the `SessionEnd` hook provides: (1) `stop_reason` is UI-level (`clear`/`resume`/`logout`/`prompt_input_exit`/`bypass_permissions_disabled`/`other`), NOT exit-42/crash/usage-limit categories; (2) a hard crash can't run a hook, so SessionEnd fires only on graceful exit — the load-bearing signal is **presence/absence** (SessionEnd since `last_spawn_at` = graceful; dead PID + none = crash); (3) no `exit_code` in the payload. Rewrote §15.4 to the presence/absence model + the graceful-doesn't-count-toward-crash-streak / crash-counts reboot refinement; fixed §16.1 catalog row + §16.4 consumer note. (`type:http` hook transport in §16.3 was already correct — confirmed.)
 - **2026-06-15 (v26)** — **DS re-audit (step 4) residual sweep** — the verification pass caught that v24/v25 left four spots still carrying the old harness-spawned-event_poll / wrapper-PID model: §3 "Subprocess spawning" bullet (claimed `boot_agent` spawns event_poll), the §7.3 "PID-source disambiguation" note (listed `.claude-pid`=wrapper PID + a `(d) event_poll_pid` + health-poll tracking event_poll), the §7.3 Linux/macOS note (same `event_poll_pid` claim), and §7.4 "event_poll lifetime across respawn" (wrongly said event_poll *survives* a claude respawn). All four corrected: event_poll is agent-Monitor-spawned (dies with claude, fresh claude arms a new one), `.claude-pid` = resolved `claude.exe` PID, no `event_poll_pid`. (Cross-ref audit (step 5) flagged AGENT-RUNTIME §4.2/§4.3/§6/§8.0 carry the same stale model — reconciled in the same PR.)
 - **2026-06-15 (v25)** — **`.claude-pid` content corrected** (same draft PR #12417; found while verifying the PID model against the live process tree). The doc said `.claude-pid` holds `thin_launcher`'s own `cmd.exe`/shell PID (§7.2 step 3, §7.3, §9, §14) — including the v23 §7.3 edit. Code + live processes prove otherwise: `thin_launcher` spawns `claude`, then **resolves the actual `claude.exe` PID via a descendant walk through the npm shim** (#10101, thin_launcher.py:576) and writes *that* (verified: skill `.claude-pid`=3704=claude.exe, dm=12292, qa=52188). So `claude_pid` is accurate, not a misnomer. Fixed §7.2 step 3 (spawn-then-resolve-then-write order; was backwards) + its sequence diagram, §7.3 (`contents = resolved claude.exe PID`), §9 (state-file row), §14 (cross-ref → §7.2 step 3). NB: separately confirmed the `_kill_process` teardown does `taskkill /F` *without* `/T`, orphaning the `event_poll` subtree under each killed `claude.exe` — the #12363 mechanism (routed to skill; fix is independent of this doc PR).
 - **2026-06-14 (v24)** — **`event_poll` lifecycle corrected to match code** (DS audit BLOCKER #1; draft for review). The doc described `event_poll.py` as a harness-spawned sibling (`subprocess.Popen` child of `harness.py`), health-polled via an `event_poll_pid` state field and "logged-not-respawned" on death. Code says otherwise: `event_poll` is armed by the **agent's Monitor tool** (`event_poll.py <alias> --wait 5 --target`) and runs **inside the agent's process tree**; `harness.py` has no `event_poll` `subprocess.Popen` and `AgentState` has no `event_poll_pid`; `update_health` polls only `claude_pid`. Recovery is the reverse chain — Monitor exit → agent session ends → `claude` PID death → harness respawn. Rewrote §3 (intro bullet), §7.2 (step 4 → renumbered; agent-arms-Monitor is now the final boot step + sequence diagram), §7.5/§10 (dropped `event_poll_pid` from the state-file example and the PID-fields paragraph), §11 (`health_poll` row), §14 (sibling claim). Plausibly the root cause of #12363 (orphaned `event_poll` the harness has no handle to reap).
