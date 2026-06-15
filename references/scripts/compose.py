@@ -1895,11 +1895,54 @@ def _ensure_session_end_hook(settings_path) -> bool:
 
 
 def _ensure_activity_hooks(settings_path) -> bool:
-    """#12443 — ensure the PostToolUse + PostToolUseFailure activity-heartbeat
-    hooks are present in ``.claude/settings.json`` (see ``_ensure_hook_entries``)."""
+    """#12443/#12458 — ensure the per-tool-call hooks are present in
+    ``.claude/settings.json`` (see ``_ensure_hook_entries``). All three are
+    async command hooks (NEVER block the tool call): PostToolUse/
+    PostToolUseFailure are the #12443 activity heartbeat; PreToolUse (#12458)
+    additionally opens the in-flight window so a long tool call isn't mistaken
+    for a wedge (the harness sets in_flight_until on the PreToolUse event)."""
     return _ensure_hook_entries(settings_path, {
+        "PreToolUse": _activity_hook_group(),
         "PostToolUse": _activity_hook_group(),
         "PostToolUseFailure": _activity_hook_group(),
+    })
+
+
+# #12458 (#12271 slice c) — pause-aware lifecycle hooks. Unlike the per-tool-
+# call hooks, these fire at LOW frequency (waiting on a prompt, compacting, an
+# API failure), so a native type:http hook (a brief synchronous block is
+# acceptable) is fine — no async command wrapper needed. Role rides the
+# X-Agent-Role header (the slice-a pattern); the harness /hooks/pause endpoint
+# dispatches on the hook event name.
+_PAUSE_HOOK_URL = "http://127.0.0.1:7373/hooks/pause"
+
+
+def _pause_hook_group() -> dict:
+    """Return a fresh pause-hook matcher-group (native http, new objects each
+    call)."""
+    return {
+        "matcher": "",
+        "hooks": [{
+            "type": "http",
+            "url": _PAUSE_HOOK_URL,
+            "timeout": 5,
+            "headers": {"X-Agent-Role": "${SQUIDSQUAD_ROLE}"},
+            "allowedEnvVars": ["SQUIDSQUAD_ROLE"],
+        }],
+    }
+
+
+def _ensure_pause_hooks(settings_path) -> bool:
+    """#12458 — ensure the pause-explaining lifecycle hooks (Notification,
+    PreCompact, PostCompact, StopFailure) are present in
+    ``.claude/settings.json`` (see ``_ensure_hook_entries``). StopFailure uses a
+    catch-all matcher; the harness extracts the cause best-effort and falls back
+    to the normal reboot path on an unrecognised cause (safe default)."""
+    return _ensure_hook_entries(settings_path, {
+        "Notification": _pause_hook_group(),
+        "PreCompact": _pause_hook_group(),
+        "PostCompact": _pause_hook_group(),
+        "StopFailure": _pause_hook_group(),
     })
 
 
@@ -2184,10 +2227,15 @@ def main():
         se_settings = REPO_ROOT / ".claude" / "settings.json"
         if _ensure_session_end_hook(se_settings):
             print(f"  SessionEnd hook -> {se_settings.relative_to(REPO_ROOT)}")
-        # #12443 — ensure the PostToolUse + PostToolUseFailure activity-heartbeat
-        # hooks are present too (same idempotent settings.json integration).
+        # #12443/#12458 — ensure the per-tool-call hooks (PreToolUse +
+        # PostToolUse + PostToolUseFailure) are present too (same idempotent
+        # settings.json integration).
         if _ensure_activity_hooks(se_settings):
             print(f"  Activity hooks -> {se_settings.relative_to(REPO_ROOT)}")
+        # #12458 — ensure the pause-aware lifecycle hooks (Notification /
+        # PreCompact / PostCompact / StopFailure) are present.
+        if _ensure_pause_hooks(se_settings):
+            print(f"  Pause hooks -> {se_settings.relative_to(REPO_ROOT)}")
 
     elif cmd == "upgrade-soul":
         if len(args) < 2:
