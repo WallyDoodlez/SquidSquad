@@ -2419,6 +2419,17 @@ async def hook_activity(request: Request):
             state.agents[role] = agent
         agent.last_activity_at = now
         agent.last_activity = activity
+        # #12458 — manage the in-flight tool-call window (pause guard). A
+        # PreToolUse opens it (deadline now + tool_call_max so a long tool call
+        # isn't mistaken for a wedge); a Post* closes it. Any activity also
+        # clears a stale 'waiting' — the agent is doing things again, so it is
+        # no longer blocked on a prompt.
+        ev = activity["event"]
+        if ev == "PreToolUse":
+            agent.in_flight_until = now + TOOL_CALL_MAX_SECONDS
+        elif ev in ("PostToolUse", "PostToolUseFailure"):
+            agent.in_flight_until = None
+        agent.waiting_since = None
         if now - _last_activity_save_at >= _ACTIVITY_SAVE_THROTTLE_SECONDS:
             _last_activity_save_at = now
             should_save = True
@@ -2432,6 +2443,81 @@ async def hook_activity(request: Request):
             await asyncio.to_thread(state.save_state)
         except Exception as e:  # pragma: no cover — defensive
             _log(f"{role}: activity save_state failed (non-fatal): {e}")
+    return JSONResponse(status_code=200, content={"ok": True})
+
+
+@app.post("/hooks/pause")
+async def hook_pause(request: Request):
+    """#12458 (#12271 slice c) — receive a pause-explaining lifecycle hook so
+    the reboot decision (update_health) holds off while the silence is
+    explained (HARNESS-ARCH §15.1). Low-frequency relative to /hooks/activity,
+    so these are native http hooks (a brief block is acceptable) and the write
+    is NOT throttled.
+
+    Dispatches on the hook event:
+      - Notification   → waiting_since = now   (blocked on a prompt/idle/input)
+      - PreCompact     → compacting_since = now (summarising context in place)
+      - PostCompact    → compacting_since = None (compaction done)
+      - StopFailure    → last_stop_failure = {cause, at}; a recent
+        rate_limit/overloaded makes a subsequent death back off (AC3d). The
+        cause is read best-effort from several candidate fields; an
+        unrecognised cause records 'unknown', which does NOT trigger backoff
+        (safe default: the normal reboot path runs, today's behavior).
+
+    Role rides the X-Agent-Role header (same contract as /hooks/session-end).
+    Fail-open: ALWAYS 200, never blocks or raises.
+    """
+    role = (request.headers.get("X-Agent-Role") or "").strip()
+    if role.startswith("${"):
+        role = ""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    if not role:
+        _log("Pause hook DROPPED — no X-Agent-Role header")
+        return JSONResponse(status_code=200, content={"ok": False, "dropped": "no-role"})
+    try:
+        allowed = set(boot_remote._get_all_roles()) | {"pm"}
+    except (SystemExit, Exception):
+        allowed = None
+    if allowed is not None and role not in allowed:
+        _log(f"Pause hook DROPPED unknown role={role!r}")
+        return JSONResponse(status_code=200, content={"ok": False, "dropped": "unknown-role"})
+
+    event = body.get("event") or body.get("hook_event_name") or ""
+    now = time.time()
+    with state._lock:
+        agent = state.agents.get(role)
+        if agent is None:
+            agent = AgentState(role)
+            state.agents[role] = agent
+        if event == "Notification":
+            agent.waiting_since = now
+        elif event == "PreCompact":
+            agent.compacting_since = now
+        elif event == "PostCompact":
+            agent.compacting_since = None
+        elif event == "StopFailure":
+            # Best-effort cause extraction — the exact StopFailure payload field
+            # is config/version dependent; an unknown cause is the safe default
+            # (no backoff → normal reboot path, unchanged behavior).
+            cause = (body.get("cause") or body.get("reason")
+                     or body.get("matcher") or body.get("stop_reason")
+                     or "unknown")
+            agent.last_stop_failure = {"cause": cause, "at": now}
+        else:
+            _log(f"{role}: pause hook unrecognised event={event!r} — ignored")
+            return JSONResponse(status_code=200,
+                                content={"ok": False, "dropped": "unknown-event"})
+    _log(f"{role}: pause hook {event} recorded (#12458)")
+    try:
+        await asyncio.to_thread(state.save_state)
+    except Exception as e:  # pragma: no cover — defensive
+        _log(f"{role}: pause save_state failed (non-fatal): {e}")
     return JSONResponse(status_code=200, content={"ok": True})
 
 

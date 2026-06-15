@@ -4530,5 +4530,121 @@ class TestActivityHook12443(unittest.TestCase):
                     st2.agents[self.role].last_activity["tool"], "Bash")
 
 
+class TestPauseHook12458(unittest.TestCase):
+    """#12458: POST /hooks/pause records pause-explaining lifecycle signals
+    (Notification→waiting, PreCompact→compacting, PostCompact→clear,
+    StopFailure→cause) and is fail-open; and /hooks/activity manages the
+    in-flight tool-call window (PreToolUse opens, Post* closes) + clears
+    waiting."""
+
+    def setUp(self):
+        import harness
+        from fastapi.testclient import TestClient
+        self.h = harness
+        self.client = TestClient(harness.app, raise_server_exceptions=False)
+        harness.state.start_time = time.time()
+        self.role = "skill"
+        self._roles = patch.object(
+            harness.boot_remote, "_get_all_roles", return_value=[self.role])
+        self._roles.start()
+        self._save = patch.object(harness.state, "save_state")
+        self._save.start()
+        self._uh = patch.object(harness.state, "update_health")
+        self._uh.start()
+        harness.state.agents.pop(self.role, None)
+        harness._last_activity_save_at = 0.0
+
+    def tearDown(self):
+        self._uh.stop()
+        self._save.stop()
+        self._roles.stop()
+        self.h.state.agents.pop(self.role, None)
+
+    def _hdr(self, role=None):
+        return {"X-Agent-Role": self.role if role is None else role}
+
+    def _agent(self):
+        return self.h.state.agents.get(self.role)
+
+    # --- /hooks/pause dispatch ---
+    def test_notification_sets_waiting(self):
+        r = self.client.post("/hooks/pause", headers=self._hdr(),
+                             json={"event": "Notification"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json().get("ok"))
+        self.assertIsInstance(self._agent().waiting_since, float)
+
+    def test_precompact_sets_compacting_postcompact_clears(self):
+        self.client.post("/hooks/pause", headers=self._hdr(),
+                         json={"event": "PreCompact"})
+        self.assertIsInstance(self._agent().compacting_since, float)
+        self.client.post("/hooks/pause", headers=self._hdr(),
+                         json={"event": "PostCompact"})
+        self.assertIsNone(self._agent().compacting_since)
+
+    def test_stopfailure_records_cause(self):
+        r = self.client.post("/hooks/pause", headers=self._hdr(),
+                             json={"hook_event_name": "StopFailure",
+                                   "matcher": "rate_limit"})
+        self.assertEqual(r.status_code, 200)
+        sf = self._agent().last_stop_failure
+        self.assertEqual(sf["cause"], "rate_limit")
+        self.assertIn("at", sf)
+
+    def test_stopfailure_unknown_cause_defaults(self):
+        self.client.post("/hooks/pause", headers=self._hdr(),
+                         json={"event": "StopFailure"})
+        self.assertEqual(self._agent().last_stop_failure["cause"], "unknown")
+
+    def test_unknown_event_dropped_but_200(self):
+        r = self.client.post("/hooks/pause", headers=self._hdr(),
+                             json={"event": "Bogus"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("dropped"), "unknown-event")
+
+    def test_no_role_dropped_but_200(self):
+        r = self.client.post("/hooks/pause", json={"event": "Notification"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("dropped"), "no-role")
+
+    def test_unknown_role_dropped_but_200(self):
+        r = self.client.post("/hooks/pause", headers=self._hdr("bogus"),
+                             json={"event": "Notification"})
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("bogus", self.h.state.agents)
+
+    def test_malformed_body_fail_open(self):
+        r = self.client.post("/hooks/pause", content=b"not json",
+                             headers={**self._hdr(), "Content-Type": "application/json"})
+        self.assertEqual(r.status_code, 200)  # empty body → unknown-event, still 200
+
+    # --- /hooks/activity in-flight management ---
+    def test_pretooluse_opens_in_flight_window(self):
+        r = self.client.post("/hooks/activity", headers=self._hdr(),
+                             json={"event": "PreToolUse", "tool": "Bash"})
+        self.assertEqual(r.status_code, 200)
+        agent = self._agent()
+        self.assertIsInstance(agent.in_flight_until, float)
+        # deadline is ~now + tool_call_max
+        self.assertGreater(agent.in_flight_until, time.time() + 1)
+
+    def test_posttooluse_closes_in_flight_window(self):
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PreToolUse"})
+        self.assertIsNotNone(self._agent().in_flight_until)
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PostToolUse"})
+        self.assertIsNone(self._agent().in_flight_until)
+
+    def test_activity_clears_waiting(self):
+        # set waiting via a Notification, then any activity clears it
+        self.client.post("/hooks/pause", headers=self._hdr(),
+                         json={"event": "Notification"})
+        self.assertIsNotNone(self._agent().waiting_since)
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PostToolUse"})
+        self.assertIsNone(self._agent().waiting_since)
+
+
 if __name__ == "__main__":
     unittest.main()
