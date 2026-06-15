@@ -2103,6 +2103,11 @@ async def hook_session_end(request: Request):
     answers 200.
     """
     role = (request.headers.get("X-Agent-Role") or "").strip()
+    # DS-REVIEW-12418-A F5: if $SQUIDSQUAD_ROLE was unset at spawn, Claude Code
+    # sends the literal "${SQUIDSQUAD_ROLE}". Treat an uninterpolated token as
+    # no-role rather than an unknown-role drop, so logs stay honest.
+    if role.startswith("${"):
+        role = ""
     try:
         body = await request.json()
     except Exception:

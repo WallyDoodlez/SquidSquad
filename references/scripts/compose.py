@@ -1841,6 +1841,13 @@ def _ensure_session_end_hook(settings_path) -> bool:
     before = json.dumps(data, sort_keys=True)
     hooks = data.get("hooks")
     if not isinstance(hooks, dict):
+        # DS-REVIEW-12418-A F3: a valid-JSON file whose `hooks` is the wrong
+        # type (list/string/null) is replaced. Surface it if it held content,
+        # so the (rare, Claude-Code-invalid) data loss isn't silent.
+        if hooks:
+            print(f"WARNING: .claude/settings.json `hooks` was "
+                  f"{type(hooks).__name__}, not an object — replacing "
+                  f"(prior hooks dropped): {settings_path}", file=sys.stderr)
         hooks = data["hooks"] = {}
     hooks["SessionEnd"] = [_session_end_hook_group()]
     if json.dumps(data, sort_keys=True) == before:

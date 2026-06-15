@@ -3899,6 +3899,15 @@ class TestSessionEndHook12418(unittest.TestCase):
         self.assertFalse(resp.json().get("ok"))
         self.assertEqual(resp.json().get("dropped"), "no-role")
 
+    def test_uninterpolated_env_var_role_is_no_role(self):
+        """#12418 F5: if $SQUIDSQUAD_ROLE was unset, Claude Code sends the
+        literal '${SQUIDSQUAD_ROLE}' — treat it as no-role (not unknown-role)."""
+        resp = self.client.post("/hooks/session-end",
+                                headers=self._hdr("${SQUIDSQUAD_ROLE}"),
+                                json={"stop_reason": "other"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json().get("dropped"), "no-role")
+
     def test_unknown_role_dropped_but_200(self):
         resp = self.client.post("/hooks/session-end",
                                 headers=self._hdr("bogus-role"),
