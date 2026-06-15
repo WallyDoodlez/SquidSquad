@@ -194,6 +194,8 @@ Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
 
 ### 4.3 Phase 0b — Re-run detection + migration walk
 
+> **Status: target — the migration walk is not yet in the runbook (#12419; see §10).** Today `WIZARD.md` Step 0b handles the existing-install case with a flat abort / regenerate / rebuild prompt. The flow below is the agreed target.
+
 The installer checks for `.squidsquad/` in the target repo.
 
 - **Fresh case** (directory absent): proceed directly to Phase 1.
@@ -256,7 +258,7 @@ Once approved, the installer:
 
 1. **Cleans up** any prior partial state (if a previous interrupted install left artifacts) under §11.2's interrupted-install recovery rules — the cleanup preserves the items in §11.3 (`vault/`, `project/`, per-alias `working-state.md`, `iterations/`, `planning/`); `.squidsquad/config.md` from the partial run is **wiped and re-synthesized** from Phase 1+2 outputs (it's a broken artifact of the interrupted Phase 5, not a preserved item) per §11.2; everything else under `.squidsquad/` is scaffold debris and is deleted.
 2. **Serializes the install spec** to a temporary location for the scaffold step.
-3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs (CLAUDE.md placeholders, working-state.md skeletons, planning/, iterations/), vault skeleton, project-local L4 directory, `.squidsquad/config.md` (including the **`## Aliases` H2 section** mapping each chosen alias to its role-class and L3 domain), and the **`squidsquad_version:` field** read from `references/VERSION` already present in the installer source tree (fresh install runs from within the pulled SquidSquad sources; upgrade re-reads this same file per §10 step 1). No per-alias `SOUL.md` files (the v1 sidecar is retired; SOUL.md content is composed into `CLAUDE.md §3 Soul` per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md)). No tool/MCP wiring (per §8).
+3. **Scaffolds `.squidsquad/`** — creates the per-alias agent dirs (the **composed** `CLAUDE.md` — scaffold invokes compose inline, see §4.9 — plus working-state.md skeletons, planning/, iterations/), vault skeleton, project-local L4 directory, `.squidsquad/config.md` (including the **`## Aliases` H2 section** mapping each chosen alias to its role-class and L3 domain), and the **`squidsquad_version:` field** read from `references/VERSION` already present in the installer source tree (fresh install runs from within the pulled SquidSquad sources; upgrade re-reads this same file per §10 step 1). No per-alias `SOUL.md` files (the v1 sidecar is retired; SOUL.md content is composed into `CLAUDE.md §3 Soul` per [COMPOSE-ARCHITECTURE.md §5.3](COMPOSE-ARCHITECTURE.md)). No tool/MCP wiring (per §8).
 
    Schema example for `## Aliases`:
    ```markdown
@@ -276,15 +278,16 @@ Once approved, the installer:
 
 Writes land in the target repo's working tree (`.squidsquad/` appears in `git status`) but are not staged or committed — the atomic commit happens at Phase 8 (per §11.1's "Phase 5 is the first phase that writes to the target repo"). Helpers handle the mechanical work; the installer agent acts on JSON outputs only.
 
-### 4.9 Phase 6 — Compose per-role CLAUDE.md
+### 4.9 Compose per-role CLAUDE.md (runs inline during Phase 5 scaffold)
 
-For each alias in the chosen team preset (PM, each worker, each verifier, DM), the installer invokes:
+Compose is **not a separate runbook phase** — `wizard.py scaffold` performs it inline while scaffolding the agent dirs (§4.8 step 3). For each alias in the chosen team preset (PM, each worker, each verifier, DM), `scaffold_install` calls `compose.deploy_role_v2(<alias>)` **in-process** (equivalent to the CLI form below; `wizard.py` imports `compose.py` lazily):
 
 ```bash
-python references/scripts/compose.py deploy <role>
+# equivalent CLI form — scaffold calls deploy_role_v2() in-process, not this subprocess:
+python references/scripts/compose.py deploy <alias>
 ```
 
-`compose.py` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<alias>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The output path is **alias-keyed**: `compose.py deploy <alias>` writes to `.squidsquad/<alias>/CLAUDE.md`, regardless of role-class. The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md). (The CLI's positional parameter is shown as `<role>` for code-compat — its value is always the alias; the rename to `<alias>` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358).) The compose helper takes the alias as its positional argument and internally resolves the role-class (from the alias→class mapping in `.squidsquad/config.md`'s `## Aliases` registry) to pick the correct L4 file. Two aliases of the same role-class share an L4 file by design — see COMPOSE-ARCHITECTURE §3.3.
+`compose` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<alias>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The output path is **alias-keyed**: `compose.py deploy <alias>` writes to `.squidsquad/<alias>/CLAUDE.md`, regardless of role-class. The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md). (The CLI's positional parameter is shown as `<role>` for code-compat — its value is always the alias; the rename to `<alias>` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358).) The compose helper takes the alias as its positional argument and internally resolves the role-class (from the alias→class mapping in `.squidsquad/config.md`'s `## Aliases` registry) to pick the correct L4 file. Two aliases of the same role-class share an L4 file by design — see COMPOSE-ARCHITECTURE §3.3.
 
 **Current-state caveat**: as of today, the project-scoped Claude-skills installer that materializes sub-skill references into invokable Skill tool entries is **not yet shipped** (COMPOSE-ARCHITECTURE §4.5.1, tracked in #10362). The composed CLAUDE.md emits sub-skill references either way; until the Skills installer ships, agents resolve `→ run sub-skill: <name>` by looking up `<name>` in [`sub-skill-catalog.md`](sub-skill-catalog.md) to find the source-file path (under `references/sub-skills/`) and executing that file's instructions in-context. The composition output format is stable; only the *invocation mechanism* differs between today and target state.
 
@@ -381,7 +384,7 @@ The installer agent never invents behavior the helpers already implement. Every 
 | `references/scripts/tracker.py` | The tracker abstraction layer — agents use this at runtime; the installer uses its label-creation paths at Phase 5 |
 | `start.sh` | Post-install boot script — ensures Python deps, syncs all clones, runs the harness |
 
-> **Runtime-shipped components (not installer-invoked):** the SquidSquad source tree also ships `references/scripts/event_poll.py` (per-agent event-bus sidecar; harness-spawned when the agent boots into event-mode wake — see [AGENT-RUNTIME.md §8.0](AGENT-RUNTIME.md) + [HARNESS-ARCH.md §7.2 step 4](HARNESS-ARCH.md)) and `references/scripts/harness.py` itself. The installer does NOT invoke these — they're part of the runtime. They're mentioned here because they live alongside the installer's helper scripts under `references/scripts/` and operators inspecting that directory will see them.
+> **Runtime-shipped components (not installer-invoked):** the SquidSquad source tree also ships `references/scripts/event_poll.py` (per-agent event-bus sidecar; the agent arms it via its Monitor tool when it boots into event-mode wake, so it runs inside the agent's own process tree — not harness-spawned — see [AGENT-RUNTIME.md §8.0](AGENT-RUNTIME.md) + [HARNESS-ARCH.md §7.2 step 6](HARNESS-ARCH.md)) and `references/scripts/harness.py` itself. The installer does NOT invoke these — they're part of the runtime. They're mentioned here because they live alongside the installer's helper scripts under `references/scripts/` and operators inspecting that directory will see them.
 
 ---
 
@@ -453,6 +456,8 @@ The choice is recorded in `.squidsquad/config.md` under `Tracker Backend`. Agent
 ---
 
 ## 10. Migration walk (existing-install step)
+
+> **Status: target — not yet implemented in the runbook (#12419).** This section specifies the migration-walk architecture (agreed 2026-05-30). `WIZARD.md` Step 0b currently presents a flat abort / regenerate-templates / full-rebuild prompt on an existing `.squidsquad/`; it does **not** read `squidsquad_version:` or apply `references/migrations/` files. The design below is the agreed target.
 
 This section details the migration walk introduced at §4.3. **There is no distinct "upgrade flow"** — the migration walk is one step of the standard installer flow, invoked when `.squidsquad/` already exists at Phase 0b. Every other phase (1 through 9) runs identically regardless of whether this is the first installer run on this repo or the hundredth.
 
@@ -537,6 +542,8 @@ The previous "preserved during upgrade" framing is retired — there is no separ
 
 ### 10.3 Post-installer harness restart
 
+> **Status: target — not yet implemented in the runbook (#12420).** `WIZARD.md` Step 7.6 currently prints the "run ./start.sh" message and exits without probing the harness or restarting agents. The behavior below is the agreed target.
+
 After Phase 8 commits the new tree, the installer triggers a per-agent restart so running agents pick up the new composed CLAUDE.md. This is **separate from Phase 8** (which is just commit+push per §4.11) and **separate from the migration walk** (which completes before Phase 1). Restart happens after Phase 8's atomic commit and before Phase 9's exit message.
 
 Detection: the installer issues `GET http://localhost:<port>/status` (port read from `.squidsquad/.harness-port`) with a 5-second timeout. Two paths:
@@ -547,7 +554,7 @@ Detection: the installer issues `GET http://localhost:<port>/status` (port read 
   POST /agents/<alias>/start   # boot with new composed CLAUDE.md
   ```
   For each agent in the install's `## Aliases` registry. The URL-template token is named `{role}` in the source code for legacy compatibility; the value is always the alias (rename to `{alias}` tracked in HARNESS-ARCH §9 (Vocabulary note) + #10358).
-- **Harness unreachable** (port file missing / port unreachable / timeout) — the installer invokes `start.sh` from the repo root as the cold-start path. `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots all configured agents. If each restarted agent's boot probe succeeds, the harness spawns its paired `event_poll.py` per HARNESS-ARCH §7.2.
+- **Harness unreachable** (port file missing / port unreachable / timeout) — the installer invokes `start.sh` from the repo root as the cold-start path. `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots all configured agents. If each restarted agent's boot probe succeeds, the agent arms its own `event_poll.py` via its Monitor tool per HARNESS-ARCH §7.2 step 6.
 
 **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent recovers from `working-state.md` (see AGENT-RUNTIME §6 + §7.5).
 
@@ -620,6 +627,8 @@ Across both upgrade and clean-rebuild, these are always preserved:
 
 ## 14. Revision log
 
+- **2026-06-15 (doc-honesty pass — DS re-audit doc-vs-runbook gaps)** — The re-audit found three behaviors written as current that `WIZARD.md` doesn't implement. Two are genuine impl gaps now honestly labeled as target + given skill tasks: **migration-walk** (§4.3/§10 → #12419; runbook Step 0b is still the flat 3-way prompt) and **post-commit harness restart** (§10.3 → #12420; runbook Step 7.6 just prints "run ./start.sh" + exits). The third was a doc-description error, now corrected: **§4.8/§4.9 "Phase 6 — Compose"** implied scaffold writes CLAUDE.md *placeholders* then a separate compose phase runs — but `wizard.py scaffold_install` calls `compose.deploy_role_v2(<alias>)` **in-process**, composing the final CLAUDE.md inline during Phase 5. Reframed §4.9 as "compose runs inline during scaffold" (no separate Phase 6) and fixed §4.8 step 3 ("placeholders" → composed). Matches the §4.1 dep-provisioning (#11613) target-labeling pattern; the installer impl backlog is now #11613 + #12419 + #12420.
+- **2026-06-15 (event_poll model straggler — cross-doc reconciliation)** — DS re-audit (cross-ref vs the just-corrected HARNESS-ARCH/AGENT-RUNTIME) caught two spots still describing `event_poll.py` as **harness-spawned**: §6 "Runtime-shipped components" and the §10.3 cold-start path. Corrected both to the current model — `event_poll` is **agent-armed via the Monitor tool** (inside the agent's process tree), HARNESS-ARCH cross-ref `§7.2 step 4` → `step 6`. (Same re-audit flagged that §4.3/§10 migration-walk, §10.3 post-commit restart, and §4.8/§4.9 compose-as-separate-phase are presented as current but not yet in `WIZARD.md` — honest-target labeling + impl tasks pending operator decision; NOT changed here.)
 - **2026-06-12 (#11537 R2 — dependency provisioning)** — Rewrote §4.1 Phase 0 from a flat 4-bullet "prerequisite check" into the full **dependency detection & provisioning** design (operator-locked option-b-with-consent, 2026-06-12). New model: **gather-all detect → present full missing-set → one consent prompt → per-platform provision → re-verify**. Locks: provision at **install time** (consent gate) with `start.sh` silent re-ensure at boot; `claude` CLI + `gh auth` stay **guided** (not silently forced); **full scope** (system tools + Python packages, instruct-fallback for the un-installable). Per-dependency provisioning table + platform-dispatch strategy added. Fixed §3.1 Environment-row drift (it listed deps as if all were checked; today only `gh` is — now points to §4.1's gather-all model). Honest target-vs-today callout: gather-all collector, per-platform dispatch, consent prompt, unified-`requirements.txt` read, and `pyyaml` runtime-requirement move are **not yet implemented** — implementation is a separate skill task off #11537. (Note: `start.ps1` already exists alongside `start.sh`; both hard-code a 2-of-4 package subset that the unified read replaces.) §2 commitment 2 + §11.1 updated to carve out Phase 0 host-level provisioning from the 'no writes during Phases 0–4' invariant (repo-write invariant preserved; host installs are consent-gated). Research: `.squidsquad/pm/planning/RESEARCH-INSTALLER-DEPROV-11537.md`. (R2 is the original #10836 scope, split out when R1 absorbed the drift sweep.)
 - **2026-06-12 (#10836 R1 reconciliation — in progress)** — Post-cutover drift sweep against the stabilized arch docs (audit: `.squidsquad/pm/planning/AUDIT-INSTALLER-ARCH-2026-06-12.md`). **Architectural-drift findings resolved (4 ERROR + 2 WARNING):**
   - **E1+W2 (clone registry)**: doc claimed `~/.squidsquad/clones/<alias>` is the boot-time clone-path registry, contradicting HARNESS-ARCH §7.2 (`.squidsquad/.local-config`). Code confirms `boot_remote.py` reads `.local-config` exclusively; the global `~/.squidsquad/clones/` fallback was removed in #3100; `shared_fs.py init` still *creates* the dir but nothing consumes it for boot. Fixed §1.2, §3.1, §3.2, §4.2 + §5 trees → `.local-config` canonical, `~/.squidsquad/clones/` marked vestigial. Code-cleanup follow-up: #11519 (retire unused `shared_fs.py` clones helpers).
