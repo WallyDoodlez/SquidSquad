@@ -1,2 +1,2 @@
 pytest>=7.0
-pyyaml>=6.0
+# pyyaml moved to requirements.txt (#11613) — it's a RUNTIME dep, not dev-only.
