@@ -831,8 +831,8 @@ class TestCrashLoopBackoff(unittest.TestCase):
 
     def test_graceful_exit_not_counted_toward_streak(self):
         """#12418 AC4: a GRACEFUL exit (SessionEnd stamped AFTER last_spawn) at
-        threshold-minus-one must NOT trip the crash-loop breaker — it resets the
-        streak and respawns immediately, unlike a crash."""
+        threshold-minus-one must NOT trip the crash-loop breaker — it does not
+        increment the streak, so it respawns immediately instead of backing off."""
         from harness import FAST_DEATH_THRESHOLD
         now = 10_000.0
         hs, _ = self._make_dead_agent(
@@ -841,8 +841,44 @@ class TestCrashLoopBackoff(unittest.TestCase):
         boot = self._run(hs, now)
         boot.assert_called_once_with("skill")  # respawned, NOT backed off
         agent = hs.get_agent("skill")
-        self.assertEqual(agent.consecutive_fast_deaths, 0)
+        # Not-incremented (DS-C F2: NOT reset to 0 — so accumulated real crashes
+        # aren't zeroable by a SessionEnd-spammer); stays below threshold.
+        self.assertEqual(agent.consecutive_fast_deaths, FAST_DEATH_THRESHOLD - 1)
         self.assertNotEqual(agent.status, "crash-looping")
+
+    def test_graceful_does_not_reset_accumulated_crashes(self):
+        """DS-REVIEW-12418-C F2 guard: a graceful death must NOT zero an
+        accumulated streak — otherwise a SessionEnd-spammer could escape the
+        breaker. After a graceful death at streak N, the very next CRASH
+        increments to N+1 and (if that crosses the threshold) backs off."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        self._set_session_end(hs, at=now - 5)  # graceful
+        self._run(hs, now)  # respawn; streak still THRESHOLD-1
+        agent = hs.get_agent("skill")
+        # Now a real crash (no fresh SessionEnd — the spawn cleared it) crosses
+        # the threshold → backoff. (The reboot loop re-stamped last_spawn_at to
+        # `now`; advance the clock so the next death is still "fast".)
+        agent.status = "running"
+        agent.claude_pid = 12345
+        boot2 = self._run(hs, now + 5)
+        boot2.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
+
+    def test_sessionend_at_none_does_not_crash(self):
+        """DS-REVIEW-12418-C F1: a {"at": null} entry (from a corrupt/hand-edited
+        state file) must NOT raise TypeError in the graceful check — it is
+        treated as a crash and update_health completes normally."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        hs.get_agent("skill").last_session_end = {"reason": "x", "at": None}
+        boot = self._run(hs, now)  # must not raise
+        boot.assert_not_called()  # treated as crash → backoff
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
 
     def test_crash_no_sessionend_still_backs_off(self):
         """No SessionEnd (a real crash — the hook couldn't run) at

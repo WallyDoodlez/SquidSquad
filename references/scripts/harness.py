@@ -542,17 +542,32 @@ class HarnessState:
                         # predates this spawn and reads as a crash. Augments the
                         # PID path (AC6) — the respawn action itself is unchanged.
                         se = agent.last_session_end
+                        # DS-REVIEW-12418-C F1: use `(se.get("at") or 0)` — a
+                        # `{"at": null}` from a hand-edited/corrupt state file
+                        # makes `.get("at", 0)` return None, and `None >= float`
+                        # raises TypeError, aborting the whole health poll.
+                        se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
                         graceful = bool(
-                            se and agent.last_spawn_at is not None
-                            and isinstance(se, dict)
-                            and se.get("at", 0) >= agent.last_spawn_at
+                            agent.last_spawn_at is not None
+                            and se_at >= agent.last_spawn_at
                         )
                         if graceful:
-                            agent.consecutive_fast_deaths = 0
+                            # #12418 AC4: a graceful exit is NOT a crash — do NOT
+                            # increment the streak. We deliberately do NOT reset
+                            # it to 0 either (DS-REVIEW-12418-C F2): a misbehaving
+                            # agent that POSTs SessionEnd then crashes must not be
+                            # able to ZERO accumulated real crashes and escape the
+                            # breaker. The legitimate reset is the survived-window
+                            # path above. (Residual: a pure SessionEnd-spammer can
+                            # still keep the streak from growing — a full
+                            # termination-correlation guard is a #12271 liveness
+                            # hardening follow-up; natural crash loops don't POST
+                            # SessionEnd, so the #12244 protection is intact.)
                             _log(
                                 f"{role}: graceful exit (SessionEnd "
-                                f"reason={se.get('reason')!r}) — not counting "
-                                f"toward crash-loop streak (#12418)"
+                                f"reason={se.get('reason')!r}) — not counted as "
+                                f"a crash (streak stays "
+                                f"{agent.consecutive_fast_deaths}) (#12418)"
                             )
                         elif (lifetime is not None
                                 and lifetime < FAST_DEATH_WINDOW_SECONDS):
@@ -658,6 +673,10 @@ class HarnessState:
                             # other three spawn paths — a successful spawn always
                             # stamps, even if terminal_pid is absent.
                             agent.last_spawn_at = time.time()
+                            # #12418 F3 — clear the prior lifecycle's SessionEnd
+                            # so only a hook from THIS spawn can mark the next
+                            # death graceful (closes the delayed-hook race).
+                            agent.last_session_end = None
                 elif result.get("action") == "error":
                     # #11640: boot_agent refused (e.g. unregistered/missing
                     # clone). Never spawned in REPO_ROOT — surface the refusal
@@ -1562,6 +1581,7 @@ async def lifespan(app: FastAPI):
                         agent_state.bootup_complete = False
                         agent_state.boot_time = time.time()
                         agent_state.last_spawn_at = time.time()  # #12244 P2
+                        agent_state.last_session_end = None  # #12418 F3
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
@@ -1807,6 +1827,7 @@ async def start_all():
                 agent_state.bootup_complete = False
                 agent_state.boot_time = time.time()
                 agent_state.last_spawn_at = time.time()  # #12244 P2
+                agent_state.last_session_end = None  # #12418 F3
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
@@ -1919,6 +1940,7 @@ async def start_agent(role: str):
             agent_state.intent_set_at = None  # #4792 Phase 1
             agent_state.boot_time = time.time()
             agent_state.last_spawn_at = time.time()  # #12244 P2
+            agent_state.last_session_end = None  # #12418 F3
             agent_state.terminal_pid = result.get("terminal_pid")
             # #8695: spawning a fresh agent → bootup-complete must be re-asserted
             # by the new process before we'll dispatch any events to it.
