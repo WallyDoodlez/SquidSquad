@@ -1,12 +1,13 @@
 # Working State
 
-- **Task**: none (between tasks) — next: #12363 (or slice d when filed)
-- **Status**: idle (just shipped #12458 to QA)
+- **Task**: none (idle) — honoring restart-required at clean boundary
+- **Status**: idle (#12458 SHIPPED+CLOSED; restart-required acked; high context → fresh cycle for next)
 - **Updated**: 2026-06-15 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## >>> ON RESUME (fresh-cycle pickup order) <<<
-**#12458 → pending-test (PR #12459)** — SHIPPED TO QA. #12271 slice c pause-aware guard: silence/dead-PID = death only when no hook explains it; guards update_health (HOLD while active_pause, ceiling-bounded + clock-skew; StopFailure throttle→backoff; AC5 genuine-death unchanged). 6 commits. DS: guard (DeepSeek — caught 2 errors: in-flight ceiling + graceful-throttle streak; fixed), plumbing (Sonnet fallback after model_router exit 2; fixed). Curated gate GREEN (2x; one transient exit-1 flake ruled out). §16 doc flagged @pm. StopFailure cause best-effort (verify payload). Vault: [[learning-guarding-a-status-machine-death-decision-needs-hold-resume-and-ceilinged-signals]].
+RESTART taken at clean boundary 2026-06-15 (restart-required + high context after 3 multi-file features this session). Next work is high-blast-radius (slice d / #12363) → warranted fresh context.
+**#12458 → SHIPPED + CLOSED (PR #12459 merged)** — pause-aware guard. #12271 slice c pause-aware guard: silence/dead-PID = death only when no hook explains it; guards update_health (HOLD while active_pause, ceiling-bounded + clock-skew; StopFailure throttle→backoff; AC5 genuine-death unchanged). 6 commits. DS: guard (DeepSeek — caught 2 errors: in-flight ceiling + graceful-throttle streak; fixed), plumbing (Sonnet fallback after model_router exit 2; fixed). Curated gate GREEN (2x; one transient exit-1 flake ruled out). §16 doc flagged @pm. StopFailure cause best-effort (verify payload). Vault: [[learning-guarding-a-status-machine-death-decision-needs-hold-resume-and-ceilinged-signals]].
 **THREE #12271 liveness slices shipped today (a/b/c = #12418/#12443/#12458).** Slice d (retire PID-poll, the cutover — consumes heartbeat + this guard, removes #10101/#10440 from liveness path) — PM files when c lands. WATCH for slice-d approval.
 Next pickup order: **#12363** (/T teardown + killpg, design posted) → #12409 ask-1 → #12408 (fix EARLY) → #12397 → installer batch (#11613/#12419/#12420) → #10690/#10686.
 Operator directive (06-15) stands: **proceed WIP-safe (commit incrementally + checkpoint every step), DS-review-per-change.**
