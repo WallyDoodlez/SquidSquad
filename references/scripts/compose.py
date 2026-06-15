@@ -1819,15 +1819,47 @@ def _session_end_hook_group() -> dict:
     }
 
 
-def _ensure_session_end_hook(settings_path) -> bool:
-    """#12418 — idempotently ensure the SessionEnd hook is present in
+# #12443 — activity-heartbeat hooks (HARNESS-ARCH §15.1). PostToolUse /
+# PostToolUseFailure fire on EVERY tool call, so they MUST NOT block or delay
+# the agent (AC2). Native `type: http` hooks are SYNCHRONOUS (they block the
+# tool call; default timeout 600s) and only `type: command` hooks support
+# `async` — verified against the Claude Code hook API (#12443) — so these are
+# async command hooks: Claude Code backgrounds them and ignores exit/output,
+# giving true zero-latency fire-and-forget. (SessionEnd, slice a, stays http: a
+# brief block once-per-session at teardown is fine.) They invoke the tiny
+# cross-platform poster via the EXEC form (command + args) so the
+# `${CLAUDE_PROJECT_DIR}` token — substituted by Claude Code itself, not the
+# shell, so it works on Windows and POSIX — resolves the script path without
+# any shell-quoting hazard. The agent role is read by the script from the
+# inherited `$SQUIDSQUAD_ROLE` env var (command-hook subprocesses inherit the
+# agent's environment).
+_ACTIVITY_HOOK_REL = "references/scripts/activity_hook.py"
+
+
+def _activity_hook_group() -> dict:
+    """Return a fresh activity-hook matcher-group (new objects each call)."""
+    return {
+        "matcher": "",
+        "hooks": [{
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PROJECT_DIR}/" + _ACTIVITY_HOOK_REL],
+            "async": True,
+            "timeout": 30,
+        }],
+    }
+
+
+def _ensure_hook_entries(settings_path, entries: dict) -> bool:
+    """#12418/#12443 — idempotently set each ``hooks.<name> = [group]`` in
     ``.claude/settings.json``. Returns True iff the file was changed.
 
-    Preserves every other key (statusLine, permissions, other hooks); only the
-    ``hooks.SessionEnd`` entry is (re)set to the canonical group. Idempotent:
-    if the entry already matches, nothing is written — so a recompose does not
+    Preserves every other key (statusLine, permissions, hooks not in
+    ``entries``); only the named ``hooks.<name>`` entries are (re)set. Idempotent:
+    if the result already matches, nothing is written — so a recompose does not
     churn the tracked file (avoids the #12397 no-op-write class). A
-    missing/corrupt file is treated as empty and (re)written.
+    missing/corrupt file is treated as empty and (re)written; a non-dict
+    ``hooks`` is replaced (warning if it held content — DS-REVIEW-12418-A F3).
     """
     settings_path = Path(settings_path)
     data = {}
@@ -1841,20 +1873,34 @@ def _ensure_session_end_hook(settings_path) -> bool:
     before = json.dumps(data, sort_keys=True)
     hooks = data.get("hooks")
     if not isinstance(hooks, dict):
-        # DS-REVIEW-12418-A F3: a valid-JSON file whose `hooks` is the wrong
-        # type (list/string/null) is replaced. Surface it if it held content,
-        # so the (rare, Claude-Code-invalid) data loss isn't silent.
         if hooks:
             print(f"WARNING: .claude/settings.json `hooks` was "
                   f"{type(hooks).__name__}, not an object — replacing "
                   f"(prior hooks dropped): {settings_path}", file=sys.stderr)
         hooks = data["hooks"] = {}
-    hooks["SessionEnd"] = [_session_end_hook_group()]
+    for name, group in entries.items():
+        hooks[name] = [group]
     if json.dumps(data, sort_keys=True) == before:
         return False
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return True
+
+
+def _ensure_session_end_hook(settings_path) -> bool:
+    """#12418 — ensure the SessionEnd telemetry hook is present in
+    ``.claude/settings.json`` (see ``_ensure_hook_entries``)."""
+    return _ensure_hook_entries(
+        settings_path, {"SessionEnd": _session_end_hook_group()})
+
+
+def _ensure_activity_hooks(settings_path) -> bool:
+    """#12443 — ensure the PostToolUse + PostToolUseFailure activity-heartbeat
+    hooks are present in ``.claude/settings.json`` (see ``_ensure_hook_entries``)."""
+    return _ensure_hook_entries(settings_path, {
+        "PostToolUse": _activity_hook_group(),
+        "PostToolUseFailure": _activity_hook_group(),
+    })
 
 
 MANDATORY_ROLES = {"pm", "verifier", "dm"}  # #6055/#6274: always present (qa→verifier per D5)
@@ -2138,6 +2184,10 @@ def main():
         se_settings = REPO_ROOT / ".claude" / "settings.json"
         if _ensure_session_end_hook(se_settings):
             print(f"  SessionEnd hook -> {se_settings.relative_to(REPO_ROOT)}")
+        # #12443 — ensure the PostToolUse + PostToolUseFailure activity-heartbeat
+        # hooks are present too (same idempotent settings.json integration).
+        if _ensure_activity_hooks(se_settings):
+            print(f"  Activity hooks -> {se_settings.relative_to(REPO_ROOT)}")
 
     elif cmd == "upgrade-soul":
         if len(args) < 2:
