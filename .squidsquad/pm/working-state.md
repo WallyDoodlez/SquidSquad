@@ -8,11 +8,13 @@ _Condensed 2026-06-14. Prior incident narrative (reboot saga, event-mode stabili
 
 **Reboot saga: CLOSED** — all fixes shipped (#12282 trigger/test-isolation, #12244/#12293 backoff, #12342 EAD routing, #12380 compose-alias). qa loop-pin (59999) is INTENTIONAL until #12409 (qa event-mode stability) lands.
 
-### Active threads awaiting operator
-1. **Draft PR #12417** — DS audit BLOCKER #1: HARNESS-ARCH event_poll lifecycle reconciliation (§3 / §7.2 steps+diagram / §7.5+§10 dropped `event_poll_pid` / §11 / §14 → corrected to *agent-Monitor-spawns-event_poll; harness tracks only `claude_pid`; recovery = Monitor-exit→session-end→claude-PID-death→respawn*). At work-discovery **human-review gate**. After review: step 4 DS re-audit on modified doc → step 5 cross-ref vs AGENT-RUNTIME → operator "all good" → slice worker task(s). Likely root cause of #12363 (orphaned event_poll) — cross-link after approval.
-2. **#11505 close** — PM ruling posted (verified): capability-check retirement is one unit owned by **#10025** per in-tree docs (manifest.md:149, sub-skill-catalog.md:143); AC1 (`capabilities/` dir) already done → no independent deliverable. Recommend close-as-superseded; flagged to operator because #11505 is in the 06-12 bundle (#11503 + #10836 R1). Handoff scope captured on #10025.
-3. **#12271** liveness scope — pending operator approval (activity-heartbeat + pause-guard; SessionEnd-slice first). **Ticket-slicing HELD until #12417 lands.**
-4. **#12300** work-discovery process → L2 — DEFERRED until harness-arch changes land (applying the principle now via #12417).
+### Active threads
+1. **#12417 — MERGED 2026-06-15** (merge commit 29643ca8). HARNESS-ARCH (v24–v26) + AGENT-RUNTIME event_poll/`.claude-pid` reconciliation on main. Full work-discovery flow completed: research → draft → human review → DS re-audit (step 4) → cross-ref (step 5) → "all okay" → merge. PM merged under explicit operator authorization (boundary deviation noted on PR). **Descriptive-corrective → no new impl tasks spawned** (docs now match existing code). PM merged (boundary exception, operator-authorized).
+2. **#12271** liveness scope — NEXT: present final scope for operator lock, then slice. Final design (this session): liveness = activity-heartbeat (PostToolUse/cycle_post) + event_poll polls + pause-guard; **PID demoted to teardown-only**; **no new PID-reporting needed** (harness already has resolved claude.exe PID); SessionEnd-reason slice first. PID-for-liveness (5s poll) dropped.
+3. **#12363** — `/T` teardown fix: root cause posted (kill without `/T` orphans event_poll subtree). role:skill, open, standalone (independent of #12271). Ready for skill pickup.
+4. **#11505 close** — PM ruling posted: capability-check retirement = one unit owned by **#10025**; recommend close-as-superseded (in 06-12 bundle). Awaiting operator confirm.
+5. **#12300** work-discovery → L2 — DEFERRED (the process just proved itself on #12417).
+6. **DS finding #4** (`/work/assign` payload) — small follow-up doc task, NOT filed yet.
 
 ### DS audit (HARNESS-ARCH §14/§15/§16) — 6 findings
 - #1 event_poll spawn (BLOCKER) → draft PR #12417.
