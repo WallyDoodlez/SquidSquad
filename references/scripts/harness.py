@@ -3484,9 +3484,14 @@ class ExternalActivityDetector:
 
             if not (fresh_transition or reemit_due):
                 # No emit this poll. Still record a freshly-observed status
-                # change (passing the time filter) so back-transitions re-emit
-                # later (DS-12342 F1) — this covers both unmapped statuses and
-                # comment-bumped re-observations of an already-routed status.
+                # change (passing the time filter) so a later re-entry to a
+                # routed status differs from it and re-emits (DS-12342 F1) —
+                # this covers unmapped statuses (in-progress, planned, ...).
+                # Comment-bumped re-observations of an already-routed status
+                # never reach this clause: they have fresh_status=False (the
+                # status was recorded on the prior emit), which also keeps them
+                # out of fresh_transition — the dedup, not this clause, silences
+                # them.
                 if fresh_status and updated_recently:
                     self.mark_emitted(issue_num, status)
                 continue
