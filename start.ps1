@@ -10,9 +10,12 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "Install Python from https://python.org" -ForegroundColor Red; exit 1
 }
 
-# --- fastapi + uvicorn ---
-python -c "import fastapi; import uvicorn" 2>$null
-if ($LASTEXITCODE -ne 0) { pip install fastapi uvicorn }
+# --- Runtime Python deps (#11613) ---
+# Install the FULL runtime set from requirements.txt, not just fastapi+uvicorn —
+# watchdog and pyyaml are also imported at runtime. The import probe covers
+# every runtime dep so a partial environment triggers a reinstall.
+python -c "import fastapi, uvicorn, starlette, watchdog, yaml" 2>$null
+if ($LASTEXITCODE -ne 0) { pip install -r requirements.txt }
 
 # --- Sync all clones to main ---
 Write-Host "Syncing clones..."
