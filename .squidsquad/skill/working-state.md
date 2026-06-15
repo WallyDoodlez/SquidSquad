@@ -2,8 +2,11 @@
 
 - **Task**: none (idle)
 - **Status**: idle
-- **Updated**: 2026-06-14 (skill — event-mode session; harness restarted mid-session, EAD fix #12342 now live)
+- **Updated**: 2026-06-15 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## Just shipped to QA
+- **#12418** → pending-test (PR #12441). SessionEnd-reason hook (#12271 slice 1). 3 components, each DS-reviewed: A (compose+settings.json native type:http hook, role via X-Agent-Role header from $SQUIDSQUAD_ROLE), B (harness ingest — NO_FINDINGS), C (reboot decision graceful-vs-crash; **DS caught a None-TypeError ERROR + a crash-loop-breaker bypass** → graceful no longer resets the streak, last_session_end cleared on all spawn paths). ~30 tests; full suite green (pytest exit codes). Endpoint header-based /hooks/session-end (PM affirmed shape). AC1 verifies by RUNNING compose. Residual deliberate-spam gap → #12271 hardening. DS-REVIEW-12418-{A,B,C}.md on main. Vault: [[learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker]].
 
 ## Shipped this session
 - **#12282** SHIPPED — reboot-churn root cause (test POSTing real /restart to live harness). Vault: [[learning-default-port-fallback-is-live-egress-trap-in-tests]].
