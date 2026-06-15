@@ -1,0 +1,355 @@
+commit 5910680ca047f1217de66955283731f06e86a54c
+Author: Wallace Chan <naahtec@hotmail.com>
+Date:   Mon Jun 15 08:37:53 2026 -0400
+
+    fix(#12442): re-emit assigned-to for stuck handoff work (EAD)
+    
+    The External Activity Detector (#12342) emitted the assigned-to nudge
+    exactly once per transition, gated by `updatedAt > _last_check_epoch`.
+    For terminal HANDOFF statuses (pending-test → verifier, pending-ship →
+    dm) that single nudge is the ONLY delivery path to an often-event-mode
+    agent. If it was missed — dm busy mid-cycle, a cursor gap,
+    ack-without-action, or the item was already at the status when the
+    detector (re)started so its updatedAt is in the past and the time filter
+    hides it forever — the item starved (observed: #12418 sat pending-ship
+    48 min until PM hand-injected a wake event).
+    
+    Fix: for the two handoff statuses only, re-emit the assigned-to nudge on
+    a bounded cadence (_HANDOFF_REEMIT_SECONDS = 600s), bypassing the
+    updatedAt time filter, until the status changes (which removes the item
+    from the open+pending query and ends the re-emit). Idempotent — an
+    assigned-to is a wake nudge; a redundant one just makes the agent
+    re-check its queue. Worker statuses (approved/open) keep the single-emit
+    + time-filter behavior (their worker is presumed already looping).
+    
+    - harness.py: _HANDOFF_REEMIT_SECONDS, _handoff_emit_at, _handoff_due/
+      _mark_handoff_emit, re-emit branch in _check_for_changes.
+    - test_harness.py: TestEADHandoffReemit12442 (7 tests); retargeted the
+      #12342 time-filter test to a worker status (handoff is now exempt).
+    
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+diff --git a/references/scripts/harness.py b/references/scripts/harness.py
+index 5eb956611..e3389ec81 100644
+--- a/references/scripts/harness.py
++++ b/references/scripts/harness.py
+@@ -3266,6 +3266,22 @@ class ExternalActivityDetector:
+         "status:pending-ship": ("role_class", "dm"),
+     }
+ 
++    # #12442: terminal HANDOFF statuses route to a *different* agent than the
++    # one who built the item (verifier / dm), so delivery depends ENTIRELY on
++    # the single assigned-to nudge reaching that (often event-mode) agent. A
++    # worker status (approved/open) routes to a worker presumed already looping
++    # on its own queue; a handoff status has no such backstop. If the one nudge
++    # is lost — dm busy mid-cycle, a cursor gap, ack-without-action, or the item
++    # was already at this status when the detector (re)started so its updatedAt
++    # is in the past and the time filter skips it forever — the item starves
++    # indefinitely (observed: #12418 sat pending-ship 48 min until PM hand-
++    # injected a wake event). So for these two statuses ONLY we RE-EMIT the
++    # assigned-to nudge on a bounded cadence, bypassing the updatedAt time
++    # filter, until the status changes (which removes the item from the
++    # open+pending query and ends the re-emit). Idempotent: assigned-to is a
++    # wake nudge — a redundant one just makes the agent re-check its queue.
++    _HANDOFF_REEMIT_SECONDS = 600  # re-nudge stuck handoff work every 10 min
++
+     def __init__(self, poll_interval: int = 60):
+         self._poll_interval = poll_interval
+         self._running = False
+@@ -3285,6 +3301,13 @@ class ExternalActivityDetector:
+         # re-verification after a reject). One entry/issue also keeps the 500
+         # eviction cap at 500 *issues* rather than ~125 (Finding 5).
+         self._emitted_issues: dict = {}
++        # #12442: issue_num → epoch of the LAST assigned-to we emitted for this
++        # issue while it sat at a terminal handoff status (pending-test/
++        # pending-ship). Drives the re-emit cadence: re-nudge only once the
++        # interval since the last emit has elapsed. Separate from
++        # _emitted_issues (which records *status* for change-detection) because
++        # re-emit is time-gated, not change-gated. Guarded by _emitted_lock.
++        self._handoff_emit_at: dict = {}
+         # Lock guards _emitted_issues against concurrent mutation. The
+         # detector's own poller thread is the only writer now that #8914
+         # removed TrackerHandoffDispatcher, but the lock stays — the
+@@ -3313,6 +3336,25 @@ class ExternalActivityDetector:
+                 oldest = next(iter(self._emitted_issues))
+                 del self._emitted_issues[oldest]
+ 
++    def _handoff_due(self, issue_num, now):
++        """True iff a handoff re-emit for ``issue_num`` is due (#12442) — i.e.
++        we have never emitted a handoff nudge for it, or the last one was at
++        least ``_HANDOFF_REEMIT_SECONDS`` ago. The fresh-transition path emits
++        immediately and seeds the timer; this only governs the *re*-emit."""
++        with self._emitted_lock:
++            last = self._handoff_emit_at.get(issue_num)
++        return last is None or (now - last) >= self._HANDOFF_REEMIT_SECONDS
++
++    def _mark_handoff_emit(self, issue_num, now):
++        """Record ``now`` as the last handoff-emit time for ``issue_num``
++        (#12442; bounded + recency-ordered, mirroring mark_emitted)."""
++        with self._emitted_lock:
++            self._handoff_emit_at.pop(issue_num, None)
++            self._handoff_emit_at[issue_num] = now
++            while len(self._handoff_emit_at) > 500:
++                oldest = next(iter(self._handoff_emit_at))
++                del self._handoff_emit_at[oldest]
++
+     @staticmethod
+     def _alias_for_role_class(role_class):
+         """Resolve the install's alias for a role-class (#12342).
+@@ -3407,32 +3449,48 @@ class ExternalActivityDetector:
+             if status is None:
+                 continue
+ 
+-            # Dedup (#12342): skip when the issue is still at the SAME status we
+-            # last recorded — nothing changed (e.g. a comment bumped updatedAt
+-            # without a transition). A different status falls through and will
+-            # re-record below, so a back-transition (pending-test → in-progress
+-            # → pending-test) correctly re-emits — see DS-REVIEW-12342 Finding 1.
+-            if self.is_emitted(issue_num, status):
+-                continue
+-
+-            # Time filter: only process issues updated since last check. A
+-            # status transition bumps updatedAt, so a freshly-transitioned
+-            # issue passes; a bare comment that does NOT change status is
+-            # absorbed by the dedup above on later polls (this is why removing
+-            # the old title-prefix `_is_agent_update` skip is safe — dedup,
+-            # not a heuristic, prevents re-triggering).
+-            updated_epoch = self._parse_iso_epoch(issue.get("updatedAt", ""))
+-            if updated_epoch <= self._last_check_epoch:
+-                continue
+-
+             # Status → routing target (#12342). Unmapped statuses (in-progress,
+-            # planned, pending, planning) emit nothing — but we still RECORD
+-            # the status so a later re-entry to a routed status differs from
+-            # it and re-emits (the back-transition support; DS Finding 1).
++            # planned, pending, planning) emit nothing.
+             routing = self._STATUS_ROUTING.get(status)
+-            if routing is None:
+-                self.mark_emitted(issue_num, status)
++            # is_handoff: routes to a *different* agent than the builder
++            # (verifier/dm). These get the #12442 re-emit cadence.
++            is_handoff = bool(routing) and routing[0] == "role_class"
++
++            # Change-detection (#12342): has the status changed since we last
++            # recorded it for this issue? A different status will re-record
++            # below, so a back-transition (pending-test → in-progress →
++            # pending-test) correctly re-emits — see DS-REVIEW-12342 Finding 1.
++            fresh_status = not self.is_emitted(issue_num, status)
++
++            # Time filter (#12342): a status transition bumps updatedAt, so a
++            # freshly-transitioned issue passes; a bare comment that does NOT
++            # change status is absorbed by the dedup. NOTE (#12442): the
++            # re-emit path below deliberately does NOT consult this — a stuck
++            # handoff item's updatedAt is in the past, which is exactly why the
++            # single-emit design starved it.
++            updated_epoch = self._parse_iso_epoch(issue.get("updatedAt", ""))
++            updated_recently = updated_epoch > self._last_check_epoch
++
++            # A fresh transition into a routed status — the fast path.
++            fresh_transition = routing is not None and fresh_status and updated_recently
++            # A re-nudge for handoff work that is STILL unclaimed (#12442):
++            # the status has not changed (not a fresh transition) but the
++            # re-emit interval has elapsed. Bypasses the time filter on purpose.
++            reemit_due = (
++                is_handoff
++                and not fresh_transition
++                and self._handoff_due(issue_num, check_time)
++            )
++
++            if not (fresh_transition or reemit_due):
++                # No emit this poll. Still record a freshly-observed status
++                # change (passing the time filter) so back-transitions re-emit
++                # later (DS-12342 F1) — this covers both unmapped statuses and
++                # comment-bumped re-observations of an already-routed status.
++                if fresh_status and updated_recently:
++                    self.mark_emitted(issue_num, status)
+                 continue
++
+             kind, role_class = routing
+             if kind == "label":
+                 # Worker statuses (approved/open) route to the issue's own
+@@ -3465,6 +3523,10 @@ class ExternalActivityDetector:
+                 "event_context": f"Issue #{issue_num} {status.replace('status:', '')}",
+             })
+             self.mark_emitted(issue_num, status)
++            # #12442: seed/refresh the re-emit timer so a stuck handoff item is
++            # re-nudged only after _HANDOFF_REEMIT_SECONDS, not every poll.
++            if is_handoff:
++                self._mark_handoff_emit(issue_num, check_time)
+ 
+         self._last_check_epoch = check_time
+         # Eviction now happens inside mark_emitted() under _emitted_lock.
+diff --git a/tests/test_harness.py b/tests/test_harness.py
+index 7efadafdc..ce9f2e100 100644
+--- a/tests/test_harness.py
++++ b/tests/test_harness.py
+@@ -3351,11 +3351,16 @@ class TestEADStatusRouting12342(unittest.TestCase):
+                                        updated="2099-02-01T00:00:00Z")], det=det)
+         self.assertEqual(e2, [], "same status + comment bump must not re-emit")
+ 
+-    def test_time_filter_skips_unupdated_issues(self):
++    def test_time_filter_skips_unupdated_worker_issues(self):
++        """A WORKER-status issue (approved/open) not updated since last check is
++        skipped — its owning worker is presumed already looping on its queue, so
++        the time filter rightly suppresses re-emit. NOTE (#12442): HANDOFF
++        statuses (pending-test/pending-ship) are deliberately EXEMPT from this —
++        see test_handoff_reemits_stuck_item_despite_old_updatedat."""
+         det, _ = self._run([self._issue(8, "approved", role="skill",
+                                         updated="2000-01-01T00:00:00Z")])
+         # _last_check_epoch advanced to ~now; an old updatedAt is skipped.
+-        _, emitted = self._run([self._issue(9, "pending-test", role="skill",
++        _, emitted = self._run([self._issue(9, "approved", role="web",
+                                             updated="2000-01-01T00:00:00Z")],
+                                det=det)
+         self.assertEqual(emitted, [])
+@@ -3393,6 +3398,150 @@ class TestEADStatusRouting12342(unittest.TestCase):
+         self.assertFalse(hasattr(ExternalActivityDetector, "_is_agent_update"))
+ 
+ 
++class TestEADHandoffReemit12442(unittest.TestCase):
++    """#12442: terminal HANDOFF statuses (pending-test → verifier, pending-ship
++    → dm) re-emit the assigned-to nudge on a bounded cadence so a single
++    lost/missed nudge no longer starves delivery indefinitely.
++
++    The original #12342 design emitted exactly once per transition, gated by
++    ``updatedAt > _last_check_epoch``. If the one nudge was missed (dm busy
++    mid-cycle, a cursor gap, ack-without-action), or the item was ALREADY at
++    the handoff status when the detector (re)started — so its updatedAt is in
++    the past and the time filter hides it forever — the item starved. Observed:
++    #12418 sat pending-ship 48 min until PM hand-injected a wake event.
++
++    Re-emit is scoped to handoff statuses only — worker statuses (approved/open)
++    route to a worker presumed already looping on its own queue, so they keep
++    the plain single-emit + time-filter behavior.
++    """
++
++    _REGISTRY = {
++        "skill": ("worker", "skill"),
++        "web": ("worker", "web"),
++        "verifier": ("verifier", None),
++        "dm": ("dm", None),
++    }
++
++    # Realistic epochs (year ~2033) so that an issue's old updatedAt
++    # (2000-01-01 → epoch 946684800) sorts BEFORE the pinned clock.
++    _START = 2_000_000_000
++
++    def _issue(self, num, status, role="skill", updated="2000-01-01T00:00:00Z"):
++        labels = [{"name": "squidsquad"}, {"name": f"status:{status}"}]
++        if role:
++            labels.append({"name": f"role:{role}"})
++        return {"number": num, "title": f"ISSUE: thing {num}",
++                "labels": labels, "updatedAt": updated}
++
++    def _run(self, issues, det, now):
++        """Run _check_for_changes once with harness's clock pinned to ``now``,
++        returning the list of emitted assigned-to payloads."""
++        import config as _cfg
++        gh_result = MagicMock(returncode=0, stdout=json.dumps(issues))
++        emitted = []
++
++        def fake_emit(event_type, role, payload=None, **extra):
++            if event_type == "assigned-to":
++                emitted.append(payload or {})
++
++        with patch("harness.subprocess.run", return_value=gh_result), \
++             patch("harness._emit_event", side_effect=fake_emit), \
++             patch("harness.time.time", return_value=now), \
++             patch.object(_cfg, "parse_aliases_registry",
++                          return_value=self._REGISTRY):
++            det._check_for_changes()
++        return emitted
++
++    def _stuck_detector(self):
++        """A detector whose last-check epoch is AFTER an old item's transition —
++        i.e. the item was already at its status when the detector started, so
++        the time filter alone would hide it forever."""
++        from harness import ExternalActivityDetector
++        det = ExternalActivityDetector()
++        det._last_check_epoch = self._START
++        return det
++
++    def test_reemits_stuck_pending_ship_despite_old_updatedat(self):
++        """The core fix: a pending-ship item already stuck when the detector
++        started (old updatedAt) is still nudged to dm — the single-emit +
++        time-filter design would never have surfaced it."""
++        det = self._stuck_detector()
++        emitted = self._run([self._issue(1, "pending-ship", role="skill")],
++                            det, now=self._START + 50)
++        self.assertEqual([e["target_alias"] for e in emitted], ["dm"])
++
++    def test_reemits_stuck_pending_test_to_verifier(self):
++        """Symmetric: pending-test re-emits to the verifier alias."""
++        det = self._stuck_detector()
++        emitted = self._run([self._issue(2, "pending-test", role="skill")],
++                            det, now=self._START + 50)
++        self.assertEqual([e["target_alias"] for e in emitted], ["verifier"])
++
++    def test_no_reemit_within_interval(self):
++        """A second poll inside the re-emit interval must NOT re-nudge — the
++        cadence is bounded, not every-poll spam."""
++        det = self._stuck_detector()
++        issue = [self._issue(3, "pending-ship", role="skill")]
++        e1 = self._run(issue, det, now=self._START + 50)
++        self.assertEqual(len(e1), 1)
++        e2 = self._run(issue, det, now=self._START + 150)  # +100s < 600s
++        self.assertEqual(e2, [], "must not re-nudge before the interval elapses")
++
++    def test_reemits_after_interval_elapses(self):
++        """Once the interval passes and the item is STILL stuck, re-nudge."""
++        det = self._stuck_detector()
++        issue = [self._issue(4, "pending-ship", role="skill")]
++        e1 = self._run(issue, det, now=self._START + 50)
++        self.assertEqual(len(e1), 1)
++        e2 = self._run(issue, det, now=self._START + 750)  # +700s > 600s
++        self.assertEqual([e["target_alias"] for e in e2], ["dm"])
++
++    def test_worker_status_never_reemitted(self):
++        """Worker statuses keep the single-emit + time-filter behavior — no
++        re-emit cadence (their worker is presumed already looping)."""
++        det = self._stuck_detector()
++        issue = [self._issue(5, "approved", role="skill")]
++        e1 = self._run(issue, det, now=self._START + 50)
++        self.assertEqual(e1, [], "old-updatedAt worker item is time-filtered out")
++        e2 = self._run(issue, det, now=self._START + 5000)  # well past interval
++        self.assertEqual(e2, [], "worker statuses must not get the re-emit path")
++
++    def test_fresh_transition_seeds_timer_no_immediate_double(self):
++        """A normal fresh transition emits once via the fast path AND seeds the
++        re-emit timer, so the very next poll within the interval does not
++        double-fire."""
++        det = self._stuck_detector()
++        # recent updatedAt → fresh-transition fast path
++        e1 = self._run([self._issue(6, "pending-ship", role="skill",
++                                    updated="2099-01-01T00:00:00Z")],
++                       det, now=self._START + 50)
++        self.assertEqual([e["target_alias"] for e in e1], ["dm"])
++        e2 = self._run([self._issue(6, "pending-ship", role="skill",
++                                    updated="2099-01-01T00:00:00Z")],
++                       det, now=self._START + 100)
++        self.assertEqual(e2, [], "fresh transition must seed the timer")
++
++    def test_status_change_then_reentry_renudges_immediately(self):
++        """When dm bounces a ship back to in-progress and it later re-enters
++        pending-ship, the fresh-transition path re-emits at once — it does not
++        wait out the stale re-emit interval."""
++        det = self._stuck_detector()
++        e1 = self._run([self._issue(7, "pending-ship", role="skill")],
++                       det, now=self._START + 50)
++        self.assertEqual([e["target_alias"] for e in e1], ["dm"])
++        # bounced back to in-progress (merge conflict rollback): no emit
++        e2 = self._run([self._issue(7, "in-progress", role="skill",
++                                    updated="2099-01-01T00:00:00Z")],
++                       det, now=self._START + 100)
++        self.assertEqual(e2, [])
++        # re-enters pending-ship → immediate re-emit via fresh-transition path
++        e3 = self._run([self._issue(7, "pending-ship", role="skill",
++                                    updated="2099-02-01T00:00:00Z")],
++                       det, now=self._START + 150)
++        self.assertEqual([e["target_alias"] for e in e3], ["dm"],
++                         "re-entry must re-emit at once, not wait the interval")
++
++
+ # ---------------------------------------------------------------------------
+ # /human/queue endpoint — #8704
+ # ---------------------------------------------------------------------------
