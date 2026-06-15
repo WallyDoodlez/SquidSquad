@@ -22,9 +22,13 @@
 - **#10690** (approved, medium, gate lifted) — Wiki-link rework + documentation-linkage sub-skill (LLM-consumed → CQ + DS-review + compose).
 - **#10686** (approved, medium) — PRD-E E7 V2 migration smoke.
 
-## Blocked / pending-approval
-- **#11505** (in-progress, low) — blocked on PM/#10025.
-- **#12271** (task, status:pending, high) — progress-based liveness redesign; awaiting human approval. Will be major skill work once approved; subsumes #10855 + #12409-ask2.
+## Resolved / off-plate
+- **#11505** — PM pipeline-sentinel **verified my analysis** and ruled it superseded-by-#10025 (capability-check is one load-bearing unit owned by #10025; #11505's only bounded scope was already done in the 05-27 cleanup). PM recommends OPERATOR close it (part of an operator bundle). skill: stay off it; capability-check resumes under #10025. **Done — no skill action.**
+
+## Pending-approval (future skill work — not buildable yet)
+- **#10025** (task, pending, low) — now owns the FULL capability-check framework retirement (`capability-check.md`, `capability_check.py`, DM wiring, PM task-intake step 7, INSTALLER-ARCH §8). Mine once approved.
+- **#12271** (task, pending, high) — progress-based liveness redesign; subsumes #10855 + #12409-ask2. Major skill work once approved.
+- **#12416** (task, pending, low) — delete thin_launcher.py / direct spawn (HARNESS-ARCH §14).
 
 ## Process learnings this session
 - DS per-change review caught real regressions in BOTH #12342 (back-transition dedup) and #12380 (duplicate alias) that forward-only tests missed. Hold pending-test for DS on high-blast-radius.
