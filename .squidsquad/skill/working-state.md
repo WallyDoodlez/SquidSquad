@@ -1,16 +1,18 @@
 # Working State
 
-- **Task**: none (between tasks) — next: #12443
-- **Status**: idle (just shipped #12442 to QA)
+- **Task**: none (between tasks) — next: #12363
+- **Status**: idle (just shipped #12443 to QA)
 - **Updated**: 2026-06-15 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## >>> ON RESUME (fresh-cycle pickup order) <<<
-**#12442 → pending-test (PR #12444)** — SHIPPED TO QA. EAD re-emits `assigned-to` for stuck handoff statuses on a 600s cadence (bypasses updatedAt filter); fixed single-emit + startup-blindness starvation. DS NO_FINDINGS (doc warn addressed). **Routing landed EAD-assigned-to-only (NO /work/assign endpoint)** — told PM to doc-sync HARNESS-ARCH §3/§4.3 + AGENT-RUNTIME §8.3/§5.2 to remove /work/assign.
-Next pickup order: **#12443** (new approved, likely #12271 slice 2 — read it first) → **#12363** (/T teardown + killpg, design posted) → #12409 ask-1 → #12408 → #12397 → installer batch (#11613/#12419/#12420 serial) → #10690/#10686.
-Operator directive (06-15, on #12418) stands: **proceed WIP-safe (commit incrementally + checkpoint every step), DS-review-per-change.**
+**#12443 → pending-test (PR #12457)** — SHIPPED TO QA. #12271 slice b activity heartbeat (PostToolUse/PostToolUseFailure async-command hooks + cycle_post → harness /hooks/activity → AgentState.last_activity_at, throttled disk write). Observational only (AC5). 4 commits. DS: harness 1-warn-fixed, emitters NO_FINDINGS. Curated static gate GREEN (pytest exit 0). Also closed slice-1's latent /hooks/session-end route-contract gap (#12408 masking hid it). **§16 doc-sync flagged to @pm** (native-http only for low-freq/teardown; high-freq telemetry = async command hooks). Vault: [[learning-claude-code-http-hooks-block-only-command-hooks-async]].
+Next pickup order: **#12363** (/T teardown + killpg, design posted) → #12409 ask-1 → #12408 (fix EARLY — its masking hid the route-contract gap) → #12397 → installer batch (#11613/#12419/#12420 serial) → #10690/#10686.
+NOTE: a restart-required (recompose, .squidsquad/skill/CLAUDE.md changed) was acked but deferred — context healthy; honor at next clean boundary if it recurs.
+Operator directive (06-15) stands: **proceed WIP-safe (commit incrementally + checkpoint every step), DS-review-per-change.**
 
 ## Shipped to QA / SHIPPED
+- **#12442** → **SHIPPED** (PR #12444 merged 2026-06-15) — EAD re-emits assigned-to for stuck handoff statuses (600s cadence, bypasses updatedAt filter); fixed single-emit + startup-blindness starvation. NOW LIVE. Routing landed EAD-assigned-to-only (PM doc-syncing /work/assign removal). Vault: [[learning-single-emit-wake-nudge-needs-bounded-reemit-and-must-bypass-time-filter]].
 - **#12418** → **SHIPPED** (PR #12441 merged) — SessionEnd-reason hook (#12271 liveness slice 1). 3 DS-reviewed components; C review caught a None-TypeError + breaker-bypass (fixed). Vault: [[learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker]].
 - **#12442** (NEW, open, medium, mine) — #12342 EAD gap: pending-ship→dm single-emit; if DM misses the one nudge there's no re-emit (same single-delivery limit as back-transitions). #12380 shipped fine (routing works), so likely emitted-but-missed → fix = delivery-robustness (re-emit cadence for unhandled pending-* / DM idle-rescan). **Fresh-cycle pickup** (don't debug EAD at 79% ctx).
 - (orig) **#12418** → pending-test (PR #12441). SessionEnd-reason hook (#12271 slice 1). 3 components, each DS-reviewed: A (compose+settings.json native type:http hook, role via X-Agent-Role header from $SQUIDSQUAD_ROLE), B (harness ingest — NO_FINDINGS), C (reboot decision graceful-vs-crash; **DS caught a None-TypeError ERROR + a crash-loop-breaker bypass** → graceful no longer resets the streak, last_session_end cleared on all spawn paths). ~30 tests; full suite green (pytest exit codes). Endpoint header-based /hooks/session-end (PM affirmed shape). AC1 verifies by RUNNING compose. Residual deliberate-spam gap → #12271 hardening. DS-REVIEW-12418-{A,B,C}.md on main. Vault: [[learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker]].

@@ -1,0 +1,331 @@
+commit 86caf99520d88981bb0a7f5ceac53146d985c2d5
+Author: Wallace Chan <naahtec@hotmail.com>
+Date:   Mon Jun 15 09:03:45 2026 -0400
+
+    feat(#12443): harness records activity heartbeat via /hooks/activity
+    
+    Slice (b) of #12271 (progress-based liveness), harness side. Adds the
+    ingestion endpoint + AgentState fields for the activity heartbeat that
+    proves the real agent loop is progressing (HARNESS-ARCH §15.1).
+    
+    - AgentState.last_activity_at (epoch of latest heartbeat) + last_activity
+      ({at, event, tool, phase}); persisted in save/load + the manual snapshot.
+    - POST /hooks/activity: mirrors /hooks/session-end (X-Agent-Role header,
+      unknown/missing-role drop, fail-open always-200). Records the heartbeat
+      in-memory immediately (what GET /agents/{role} reads) and THROTTLES the
+      state-file write (_ACTIVITY_SAVE_THROTTLE_SECONDS=30) since these fire on
+      every tool call — disk staleness within the window is harmless.
+    - Exposed via the existing GET /agents/{role}.to_dict().
+    
+    Observational only (AC5) — does NOT drive the reboot decision yet (#12271
+    slice d). TestActivityHook12443 (10 tests); full harness suite green (233).
+    
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+diff --git a/references/scripts/harness.py b/references/scripts/harness.py
+index 5eb956611..271ced155 100644
+--- a/references/scripts/harness.py
++++ b/references/scripts/harness.py
+@@ -160,7 +160,9 @@ class AgentState:
+                  "last_spawn_at", "consecutive_fast_deaths",
+                  "reboot_blocked_until",
+                  # #12418 — last SessionEnd hook reason (graceful-exit signal)
+-                 "last_session_end")
++                 "last_session_end",
++                 # #12443 — activity heartbeat (progress-based liveness)
++                 "last_activity_at", "last_activity")
+ 
+     # Intent values:
+     #   "running"    — agent should be alive; auto-reboot on death (#4949)
+@@ -212,6 +214,16 @@ class AgentState:
+         # a crash. The reboot decision (update_health) keys off that to avoid
+         # counting graceful exits toward the #12244 crash-loop streak.
+         self.last_session_end = None
++        # #12443 — activity heartbeat (HARNESS-ARCH §15.1). last_activity_at is
++        # the epoch of the most recent heartbeat (a PostToolUse / PostToolUse-
++        # Failure command hook, or a cycle_post emit); last_activity carries the
++        # enriched context ({at, event, tool, phase}, §15.2) for display. A
++        # working loop emits these continuously; a wedged loop stops, so silence
++        # — evaluated relative to dispatched work — is the death signal.
++        # OBSERVATIONAL ONLY this slice (#12443): recorded + exposed, does NOT
++        # yet drive the reboot decision (that is #12271 slice d).
++        self.last_activity_at = None
++        self.last_activity = None
+ 
+     def to_dict(self):
+         return {
+@@ -236,6 +248,9 @@ class AgentState:
+             "reboot_blocked_until": self.reboot_blocked_until,
+             # #12418 — last SessionEnd hook reason (graceful-exit signal)
+             "last_session_end": self.last_session_end,
++            # #12443 — activity heartbeat (progress-based liveness)
++            "last_activity_at": self.last_activity_at,
++            "last_activity": self.last_activity,
+         }
+ 
+ 
+@@ -897,6 +912,11 @@ class HarnessState:
+                         # #12418 — persist last SessionEnd reason so the
+                         # graceful-vs-crash signal survives a harness restart.
+                         "last_session_end": a.last_session_end,
++                        # #12443 — persist activity heartbeat (throttled writer;
++                        # see /hooks/activity). Survives a harness restart so the
++                        # last-known activity isn't lost on recovery.
++                        "last_activity_at": a.last_activity_at,
++                        "last_activity": a.last_activity,
+                     }
+                     for role, a in self.agents.items()
+                 },
+@@ -987,6 +1007,10 @@ class HarnessState:
+                 # #12418 — restore last SessionEnd reason (defaults None for
+                 # older state files / fresh agents).
+                 agent.last_session_end = agent_data.get("last_session_end")
++                # #12443 — restore activity heartbeat (defaults None for older
++                # state files / fresh agents).
++                agent.last_activity_at = agent_data.get("last_activity_at")
++                agent.last_activity = agent_data.get("last_activity")
+ 
+         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
+ 
+@@ -2165,6 +2189,84 @@ async def hook_session_end(request: Request):
+     return JSONResponse(status_code=200, content={"ok": True})
+ 
+ 
++# #12443 — activity-heartbeat persistence throttle. These hooks fire on EVERY
++# tool call, so we update the in-memory AgentState immediately (that is what
++# GET /agents/{role} reads) but rate-limit the state-FILE write: a heartbeat
++# only persists to disk if the last persist was at least this many seconds ago.
++# Disk staleness up to this window is harmless — last_activity_at matters for
++# live liveness (in-memory), and persistence only backstops a harness restart.
++_ACTIVITY_SAVE_THROTTLE_SECONDS = 30
++_last_activity_save_at = 0.0
++
++
++@app.post("/hooks/activity")
++async def hook_activity(request: Request):
++    """#12443 — receive an agent activity heartbeat (HARNESS-ARCH §15.1).
++
++    Emitted by the per-clone `PostToolUse` / `PostToolUseFailure` async command
++    hooks (every tool call) and by `cycle_post` (every completed cycle). The
++    heartbeat proves the agent's real loop is PROGRESSING — a wedged loop stops
++    making tool calls and completing cycles, so the heartbeat stops. We record
++    `last_activity_at` (+ enriched {event, tool, phase}) per agent; the reboot
++    decision does NOT yet consume it (observational this slice — #12271 d).
++
++    Role rides the `X-Agent-Role` header (same contract as /hooks/session-end).
++
++    Fail-open contract (§16.3): ALWAYS 200, never blocks or raises. Disk
++    persistence is throttled (`_ACTIVITY_SAVE_THROTTLE_SECONDS`) since these
++    fire per tool call — the in-memory value that GET /agents/{role} reads is
++    always current; only the state-file write is rate-limited.
++    """
++    global _last_activity_save_at
++    role = (request.headers.get("X-Agent-Role") or "").strip()
++    # Mirror /hooks/session-end F5: an uninterpolated token = no-role.
++    if role.startswith("${"):
++        role = ""
++    try:
++        body = await request.json()
++    except Exception:
++        body = {}
++    if not isinstance(body, dict):
++        body = {}
++
++    if not role:
++        return JSONResponse(status_code=200, content={"ok": False, "dropped": "no-role"})
++
++    # Defense-in-depth (mirrors /hooks/session-end + receive_event #9242): drop
++    # unknown roles so a stray hook can't seed a ghost agent — but STILL 200.
++    try:
++        allowed = set(boot_remote._get_all_roles()) | {"pm"}
++    except (SystemExit, Exception):
++        allowed = None
++    if allowed is not None and role not in allowed:
++        return JSONResponse(status_code=200, content={"ok": False, "dropped": "unknown-role"})
++
++    now = time.time()
++    activity = {
++        "at": now,
++        "event": body.get("event") or body.get("hook_event_name"),
++        "tool": body.get("tool") or body.get("tool_name"),
++        "phase": body.get("phase"),
++    }
++    should_save = False
++    with state._lock:
++        agent = state.agents.get(role)
++        if agent is None:
++            agent = AgentState(role)
++            state.agents[role] = agent
++        agent.last_activity_at = now
++        agent.last_activity = activity
++        if now - _last_activity_save_at >= _ACTIVITY_SAVE_THROTTLE_SECONDS:
++            _last_activity_save_at = now
++            should_save = True
++    if should_save:
++        try:
++            await asyncio.to_thread(state.save_state)
++        except Exception as e:  # pragma: no cover — defensive
++            _log(f"{role}: activity save_state failed (non-fatal): {e}")
++    return JSONResponse(status_code=200, content={"ok": True})
++
++
+ # ---------------------------------------------------------------------------
+ # Event bus endpoints (#4709 Phase 2)
+ # ---------------------------------------------------------------------------
+diff --git a/tests/test_harness.py b/tests/test_harness.py
+index 7efadafdc..c1076c6d3 100644
+--- a/tests/test_harness.py
++++ b/tests/test_harness.py
+@@ -3987,5 +3987,152 @@ class TestSessionEndHook12418(unittest.TestCase):
+                     {"reason": "other", "at": 123.0})
+ 
+ 
++class TestActivityHook12443(unittest.TestCase):
++    """#12443: POST /hooks/activity records the activity heartbeat
++    (last_activity_at + enriched {event, tool, phase}) on AgentState, exposes it
++    via GET /agents/{role}, throttles the state-FILE write (fires per tool
++    call), and is fail-open (always 200 — a telemetry hook must never block or
++    fail the agent)."""
++
++    def setUp(self):
++        import harness
++        from fastapi.testclient import TestClient
++        self.harness = harness
++        self.client = TestClient(harness.app, raise_server_exceptions=False)
++        harness.state.start_time = time.time()
++        self.role = "skill"
++        self._roles = patch.object(
++            harness.boot_remote, "_get_all_roles", return_value=[self.role])
++        self._roles.start()
++        self._save = patch.object(harness.state, "save_state")
++        self._save_mock = self._save.start()
++        self._uh = patch.object(harness.state, "update_health")
++        self._uh.start()
++        harness.state.agents.pop(self.role, None)
++        # Reset the persistence throttle so the first POST in each test persists.
++        harness._last_activity_save_at = 0.0
++
++    def tearDown(self):
++        self._uh.stop()
++        self._save.stop()
++        self._roles.stop()
++        self.harness.state.agents.pop(self.role, None)
++
++    def _hdr(self, role=None):
++        return {"X-Agent-Role": self.role if role is None else role}
++
++    def test_records_activity_on_agentstate(self):
++        resp = self.client.post(
++            "/hooks/activity", headers=self._hdr(),
++            json={"event": "PostToolUse", "tool": "Bash", "phase": "implement"})
++        self.assertEqual(resp.status_code, 200)
++        self.assertTrue(resp.json().get("ok"))
++        agent = self.harness.state.agents.get(self.role)
++        self.assertIsNotNone(agent)
++        self.assertIsInstance(agent.last_activity_at, float)
++        self.assertEqual(agent.last_activity["event"], "PostToolUse")
++        self.assertEqual(agent.last_activity["tool"], "Bash")
++        self.assertEqual(agent.last_activity["phase"], "implement")
++
++    def test_accepts_raw_hook_payload_fields(self):
++        """A raw Claude Code hook payload uses hook_event_name / tool_name —
++        the endpoint falls back to those when event/tool aren't set."""
++        resp = self.client.post(
++            "/hooks/activity", headers=self._hdr(),
++            json={"hook_event_name": "PostToolUseFailure", "tool_name": "Edit"})
++        self.assertEqual(resp.status_code, 200)
++        act = self.harness.state.agents[self.role].last_activity
++        self.assertEqual(act["event"], "PostToolUseFailure")
++        self.assertEqual(act["tool"], "Edit")
++
++    def test_exposed_via_get_agent(self):
++        self.client.post("/hooks/activity", headers=self._hdr(),
++                         json={"event": "cycle_post"})
++        resp = self.client.get(f"/agents/{self.role}")
++        self.assertEqual(resp.status_code, 200)
++        data = resp.json()
++        self.assertIsInstance(data.get("last_activity_at"), float)
++        self.assertEqual(data["last_activity"]["event"], "cycle_post")
++
++    def test_no_role_header_dropped_but_200(self):
++        resp = self.client.post("/hooks/activity", json={"event": "PostToolUse"})
++        self.assertEqual(resp.status_code, 200)
++        self.assertFalse(resp.json().get("ok"))
++        self.assertEqual(resp.json().get("dropped"), "no-role")
++
++    def test_uninterpolated_env_var_role_is_no_role(self):
++        resp = self.client.post("/hooks/activity",
++                                headers=self._hdr("${SQUIDSQUAD_ROLE}"),
++                                json={"event": "PostToolUse"})
++        self.assertEqual(resp.status_code, 200)
++        self.assertEqual(resp.json().get("dropped"), "no-role")
++
++    def test_unknown_role_dropped_but_200(self):
++        resp = self.client.post("/hooks/activity",
++                                headers=self._hdr("bogus-role"),
++                                json={"event": "PostToolUse"})
++        self.assertEqual(resp.status_code, 200)
++        self.assertFalse(resp.json().get("ok"))
++        self.assertNotIn("bogus-role", self.harness.state.agents)
++
++    def test_malformed_body_is_fail_open(self):
++        resp = self.client.post(
++            "/hooks/activity", content=b"not json",
++            headers={**self._hdr(), "Content-Type": "application/json"})
++        self.assertEqual(resp.status_code, 200)
++        # Still records the heartbeat (the activity FACT is the signal, not the
++        # body) — event is just None when the payload is unreadable.
++        self.assertIsInstance(
++            self.harness.state.agents[self.role].last_activity_at, float)
++
++    def test_save_failure_is_fail_open(self):
++        """Even if persistence raises, the hook still answers 200."""
++        self._save.stop()
++        with patch.object(self.harness.state, "save_state",
++                          side_effect=OSError("disk full")):
++            resp = self.client.post("/hooks/activity", headers=self._hdr(),
++                                    json={"event": "PostToolUse"})
++        self._save_mock = self._save.start()  # restore for tearDown balance
++        self.assertEqual(resp.status_code, 200)
++
++    def test_disk_write_is_throttled(self):
++        """Heartbeats fire per tool call — the in-memory value updates every
++        time, but the state-FILE write is rate-limited. Two rapid POSTs persist
++        at most once."""
++        self.client.post("/hooks/activity", headers=self._hdr(),
++                         json={"event": "PostToolUse"})
++        first_at = self.harness.state.agents[self.role].last_activity_at
++        self.client.post("/hooks/activity", headers=self._hdr(),
++                         json={"event": "PostToolUse"})
++        second_at = self.harness.state.agents[self.role].last_activity_at
++        # In-memory advanced on BOTH calls...
++        self.assertGreaterEqual(second_at, first_at)
++        # ...but save_state was called at most once (throttled).
++        self.assertLessEqual(self._save_mock.call_count, 1)
++
++    def test_persisted_and_restored(self):
++        """last_activity_at + last_activity survive a save/load round-trip."""
++        import json as _json
++        import tempfile
++        from pathlib import Path as _Path
++        st = self.harness.HarnessState()
++        agent = self.harness.AgentState(self.role, "/tmp/x")
++        agent.last_activity_at = 456.0
++        agent.last_activity = {"at": 456.0, "event": "PostToolUse", "tool": "Bash"}
++        st.agents[self.role] = agent
++        with tempfile.TemporaryDirectory() as d:
++            sf = _Path(d) / ".harness-state.json"
++            with patch.object(self.harness, "HARNESS_STATE_FILE", sf):
++                st.save_state()
++                raw = _json.loads(sf.read_text(encoding="utf-8"))
++                self.assertEqual(
++                    raw["agents"][self.role]["last_activity_at"], 456.0)
++                st2 = self.harness.HarnessState()
++                st2.load_state()
++                self.assertEqual(st2.agents[self.role].last_activity_at, 456.0)
++                self.assertEqual(
++                    st2.agents[self.role].last_activity["tool"], "Bash")
++
++
+ if __name__ == "__main__":
+     unittest.main()

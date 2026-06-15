@@ -1,0 +1,560 @@
+commit 0ba986abf35fd94fb6d9639f4a0c651405a07949
+Author: Wallace Chan <naahtec@hotmail.com>
+Date:   Mon Jun 15 09:09:29 2026 -0400
+
+    feat(#12443): activity-heartbeat hooks (compose + poster + cycle_post)
+    
+    Slice (b) of #12271, agent/emitter side. Wires the heartbeat emitters
+    that feed the harness /hooks/activity endpoint.
+    
+    - activity_hook.py (new): cross-platform heartbeat poster. As a
+      PostToolUse/PostToolUseFailure async COMMAND hook it reads role from
+      $SQUIDSQUAD_ROLE + payload from stdin and POSTs to the harness; also
+      importable (post_activity) for cycle_post. Fail-open, always exit 0.
+    - compose.py: deploys the two activity hooks into .claude/settings.json.
+      These are type:command + async:true (NOT native http) — verified via the
+      CC hook API that http hooks block synchronously and only command hooks
+      support async, so per-tool-call hooks must be async command hooks to
+      satisfy AC2 (never block/delay the tool call). Exec form (python + args
+      with ${CLAUDE_PROJECT_DIR}) = cross-platform, no shell quoting. Refactored
+      slice-a's _ensure_session_end_hook into a shared idempotent
+      _ensure_hook_entries; added _ensure_activity_hooks.
+    - cycle_post.py: _do_activity_heartbeat emits a heartbeat at cycle end
+      (covers quiet stretches with no tool calls), reusing the liveness-aware
+      port discovery. Fail-open.
+    - installer-files.txt += activity_hook.py.
+    - Tests: TestEnsureActivityHooks12443 (compose), test_activity_hook.py
+      (poster fail-open + happy path), TestActivityHeartbeat12443 (cycle_post).
+      Hardened test_cycle_post's #12282 egress guard to also neutralize the
+      activity poster (it has its own urllib → would leak to live harness).
+    
+    §16 doc note (flagged to PM on the issue): 'native http, no shell wrapper'
+    holds for low-frequency/teardown hooks; high-frequency telemetry hooks must
+    be async command hooks. AC1 grants 'endpoint shape is skill's call'.
+    
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+diff --git a/references/installer-files.txt b/references/installer-files.txt
+index 55972924d..58a3c93be 100644
+--- a/references/installer-files.txt
++++ b/references/installer-files.txt
+@@ -12,6 +12,7 @@ start.ps1
+ references/commands/squidsquad-compose.md
+ references/commands/squidsquad-upgrade.md
+ references/wizard/WIZARD.md
++references/scripts/activity_hook.py
+ references/scripts/add_role.py
+ references/scripts/boot_remote.py
+ references/scripts/capability_check.py
+diff --git a/references/scripts/activity_hook.py b/references/scripts/activity_hook.py
+new file mode 100644
+index 000000000..8c03bfacc
+--- /dev/null
++++ b/references/scripts/activity_hook.py
+@@ -0,0 +1,109 @@
++#!/usr/bin/env python
++"""#12443 — activity-heartbeat poster (HARNESS-ARCH §15.1, #12271 slice b).
++
++Two roles:
++
++1. **Claude Code command hook** — wired per-clone (by compose) as the
++   ``PostToolUse`` / ``PostToolUseFailure`` hook with ``async: true``, so Claude
++   Code backgrounds it and IGNORES its exit code/output: it can never block,
++   delay, or fail the agent's tool call (AC2). Run that way it reads the agent
++   role from the inherited ``$SQUIDSQUAD_ROLE`` env var and the hook payload
++   (``tool_name`` / ``hook_event_name``) from stdin, then POSTs a lightweight
++   heartbeat to the harness ``POST /hooks/activity``.
++
++2. **Importable poster** — ``cycle_post`` imports ``post_activity()`` to emit a
++   heartbeat at cycle end (AC3), passing its own liveness-aware harness port.
++
++Why a command hook and not a native ``type: http`` hook: native http hooks are
++SYNCHRONOUS (they block the tool call; their default timeout is 600s) and only
++``type: command`` hooks support ``async``/fire-and-forget — verified against the
++Claude Code hook API (#12443). These fire on EVERY tool call, so they MUST be
++async command hooks. (SessionEnd, slice a, is once-per-session, so it stays a
++native http hook.)
++
++Fail-open contract (HARNESS-ARCH §15.5 / §16.3): NOTHING here raises and the
++process ALWAYS exits 0 — a telemetry hook must never stall, fail, or error the
++agent's work.
++"""
++
++import json
++import os
++import sys
++import urllib.error
++import urllib.request
++from pathlib import Path
++
++_DEFAULT_PORT = 7373
++# Bound the POST. ``async: true`` already keeps the hook off the agent's
++# critical path, so this only caps how long this background process lingers.
++_HEARTBEAT_TIMEOUT = 2
++
++
++def _repo_root() -> Path:
++    # references/scripts/activity_hook.py → repo root is three parents up.
++    return Path(__file__).resolve().parent.parent.parent
++
++
++def _discover_port() -> int:
++    """Best-effort harness port: this clone's ``.squidsquad/.harness-port``,
++    else the default 7373. No liveness probe — fail-open means a wrong/dead
++    port just yields a swallowed connection error and a no-op heartbeat."""
++    try:
++        txt = (_repo_root() / ".squidsquad" / ".harness-port").read_text(
++            encoding="utf-8").strip()
++        return int(txt)
++    except (OSError, ValueError):
++        return _DEFAULT_PORT
++
++
++def post_activity(role, event, tool=None, phase=None, port=None,
++                  timeout=_HEARTBEAT_TIMEOUT) -> bool:
++    """POST an activity heartbeat to the harness. Returns True on a 2xx
++    response, False otherwise. NEVER raises — every error (no role, unreachable
++    harness, timeout, bad response) is swallowed (fail-open telemetry)."""
++    if not role:
++        return False
++    if port is None:
++        port = _discover_port()
++    url = f"http://127.0.0.1:{port}/hooks/activity"
++    body = {"event": event}
++    if tool:
++        body["tool"] = tool
++    if phase:
++        body["phase"] = phase
++    try:
++        req = urllib.request.Request(
++            url, data=json.dumps(body).encode("utf-8"), method="POST",
++            headers={"Content-Type": "application/json", "X-Agent-Role": role},
++        )
++        with urllib.request.urlopen(req, timeout=timeout) as resp:
++            return 200 <= resp.status < 300
++    except Exception:
++        return False
++
++
++def main() -> int:
++    """Command-hook entrypoint: role from env, payload from stdin → heartbeat."""
++    role = (os.environ.get("SQUIDSQUAD_ROLE") or "").strip()
++    payload = {}
++    try:
++        raw = sys.stdin.read()
++        if raw:
++            parsed = json.loads(raw)
++            if isinstance(parsed, dict):
++                payload = parsed
++    except Exception:
++        payload = {}
++    event = payload.get("hook_event_name") or "PostToolUse"
++    tool = payload.get("tool_name")
++    post_activity(role, event, tool=tool)
++    return 0
++
++
++if __name__ == "__main__":
++    try:
++        sys.exit(main())
++    except Exception:
++        # Absolute fail-open: a telemetry hook must never surface a non-zero
++        # exit to Claude Code, even on an unforeseen error.
++        sys.exit(0)
+diff --git a/references/scripts/compose.py b/references/scripts/compose.py
+index 8155fe9f7..da88552a8 100644
+--- a/references/scripts/compose.py
++++ b/references/scripts/compose.py
+@@ -1819,15 +1819,47 @@ def _session_end_hook_group() -> dict:
+     }
+ 
+ 
+-def _ensure_session_end_hook(settings_path) -> bool:
+-    """#12418 — idempotently ensure the SessionEnd hook is present in
++# #12443 — activity-heartbeat hooks (HARNESS-ARCH §15.1). PostToolUse /
++# PostToolUseFailure fire on EVERY tool call, so they MUST NOT block or delay
++# the agent (AC2). Native `type: http` hooks are SYNCHRONOUS (they block the
++# tool call; default timeout 600s) and only `type: command` hooks support
++# `async` — verified against the Claude Code hook API (#12443) — so these are
++# async command hooks: Claude Code backgrounds them and ignores exit/output,
++# giving true zero-latency fire-and-forget. (SessionEnd, slice a, stays http: a
++# brief block once-per-session at teardown is fine.) They invoke the tiny
++# cross-platform poster via the EXEC form (command + args) so the
++# `${CLAUDE_PROJECT_DIR}` token — substituted by Claude Code itself, not the
++# shell, so it works on Windows and POSIX — resolves the script path without
++# any shell-quoting hazard. The agent role is read by the script from the
++# inherited `$SQUIDSQUAD_ROLE` env var (command-hook subprocesses inherit the
++# agent's environment).
++_ACTIVITY_HOOK_REL = "references/scripts/activity_hook.py"
++
++
++def _activity_hook_group() -> dict:
++    """Return a fresh activity-hook matcher-group (new objects each call)."""
++    return {
++        "matcher": "",
++        "hooks": [{
++            "type": "command",
++            "command": "python",
++            "args": ["${CLAUDE_PROJECT_DIR}/" + _ACTIVITY_HOOK_REL],
++            "async": True,
++            "timeout": 30,
++        }],
++    }
++
++
++def _ensure_hook_entries(settings_path, entries: dict) -> bool:
++    """#12418/#12443 — idempotently set each ``hooks.<name> = [group]`` in
+     ``.claude/settings.json``. Returns True iff the file was changed.
+ 
+-    Preserves every other key (statusLine, permissions, other hooks); only the
+-    ``hooks.SessionEnd`` entry is (re)set to the canonical group. Idempotent:
+-    if the entry already matches, nothing is written — so a recompose does not
++    Preserves every other key (statusLine, permissions, hooks not in
++    ``entries``); only the named ``hooks.<name>`` entries are (re)set. Idempotent:
++    if the result already matches, nothing is written — so a recompose does not
+     churn the tracked file (avoids the #12397 no-op-write class). A
+-    missing/corrupt file is treated as empty and (re)written.
++    missing/corrupt file is treated as empty and (re)written; a non-dict
++    ``hooks`` is replaced (warning if it held content — DS-REVIEW-12418-A F3).
+     """
+     settings_path = Path(settings_path)
+     data = {}
+@@ -1841,15 +1873,13 @@ def _ensure_session_end_hook(settings_path) -> bool:
+     before = json.dumps(data, sort_keys=True)
+     hooks = data.get("hooks")
+     if not isinstance(hooks, dict):
+-        # DS-REVIEW-12418-A F3: a valid-JSON file whose `hooks` is the wrong
+-        # type (list/string/null) is replaced. Surface it if it held content,
+-        # so the (rare, Claude-Code-invalid) data loss isn't silent.
+         if hooks:
+             print(f"WARNING: .claude/settings.json `hooks` was "
+                   f"{type(hooks).__name__}, not an object — replacing "
+                   f"(prior hooks dropped): {settings_path}", file=sys.stderr)
+         hooks = data["hooks"] = {}
+-    hooks["SessionEnd"] = [_session_end_hook_group()]
++    for name, group in entries.items():
++        hooks[name] = [group]
+     if json.dumps(data, sort_keys=True) == before:
+         return False
+     settings_path.parent.mkdir(parents=True, exist_ok=True)
+@@ -1857,6 +1887,22 @@ def _ensure_session_end_hook(settings_path) -> bool:
+     return True
+ 
+ 
++def _ensure_session_end_hook(settings_path) -> bool:
++    """#12418 — ensure the SessionEnd telemetry hook is present in
++    ``.claude/settings.json`` (see ``_ensure_hook_entries``)."""
++    return _ensure_hook_entries(
++        settings_path, {"SessionEnd": _session_end_hook_group()})
++
++
++def _ensure_activity_hooks(settings_path) -> bool:
++    """#12443 — ensure the PostToolUse + PostToolUseFailure activity-heartbeat
++    hooks are present in ``.claude/settings.json`` (see ``_ensure_hook_entries``)."""
++    return _ensure_hook_entries(settings_path, {
++        "PostToolUse": _activity_hook_group(),
++        "PostToolUseFailure": _activity_hook_group(),
++    })
++
++
+ MANDATORY_ROLES = {"pm", "verifier", "dm"}  # #6055/#6274: always present (qa→verifier per D5)
+ 
+ 
+@@ -2138,6 +2184,10 @@ def main():
+         se_settings = REPO_ROOT / ".claude" / "settings.json"
+         if _ensure_session_end_hook(se_settings):
+             print(f"  SessionEnd hook -> {se_settings.relative_to(REPO_ROOT)}")
++        # #12443 — ensure the PostToolUse + PostToolUseFailure activity-heartbeat
++        # hooks are present too (same idempotent settings.json integration).
++        if _ensure_activity_hooks(se_settings):
++            print(f"  Activity hooks -> {se_settings.relative_to(REPO_ROOT)}")
+ 
+     elif cmd == "upgrade-soul":
+         if len(args) < 2:
+diff --git a/references/scripts/cycle_post.py b/references/scripts/cycle_post.py
+index ebc172a0f..508330f19 100644
+--- a/references/scripts/cycle_post.py
++++ b/references/scripts/cycle_post.py
+@@ -923,6 +923,22 @@ def _do_stop_after_cycle_check(data, role):
+     return False
+ 
+ 
++def _do_activity_heartbeat(role):
++    """#12443 — emit an activity heartbeat at cycle end (HARNESS-ARCH §15.1).
++
++    A completed cycle is a liveness signal that covers quiet stretches with no
++    tool calls in the wrapper window (the PostToolUse hooks cover the rest).
++    Reuses the liveness-aware harness-port discovery. Fail-open: a telemetry
++    failure (harness down, import error, anything) must NEVER break the cycle.
++    """
++    try:
++        import activity_hook
++        activity_hook.post_activity(
++            role, "cycle_post", phase="cleanup", port=_discover_harness_port())
++    except Exception:
++        pass
++
++
+ def _do_working_state_update(data, role):
+     """Update working state file if agent provided update content."""
+     update = data.get("working_state_update")
+@@ -1027,6 +1043,9 @@ def main():
+     except (ImportError, Exception):
+         pass
+ 
++    # 8b. Activity heartbeat (#12443) — a completed cycle is a liveness signal.
++    _do_activity_heartbeat(role)
++
+     # 9. Intent + context pressure check (MUST be last — after commit, after log)
+     # Queries harness API for intent, checks context pressure. Exit 42 = harness respawns.
+     stop_for_restart = _do_stop_after_cycle_check(data, role)
+diff --git a/tests/test_activity_hook.py b/tests/test_activity_hook.py
+new file mode 100644
+index 000000000..5f31b17bc
+--- /dev/null
++++ b/tests/test_activity_hook.py
+@@ -0,0 +1,111 @@
++"""#12443 — tests for activity_hook.py, the activity-heartbeat poster.
++
++Covers AC2/AC6 fail-open behavior: harness unreachable → no raise, returns
++False, exit 0; and the happy path POSTs the heartbeat with the role header.
++"""
++import io
++import json
++import os
++import sys
++import unittest
++from unittest.mock import MagicMock, patch
++
++sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "references", "scripts"))
++
++import activity_hook  # noqa: E402
++
++
++class TestPostActivity(unittest.TestCase):
++    def test_no_role_returns_false_no_post(self):
++        """No role → no-op, never reaches the network."""
++        with patch("activity_hook.urllib.request.urlopen") as m:
++            self.assertFalse(activity_hook.post_activity("", "PostToolUse"))
++            m.assert_not_called()
++
++    def test_unreachable_harness_is_fail_open(self):
++        """Connection error → swallowed, returns False, NEVER raises."""
++        import urllib.error
++        with patch("activity_hook.urllib.request.urlopen",
++                   side_effect=urllib.error.URLError("refused")):
++            # Must not raise.
++            self.assertFalse(
++                activity_hook.post_activity("skill", "PostToolUse", port=7373))
++
++    def test_any_exception_is_swallowed(self):
++        with patch("activity_hook.urllib.request.urlopen",
++                   side_effect=RuntimeError("boom")):
++            self.assertFalse(
++                activity_hook.post_activity("skill", "PostToolUse", port=7373))
++
++    def test_happy_path_posts_with_role_header(self):
++        captured = {}
++
++        class _Resp:
++            status = 200
++            def __enter__(self): return self
++            def __exit__(self, *a): return False
++
++        def _fake_urlopen(req, timeout=None):
++            captured["url"] = req.full_url
++            captured["role"] = req.headers.get("X-agent-role")  # urllib title-cases
++            captured["body"] = json.loads(req.data.decode("utf-8"))
++            return _Resp()
++
++        with patch("activity_hook.urllib.request.urlopen", side_effect=_fake_urlopen):
++            ok = activity_hook.post_activity(
++                "skill", "PostToolUse", tool="Bash", phase="implement", port=7373)
++        self.assertTrue(ok)
++        self.assertTrue(captured["url"].endswith("/hooks/activity"))
++        self.assertEqual(captured["role"], "skill")
++        self.assertEqual(captured["body"]["event"], "PostToolUse")
++        self.assertEqual(captured["body"]["tool"], "Bash")
++        self.assertEqual(captured["body"]["phase"], "implement")
++
++    def test_non_2xx_returns_false(self):
++        class _Resp:
++            status = 500
++            def __enter__(self): return self
++            def __exit__(self, *a): return False
++        with patch("activity_hook.urllib.request.urlopen", return_value=_Resp()):
++            self.assertFalse(
++                activity_hook.post_activity("skill", "PostToolUse", port=7373))
++
++
++class TestMainEntrypoint(unittest.TestCase):
++    def test_main_reads_env_role_and_stdin_payload(self):
++        payload = {"hook_event_name": "PostToolUseFailure", "tool_name": "Edit"}
++        calls = {}
++
++        def _fake_post(role, event, tool=None, **kw):
++            calls.update(role=role, event=event, tool=tool)
++            return True
++
++        with patch.dict(os.environ, {"SQUIDSQUAD_ROLE": "skill"}), \
++             patch("activity_hook.post_activity", side_effect=_fake_post), \
++             patch("sys.stdin", io.StringIO(json.dumps(payload))):
++            rc = activity_hook.main()
++        self.assertEqual(rc, 0)
++        self.assertEqual(calls["role"], "skill")
++        self.assertEqual(calls["event"], "PostToolUseFailure")
++        self.assertEqual(calls["tool"], "Edit")
++
++    def test_main_empty_stdin_still_heartbeats(self):
++        """No payload (empty stdin) → still emits a heartbeat (the activity
++        FACT is the signal); event defaults, never raises."""
++        calls = {}
++        with patch.dict(os.environ, {"SQUIDSQUAD_ROLE": "skill"}), \
++             patch("activity_hook.post_activity",
++                   side_effect=lambda *a, **k: calls.update(a=a) or True), \
++             patch("sys.stdin", io.StringIO("")):
++            self.assertEqual(activity_hook.main(), 0)
++        self.assertEqual(calls["a"][0], "skill")
++
++    def test_main_malformed_stdin_is_fail_open(self):
++        with patch.dict(os.environ, {"SQUIDSQUAD_ROLE": "skill"}), \
++             patch("activity_hook.post_activity", return_value=True), \
++             patch("sys.stdin", io.StringIO("{ not json")):
++            self.assertEqual(activity_hook.main(), 0)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_compose.py b/tests/test_compose.py
+index aca21b524..543172dc5 100644
+--- a/tests/test_compose.py
++++ b/tests/test_compose.py
+@@ -562,6 +562,67 @@ class TestEnsureSessionEndHook12418:
+         assert url.endswith("/hooks/session-end")
+ 
+ 
++class TestEnsureActivityHooks12443:
++    """#12443 AC1: the pipeline places PostToolUse + PostToolUseFailure
++    activity-heartbeat hooks in .claude/settings.json — async command hooks (NOT
++    blocking http), idempotently, preserving everything else (incl. slice-a's
++    SessionEnd hook)."""
++
++    def _load(self, p):
++        import json
++        return json.loads(p.read_text(encoding="utf-8"))
++
++    def test_adds_both_hooks_to_missing_file(self, tmp_path):
++        p = tmp_path / ".claude" / "settings.json"
++        changed = compose._ensure_activity_hooks(p)
++        assert changed is True
++        hooks = self._load(p)["hooks"]
++        for name in ("PostToolUse", "PostToolUseFailure"):
++            assert name in hooks, f"{name} hook missing"
++            hook = hooks[name][0]["hooks"][0]
++            # AC2: must be a non-blocking async COMMAND hook, not a blocking
++            # native http hook.
++            assert hook["type"] == "command"
++            assert hook["async"] is True
++            assert hook["command"] == "python"
++            # Exec form + CC-substituted project-dir token = cross-platform path.
++            assert hook["args"] == [
++                "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"]
++            assert isinstance(hook["timeout"], int)
++
++    def test_idempotent_no_rewrite(self, tmp_path):
++        p = tmp_path / ".claude" / "settings.json"
++        assert compose._ensure_activity_hooks(p) is True
++        assert compose._ensure_activity_hooks(p) is False
++
++    def test_coexists_with_session_end_hook(self, tmp_path):
++        """Slice-a's SessionEnd hook and slice-b's activity hooks are both
++        present after the two idempotent ensures run in sequence (the deploy
++        order), and neither clobbers the other or other keys."""
++        import json
++        p = tmp_path / ".claude" / "settings.json"
++        p.parent.mkdir(parents=True)
++        p.write_text(json.dumps({
++            "statusLine": {"type": "command", "command": "x"},
++        }), encoding="utf-8")
++        assert compose._ensure_session_end_hook(p) is True
++        assert compose._ensure_activity_hooks(p) is True
++        d = self._load(p)
++        assert d["statusLine"]["command"] == "x"
++        assert "SessionEnd" in d["hooks"]
++        assert "PostToolUse" in d["hooks"]
++        assert "PostToolUseFailure" in d["hooks"]
++        # SessionEnd stays a native http hook (once-per-session, block-OK).
++        assert d["hooks"]["SessionEnd"][0]["hooks"][0]["type"] == "http"
++
++    def test_corrupt_file_treated_as_empty(self, tmp_path):
++        p = tmp_path / ".claude" / "settings.json"
++        p.parent.mkdir(parents=True)
++        p.write_text("{ not json", encoding="utf-8")
++        assert compose._ensure_activity_hooks(p) is True
++        assert "PostToolUse" in self._load(p)["hooks"]
++
++
+ # ---------------------------------------------------------------------------
+ # Layered role architecture (#3465)
+ # ---------------------------------------------------------------------------
+diff --git a/tests/test_cycle_post.py b/tests/test_cycle_post.py
+index 31548aba3..9bc78cf59 100644
+--- a/tests/test_cycle_post.py
++++ b/tests/test_cycle_post.py
+@@ -94,6 +94,19 @@ def _block_live_harness_egress(monkeypatch):
+ 
+     monkeypatch.setattr(cycle_post.urllib.request, "urlopen", _guard)
+ 
++    # #12443: the step-8b cycle_post heartbeat calls activity_hook.post_activity,
++    # which has its OWN urllib (not cycle_post's) and would otherwise leak to the
++    # live harness on 7373 from any full-main() test (e.g.
++    # test_exits_on_context_pressure) — the same #12282 class. Neutralize the
++    # poster to a no-op by default; a test that wants to assert the heartbeat
++    # re-patches it inside its own body (overriding this).
++    try:
++        import activity_hook
++        monkeypatch.setattr(activity_hook, "post_activity",
++                            lambda *a, **k: False)
++    except ImportError:
++        pass
++
+ 
+ # ---------------------------------------------------------------------------
+ # Validation
+@@ -521,6 +534,36 @@ class TestStopAfterCycleCheck:
+     # API (#4966) is the sole restart authority.
+ 
+ 
++class TestActivityHeartbeat12443:
++    """#12443 AC3: cycle_post emits an activity heartbeat at cycle end (a
++    completed cycle is a liveness signal), reusing the liveness-aware port
++    discovery, and fail-open (telemetry must never break the cycle)."""
++
++    def test_emits_heartbeat_at_cycle_end(self, patch_dirs, squid_dir):
++        import activity_hook
++        # Re-patch over the autouse no-op to assert the call shape.
++        with patch.object(activity_hook, "post_activity") as m, \
++             patch.object(cycle_post, "_discover_harness_port", return_value=9999):
++            cycle_post._do_activity_heartbeat("skill")
++        m.assert_called_once()
++        args, kwargs = m.call_args
++        assert args[0] == "skill"
++        assert args[1] == "cycle_post"
++        assert kwargs.get("port") == 9999
++
++    def test_heartbeat_is_fail_open(self, patch_dirs, squid_dir):
++        """A telemetry failure (poster raises) must NOT propagate."""
++        import activity_hook
++        with patch.object(activity_hook, "post_activity",
++                          side_effect=RuntimeError("boom")):
++            cycle_post._do_activity_heartbeat("skill")  # must not raise
++
++    def test_heartbeat_import_error_is_fail_open(self, patch_dirs, squid_dir):
++        """Even if activity_hook can't be imported, the cycle continues."""
++        with patch.dict("sys.modules", {"activity_hook": None}):
++            cycle_post._do_activity_heartbeat("skill")  # must not raise
++
++
+ class TestContextPressureRestartRouting:
+     """#4792 Phase 1 / CONTEXT-4792.md §5.1: when context pressure is exceeded,
+     cycle_post must POST /agents/{role}/restart BEFORE returning 42 so the
