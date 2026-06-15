@@ -12,7 +12,7 @@ _Condensed 2026-06-14. Prior incident narrative (reboot saga, event-mode stabili
 - Operator wants a deliberate harness restart **once all agents are idle** (don't disrupt skill's #10855 deep-work / risk WIP). Currently NOT quiet (skill active on #10855, CPU climbing).
 - **Quiet condition**: skill idle (no active child procs, #10855 at a transition point, CPU flat) AND no other agent mid-work.
 - **Current harness**: nohup-wrapped (nohup PID 31668 → python harness.py 35768), :7373, up since 06-14 10:20 (#12342-loaded). Survived the operator's accidental terminal-close via nohup.
-- **Why restart**: clears the 9 `event_poll` orphans (#12363 cruft); fresh harness.
+- **Why restart**: (1) clears the 9 `event_poll` orphans (#12363 cruft); (2) **activates #12442** (DM event-mode auto-route fix, SHIPPED to main 2026-06-15 — running harness predates it) → retires the manual dm-nudge workaround; fresh harness.
 - **Side-effects to handle on restart**: (1) compose runs → verify `.local-config` still has `qa` (#11600; #12380 should've fixed — re-add if dropped); (2) port redistribution may un-pin qa's loop (59999→7373) → re-pin qa to 59999 (loop intentional until #12409); (3) confirm all 4 agents respawn + reach ready; (4) orphans cleared.
 - **Procedure**: stop harness (kill nohup+python, or POST /shutdown) → relaunch via start.sh (or nohup python harness.py) → verify agents + qa config + qa pin.
 
