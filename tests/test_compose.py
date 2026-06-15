@@ -494,6 +494,75 @@ class TestAliasesForRoles12380:
 
 
 # ---------------------------------------------------------------------------
+# _ensure_session_end_hook — #12418 (SessionEnd telemetry hook deployment)
+# ---------------------------------------------------------------------------
+
+class TestEnsureSessionEndHook12418:
+    """#12418 AC1: the pipeline places a native type:http SessionEnd hook in
+    .claude/settings.json, idempotently, preserving everything else."""
+
+    def _load(self, p):
+        import json
+        return json.loads(p.read_text(encoding="utf-8"))
+
+    def test_adds_hook_to_missing_file(self, tmp_path):
+        p = tmp_path / ".claude" / "settings.json"
+        changed = compose._ensure_session_end_hook(p)
+        assert changed is True
+        assert p.exists()
+        group = self._load(p)["hooks"]["SessionEnd"][0]
+        hook = group["hooks"][0]
+        assert hook["type"] == "http"
+        assert hook["url"].endswith("/hooks/session-end")
+        # Role rides the env-var header so one committed file serves all clones.
+        assert hook["headers"]["X-Agent-Role"] == "${SQUIDSQUAD_ROLE}"
+        assert "SQUIDSQUAD_ROLE" in hook["allowedEnvVars"]
+        assert isinstance(hook["timeout"], int)
+
+    def test_idempotent_no_rewrite(self, tmp_path):
+        p = tmp_path / ".claude" / "settings.json"
+        assert compose._ensure_session_end_hook(p) is True
+        # Second call: already present + identical → no change, no churn.
+        assert compose._ensure_session_end_hook(p) is False
+
+    def test_preserves_other_keys_and_hooks(self, tmp_path):
+        import json
+        p = tmp_path / ".claude" / "settings.json"
+        p.parent.mkdir(parents=True)
+        p.write_text(json.dumps({
+            "statusLine": {"type": "command", "command": "x"},
+            "permissions": {"allow": ["Bash(ls *)"]},
+            "hooks": {"SessionStart": [{"matcher": "", "hooks": [
+                {"type": "command", "command": "echo hi"}]}]},
+        }), encoding="utf-8")
+        assert compose._ensure_session_end_hook(p) is True
+        d = self._load(p)
+        assert d["statusLine"]["command"] == "x"
+        assert d["permissions"]["allow"] == ["Bash(ls *)"]
+        # Existing SessionStart hook untouched; SessionEnd added alongside.
+        assert d["hooks"]["SessionStart"][0]["hooks"][0]["command"] == "echo hi"
+        assert "SessionEnd" in d["hooks"]
+
+    def test_corrupt_file_treated_as_empty(self, tmp_path):
+        p = tmp_path / ".claude" / "settings.json"
+        p.parent.mkdir(parents=True)
+        p.write_text("{ not json", encoding="utf-8")
+        assert compose._ensure_session_end_hook(p) is True
+        assert "SessionEnd" in self._load(p)["hooks"]
+
+    def test_replaces_stale_session_end_entry(self, tmp_path):
+        import json
+        p = tmp_path / ".claude" / "settings.json"
+        p.parent.mkdir(parents=True)
+        p.write_text(json.dumps({"hooks": {"SessionEnd": [{"matcher": "",
+            "hooks": [{"type": "http", "url": "http://old/x"}]}]}}),
+            encoding="utf-8")
+        assert compose._ensure_session_end_hook(p) is True
+        url = self._load(p)["hooks"]["SessionEnd"][0]["hooks"][0]["url"]
+        assert url.endswith("/hooks/session-end")
+
+
+# ---------------------------------------------------------------------------
 # Layered role architecture (#3465)
 # ---------------------------------------------------------------------------
 
