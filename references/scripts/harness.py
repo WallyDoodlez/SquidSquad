@@ -568,6 +568,30 @@ class HarnessState:
                     except Exception:
                         pass
 
+                # #12271 slice d — SHADOW divergence logging (OBSERVATIONAL).
+                # `alive` above is the PID-based verdict. Compute the progress-
+                # based verdict alongside it and log where they DISAGREE — this
+                # gathers the validation data the cutover needs before PID-
+                # liveness is removed: a PID-alive / progress-dead divergence is
+                # a candidate ZOMBIE (an inert process — the #10855/#10440 case
+                # we want to start catching); a PID-dead / progress-alive one is
+                # a candidate FALSE REBOOT the progress model would have avoided.
+                # Reads run under self._lock (held here), satisfying progress_
+                # liveness()'s snapshot contract. This does NOT change `alive` or
+                # the reboot decision — the cutover (making progress authoritative
+                # + demoting PID to teardown-only) is the separate next step,
+                # gated on this shadow data showing no false positives/negatives.
+                prog_alive, prog_reason = agent.progress_liveness(time.time())
+                if prog_alive != alive:
+                    _kind = ("candidate-zombie" if alive and not prog_alive
+                             else "candidate-false-reboot-avoided")
+                    _log(
+                        f"{role}: LIVENESS DIVERGENCE — PID says "
+                        f"{'alive' if alive else 'dead'}, progress says "
+                        f"{'alive' if prog_alive else 'dead'} ({prog_reason}) "
+                        f"[shadow #12271-d: {_kind}]"
+                    )
+
                 # #4792 Phase 1 (Q7) — 60s force-kill safety net.
                 # If the agent has been STOPPING/RESTARTING for longer than
                 # the timeout AND the claude PID is still alive, the

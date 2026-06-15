@@ -14,6 +14,7 @@ alive PID, zero work) that PID-liveness cannot catch.
 
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -270,3 +271,74 @@ class TestShouldAdvanceDispatch:
         st = HarnessState()
         st.load_state()
         assert st.get_agent("skill").last_dispatch_at is None
+
+
+# ---------------------------------------------------------------------------
+# update_health SHADOW divergence logging (observational — no behavior change)
+# ---------------------------------------------------------------------------
+
+class TestShadowDivergenceLogging:
+    def _run_update_health(self, agent, pid_alive, fake_now):
+        """Drive one update_health pass with a controlled PID verdict and the
+        given agent progress-state. Returns the _log MagicMock."""
+        from harness import HarnessState
+        hs = HarnessState()
+        hs.set_agent("skill", agent)
+        log_mock = MagicMock()
+        patches = [
+            patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path", return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive", return_value=pid_alive),
+            patch("harness.reboot_agent._read_claude_pid", return_value=(None, False)),
+            patch("harness.boot_remote.boot_agent",
+                  return_value={"success": True, "terminal_pid": 9, "action": "spawn"}),
+            patch("harness.time.time", return_value=fake_now),
+            patch("harness._log", log_mock),
+            patch.object(hs, "save_state"),
+        ]
+        for p in patches:
+            p.start()
+        try:
+            hs.update_health()
+        finally:
+            for p in patches:
+                p.stop()
+        return log_mock
+
+    def _divergence_logs(self, log_mock):
+        return [c.args[0] for c in log_mock.call_args_list
+                if c.args and "LIVENESS DIVERGENCE" in str(c.args[0])]
+
+    def test_pid_alive_progress_dead_logs_candidate_zombie(self):
+        """The zombie case: PID alive, progress dead → divergence logged, but
+        NO reboot (alive drives the decision; observational only)."""
+        now = 1_000_000.0
+        a = _booted("skill")
+        a.claude_pid = 4321
+        a.last_dispatch_at = now - (ACTIVITY_GRACE_SECONDS + 100)
+        a.last_activity_at = None  # inert → progress dead
+        log_mock = self._run_update_health(a, pid_alive=True, fake_now=now)
+        logs = self._divergence_logs(log_mock)
+        assert len(logs) == 1
+        assert "candidate-zombie" in logs[0]
+        assert "PID says alive" in logs[0]
+        assert "progress says dead" in logs[0]
+
+    def test_agreement_logs_nothing(self):
+        """PID alive AND progress alive (acted since dispatch) → no divergence."""
+        now = 1_000_000.0
+        a = _booted("skill")
+        a.claude_pid = 4321
+        a.last_dispatch_at = now - (ACTIVITY_GRACE_SECONDS + 100)
+        a.last_activity_at = now - 5  # acted → progress alive
+        log_mock = self._run_update_health(a, pid_alive=True, fake_now=now)
+        assert self._divergence_logs(log_mock) == []
+
+    def test_idle_agent_no_divergence(self):
+        """An idle agent (PID alive, nothing dispatched) agrees → no log."""
+        now = 1_000_000.0
+        a = _booted("skill")
+        a.claude_pid = 4321
+        a.last_dispatch_at = None
+        log_mock = self._run_update_health(a, pid_alive=True, fake_now=now)
+        assert self._divergence_logs(log_mock) == []
