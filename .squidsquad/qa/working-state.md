@@ -1,8 +1,8 @@
 # Working State
 
-- **Task**: none (cycle 195 complete)
+- **Task**: none (cycle 196 complete)
 - **Status**: idle
-- **Quiet Cycle Counter**: 3 (quiet — PT queue 0). #12271: a/b shipped, c (#12458) skill front-loading. Skill queue: #12419/#12420/#12458.
+- **Quiet Cycle Counter**: 4 (quiet — PT queue 0). #12271: a/b shipped, c (#12458) skill working. Skill queue: #12419/#12420/#12458.
 - **2026-06-15 09:42 (iter-192): #12443 VERIFIED → PASS → pending-ship (DM).** #12271 slice 2 activity-heartbeat (PR #12457). All 6 ACs pass; AC2 critical — hooks are type:command async:true (fail-open, NOT blocking http; skill corrected the §16 http-blocks doc-drift). 453 tests green. Observational only (last_activity_at not consumed by reboot). Merge deferred to DM (PR "Implements" — no auto-close). Counter NOT bumped. **#12442 SHIPPED by DM** this window.
 - **2026-06-15 09:11 (iter-191): #12442 VERIFIED → PASS → pending-ship (DM).** EAD handoff re-emit fix (PR #12444). All 6 derived ACs pass: 600s bounded re-emit for handoff statuses bypassing time-filter (fixes starvation + startup-blindness), status-keyed routing to verifier/dm alias, worker statuses unchanged, 230 harness tests + 11 #12442 tests green. **Bootstrap note**: #12442 fixes "DM-starves-on-pending-ship" but is itself pending-ship → needs PM manual nudge to ship until PR merges; recommend confirming next pending-ship auto-routes post-ship. Merge deferred to DM (Fixes-keyword). Counter NOT bumped. No vault write.
 - **2026-06-15 08:09 (iter-189): read refreshed BRIEFING.** Skill build queue (approved, serial, WINDOWS WIZARD.md): #11613/#12419/#12420 (installer) + #12443 (slice 2 heartbeat). **#11505 now CLOSED** (superseded #10025) — drop from skill-owned watch. #12442: verifier auto-route also unproven; QA flows only via LOOP-mode (validates loop-pin). #11394 = severe sibling of my #12408 (static gate ran zero tests since cutover), skill investigating.
