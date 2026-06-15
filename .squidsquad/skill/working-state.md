@@ -1,12 +1,24 @@
 # Working State
 
-- **Task**: none (idle) — honoring restart-required at clean boundary
-- **Status**: idle (#12458 SHIPPED+CLOSED; restart-required acked; high context → fresh cycle for next)
+- **Task**: #11613 (in-progress) — installer dep auto-provisioning; concrete fixes done, §4.1 build deferred
+- **Status**: in-progress (chunk 1 committed+pushed; §4.1 main build front-loaded for fresh cycle)
 - **Updated**: 2026-06-15 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
-## >>> ON RESUME (fresh-cycle pickup order) <<<
-RESTART taken at clean boundary 2026-06-15 (restart-required + high context after 3 multi-file features this session). Next work is high-blast-radius (slice d / #12363) → warranted fresh context.
+## >>> ON RESUME — #11613 §4.1 BUILD (TOP PICKUP, in-progress on `squidsquad/task/11613`) <<<
+Operator directive (17:xx): set #10855 aside; build APPROVED installer cluster **#11613 → #12419 → #12420 (serial)**; #12363 open; #12460 (slice d cutover) gated on operator.
+**#11613 chunk 1 DONE + pushed** (commit 4ff24f742): pyyaml→requirements.txt; start.sh/ps1 `pip install -r requirements.txt` + widened import probe. Drift+installer-wiring+start-team green.
+**REMAINING = §4.1 main build in `references/scripts/wizard.py`** (spec: docs/INSTALLER-ARCH.md §4.1; research: .squidsquad/pm/planning/RESEARCH-INSTALLER-DEPROV-11537.md). Model = **gather-all → present → ONE consent → provision → re-verify** (never fail-fast):
+1. **Gather-all detector** — ONE pass enumerating EVERY missing dep (no bail on first): `gh` installed, `gh` auth, Python3, pip, runtime pkgs (`requirements.txt`), `claude` CLI on PATH. Each annotated with its per-OS provisioning action. EXTEND wizard.py's single-helper-JSON envelope pattern (today it checks ONLY gh, fail-fast — see wizard.py:166 `shutil.which("gh")`). Returns the full missing-set.
+2. **Per-platform dispatch** in ONE helper (don't scatter): system tools (gh/Python/pip) → winget|choco (Win) / brew (macOS) / apt|dnf (Linux); packages → `pip install -r requirements.txt`.
+3. **Consent** — present full missing-set in plain language + proposed action each; ONE permission ask ("Install these N?"); nothing installed before consent.
+4. **Guided (NOT auto)**: `claude` CLI (npm `npm i -g @anthropic-ai/claude-code`, only if npm present else instruct) + `gh auth login` (interactive) — surface as guided steps.
+5. **Re-verify** — re-run gather-all; still-missing → instruct + stop clean (Phase 0 is pre-Phase-5, abort = no repo writes).
+Notes: install-time = consent gate (human present); boot-time start.sh/ps1 = SILENT re-ensure (no prompt) — chunk 1 already did the start-script unified read. DS-review-per-AC (install+boot blast radius). Installer agent acts on helper JSON, never invents checks. AC: compose-consumption verified, no regression to existing prereq check.
+**This §4.1 build is high-blast-radius → fresh context warranted (deferred from a 3-feature marathon tail).**
+
+## (earlier this session) RESTART context
+restart-required acked; 3 liveness slices (a/b/c) shipped. Next after #11613 cluster: #12363 → #12409 ask-1 → #12408 → #12397 → #10690/#10686.
 **#12458 → SHIPPED + CLOSED (PR #12459 merged)** — pause-aware guard. #12271 slice c pause-aware guard: silence/dead-PID = death only when no hook explains it; guards update_health (HOLD while active_pause, ceiling-bounded + clock-skew; StopFailure throttle→backoff; AC5 genuine-death unchanged). 6 commits. DS: guard (DeepSeek — caught 2 errors: in-flight ceiling + graceful-throttle streak; fixed), plumbing (Sonnet fallback after model_router exit 2; fixed). Curated gate GREEN (2x; one transient exit-1 flake ruled out). §16 doc flagged @pm. StopFailure cause best-effort (verify payload). Vault: [[learning-guarding-a-status-machine-death-decision-needs-hold-resume-and-ceilinged-signals]].
 **THREE #12271 liveness slices shipped today (a/b/c = #12418/#12443/#12458).** Slice d = **#12460 (FILED, status:pending — NOT approved, do NOT build)**: the cutover (flip reboot decision PID→progress, demote PID to teardown). PM holding for explicit operator go + cutover strategy (PM recommends SHADOW/PARALLEL validation: run progress-liveness alongside PID-liveness, log divergence, confirm no false-positives, THEN hard-flip). Highest blast radius — fresh context + the agreed strategy when approved. WATCH for #12460 approval.
 Next pickup order: **#12363** (/T teardown + killpg, design posted) → #12409 ask-1 → #12408 (fix EARLY) → #12397 → installer batch (#11613/#12419/#12420) → #10690/#10686.
