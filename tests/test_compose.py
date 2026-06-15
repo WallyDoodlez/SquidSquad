@@ -577,7 +577,8 @@ class TestEnsureActivityHooks12443:
         changed = compose._ensure_activity_hooks(p)
         assert changed is True
         hooks = self._load(p)["hooks"]
-        for name in ("PostToolUse", "PostToolUseFailure"):
+        # #12458: PreToolUse joins the per-tool-call async command hooks.
+        for name in ("PreToolUse", "PostToolUse", "PostToolUseFailure"):
             assert name in hooks, f"{name} hook missing"
             hook = hooks[name][0]["hooks"][0]
             # AC2: must be a non-blocking async COMMAND hook, not a blocking
@@ -621,6 +622,47 @@ class TestEnsureActivityHooks12443:
         p.write_text("{ not json", encoding="utf-8")
         assert compose._ensure_activity_hooks(p) is True
         assert "PostToolUse" in self._load(p)["hooks"]
+
+
+class TestEnsurePauseHooks12458:
+    """#12458 AC1: the pipeline places the pause-aware lifecycle hooks
+    (Notification / PreCompact / PostCompact / StopFailure) in settings.json as
+    native http hooks (low-frequency, block-OK), idempotently, coexisting with
+    the per-tool-call activity hooks + SessionEnd."""
+
+    def _load(self, p):
+        import json
+        return json.loads(p.read_text(encoding="utf-8"))
+
+    def test_adds_all_pause_hooks(self, tmp_path):
+        p = tmp_path / ".claude" / "settings.json"
+        assert compose._ensure_pause_hooks(p) is True
+        hooks = self._load(p)["hooks"]
+        for name in ("Notification", "PreCompact", "PostCompact", "StopFailure"):
+            assert name in hooks, f"{name} hook missing"
+            hook = hooks[name][0]["hooks"][0]
+            # Low-freq → native http (a brief block is fine), role via header.
+            assert hook["type"] == "http"
+            assert hook["url"].endswith("/hooks/pause")
+            assert hook["headers"]["X-Agent-Role"] == "${SQUIDSQUAD_ROLE}"
+
+    def test_idempotent_no_rewrite(self, tmp_path):
+        p = tmp_path / ".claude" / "settings.json"
+        assert compose._ensure_pause_hooks(p) is True
+        assert compose._ensure_pause_hooks(p) is False
+
+    def test_coexists_with_activity_and_session_end(self, tmp_path):
+        """All three hook families (session-end, activity, pause) coexist after
+        the deploy-order ensures run, none clobbering the others."""
+        p = tmp_path / ".claude" / "settings.json"
+        assert compose._ensure_session_end_hook(p) is True
+        assert compose._ensure_activity_hooks(p) is True
+        assert compose._ensure_pause_hooks(p) is True
+        hooks = self._load(p)["hooks"]
+        for name in ("SessionEnd", "PreToolUse", "PostToolUse",
+                     "PostToolUseFailure", "Notification", "PreCompact",
+                     "PostCompact", "StopFailure"):
+            assert name in hooks, f"{name} missing"
 
 
 # ---------------------------------------------------------------------------

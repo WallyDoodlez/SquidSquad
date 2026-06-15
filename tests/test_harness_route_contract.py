@@ -73,6 +73,10 @@ EXPECTED_CALLERS = {
     # that cycle_post imports). activity_hook is the module that literally holds
     # the route path; cycle_post reaches it via post_activity(), not a literal.
     ("POST", "/hooks/activity"):                ["activity_hook"],
+    # #12458 — pause-aware liveness hooks (Notification / PreCompact /
+    # PostCompact / StopFailure): POSTed only by Claude Code's native type:http
+    # hooks in settings.json (no in-repo Python caller).
+    ("POST", "/hooks/pause"):                   _EXTERNAL,
 }
 
 

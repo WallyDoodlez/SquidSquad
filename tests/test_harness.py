@@ -4136,6 +4136,280 @@ class TestSessionEndHook12418(unittest.TestCase):
                     {"reason": "other", "at": 123.0})
 
 
+class TestPauseStateHelpers12458(unittest.TestCase):
+    """#12458 (#12271 slice c): AgentState.active_pause() returns the reason a
+    hook explains the agent's silence (so reboot should hold off), each bounded
+    by a staleness ceiling; stopfailure_backoff_due() flags a recent throttle."""
+
+    def setUp(self):
+        import harness
+        self.h = harness
+        self.a = harness.AgentState("skill", "/tmp/x")
+
+    def test_in_flight_within_deadline_is_paused(self):
+        now = 1000.0
+        self.a.in_flight_until = now + 100  # deadline in the future
+        self.assertEqual(self.a.active_pause(now), "in-flight")
+
+    def test_in_flight_past_deadline_not_paused(self):
+        now = 1000.0
+        self.a.in_flight_until = now - 1  # deadline elapsed (tool_call_max hit)
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_in_flight_deadline_too_far_future_not_paused(self):
+        """DS-REVIEW-12458-guard F2: a deadline further out than tool_call_max
+        (stale flag / backward clock step) must NOT hold indefinitely — the
+        ceiling caps the hold at one legitimate tool call."""
+        now = 1000.0
+        self.a.in_flight_until = now + self.h.TOOL_CALL_MAX_SECONDS + 100
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_compacting_within_ceiling_is_paused(self):
+        now = 1000.0
+        self.a.compacting_since = now - 10
+        self.assertEqual(self.a.active_pause(now), "compacting")
+
+    def test_compacting_past_ceiling_not_paused(self):
+        now = 1000.0
+        self.a.compacting_since = now - (self.h.COMPACTING_MAX_SECONDS + 1)
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_waiting_within_ceiling_is_paused(self):
+        now = 1000.0
+        self.a.waiting_since = now - 10
+        self.assertEqual(self.a.active_pause(now), "waiting")
+
+    def test_waiting_past_ceiling_not_paused(self):
+        now = 1000.0
+        self.a.waiting_since = now - (self.h.WAITING_MAX_SECONDS + 1)
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_no_signals_not_paused(self):
+        self.assertIsNone(self.a.active_pause(1000.0))
+
+    def test_in_flight_takes_priority_over_waiting(self):
+        now = 1000.0
+        self.a.in_flight_until = now + 100
+        self.a.waiting_since = now - 10
+        self.assertEqual(self.a.active_pause(now), "in-flight")
+
+    def test_clock_skew_negative_age_not_paused(self):
+        """A flag stamped in the FUTURE (clock skew / corrupt state) must not
+        read as an indefinite pause — the `0 <= age` guard rejects it."""
+        now = 1000.0
+        self.a.compacting_since = now + 500
+        self.assertIsNone(self.a.active_pause(now))
+
+    def test_recent_rate_limit_backoff_due(self):
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "rate_limit", "at": now - 5}
+        self.assertTrue(self.a.stopfailure_backoff_due(now))
+
+    def test_recent_overloaded_backoff_due(self):
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "overloaded", "at": now - 5}
+        self.assertTrue(self.a.stopfailure_backoff_due(now))
+
+    def test_stale_rate_limit_not_due(self):
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "rate_limit",
+                                    "at": now - (self.h.STOP_FAILURE_RECENT_SECONDS + 1)}
+        self.assertFalse(self.a.stopfailure_backoff_due(now))
+
+    def test_non_throttle_cause_not_due(self):
+        """auth/billing failures need operator action, not an auto-backoff."""
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "authentication_failed", "at": now - 5}
+        self.assertFalse(self.a.stopfailure_backoff_due(now))
+
+    def test_missing_stop_failure_not_due(self):
+        self.assertFalse(self.a.stopfailure_backoff_due(1000.0))
+        self.a.last_stop_failure = "not-a-dict"
+        self.assertFalse(self.a.stopfailure_backoff_due(1000.0))
+
+    def test_null_at_does_not_crash(self):
+        """A {'at': null} from a hand-edited state file must not TypeError."""
+        now = 1000.0
+        self.a.last_stop_failure = {"cause": "rate_limit", "at": None}
+        self.assertFalse(self.a.stopfailure_backoff_due(now))
+
+    def test_pause_state_persisted_and_restored(self):
+        import json as _json, tempfile
+        from pathlib import Path as _Path
+        st = self.h.HarnessState()
+        a = self.h.AgentState("skill", "/tmp/x")
+        a.in_flight_until = 111.0
+        a.waiting_since = 222.0
+        a.compacting_since = 333.0
+        a.last_stop_failure = {"cause": "rate_limit", "at": 444.0}
+        st.agents["skill"] = a
+        with tempfile.TemporaryDirectory() as d:
+            sf = _Path(d) / ".harness-state.json"
+            with patch.object(self.h, "HARNESS_STATE_FILE", sf):
+                st.save_state()
+                st2 = self.h.HarnessState()
+                st2.load_state()
+        r = st2.agents["skill"]
+        self.assertEqual(r.in_flight_until, 111.0)
+        self.assertEqual(r.waiting_since, 222.0)
+        self.assertEqual(r.compacting_since, 333.0)
+        self.assertEqual(r.last_stop_failure, {"cause": "rate_limit", "at": 444.0})
+
+
+class TestPauseGuard12458(unittest.TestCase):
+    """#12458 (#12271 slice c): update_health's reboot decision is GUARDED — a
+    dead-PID agent is NOT rebooted while a hook explains the silence (in-flight /
+    waiting / compacting), and a recent throttle (StopFailure) backs off instead
+    of immediate respawn. AC5: a genuine death with NO pause signal still reboots
+    exactly as before."""
+
+    def _make_agent(self, status="running", **pause):
+        from harness import HarnessState, AgentState
+        hs = HarnessState()
+        agent = AgentState("skill", "/clone")
+        agent.status = status
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.claude_pid = 12345
+        agent.last_spawn_at = None  # avoid fast-death-window effects unless set
+        for k, v in pause.items():
+            setattr(agent, k, v)
+        hs.set_agent("skill", agent)
+        return hs, agent
+
+    def _run(self, hs, now):
+        """One update_health poll, claude PID dead. Returns the boot_agent mock."""
+        boot = patch("harness.boot_remote.boot_agent",
+                     return_value={"success": True, "terminal_pid": 999})
+        patches = [
+            patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path", return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive", return_value=False),
+            patch("harness.reboot_agent._read_claude_pid", return_value=(None, False)),
+            patch("harness.time.time", return_value=now),
+            patch("harness._log"),
+            patch.object(hs, "save_state"),
+        ]
+        boot_mock = boot.start()
+        for p in patches:
+            p.start()
+        try:
+            hs.update_health()
+        finally:
+            for p in patches:
+                p.stop()
+            boot.stop()
+        return boot_mock
+
+    # --- AC5: genuine death (no pause) still reboots ---
+    def test_genuine_death_no_pause_reboots(self):
+        now = 10_000.0
+        hs, _ = self._make_agent()
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+        self.assertEqual(hs.get_agent("skill").status, "starting")
+
+    # --- AC3a: in-flight within tool_call_max → HOLD ---
+    def test_in_flight_within_deadline_holds_reboot(self):
+        now = 10_000.0
+        hs, _ = self._make_agent(in_flight_until=now + 100)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "paused")
+
+    def test_in_flight_past_deadline_reboots(self):
+        """AC4: past tool_call_max (deadline elapsed) the agent IS wedged."""
+        now = 10_000.0
+        hs, _ = self._make_agent(in_flight_until=now - 1)
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+
+    # --- AC3b: waiting → HOLD ---
+    def test_waiting_holds_reboot(self):
+        now = 10_000.0
+        hs, _ = self._make_agent(waiting_since=now - 10)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "paused")
+
+    # --- AC3c: compacting → HOLD ---
+    def test_compacting_holds_reboot(self):
+        now = 10_000.0
+        hs, _ = self._make_agent(compacting_since=now - 10)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "paused")
+
+    # --- AC3d: StopFailure throttle → backoff, not immediate respawn ---
+    def test_stopfailure_rate_limit_backs_off(self):
+        from harness import CRASH_BACKOFF_BASE_SECONDS
+        now = 10_000.0
+        hs, _ = self._make_agent(
+            last_stop_failure={"cause": "rate_limit", "at": now - 5})
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        agent = hs.get_agent("skill")
+        self.assertEqual(agent.status, "crash-looping")
+        self.assertIsNotNone(agent.reboot_blocked_until)
+        self.assertGreater(agent.reboot_blocked_until, now)
+
+    def test_graceful_exit_with_throttle_backs_off_without_streak(self):
+        """DS-REVIEW-12458-guard F3: a GRACEFUL exit (SessionEnd after spawn)
+        that coincides with a recent throttle still BACKS OFF (don't re-hit the
+        limit) but must NOT accumulate the #12244 crash streak (the #12418 AC4
+        contract — a cooperative exit is not a crash)."""
+        now = 10_000.0
+        hs, agent = self._make_agent(
+            last_spawn_at=now - 10,
+            last_session_end={"reason": "other", "at": now - 5},  # after spawn
+            last_stop_failure={"cause": "rate_limit", "at": now - 3},
+        )
+        boot = self._run(hs, now)
+        boot.assert_not_called()  # backed off, not respawned
+        a = hs.get_agent("skill")
+        self.assertEqual(a.status, "crash-looping")
+        self.assertIsNotNone(a.reboot_blocked_until)
+        # graceful → streak NOT incremented
+        self.assertEqual(a.consecutive_fast_deaths, 0)
+
+    def test_stale_stopfailure_does_not_backoff(self):
+        """An OLD StopFailure is not a current throttle → normal death path."""
+        from harness import STOP_FAILURE_RECENT_SECONDS
+        now = 10_000.0
+        hs, _ = self._make_agent(
+            last_stop_failure={"cause": "rate_limit",
+                               "at": now - (STOP_FAILURE_RECENT_SECONDS + 10)})
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")  # reboots as a normal death
+
+    # --- resume: a held agent whose ceiling has elapsed reboots ---
+    def test_held_agent_reboots_once_pause_clears(self):
+        now = 10_000.0
+        # already "paused", and its in-flight deadline is now in the past
+        hs, _ = self._make_agent(status="paused", in_flight_until=now - 1)
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")
+        self.assertEqual(hs.get_agent("skill").status, "starting")
+
+    def test_held_agent_stays_paused_while_pause_active(self):
+        now = 10_000.0
+        hs, _ = self._make_agent(status="paused", compacting_since=now - 10)
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "paused")
+
+    # --- operator stop wins over a pause hold ---
+    def test_operator_stop_wins_over_pause(self):
+        from harness import AgentState
+        now = 10_000.0
+        hs, agent = self._make_agent(status="paused", in_flight_until=now + 100)
+        agent.intent = AgentState.INTENT_STOPPING
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        a = hs.get_agent("skill")
+        # settles to stopped (intent fulfilled), NOT held forever
+        self.assertEqual(a.intent, AgentState.INTENT_STOPPED)
+
+
 class TestActivityHook12443(unittest.TestCase):
     """#12443: POST /hooks/activity records the activity heartbeat
     (last_activity_at + enriched {event, tool, phase}) on AgentState, exposes it
@@ -4281,6 +4555,124 @@ class TestActivityHook12443(unittest.TestCase):
                 self.assertEqual(st2.agents[self.role].last_activity_at, 456.0)
                 self.assertEqual(
                     st2.agents[self.role].last_activity["tool"], "Bash")
+
+
+class TestPauseHook12458(unittest.TestCase):
+    """#12458: POST /hooks/pause records pause-explaining lifecycle signals
+    (Notification→waiting, PreCompact→compacting, PostCompact→clear,
+    StopFailure→cause) and is fail-open; and /hooks/activity manages the
+    in-flight tool-call window (PreToolUse opens, Post* closes) + clears
+    waiting."""
+
+    def setUp(self):
+        import harness
+        from fastapi.testclient import TestClient
+        self.h = harness
+        self.client = TestClient(harness.app, raise_server_exceptions=False)
+        harness.state.start_time = time.time()
+        self.role = "skill"
+        self._roles = patch.object(
+            harness.boot_remote, "_get_all_roles", return_value=[self.role])
+        self._roles.start()
+        self._save = patch.object(harness.state, "save_state")
+        self._save.start()
+        self._uh = patch.object(harness.state, "update_health")
+        self._uh.start()
+        harness.state.agents.pop(self.role, None)
+        harness._last_activity_save_at = 0.0
+
+    def tearDown(self):
+        self._uh.stop()
+        self._save.stop()
+        self._roles.stop()
+        self.h.state.agents.pop(self.role, None)
+
+    def _hdr(self, role=None):
+        return {"X-Agent-Role": self.role if role is None else role}
+
+    def _agent(self):
+        return self.h.state.agents.get(self.role)
+
+    # --- /hooks/pause dispatch ---
+    def test_notification_sets_waiting(self):
+        r = self.client.post("/hooks/pause", headers=self._hdr(),
+                             json={"event": "Notification"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json().get("ok"))
+        self.assertIsInstance(self._agent().waiting_since, float)
+
+    def test_precompact_sets_compacting_postcompact_clears(self):
+        self.client.post("/hooks/pause", headers=self._hdr(),
+                         json={"event": "PreCompact"})
+        self.assertIsInstance(self._agent().compacting_since, float)
+        self.client.post("/hooks/pause", headers=self._hdr(),
+                         json={"event": "PostCompact"})
+        self.assertIsNone(self._agent().compacting_since)
+
+    def test_stopfailure_records_cause(self):
+        r = self.client.post("/hooks/pause", headers=self._hdr(),
+                             json={"hook_event_name": "StopFailure",
+                                   "reason": "rate_limit"})
+        self.assertEqual(r.status_code, 200)
+        sf = self._agent().last_stop_failure
+        self.assertEqual(sf["cause"], "rate_limit")
+        self.assertIn("at", sf)
+
+    def test_stopfailure_unknown_cause_defaults(self):
+        """F5: matcher is NOT a cause source — a payload with only a matcher
+        records 'unknown' (→ safe default, no backoff)."""
+        self.client.post("/hooks/pause", headers=self._hdr(),
+                         json={"event": "StopFailure", "matcher": "rate_limit"})
+        self.assertEqual(self._agent().last_stop_failure["cause"], "unknown")
+
+    def test_unknown_event_dropped_but_200(self):
+        r = self.client.post("/hooks/pause", headers=self._hdr(),
+                             json={"event": "Bogus"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("dropped"), "unknown-event")
+
+    def test_no_role_dropped_but_200(self):
+        r = self.client.post("/hooks/pause", json={"event": "Notification"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json().get("dropped"), "no-role")
+
+    def test_unknown_role_dropped_but_200(self):
+        r = self.client.post("/hooks/pause", headers=self._hdr("bogus"),
+                             json={"event": "Notification"})
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn("bogus", self.h.state.agents)
+
+    def test_malformed_body_fail_open(self):
+        r = self.client.post("/hooks/pause", content=b"not json",
+                             headers={**self._hdr(), "Content-Type": "application/json"})
+        self.assertEqual(r.status_code, 200)  # empty body → unknown-event, still 200
+
+    # --- /hooks/activity in-flight management ---
+    def test_pretooluse_opens_in_flight_window(self):
+        r = self.client.post("/hooks/activity", headers=self._hdr(),
+                             json={"event": "PreToolUse", "tool": "Bash"})
+        self.assertEqual(r.status_code, 200)
+        agent = self._agent()
+        self.assertIsInstance(agent.in_flight_until, float)
+        # deadline is ~now + tool_call_max
+        self.assertGreater(agent.in_flight_until, time.time() + 1)
+
+    def test_posttooluse_closes_in_flight_window(self):
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PreToolUse"})
+        self.assertIsNotNone(self._agent().in_flight_until)
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PostToolUse"})
+        self.assertIsNone(self._agent().in_flight_until)
+
+    def test_activity_clears_waiting(self):
+        # set waiting via a Notification, then any activity clears it
+        self.client.post("/hooks/pause", headers=self._hdr(),
+                         json={"event": "Notification"})
+        self.assertIsNotNone(self._agent().waiting_since)
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PostToolUse"})
+        self.assertIsNone(self._agent().waiting_since)
 
 
 if __name__ == "__main__":
