@@ -3351,11 +3351,16 @@ class TestEADStatusRouting12342(unittest.TestCase):
                                        updated="2099-02-01T00:00:00Z")], det=det)
         self.assertEqual(e2, [], "same status + comment bump must not re-emit")
 
-    def test_time_filter_skips_unupdated_issues(self):
+    def test_time_filter_skips_unupdated_worker_issues(self):
+        """A WORKER-status issue (approved/open) not updated since last check is
+        skipped — its owning worker is presumed already looping on its queue, so
+        the time filter rightly suppresses re-emit. NOTE (#12442): HANDOFF
+        statuses (pending-test/pending-ship) are deliberately EXEMPT from this —
+        see test_handoff_reemits_stuck_item_despite_old_updatedat."""
         det, _ = self._run([self._issue(8, "approved", role="skill",
                                         updated="2000-01-01T00:00:00Z")])
         # _last_check_epoch advanced to ~now; an old updatedAt is skipped.
-        _, emitted = self._run([self._issue(9, "pending-test", role="skill",
+        _, emitted = self._run([self._issue(9, "approved", role="web",
                                             updated="2000-01-01T00:00:00Z")],
                                det=det)
         self.assertEqual(emitted, [])
@@ -3391,6 +3396,150 @@ class TestEADStatusRouting12342(unittest.TestCase):
         it matched every SquidSquad issue and made the EAD emit nothing."""
         from harness import ExternalActivityDetector
         self.assertFalse(hasattr(ExternalActivityDetector, "_is_agent_update"))
+
+
+class TestEADHandoffReemit12442(unittest.TestCase):
+    """#12442: terminal HANDOFF statuses (pending-test → verifier, pending-ship
+    → dm) re-emit the assigned-to nudge on a bounded cadence so a single
+    lost/missed nudge no longer starves delivery indefinitely.
+
+    The original #12342 design emitted exactly once per transition, gated by
+    ``updatedAt > _last_check_epoch``. If the one nudge was missed (dm busy
+    mid-cycle, a cursor gap, ack-without-action), or the item was ALREADY at
+    the handoff status when the detector (re)started — so its updatedAt is in
+    the past and the time filter hides it forever — the item starved. Observed:
+    #12418 sat pending-ship 48 min until PM hand-injected a wake event.
+
+    Re-emit is scoped to handoff statuses only — worker statuses (approved/open)
+    route to a worker presumed already looping on its own queue, so they keep
+    the plain single-emit + time-filter behavior.
+    """
+
+    _REGISTRY = {
+        "skill": ("worker", "skill"),
+        "web": ("worker", "web"),
+        "verifier": ("verifier", None),
+        "dm": ("dm", None),
+    }
+
+    # Realistic epochs (year ~2033) so that an issue's old updatedAt
+    # (2000-01-01 → epoch 946684800) sorts BEFORE the pinned clock.
+    _START = 2_000_000_000
+
+    def _issue(self, num, status, role="skill", updated="2000-01-01T00:00:00Z"):
+        labels = [{"name": "squidsquad"}, {"name": f"status:{status}"}]
+        if role:
+            labels.append({"name": f"role:{role}"})
+        return {"number": num, "title": f"ISSUE: thing {num}",
+                "labels": labels, "updatedAt": updated}
+
+    def _run(self, issues, det, now):
+        """Run _check_for_changes once with harness's clock pinned to ``now``,
+        returning the list of emitted assigned-to payloads."""
+        import config as _cfg
+        gh_result = MagicMock(returncode=0, stdout=json.dumps(issues))
+        emitted = []
+
+        def fake_emit(event_type, role, payload=None, **extra):
+            if event_type == "assigned-to":
+                emitted.append(payload or {})
+
+        with patch("harness.subprocess.run", return_value=gh_result), \
+             patch("harness._emit_event", side_effect=fake_emit), \
+             patch("harness.time.time", return_value=now), \
+             patch.object(_cfg, "parse_aliases_registry",
+                          return_value=self._REGISTRY):
+            det._check_for_changes()
+        return emitted
+
+    def _stuck_detector(self):
+        """A detector whose last-check epoch is AFTER an old item's transition —
+        i.e. the item was already at its status when the detector started, so
+        the time filter alone would hide it forever."""
+        from harness import ExternalActivityDetector
+        det = ExternalActivityDetector()
+        det._last_check_epoch = self._START
+        return det
+
+    def test_reemits_stuck_pending_ship_despite_old_updatedat(self):
+        """The core fix: a pending-ship item already stuck when the detector
+        started (old updatedAt) is still nudged to dm — the single-emit +
+        time-filter design would never have surfaced it."""
+        det = self._stuck_detector()
+        emitted = self._run([self._issue(1, "pending-ship", role="skill")],
+                            det, now=self._START + 50)
+        self.assertEqual([e["target_alias"] for e in emitted], ["dm"])
+
+    def test_reemits_stuck_pending_test_to_verifier(self):
+        """Symmetric: pending-test re-emits to the verifier alias."""
+        det = self._stuck_detector()
+        emitted = self._run([self._issue(2, "pending-test", role="skill")],
+                            det, now=self._START + 50)
+        self.assertEqual([e["target_alias"] for e in emitted], ["verifier"])
+
+    def test_no_reemit_within_interval(self):
+        """A second poll inside the re-emit interval must NOT re-nudge — the
+        cadence is bounded, not every-poll spam."""
+        det = self._stuck_detector()
+        issue = [self._issue(3, "pending-ship", role="skill")]
+        e1 = self._run(issue, det, now=self._START + 50)
+        self.assertEqual(len(e1), 1)
+        e2 = self._run(issue, det, now=self._START + 150)  # +100s < 600s
+        self.assertEqual(e2, [], "must not re-nudge before the interval elapses")
+
+    def test_reemits_after_interval_elapses(self):
+        """Once the interval passes and the item is STILL stuck, re-nudge."""
+        det = self._stuck_detector()
+        issue = [self._issue(4, "pending-ship", role="skill")]
+        e1 = self._run(issue, det, now=self._START + 50)
+        self.assertEqual(len(e1), 1)
+        e2 = self._run(issue, det, now=self._START + 750)  # +700s > 600s
+        self.assertEqual([e["target_alias"] for e in e2], ["dm"])
+
+    def test_worker_status_never_reemitted(self):
+        """Worker statuses keep the single-emit + time-filter behavior — no
+        re-emit cadence (their worker is presumed already looping)."""
+        det = self._stuck_detector()
+        issue = [self._issue(5, "approved", role="skill")]
+        e1 = self._run(issue, det, now=self._START + 50)
+        self.assertEqual(e1, [], "old-updatedAt worker item is time-filtered out")
+        e2 = self._run(issue, det, now=self._START + 5000)  # well past interval
+        self.assertEqual(e2, [], "worker statuses must not get the re-emit path")
+
+    def test_fresh_transition_seeds_timer_no_immediate_double(self):
+        """A normal fresh transition emits once via the fast path AND seeds the
+        re-emit timer, so the very next poll within the interval does not
+        double-fire."""
+        det = self._stuck_detector()
+        # recent updatedAt → fresh-transition fast path
+        e1 = self._run([self._issue(6, "pending-ship", role="skill",
+                                    updated="2099-01-01T00:00:00Z")],
+                       det, now=self._START + 50)
+        self.assertEqual([e["target_alias"] for e in e1], ["dm"])
+        e2 = self._run([self._issue(6, "pending-ship", role="skill",
+                                    updated="2099-01-01T00:00:00Z")],
+                       det, now=self._START + 100)
+        self.assertEqual(e2, [], "fresh transition must seed the timer")
+
+    def test_status_change_then_reentry_renudges_immediately(self):
+        """When dm bounces a ship back to in-progress and it later re-enters
+        pending-ship, the fresh-transition path re-emits at once — it does not
+        wait out the stale re-emit interval."""
+        det = self._stuck_detector()
+        e1 = self._run([self._issue(7, "pending-ship", role="skill")],
+                       det, now=self._START + 50)
+        self.assertEqual([e["target_alias"] for e in e1], ["dm"])
+        # bounced back to in-progress (merge conflict rollback): no emit
+        e2 = self._run([self._issue(7, "in-progress", role="skill",
+                                    updated="2099-01-01T00:00:00Z")],
+                       det, now=self._START + 100)
+        self.assertEqual(e2, [])
+        # re-enters pending-ship → immediate re-emit via fresh-transition path
+        e3 = self._run([self._issue(7, "pending-ship", role="skill",
+                                    updated="2099-02-01T00:00:00Z")],
+                       det, now=self._START + 150)
+        self.assertEqual([e["target_alias"] for e in e3], ["dm"],
+                         "re-entry must re-emit at once, not wait the interval")
 
 
 # ---------------------------------------------------------------------------
