@@ -31,11 +31,20 @@ Next scan after: #10540 routed/closed (then quiet-gate resumes).
 
 - **#12458** (PR #12459, #12271 slice-3 pause-aware liveness guard: silence=death only when no hook explains it; ceiling-bounded pauses + clock-skew guard; genuine death still reboots; compose.py+harness.py+tests; merge 4b9dc42). Verifier PASS 6 ACs (377 passed). DM-merged, 'Implements' no auto-close. Counter 22→23. No reboot. (slice d = retire PID-poll, still upcoming.)
 
-## >>> BUMP GATE OPEN (23/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
+- **#11613** (PR #12471, installer dependency auto-provisioning per INSTALLER-ARCH §4.1: gather-all→present→ONE consent→provision→re-verify, never fail-fast; wizard.py+WIZARD.md+requirements.txt+start scripts; merge 887d681). Verifier PASS (ACs+§4.1+comprehension 6/6, 398 green). DM-merged. Counter 23→24. **USER-FACING** — updated README (install section: one-step dep auto-provisioning; fixed stale `pip install fastapi uvicorn`→`-r requirements.txt`). Real user-value CHANGELOG entry prepared (in #11613 comment), batched to bump.
+
+## >>> INSTALLER CLUSTER (operator's bump-gate dependency) <<<
+- Operator HELD bump 2026-06-15 for "land better installer". Installer cluster = 3 items (PM-approved 2026-06-15):
+  - **#11613** dep-provisioning ✅ SHIPPED (this session)
+  - **#12419** migration-walk — upstream (was approved; check status)
+  - **#12420** post-commit-restart — upstream
+- When all 3 ship → flag operator that installer cluster is complete + ask for bump green-light. Do NOT auto-bump.
+
+## >>> BUMP GATE OPEN (24/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
 - **Operator directive 2026-06-15 05:19 UTC: HOLD the bump — "trying to land better installer."** Bundle the installer improvements into v0.45.0; do not bump until operator green-lights post-installer. Keep shipping; counter accrues.
-- Counter **23/10**, well over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ prior cycles 415 & 416 — no green-light yet. Not re-flagging (avoid churn; operator is aware). Hold until explicit PM/operator signal.
+- Counter **24/10**, well over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ prior cycles 415 & 416 — no green-light yet. Not re-flagging (avoid churn; operator is aware). Hold until explicit PM/operator signal.
 - On green-light: bump minor v0.44.0→v0.45.0 (config.md + SKILL.md frontmatter + CHANGELOG.md), git tag, push, reset counter→0.
-- **CHANGELOG held (operator/internal-reliability framing; bump-window items are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511), WIP-preservation across reboots (#12142), harness crash-loop backoff (#12244), test-isolation /restart-leak fix (#12282), EAD event-routing fix (#12342), compose .local-config alias-keying fix (#12380), SessionEnd-reason hook #12271-slice1 (#12418), EAD handoff re-emit fix (#12442), activity-heartbeat hooks #12271-slice2 (#12443), pause-aware liveness guard #12271-slice3 (#12458).
+- **CHANGELOG held (operator/internal-reliability framing; bump-window items are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511), WIP-preservation across reboots (#12142), harness crash-loop backoff (#12244), test-isolation /restart-leak fix (#12282), EAD event-routing fix (#12342), compose .local-config alias-keying fix (#12380), SessionEnd-reason hook #12271-slice1 (#12418), EAD handoff re-emit fix (#12442), activity-heartbeat hooks #12271-slice2 (#12443), pause-aware liveness guard #12271-slice3 (#12458), installer dep auto-provisioning #11613 (USER-FACING).
 
 ## Queue state (boot @ 2026-06-14)
 - **pending-ship: 0 open** — `list-tasks dm --status pending-ship` returns ~30 results but ALL are CLOSED issues carrying stale `status:pending-ship` labels (verified get-state on #605/#9965/#11511 = CLOSED). The `--status` filter does NOT exclude closed; the no-filter `list-tasks dm` (open-only) returns 17, all status:pending. So real DM delivery queue = EMPTY.

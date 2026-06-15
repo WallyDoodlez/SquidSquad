@@ -42,8 +42,10 @@ Exit codes:
     2 — usage error (no JSON, plain text on stderr)
 """
 
+import importlib.util
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -152,6 +154,18 @@ def _run(cmd, *, timeout=30, **kwargs):
             stdout="",
             stderr=f"timeout after {timeout}s: {' '.join(str(c) for c in cmd[:2])}\n",
         )
+    except OSError as exc:
+        # Binary missing / not executable (e.g. a TOCTOU race where a tool
+        # vanishes between detection and provisioning). Return a synthetic
+        # failure like the timeout branch so callers that inspect
+        # ``.returncode`` / ``.stderr`` keep working instead of seeing an
+        # uncaught FileNotFoundError / PermissionError.
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=127,
+            stdout="",
+            stderr=f"failed to run {' '.join(str(c) for c in cmd[:2])}: {exc}\n",
+        )
 
 
 def check_gh():
@@ -247,6 +261,464 @@ def preflight(base_dir=None):
                     "message": "git remote found"})
 
     return {"ok": True, "checks": checks, "message": "Pre-flight passed."}
+
+
+# ---------------------------------------------------------------------------
+# Phase 0 — dependency gather-all detection & provisioning (INSTALLER-ARCH §4.1)
+#
+# The model is gather-all -> present -> ONE consent -> provision -> re-verify
+# (it never fails fast on the first missing dependency, unlike check_gh above
+# which is kept for the legacy fail-fast preflight path). Detection and the
+# per-platform install dispatch are deterministic Python here; the consent
+# prompt itself lives in the WIZARD.md runbook (the installer agent presents
+# the missing-set the gather pass returns and asks the human once). The agent
+# acts on this helper JSON and never invents environment checks.
+# ---------------------------------------------------------------------------
+
+# requirements.txt dist name -> import (module) name where they differ.
+_PKG_IMPORT_NAMES = {
+    "pyyaml": "yaml",
+}
+
+# Per-package-manager package id for each system tool, keyed by tool id.
+_SYSTEM_TOOL_PKGS = {
+    "gh": {
+        "winget": "GitHub.cli",
+        "choco": "gh",
+        "brew": "gh",
+        "apt": "gh",
+        "dnf": "gh",
+    },
+    "python3": {
+        "winget": "Python.Python.3",
+        "choco": "python",
+        "brew": "python3",
+        "apt": "python3",
+        "dnf": "python3",
+    },
+}
+
+
+def _detect_os():
+    """Return a normalized OS token: 'windows' | 'macos' | 'linux' | 'unknown'."""
+    sysname = platform.system().lower()
+    if sysname.startswith("win"):
+        return "windows"
+    if sysname == "darwin":
+        return "macos"
+    if sysname == "linux":
+        return "linux"
+    return "unknown"
+
+
+def _pip_base_cmd():
+    """The current interpreter's pip invocation (``python -m pip``).
+
+    Using ``sys.executable -m pip`` rather than a bare ``pip`` on PATH means
+    packages land in the same interpreter the harness/helpers run under — the
+    failure mode where ``pip`` points at a different Python than ``python3``.
+    """
+    return [sys.executable, "-m", "pip"]
+
+
+def _python3_on_path():
+    """True if a Python 3.x interpreter is invocable from the shell.
+
+    ``python3`` is unambiguous. A bare ``python`` is only accepted after a
+    version probe — on some systems ``python`` is still Python 2, and the
+    boot scripts / helpers need a real 3.x. If we are ourselves running under
+    the same ``python`` resolved on PATH, short-circuit via ``sys.version_info``
+    rather than spawning a subprocess.
+    """
+    if shutil.which("python3"):
+        return True
+    py = shutil.which("python")
+    if not py:
+        return False
+    if sys.version_info >= (3,) and os.path.realpath(py) == os.path.realpath(sys.executable):
+        return True
+    probe = _run([py, "-c", "import sys; sys.exit(0 if sys.version_info >= (3,) else 1)"])
+    return probe.returncode == 0
+
+
+def _choose_pkg_manager(os_token):
+    """Pick the best available system package manager for this OS.
+
+    Returns ``(manager_name, prefix_builder)`` where ``prefix_builder(pkg)``
+    yields the full non-interactive install command, or ``(None, None)`` if no
+    known manager is on PATH. Non-interactive flags are baked in so
+    ``provision_deps`` never blocks on a prompt; sudo is deliberately NOT
+    injected (it would hang on a password prompt) — elevation, if needed, is
+    surfaced through the instruct fallback.
+    """
+    if os_token == "windows":
+        if shutil.which("winget"):
+            return "winget", lambda pkg: [
+                "winget", "install", "-e", "--id", pkg,
+                "--accept-package-agreements", "--accept-source-agreements",
+                "--silent",
+            ]
+        if shutil.which("choco"):
+            return "choco", lambda pkg: ["choco", "install", pkg, "-y"]
+        return None, None
+    if os_token == "macos":
+        if shutil.which("brew"):
+            return "brew", lambda pkg: ["brew", "install", pkg]
+        return None, None
+    if os_token == "linux":
+        if shutil.which("apt-get"):
+            return "apt", lambda pkg: ["apt-get", "install", "-y", pkg]
+        if shutil.which("dnf"):
+            return "dnf", lambda pkg: ["dnf", "install", "-y", pkg]
+        return None, None
+    return None, None
+
+
+def _system_tool_action(tool_id, os_token):
+    """Build the provisioning action dict for a missing system tool.
+
+    Auto when a package manager is available; otherwise instruct-only.
+    """
+    manager, builder = _choose_pkg_manager(os_token)
+    pkgs = _SYSTEM_TOOL_PKGS.get(tool_id, {})
+    instruct = [
+        f"Install {tool_id} using your system package manager, then re-run the installer.",
+    ]
+    if tool_id == "gh":
+        instruct = [
+            "Install the GitHub CLI: https://cli.github.com/",
+            "  macOS:   brew install gh",
+            "  Windows: winget install --id GitHub.cli",
+            "  Linux:   https://github.com/cli/cli/blob/trunk/docs/install_linux.md",
+        ]
+    elif tool_id == "python3":
+        instruct = [
+            "Install Python 3.10+: https://www.python.org/downloads/",
+            "  macOS:   brew install python3",
+            "  Windows: winget install Python.Python.3",
+            "  Linux:   sudo apt-get install python3   (or your distro's package)",
+        ]
+    if manager and manager in pkgs:
+        return {
+            "type": "package_manager",
+            "manager": manager,
+            "command": builder(pkgs[manager]),
+            "instruct": instruct,
+            "auto": True,
+        }
+    return {
+        "type": "instruct",
+        "manager": None,
+        "command": None,
+        "instruct": instruct,
+        "auto": False,
+    }
+
+
+def _packages_from_requirements(base_dir):
+    """Parse requirements.txt into a list of (dist_name, import_name) pairs.
+
+    Strips comments, version specifiers, extras, and environment markers.
+    Returns [] if the file is absent (a fresh checkout always ships it, but be
+    defensive so detection degrades to "nothing to check" rather than crashing).
+    """
+    req_path = Path(base_dir) / "requirements.txt"
+    pairs = []
+    if not req_path.exists():
+        return pairs
+    for raw in req_path.read_text(encoding="utf-8").splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line or line.startswith("-"):
+            continue
+        # Drop environment markers (after ';') and extras ('pkg[extra]').
+        line = line.split(";", 1)[0].strip()
+        # Split on the first version operator / whitespace.
+        name = re.split(r"[<>=!~\[ ]", line, 1)[0].strip().lower()
+        if not name:
+            continue
+        import_name = _PKG_IMPORT_NAMES.get(name, name.replace("-", "_"))
+        pairs.append((name, import_name))
+    return pairs
+
+
+def _missing_packages(base_dir):
+    """Return the list of requirement dist-names whose import is unavailable."""
+    missing = []
+    for dist_name, import_name in _packages_from_requirements(base_dir):
+        try:
+            found = importlib.util.find_spec(import_name) is not None
+        except (ImportError, ValueError):
+            found = False
+        if not found:
+            missing.append(dist_name)
+    return missing
+
+
+def gather_deps(base_dir=None):
+    """Single gather-all pass over every install dependency (§4.1).
+
+    Enumerates EVERY missing/unsatisfied dependency without bailing on the
+    first, each annotated with its per-OS provisioning action. This is the
+    detector the installer agent calls at Phase 0 and again to re-verify after
+    provisioning.
+
+    Returns a dict with:
+        ok: bool — True when nothing is missing
+        os: str — detected OS token
+        satisfied: list[str] — ids that are present
+        missing: list[dict] — one entry per unsatisfied dep, each with
+            {id, name, kind, provisioning, detail, action}
+        auto_ids: list[str] — missing ids provision_deps will attempt
+        guided_ids: list[str] — missing ids needing a human-walked step
+        message: str — one-line summary
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    base_dir = Path(base_dir)
+    os_token = _detect_os()
+
+    satisfied = []
+    missing = []
+
+    def _add_missing(dep_id, name, kind, provisioning, detail, action):
+        missing.append({
+            "id": dep_id,
+            "name": name,
+            "kind": kind,
+            "provisioning": provisioning,
+            "detail": detail,
+            "action": action,
+        })
+
+    # 1. gh installed
+    gh_installed = shutil.which("gh") is not None
+    if gh_installed:
+        satisfied.append("gh")
+    else:
+        _add_missing(
+            "gh", "GitHub CLI (gh)", "system_tool", "auto",
+            "gh is not installed or not on PATH",
+            _system_tool_action("gh", os_token),
+        )
+
+    # 2. gh auth — only checkable once gh is installed; interactive to fix.
+    if gh_installed:
+        auth = _run(["gh", "auth", "status"])
+        if auth.returncode == 0:
+            satisfied.append("gh_auth")
+        else:
+            _add_missing(
+                "gh_auth", "GitHub CLI authentication", "auth", "guided",
+                "gh is installed but not authenticated",
+                {
+                    "type": "interactive",
+                    "manager": None,
+                    "command": ["gh", "auth", "login"],
+                    "instruct": [
+                        "Run: gh auth login",
+                        "Choose GitHub.com, HTTPS, authenticate via browser or token",
+                        "Make sure the 'repo' scope is granted",
+                        "Verify with: gh auth status",
+                    ],
+                    "auto": False,
+                },
+            )
+    else:
+        # Can't authenticate before gh exists — report as blocked, guided.
+        _add_missing(
+            "gh_auth", "GitHub CLI authentication", "auth", "guided",
+            "cannot check auth until gh is installed",
+            {
+                "type": "interactive",
+                "manager": None,
+                "command": ["gh", "auth", "login"],
+                "instruct": ["After installing gh, run: gh auth login"],
+                "auto": False,
+                "blocked_by": "gh",
+            },
+        )
+
+    # 3. Python 3 on PATH (python3, or a `python` that is actually 3.x).
+    if _python3_on_path():
+        satisfied.append("python3")
+    else:
+        _add_missing(
+            "python3", "Python 3", "system_tool", "auto",
+            "no python3/python found on PATH",
+            _system_tool_action("python3", os_token),
+        )
+
+    # 4. pip for the current interpreter.
+    pip_ok = _run(_pip_base_cmd() + ["--version"]).returncode == 0
+    if pip_ok:
+        satisfied.append("pip")
+    else:
+        _add_missing(
+            "pip", "pip (Python package installer)", "system_tool", "auto",
+            "pip is not available for the current interpreter",
+            {
+                "type": "package_manager",
+                "manager": "ensurepip",
+                "command": [sys.executable, "-m", "ensurepip", "--upgrade"],
+                "instruct": [
+                    f"Bootstrap pip: {sys.executable} -m ensurepip --upgrade",
+                    "  Linux: sudo apt-get install python3-pip   (or your distro's package)",
+                ],
+                "auto": True,
+            },
+        )
+
+    # 5. Runtime Python packages (requirements.txt) — only meaningful if pip
+    #    can install them; the action is the unified requirements.txt read.
+    missing_pkgs = _missing_packages(base_dir)
+    if missing_pkgs:
+        _add_missing(
+            "packages", "Runtime Python packages", "packages", "auto",
+            "missing: " + ", ".join(missing_pkgs),
+            {
+                "type": "pip",
+                "manager": "pip",
+                "command": _pip_base_cmd() + [
+                    "install", "-r", str(base_dir / "requirements.txt"),
+                ],
+                "instruct": [
+                    "Install runtime packages: pip install -r requirements.txt",
+                ],
+                "auto": True,
+                "packages": missing_pkgs,
+            },
+        )
+    else:
+        satisfied.append("packages")
+
+    # 6. claude CLI on PATH — guided (npm global) only if npm present.
+    if shutil.which("claude"):
+        satisfied.append("claude")
+    else:
+        npm_present = shutil.which("npm") is not None
+        _add_missing(
+            "claude", "Claude Code CLI", "cli", "guided",
+            "claude CLI is not on PATH",
+            {
+                "type": "npm" if npm_present else "instruct",
+                "manager": "npm" if npm_present else None,
+                "command": (
+                    ["npm", "install", "-g", "@anthropic-ai/claude-code"]
+                    if npm_present else None
+                ),
+                "instruct": [
+                    "Install the Claude Code CLI:",
+                    "  npm install -g @anthropic-ai/claude-code   (requires Node.js/npm)",
+                    "  or see https://docs.claude.com/claude-code for other options",
+                ],
+                "auto": npm_present,
+            },
+        )
+
+    auto_ids = [m["id"] for m in missing if m["action"].get("auto")]
+    guided_ids = [m["id"] for m in missing if not m["action"].get("auto")]
+    ok = not missing
+    if ok:
+        message = "All dependencies satisfied."
+    else:
+        message = (
+            f"{len(missing)} missing: " + ", ".join(m["id"] for m in missing)
+        )
+    return {
+        "ok": ok,
+        "os": os_token,
+        "satisfied": satisfied,
+        "missing": missing,
+        "auto_ids": auto_ids,
+        "guided_ids": guided_ids,
+        "message": message,
+    }
+
+
+def provision_deps(ids=None, base_dir=None):
+    """Provision the requested (or all auto) missing dependencies (§4.1 step 3).
+
+    Re-runs ``gather_deps`` so it acts only on dependencies the helper actually
+    reports missing — never on an invented or stale set. For each requested id
+    whose action is auto-provisionable (package_manager / pip / npm / ensurepip),
+    it runs the per-platform command non-interactively and captures the result.
+    Interactive (gh auth) and instruct-only items are never auto-run here — the
+    runbook walks those with the human.
+
+    Args:
+        ids: list of dependency ids to provision, or None / ["all"] to
+            provision every auto-provisionable missing item.
+        base_dir: install target (defaults to REPO_ROOT).
+
+    Returns a dict with:
+        ok: bool — every attempted provision succeeded
+        attempted: list[str] — ids actually run
+        skipped: list[dict] — {id, reason} for requested-but-not-run ids
+        results: list[dict] — {id, command, returncode, ok, message,
+                               stdout_tail, stderr_tail} per attempt
+        message: str — one-line summary
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    base_dir = Path(base_dir)
+
+    state = gather_deps(base_dir=base_dir)
+    missing_by_id = {m["id"]: m for m in state["missing"]}
+
+    if ids is None or ids == ["all"] or ids == "all":
+        target_ids = list(state["auto_ids"])
+    else:
+        target_ids = list(ids)
+
+    results = []
+    skipped = []
+    attempted = []
+    for dep_id in target_ids:
+        item = missing_by_id.get(dep_id)
+        if item is None:
+            skipped.append({"id": dep_id, "reason": "not in missing-set"})
+            continue
+        action = item["action"]
+        if not action.get("auto") or not action.get("command"):
+            skipped.append({"id": dep_id, "reason": "not auto-provisionable"})
+            continue
+        cmd = action["command"]
+        # Package installs and large downloads can be slow — give them room.
+        # HOMEBREW_NO_AUTO_UPDATE keeps `brew install` from running a slow
+        # `brew update` first (the brew equivalent of the -y/--silent flags the
+        # other managers already carry); harmless for non-brew commands.
+        env = {**os.environ, "HOMEBREW_NO_AUTO_UPDATE": "1"}
+        proc = _run(cmd, timeout=600, env=env)
+        ok = proc.returncode == 0
+        attempted.append(dep_id)
+        results.append({
+            "id": dep_id,
+            "command": cmd,
+            "returncode": proc.returncode,
+            "ok": ok,
+            "message": (
+                f"{dep_id}: provisioned" if ok
+                else f"{dep_id}: failed (exit {proc.returncode})"
+            ),
+            "stdout_tail": (proc.stdout or "")[-500:],
+            "stderr_tail": (proc.stderr or "")[-500:],
+        })
+
+    all_ok = all(r["ok"] for r in results) if results else True
+    if not results:
+        message = "Nothing to provision."
+    elif all_ok:
+        message = f"Provisioned: {', '.join(attempted)}."
+    else:
+        failed = [r["id"] for r in results if not r["ok"]]
+        message = f"Provision incomplete — failed: {', '.join(failed)}."
+    return {
+        "ok": all_ok,
+        "attempted": attempted,
+        "skipped": skipped,
+        "results": results,
+        "message": message,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -2017,6 +2489,24 @@ def cmd_preflight(_args):
     return 0 if result["ok"] else 1
 
 
+def cmd_gather_deps(_args):
+    """Phase 0 gather-all dependency detection (§4.1)."""
+    result = gather_deps()
+    _print_json(result, ok=result["ok"])
+    return 0 if result["ok"] else 1
+
+
+def cmd_provision_deps(args):
+    """Provision missing auto-provisionable deps (§4.1 step 3).
+
+    Usage: provision-deps [id ...]   (no ids => provision all auto items)
+    """
+    ids = list(args) if args else None
+    result = provision_deps(ids=ids)
+    _print_json(result, ok=result["ok"])
+    return 0 if result["ok"] else 1
+
+
 def cmd_check_existing(_args):
     result = detect_existing_install()
     _print_json(result)
@@ -2707,6 +3197,8 @@ def main():
         "generate-defaults": cmd_generate_defaults,
         "setup-yes": cmd_setup_yes,
         "preflight": cmd_preflight,
+        "gather-deps": cmd_gather_deps,
+        "provision-deps": cmd_provision_deps,
         "upgrade": cmd_upgrade,
     }
     if cmd not in dispatch:

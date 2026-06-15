@@ -65,7 +65,7 @@ npx squidsquad
 
 The bootstrapper checks prerequisites (Node.js 18+, Python, `gh` CLI, Claude Code), seeds the skill into your project, and launches an intent-driven setup wizard. The wizard asks 3 quick questions — what your project does, then 2 adaptive follow-ups based on your answers — to understand your domain and tailor each agent's personality. It classifies your intent, proposes a team from curated presets, and walks you through setup including whether you want PR Flow (human review gate on every change) or direct commits. PM, QA, and DM are always installed; dev agents are added based on your project type. After setup, you get a "What's Next" summary with exact boot commands and tips for interacting with your team.
 
-The wizard auto-detects your project context (test commands, tech stack, existing configuration) and saves it to `.squidsquad/.install-spec.json` so future upgrades preserve your choices. For CI or scripted setups, use `python references/scripts/wizard.py setup-yes` to accept all detected defaults without prompts.
+The wizard auto-detects your project context (test commands, tech stack, existing configuration) and saves it to `.squidsquad/.install-spec.json` so future upgrades preserve your choices. It also scans for any missing prerequisites in one pass — system tools (via your platform's package manager) and Python packages — and offers to install them with a single confirmation, so you're not chasing dependency errors one at a time (the Claude CLI and `gh` authentication are guided rather than auto-installed). For CI or scripted setups, use `python references/scripts/wizard.py setup-yes` to accept all detected defaults without prompts.
 
 **Already have Claude Code open?** You can also run `Set up SquidSquad for my project.` directly in a Claude Code session.
 
@@ -78,7 +78,7 @@ python references/scripts/squidsquad_cli.py stop      # Stop all agents
 python references/scripts/squidsquad_cli.py shutdown   # Stop agents + exit harness
 ```
 
-Requires `pip install fastapi uvicorn`. The harness owns the full agent lifecycle — starting, stopping, restarting, health monitoring, and crash recovery are all managed through a single process. Each agent runs in its own terminal window; if the harness crashes, your agents keep running. Press Ctrl+C once for graceful shutdown (agents finish their current cycle), twice for a warning, three times for immediate exit.
+Requires the Python packages in `requirements.txt` (`pip install -r requirements.txt`) — the setup wizard offers to install these for you. The harness owns the full agent lifecycle — starting, stopping, restarting, health monitoring, and crash recovery are all managed through a single process. Each agent runs in its own terminal window; if the harness crashes, your agents keep running. Press Ctrl+C once for graceful shutdown (agents finish their current cycle), twice for a warning, three times for immediate exit.
 
 ### 3. Work
 

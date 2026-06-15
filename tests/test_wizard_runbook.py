@@ -35,6 +35,8 @@ _WIZARD_COMMANDS = {
     "validate-name", "validate-rerun-action", "build-config-md",
     "scaffold", "ensure-labels", "list-issues-by-label", "migrate-label",
     "pr-flow-prompt",
+    # #11613 §4.1 Phase 0 gather-all dependency provisioning.
+    "gather-deps", "provision-deps",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}
@@ -58,7 +60,7 @@ class TestRunbookStructure:
     def test_all_steps_present_in_order(self, runbook):
         """Every required step must appear in the runbook, in order."""
         required_steps = [
-            "## Step 0 — Prerequisite check",
+            "## Step 0 — Prerequisite detection",
             "## Step 0b — Re-run detection",
             "## Step 1 — Project details",
             "## Step 2 — Intent",
@@ -133,7 +135,8 @@ class TestHelperCommandReferences:
     def test_critical_helpers_are_mentioned(self, runbook):
         """Key commands that MUST be part of the flow."""
         for cmd in (
-            "wizard.py check-gh",
+            "wizard.py gather-deps",
+            "wizard.py provision-deps",
             "wizard.py check-existing",
             "wizard.py repo-info",
             "wizard.py validate-rerun-action",
