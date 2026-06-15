@@ -122,6 +122,15 @@ WAITING_MAX_SECONDS = 1800           # 30m
 #     NOT auto-backoff (they need operator action, not a wait).
 STOP_FAILURE_BACKOFF_CAUSES = frozenset({"rate_limit", "overloaded"})
 STOP_FAILURE_RECENT_SECONDS = 180    # a StopFailure older than this is stale
+#   #12271 slice d — dispatch-relative activity grace. After work is dispatched
+#     to an agent (an assigned-to nudge), a healthy agent emits an activity
+#     heartbeat within this window (it wakes, reads the forge, makes tool calls
+#     → PostToolUse). Past the window with NO heartbeat since the dispatch AND
+#     no pause signal = wedged/zombie (the #10855 inert-boot catch). Generous so
+#     a slow first tool call (covered separately by the in-flight pause once
+#     PreToolUse fires) or model latency never false-positives; tunable from the
+#     shadow-mode divergence data this slice gathers.
+ACTIVITY_GRACE_SECONDS = 600         # 10m
 
 # #9242: Diagnostic escape hatch. When True (set by `main()` from
 # `--no-auto-start` or `SQUIDSQUAD_HARNESS_NO_AUTO_START=1`), the
@@ -192,7 +201,9 @@ class AgentState:
                  "last_activity_at", "last_activity",
                  # #12458 — pause-aware liveness guard (explained-silence state)
                  "in_flight_until", "waiting_since", "compacting_since",
-                 "last_stop_failure")
+                 "last_stop_failure",
+                 # #12271 slice d — dispatch reference for progress-liveness
+                 "last_dispatch_at")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -269,6 +280,13 @@ class AgentState:
         self.waiting_since = None
         self.compacting_since = None
         self.last_stop_failure = None
+        # #12271 slice d — epoch of the last work dispatched to this agent (an
+        # assigned-to nudge emitted by the ExternalActivityDetector). The
+        # progress-liveness check measures activity-heartbeat silence RELATIVE to
+        # this (HARNESS-ARCH §15.1: liveness is dispatch-relative, not a pure
+        # timer) so a legitimately idle agent — nothing dispatched — is never
+        # judged dead. None until the first dispatch.
+        self.last_dispatch_at = None
 
     def active_pause(self, now):
         """#12458 — return a short reason string if a hook currently explains
@@ -312,6 +330,47 @@ class AgentState:
         return (cause in STOP_FAILURE_BACKOFF_CAUSES
                 and 0 <= now - at < STOP_FAILURE_RECENT_SECONDS)
 
+    def progress_liveness(self, now):
+        """#12271 slice d — progress-based liveness verdict (HARNESS-ARCH §15.1).
+
+        Returns (alive: bool, reason: str) derived from PROGRESS signals
+        (activity heartbeat + pause guard + dispatch reference) instead of PID
+        existence. "Dead" = work was dispatched, the grace window elapsed, NO
+        activity heartbeat has landed since that dispatch, and no hook explains
+        the silence. This catches the zombie PID-liveness cannot: an alive
+        process doing zero work (#10855 / #10440).
+
+        SHADOW / OBSERVATIONAL this slice — computed and logged alongside the PID
+        decision to validate divergence; it does NOT yet drive the reboot. The
+        cutover (making this authoritative + demoting PID to teardown-only) is a
+        later, separately-reviewed step once the shadow data confirms no false
+        positives (killing a live agent) or false negatives (missing a death).
+        """
+        # A not-yet-booted agent has no heartbeat baseline — never judge it dead
+        # by activity silence (it may be mid-boot). Treat as alive.
+        if not self.bootup_complete:
+            return True, "booting"
+        # An explained pause (in-flight tool call / compacting / waiting) means
+        # the silence is accounted for — alive. Reuses the slice-c guard so the
+        # two liveness models share one definition of "explained silence".
+        pause = self.active_pause(now)
+        if pause is not None:
+            return True, pause
+        # No work dispatched → legitimately idle → never a false-positive death.
+        if self.last_dispatch_at is None:
+            return True, "idle-no-dispatch"
+        # Within the post-dispatch grace window → too early to call it wedged.
+        if now - self.last_dispatch_at <= ACTIVITY_GRACE_SECONDS:
+            return True, "dispatch-grace"
+        # Activity heartbeat landed at/after the dispatch → the agent acted on
+        # the work → alive.
+        if (self.last_activity_at is not None
+                and self.last_activity_at >= self.last_dispatch_at):
+            return True, "active"
+        # Dispatched, grace elapsed, no activity since, nothing explains it →
+        # wedged / zombie.
+        return False, "wedged-no-activity-since-dispatch"
+
     def to_dict(self):
         return {
             "role": self.role,
@@ -343,6 +402,8 @@ class AgentState:
             "waiting_since": self.waiting_since,
             "compacting_since": self.compacting_since,
             "last_stop_failure": self.last_stop_failure,
+            # #12271 slice d — dispatch reference for progress-liveness
+            "last_dispatch_at": self.last_dispatch_at,
         }
 
 
@@ -1092,6 +1153,9 @@ class HarnessState:
                         "waiting_since": a.waiting_since,
                         "compacting_since": a.compacting_since,
                         "last_stop_failure": a.last_stop_failure,
+                        # #12271 slice d — persist dispatch reference so a
+                        # harness restart preserves the activity baseline.
+                        "last_dispatch_at": a.last_dispatch_at,
                     }
                     for role, a in self.agents.items()
                 },
@@ -1192,6 +1256,9 @@ class HarnessState:
                 agent.waiting_since = agent_data.get("waiting_since")
                 agent.compacting_since = agent_data.get("compacting_since")
                 agent.last_stop_failure = agent_data.get("last_stop_failure")
+                # #12271 slice d — restore dispatch reference (None for older
+                # state files / fresh agents).
+                agent.last_dispatch_at = agent_data.get("last_dispatch_at")
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -3917,6 +3984,18 @@ class ExternalActivityDetector:
                 "event_context": f"Issue #{issue_num} {status.replace('status:', '')}",
             })
             self.mark_emitted(issue_num, status)
+            # #12271 slice d — stamp the dispatch reference for progress-based
+            # liveness. An assigned-to is work dispatched to target_alias, so a
+            # healthy agent should heartbeat within ACTIVITY_GRACE_SECONDS;
+            # progress_liveness() measures heartbeat silence relative to this.
+            # (Handoff re-emits, #12442, refresh it too — for the shadow phase
+            # that's intended: the divergence data informs whether a re-emit
+            # should reset the grace at cutover.) OBSERVATIONAL — does not yet
+            # drive the reboot decision.
+            with state._lock:
+                _disp_agent = state.agents.get(target_alias)
+                if _disp_agent is not None:
+                    _disp_agent.last_dispatch_at = check_time
             # #12442: seed/refresh the re-emit timer so a stuck handoff item is
             # re-nudged only after _HANDOFF_REEMIT_SECONDS, not every poll.
             if is_handoff:
