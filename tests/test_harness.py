@@ -824,6 +824,52 @@ class TestCrashLoopBackoff(unittest.TestCase):
                 self.assertEqual(loaded.consecutive_fast_deaths, 4)
                 self.assertEqual(loaded.reboot_blocked_until, 456.0)
 
+    # --- #12418 AC4: SessionEnd graceful-vs-crash refinement ---
+
+    def _set_session_end(self, hs, at, reason="other", role="skill"):
+        hs.get_agent(role).last_session_end = {"reason": reason, "at": at}
+
+    def test_graceful_exit_not_counted_toward_streak(self):
+        """#12418 AC4: a GRACEFUL exit (SessionEnd stamped AFTER last_spawn) at
+        threshold-minus-one must NOT trip the crash-loop breaker — it resets the
+        streak and respawns immediately, unlike a crash."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        self._set_session_end(hs, at=now - 5)  # after spawn (now-10) → graceful
+        boot = self._run(hs, now)
+        boot.assert_called_once_with("skill")  # respawned, NOT backed off
+        agent = hs.get_agent("skill")
+        self.assertEqual(agent.consecutive_fast_deaths, 0)
+        self.assertNotEqual(agent.status, "crash-looping")
+
+    def test_crash_no_sessionend_still_backs_off(self):
+        """No SessionEnd (a real crash — the hook couldn't run) at
+        threshold-minus-one still trips the breaker. The graceful path must not
+        weaken crash protection (AC6 — PID path unchanged for crashes)."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        # last_session_end stays None (crash).
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
+
+    def test_stale_sessionend_treated_as_crash(self):
+        """A SessionEnd from a PRIOR spawn (at < last_spawn_at) is NOT graceful
+        for the current death — the >= last_spawn_at guard treats it as a crash
+        and still backs off."""
+        from harness import FAST_DEATH_THRESHOLD
+        now = 10_000.0
+        hs, _ = self._make_dead_agent(
+            last_spawn_at=now - 10, fast_deaths=FAST_DEATH_THRESHOLD - 1)
+        self._set_session_end(hs, at=now - 50)  # BEFORE last_spawn_at → stale
+        boot = self._run(hs, now)
+        boot.assert_not_called()
+        self.assertEqual(hs.get_agent("skill").status, "crash-looping")
+
 
 class TestRestartLifecycle(unittest.TestCase):
     """#11538: update_health must not undo an in-flight RESTARTING intent.

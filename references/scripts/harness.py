@@ -530,7 +530,31 @@ class HarnessState:
                             now - agent.last_spawn_at
                             if agent.last_spawn_at is not None else None
                         )
-                        if (lifetime is not None
+                        # #12418 AC4 — graceful-vs-crash. A GRACEFUL exit (a
+                        # SessionEnd hook fired AFTER this spawn) is not a crash:
+                        # it must not accumulate the #12244 crash-loop streak, so
+                        # a legitimate cooperative restart is never throttled as
+                        # if it were a quota/startup crash. A CRASH (dead PID
+                        # with NO SessionEnd since last_spawn_at — the hook
+                        # couldn't run) still counts toward the streak → backoff.
+                        # The stale-SessionEnd case is handled by the
+                        # `>= last_spawn_at` guard: a prior spawn's SessionEnd
+                        # predates this spawn and reads as a crash. Augments the
+                        # PID path (AC6) — the respawn action itself is unchanged.
+                        se = agent.last_session_end
+                        graceful = bool(
+                            se and agent.last_spawn_at is not None
+                            and isinstance(se, dict)
+                            and se.get("at", 0) >= agent.last_spawn_at
+                        )
+                        if graceful:
+                            agent.consecutive_fast_deaths = 0
+                            _log(
+                                f"{role}: graceful exit (SessionEnd "
+                                f"reason={se.get('reason')!r}) — not counting "
+                                f"toward crash-loop streak (#12418)"
+                            )
+                        elif (lifetime is not None
                                 and lifetime < FAST_DEATH_WINDOW_SECONDS):
                             agent.consecutive_fast_deaths += 1
                         else:
