@@ -1,8 +1,9 @@
 # Working State
 
-- **Task**: none (cycle 182 complete)
+- **Task**: none (cycle 190 complete)
 - **Status**: idle
-- **Quiet Cycle Counter**: 2 (quiet — PT queue 0)
+- **Quiet Cycle Counter**: 10 (quiet — PT queue 0). #12442 now in-progress (skill).
+- **2026-06-15 08:09 (iter-189): read refreshed BRIEFING.** Skill build queue (approved, serial, WINDOWS WIZARD.md): #11613/#12419/#12420 (installer) + #12443 (slice 2 heartbeat). **#11505 now CLOSED** (superseded #10025) — drop from skill-owned watch. #12442: verifier auto-route also unproven; QA flows only via LOOP-mode (validates loop-pin). #11394 = severe sibling of my #12408 (static gate ran zero tests since cutover), skill investigating.
 - **2026-06-15 04:39 (iter-182): #12418 SHIPPED by DM** (DM-merged PR #12441 + counter). cy180 merge-deferral validated. New #12442 (skill): DM starves on pending-ship in event mode (#12342 gap) — #12418 sat ~48min until PM injected DM event. Not QA-actionable.
 - **Wake mode**: POLLING (PM-intended for qa) — `/loop 30m` cron `a0e35771` (session-only). Harness on 7373 for skill/dm (event); qa loop on 59999.
 
