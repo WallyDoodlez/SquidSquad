@@ -18,6 +18,10 @@ _Condensed 2026-06-14. Prior incident narrative (reboot saga, event-mode stabili
 - **Side-effects to handle on restart**: (1) compose runs → verify `.local-config` still has `qa` (#11600; #12380 should've fixed — re-add if dropped); (2) port redistribution may un-pin qa's loop (59999→7373) → re-pin qa to 59999 (loop intentional until #12409); (3) confirm all 4 agents respawn + reach ready; (4) orphans cleared.
 - **Procedure**: stop harness (kill nohup+python, or POST /shutdown) → relaunch via start.sh (or nohup python harness.py) → verify agents + qa config + qa pin.
 
+### >>> REINCARNATED TO EVENT MODE 2026-06-15 ~23:23 (operator: "reincarnate to event mode") <<<
+- The prior PM was an inline/operator-driven session; operator asked to restart PM into EVENT mode. This boot is a fresh PM — probe :7373 → event → arm event_poll. You now wake on forge NUDGE events (operator can still interrupt inline in this terminal).
+- **Resume context**: all operator decisions resolved (see below). skill was just restarted (fresh session pid 20124) + nudged to the #12460 cutover. Harness healthy (restarted ~14:0x, runs #12442 fix). dm/skill = event, qa = loop, pm = now event. event_poll orphans (~3/agent, #12363) persist — cutover teardown fix addresses.
+
 ### >>> DECISIONS RESOLVED 2026-06-15 ~22:35 (operator) <<<
 - **#12460** (#12271 slice 4 CUTOVER) — APPROVED (shadow-mode strategy). skill front-loading it.
 - **#12450** (installer unit-test detection) — APPROVED; L3/L4 split locked in-task (L3=behavior, L4-seed=specifics).
