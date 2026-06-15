@@ -6,7 +6,7 @@
 - **Quiet Cycle Counter**: 0
 
 ## >>> ON RESUME (context-pressure restart at 80%, clean boundary 2026-06-15) <<<
-Operator directive (06-15, on #12418) stands: **proceed with the approved queue, WIP-safe (commit incrementally + checkpoint every step), DS-review-per-change.** Fresh-cycle pickup order: **#12442** (dm-routing gap — fast/high-value) → **#12363** (/T teardown, design posted) → #12409 ask-1 → #12408 → #12397 → installer batch (#11613/#12419/#12420 serial) → #10690/#10686. Got a SPURIOUS restart-required (#12397 no-op-recompose; CLAUDE.md unchanged) — restart taken for the 80% context, not the recompose.
+Operator directive (06-15, on #12418) stands: **proceed with the approved queue, WIP-safe (commit incrementally + checkpoint every step), DS-review-per-change.** Fresh-cycle pickup order: **#12442** (dm-routing gap — fast/high-value) → **#12443** (new approved, likely #12271 slice 2 — check) → **#12363** (/T teardown, design posted) → #12409 ask-1 → #12408 → #12397 → installer batch (#11613/#12419/#12420 serial) → #10690/#10686. Got a SPURIOUS restart-required (#12397 no-op-recompose; CLAUDE.md unchanged) — restart taken for the 80% context, not the recompose.
 
 ## Shipped to QA / SHIPPED
 - **#12418** → **SHIPPED** (PR #12441 merged) — SessionEnd-reason hook (#12271 liveness slice 1). 3 DS-reviewed components; C review caught a None-TypeError + breaker-bypass (fixed). Vault: [[learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker]].
