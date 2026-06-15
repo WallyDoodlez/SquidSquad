@@ -2230,6 +2230,13 @@ async def hook_activity(request: Request):
         body = {}
 
     if not role:
+        # Log the DROP paths (DS-REVIEW-12443-harness F1): these fire only on a
+        # MISCONFIGURED header, so a healthy agent never logs here — a steady
+        # stream is the diagnostic signal that the X-Agent-Role wiring is wrong
+        # (distinguishes "no heartbeats" from "heartbeats silently dropped").
+        # The SUCCESS path is logged only at the throttle cadence below (it
+        # fires per tool call — logging each would be spam).
+        _log("Activity hook DROPPED — no X-Agent-Role header")
         return JSONResponse(status_code=200, content={"ok": False, "dropped": "no-role"})
 
     # Defense-in-depth (mirrors /hooks/session-end + receive_event #9242): drop
@@ -2239,6 +2246,7 @@ async def hook_activity(request: Request):
     except (SystemExit, Exception):
         allowed = None
     if allowed is not None and role not in allowed:
+        _log(f"Activity hook DROPPED unknown role={role!r}")
         return JSONResponse(status_code=200, content={"ok": False, "dropped": "unknown-role"})
 
     now = time.time()
@@ -2260,6 +2268,11 @@ async def hook_activity(request: Request):
             _last_activity_save_at = now
             should_save = True
     if should_save:
+        # Throttled success log (DS-REVIEW-12443-harness F1): a low-noise
+        # "still alive" breadcrumb at the persistence cadence (~once/30s per
+        # agent), NOT per tool call. Confirms heartbeats are arriving + being
+        # recorded without flooding the log.
+        _log(f"{role}: activity recorded ({activity.get('event')}, #12443)")
         try:
             await asyncio.to_thread(state.save_state)
         except Exception as e:  # pragma: no cover — defensive
