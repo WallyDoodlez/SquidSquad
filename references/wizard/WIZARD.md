@@ -27,24 +27,70 @@ with an `ok` field you should check.
 
 ---
 
-## Step 0 — Prerequisite check (gh CLI)
+## Step 0 — Prerequisite detection & provisioning (§4.1)
+
+Phase 0 follows a **gather-all → present → ONE consent → provision →
+re-verify** model. It NEVER fails fast on the first missing dependency, and
+it makes **no writes to the target repo** — provisioning installs host tools /
+Python packages only, and only after the user consents. Aborting here leaves
+nothing changed.
 
 Print a one-line status note: `[🦑] Checking prerequisites...`
 
-Run `python references/scripts/wizard.py check-gh` and parse the JSON.
+**1. Gather-all detect.** Run `python references/scripts/wizard.py gather-deps`
+and parse the JSON. The response carries `ok`, `os`, `satisfied`, and
+`missing` (one entry per unsatisfied dep, each with `id`, `name`, `detail`,
+and an `action` block — `auto: true|false`, `type`, `instruct` lines).
 
-- **`ok: true`, `stage: ready`**: continue to Step 0b.
-- **`ok: false`, `stage: installed`**: gh CLI is not installed. Show the
-  `fix` list from the response as a numbered walkthrough. Offer to wait
-  while the user installs it, or to abort. If the user says "wait",
-  re-run the check when they come back. If the user says "abort", exit
-  with code 0 and a one-line "no changes made" message.
-- **`ok: false`, `stage: authenticated`**: gh is installed but not
-  authenticated. Show the `fix` list. Same wait/abort pattern.
+- **`ok: true`**: every dependency is satisfied. Continue to Step 0a.
+- **`ok: false`**: one or more deps are missing — go to step 2. Do NOT bail on
+  the first one; the helper already enumerated them all.
 
-Do not proceed past Step 0 until the check returns `ok: true`.
-SquidSquad's tracker, comments, and audit trail all run on gh — an
-install without working gh would be a broken install.
+**2. Present + ONE consent.** Show the user the FULL missing-set in plain
+language — for each item print its `name`, the `detail`, and what you propose
+to do (the `action`). Group them so the user sees the split:
+
+- **Auto-provisionable** (items where `action.auto` is `true`): you will
+  install these for them — system tools via the OS package manager, Python
+  packages via `pip install -r requirements.txt`, the `claude` CLI via npm if
+  npm is present.
+- **Guided** (items where `action.auto` is `false` — e.g. `gh auth`, or
+  `claude` when npm is absent): these need a human-walked step; show the
+  `action.instruct` lines.
+
+Then ask **exactly one** permission question, e.g.
+`> Install these N item(s)? [y/N]`. Install NOTHING before the user answers.
+
+**3. Provision on approval.**
+
+- If the user declines: explain that SquidSquad can't install without these
+  deps (the tracker, harness, and agent spawn all depend on them), then exit
+  cleanly with code 0 and "no changes made".
+- If the user approves: run
+  `python references/scripts/wizard.py provision-deps` (no args = provision
+  every auto item). Parse the `results` — report each `id` as provisioned or
+  failed (`stderr_tail` tells you why; a common cause on Linux is missing
+  elevation — surface the `instruct` line so the user can re-run with `sudo`).
+  Then walk the **guided** items WITH the user, one at a time:
+  - `gh auth` → run `gh auth login` interactively (browser/token, `repo`
+    scope), wait for them to finish.
+  - `claude` (npm absent) → show the install instructions and wait.
+
+**4. Re-verify.** Re-run `python references/scripts/wizard.py gather-deps`.
+
+- **`ok: true`** → continue to Step 0a.
+- **`ok: false`** → show the still-missing items with their `instruct` lines,
+  tell the user plainly what to install, and exit cleanly with code 0 (Phase 0
+  is pre-Phase-5, so no repo writes happened — nothing to roll back). The user
+  fixes the environment and re-runs the installer.
+
+`gh` (installed + authenticated) and Python/pip/packages are hard
+requirements — SquidSquad's tracker, comments, audit trail, and harness all
+depend on them, so the re-verify gate above must reach `ok: true` before the
+install proceeds. The `claude` CLI is needed at run time (agent spawn) but the
+install itself can complete without it; if it remains missing after re-verify,
+warn prominently but you MAY proceed past Step 0 as long as everything else is
+satisfied.
 
 ---
 
@@ -662,12 +708,16 @@ git push
 Push is optional but recommended — the user can opt out with a one-
 line prompt if you're unsure.
 
-### 7.5b — Install harness Python dependencies (#11403)
+### 7.5b — Re-ensure harness Python dependencies (#11403)
 
-The harness and its subsystems need a few Python packages — FastAPI +
-uvicorn for the HTTP server (hard requirements; the harness exits without
-them) and `watchdog` for PRD-E E3 L4 auto-recompose. They are declared in
-`requirements.txt` (seeded with the install). Install them:
+Step 0 (§4.1 gather-all) already provisions the runtime Python packages with
+the user's consent, and `start.sh` / `start.ps1` re-ensure them silently at
+every boot. This step is a belt-and-suspenders re-ensure for the rare case
+where Step 0 was skipped on a re-run path or the environment drifted between
+Phase 0 and here. The packages are declared in `requirements.txt` (seeded with
+the install) — FastAPI + uvicorn for the HTTP server (hard requirements; the
+harness exits without them), `watchdog` for PRD-E E3 L4 auto-recompose, plus
+`pyyaml` (runtime dep for compose/manifest/wizard). Re-run:
 
 ```bash
 pip install -r requirements.txt
