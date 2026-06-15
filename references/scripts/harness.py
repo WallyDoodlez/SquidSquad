@@ -281,7 +281,14 @@ class AgentState:
         that left a flag set still reboots once the ceiling elapses (AC4/AC5).
         Order is by confidence: an in-flight tool call is the strongest signal.
         """
-        if self.in_flight_until is not None and now < self.in_flight_until:
+        # DS-REVIEW-12458-guard F2: bound the in-flight hold by the SAME ceiling
+        # the deadline was set with, so a stale/never-cleared deadline or a
+        # backward clock step (NTP) can't hold the reboot longer than one
+        # legitimate tool call. The deadline must be in the future (diff > 0) but
+        # not by more than tool_call_max — the clock-skew guard the other
+        # branches get via `0 <= age < MAX`, expressed here on the deadline.
+        if (self.in_flight_until is not None
+                and 0 < self.in_flight_until - now <= TOOL_CALL_MAX_SECONDS):
             return "in-flight"
         if (self.compacting_since is not None
                 and 0 <= now - self.compacting_since < COMPACTING_MAX_SECONDS):
@@ -628,17 +635,22 @@ class HarnessState:
                 if death_candidate and pause_reason is not None:
                     # Explained silence → HOLD reboot (mirrors the crash-looping
                     # hold: "paused" is preserved across polls by the status
-                    # block above and re-evaluated here each poll).
+                    # block above and re-evaluated here each poll). DS-REVIEW-
+                    # 12458-guard F1: signal a change ONLY on the initial
+                    # transition into "paused" — the status block preserves the
+                    # hold silently thereafter, so re-asserting the same values
+                    # every 5s poll would churn save_state for no change (the
+                    # crash-looping hold doesn't either).
                     if agent.status != "paused":
                         _log(
                             f"{role}: dead/silent PID but '{pause_reason}' hook "
                             f"active — holding off reboot (explained pause, "
                             f"#12458)"
                         )
-                    agent.status = "paused"
-                    agent.claude_pid = None
-                    agent.bootup_complete = False
-                    state_changed = True
+                        agent.status = "paused"
+                        agent.claude_pid = None
+                        agent.bootup_complete = False
+                        state_changed = True
                 elif death_candidate and _NO_AUTO_REBOOT:
                     # #10538: observe-but-don't-respawn. State stays
                     # honest (PID cleared, bootup gate reset) so the
@@ -656,10 +668,24 @@ class HarnessState:
                     # #12458 AC3d — the death coincides with a recent throttle
                     # (rate_limit / overloaded). Respawning immediately would
                     # re-hit the same limit, so back off via the crash-loop
-                    # timer (count it as a fast death so repeated throttles
-                    # escalate the wait) — NOT a tight respawn. Reuses the
-                    # crash-looping resume path below.
-                    agent.consecutive_fast_deaths += 1
+                    # timer — NOT a tight respawn. Reuses the crash-looping
+                    # resume path below.
+                    #
+                    # DS-REVIEW-12458-guard F3: only COUNT it toward the crash
+                    # streak when the exit was NOT graceful — a cooperative exit
+                    # (SessionEnd after this spawn) that merely coincides with a
+                    # stale throttle must not accumulate the #12244 streak (the
+                    # #12418 AC4 contract). We still apply the backoff either way
+                    # (don't re-hit the limit), but a graceful exit doesn't
+                    # escalate the streak.
+                    se = agent.last_session_end
+                    se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
+                    graceful = bool(
+                        agent.last_spawn_at is not None
+                        and se_at >= agent.last_spawn_at
+                    )
+                    if not graceful:
+                        agent.consecutive_fast_deaths += 1
                     over = max(0, agent.consecutive_fast_deaths
                                - FAST_DEATH_THRESHOLD)
                     backoff = min(
@@ -2421,15 +2447,20 @@ async def hook_activity(request: Request):
         agent.last_activity = activity
         # #12458 — manage the in-flight tool-call window (pause guard). A
         # PreToolUse opens it (deadline now + tool_call_max so a long tool call
-        # isn't mistaken for a wedge); a Post* closes it. Any activity also
-        # clears a stale 'waiting' — the agent is doing things again, so it is
-        # no longer blocked on a prompt.
+        # isn't mistaken for a wedge); a Post* closes it. A real TOOL-CALL event
+        # also clears a stale 'waiting' — the agent is demonstrably executing,
+        # so it is no longer blocked on a prompt. DS-REVIEW-12458-plumbing F2:
+        # scope the waiting-clear to the three tool-use events, NOT every
+        # activity — a cycle_post heartbeat (or any non-tool event) is a weaker
+        # signal and a late one from a prior cycle could otherwise race a fresh
+        # Notification and prematurely clear a legitimate wait.
         ev = activity["event"]
         if ev == "PreToolUse":
             agent.in_flight_until = now + TOOL_CALL_MAX_SECONDS
+            agent.waiting_since = None
         elif ev in ("PostToolUse", "PostToolUseFailure"):
             agent.in_flight_until = None
-        agent.waiting_since = None
+            agent.waiting_since = None
         if now - _last_activity_save_at >= _ACTIVITY_SAVE_THROTTLE_SECONDS:
             _last_activity_save_at = now
             should_save = True
@@ -2504,10 +2535,12 @@ async def hook_pause(request: Request):
         elif event == "StopFailure":
             # Best-effort cause extraction — the exact StopFailure payload field
             # is config/version dependent; an unknown cause is the safe default
-            # (no backoff → normal reboot path, unchanged behavior).
+            # (no backoff → normal reboot path, unchanged behavior). DS-REVIEW-
+            # 12458-plumbing F5: `matcher` is the hook TRIGGER pattern, not the
+            # stop reason — excluded so a future named matcher can't be
+            # mistaken for the cause.
             cause = (body.get("cause") or body.get("reason")
-                     or body.get("matcher") or body.get("stop_reason")
-                     or "unknown")
+                     or body.get("stop_reason") or "unknown")
             agent.last_stop_failure = {"cause": cause, "at": now}
         else:
             _log(f"{role}: pause hook unrecognised event={event!r} — ignored")

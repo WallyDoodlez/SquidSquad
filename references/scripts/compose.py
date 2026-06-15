@@ -1914,6 +1914,18 @@ def _ensure_activity_hooks(settings_path) -> bool:
 # acceptable) is fine — no async command wrapper needed. Role rides the
 # X-Agent-Role header (the slice-a pattern); the harness /hooks/pause endpoint
 # dispatches on the hook event name.
+#
+# Two documented tradeoffs (DS-REVIEW-12458-plumbing F3/F4):
+#  - Port is the harness default 7373. If the harness runs on a non-default
+#    port the POST fails-open (no record → the reboot decision treats the
+#    silence as UNEXPLAINED, the safe-conservative default — same as the
+#    SessionEnd hook).
+#  - `Notification` is the one event here that fires BEFORE the agent is
+#    paused (it announces a pending permission/idle prompt). As a synchronous
+#    http hook it can delay the prompt's display by up to `timeout` seconds if
+#    the harness is unreachable. Acceptable for an unattended autonomous agent
+#    (prompts are rare and the timeout is short); flagged so a future
+#    interactive context can revisit (→ async command if it matters).
 _PAUSE_HOOK_URL = "http://127.0.0.1:7373/hooks/pause"
 
 

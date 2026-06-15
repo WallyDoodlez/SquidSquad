@@ -4156,6 +4156,14 @@ class TestPauseStateHelpers12458(unittest.TestCase):
         self.a.in_flight_until = now - 1  # deadline elapsed (tool_call_max hit)
         self.assertIsNone(self.a.active_pause(now))
 
+    def test_in_flight_deadline_too_far_future_not_paused(self):
+        """DS-REVIEW-12458-guard F2: a deadline further out than tool_call_max
+        (stale flag / backward clock step) must NOT hold indefinitely — the
+        ceiling caps the hold at one legitimate tool call."""
+        now = 1000.0
+        self.a.in_flight_until = now + self.h.TOOL_CALL_MAX_SECONDS + 100
+        self.assertIsNone(self.a.active_pause(now))
+
     def test_compacting_within_ceiling_is_paused(self):
         now = 1000.0
         self.a.compacting_since = now - 10
@@ -4343,6 +4351,25 @@ class TestPauseGuard12458(unittest.TestCase):
         self.assertEqual(agent.status, "crash-looping")
         self.assertIsNotNone(agent.reboot_blocked_until)
         self.assertGreater(agent.reboot_blocked_until, now)
+
+    def test_graceful_exit_with_throttle_backs_off_without_streak(self):
+        """DS-REVIEW-12458-guard F3: a GRACEFUL exit (SessionEnd after spawn)
+        that coincides with a recent throttle still BACKS OFF (don't re-hit the
+        limit) but must NOT accumulate the #12244 crash streak (the #12418 AC4
+        contract — a cooperative exit is not a crash)."""
+        now = 10_000.0
+        hs, agent = self._make_agent(
+            last_spawn_at=now - 10,
+            last_session_end={"reason": "other", "at": now - 5},  # after spawn
+            last_stop_failure={"cause": "rate_limit", "at": now - 3},
+        )
+        boot = self._run(hs, now)
+        boot.assert_not_called()  # backed off, not respawned
+        a = hs.get_agent("skill")
+        self.assertEqual(a.status, "crash-looping")
+        self.assertIsNotNone(a.reboot_blocked_until)
+        # graceful → streak NOT incremented
+        self.assertEqual(a.consecutive_fast_deaths, 0)
 
     def test_stale_stopfailure_does_not_backoff(self):
         """An OLD StopFailure is not a current throttle → normal death path."""
@@ -4585,15 +4612,17 @@ class TestPauseHook12458(unittest.TestCase):
     def test_stopfailure_records_cause(self):
         r = self.client.post("/hooks/pause", headers=self._hdr(),
                              json={"hook_event_name": "StopFailure",
-                                   "matcher": "rate_limit"})
+                                   "reason": "rate_limit"})
         self.assertEqual(r.status_code, 200)
         sf = self._agent().last_stop_failure
         self.assertEqual(sf["cause"], "rate_limit")
         self.assertIn("at", sf)
 
     def test_stopfailure_unknown_cause_defaults(self):
+        """F5: matcher is NOT a cause source — a payload with only a matcher
+        records 'unknown' (→ safe default, no backoff)."""
         self.client.post("/hooks/pause", headers=self._hdr(),
-                         json={"event": "StopFailure"})
+                         json={"event": "StopFailure", "matcher": "rate_limit"})
         self.assertEqual(self._agent().last_stop_failure["cause"], "unknown")
 
     def test_unknown_event_dropped_but_200(self):
