@@ -923,6 +923,22 @@ def _do_stop_after_cycle_check(data, role):
     return False
 
 
+def _do_activity_heartbeat(role):
+    """#12443 — emit an activity heartbeat at cycle end (HARNESS-ARCH §15.1).
+
+    A completed cycle is a liveness signal that covers quiet stretches with no
+    tool calls in the wrapper window (the PostToolUse hooks cover the rest).
+    Reuses the liveness-aware harness-port discovery. Fail-open: a telemetry
+    failure (harness down, import error, anything) must NEVER break the cycle.
+    """
+    try:
+        import activity_hook
+        activity_hook.post_activity(
+            role, "cycle_post", phase="cleanup", port=_discover_harness_port())
+    except Exception:
+        pass
+
+
 def _do_working_state_update(data, role):
     """Update working state file if agent provided update content."""
     update = data.get("working_state_update")
@@ -1026,6 +1042,9 @@ def main():
         }, cycle_number=data.get("cycle_number"))
     except (ImportError, Exception):
         pass
+
+    # 8b. Activity heartbeat (#12443) — a completed cycle is a liveness signal.
+    _do_activity_heartbeat(role)
 
     # 9. Intent + context pressure check (MUST be last — after commit, after log)
     # Queries harness API for intent, checks context pressure. Exit 42 = harness respawns.

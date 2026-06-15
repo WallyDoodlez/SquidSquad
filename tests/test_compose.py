@@ -562,6 +562,67 @@ class TestEnsureSessionEndHook12418:
         assert url.endswith("/hooks/session-end")
 
 
+class TestEnsureActivityHooks12443:
+    """#12443 AC1: the pipeline places PostToolUse + PostToolUseFailure
+    activity-heartbeat hooks in .claude/settings.json — async command hooks (NOT
+    blocking http), idempotently, preserving everything else (incl. slice-a's
+    SessionEnd hook)."""
+
+    def _load(self, p):
+        import json
+        return json.loads(p.read_text(encoding="utf-8"))
+
+    def test_adds_both_hooks_to_missing_file(self, tmp_path):
+        p = tmp_path / ".claude" / "settings.json"
+        changed = compose._ensure_activity_hooks(p)
+        assert changed is True
+        hooks = self._load(p)["hooks"]
+        for name in ("PostToolUse", "PostToolUseFailure"):
+            assert name in hooks, f"{name} hook missing"
+            hook = hooks[name][0]["hooks"][0]
+            # AC2: must be a non-blocking async COMMAND hook, not a blocking
+            # native http hook.
+            assert hook["type"] == "command"
+            assert hook["async"] is True
+            assert hook["command"] == "python"
+            # Exec form + CC-substituted project-dir token = cross-platform path.
+            assert hook["args"] == [
+                "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"]
+            assert isinstance(hook["timeout"], int)
+
+    def test_idempotent_no_rewrite(self, tmp_path):
+        p = tmp_path / ".claude" / "settings.json"
+        assert compose._ensure_activity_hooks(p) is True
+        assert compose._ensure_activity_hooks(p) is False
+
+    def test_coexists_with_session_end_hook(self, tmp_path):
+        """Slice-a's SessionEnd hook and slice-b's activity hooks are both
+        present after the two idempotent ensures run in sequence (the deploy
+        order), and neither clobbers the other or other keys."""
+        import json
+        p = tmp_path / ".claude" / "settings.json"
+        p.parent.mkdir(parents=True)
+        p.write_text(json.dumps({
+            "statusLine": {"type": "command", "command": "x"},
+        }), encoding="utf-8")
+        assert compose._ensure_session_end_hook(p) is True
+        assert compose._ensure_activity_hooks(p) is True
+        d = self._load(p)
+        assert d["statusLine"]["command"] == "x"
+        assert "SessionEnd" in d["hooks"]
+        assert "PostToolUse" in d["hooks"]
+        assert "PostToolUseFailure" in d["hooks"]
+        # SessionEnd stays a native http hook (once-per-session, block-OK).
+        assert d["hooks"]["SessionEnd"][0]["hooks"][0]["type"] == "http"
+
+    def test_corrupt_file_treated_as_empty(self, tmp_path):
+        p = tmp_path / ".claude" / "settings.json"
+        p.parent.mkdir(parents=True)
+        p.write_text("{ not json", encoding="utf-8")
+        assert compose._ensure_activity_hooks(p) is True
+        assert "PostToolUse" in self._load(p)["hooks"]
+
+
 # ---------------------------------------------------------------------------
 # Layered role architecture (#3465)
 # ---------------------------------------------------------------------------

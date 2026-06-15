@@ -160,7 +160,9 @@ class AgentState:
                  "last_spawn_at", "consecutive_fast_deaths",
                  "reboot_blocked_until",
                  # #12418 — last SessionEnd hook reason (graceful-exit signal)
-                 "last_session_end")
+                 "last_session_end",
+                 # #12443 — activity heartbeat (progress-based liveness)
+                 "last_activity_at", "last_activity")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -212,6 +214,16 @@ class AgentState:
         # a crash. The reboot decision (update_health) keys off that to avoid
         # counting graceful exits toward the #12244 crash-loop streak.
         self.last_session_end = None
+        # #12443 — activity heartbeat (HARNESS-ARCH §15.1). last_activity_at is
+        # the epoch of the most recent heartbeat (a PostToolUse / PostToolUse-
+        # Failure command hook, or a cycle_post emit); last_activity carries the
+        # enriched context ({at, event, tool, phase}, §15.2) for display. A
+        # working loop emits these continuously; a wedged loop stops, so silence
+        # — evaluated relative to dispatched work — is the death signal.
+        # OBSERVATIONAL ONLY this slice (#12443): recorded + exposed, does NOT
+        # yet drive the reboot decision (that is #12271 slice d).
+        self.last_activity_at = None
+        self.last_activity = None
 
     def to_dict(self):
         return {
@@ -236,6 +248,9 @@ class AgentState:
             "reboot_blocked_until": self.reboot_blocked_until,
             # #12418 — last SessionEnd hook reason (graceful-exit signal)
             "last_session_end": self.last_session_end,
+            # #12443 — activity heartbeat (progress-based liveness)
+            "last_activity_at": self.last_activity_at,
+            "last_activity": self.last_activity,
         }
 
 
@@ -897,6 +912,11 @@ class HarnessState:
                         # #12418 — persist last SessionEnd reason so the
                         # graceful-vs-crash signal survives a harness restart.
                         "last_session_end": a.last_session_end,
+                        # #12443 — persist activity heartbeat (throttled writer;
+                        # see /hooks/activity). Survives a harness restart so the
+                        # last-known activity isn't lost on recovery.
+                        "last_activity_at": a.last_activity_at,
+                        "last_activity": a.last_activity,
                     }
                     for role, a in self.agents.items()
                 },
@@ -987,6 +1007,10 @@ class HarnessState:
                 # #12418 — restore last SessionEnd reason (defaults None for
                 # older state files / fresh agents).
                 agent.last_session_end = agent_data.get("last_session_end")
+                # #12443 — restore activity heartbeat (defaults None for older
+                # state files / fresh agents).
+                agent.last_activity_at = agent_data.get("last_activity_at")
+                agent.last_activity = agent_data.get("last_activity")
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -2162,6 +2186,97 @@ async def hook_session_end(request: Request):
     except Exception as e:  # pragma: no cover — defensive
         _log(f"{role}: SessionEnd save_state failed (non-fatal): {e}")
     _log(f"{role}: SessionEnd reason={reason!r} recorded (#12418)")
+    return JSONResponse(status_code=200, content={"ok": True})
+
+
+# #12443 — activity-heartbeat persistence throttle. These hooks fire on EVERY
+# tool call, so we update the in-memory AgentState immediately (that is what
+# GET /agents/{role} reads) but rate-limit the state-FILE write: a heartbeat
+# only persists to disk if the last persist was at least this many seconds ago.
+# Disk staleness up to this window is harmless — last_activity_at matters for
+# live liveness (in-memory), and persistence only backstops a harness restart.
+_ACTIVITY_SAVE_THROTTLE_SECONDS = 30
+_last_activity_save_at = 0.0
+
+
+@app.post("/hooks/activity")
+async def hook_activity(request: Request):
+    """#12443 — receive an agent activity heartbeat (HARNESS-ARCH §15.1).
+
+    Emitted by the per-clone `PostToolUse` / `PostToolUseFailure` async command
+    hooks (every tool call) and by `cycle_post` (every completed cycle). The
+    heartbeat proves the agent's real loop is PROGRESSING — a wedged loop stops
+    making tool calls and completing cycles, so the heartbeat stops. We record
+    `last_activity_at` (+ enriched {event, tool, phase}) per agent; the reboot
+    decision does NOT yet consume it (observational this slice — #12271 d).
+
+    Role rides the `X-Agent-Role` header (same contract as /hooks/session-end).
+
+    Fail-open contract (§16.3): ALWAYS 200, never blocks or raises. Disk
+    persistence is throttled (`_ACTIVITY_SAVE_THROTTLE_SECONDS`) since these
+    fire per tool call — the in-memory value that GET /agents/{role} reads is
+    always current; only the state-file write is rate-limited.
+    """
+    global _last_activity_save_at
+    role = (request.headers.get("X-Agent-Role") or "").strip()
+    # Mirror /hooks/session-end F5: an uninterpolated token = no-role.
+    if role.startswith("${"):
+        role = ""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+
+    if not role:
+        # Log the DROP paths (DS-REVIEW-12443-harness F1): these fire only on a
+        # MISCONFIGURED header, so a healthy agent never logs here — a steady
+        # stream is the diagnostic signal that the X-Agent-Role wiring is wrong
+        # (distinguishes "no heartbeats" from "heartbeats silently dropped").
+        # The SUCCESS path is logged only at the throttle cadence below (it
+        # fires per tool call — logging each would be spam).
+        _log("Activity hook DROPPED — no X-Agent-Role header")
+        return JSONResponse(status_code=200, content={"ok": False, "dropped": "no-role"})
+
+    # Defense-in-depth (mirrors /hooks/session-end + receive_event #9242): drop
+    # unknown roles so a stray hook can't seed a ghost agent — but STILL 200.
+    try:
+        allowed = set(boot_remote._get_all_roles()) | {"pm"}
+    except (SystemExit, Exception):
+        allowed = None
+    if allowed is not None and role not in allowed:
+        _log(f"Activity hook DROPPED unknown role={role!r}")
+        return JSONResponse(status_code=200, content={"ok": False, "dropped": "unknown-role"})
+
+    now = time.time()
+    activity = {
+        "at": now,
+        "event": body.get("event") or body.get("hook_event_name"),
+        "tool": body.get("tool") or body.get("tool_name"),
+        "phase": body.get("phase"),
+    }
+    should_save = False
+    with state._lock:
+        agent = state.agents.get(role)
+        if agent is None:
+            agent = AgentState(role)
+            state.agents[role] = agent
+        agent.last_activity_at = now
+        agent.last_activity = activity
+        if now - _last_activity_save_at >= _ACTIVITY_SAVE_THROTTLE_SECONDS:
+            _last_activity_save_at = now
+            should_save = True
+    if should_save:
+        # Throttled success log (DS-REVIEW-12443-harness F1): a low-noise
+        # "still alive" breadcrumb at the persistence cadence (~once/30s per
+        # agent), NOT per tool call. Confirms heartbeats are arriving + being
+        # recorded without flooding the log.
+        _log(f"{role}: activity recorded ({activity.get('event')}, #12443)")
+        try:
+            await asyncio.to_thread(state.save_state)
+        except Exception as e:  # pragma: no cover — defensive
+            _log(f"{role}: activity save_state failed (non-fatal): {e}")
     return JSONResponse(status_code=200, content={"ok": True})
 
 
