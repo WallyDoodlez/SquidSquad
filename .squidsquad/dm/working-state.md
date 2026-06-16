@@ -5,6 +5,11 @@
 - **Task**: none
 - **Status**: idle
 
+## >>> FLAG @PM — .claude/settings.json merge friction (volatile-shared-file class) <<<
+- 2026-06-16: a pull aborted because `.claude/settings.json` was locally dirty (compose regenerates its activity/pause hooks block per-clone), and a stash-pop hit a UU conflict because origin also changed it. Resolved by resetting to HEAD (committed version is generic — hooks use ${CLAUDE_PROJECT_DIR}/${SQUIDSQUAD_ROLE}, serves all clones per #12418/#12443).
+- **This is [[feedback_merge_spiral_volatile_file]]**: a tracked file that compose rewrites per-clone will keep blocking pulls. Structural fix = untrack + gitignore .claude/settings.json (compose regenerates it on deploy). NOT a DM-domain decision + the file may be intentionally committed (the #12418 'one committed settings.json serves all clones' design) → flag @pm/skill, don't unilaterally untrack.
+- Workaround until fixed: on a blocked pull, `git checkout -- .claude/settings.json` (or reset to HEAD) before pulling — the committed version is authoritative; local compose hooks regenerate on next deploy.
+
 ## >>> PENDING TEAM REBOOT (#12473 comms rule) <<<
 - #12473 (L1 plain-language comms rule) SHIPPED + composed into all 4 CLAUDE.md (commit cf5a48666). **Reboots DEFERRED per operator (2026-06-15)** — auto-reboot off during firefight; agents run stale CLAUDE.md until next natural restart, then pick up the rule. Harness compose-after-merge auto-reboot did NOT fire (no intents flipped). When operator/PM green-light a team reboot, restart pm/dm/qa/skill via `squidsquad_cli.py restart <role>` (reboot_agent.py deprecated). Note: my own /quit doesn't work this session → my reboot = harness force-kill+respawn.
 - **Quiet Cycle Counter**: 3 (doc-scan GATED — see below)
