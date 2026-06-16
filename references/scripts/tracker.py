@@ -27,7 +27,8 @@ Role authority (who may call `transition`):
                                      in-progress -> approved (must match issue's `role:*` label)
   - DM  (--role dm  or dm-lead)    : in-progress -> pending-ship, pending-ship -> shipped,
                                      pending-ship -> in-progress (merge conflict rollback)
-  - Human override                 : --force bypasses authority + unread-feedback guards
+  - Human override                 : --force bypasses legality + authority + unread-feedback
+                                     guards (any status change); ship-integrity gates still apply
 """
 
 import json
@@ -163,8 +164,11 @@ LEGAL_TRANSITIONS = {
 # this table will be rejected with "no authority mapping" unless --force is
 # passed. This fails closed by design.
 #
-# Bypass: --force overrides authority (and the unread-feedback guard) but
-# NOT legality. Humans use --force when intervening manually.
+# Bypass: --force overrides the legality matrix, authority, AND the unread-
+# feedback guard (#12475) — the full human override for setting any status.
+# The ship-integrity gates (TC-coverage; unmerged-PR/branch on ->shipped) are
+# the only checks --force does NOT bypass. Humans use --force when intervening
+# manually (e.g. correcting a mis-transition).
 
 ROLE_AUTHORITY = {
     # PM owns the intake lifecycle
@@ -1092,22 +1096,41 @@ def transition(number, from_status, to_status, role=None, force=False):
         to_status: target status (short or full label)
         role: caller's role (e.g. "skill-lead", "pm", "verifier-lead"). Required
               unless `force` is set. Checked against ROLE_AUTHORITY.
-        force: human override — bypasses role authority AND the unread-feedback
-              guard. Does NOT bypass legality.
+        force: human override — bypasses the legality matrix, role authority,
+              AND the unread-feedback guard, permitting any from->to status
+              change (#12475). Does NOT bypass the ship-integrity gates
+              (TC-coverage on pending-test->pending-ship; unmerged PR/branch on
+              ->shipped) — those remain hard invariants even under --force.
     """
     from_label = _resolve_status(from_status)
     to_label = _resolve_status(to_status)
 
-    # 1. Enforce legal transitions (never bypassed)
+    # 1. Enforce legal transitions (bypassable with --force — #12475)
+    #    --force is the human override: it permits setting status to ANY value,
+    #    bypassing the legality matrix in addition to the authority + unread-
+    #    feedback guards. This is the path a human (or PM on a human directive)
+    #    uses to correct a mis-transition (e.g. walk a task over-approved in an
+    #    'approve all' batch back from approved -> planning). The ship-INTEGRITY
+    #    gates below (step 4 TC-coverage, step 5 unmerged-PR/branch) remain hard
+    #    invariants even under --force — they protect `shipped` integrity and
+    #    are out of scope for this override.
     legal = LEGAL_TRANSITIONS.get(from_label, set())
     if to_label not in legal:
-        _log_diagnostic("error", f"Illegal transition {from_label} -> {to_label} on #{number}")
-        print(
-            f"ERROR: Illegal transition {from_label} -> {to_label}. "
-            f"Legal from {from_label}: {sorted(legal)}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        if force:
+            _log_diagnostic(
+                "warning",
+                f"Forced illegal transition {from_label} -> {to_label} on "
+                f"#{number} (--force human override)",
+            )
+        else:
+            _log_diagnostic("error", f"Illegal transition {from_label} -> {to_label} on #{number}")
+            print(
+                f"ERROR: Illegal transition {from_label} -> {to_label}. "
+                f"Legal from {from_label}: {sorted(legal)}. "
+                f"Use --force to override (humans only).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     # 2. Enforce role authority (bypassable with --force)
     if not force:

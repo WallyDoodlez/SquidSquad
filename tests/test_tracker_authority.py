@@ -499,18 +499,38 @@ class TestTransitionEnforcement:
         # gh was actually called
         assert any("edit" in c for c in gh_calls)
 
-    def test_illegal_transition_rejected_even_with_force(self, monkeypatch, capsys):
-        """--force does NOT bypass legality (can't jump pending -> shipped)."""
+    def test_illegal_transition_rejected_without_force(self, monkeypatch, capsys):
+        """Without --force the legality matrix still blocks illegal edges."""
         def _fail(*a, **kw):
             raise AssertionError("gh should not be called on illegal transition")
 
         monkeypatch.setattr(tracker, "_run_list", _fail)
         with pytest.raises(SystemExit) as excinfo:
-            tracker.transition(1, "pending", "shipped",
-                               role="pm-lead", force=True)
+            tracker.transition(1, "approved", "planning",
+                               role="pm-lead", force=False)
         assert excinfo.value.code == 1
         err = capsys.readouterr().err
         assert "Illegal transition" in err
+
+    def test_force_bypasses_legality(self, monkeypatch):
+        """#12475: --force IS a full legality override — approved -> planning
+        (illegal in the forward matrix) succeeds, letting a human walk back a
+        mis-transition. Ship-integrity gates are covered in
+        test_12475_force_bypasses_legality.py."""
+        gh_calls = []
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            gh_calls.append(cmd)
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        tracker.transition(1, "approved", "planning", role="pm-lead", force=True)
+        assert any("edit" in c for c in gh_calls)
 
     def test_missing_role_rejected(self, monkeypatch, capsys):
         def _fail(*a, **kw):
