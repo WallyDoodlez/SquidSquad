@@ -13,3 +13,4 @@ fastapi>=0.100.0      # harness HTTP server (hard requirement — harness exits 
 starlette>=0.27.0     # imported directly (harness.py JSONResponse); fastapi's tighter pin governs resolution
 uvicorn>=0.23.0       # ASGI server that runs the FastAPI app (hard requirement)
 watchdog>=3.0.0       # PRD-E E3 L4 file-watch Observer (auto-recompose on L4 edit)
+pyyaml>=6.0           # #11613: imported at RUNTIME by compose/manifest/wizard/capability_check/source_frontmatter/model_router/catalog_drift — a fresh `pip install -r requirements.txt` must include it (was mis-filed in requirements-dev.txt)

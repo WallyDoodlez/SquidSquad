@@ -26,8 +26,12 @@ python3 -m pip --version &>/dev/null || {
     fi
 }
 
-# --- fastapi + uvicorn ---
-python3 -c "import fastapi; import uvicorn" 2>/dev/null || pip3 install fastapi uvicorn
+# --- Runtime Python deps (#11613) ---
+# Install the FULL runtime set from requirements.txt, not just fastapi+uvicorn —
+# watchdog and pyyaml are also imported at runtime, so the old 2-of-N install
+# left a fresh machine missing deps the harness/compose need. The import probe
+# covers every runtime dep so a partial environment triggers a reinstall.
+python3 -c "import fastapi, uvicorn, starlette, watchdog, yaml" 2>/dev/null || pip3 install -r requirements.txt
 
 # --- claude CLI ---
 command -v claude &>/dev/null || echo "WARNING: 'claude' not on PATH (npm i -g @anthropic-ai/claude-code)"

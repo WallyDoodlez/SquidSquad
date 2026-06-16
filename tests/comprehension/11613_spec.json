@@ -1,0 +1,40 @@
+{
+  "issue": 11613,
+  "title": "Installer dependency auto-provisioning — WIZARD.md Step 0 comprehension",
+  "source_file": "references/wizard/WIZARD.md",
+  "section": "Step 0 — Prerequisite detection & provisioning (§4.1)",
+  "method": "Fresh agent given ONLY the Step 0 section, no other context. Answers must come from the text alone. Correct = instructions are unambiguous; wrong = implementation/clarity gap → reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "During prerequisite detection, the very first missing dependency is found. Should the installer stop and report it immediately, or keep checking the rest?",
+      "expected": "Keep checking / do NOT bail on the first — gather-all enumerates all missing deps in one pass; never fail-fast."
+    },
+    {
+      "id": "CQ2",
+      "q": "When deps are missing, how many permission/consent questions does the user get before anything is installed?",
+      "expected": "Exactly one consent question for the full missing-set; install nothing before the user answers."
+    },
+    {
+      "id": "CQ3",
+      "q": "The user DECLINES provisioning, and the ONLY missing item is the `claude` CLI. Does the install hard-stop?",
+      "expected": "No — claude is soft; note the install could still proceed (agent spawn would be unavailable) and let the user reconsider; not a hard blocker."
+    },
+    {
+      "id": "CQ4",
+      "q": "After re-verify, a hard dependency (gh / Python / pip / packages) is STILL missing. What does the installer do?",
+      "expected": "Show the still-missing items + instruct lines, tell the user what to install, exit cleanly with code 0 (no repo writes happened, nothing to roll back); user fixes env and re-runs."
+    },
+    {
+      "id": "CQ5",
+      "q": "Does Phase 0 provisioning write anything to the target repository?",
+      "expected": "No — it installs host tools / Python packages only (consent-gated); no writes to the target repo. Aborting leaves nothing changed."
+    },
+    {
+      "id": "CQ6",
+      "q": "After the user approves, what exact command provisions all the auto-provisionable items?",
+      "expected": "`python references/scripts/wizard.py provision-deps` (no args = provision every auto item)."
+    }
+  ]
+}
