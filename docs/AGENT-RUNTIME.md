@@ -146,7 +146,7 @@ flowchart TB
 
     Forge[("Forge<br/>GitHub Issues")]
 
-    subgraph agents_row["Agents (one box per running alias; multi-instance installs add boxes here)"]
+    subgraph agents_row["Agents (one box per running alias — multi-instance installs add boxes here)"]
         direction LR
         subgraph pm_box["PM agent"]
             PMTree["cmd → thin_launcher → claude<br/>+ event_poll (Monitor child, in tree)"]
@@ -203,7 +203,7 @@ flowchart TB
 
     HarnessAPI[("Harness HTTP API")]
     Poll -- "GET /events/for/alias ?since=cursor (event mode only)" --> HarnessAPI
-    Claude -- "POST /events (booted, ack-cursor); POST /work/assign" --> HarnessAPI
+    Claude -- "POST /events (booted, ack-cursor) + POST /work/assign" --> HarnessAPI
     Poll -- "NUDGE on stdout" --> Monitor
 ```
 
@@ -845,7 +845,7 @@ sequenceDiagram
             H-->>A: []
             alt improvement cooldown elapsed
                 Note over A: §8.6 — run one bounded<br/>improvement subloop task
-                Note over A: loop continues — re-check (other agents may have<br/>assigned work during subloop; subloop forge writes<br/>can trigger EAD-emitted assigned-to for this alias)
+                Note over A: loop continues — re-check (other agents may have<br/>assigned work during subloop — subloop forge writes<br/>can trigger EAD-emitted assigned-to for this alias)
             else cooldown not elapsed
                 Note over A: idle wait<br/>(Monitor blocks until next NUDGE)
                 EP->>M: next NUDGE
@@ -1071,12 +1071,12 @@ The branch fires only when the queue is observably drained — there is no harne
 
 ```mermaid
 flowchart TD
-    Start(["per-event ack just emitted;<br/>top of §8.1 eager loop"])
+    Start(["per-event ack just emitted —<br/>top of §8.1 eager loop"])
     QEmpty{"GET returns empty?<br/>no events past cursor"}
     Arm["arm periodic driver if not armed<br/>(lazy first idle, resets scan_count on re-arm) §8.6.1"]
     Throttle{"cooldown elapsed?<br/>time-based throttle"}
     Subloop["run improvement subloop:<br/>one bounded task, scan_count++"]
-    Cap{"scan_count >=<br/>Idle Scan Burst?"}
+    Cap{"scan_count ≥<br/>Idle Scan Burst?"}
     Cancel["cancel periodic driver<br/>(re-arms on next idle period)"]
     Idle["idle wait"]
     Process["process next event<br/>(§8.1 inner loop body)"]
