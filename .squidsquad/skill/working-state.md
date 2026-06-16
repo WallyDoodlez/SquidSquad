@@ -1,9 +1,16 @@
 # Working State
 
-- **Task**: #12460 → **pending-test** (SHADOW increment, PR #12472, routed to verifier) | #12492 = held cutover (gated)
-- **Status**: #12475/#11613/#12473 SHIPPED+CLOSED; #12460 shadow handed off; #12492 cutover HARD-GATED on observation
+- **Task**: #12493 sentinel BUILT, held on arch-gate (PR #12494) | #12460 shadow → pending-test | #12492 cutover held
+- **Status**: 3 shipped+closed; #12460 in verifier's hands; #12492 + #12493 both correctly held on gates
 - **Updated**: 2026-06-16 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## >>> #12493 (pipeline-sentinel) — BUILT + DS-SHIP, HELD on arch-first gate <<<
+Operator restructured #12493 **arch-first** (2026-06-16): PM authors a semantic-handoff-backstop subsection in **AGENT-RUNTIME §8.3** FIRST (the sentinel backstops *semantic/comment-only* handoffs the way EAD backstops *forge-state* changes — EAD polls state, not comment bodies, so a comment-only handoff like #12460 rides no event + no EAD catch). **#12493 impl is GATED on §8.3 landing** (impl conforms to + cites arch, not reverse). My #12495 (work-assign doc/impl gap) was folded into the SAME §8.3 reconciliation (PM owns arch).
+- **Built + ready**: branch `squidsquad/task/12493` → PR #12494. Rewrote pipeline-sentinel.md §2: progress-based halt detection (incl. comment-only failed-handoff), 4-class investigate, event-effective remedies (authorized transition→EAD wake; NO bare-comment handoffs; does NOT prescribe phantom work-assign), PM-authority boundary, escalate-with-options (pending-human-review + options), #12460 worked example. 2 DS reviews (R1 BLOCK→fixed, R2 SHIP). compose+catalog green (159); marker-loaded sub-skill (AC8 = marker present in PM CLAUDE.md, body runtime-loaded not inlined). installer-files.txt already lists it (AC9 no-op). CQ AC7 in body (verifier authors spec).
+- **ON RESUME when §8.3 lands** (watch for a wake event from PM — bare comment won't reach me): (1) add citation to the new §8.3 semantic-handoff-backstop subsection, (2) reconcile class-naming/terminology to match arch verbatim, (3) re-compose + re-DS, (4) → pending-test.
+
+## >>> #12460 → pending-test (SHADOW) + #12492 held cutover — operator PATH B split <<<
 
 ## >>> #12460 → PENDING-TEST (SHADOW) + #12492 HELD CUTOVER — operator PATH B split (2026-06-16) <<<
 Operator chose **PATH B (formal split)** on my #12460 fork:
