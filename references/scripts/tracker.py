@@ -27,7 +27,8 @@ Role authority (who may call `transition`):
                                      in-progress -> approved (must match issue's `role:*` label)
   - DM  (--role dm  or dm-lead)    : in-progress -> pending-ship, pending-ship -> shipped,
                                      pending-ship -> in-progress (merge conflict rollback)
-  - Human override                 : --force bypasses authority + unread-feedback guards
+  - Human override                 : --force bypasses legality + authority + unread-feedback
+                                     guards (any status change); ship-integrity gates still apply
 """
 
 import json
@@ -163,8 +164,11 @@ LEGAL_TRANSITIONS = {
 # this table will be rejected with "no authority mapping" unless --force is
 # passed. This fails closed by design.
 #
-# Bypass: --force overrides authority (and the unread-feedback guard) but
-# NOT legality. Humans use --force when intervening manually.
+# Bypass: --force overrides the legality matrix, authority, AND the unread-
+# feedback guard (#12475) — the full human override for setting any status.
+# The ship-integrity gates (TC-coverage; unmerged-PR/branch on ->shipped) are
+# the only checks --force does NOT bypass. Humans use --force when intervening
+# manually (e.g. correcting a mis-transition).
 
 ROLE_AUTHORITY = {
     # PM owns the intake lifecycle
@@ -356,6 +360,35 @@ def _get_issue_role_labels(number):
         if name.startswith("role:"):
             roles.add(name[len("role:"):])
     return roles
+
+
+def _get_issue_status_labels(number):
+    """Return the set of FULL `status:*` labels currently on an issue.
+
+    e.g. labels `status:approved`, `role:skill` -> {"status:approved"}. Note the
+    return shape differs from `_get_issue_role_labels`, which strips its prefix
+    ("skill"); this returns the full label string ("status:approved") because the
+    swap site removes full label names. Returns an empty set on API failure
+    (caller decides how to treat missing data). Used by the forced-transition
+    path (#12475) to remove whatever status label is ACTUALLY present rather than
+    trusting the caller-supplied from-status — a wrong from-status would
+    otherwise leave the issue with two status labels.
+    """
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "labels"],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return set()
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return set()
+    return {
+        lbl.get("name", "")
+        for lbl in data.get("labels", [])
+        if lbl.get("name", "").startswith("status:")
+    }
 
 
 def _check_authority(number, from_label, to_label, caller_role):
@@ -1092,22 +1125,43 @@ def transition(number, from_status, to_status, role=None, force=False):
         to_status: target status (short or full label)
         role: caller's role (e.g. "skill-lead", "pm", "verifier-lead"). Required
               unless `force` is set. Checked against ROLE_AUTHORITY.
-        force: human override — bypasses role authority AND the unread-feedback
-              guard. Does NOT bypass legality.
+        force: human override — bypasses the legality matrix, role authority,
+              AND the unread-feedback guard, permitting any from->to status
+              change (#12475). Does NOT bypass the ship-integrity gates
+              (TC-coverage on pending-test->pending-ship; unmerged PR/branch on
+              ->shipped) — those remain hard invariants even under --force.
     """
     from_label = _resolve_status(from_status)
     to_label = _resolve_status(to_status)
 
-    # 1. Enforce legal transitions (never bypassed)
+    # 1. Enforce legal transitions (bypassable with --force — #12475)
+    #    --force is the human override: it permits setting status to ANY value,
+    #    bypassing the legality matrix in addition to the authority + unread-
+    #    feedback guards. This is the path a human (or PM on a human directive)
+    #    uses to correct a mis-transition (e.g. walk a task over-approved in an
+    #    'approve all' batch back from approved -> planning). The ship-INTEGRITY
+    #    gates below (step 4 TC-coverage, step 5 unmerged-PR/branch) remain hard
+    #    invariants even under --force — they protect `shipped` integrity and
+    #    are out of scope for this override.
     legal = LEGAL_TRANSITIONS.get(from_label, set())
     if to_label not in legal:
-        _log_diagnostic("error", f"Illegal transition {from_label} -> {to_label} on #{number}")
-        print(
-            f"ERROR: Illegal transition {from_label} -> {to_label}. "
-            f"Legal from {from_label}: {sorted(legal)}",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        if force:
+            _log_diagnostic(
+                "warning",
+                f"Forced illegal transition {from_label} -> {to_label} on "
+                f"#{number} (--force human override)",
+            )
+            # fall through — force allows the illegal edge; the authority and
+            # ship-integrity gates below still run (steps 4/5 are never bypassed).
+        else:
+            _log_diagnostic("error", f"Illegal transition {from_label} -> {to_label} on #{number}")
+            print(
+                f"ERROR: Illegal transition {from_label} -> {to_label}. "
+                f"Legal from {from_label}: {sorted(legal)}. "
+                f"Use --force to override (humans only).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
     # 2. Enforce role authority (bypassable with --force)
     if not force:
@@ -1126,6 +1180,14 @@ def transition(number, from_status, to_status, role=None, force=False):
             sys.exit(1)
 
     # 3. Guard: block guarded transitions if unread feedback exists
+    if force and (from_label, to_label) in _GUARDED_TRANSITIONS:
+        # Force skips the unread-feedback block — surface that it was skipped so
+        # a human override past genuinely-unread QA feedback is auditable (#12475).
+        _log_diagnostic(
+            "warning",
+            f"Forced transition {from_label} -> {to_label} on #{number} "
+            f"bypassed the unread-feedback guard (--force)",
+        )
     if (from_label, to_label) in _GUARDED_TRANSITIONS and not force:
         # Match the caller's actual comment format (role is non-None here
         # because authority check required it; fall back to skill-lead
@@ -1232,11 +1294,29 @@ def transition(number, from_status, to_status, role=None, force=False):
                 )
                 sys.exit(1)
 
+    # Determine which status label(s) to remove. On the normal (non-forced)
+    # path the legality matrix guarantees `from_label` is the actual current
+    # status, so remove exactly that (no extra gh round-trip on the hot path).
+    # On the forced path (#12475) the caller-supplied `from_status` is NOT
+    # trusted: a wrong value would no-op the remove and leave the issue with
+    # two status:* labels. So query the live status labels and strip ALL of
+    # them (except the target) — a forced status change always lands exactly
+    # one status label. Falls back to `from_label` if the query fails.
+    remove_labels = [from_label]
+    if force:
+        live_status = _get_issue_status_labels(number)
+        stale = sorted(live_status - {to_label})
+        if stale:
+            remove_labels = stale
+
     adapter = _get_forge_adapter()
     if adapter:
-        adapter.edit_labels(number, add=[to_label], remove=[from_label])
+        adapter.edit_labels(number, add=[to_label], remove=remove_labels)
     else:
-        _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
+        cmd = ["gh", "issue", "edit", str(number), "--add-label", to_label]
+        for lbl in remove_labels:
+            cmd += ["--remove-label", lbl]
+        _run_list(cmd)
 
     # Auto-convert draft PR to ready on pending-test or pending-ship
     if to_label in ("status:pending-test", "status:pending-ship"):
