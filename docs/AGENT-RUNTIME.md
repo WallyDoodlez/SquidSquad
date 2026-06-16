@@ -1086,6 +1086,7 @@ flowchart TD
     Throttle -->|"cooldown elapsed"| Subloop
     Subloop --> Start
     Idle -->|"NUDGE wakes agent"| Start
+    Idle -->|"periodic-driver tick (§8.6.1)"| Start
 ```
 
 **Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
@@ -1097,6 +1098,23 @@ flowchart TD
 - **dm**: doc realignment + CHANGELOG hygiene + version-bump readiness
 
 Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and routes it). That nudges the owning alias into work — via the same `/work/assign` path everything else uses.
+
+#### 8.6.1 The event-mode periodic driver (idle-work scheduler)
+
+§8.6's "idle → wake → re-check" loop has an implicit dependency the rest of §8 doesn't satisfy: **something must re-enter the loop on a timer when no forge events arrive.** Loop mode gets this for free — `/loop 30m` *is* a periodic driver, and the subloop fires at `step:cycle/cleanup`. Event mode arms the Monitor but schedules **nothing periodic**; `event_poll` emits a NUDGE only on *forge events* (it is silent on an empty poll). So a genuinely idle event-mode agent (zero forge events) never re-enters the loop, never re-checks the throttle, and **the subloop never fires** — the dormancy observed in #12506 (no improvement scan across event-mode agents for weeks).
+
+**The driver.** At event-mode boot, *after* `bootup-complete` and arming the Monitor, the agent **schedules a dedicated low-frequency self-wake** using the same cron/`/loop` scheduling primitive loop mode uses, at the throttle cadence (≈ the cool-down, default 30m). Event mode therefore has **two independent, orthogonal wake sources**:
+
+- **Monitor / `event_poll`** → forge-event NUDGEs → *productive* work (§8.1).
+- **Periodic driver (cron)** → timer tick → *idle-work* check: re-enter one §8.1 drained-queue evaluation.
+
+**On a driver tick** the agent (1) forge-reads `work_queue()` first — absorbing any work that arrived (so the driver doubles as a safety-net against a missed nudge); then (2) if the queue is drained **and** the throttle window has elapsed, runs one bounded subloop task (existing §8.6 logic). The driver runs only this **narrow drained-check — not a full loop-mode cycle**; event mode stays event-driven for productive work, and the driver covers *only* the idle window.
+
+**Integration with the Monitor.** The cron tick and the persistent Monitor coexist in one session — a tick arriving mid-task or mid-stream is handled exactly like a mid-task NUDGE (noted, then absorbed by the next forge-read; atomicity preserved per §8.5). **No harness change is required**: the scheduling primitive is runtime-side, scheduled by the agent at boot.
+
+**Reconciliations.** The §8.6 diagram's `Idle` state now has a second exit, `periodic-driver tick → Start`. The `idle-cooldown-loop` sub-skill's step-5 assumption ("the persistent Monitor delivers wakes at a short fixed cadence") is corrected to name this driver as the cadence source — that sub-skill edit is part of the implementation.
+
+*Scope:* covers the event-mode driver (pm/skill/dm). dm's #10540 gate (separate, PM routing) and qa's loop-mode staleness (separate path) are out of scope per the #12506 RCA.
 
 ---
 
