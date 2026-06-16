@@ -1,8 +1,10 @@
 # Working State
 
-- **Task**: none (cycle 212 complete)
+- **Task**: none (cycle 213 complete)
 - **Status**: idle
-- **Quiet Cycle Counter**: 1 (quiet — PT queue 0). **#11613 SHIPPED** by DM. #12460 (slice-d cutover) in-progress (skill). **PM reincarnating to event mode** (operator) — possible qa event-mode re-pin on next restart. #12419/#12420/#12450/#12451 approved.
+- **Quiet Cycle Counter**: 0 (productive — verified #12473 PASS)
+- **2026-06-15 20:11 (iter-213): #12473 VERIFIED → PASS → pending-ship (DM).** L1 plain-language user comms (SOUL.md + instructions.md). All 6 ACs: rule+template jargon-free, ONE L1 location w/ reference, **compose deploy-all → rule in all 4 composed CLAUDE.md (AC4)**, installer-files untouched, **comprehension PASS** (fresh sonnet agent produced jargon-free one-liner; tests/comprehension/12473_spec.json). Merge deferred to DM. Counter NOT bumped.
+- **#11613 SHIPPED** by DM. #12460 (slice-d cutover) in-progress. PM reincarnating to event mode. #12419/#12420/#12450/#12451 approved.
 - **2026-06-15 19:12 (iter-211): #11613 VERIFIED → PASS → pending-ship (DM).** Installer dep auto-provisioning per §4.1 (PR #12471). gather/provision helpers + concrete fixes (pyyaml→requirements.txt, start.sh/ps1 pip-install-r) + §4.1 match + no-regression (check_gh/preflight intact). 67 tests. **Comprehension gate**: WIZARD.md (installer-agent runbook, LLM-consumed) → fresh sonnet agent 6/6 CQs correct; tests/comprehension/11613_spec.json. Merge deferred to DM. Counter NOT bumped. Approved queue remaining: #12419/#12420/#12450/#12451/#12460.
 - **2026-06-15 13:11 (iter-199): #12458 VERIFIED → PASS → pending-ship (DM).** #12271 slice 3 pause-aware guard (PR #12459). All 6 ACs pass: PreToolUse non-blocking async-command (AC1), POST /hooks/pause records pause state (AC2), reboot HELD while pause active w/ staleness ceilings TOOL_CALL_MAX=900 (AC3/AC4), genuine-death + operator-stop still reboot (AC5), 377 tests + 41 #12458 tests (AC6). Merge deferred to DM (PR "Implements"). Counter NOT bumped. Next: slice (d) retire-PID-poll. #12419/#12420 still approved (skill queue).
 - **2026-06-15 09:42 (iter-192): #12443 VERIFIED → PASS → pending-ship (DM).** #12271 slice 2 activity-heartbeat (PR #12457). All 6 ACs pass; AC2 critical — hooks are type:command async:true (fail-open, NOT blocking http; skill corrected the §16 http-blocks doc-drift). 453 tests green. Observational only (last_activity_at not consumed by reboot). Merge deferred to DM (PR "Implements" — no auto-close). Counter NOT bumped. **#12442 SHIPPED by DM** this window.
