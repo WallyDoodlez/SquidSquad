@@ -1,12 +1,17 @@
 # Working State
 
-- **Task**: ON RESUME → resume #12460 (in-progress, shadow deploy-ready, cutover HELD on external gate)
-- **Status**: #12475 SHIPPED+CLOSED; #12460 gated on shadow merge→observe (PR #12472). Honoring restart-required at clean boundary.
-- **Updated**: 2026-06-15 (skill — event-mode, pre-restart checkpoint)
+- **Task**: #12460 → **pending-test** (SHADOW increment, PR #12472, routed to verifier) | #12492 = held cutover (gated)
+- **Status**: #12475/#11613/#12473 SHIPPED+CLOSED; #12460 shadow handed off; #12492 cutover HARD-GATED on observation
+- **Updated**: 2026-06-16 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
-## >>> ON RESUME — #12460 (#12271 slice-d CUTOVER) is the live in-progress task <<<
-Shadow phase DONE + deploy-ready (PR #12472, merged main, 303 green, pushed). CUTOVER (ACs 1/4: flip reboot decision PID→progress at ~harness.py:542, demote PID to teardown-only, remove #10101/#10440 walk from liveness path) is HELD per operator shadow-first mandate — needs PR #12472 to MERGE + run on the live harness to produce a PID-vs-progress divergence window BEFORE writing the flip. Decision posted to #12460 (22:03): asked DM to merge #12472 (open observation window) OR PM to formally split (shadow shippable now / cutover follow-up). **WATCH for: DM pr-merged on #12472, or PM transition/assigned-to on #12460.** Front-load map: planning/12460-liveness-map.md. Vault: [[learning-activity-liveness-redispatch-must-not-reset-grace]].
+## >>> #12460 → PENDING-TEST (SHADOW) + #12492 HELD CUTOVER — operator PATH B split (2026-06-16) <<<
+Operator chose **PATH B (formal split)** on my #12460 fork:
+- **#12460 = the SHADOW increment** (observational): progress_liveness() computed alongside PID in update_health(), divergence LOGGED, reboot decision UNCHANGED. Advanced → pending-test (PR #12472, branch refreshed onto main bd1072f05, 303 green). Verifier scope: reboot behavior unchanged + shadow CAN produce a 'dead' verdict for a constructed zombie + suite green. NOT the flip. (Unread-feedback guard blocked the first transition; cleared after posting my scoped handoff comment.)
+- **#12492 = the CUTOVER flip** (approved, role:skill, HIGH, **HARD-GATED**): remove PID-poll as reboot decider, progress-liveness authoritative, PID→teardown-only. **DO NOT START** until #12460's shadow has MERGED + run on the live harness and produced a clean PID-vs-progress divergence window (no false pos/neg). I hold the cutover commits (foundation: progress_liveness/should_advance_dispatch/last_dispatch_at already on the #12460 branch; the flip itself = replace `alive = boot_remote._is_process_alive(pid)` ~harness.py:542 with progress-derived under self._lock, demote PID, remove #10101/#10440 walk from liveness path; AC: cite the divergence window as evidence, slow-boot agent (qa #12409) not falsely rebooted). Front-load map: planning/12460-liveness-map.md. Vault: [[learning-activity-liveness-redispatch-must-not-reset-grace]]. **WATCH for: DM pr-merged on #12472 → then the observation window opens → then #12492.**
+
+## LEARNED THIS SESSION (process)
+- A bare tracker-comment wakes NO agent in event mode — my 22:03 #12460 ask stalled ~2.5h until PM re-raised it via a real event. **To get an agent to act, post + ensure a routing event fires (transition/assigned-to/@mention that the harness emits), not just a comment.**
 
 ## Shipped this session (all 3 CLOSED)
 - **#12475** SHIPPED+CLOSED (PR #12486 DM-merged) — tracker.py `--force` full legality override (+ authority + unread-feedback); ship-integrity gates kept hard. Forced swap strips LIVE status labels (no double-label corruption — DS R1 catch). 2 DS reviews, 17 tests. Vault: [[learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate]].
