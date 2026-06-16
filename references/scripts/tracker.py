@@ -362,6 +362,32 @@ def _get_issue_role_labels(number):
     return roles
 
 
+def _get_issue_status_labels(number):
+    """Return the set of `status:*` labels currently on an issue.
+
+    e.g. labels `status:approved`, `role:skill` -> {"status:approved"}. Returns
+    an empty set on API failure (caller decides how to treat missing data).
+    Used by the forced-transition path (#12475) to remove whatever status label
+    is ACTUALLY present rather than trusting the caller-supplied from-status —
+    a wrong from-status would otherwise leave the issue with two status labels.
+    """
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "labels"],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return set()
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return set()
+    return {
+        lbl.get("name", "")
+        for lbl in data.get("labels", [])
+        if lbl.get("name", "").startswith("status:")
+    }
+
+
 def _check_authority(number, from_label, to_label, caller_role):
     """Decide whether `caller_role` may perform (from_label -> to_label) on #number.
 
@@ -1122,6 +1148,8 @@ def transition(number, from_status, to_status, role=None, force=False):
                 f"Forced illegal transition {from_label} -> {to_label} on "
                 f"#{number} (--force human override)",
             )
+            # fall through — force allows the illegal edge; the authority and
+            # ship-integrity gates below still run (steps 4/5 are never bypassed).
         else:
             _log_diagnostic("error", f"Illegal transition {from_label} -> {to_label} on #{number}")
             print(
@@ -1149,6 +1177,14 @@ def transition(number, from_status, to_status, role=None, force=False):
             sys.exit(1)
 
     # 3. Guard: block guarded transitions if unread feedback exists
+    if force and (from_label, to_label) in _GUARDED_TRANSITIONS:
+        # Force skips the unread-feedback block — surface that it was skipped so
+        # a human override past genuinely-unread QA feedback is auditable (#12475).
+        _log_diagnostic(
+            "warning",
+            f"Forced transition {from_label} -> {to_label} on #{number} "
+            f"bypassed the unread-feedback guard (--force)",
+        )
     if (from_label, to_label) in _GUARDED_TRANSITIONS and not force:
         # Match the caller's actual comment format (role is non-None here
         # because authority check required it; fall back to skill-lead
@@ -1255,11 +1291,29 @@ def transition(number, from_status, to_status, role=None, force=False):
                 )
                 sys.exit(1)
 
+    # Determine which status label(s) to remove. On the normal (non-forced)
+    # path the legality matrix guarantees `from_label` is the actual current
+    # status, so remove exactly that (no extra gh round-trip on the hot path).
+    # On the forced path (#12475) the caller-supplied `from_status` is NOT
+    # trusted: a wrong value would no-op the remove and leave the issue with
+    # two status:* labels. So query the live status labels and strip ALL of
+    # them (except the target) — a forced status change always lands exactly
+    # one status label. Falls back to `from_label` if the query fails.
+    remove_labels = [from_label]
+    if force:
+        live_status = _get_issue_status_labels(number)
+        stale = sorted(live_status - {to_label})
+        if stale:
+            remove_labels = stale
+
     adapter = _get_forge_adapter()
     if adapter:
-        adapter.edit_labels(number, add=[to_label], remove=[from_label])
+        adapter.edit_labels(number, add=[to_label], remove=remove_labels)
     else:
-        _run_list(["gh", "issue", "edit", str(number), "--remove-label", from_label, "--add-label", to_label])
+        cmd = ["gh", "issue", "edit", str(number), "--add-label", to_label]
+        for lbl in remove_labels:
+            cmd += ["--remove-label", lbl]
+        _run_list(cmd)
 
     # Auto-convert draft PR to ready on pending-test or pending-ship
     if to_label in ("status:pending-test", "status:pending-ship"):

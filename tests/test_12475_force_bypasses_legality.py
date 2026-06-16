@@ -30,6 +30,9 @@ def stub_forge(monkeypatch):
     # test overrides them; harmless for non-shipped targets (never called).
     monkeypatch.setattr(tracker, "_check_unmerged_pr", lambda _n: None)
     monkeypatch.setattr(tracker, "_check_unmerged_branch", lambda _n: None)
+    # Default live status labels to empty so the forced-swap helper falls back
+    # to from_label unless a test injects a specific live state.
+    monkeypatch.setattr(tracker, "_get_issue_status_labels", lambda _n: set())
     return adapter
 
 
@@ -90,6 +93,16 @@ class TestForceDoesNotBypassShipIntegrity:
         assert exc.value.code == 1
         stub_forge.edit_labels.assert_not_called()
 
+    def test_force_on_LEGAL_ship_still_blocked_by_unmerged_pr(self, monkeypatch, stub_forge):
+        """Regression guard (DS-12475 F12): the ship gate keys on to_label, so
+        even a LEGAL forced pending-ship -> shipped must block on an open PR —
+        catches a future `if not force` accidentally added to step 5."""
+        monkeypatch.setattr(tracker, "_check_unmerged_pr", lambda _n: (778, "http://pr/778"))
+        with pytest.raises(SystemExit) as exc:
+            tracker.transition(999, "pending-ship", "shipped", role="dm-lead", force=True)
+        assert exc.value.code == 1
+        stub_forge.edit_labels.assert_not_called()
+
     def test_force_to_shipped_still_blocked_by_unmerged_branch(self, monkeypatch, stub_forge):
         """Forcing ->shipped with an unmerged branch (and no merged PR) blocks."""
         monkeypatch.setattr(tracker, "_check_unmerged_branch", lambda _n: ("squidsquad/task/999", 3))
@@ -106,6 +119,18 @@ class TestForceDoesNotBypassShipIntegrity:
         monkeypatch.setitem(sys.modules, "tc_coverage", fake_tc)
         # pending-test -> pending-ship IS legal, but force or not the TC gate
         # must block when a test plan exists with no QA-RESULTS.
+        with pytest.raises(SystemExit) as exc:
+            tracker.transition(999, "pending-test", "pending-ship", role="pm-lead", force=True)
+        assert exc.value.code == 1
+        stub_forge.edit_labels.assert_not_called()
+
+    def test_force_tc_gate_blocks_on_failing_coverage(self, monkeypatch, stub_forge):
+        """Step 4 also blocks (under force) when QA-RESULTS exists but coverage
+        fails — the check_coverage != 0 branch (DS-12475 F15)."""
+        fake_tc = MagicMock()
+        fake_tc._discover_files.return_value = (Path("TEST-PLAN-999.md"), Path("QA-RESULTS-999.md"))
+        fake_tc.check_coverage.return_value = 1  # coverage fails
+        monkeypatch.setitem(sys.modules, "tc_coverage", fake_tc)
         with pytest.raises(SystemExit) as exc:
             tracker.transition(999, "pending-test", "pending-ship", role="pm-lead", force=True)
         assert exc.value.code == 1
@@ -128,6 +153,52 @@ class TestForcedTransitionSideEffects:
         )
         stub_forge.close_issue.assert_called_once_with(999)
 
+    def test_forced_swap_strips_live_status_label_not_claimed_from(self, monkeypatch, stub_forge):
+        """DS-12475 F2/F14: a wrong from_status under force must NOT leave two
+        status labels. The swap removes the ACTUAL live status label(s), not the
+        caller's claimed from. Here the issue is really in-progress but the
+        caller wrongly passes from=approved; the remove must target the live
+        label so the issue ends with exactly status:planning."""
+        monkeypatch.setattr(
+            tracker, "_get_issue_status_labels", lambda _n: {"status:in-progress"}
+        )
+        result = tracker.transition(999, "approved", "planning", role="pm-lead", force=True)
+        assert result is True
+        stub_forge.edit_labels.assert_called_once_with(
+            999, add=["status:planning"], remove=["status:in-progress"]
+        )
+
+    def test_forced_swap_strips_multiple_stale_status_labels(self, monkeypatch, stub_forge):
+        """If the issue is already corrupted with two status labels, a forced
+        transition cleans BOTH and lands exactly the target."""
+        monkeypatch.setattr(
+            tracker, "_get_issue_status_labels",
+            lambda _n: {"status:approved", "status:in-progress"},
+        )
+        result = tracker.transition(999, "approved", "planning", role="pm-lead", force=True)
+        assert result is True
+        args, kwargs = stub_forge.edit_labels.call_args
+        assert kwargs["add"] == ["status:planning"]
+        assert sorted(kwargs["remove"]) == ["status:approved", "status:in-progress"]
+
+    def test_nonforced_swap_does_not_query_live_labels(self, monkeypatch, stub_forge):
+        """The hot non-forced path must NOT add a gh round-trip — it trusts
+        from_label (legality guarantees it is the real predecessor)."""
+        called = {"n": 0}
+
+        def _spy(_n):
+            called["n"] += 1
+            return {"status:in-progress"}
+
+        monkeypatch.setattr(tracker, "_get_issue_status_labels", _spy)
+        # in-progress -> approved is a legal edge for the assigned worker.
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda _n: {"skill"})
+        tracker.transition(999, "in-progress", "approved", role="skill-lead", force=False)
+        assert called["n"] == 0
+        stub_forge.edit_labels.assert_called_once_with(
+            999, add=["status:approved"], remove=["status:in-progress"]
+        )
+
     def test_forced_transition_emits_status_event(self, monkeypatch, stub_forge):
         """The status-transition event still emits for a forced illegal edge."""
         emitted = {}
@@ -144,3 +215,5 @@ class TestForcedTransitionSideEffects:
         assert emitted["type"] == "status-transition"
         assert emitted["payload"]["from"] == "approved"
         assert emitted["payload"]["to"] == "planning"
+        assert emitted["payload"]["issue_number"] == "999"
+        assert emitted["role"] == "pm"  # "pm-lead" -> bare alias
