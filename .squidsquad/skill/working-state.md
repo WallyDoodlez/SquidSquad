@@ -1,12 +1,33 @@
 # Working State
 
-- **Task**: #12475 → **pending-test** (PR #12486, routed to verifier) | #12460 in-progress (shadow deploy-ready, cutover HELD)
-- **Status**: #12475 handed off; #12460 gated on shadow merge→observe (PR #12472)
-- **Updated**: 2026-06-15 (skill — event-mode)
+- **Task**: ON RESUME → resume #12460 (in-progress, shadow deploy-ready, cutover HELD on external gate)
+- **Status**: #12475 SHIPPED+CLOSED; #12460 gated on shadow merge→observe (PR #12472). Honoring restart-required at clean boundary.
+- **Updated**: 2026-06-15 (skill — event-mode, pre-restart checkpoint)
 - **Quiet Cycle Counter**: 0
 
-## >>> #12475 → PENDING-TEST (PR #12486) — tracker.py --force full legality override <<<
-Bug (operator directive 2026-06-16): `tracker.py transition --force` now bypasses the legal-transition matrix (+ authority + unread-feedback) so a human/PM can correct a mis-transition (e.g. walk approved→planning — the #12451 case). Ship-integrity gates (TC-coverage, unmerged-PR/branch on →shipped) kept as hard invariants. **DS R1 (BLOCK)** caught the from_label-trust double-label corruption → forced swap now strips LIVE status labels (`_get_issue_status_labels`), lands exactly target, cleans pre-corrupted issues; non-forced hot path unchanged. **DS R2 (SHIP)** → fixed a test-clarity nit. 17 tests + updated test_tracker_authority.py; full suite green. CQ: none (deterministic script, no composed-instruction change — flagged for verifier). Branch `squidsquad/task/12475` (off main, no stacking). Vault: [[learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate]].
+## >>> ON RESUME — #12460 (#12271 slice-d CUTOVER) is the live in-progress task <<<
+Shadow phase DONE + deploy-ready (PR #12472, merged main, 303 green, pushed). CUTOVER (ACs 1/4: flip reboot decision PID→progress at ~harness.py:542, demote PID to teardown-only, remove #10101/#10440 walk from liveness path) is HELD per operator shadow-first mandate — needs PR #12472 to MERGE + run on the live harness to produce a PID-vs-progress divergence window BEFORE writing the flip. Decision posted to #12460 (22:03): asked DM to merge #12472 (open observation window) OR PM to formally split (shadow shippable now / cutover follow-up). **WATCH for: DM pr-merged on #12472, or PM transition/assigned-to on #12460.** Front-load map: planning/12460-liveness-map.md. Vault: [[learning-activity-liveness-redispatch-must-not-reset-grace]].
+
+## Shipped this session (all 3 CLOSED)
+- **#12475** SHIPPED+CLOSED (PR #12486 DM-merged) — tracker.py `--force` full legality override (+ authority + unread-feedback); ship-integrity gates kept hard. Forced swap strips LIVE status labels (no double-label corruption — DS R1 catch). 2 DS reviews, 17 tests. Vault: [[learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate]].
+- **#11613** SHIPPED+CLOSED (PR #12471) — installer dep auto-provisioning. Vault: [[learning-shell-out-provisioning-has-three-sharp-edges]].
+- **#12473** SHIPPED+CLOSED (PR #12474) — L1 no-action-wake plain-language comms.
+
+## Next queue (fresh-context pickups; not yet started)
+- **#12450** (approved + assigned, medium) — installer auto-detect unit-test strategy (L3). Operator locked a design Q in the approval comment — read it. Independent of harness (branch off main).
+- **#12451** (status bar event-vs-loop) — planning-complete + operator-approved 22:10; pick up when its approved/assigned-to routes.
+- Then reboot-churn: #12409 ask-1 → #12408 (fix EARLY) → #12397 (no-op recompose restart-required — note: this very class of event) → #12363 → features #10690/#10686.
+
+## Process / standing directives
+- Operator (06-15): proceed WIP-safe (commit incrementally + checkpoint), DS-review-per-change.
+- Feature-branch pre-commit guard (#11511) STRIPS .squidsquad/ from task-branch commits → vault/working-state land on MAIN directly (working branch), not in feature PRs.
+- Verify `git branch --show-current` before commits (task-begin switches branch). Always merge main into branch, never rebase.
+- Verify with pytest exit codes, not run_tests.py gate (#12408 masks failures).
+
+## Improvement Scan
+Status: idle
+Last completed: (none this session)
+Next scan after: (eligible)
 
 ## >>> ON RESUME — #12460 (#12271 slice-d CUTOVER), high priority, HIGHEST blast radius <<<
 Operator APPROVED the cutover (2026-06-15 18:02) with the **shadow/parallel validation** mandate: run progress-based liveness ALONGSIDE PID-liveness first → log divergence → confirm no false-pos/neg → THEN remove PID-liveness. Restart resume directive (a771871299) reaffirms: "Resume the APPROVED cutover #12460 ... shadow-mode strategy ... Commit incrementally."
