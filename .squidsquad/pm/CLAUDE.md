@@ -111,6 +111,17 @@ This is a behavioral default — check the vault before starting work, not just 
 - Be concise in outputs. Avoid unnecessary verbosity or repetition.
 - Evaluate the best model for subagent work based on the type of task performed — use lighter models for mechanical subtasks, reserve heavier models for complex reasoning.
 
+### User-Facing Communication
+
+The person reading your terminal output does not know the internals of the event system. When you wake on a forge event that needs **no action from you** — a false-positive wake that surfaces nothing, a real change that doesn't concern you, or a misrouted event you set aside — tell them in one short, plain sentence and keep watching. Show that line on **every** such no-action wake (including frequent false-positive wakes) so the person can see you checked rather than going dark.
+
+- Default one-liner (adapt the wording freely, but keep it jargon-free — never use `ack`/`acked`, `cursor`, `event id`, `GET`/`POST`, `no-op`, `care filter`, `nudge`, or `drain`, even where they read as natural English like "queue drained" or "it was a no-op"):
+
+  `🦑 Checked the latest activity — nothing needs my attention right now.`
+
+- The line must read naturally to someone who knows nothing about how wakes work.
+- This is **wording only**: the underlying mechanics (advancing your place in the event stream, re-reading the forge, etc.) still happen exactly as before, and your own internal/working notes may still use precise terms. The rule governs only what the user sees.
+
 ### Universal Quality Gate
 
 - Never ship with failed work.
@@ -328,6 +339,8 @@ sequenceDiagram
 ```
 
 A nudge wakes you. You then run the canonical eager loop documented in `docs/AGENT-RUNTIME.md` §8.1: fetch the next event past your cursor, apply the care filter, fire the cycle wrapper if cared (skip the wrapper if not), then POST `ack-cursor` for the event you just tended — and immediately re-check for the next event. The cursor advances **per event, not per batch**. When the queue drains, you optionally fire one improvement-subloop task (§4) if the cooldown is elapsed, then re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change. **If a new NUDGE arrives while you're mid-drain**, take no special action: note it in conversation context only — no file write, no queue, no flag. The next iteration's GET absorbs the new events naturally (see `docs/AGENT-RUNTIME.md` §8.5).
+
+> **Telling the user about a no-action wake.** When a whole wake resolves to nothing for you — the drain finds no events, every event in it is skipped by the care filter, or every cared event turns out to need no work — surface that to the user as a single short plain-language line per the **User-Facing Communication** rule in your Soul. One line **per wake, not per event**: a drain that skips three events still produces one line, emitted once the drain is complete. Emit it after any improvement-subloop task for this wake has finished or been skipped (§4); the line covers only the forge-event drain. Use plain language only — the prohibited internal terms and the template live in that Soul rule, and the mechanics still run unchanged underneath.
 
 > **Care filter — what counts as "cared" vs "skipped"?** Per `docs/AGENT-RUNTIME.md` §8.4 the rule is simply: **does this event's `payload.target_alias` field equal my own alias?** If yes, you process it (pre-cycle → work → post-cycle) and POST `ack-cursor` to commit the tend. If no, you skip the cycle wrapper but still POST `ack-cursor` — finishing the event by deciding not to act on it IS the cursor commit (D1; finishing the event in either way advances the cursor). In normal operation the harness emits one `assigned-to` per target alias and the `/events/for/{role}` endpoint pre-filters before delivery, so your queue is already pre-filtered and almost every event is cared. The `else skipped` branch is the defensive escape hatch for race conditions (re-emit after EAD restart, cursor catch-up after eviction, future multi-instance scenarios) where a misrouted event lands in your queue — you ack past it without firing the cycle wrapper.
 
