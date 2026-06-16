@@ -1,0 +1,59 @@
+# QA-RESULTS #12509 — harness basename shadow fix
+
+**Verdict: FAIL** → in-progress (skill). **Cycle 251, 2026-06-16. Branch squidsquad/task/12509, PR #12517.**
+
+## Results
+
+| TC | AC | Result | Evidence |
+|----|----|--------|----------|
+| TC1 | AC1 | ✅ PASS | `pytest tests/ --co -q` → **4709 collected, 0 errors** (was 2 collection-abort errors). The rename (`harness.py`→`integration_harness.py`) correctly removes the basename shadow. |
+| TC2 | AC2 | ❌ **FAIL** | `pytest test_12509 test_12460 test_feat_10681` → **6 failed, 32 passed**. The full-suite run does NOT run clean. |
+| TC3 | AC3 | ⏳ not reached | (blocked by the AC2/AC4 failure — rejecting first) |
+| TC4 | AC4 | ❌ **FAIL** | The new regression test **contaminates global import state** and breaks later modules (see root cause). |
+| TC5 | AC5 | — | not reached |
+
+## Root cause of the FAIL (specific, actionable)
+`tests/test_12509_no_harness_basename_shadow.py::test_bare_harness_import_resolves_to_real_harness`
+(lines 72–81) mutates global `sys.modules` without restoring it:
+
+```python
+sys.path.insert(0, str(SCRIPTS_DIR))
+try:
+    sys.modules.pop("harness", None)   # drops the cached binding
+    import harness                      # rebinds sys.modules['harness'] = references/scripts/harness.py
+    assert ...
+finally:
+    if sys.path and sys.path[0] == str(SCRIPTS_DIR):
+        sys.path.pop(0)                 # restores sys.path ONLY — sys.modules['harness'] left mutated
+```
+
+The `finally` restores `sys.path` but NEVER restores the prior `sys.modules['harness']`. It pops the
+cached entry and leaves a freshly re-imported module object bound. Modules collected AFTER this test
+that do `from harness import ...` then bind against a different module object than the one their
+fixtures set up → state divergence.
+
+## Proof it is THIS test (order-dependent, not a product bug, not the rename)
+- `test_12460_progress_liveness.py` ALONE → **24 passed**.
+- `test_feat_10681_compose_checksum.py` ALONE → **11 passed**.
+- `test_feat_10681 + test_12460` together (no 12509) → **35 passed** (test_12460 also imports harness but does NOT poison).
+- `test_12509 → test_feat_10681` → **7 failed** (the 5 `TestLastComposeChecksumPersistence` + 2 `TestLastComposeChecksumAtomicWrite`, plus 2 load tests).
+- `test_feat_10681 → test_12509` (reversed) → **14 passed**.
+Conclusion: test_12509 poisons modules collected after it. In a real `pytest tests/` run,
+`test_12509` sorts before `test_feat_10681`, so the contamination fires.
+
+## Impact
+The PR's stated goal is that `pytest tests/` works. It now COLLECTS (AC1 ✅) but does NOT run clean —
+and the proximate cause is the PR's OWN newly-added regression test. A regression test that breaks
+sibling tests is a net-negative; it trades a collection-abort for an import-state contamination.
+
+## Required fix (worker)
+Make the regression test isolate its `sys.modules` mutation: snapshot `sys.modules.get("harness")`
+(and any `boot_remote`/state modules it perturbs) BEFORE, and restore the exact prior binding in
+`finally` (not just `sys.path`). Equivalent: use `monkeypatch`/`importlib` with full teardown, or
+assert resolution without popping the live binding. After the fix, re-confirm: `pytest tests/`
+collects AND runs clean (no new failures), test_12509 does not contaminate neighbors in either
+order, and `run_tests.py` still works.
+
+## Disposition
+FAIL → transition pending-test → in-progress (skill) with the above evidence. The rename half of the
+fix (AC1) is correct and should be kept; only the regression test's isolation needs fixing.
