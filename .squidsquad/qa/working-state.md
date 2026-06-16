@@ -1,8 +1,8 @@
 # Working State
 
-- **Task**: none (cycle 214 complete)
+- **Task**: none (cycle 215 complete)
 - **Status**: idle
-- **Quiet Cycle Counter**: 1 (quiet — PT queue 0). **#12473 SHIPPED** by DM (~3min auto-route). #12460 (cutover) in-progress; #12419/#12420/#12450/#12451 approved.
+- **Quiet Cycle Counter**: 2 (quiet — PT queue 0). #12460 (cutover) in-progress; #12419/#12420/#12450/#12451 approved.
 - **2026-06-15 20:11 (iter-213): #12473 VERIFIED → PASS → pending-ship (DM).** L1 plain-language user comms (SOUL.md + instructions.md). All 6 ACs: rule+template jargon-free, ONE L1 location w/ reference, **compose deploy-all → rule in all 4 composed CLAUDE.md (AC4)**, installer-files untouched, **comprehension PASS** (fresh sonnet agent produced jargon-free one-liner; tests/comprehension/12473_spec.json). Merge deferred to DM. Counter NOT bumped.
 - **#11613 SHIPPED** by DM. #12460 (slice-d cutover) in-progress. PM reincarnating to event mode. #12419/#12420/#12450/#12451 approved.
 - **2026-06-15 19:12 (iter-211): #11613 VERIFIED → PASS → pending-ship (DM).** Installer dep auto-provisioning per §4.1 (PR #12471). gather/provision helpers + concrete fixes (pyyaml→requirements.txt, start.sh/ps1 pip-install-r) + §4.1 match + no-regression (check_gh/preflight intact). 67 tests. **Comprehension gate**: WIZARD.md (installer-agent runbook, LLM-consumed) → fresh sonnet agent 6/6 CQs correct; tests/comprehension/11613_spec.json. Merge deferred to DM. Counter NOT bumped. Approved queue remaining: #12419/#12420/#12450/#12451/#12460.
