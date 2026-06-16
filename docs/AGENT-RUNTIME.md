@@ -1073,18 +1073,25 @@ The branch fires only when the queue is observably drained — there is no harne
 flowchart TD
     Start(["per-event ack just emitted;<br/>top of §8.1 eager loop"])
     QEmpty{"GET returns empty?<br/>no events past cursor"}
+    Arm["arm periodic driver if not armed<br/>(lazy: first idle; resets scan_count on re-arm) §8.6.1"]
     Throttle{"cooldown elapsed?<br/>time-based throttle"}
-    Subloop["run improvement subloop:<br/>one bounded task"]
-    Idle["idle wait for next nudge"]
+    Subloop["run improvement subloop:<br/>one bounded task; scan_count++"]
+    Cap{"scan_count ≥<br/>Idle Scan Burst?"}
+    Cancel["cancel periodic driver<br/>(re-arms on next idle period)"]
+    Idle["idle wait"]
     Process["process next event<br/>(§8.1 inner loop body)"]
 
     Start --> QEmpty
     QEmpty -->|"no — more events past cursor"| Process
     Process --> Start
-    QEmpty -->|"yes — drained"| Throttle
+    QEmpty -->|"yes — drained"| Arm
+    Arm --> Throttle
     Throttle -->|"recent subloop ran<br/>within throttle window"| Idle
     Throttle -->|"cooldown elapsed"| Subloop
-    Subloop --> Start
+    Subloop --> Cap
+    Cap -->|"no"| Start
+    Cap -->|"yes"| Cancel
+    Cancel --> Idle
     Idle -->|"NUDGE wakes agent"| Start
     Idle -->|"periodic-driver tick (§8.6.1)"| Start
 ```
