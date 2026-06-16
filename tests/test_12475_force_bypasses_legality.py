@@ -68,12 +68,29 @@ class TestForceBypassesLegality:
         ("pending-test", "planning"),
         ("shipped", "in-progress"),    # out of a terminal state
     ])
-    def test_force_permits_arbitrary_status_change(self, stub_forge, frm, to):
-        """--force permits ANY from->to (none of these touch a ship gate)."""
+    def test_force_permits_arbitrary_status_change(self, monkeypatch, stub_forge, frm, to):
+        """--force permits ANY from->to (none of these touch a ship gate).
+
+        Exercises the REAL forced path: the live status label equals `frm`, so
+        the forced swap removes the live label (== from) and adds `to`. (Not the
+        empty-live-set fallback — that is covered separately.)"""
+        monkeypatch.setattr(
+            tracker, "_get_issue_status_labels", lambda _n: {f"status:{frm}"}
+        )
         result = tracker.transition(999, frm, to, role="pm-lead", force=True)
         assert result is True
         stub_forge.edit_labels.assert_called_once_with(
             999, add=[f"status:{to}"], remove=[f"status:{frm}"]
+        )
+
+    def test_force_arbitrary_change_falls_back_to_from_on_api_failure(self, stub_forge):
+        """When the live-label query fails (empty set), the forced swap falls
+        back to removing the caller-supplied from_label (best effort)."""
+        # stub_forge defaults _get_issue_status_labels to empty (API-failure sim).
+        result = tracker.transition(999, "approved", "pending", role="pm-lead", force=True)
+        assert result is True
+        stub_forge.edit_labels.assert_called_once_with(
+            999, add=["status:pending"], remove=["status:approved"]
         )
 
 

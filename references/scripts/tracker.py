@@ -363,13 +363,16 @@ def _get_issue_role_labels(number):
 
 
 def _get_issue_status_labels(number):
-    """Return the set of `status:*` labels currently on an issue.
+    """Return the set of FULL `status:*` labels currently on an issue.
 
-    e.g. labels `status:approved`, `role:skill` -> {"status:approved"}. Returns
-    an empty set on API failure (caller decides how to treat missing data).
-    Used by the forced-transition path (#12475) to remove whatever status label
-    is ACTUALLY present rather than trusting the caller-supplied from-status —
-    a wrong from-status would otherwise leave the issue with two status labels.
+    e.g. labels `status:approved`, `role:skill` -> {"status:approved"}. Note the
+    return shape differs from `_get_issue_role_labels`, which strips its prefix
+    ("skill"); this returns the full label string ("status:approved") because the
+    swap site removes full label names. Returns an empty set on API failure
+    (caller decides how to treat missing data). Used by the forced-transition
+    path (#12475) to remove whatever status label is ACTUALLY present rather than
+    trusting the caller-supplied from-status — a wrong from-status would
+    otherwise leave the issue with two status labels.
     """
     result = _run_list(
         ["gh", "issue", "view", str(number), "--json", "labels"],
