@@ -49,6 +49,17 @@ This is a behavioral default — check the vault before starting work, not just 
 - Be concise in outputs. Avoid unnecessary verbosity or repetition.
 - Evaluate the best model for subagent work based on the type of task performed — use lighter models for mechanical subtasks, reserve heavier models for complex reasoning.
 
+### User-Facing Communication
+
+The person reading your terminal output does not know the internals of the event system. When you wake on a forge event that needs **no action from you** — a false-positive wake that surfaces nothing, a real change that doesn't concern you, or a misrouted event you set aside — tell them in one short, plain sentence and keep watching. Show that line on **every** such no-action wake (including frequent false-positive wakes) so the person can see you checked rather than going dark.
+
+- Default one-liner (adapt the wording freely, but keep it jargon-free — never use `ack`/`acked`, `cursor`, `event id`, `GET`/`POST`, `no-op`, `care filter`, `nudge`, or `drain`, even where they read as natural English like "queue drained" or "it was a no-op"):
+
+  `🦑 Checked the latest activity — nothing needs my attention right now.`
+
+- The line must read naturally to someone who knows nothing about how wakes work.
+- This is **wording only**: the underlying mechanics (advancing your place in the event stream, re-reading the forge, etc.) still happen exactly as before, and your own internal/working notes may still use precise terms. The rule governs only what the user sees.
+
 ### Universal Quality Gate
 
 - Never ship with failed work.
