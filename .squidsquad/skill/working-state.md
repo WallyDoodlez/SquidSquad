@@ -1,9 +1,15 @@
 # Working State
 
-- **Task**: 4 shipped; #12493 + #12492 held on gates; #12506 routed to PM (arch gap)
-- **Status**: #12460 shadow SHIPPED; #12492/#12493 held; #12506 RCA done → arch-first to PM, awaiting §8.6
+- **Task**: #12509 → pending-test (PR #12517); #12493/#12492 held on gates; #12506 w/PM; #12511 next pickup
+- **Status**: 4 shipped; #12509 in verifier's hands; #12492/#12493 held; #12506 w/PM (§8.6); #12511 queued
 - **Updated**: 2026-06-16 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## >>> #12509 → PENDING-TEST (PR #12517) — test 'harness' basename shadow <<<
+Renamed `tests/integration/harness.py` → `integration_harness.py` (git mv) so it stops shadowing `references/scripts/harness.py` in sys.modules — `pytest tests/` now collects 4706 / 0 errors (was Interrupted, 2 errors). Updated 3 importers + 2 e2e stale comments; regression guard `tests/test_12509_no_harness_basename_shadow.py`. Verified: collection clean, 8 harness-importing files + guard = 432 passed, integration collects 53. Test-only → no DS/CQ. (Branch off main.)
+
+## >>> #12511 (NEXT PICKUP, fresh context) — test-isolation: force-transition tests leak real events to live bus <<<
+PM-filed (MEDIUM), assigned to me. **My dup #12510 → CLOSED.** Root cause: unit tests calling real `tracker.transition(... --force)` (test_12475_force_bypasses_legality.py etc.) POST real `status-transition` events to the LIVE harness for placeholder #999 → wakes the whole team (the recurring #999 flurry that plagued THIS session). **Fix design:** autouse fixture in tests/conftest.py stubbing `event_bus.emit` (or the harness POST) for unit tests — CAREFUL: must not break tests that themselves assert emit was called (e.g. test_forced_transition_emits_status_event mocks event_bus directly — per-test mock must take precedence over the autouse no-op). Verify the #999 flurry stops. Active disruption was from MY suite runs (now stopped), so not urgent — but real test-hygiene (CI/other agents). Fresh context warranted (event_bus internals + fixture-interaction care).
 
 ## >>> #12506 (improvement subloop dormant team-wide) — RCA DONE, routed to PM as ARCH gap <<<
 **RCA (confirmed):** event-mode boot schedules NO periodic driver for idle work — only forge-event wakes. So an idle event-mode agent (pm/skill/dm) never wakes to evaluate the improvement-scan cool-down → scan never fires (dormant for weeks). `idle-cooldown-loop` step 5 ASSUMES a 'fixed-cadence Monitor wake' that `event_poll.py` never delivers (it only NUDGEs on forge events, L325 `if clean or evicted`).
