@@ -1,0 +1,21 @@
+{
+  "issue": 12473,
+  "title": "L1 plain-language user comms on no-action wake — generative comprehension",
+  "source_file": "references/roles/SOUL.md",
+  "section": "User-Facing Communication",
+  "method": "Fresh agent given ONLY the SOUL.md User-Facing Communication rule + the no-action-wake scenario. It must PRODUCE the user-facing line. PASS = a short plain-language one-liner containing ZERO prohibited terms.",
+  "model": "sonnet",
+  "prohibited_terms": ["ack", "acked", "cursor", "event id", "GET", "POST", "no-op", "care filter", "nudge", "drain"],
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You woke on a forge event and there is nothing for you to do. What single line do you show the user?",
+      "expected": "A short, plain, jargon-free one-liner conveying 'checked for activity, nothing needs me, still watching' — e.g. the template '🦑 Checked the latest activity — nothing needs my attention right now.' Must contain NONE of the prohibited terms."
+    },
+    {
+      "id": "CQ2",
+      "q": "A single wake skipped three events that don't concern you. How many user-facing lines do you emit, and may you use the word 'drain' or 'acked' if it reads naturally?",
+      "expected": "One line per wake (not per event); MUST NOT use 'drain'/'acked' (or any prohibited term) even where it reads as natural English."
+    }
+  ]
+}
