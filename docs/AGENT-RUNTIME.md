@@ -884,7 +884,7 @@ stateDiagram-v2
     stopping --> stopped: ack-stop or timeout
     ready --> crashed: process death detected
     crashed --> booting: harness auto-respawn
-    crashed --> crash-looping: 3+ fast deaths (<60s each)
+    crashed --> crash-looping: 3+ fast deaths (under 60s each)
     crash-looping --> booting: backoff window elapsed
     crashed --> stopped: operator gives up
 ```
@@ -1073,10 +1073,10 @@ The branch fires only when the queue is observably drained — there is no harne
 flowchart TD
     Start(["per-event ack just emitted;<br/>top of §8.1 eager loop"])
     QEmpty{"GET returns empty?<br/>no events past cursor"}
-    Arm["arm periodic driver if not armed<br/>(lazy: first idle; resets scan_count on re-arm) §8.6.1"]
+    Arm["arm periodic driver if not armed<br/>(lazy first idle, resets scan_count on re-arm) §8.6.1"]
     Throttle{"cooldown elapsed?<br/>time-based throttle"}
-    Subloop["run improvement subloop:<br/>one bounded task; scan_count++"]
-    Cap{"scan_count ≥<br/>Idle Scan Burst?"}
+    Subloop["run improvement subloop:<br/>one bounded task, scan_count++"]
+    Cap{"scan_count >=<br/>Idle Scan Burst?"}
     Cancel["cancel periodic driver<br/>(re-arms on next idle period)"]
     Idle["idle wait"]
     Process["process next event<br/>(§8.1 inner loop body)"]
