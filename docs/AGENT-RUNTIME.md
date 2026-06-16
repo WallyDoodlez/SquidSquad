@@ -876,6 +876,7 @@ These move independently. The operator sets `intent`; the harness updates `statu
 
 ```mermaid
 stateDiagram-v2
+    state "crash-looping" as crashLooping
     [*] --> stopped
     stopped --> booting: operator start
     booting --> ready: booted received
@@ -884,8 +885,8 @@ stateDiagram-v2
     stopping --> stopped: ack-stop or timeout
     ready --> crashed: process death detected
     crashed --> booting: harness auto-respawn
-    crashed --> crash-looping: 3+ fast deaths (under 60s each)
-    crash-looping --> booting: backoff window elapsed
+    crashed --> crashLooping: 3+ fast deaths (under 60s each)
+    crashLooping --> booting: backoff window elapsed
     crashed --> stopped: operator gives up
 ```
 
