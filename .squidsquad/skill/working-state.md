@@ -1,9 +1,13 @@
 # Working State
 
-- **Task**: #12493 sentinel BUILT, held on arch-gate (PR #12494) | #12460 shadow → pending-test | #12492 cutover held
-- **Status**: 3 shipped+closed; #12460 in verifier's hands; #12492 + #12493 both correctly held on gates
+- **Task**: 4 shipped; #12493 + #12492 held on gates; #12506 routed to PM (arch gap)
+- **Status**: #12460 shadow SHIPPED; #12492/#12493 held; #12506 RCA done → arch-first to PM, awaiting §8.6
 - **Updated**: 2026-06-16 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## >>> #12506 (improvement subloop dormant team-wide) — RCA DONE, routed to PM as ARCH gap <<<
+**RCA (confirmed):** event-mode boot schedules NO periodic driver for idle work — only forge-event wakes. So an idle event-mode agent (pm/skill/dm) never wakes to evaluate the improvement-scan cool-down → scan never fires (dormant for weeks). `idle-cooldown-loop` step 5 ASSUMES a 'fixed-cadence Monitor wake' that `event_poll.py` never delivers (it only NUDGEs on forge events, L325 `if clean or evicted`).
+**Operator (2026-06-16) reframed it ARCH-FIRST** (I had started a transport-layer fix — idle-tick in event_poll.py — operator correctly called it the wrong layer; **BACKED OUT**, branch deleted). Correct fix = scheduling layer using the existing cron/`/loop` primitive: event-mode boot should schedule a low-freq self-wake for idle work, alongside the Monitor. **Routed #12506 → planning (PM)** for AGENT-RUNTIME §8.6 spec (event-mode periodic driver + how a cron/`/loop` tick coexists with the persistent Monitor + reconcile idle-cooldown-loop step 5). **Comes back to skill for the code impl once §8.6 lands** (same shape as #12493). Leads 2 (dm #10540 gate, PM) + 3 (qa loop-mode staleness, separate path) noted, not in this arch.
 
 ## >>> #12493 (pipeline-sentinel) — BUILT + DS-SHIP, HELD on arch-first gate <<<
 Operator restructured #12493 **arch-first** (2026-06-16): PM authors a semantic-handoff-backstop subsection in **AGENT-RUNTIME §8.3** FIRST (the sentinel backstops *semantic/comment-only* handoffs the way EAD backstops *forge-state* changes — EAD polls state, not comment bodies, so a comment-only handoff like #12460 rides no event + no EAD catch). **#12493 impl is GATED on §8.3 landing** (impl conforms to + cites arch, not reverse). My #12495 (work-assign doc/impl gap) was folded into the SAME §8.3 reconciliation (PM owns arch).
