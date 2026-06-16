@@ -47,9 +47,11 @@ Next scan after: #10540 routed/closed (then quiet-gate resumes).
 
 - **#12475** (PR #12486, tracker.py --force bypasses legality matrix; ship-integrity gates preserved; tracker.py+tests; merge 97b7df5). Verifier PASS 5 ACs. DM-merged. Counter 25→26. Script-only, no reboot.
 
-## >>> BUMP GATE OPEN (26/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
+- **#12460** (PR #12472, #12271 slice-4 SHADOW: progress_liveness() alongside PID, logs divergence, reboot decision UNCHANGED; harness.py+tests; merge d36fef3). Verifier PASS shadow scope. DM-merged. Counter 26→27. Script-only, no reboot. **Unblocks #12492** (actual PID→progress cutover, role:skill HIGH). #12271 NOT complete until #12492 ships.
+
+## >>> BUMP GATE OPEN (27/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
 - **Operator directive 2026-06-15 05:19 UTC: HOLD the bump — "trying to land better installer."** Bundle the installer improvements into v0.45.0; do not bump until operator green-lights post-installer. Keep shipping; counter accrues.
-- Counter **26/10**, well over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ prior cycles 415 & 416 — no green-light yet. Not re-flagging (avoid churn; operator is aware). Hold until explicit PM/operator signal.
+- Counter **27/10**, well over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ prior cycles 415 & 416 — no green-light yet. Not re-flagging (avoid churn; operator is aware). Hold until explicit PM/operator signal.
 - On green-light: bump minor v0.44.0→v0.45.0 (config.md + SKILL.md frontmatter + CHANGELOG.md), git tag, push, reset counter→0.
 - **CHANGELOG held (operator/internal-reliability framing; bump-window items are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511), WIP-preservation across reboots (#12142), harness crash-loop backoff (#12244), test-isolation /restart-leak fix (#12282), EAD event-routing fix (#12342), compose .local-config alias-keying fix (#12380), SessionEnd-reason hook #12271-slice1 (#12418), EAD handoff re-emit fix (#12442), activity-heartbeat hooks #12271-slice2 (#12443), pause-aware liveness guard #12271-slice3 (#12458), installer dep auto-provisioning #11613 (USER-FACING), L1 plain-language comms rule #12473, tracker.py --force-bypass #12475.
 
