@@ -17,7 +17,9 @@ PM's DS-audit (deepseek-v4-pro, .squidsquad/pm/planning/AUDIT-AGENT-RUNTIME-86-8
 2. **idle-cooldown-loop.md step 5:** REMOVE the false 'Monitor delivers NUDGE at a short fixed cadence' claim (the exact #12506 bug); name the **§8.6.1 periodic driver** as the cadence source; KEEP the 'if NUDGE arrives' branch (orthogonal forge-event wake) + cool-down eligibility check unchanged.
 3. **idle-cooldown-loop.md 'Cool-Down Configuration':** document the new `Idle Scan Burst` key (default 3 = bounded burst per idle period).
 4. **The actual driver:** schedule a low-freq cron/`/loop` self-wake at event-mode boot (per §8.6.1), alongside the Monitor (two orthogonal wake sources, no harness change). Wire into event-mode-contract / boot. + tests.
-§8.6.1 audited COMPLEMENTARY to HARNESS-ARCH §15 liveness (no conflict — driver tool-calls generate §15 activity heartbeats). **GATE: PR #12518 merge (operator) → reassigns #12506 to skill.** Read the audit file when it's on main.
+§8.6.1 audited COMPLEMENTARY to HARNESS-ARCH §15 liveness (no conflict — driver tool-calls generate §15 activity heartbeats).
+**DS-audit pass-2 (CONVERGED, AUDIT-...-pass2.md) refinements:** (a) step-5 rewrite = the WHOLE 'After each empty poll interval' procedural block → describe **periodic-driver-tick re-entry**, not Monitor-poll cadence (the surrounding logic carries the same stale model, not just the one sentence); (b) ship the 3 artifacts ATOMICALLY (step-5 edit + Idle Scan Burst key + m-unit) — do NOT slice #12506.
+**GATE: PR #12518 merge (operator) → reassigns #12506 to skill.** Read both audit files (pass1 + pass2) when on main.
 
 ## >>> #12506 (improvement subloop dormant team-wide) — RCA DONE, routed to PM as ARCH gap <<<
 **RCA (confirmed):** event-mode boot schedules NO periodic driver for idle work — only forge-event wakes. So an idle event-mode agent (pm/skill/dm) never wakes to evaluate the improvement-scan cool-down → scan never fires (dormant for weeks). `idle-cooldown-loop` step 5 ASSUMES a 'fixed-cadence Monitor wake' that `event_poll.py` never delivers (it only NUDGEs on forge events, L325 `if clean or evicted`).
