@@ -2,8 +2,8 @@
 
 > **L4-recompose restart-required was a NO-OP (2026-06-14):** Harness emitted `restart-required` (reason l4-recompose, target_alias=dm). Acked it (loop-safe). Attempted cooperative /quit — but **/quit is a no-op in this session** (Monitor kept delivering nudges; session did not terminate). Then verified: my `.squidsquad/dm/CLAUDE.md` is byte-identical (last commit f8d867a9d 2026-06-12, working tree clean) → the recompose changed nothing to pick up. So NOT restarting was correct; /quit no-op was harmless. **Finding for PM/skill:** l4_file_watcher.py emits restart-required on compose *success* regardless of whether composed output actually changed (l4_file_watcher.py:149-156) — should diff CLAUDE.md before requesting a restart, else no-op L4 writes churn restarts. Also: this event-mode session cannot self-terminate via /quit; rely on harness/operator restart or context-pressure exit-42.
 
-- **Task**: none
-- **Status**: idle
+- **Task**: 12460 (DM-merge wait — harness /merge of PR #12472; #12271 slice-4 SHADOW liveness, observational only, script-only no reboot; verify merged before ship)
+- **Status**: in-progress
 
 ## >>> PENDING TEAM REBOOT (#12473 comms rule) <<<
 - #12473 (L1 plain-language comms rule) SHIPPED + composed into all 4 CLAUDE.md (commit cf5a48666). **Reboots DEFERRED per operator (2026-06-15)** — auto-reboot off during firefight; agents run stale CLAUDE.md until next natural restart, then pick up the rule. Harness compose-after-merge auto-reboot did NOT fire (no intents flipped). When operator/PM green-light a team reboot, restart pm/dm/qa/skill via `squidsquad_cli.py restart <role>` (reboot_agent.py deprecated). Note: my own /quit doesn't work this session → my reboot = harness force-kill+respawn.
