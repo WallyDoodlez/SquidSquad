@@ -2,8 +2,8 @@
 
 > **L4-recompose restart-required was a NO-OP (2026-06-14):** Harness emitted `restart-required` (reason l4-recompose, target_alias=dm). Acked it (loop-safe). Attempted cooperative /quit — but **/quit is a no-op in this session** (Monitor kept delivering nudges; session did not terminate). Then verified: my `.squidsquad/dm/CLAUDE.md` is byte-identical (last commit f8d867a9d 2026-06-12, working tree clean) → the recompose changed nothing to pick up. So NOT restarting was correct; /quit no-op was harmless. **Finding for PM/skill:** l4_file_watcher.py emits restart-required on compose *success* regardless of whether composed output actually changed (l4_file_watcher.py:149-156) — should diff CLAUDE.md before requesting a restart, else no-op L4 writes churn restarts. Also: this event-mode session cannot self-terminate via /quit; rely on harness/operator restart or context-pressure exit-42.
 
-- **Task**: none
-- **Status**: idle
+- **Task**: 12473 (DM-merge wait — harness /merge of PR #12474; L1 SOUL.md/instructions.md change → triggers compose-after-merge auto-reboot of ALL agents incl. me; verify reboot post-ship)
+- **Status**: in-progress
 - **Quiet Cycle Counter**: 3 (doc-scan GATED — see below)
 
 ## Improvement Scan
