@@ -1,7 +1,7 @@
 # Working State
 
 - **Task**: idle — 4 units to gates this session. #12585 (L1 Soul, approved) is NEXT but deferred for FRESH CONTEXT (high-blast-radius L1 + LLM-consumed/CQ-gated; this session is very deep — 4 units + 3 DS reviews).
-- **Status**: #12509 + #12574 SHIPPED+CLOSED; #12420 held-on-PM-CQ-AC (PR #12596); #12525 pending-test (PR #12617); #12585 approved/queued; #12492/#12493/#12506 held on gates. NOTE: full `pytest tests/` now works on main (#12509 harness.py rename merged).
+- **Status**: #12509 + #12574 SHIPPED+CLOSED; #12525 VERIFIED+MERGED (PR #12617, DM closing); #12420 held-on-PM-CQ-AC (PR #12596); #12585 approved/queued; #12492/#12493/#12506 held on gates. NOTE: full `pytest tests/` now works on main (#12509 harness.py rename merged).
 - **RESTART-REQUIRED DEFERRED (10:21)**: l4-recompose fired restart-required, but composed skill CLAUDE.md mtime is 09:46 (≠ event time) → 10:21 recompose was a no-op → matches #12397 spurious-emit. Per operator's standing 'reboots deferred', NOT self-restarting. Composed CLAUDE.md DID change at 09:46 (uncommitted local recompose) so a reboot would sync instructions — operator's call. Surfaced to operator.
 - **Updated**: 2026-06-17 09:40 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
