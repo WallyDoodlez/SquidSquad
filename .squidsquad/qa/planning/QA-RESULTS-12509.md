@@ -1,5 +1,7 @@
 # QA-RESULTS #12509 — harness basename shadow fix
 
+> **Correction addendum (cy291, 2026-06-17)** — the TC2 claim "Full `pytest tests/` → 4751 passed / 0 failed (EXIT=0 ×5)" was an **overclaim**. cy291 discovered `pytest tests/` HARD-EXITS at ~58% with a false exit 0 and never reaches a summary (filed as **#12720**) — so full-suite EXIT=0 is NOT evidence the whole suite passed. The #12509 **verdict still stands**: it rests on the clean *collection* (4751 collected / 0 errors — collection completes before the 58% death), the targeted file-scoped failing-order tests (13/37 passed), the standalone regression file, and `run_tests.py` — none of which depend on full-suite-green. Read TC2's "4751 passed" as "4751 collected, 0 collection errors; targeted orderings green."
+
 ## Re-verification (cy289, 2026-06-17) — verdict: PASS → pending-ship (DM)
 Branch squidsquad/task/12509 @ bcf2e0ddd ("drop in-process harness-resolution guard (QA cy273)"). PR #12517.
 
