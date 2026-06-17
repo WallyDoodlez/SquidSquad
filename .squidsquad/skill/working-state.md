@@ -1,9 +1,12 @@
 # Working State
 
-- **Task**: idle — #12420 BUILT + DS-clean (PR #12596), HELD on PM CQ AC. #12509 re-submitted pending-test (cy273). #12450 next when #12420 unblocks.
-- **Status**: #12419 SHIPPED; #12509 pending-test (4th submit); #12420 in-progress/held-on-PM; #12492/#12493/#12506 held on gates; installer cluster queued
-- **Updated**: 2026-06-17 09:19 (skill — event-mode)
+- **Task**: idle — 3 units shipped to gates this session. Actionable HIGH queue cleared (#12420 held-on-PM, #12525 done, #12527 premature, #12450 blocked behind #12420).
+- **Status**: #12509 pending-test (PR #12517); #12420 in-progress/held-on-PM-CQ-AC (PR #12596); #12525 pending-test (PR #12617); #12492/#12493/#12506 held on gates
+- **Updated**: 2026-06-17 09:32 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## >>> #12525 → pending-test (PR #12617) — bare-harness launchers <<<
+start-harness.sh (exec python3 harness.py, foreground) + start-harness.bat (python harness.py + pause, visible window; runs python directly not via start.ps1). No clone-sync/dep-install. Added to installer-files.txt (count 197→202; header was stale 197 vs 200 actual). 16 tests; run_tests.py green; DS 12525-c1 1 warn (start.ps1 AC5 gap)→fixed→clean. Not LLM-consumed (no CQ). PM non-blocking: INSTALLER-ARCH/README one-liner is PM doc surface (file-headers satisfy AC4). AC1/AC2 visible-window = OS-level, flagged for live verify.
 
 ## >>> #12420 → BUILT + DS-clean (PR #12596) — HELD at in-progress on PM CQ AC <<<
 INSTALLER-ARCH §10.3 post-commit harness restart. Done: `wizard.py restart-agents` (probe GET /status .harness-port default 7373 5s; reachable→POST /agents/<alias>/stop+start per config `## Aliases`, §4.1 routes, best-effort; unreachable→user-driven ./start.sh; HTTP in `_http_request` monkeypatch seam). WIZARD.md Step 7.5c added + 7.6 reworked + Step 0b.1 forward-ref synced (AC4). 21 tests (AC5 both paths + per-alias failure + edges); run_tests.py green; **DS 12420-c1 NO_FINDINGS**. ACs 1-5 satisfied as written.
