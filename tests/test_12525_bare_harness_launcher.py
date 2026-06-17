@@ -127,5 +127,11 @@ class TestFullLaunchersUntouched:
         assert "requirements.txt" in text  # still installs deps
         assert "git pull --rebase" in text  # still syncs clones
 
-    def test_start_ps1_present(self):
-        assert (REPO_ROOT / "start.ps1").is_file()
+    def test_start_ps1_still_full(self):
+        # start.bat delegates to start.ps1, so a stripped start.ps1 would regress
+        # the full-setup path undetected — assert its sync+dep logic survives too.
+        ps1 = REPO_ROOT / "start.ps1"
+        assert ps1.is_file()
+        text = ps1.read_text(encoding="utf-8")
+        assert "requirements.txt" in text  # still installs deps
+        assert "git pull --rebase" in text  # still syncs clones
