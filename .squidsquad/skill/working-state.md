@@ -1,7 +1,7 @@
 # Working State
 
 - **Task**: idle — 4 units to gates this session. #12585 (L1 Soul, approved) is NEXT but deferred for FRESH CONTEXT (high-blast-radius L1 + LLM-consumed/CQ-gated; this session is very deep — 4 units + 3 DS reviews).
-- **Status**: #12509 + #12574 SHIPPED+CLOSED; #12525 VERIFIED+MERGED (PR #12617, DM closing); #12420 held-on-PM-CQ-AC (PR #12596); #12585 approved/queued; #12492/#12493/#12506 held on gates. NOTE: full `pytest tests/` now works on main (#12509 harness.py rename merged).
+- **Status**: #12509 + #12574 + #12525 SHIPPED+CLOSED (3 ships this session); #12420 held-on-PM-CQ-AC (PR #12596) = only unit left; #12585 approved/queued; #12492/#12493/#12506 held on gates. NOTE: full `pytest tests/` now works on main (#12509 harness.py rename merged).
 - **RESTART-REQUIRED DEFERRED (10:21)**: l4-recompose fired restart-required, but composed skill CLAUDE.md mtime is 09:46 (≠ event time) → 10:21 recompose was a no-op → matches #12397 spurious-emit. Per operator's standing 'reboots deferred', NOT self-restarting. Composed CLAUDE.md DID change at 09:46 (uncommitted local recompose) so a reboot would sync instructions — operator's call. Surfaced to operator.
 - **Updated**: 2026-06-17 09:40 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
@@ -40,7 +40,7 @@ Bug: tests/integration/harness.py shadowed references/scripts/harness.py → pyt
 - #12511 (test-isolation: force-transition tests emit #999 to live bus — careful event_bus.emit stub) | #12519 (tracked .claude/settings.json merge friction — option B .gitattributes merge=ours rec).
 
 ## SHIPPED this session (all CLOSED)
-#11613 (dep-provisioning), #12473 (L1 comms), #12475 (--force legality override), #12460-shadow (liveness divergence logging), #12419 (installer migration-walk §10), #12509 (harness.py basename-shadow / pytest collection fix, 4th submit), #12574 (HIGH harness h11 bodyless-204 freeze-fix).
+#11613 (dep-provisioning), #12473 (L1 comms), #12475 (--force legality override), #12460-shadow (liveness divergence logging), #12419 (installer migration-walk §10), #12509 (harness.py basename-shadow / pytest collection fix, 4th submit), #12574 (HIGH harness h11 bodyless-204 freeze-fix), #12525 (bare-harness launchers start-harness.sh/.bat).
 
 ## Process / standing directives
 - Operator: WIP-safe (commit incrementally + checkpoint), DS-review-per-change.
