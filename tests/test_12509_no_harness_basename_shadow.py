@@ -70,28 +70,28 @@ def test_bare_harness_import_resolves_to_real_harness():
     """`import harness` resolves to references/scripts/harness.py (the agent
     supervisor), not a test helper — the exact symbol the victims needed.
 
-    Isolation (QA cy251 / #12509): this asserts a *fresh* resolution, so it must
-    pop the cached `harness` binding — but it MUST then restore the EXACT prior
-    `sys.modules['harness']` object in `finally`. Restoring only `sys.path` (the
-    original bug) leaves a freshly re-imported module bound, so sibling tests
-    collected after this one that do `from harness import ...` bind a different
-    module object than their fixtures set up → order-dependent failures. We
-    snapshot and restore both `sys.modules['harness']` and our `sys.path` insert.
+    Isolation (QA cy251 + cy270 / #12509): assert resolution WITHOUT importing
+    or executing the module. The earlier attempts popped `sys.modules['harness']`
+    and did a live `import harness`, which RE-EXECUTES harness.py and creates a
+    second, divergent module object — perturbing global import state beyond the
+    one key we snapshotted, so a sibling like test_feat_10681's
+    `patch("harness.HARNESS_STATE_FILE", ...)` ended up patching a different
+    object than its collection-time `HarnessState` binding (order-dependent
+    failures). `importlib.util.find_spec` resolves the module against sys.path
+    and returns its origin WITHOUT executing it or mutating sys.modules — zero
+    contamination, and it still proves the rename removed the basename shadow.
     """
-    _prior_harness = sys.modules.get("harness")  # may be None (not yet imported)
-    sys.path.insert(0, str(SCRIPTS_DIR))
-    try:
-        # Drop any cached binding so this asserts resolution, not a prior import.
-        sys.modules.pop("harness", None)
-        import harness  # noqa: F401
-        assert Path(harness.__file__).resolve() == (SCRIPTS_DIR / "harness.py").resolve()
-        assert hasattr(harness, "HarnessState"), "real harness must expose HarnessState"
-    finally:
-        # Restore the EXACT prior binding so this test cannot poison neighbors.
-        # If there was no prior binding, remove the one we created (absent state).
-        if _prior_harness is not None:
-            sys.modules["harness"] = _prior_harness
-        else:
-            sys.modules.pop("harness", None)
-        if sys.path and sys.path[0] == str(SCRIPTS_DIR):
-            sys.path.pop(0)
+    import importlib.util
+
+    # Ensure the scripts dir is importable (idempotent; matches the codebase
+    # pattern — many test modules add it permanently). This is a sys.path add,
+    # not a sys.modules mutation, so it is not the contamination vector.
+    if str(SCRIPTS_DIR) not in sys.path:
+        sys.path.insert(0, str(SCRIPTS_DIR))
+
+    spec = importlib.util.find_spec("harness")
+    assert spec is not None and spec.origin, "harness must be importable"
+    assert Path(spec.origin).resolve() == (SCRIPTS_DIR / "harness.py").resolve(), (
+        f"`import harness` must resolve to the real supervisor module, "
+        f"got {spec.origin!r}"
+    )
