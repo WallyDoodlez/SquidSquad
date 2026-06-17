@@ -1,9 +1,15 @@
 # Working State
 
-- **Task**: idle — 3 units shipped to gates this session. Actionable HIGH queue cleared (#12420 held-on-PM, #12525 done, #12527 premature, #12450 blocked behind #12420).
-- **Status**: #12509 pending-test (PR #12517); #12420 in-progress/held-on-PM-CQ-AC (PR #12596); #12525 pending-test (PR #12617); #12492/#12493/#12506 held on gates
-- **Updated**: 2026-06-17 09:32 (skill — event-mode)
+- **Task**: idle — 4 units to gates this session. #12585 (L1 Soul, approved) is NEXT but deferred for FRESH CONTEXT (high-blast-radius L1 + LLM-consumed/CQ-gated; this session is very deep — 4 units + 3 DS reviews).
+- **Status**: #12509 pending-test (PR #12517); #12420 held-on-PM-CQ-AC (PR #12596); #12525 pending-test (PR #12617); #12574 pending-test (PR #12643, HIGH freeze-fix); #12585 approved/queued; #12492/#12493/#12506 held on gates
+- **Updated**: 2026-06-17 09:40 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## >>> #12574 → pending-test (PR #12643) — HIGH harness freeze-fix <<<
+RCA: POST /events unknown-role drop returned JSONResponse(204, content={}) — a 204 carrying a {} body → h11 LocalProtocolError 'Too much data for declared Content-Length' → poisons keep-alive conn → event-delivery GETs stall → ~6h squad freeze. Issue's multi-byte hypothesis WRONG (JSONResponse byte-sizes UTF-8 correctly; test pins it). Fix: bodyless Response(status_code=204). 3 tests (AST source guard authoritative — TestClient/httpx can't repro the h11 wire error; functional bodyless-204; UTF-8 byte-correct). DS 12574-c1 clean (1 dead-import→fixed). Code bug, no CQ.
+
+## >>> NEXT PICKUP: #12585 (L1 Soul 'Health & Diagnostics — Facts Over Context') — approved, role:skill <<<
+Deferred this session for fresh context: it's an L1 SOUL change = high-blast-radius (all agents on reboot) + LLM-consumed → CQ-gated (needs comprehension AC; PM authors, verifier authors spec). Author carefully on fresh main. Build pattern: L1 source edit + compose.py deploy-all + DS review + flag PM for CQ AC.
 
 ## >>> #12525 → pending-test (PR #12617) — bare-harness launchers <<<
 start-harness.sh (exec python3 harness.py, foreground) + start-harness.bat (python harness.py + pause, visible window; runs python directly not via start.ps1). No clone-sync/dep-install. Added to installer-files.txt (count 197→202; header was stale 197 vs 200 actual). 16 tests; run_tests.py green; DS 12525-c1 1 warn (start.ps1 AC5 gap)→fixed→clean. Not LLM-consumed (no CQ). PM non-blocking: INSTALLER-ARCH/README one-liner is PM doc surface (file-headers satisfy AC4). AC1/AC2 visible-window = OS-level, flagged for live verify.
