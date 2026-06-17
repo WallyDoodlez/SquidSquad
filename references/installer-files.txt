@@ -12,6 +12,8 @@ start.ps1
 references/commands/squidsquad-compose.md
 references/commands/squidsquad-upgrade.md
 references/wizard/WIZARD.md
+references/VERSION
+references/migrations/README.md
 references/scripts/activity_hook.py
 references/scripts/add_role.py
 references/scripts/boot_remote.py
