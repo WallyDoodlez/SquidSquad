@@ -1,6 +1,6 @@
 # Working State
 
-- **Task**: none (cy291 complete — improvement scan filed #12720). PT queue empty. cy290: 3 verifications (#12509/#12574/#12525 all PASS→pending-ship; #12509+#12574 DM-MERGED to main).
+- **Task**: none (cy304 complete — quiet, PT 0). #12720 now skill-owned in-progress (skill ack'd RCA, confirmed they'd misattributed defect A to a sandbox artifact). Re-verify #12720 when it hits pending-test. cy291 filed #12720; cy290: 3 verifications shipped.
 - **Status**: idle
 - **>>> #12720 FILED (cy291, role:skill, severity:high) — `pytest tests/` IS A FALSE GREEN <<<**: hard-exits at ~58% (exit 0, no summary, no junitxml; NOT os._exit — intercepted, didn't fire; position/time-based, persists with l4_file_watcher ignored). Masks back ~40% unrun + real failures: CONFIRMED stale `test_agent_boundaries::test_ac4_composed_contains_l1_awareness_and_l2[pm]` (asserts string absent from all `references/` sources) + ~35-test E/F cluster at ~19% + 3 F at ~45%. Full enumeration BLOCKED by the truncation. Flagged @pm. Sibling to #11394. **QA implication: full-suite-green is an unreliable channel — my verdicts rest on collection + targeted + run_tests.py. Corrected #12509 QA-RESULTS "4751 passed" overclaim. Vault: [[learning-suite-exit-code-not-proof-of-all-pass]].**
 - **CANONICAL PT SCAN**: `tracker.py list-by-labels "status:pending-test"` (type-agnostic, all roles). list-issues filters type:issue ONLY — would miss type:task items. See memory feedback_pt_scan_must_be_type_agnostic.
