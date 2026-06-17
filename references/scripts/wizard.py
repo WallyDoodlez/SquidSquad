@@ -827,9 +827,21 @@ _MIGRATION_FILE_RE = re.compile(
     r"^v?(?P<frm>\d+(?:\.\d+)*)-to-v?(?P<to>\d+(?:\.\d+)*)\.md$",
     re.IGNORECASE,
 )
+# Matches the config.md version-stamp line for BOTH reading and writing, so a
+# pre-existing line with minor formatting variance (`*` bullet, space before the
+# colon) is recognised + replaced rather than duplicated (DS-c1 F6). The value
+# is captured loosely and post-cleaned by the caller (DS-c1 F5).
+_VERSION_STAMP_RE = re.compile(
+    r"^\s*[-*]\s+\*\*SquidSquad Version\*\*\s*:\s*(?P<val>.*)$"
+)
 # Absent-stamp sentinel: an existing install with no version stamp predates the
 # convention. §10 step 2 treats it as pre-1.0 and walks all available migrations.
-PRE_VERSION_STAMP = "0.0.0"
+# It is a deliberately NON-version string so it can never collide with a real
+# stamp (DS-c1 F1) — note `build_config_md` itself defaults `squidsquad_version`
+# to "0.0.0", so "0.0.0" is a legitimate value the sentinel must not shadow.
+# `_version_key` maps it to the lowest possible key (junk → (-1,)), so a
+# pre-stamp install walks every migration exactly as §10 step 2 requires.
+PRE_VERSION_STAMP = "pre-stamp"
 
 
 def _parse_version(value):
@@ -877,9 +889,13 @@ def installed_version(base_dir=None):
         return None  # fresh install — no walk
     try:
         for line in config_path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("- **SquidSquad Version**:"):
-                val = stripped.split(":", 1)[1].strip()
+            m = _VERSION_STAMP_RE.match(line)
+            if m:
+                # First whitespace-delimited token only, so a human annotation
+                # like `0.44.0  # was 0.43.0` doesn't break the parse and cause
+                # an all-migrations re-walk (DS-c1 F5).
+                raw = m.group("val").strip()
+                val = raw.split()[0] if raw else ""
                 return val or PRE_VERSION_STAMP
     except (OSError, UnicodeDecodeError):
         # Config unreadable but dir exists — treat as pre-stamp, not fresh, so
@@ -918,7 +934,13 @@ def list_migration_files(base_dir=None):
     if not mig_dir.is_dir():
         return []
     out = []
-    for p in mig_dir.iterdir():
+    try:
+        entries = list(mig_dir.iterdir())
+    except OSError:
+        # Dir exists but is unreadable — degrade to "no migrations" rather than
+        # crash the walk/CLI (DS-c1 F2; matches the docstring's never-raise promise).
+        return []
+    for p in entries:
         if not p.is_file():
             continue
         m = _MIGRATION_FILE_RE.match(p.name)
@@ -973,12 +995,13 @@ def stamp_version(version, base_dir=None):
         return False
     new_line = f"- **SquidSquad Version**: {version}"
     lines = text.splitlines(keepends=True)
-    nl = "\n"
-    if lines and lines[0].endswith("\r\n"):
-        nl = "\r\n"
+    # Dominant newline from the whole text, not just the first line (DS-c1 F3).
+    nl = "\r\n" if "\r\n" in text else "\n"
     replaced = False
     for i, line in enumerate(lines):
-        if line.strip().startswith("- **SquidSquad Version**:"):
+        # Same regex used to READ the stamp, so a minor-variant existing line is
+        # replaced (not duplicated) and the reader will find exactly one (F6).
+        if _VERSION_STAMP_RE.match(line):
             lines[i] = new_line + nl
             replaced = True
             break
@@ -1026,13 +1049,18 @@ def migration_walk_plan(base_dir=None):
     instlr = installer_version(base_dir)
     is_fresh = inst is None
     is_pre_stamp = inst == PRE_VERSION_STAMP
+    # installer_version absent ≠ "up to date" — it means the target is unknown
+    # (no references/VERSION after the pull), which the runbook must surface to
+    # the operator, NOT silently treat as a no-op walk (DS-c1 F4).
+    installer_version_unknown = (not is_fresh) and (instlr is None)
     chain = [] if is_fresh else select_migration_chain(inst, instlr, base_dir)
     return {
         "is_fresh": is_fresh,
         "installed_version": inst,
         "installer_version": instlr,
         "is_pre_stamp": is_pre_stamp,
-        "is_noop": is_fresh or not chain,
+        "installer_version_unknown": installer_version_unknown,
+        "is_noop": is_fresh or (not chain and not installer_version_unknown),
         "chain": chain,
     }
 
