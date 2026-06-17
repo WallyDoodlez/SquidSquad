@@ -808,6 +808,236 @@ def validate_rerun_action(action):
 
 
 # ---------------------------------------------------------------------------
+# Step 0b — migration walk (existing-install upgrade, INSTALLER-ARCH §10) — #12419
+#
+# These are the DETERMINISTIC helpers the migration walk rests on: read the
+# installed + installer versions, select the ordered chain of per-version
+# migration markdowns to apply, and stamp the version after a successful walk.
+# They do NOT apply migration prose — that is the LLM's job under the §10
+# three-gate model (DeepSeek audit → mini-CQ → compose dry-run), driven by the
+# WIZARD.md Step 0b runbook. These helpers only compute *what* to apply; the
+# runbook drives *how*, gated. Keeping the seam here is the point: version math
+# and chain selection are testable code; prose application is probabilistic.
+# ---------------------------------------------------------------------------
+
+MIGRATIONS_DIRNAME = "migrations"
+# Matches a per-version migration markdown: v<A>-to-v<B>.md, e.g. v1.4-to-v1.5.md
+# (the "v" prefix is optional on each side to tolerate authoring variance).
+_MIGRATION_FILE_RE = re.compile(
+    r"^v?(?P<frm>\d+(?:\.\d+)*)-to-v?(?P<to>\d+(?:\.\d+)*)\.md$",
+    re.IGNORECASE,
+)
+# Absent-stamp sentinel: an existing install with no version stamp predates the
+# convention. §10 step 2 treats it as pre-1.0 and walks all available migrations.
+PRE_VERSION_STAMP = "0.0.0"
+
+
+def _parse_version(value):
+    """Parse a dotted version string into a comparable tuple of ints.
+
+    "1.4" -> (1, 4); "0.44.0" -> (0, 44, 0). Tolerates a leading 'v'. Returns
+    None for unparseable input (caller decides how to treat it). Never raises.
+    """
+    if not value:
+        return None
+    raw = str(value).strip().lstrip("vV")
+    if not raw:
+        return None
+    parts = raw.split(".")
+    try:
+        return tuple(int(p) for p in parts)
+    except (ValueError, TypeError):
+        return None
+
+
+def _version_key(value):
+    """Sort/compare key for a version string: parsed tuple, or (-1,) if junk.
+
+    Pads nothing — Python compares (1, 4) < (1, 4, 1) correctly because a
+    shorter tuple is a prefix. Unparseable versions sort lowest (treated as
+    pre-everything) so a malformed stamp never masks real migrations.
+    """
+    parsed = _parse_version(value)
+    return parsed if parsed is not None else (-1,)
+
+
+def installed_version(base_dir=None):
+    """Read the installed `SquidSquad Version` from `base_dir/.squidsquad/config.md`.
+
+    Returns the version string, or ``PRE_VERSION_STAMP`` ("0.0.0") when the
+    install exists but carries no stamp (§10 step 2 pre-1.0 fallback), or
+    ``None`` when there is no install at all (fresh — the walk is skipped).
+    Mirrors harness._read_squidsquad_version's field-read but is install-rooted
+    and adds the fresh-vs-pre-stamp distinction the walk needs.
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    config_path = Path(base_dir) / ".squidsquad" / "config.md"
+    if not config_path.exists():
+        return None  # fresh install — no walk
+    try:
+        for line in config_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- **SquidSquad Version**:"):
+                val = stripped.split(":", 1)[1].strip()
+                return val or PRE_VERSION_STAMP
+    except (OSError, UnicodeDecodeError):
+        # Config unreadable but dir exists — treat as pre-stamp, not fresh, so
+        # the walk runs rather than silently skipping a real existing install.
+        return PRE_VERSION_STAMP
+    return PRE_VERSION_STAMP  # install exists, no stamp line
+
+
+def installer_version(base_dir=None):
+    """Read the installer's target version from `references/VERSION`.
+
+    This is the version the operator is moving *to* (read after the §10 step-1
+    source pull). Returns the string, or ``None`` if the file is absent/empty.
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    version_file = Path(base_dir) / "references" / "VERSION"
+    try:
+        val = version_file.read_text(encoding="utf-8").strip()
+        return val or None
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def list_migration_files(base_dir=None):
+    """Return all parseable migration files under `references/migrations/`.
+
+    Each entry: ``{"file": <name>, "path": <abs>, "from": <str>, "to": <str>}``.
+    Files that don't match the ``v<A>-to-v<B>.md`` pattern are ignored (e.g. a
+    README). Returns ``[]`` when the directory is absent (the pre-1.0 state —
+    no migrations have shipped yet, so the walk is a no-op).
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    mig_dir = Path(base_dir) / "references" / MIGRATIONS_DIRNAME
+    if not mig_dir.is_dir():
+        return []
+    out = []
+    for p in mig_dir.iterdir():
+        if not p.is_file():
+            continue
+        m = _MIGRATION_FILE_RE.match(p.name)
+        if not m:
+            continue
+        out.append({
+            "file": p.name,
+            "path": str(p),
+            "from": m.group("frm"),
+            "to": m.group("to"),
+        })
+    return out
+
+
+def select_migration_chain(installed, target, base_dir=None):
+    """Return the ordered list of migration files to apply for installed→target.
+
+    A migration ``v<A>-to-v<B>`` is included when ``installed < B <= target``
+    (its target version is newer than what's installed and no newer than where
+    we're going). The result is sorted by target version ascending — the order
+    the walk applies them (§10 step 3). A version step with no migration file is
+    simply absent (skipped silently per §10.4). Returns ``[]`` when target <=
+    installed (no-op walk) or no files qualify.
+    """
+    inst_k = _version_key(installed)
+    tgt_k = _version_key(target)
+    chain = [
+        mig for mig in list_migration_files(base_dir)
+        if inst_k < _version_key(mig["to"]) <= tgt_k
+    ]
+    chain.sort(key=lambda m: _version_key(m["to"]))
+    return chain
+
+
+def stamp_version(version, base_dir=None):
+    """Write ``version`` to config.md's ``- **SquidSquad Version**:`` line.
+
+    The only field the installer writes outside the three-gate model during the
+    walk (§10 step 4). Rewrites the existing stamp line in place if present, or
+    inserts one into the header block if absent (pre-stamp install). Returns
+    True on success, False if config.md is missing/unwritable. Atomic write
+    (.tmp then replace) so a concurrent reader never sees a half-written file.
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    config_path = Path(base_dir) / ".squidsquad" / "config.md"
+    if not config_path.exists():
+        return False
+    try:
+        text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    new_line = f"- **SquidSquad Version**: {version}"
+    lines = text.splitlines(keepends=True)
+    nl = "\n"
+    if lines and lines[0].endswith("\r\n"):
+        nl = "\r\n"
+    replaced = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith("- **SquidSquad Version**:"):
+            lines[i] = new_line + nl
+            replaced = True
+            break
+    if not replaced:
+        # Insert after the first '# SquidSquad Config' header line, else at top.
+        insert_at = 0
+        for i, line in enumerate(lines):
+            if line.strip().startswith("# "):
+                insert_at = i + 1
+                break
+        lines.insert(insert_at, new_line + nl)
+    tmp = config_path.with_suffix(config_path.suffix + ".tmp")
+    try:
+        tmp.write_text("".join(lines), encoding="utf-8")
+        os.replace(str(tmp), str(config_path))
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return False
+    return True
+
+
+def migration_walk_plan(base_dir=None):
+    """Aggregate the deterministic walk inputs into one JSON-able plan.
+
+    This is what the WIZARD.md Step 0b runbook consumes to decide whether to
+    walk and which files to apply (it then drives the §10 three-gate model per
+    file). Pure read — computes nothing on disk. Shape:
+
+        {
+          "is_fresh": bool,            # no .squidsquad/ — skip the walk entirely
+          "installed_version": str|None,
+          "installer_version": str|None,
+          "is_pre_stamp": bool,        # existing install, no version stamp
+          "is_noop": bool,             # nothing to apply (fresh, or target<=installed,
+                                       #                   or no qualifying files)
+          "chain": [ {file, path, from, to}, ... ],  # ordered apply list
+        }
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    inst = installed_version(base_dir)
+    instlr = installer_version(base_dir)
+    is_fresh = inst is None
+    is_pre_stamp = inst == PRE_VERSION_STAMP
+    chain = [] if is_fresh else select_migration_chain(inst, instlr, base_dir)
+    return {
+        "is_fresh": is_fresh,
+        "installed_version": inst,
+        "installer_version": instlr,
+        "is_pre_stamp": is_pre_stamp,
+        "is_noop": is_fresh or not chain,
+        "chain": chain,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Step 1 — project details (auto-fill from gh repo view + git)
 # ---------------------------------------------------------------------------
 
@@ -2720,6 +2950,34 @@ def cmd_validate_rerun_action(args):
     return 0 if action is not None else 1
 
 
+def cmd_migration_plan(args):
+    """CLI: emit the migration-walk plan JSON the Step 0b runbook consumes (#12419).
+
+    Optional positional arg overrides the base dir (defaults to REPO_ROOT) for
+    fixture/testing. Exit 0 always (a no-op/fresh plan is not an error — the
+    runbook branches on `is_fresh`/`is_noop`).
+    """
+    base_dir = args[0] if args else None
+    plan = migration_walk_plan(base_dir)
+    _print_json(plan, ok=True)
+    return 0
+
+
+def cmd_stamp_version(args):
+    """CLI: stamp config.md's SquidSquad Version after a successful walk (#12419).
+
+    Usage: wizard.py stamp-version <version> [base_dir]
+    """
+    if not args:
+        print("Usage: wizard.py stamp-version <version> [base_dir]", file=sys.stderr)
+        return 2
+    version = args[0]
+    base_dir = args[1] if len(args) > 1 else None
+    ok = stamp_version(version, base_dir)
+    _print_json({"version": version, "stamped": ok}, ok=ok)
+    return 0 if ok else 1
+
+
 def pr_flow_prompt():
     """Return the PR Flow question text and options for the setup agent."""
     return {
@@ -3200,6 +3458,8 @@ def main():
         "gather-deps": cmd_gather_deps,
         "provision-deps": cmd_provision_deps,
         "upgrade": cmd_upgrade,
+        "migration-plan": cmd_migration_plan,
+        "stamp-version": cmd_stamp_version,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)
