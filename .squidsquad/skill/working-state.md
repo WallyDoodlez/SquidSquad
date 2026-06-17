@@ -5,8 +5,19 @@
 - **Updated**: 2026-06-17 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
-## >>> INSTALLER CLUSTER (operator-activated 2026-06-17, HIGH, SERIAL) — building now <<<
-PM: build in order #12419 (migration-walk §10) → #12420 (post-commit restart §10.3) → #12450 (unit-test detection, L3). All touch WIZARD.md/wizard.py → SERIAL (avoid conflicts). DS-review per change (high blast-radius, same as #11613). Each builds off prior's merged branch — NO stacking (base on main after each ships).
+## >>> INSTALLER CLUSTER (operator-activated 2026-06-17, HIGH, SERIAL) — #12419 IN PROGRESS <<<
+PM: build in order #12419 (migration-walk §10) → #12420 (post-commit restart §10.3) → #12450 (unit-test detection, L3). All touch WIZARD.md/wizard.py → SERIAL. DS-review per change. NO stacking (base on main after each ships).
+
+### #12419 — BUILD COMPLETE, PR #12533, HOLDING pending-test on PM CQ-AC answer
+Branch `squidsquad/task/12419` (4 commits, pushed). Both increments done + BOTH DS-reviewed:
+- Inc1 (b83926278 + DS-c1 fixes 068dbfa36): deterministic foundation — references/VERSION, version-read/chain/stamp helpers, migrations/README, migration-plan/stamp-version CLI. DeepSeek c1: 6 warnings fixed (sentinel collision, iterdir guard, CRLF, installer-unknown flag, annotation parse, variant-stamp dedup).
+- Inc3 (0a6f22971 + DS-c2 fixes 403f56447): WIZARD.md Step 0b rewrite — Upgrade(default)/Full-rebuild/Abort; Upgrade=§10 three-gate walk; preserves Step 7.1. DeepSeek c2: 3 errors + 1 warning fixed (wrong step-refs, before-Step-7 invariant carve-out, write-ordering write-then-validate-revert, resume→re-walk-idempotent).
+- Tests: 43 migration-walk unit + 24 runbook = green; 381 wizard-suite green. **NOTE: full `pytest tests/` collection BROKEN on this branch (the #12509 harness.py shadow, unmerged) — run wizard tests FILE-SCOPED.**
+- **GATE before pending-test:** PM CQ-AC answer (Step 7.4 — WIZARD.md is LLM-consumed, cf #11613 CQ spec; flagged on #12419). Also flagged PM: INSTALLER-ARCH §4.3/§10 stale "not implemented" banners (PM doc lane) + §10 "before any write"/"resumes at k" reconciliation. **When PM confirms CQ scope → mark pending-test.**
+
+### NEXT (installer cluster + new HIGH, all queued behind #12419 / fresh context):
+- #12420 (post-commit harness restart §10.3) → #12450 (unit-test detection L3) — rest of the SERIAL cluster, base on main after #12419 merges.
+- #12525 (HIGH — minimal bare-harness launcher start-harness.bat), #12527 (HIGH — greenfield installer smoke on a FOREIGN throwaway repo), #12526 (bug — start.ps1/.sh clone-sync uses git pull --rebase). All role:skill, approved/open.
 
 ## >>> #12509 → RE-SUBMITTED pending-test (PR #12517) — QA cy251 FAIL fixed <<<
 Verifier FAIL (cy251): my regression test contaminated sys.modules['harness'] (popped + re-imported, restored only sys.path). Fixed (commit 728142808): snapshot + restore exact prior binding in finally. Re-confirmed: QA repro both directions pass, full pytest tests/ exit 0, run_tests.py OK. Back to verifier.
