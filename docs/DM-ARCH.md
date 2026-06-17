@@ -34,8 +34,8 @@ Any delivery manager, any project, runs this lifecycle. Steps 3–4 are the *act
 3. **Package** — assemble the actual deliverable (the thing that goes out). *(form = L3)*
 4. **Publish** — execute the delivery. *(mechanics = L3)*
 5. **Confirm landing** — it reached its destination intact.
-6. **Document the delivery** — the **operator-facing audit trail**: what was delivered, what was done, what was investigated, what changed, and why. **This — not versioning — is the universal record step.** Versioning, changelog format, and release tags are *optional facets* applied here per L4 policy; a version-less project (a one-off deliverable, a doc, a client job) still produces this record.
-7. **Contribute institutional knowledge** — having seen the finished deliverable end-to-end, the DM harvests durable learnings and **cross-connections** (e.g. "this client/job relates to that other one," recurring patterns) into the institutional memory (vault).
+6. **Generate the delivery report** — synthesize the **facts already recorded in the forge** (issue discussion, PR, commits, verification) into a report of what was delivered, done, investigated, changed, and why. **The L2 act is "generate a report from the forge facts"; *what* the report contains, its format, audience, and destination are determined per L3/L4** (an internal audit trail, external release notes, or both — it's a parameter, not a fixed L2 structure). Versioning, changelog format, and release tags are L4 facets of this report; a version-less project still produces a report. **Storage note:** the forge is the audit store for *code/work* facts (what step 6 reads); it is **not** the right home for *new knowledge gained* — that routes to the vault in step 7.
+7. **Contribute institutional knowledge** — having seen the finished deliverable end-to-end, the DM harvests durable learnings and **cross-connections** (e.g. "this client/job relates to that other one," recurring patterns) into the institutional memory (**vault** — the store the forge can't serve, because knowledge is not code-audit).
 8. **Handle failure** *(cross-cutting)* — on a failed delivery, roll back and/or route the work back to its owner.
 
 **Default (no L4 policy):** ship each verified item as it's ready — no batching, no version concept.
@@ -66,8 +66,8 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 | 3 | Package | **L3-overridable** | *what a deliverable is* = domain mechanics |
 | 4 | Publish | **L3-overridable** (+ L4 target) | mechanism class = L3; concrete target = L4 |
 | 5 | Confirm landing | **L2-complete** (+ L3 probe) | "did it arrive" is universal; the probe may be domain-specific |
-| 6 | Document the delivery | **L2 default + L4 policy** | the audit-trail *act* is universal; format/version/cadence facets = L4 |
-| 7 | Contribute institutional knowledge | **L2 act + L3/L4 flavor** | the *harvest* is universal; *what to look for* may be domain/project flavored |
+| 6 | Generate the delivery report | **L2 act + L3/L4 output** | L2 = "generate a report from the forge facts"; the report's *content/format/audience/destination* (incl. version, changelog, release notes) = L3/L4. Reads forge (code/work audit store). |
+| 7 | Contribute institutional knowledge | **L2 act + L3/L4 flavor** | the *harvest* is universal; *what to look for* may be domain/project flavored. Writes the **vault** (the store the forge can't serve). |
 | 8 | Handle failure | **L2-complete** (+ L3 rollback) | route-back is universal; rollback mechanics may be domain |
 
 ### Open questions
@@ -85,3 +85,4 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 
 - **2026-06-17 (DRAFT kickoff)** — Created from operator+PM discussion. Captured: the layering principle (L2 parameterizes, never hardcodes), the L2 lifecycle spine (with the operator's correction that *version* is not a spine step and *document the delivery / audit trail* is the universal step), the DM-as-deliverer+historian+knowledge-harvester conception, the verifier-counter-leak correction, and three open questions for the polish pass.
 - **2026-06-17 (reframe — override = existing compose)** — Operator correction: the override mechanism is NOT new — it is the existing L1–L4 compose machinery (slot + ordinal + the `replace`/`insert`/`append` op grammar, COMPOSE-ARCHITECTURE §3.2–§3.3). Reframed §2: "L2 is mostly slots" = the spine authored as addressable step-units; L3/L4 override the *how* of specific steps via the standard op grammar. The real work is per-step **classification** (§6: L2-complete / L3-overridable / L4-overridable) + step **addressability**, not designing a mechanism. Added §6 classification table + Q4 (addressability).
+- **2026-06-17 (step 6 deep-dive)** — Operator refinement: step 6 L2 act = **"generate a report from the facts in the forge"**; the report's content/format/audience/destination are L3/L4 (collapses the earlier 6a/6b split into a single L2 act with L3/L4-parameterized output). **Storage-by-type** distinction added: forge = code/work audit store (step 6 reads it); vault = new-knowledge store (step 7 writes it), because the forge isn't the right home for knowledge.
