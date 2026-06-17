@@ -37,6 +37,8 @@ _WIZARD_COMMANDS = {
     "pr-flow-prompt",
     # #11613 §4.1 Phase 0 gather-all dependency provisioning.
     "gather-deps", "provision-deps",
+    # #12419 §10 existing-install migration walk.
+    "migration-plan", "stamp-version",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}
@@ -139,7 +141,10 @@ class TestHelperCommandReferences:
             "wizard.py provision-deps",
             "wizard.py check-existing",
             "wizard.py repo-info",
-            "wizard.py validate-rerun-action",
+            # #12419: the §10 migration walk replaced the flat re-run prompt;
+            # validate-rerun-action is no longer part of the Step 0b flow.
+            "wizard.py migration-plan",
+            "wizard.py stamp-version",
             "wizard.py validate-name",
             "wizard.py build-config-md",
             "wizard.py scaffold",
