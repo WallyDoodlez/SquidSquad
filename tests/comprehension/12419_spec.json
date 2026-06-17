@@ -1,0 +1,46 @@
+{
+  "issue": 12419,
+  "title": "Installer migration-walk — WIZARD.md Step 0b / 0b.1 comprehension",
+  "authored_by": "verifier (qa)",
+  "source_under_test": "references/wizard/WIZARD.md (Step 0b + Step 0b.1 — LLM-consumed installer runbook)",
+  "method": "Fresh sonnet agent given ONLY the Step 0b/0b.1 prose, no other context. Answers must come from the prose alone. Scenario framing: 'You are the installer agent. check-existing reported exists:true (an existing .squidsquad/ install).' Zero misreads of branch semantics required to PASS.",
+  "questions": [
+    {
+      "id": "CQ1",
+      "ac": "AC-CQ.1 (branch presentation/selection)",
+      "q": "check-existing returned exists:true. What three choices do you present, and which is the default if the user just presses Enter?",
+      "expected": "Three choices: 1) Upgrade (the default on Enter), 2) Full rebuild, 3) Abort. Upgrade is the default."
+    },
+    {
+      "id": "CQ2",
+      "ac": "AC-CQ.2 (Upgrade → §10 three-gate walk)",
+      "q": "The user picks Upgrade. Walk me through what you do: how do you decide which migrations to apply, and what are the gates for each migration file before and after writing?",
+      "expected": "Run migration-plan (reads installed squidsquad_version + target references/VERSION); if is_noop just stamp+continue, if installer_version_unknown stop. Otherwise apply each file in the ordered chain ONE at a time, in version order, with three gates: Gate 1 DeepSeek audit (no write), Gate 2 mini-CQ operator confirm (no write), then apply atomically, Gate 3 compose dry-run validating the written result (revert that file on failure). A rejection/failure at any gate stops the walk."
+    },
+    {
+      "id": "CQ3",
+      "ac": "AC-CQ.2 (version-order + missing-step)",
+      "q": "Migrations on disk are v0.45.0-to-v0.46.0.md and v0.43.0-to-v0.44.0.md, and there is NO v0.44.0-to-v0.45.0.md. Installed is 0.43.0, target 0.46.0. In what order do you apply, and what happens to the missing 0.44→0.45 step?",
+      "expected": "Apply in ascending version order: v0.43.0-to-v0.44.0 first, then v0.45.0-to-v0.46.0. The missing 0.44→0.45 step is simply absent/skipped silently — no error."
+    },
+    {
+      "id": "CQ4",
+      "ac": "AC-CQ.2 + AC4 (who stamps the version)",
+      "q": "After the chain is applied, how does the installed version get updated to the target, and may a migration markdown set that version field itself?",
+      "expected": "The installer runs stamp-version <installer_version> (the only field written outside the three gates). Migration files MUST NOT modify the SquidSquad Version field themselves."
+    },
+    {
+      "id": "CQ5",
+      "ac": "AC-CQ.3 (full-rebuild path preserved on this branch)",
+      "q": "On this existing-install branch, the user instead chooses Full rebuild. What do you require before proceeding, and when does the actual deletion happen?",
+      "expected": "Require a typed confirmation — the user must type 'delete and rebuild' exactly (anything else returns to the prompt). On confirmation, record the rebuild intent and proceed to Step 1; the actual deletion happens at Step 7.1 (the user can still abort at the Step 6 review). This is the only path that wipes existing content."
+    },
+    {
+      "id": "CQ6",
+      "ac": "AC-CQ.2 (preservation invariant)",
+      "q": "On the Upgrade path, what guarantees that vault content, working-state.md, and iteration logs are not lost?",
+      "expected": "Only a migration markdown changes existing state (under the three gates); anything no migration touches is preserved automatically because later steps write only fresh-scaffold paths and never overwrite existing files. Existing vault / working-state.md / iterations/ are never touched."
+    }
+  ],
+  "pass_criteria": "All 6 CQs answered correctly from the prose alone — zero misreads of the branch semantics (esp. Upgrade-default, version-order apply, installer-stamps-not-migration, full-rebuild typed-confirm + deferred deletion)."
+}
