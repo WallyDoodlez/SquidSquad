@@ -1,3 +1,14 @@
+---
+name: learning-doc-first-for-architecture-changes
+description: for architecture-level changes the human-reviewed TRD must exist and be approved BEFORE implementation; impl-first makes the doc race to catch up and contradictions slip in (#12244/#12293 shipped ahead of HARNESS-ARCH → retroactive v7/v8 reconcile; operator verdict "the steps went wrong")
+metadata:
+  type: learning
+type: learning
+tags: [learning, process, architecture, doc-first, trd, 12244, 12271, 12300]
+created: 2026-06-14
+author: pm
+---
+
 # Learning: doc-first for architecture changes
 
 **Date:** 2026-06-14 · **Author:** pm · **Type:** learning
