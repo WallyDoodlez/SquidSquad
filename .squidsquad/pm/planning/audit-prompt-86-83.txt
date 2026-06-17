@@ -1,0 +1,21 @@
+You are performing a rigorous PROSE-DRIFT CONSISTENCY AUDIT for the SquidSquad project (a multi-agent dev framework). Two arch-doc changes were just authored in docs/AGENT-RUNTIME.md and need consistency-closure before merge.
+
+(A) NEW subsection §8.6.1 "The event-mode periodic driver (idle-work scheduler)" — fixes #12506 (the improvement subloop was dormant for event-mode agents because nothing periodic re-enters the §8.1 loop). It specifies: event-mode boot does NOT schedule the driver eagerly; on the FIRST idle/drained state the agent schedules a low-frequency cron/`/loop` self-wake at the throttle cadence (≈ cool-down, default 30m); two orthogonal wake sources (Monitor = forge events, periodic driver = timer idle-check); the driver is LAZY (armed on first idle, not boot) and BOUNDED (a scan-counter cancels the cron at "Idle Scan Burst" threshold, default 3; re-arms on re-entering idle after forge work); no harness change (runtime-side scheduling). The §8.6 flowchart was updated to match.
+
+(B) NEW subsection in §8.3 "Comment-only handoffs and the pipeline-sentinel backstop" — comment-only handoffs ride no event and aren't caught by the EAD (which polls forge state, not comment bodies), so they're silently dropped; the pipeline sentinel (a PM responsibility) is the backstop (detect progress-halt / investigate / unblock event-effectively / escalate).
+
+AUDIT TASK — find inconsistencies and drift, BOTH:
+
+1. INTERNAL to AGENT-RUNTIME.md: does §8.6.1 contradict §8.0 (event_poll), §8.1 (nudge contract), §8.2 (boot sequence), or §8.6 (subloop throttle + `.subloop-last-run`)? Does the §8.3 backstop contradict the rest of §8.3, or §5.1 / §5.4 (EAD)?
+
+2. CROSS-DOCUMENT:
+   - §8.6.1 vs idle-cooldown-loop.md: its step 5 still says "the persistent Monitor delivers NUDGE wake signals at a short fixed cadence" — the exact assumption #12506 proved false. §8.6.1 says the sub-skill must be reconciled. Confirm the sub-skill currently CONTRADICTS §8.6.1 and specify the precise edit that closes it.
+   - §8.6.1 vs config.md: does an "Idle Scan Burst" key exist? Does the throttle cadence ("Improvement Scan Cool-Down", default 30m) match §8.6.1's "≈ cool-down, default 30m" and §8.6's "default 30"? Flag any missing config key or cadence mismatch.
+   - §8.6.1 vs HARNESS-ARCH §15 (progress-based liveness, #12271): §15 / §8.2 reference "event_poll idle-ticks" as a liveness signal. §8.6.1 introduces a separate periodic self-wake (cron/`/loop`) for idle improvement work. Are these the SAME mechanism, complementary, or conflicting? This is the highest-risk overlap — analyze carefully and flag any contradiction or terminology collision.
+   - §8.6.1 vs event-mode-contract.md boot (Case A): the boot steps don't mention scheduling the driver. Since the driver is LAZY (first idle, not boot), is that consistent, or should the contract mention it?
+   - §8.3 backstop vs comment-handling.md: consistent?
+   - §8.6 "What the subloop does" lists pm subloop = "pipeline sentinel + improvement scan" — consistent with §8.3 backstop calling the sentinel a PM responsibility?
+
+KNOWN/DEFERRED (note once, do NOT over-flag): §8.3 still references the "/work/assign" endpoint, a documented fiction tracked in #12495 (full reconciliation deferred).
+
+OUTPUT (markdown): header (date 2026-06-16, docs under audit, audited-against list); a one-line summary count "N ERROR / N WARNING / N LOW"; then findings grouped by severity. Each finding: an ID, exact location(s) (file + section), the precise contradiction (cite the actual text), and a concrete suggested fix. Focus on REAL drift, not stylistic nits. If a claimed cross-reference is actually consistent, say so explicitly rather than inventing problems.
