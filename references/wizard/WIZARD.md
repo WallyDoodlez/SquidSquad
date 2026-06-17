@@ -22,8 +22,12 @@ with an `ok` field you should check.
   "a delivery manager who ships the work". Never mention internal
   files, status labels, or script names unless you're inside a
   troubleshooting block.
-- **Never write anything to disk before Step 7.** The user can abort at
-  any step up to the review screen with zero trace.
+- **Never write anything to disk before Step 7** — with one exception:
+  the Step 0b.1 migration walk on an existing install (applying gated
+  migration changes + stamping the version) writes before Step 7 by
+  design, each write gated and reverted on failure (§10). On a *fresh*
+  install nothing is written before Step 7, and the user can abort at any
+  step up to the review screen with zero trace.
 
 ---
 
@@ -170,35 +174,53 @@ later steps write only fresh-scaffold paths.
   proceed to step 2.
 
 **2. Walk the chain — one file at a time, three gates each (§10).** For
-each entry in `chain` **in order**, apply its `path` markdown to the
-on-disk state under all three gates, in order. Migration prose describes
-both **mechanical** changes (deterministic renames / additive defaults —
-apply straight through) and **judgment-call** changes (slot retirements /
-re-routing — surface options to the operator and wait for their choice).
-A file's changes apply **atomically** — all or none.
+each entry in `chain` **in order**, work out the file's changes from its
+`path` markdown, then run the three gates below **in order**. Migration
+prose describes both **mechanical** changes (deterministic renames /
+additive defaults — apply straight through) and **judgment-call** changes
+(slot retirements / re-routing — surface options to the operator and wait
+for their choice). A file's changes apply **atomically** — all or none.
 
-- **Gate 1 — DeepSeek audit.** Have a deepseek-class model review your
-  planned writes for this file against the migration prose's stated
-  intent (flag a "mechanical" change that isn't deterministic; flag a
-  "judgment-call" change whose option-surfacing dialog is missing). A
-  rejection **stops the walk at this step** (clean — see step 3).
-- **Gate 2 — Mini-CQ.** Summarise the file's changes to the operator in
-  one plain-language line and ask to proceed (e.g. "Migration v1.4 → v1.5
-  wants to rename `Iteration_Interval` and retire the `## Vault` L4 slot
-  — OK?"). A rejection **stops the walk at this step** (clean).
-- **Gate 3 — Compose dry-run.** Run
-  `python references/scripts/compose.py deploy-all --check`. A failure
-  means the migration produced content that doesn't compose — **stop the
-  walk at this step** (clean).
-- All three gates pass → apply this file's changes to disk (atomically),
-  then move to the next chain entry.
+- **Gate 1 — DeepSeek audit (no write yet).** Have a deepseek-class model
+  review your *planned* changes for this file against the migration
+  prose's stated intent (flag a "mechanical" change that isn't
+  deterministic; flag a "judgment-call" change whose option-surfacing
+  dialog is missing). A rejection **stops the walk at this step** (clean
+  — see step 3).
+- **Gate 2 — Mini-CQ (no write yet).** Summarise the file's *planned*
+  changes to the operator in one plain-language line and ask to proceed
+  (e.g. "Migration v1.4 → v1.5 wants to rename `Iteration_Interval` and
+  retire the `## Vault` L4 slot — OK?"). A rejection **stops the walk at
+  this step** (clean).
+- **Apply the file's changes to disk (atomically).** Only now, after both
+  pre-write gates pass, write this file's changes.
+- **Gate 3 — Compose dry-run (validate the written result).** Run
+  `python references/scripts/compose.py deploy-all --check` against the
+  now-migrated tree. If it fails, the migration produced content that
+  doesn't compose: **revert this file's changes** (the target repo is
+  git-tracked — `git restore` the paths this file touched) so no partial
+  state persists, then **stop the walk at this step** (clean).
+  > Sequencing note (§10 says the dry-run validates "before any write"):
+  > because `compose.py --check` reads the on-disk tree, the only
+  > executable order is write-then-validate-then-revert-on-fail, which is
+  > still atomic-per-file from the operator's view (a failure leaves no
+  > net change). Flagged to PM to reconcile §10's wording — see the
+  > Discussion on #12419.
+
+After all gates pass for a file, move to the next chain entry.
 
 **3. Aborting mid-walk (§10.4).** A rejection or failure at any gate for
 step _k_ stops the walk: do **not** apply step _k_ or any later step, do
 **not** advance the version stamp, do **not** recompose, do **not**
 continue to Step 1. Steps 1..k-1 (already gated through and written)
-persist. Tell the operator where it stopped and why — the next installer
-re-run resumes at step _k_. This makes partial walks safe.
+persist. Tell the operator where it stopped and why. The version stamp is
+**not** advanced, so a re-run's `migration-plan` returns the *same* full
+chain — the agent re-walks from the first file. Migrations are authored to
+be **idempotent** (re-renaming an already-renamed field is a no-op), so
+already-applied files pass their gates as no-ops; the walk converges on a
+re-run rather than literally resuming at _k_. (Re-running the gates on
+already-applied files is also a feature: it re-verifies them in case the
+operator hand-edited state between runs.)
 
 **4. Stamp the version.** After the chain is fully applied (or on a
 no-op plan), run
@@ -209,12 +231,13 @@ installer writes outside the three gates. (Migration files MUST NOT
 modify this field themselves.)
 
 **5. Continue.** The walk is complete — proceed to Step 1 and run the
-standard installer exactly as in the fresh case. Step 6 (Phase 6)
-recompose regenerates every `.squidsquad/<alias>/CLAUDE.md` from the
-now-current source + migrated L4; Step 7 scaffolding writes only
-fresh paths (never overwrites existing files); Step 8 commits; Step 7.6
-handles the harness restart (#12420). Existing vault / `working-state.md`
-/ `iterations/` are never touched.
+standard installer exactly as in the fresh case. Step 7.3 scaffolds and
+recomposes every `.squidsquad/<alias>/CLAUDE.md` inline from the
+now-current source + migrated L4, writing only fresh-scaffold paths (it
+never overwrites existing files); Step 7.5 commits and pushes. The
+post-commit harness restart is tracked separately (#12420, §10.3) and is
+not yet in this runbook. Existing vault / `working-state.md` /
+`iterations/` are never touched.
 
 > **Pre-1.0 / no migrations yet.** `references/migrations/` ships empty
 > of migration files until the first schema-break release, so on current
@@ -843,7 +866,9 @@ install is committed locally and they can push manually.
 
 ## What NOT to do
 
-- Do not write to disk before Step 7.
+- Do not write to disk before Step 7 — except the Step 0b.1 migration
+  walk on an existing install (gated per-file writes + the version stamp,
+  §10). Fresh installs write nothing before Step 7.
 - Do not call any helper that is not listed in this runbook.
 - Do not compose CLAUDE.md by hand — always go through `compose.py
   deploy` or `wizard.py scaffold`.
