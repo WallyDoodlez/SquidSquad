@@ -194,7 +194,7 @@ Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
 
 ### 4.3 Phase 0b — Re-run detection + migration walk
 
-> **Status: target — the migration walk is not yet in the runbook (#12419; see §10).** Today `WIZARD.md` Step 0b handles the existing-install case with a flat abort / regenerate / rebuild prompt. The flow below is the agreed target.
+> **Status: IMPLEMENTED (#12419, shipped 2026-06-17; see §10).** `WIZARD.md` Step 0b now presents Upgrade (default) / Full-rebuild / Abort, where Upgrade runs the §10 three-gate migration walk (reads `squidsquad_version`, applies `references/migrations/` per-version files in order). The flow below matches the runbook.
 
 The installer checks for `.squidsquad/` in the target repo.
 
@@ -457,7 +457,7 @@ The choice is recorded in `.squidsquad/config.md` under `Tracker Backend`. Agent
 
 ## 10. Migration walk (existing-install step)
 
-> **Status: target — not yet implemented in the runbook (#12419).** This section specifies the migration-walk architecture (agreed 2026-05-30). `WIZARD.md` Step 0b currently presents a flat abort / regenerate-templates / full-rebuild prompt on an existing `.squidsquad/`; it does **not** read `squidsquad_version:` or apply `references/migrations/` files. The design below is the agreed target.
+> **Status: IMPLEMENTED (#12419, shipped 2026-06-17).** This section's migration-walk architecture (agreed 2026-05-30) is now live in the runbook: `WIZARD.md` Step 0b's Upgrade branch reads `squidsquad_version:` and applies `references/migrations/` per-version files in order, with `references/VERSION` as the version source. Verified PASS (verifier cy271, all ACs + comprehension spec `tests/comprehension/12419_spec.json`).
 
 This section details the migration walk introduced at §4.3. **There is no distinct "upgrade flow"** — the migration walk is one step of the standard installer flow, invoked when `.squidsquad/` already exists at Phase 0b. Every other phase (1 through 9) runs identically regardless of whether this is the first installer run on this repo or the hundredth.
 
