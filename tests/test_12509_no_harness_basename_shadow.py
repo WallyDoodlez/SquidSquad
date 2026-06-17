@@ -66,32 +66,12 @@ def test_no_test_dir_module_shadows_a_scripts_module():
         )
 
 
-def test_bare_harness_import_resolves_to_real_harness():
-    """`import harness` resolves to references/scripts/harness.py (the agent
-    supervisor), not a test helper — the exact symbol the victims needed.
-
-    Isolation (QA cy251 + cy270 / #12509): assert resolution WITHOUT importing
-    or executing the module. The earlier attempts popped `sys.modules['harness']`
-    and did a live `import harness`, which RE-EXECUTES harness.py and creates a
-    second, divergent module object — perturbing global import state beyond the
-    one key we snapshotted, so a sibling like test_feat_10681's
-    `patch("harness.HARNESS_STATE_FILE", ...)` ended up patching a different
-    object than its collection-time `HarnessState` binding (order-dependent
-    failures). `importlib.util.find_spec` resolves the module against sys.path
-    and returns its origin WITHOUT executing it or mutating sys.modules — zero
-    contamination, and it still proves the rename removed the basename shadow.
-    """
-    import importlib.util
-
-    # Ensure the scripts dir is importable (idempotent; matches the codebase
-    # pattern — many test modules add it permanently). This is a sys.path add,
-    # not a sys.modules mutation, so it is not the contamination vector.
-    if str(SCRIPTS_DIR) not in sys.path:
-        sys.path.insert(0, str(SCRIPTS_DIR))
-
-    spec = importlib.util.find_spec("harness")
-    assert spec is not None and spec.origin, "harness must be importable"
-    assert Path(spec.origin).resolve() == (SCRIPTS_DIR / "harness.py").resolve(), (
-        f"`import harness` must resolve to the real supervisor module, "
-        f"got {spec.origin!r}"
-    )
+# NOTE (#12509, QA cy251/cy270/cy273): a third guard that asserted
+# `import harness` resolves to the supervisor at runtime was removed. Every
+# in-process form of it (sys.modules snapshot+restore; importlib.find_spec)
+# diverged global import state in a full-suite run via a collection-order
+# interaction, breaking siblings like test_feat_10681's
+# `patch("harness.HARNESS_STATE_FILE")`. The two structural guards above lock
+# the #12509 regression with zero import machinery — a reintroduced colliding
+# basename fails them. If runtime resolution must ever be asserted, run it in a
+# SUBPROCESS so import-state side effects die with the child, never in-process.
