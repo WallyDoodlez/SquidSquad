@@ -44,9 +44,9 @@ Next scan after: #10540 routed/closed (then quiet-gate resumes).
 ## >>> INSTALLER CLUSTER (operator's bump-gate dependency) <<<
 - Operator HELD bump 2026-06-15 for "land better installer". Installer cluster = 3 items (PM-approved 2026-06-15):
   - **#11613** dep-provisioning ✅ SHIPPED (this session)
-  - **#12419** migration-walk — upstream (was approved; check status)
-  - **#12420** post-commit-restart — upstream
-- When all 3 ship → flag operator that installer cluster is complete + ask for bump green-light. Do NOT auto-bump.
+  - **#12419** migration-walk ✅ SHIPPED (PR #12533, merge 21bc16a, counter →28) — operator-facing, CHANGELOG prepared
+  - **#12420** post-commit-restart — LAST ONE; skill building next (per #12419 note). When it ships → installer cluster COMPLETE.
+- When #12420 ships → flag operator that installer cluster is complete + ask for bump green-light. Do NOT auto-bump.
 
 - **#12473** (PR #12474, L1 plain-language user-comms rule in SOUL.md+instructions.md; merge 7bf840f). Verifier PASS 6 ACs. DM-merged. Counter 24→25. Recomposed all 4 CLAUDE.md (cf5a48666); reboots deferred per operator.
 
@@ -54,11 +54,13 @@ Next scan after: #10540 routed/closed (then quiet-gate resumes).
 
 - **#12460** (PR #12472, #12271 slice-4 SHADOW: progress_liveness() alongside PID, logs divergence, reboot decision UNCHANGED; harness.py+tests; merge d36fef3). Verifier PASS shadow scope. DM-merged. Counter 26→27. Script-only, no reboot. **Unblocks #12492** (actual PID→progress cutover, role:skill HIGH). #12271 NOT complete until #12492 ships.
 
-## >>> BUMP GATE OPEN (27/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
+- **#12419** (PR #12533, installer migration-walk §10: version-stamp detect → in-range ordered migration steps → 3-gate safety walk; Upgrade/Full-rebuild/Abort; wizard.py+WIZARD.md+VERSION+migrations/README+tests; merge 21bc16a). Verifier PASS 6 ACs + CQ. DM-merged. Counter 27→28. OPERATOR-FACING, CHANGELOG prepared. No reboot. references/VERSION=0.44.0 (bump still DM's job).
+
+## >>> BUMP GATE OPEN (28/10) — HOLDING FOR PM/OPERATOR GREEN-LIGHT <<<
 - **Operator directive 2026-06-15 05:19 UTC: HOLD the bump — "trying to land better installer."** Bundle the installer improvements into v0.45.0; do not bump until operator green-lights post-installer. Keep shipping; counter accrues.
-- Counter **27/10**, well over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ prior cycles 415 & 416 — no green-light yet. Not re-flagging (avoid churn; operator is aware). Hold until explicit PM/operator signal.
+- Counter **28/10**, well over Ship Threshold. **DO NOT auto-fire** ([[feedback_bump_requires_pm_signal]]). Flagged operator @ prior cycles 415 & 416 — no green-light yet. Not re-flagging (avoid churn; operator is aware). Hold until explicit PM/operator signal.
 - On green-light: bump minor v0.44.0→v0.45.0 (config.md + SKILL.md frontmatter + CHANGELOG.md), git tag, push, reset counter→0.
-- **CHANGELOG held (operator/internal-reliability framing; bump-window items are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511), WIP-preservation across reboots (#12142), harness crash-loop backoff (#12244), test-isolation /restart-leak fix (#12282), EAD event-routing fix (#12342), compose .local-config alias-keying fix (#12380), SessionEnd-reason hook #12271-slice1 (#12418), EAD handoff re-emit fix (#12442), activity-heartbeat hooks #12271-slice2 (#12443), pause-aware liveness guard #12271-slice3 (#12458), installer dep auto-provisioning #11613 (USER-FACING), L1 plain-language comms rule #12473, tracker.py --force-bypass #12475.
+- **CHANGELOG held (operator/internal-reliability framing; bump-window items are internal harness/test reliability, NOT end-user-facing):** harness restart reliability (#11538), test-suite reliability (#11503 21/23, #11657), dep-provisioning design contract (#11537), stale-lock startup-crash fix (#11641), liveness-aware port discovery (#11723), Windows ConnectionReset fix (#11587), unregistered-clone spawn-refusal (#11640), self-closing agent terminals (#11745), real-conflict PR-flap detection (#11511), WIP-preservation across reboots (#12142), harness crash-loop backoff (#12244), test-isolation /restart-leak fix (#12282), EAD event-routing fix (#12342), compose .local-config alias-keying fix (#12380), SessionEnd-reason hook #12271-slice1 (#12418), EAD handoff re-emit fix (#12442), activity-heartbeat hooks #12271-slice2 (#12443), pause-aware liveness guard #12271-slice3 (#12458), installer dep auto-provisioning #11613 (USER-FACING), L1 plain-language comms rule #12473, tracker.py --force-bypass #12475, #12271-slice4-shadow #12460, installer migration-walk #12419 (OPERATOR-FACING).
 
 ## Queue state (boot @ 2026-06-14)
 - **pending-ship: 0 open** — `list-tasks dm --status pending-ship` returns ~30 results but ALL are CLOSED issues carrying stale `status:pending-ship` labels (verified get-state on #605/#9965/#11511 = CLOSED). The `--status` filter does NOT exclude closed; the no-filter `list-tasks dm` (open-only) returns 17, all status:pending. So real DM delivery queue = EMPTY.
