@@ -16,7 +16,7 @@ This doc defines the DM as a layered role so the generic essence lives at L2, do
 
 | Layer | Source location | What it contributes to the DM | SquidSquad example |
 |---|---|---|---|
-| **L1** universal agent | `references/roles/` (base) | base agent behavior (all roles) | — |
+| **L1** universal agent | `references/sub-skills/common/` + L1 portions of `references/roles/` (see COMPOSE-ARCHITECTURE §2) | base agent behavior (all roles) | — |
 | **L2** DM role | `references/roles/dm/` | the **spine as addressable step-units** + a default *how*; default delivery = *ship each verified item as it's ready* | — |
 | **L3** domain variant | `references/roles/dm/<domain>/` | **overrides the *how*** of domain-variable steps (package / publish mechanics) | `roles/dm/skill-dev/`: package+publish = merge-to-main + `compose` |
 | **L4** this install | `.squidsquad/project/dm.md` | **overrides the *how*** of project-variable steps (cadence, version scheme, targets, record format) | "batch 10 → semver bump + tag", `CHANGELOG.md`, the counter |
@@ -64,7 +64,7 @@ The DM's two "meaning" steps read/write two **distinct stores with different uni
 | Store | Universality | Holds | DM step |
 |---|---|---|---|
 | **System of record** | **domain-specific** (forge/GitHub for code; an email+spreadsheet store, CRM, etc. for a non-code team) | raw work artifacts + the code/work audit trail | step 5 **reads** it → generates the report |
-| **Vault** | **universal (L1)**, domain-agnostic | distilled institutional knowledge that **references** the external artifacts (rather than storing them) | step 6 **writes** it (as do all roles) |
+| **Vault** | **universal (L1)**, domain-agnostic | distilled institutional knowledge that **references** the external artifacts (rather than storing them) | step 6 **writes** it (as do all roles; step 5 also **reads** it for provenance) |
 
 Consequence: **step 5's fact-source is L3-bound** ("the forge" is the *code* binding of "the system of record"); **step 6's store is L1-universal** (the vault is the same for every team and domain).
 
@@ -79,14 +79,14 @@ Two categories — only the first is truly fixed:
 
 So step 6's *how* = the **machine-fixed skeleton** + the **composed content policy** (governance + form) for that agent. For SquidSquad's DM: *"deliverable summary + cross-connection edges, under this install's admissibility policy."*
 
-> **Guardrail finding:** the current "the *whole* vault contract is L1-exclusive" guardrail is over-broad — the note **body/prose**, the content-**form**, and the content-**admissibility policy** all compose from the layers like any other slot. **Only the machine skeleton is genuinely L1-fixed** (the *default* capture disposition is an L1 default, not a lock — lower layers override it via compose). Scope-clarification belongs to **VAULT-ARCH (#10838)**, not here.
+> **Guardrail finding:** the existing guardrail — that the vault **slot** and the contract **spec** (PARAG, entity types, `[[wikilink]]` grammar, confidence) are L1-exclusive (VAULT-ARCH §1) — is *sound for the slot/spec but should not be read as locking content*: the note **body/prose**, the content-**form**, and the content-**admissibility policy** live in *other* slots (instructions/responsibility) and compose from the layers like anything else. **Only the machine skeleton is genuinely L1-fixed** (the *default* capture disposition is an L1 default, not a lock — lower layers override it via compose). Scope-clarification belongs to **VAULT-ARCH (#10838)**, not here.
 
 > **Resolution (operator, 2026-06-17): only a thin machine-readable *skeleton* is fixed — the note body is free.** A vault note is just an agent's text output; its *prose* (depth, structure, voice, specificity) is **role-shaped and unconstrained**. The **only** load-bearing constraint is the machine-readable skeleton the graph tooling parses — fixed *because it powers the graph* (the traversal/provenance step 6 depends on), not because grammar is sacred:
 > - **`[[wikilink]]` edge syntax** — `vault_check.py` parses these to build edges + auto-maintain `links:`. A different link syntax → no edge → silent graph loss.
 > - **Frontmatter schema** (`name`, `links:`, type/status, confidence) — parsed by the tooling.
 > - **PARAG folder placement** — drives lifecycle (`vault_optimize.py` prunes/archives notes orphaned of inbound wikilinks).
 >
-> So: **skeleton (link syntax + frontmatter keys + placement) = L1-fixed/load-bearing; note body = free/role-shaped.** This makes the current "the *whole* vault contract is L1-exclusive" guardrail slightly over-broad — the load-bearing part was always just the skeleton. That **scope clarification belongs to VAULT-ARCH** (#10838), not DM-ARCH; flagged there.
+> So: **skeleton (link syntax + frontmatter keys + placement) = L1-fixed/load-bearing; note body = free/role-shaped.** So the L1-exclusive *vault-slot/spec* guardrail stays intact, but the genuinely format-load-bearing part is only the machine skeleton — the note body was never the constraint. That **scope clarification belongs to VAULT-ARCH** (#10838), not DM-ARCH; flagged there.
 
 ## 4. What the DM fundamentally is
 
@@ -99,7 +99,7 @@ Not a "shipper." The DM is the **deliverer + the historian + an end-to-end knowl
 
 ## 5. Design corrections already agreed
 
-- **"Version" is not an L2 spine step.** Many projects have no version. Versioning is an optional L4 facet of step 6 (Document), not a universal step.
+- **"Version" is not an L2 spine step.** Many projects have no version. Versioning is an optional L4 facet of step 5 (Generate the delivery report), not a universal step.
 - **Release state belongs to the DM, not the verifier.** Today SquidSquad's *verifier* increments the bump counter — a release concern leaking into verification. In the clean model, the **verifier verifies and knows nothing about release policy**; the DM owns all release state and reads its cadence from L4.
 - **Status-bar counter is removed.** The `Shipped Since Last Bump` display is an L4 policy artifact shown universally; it comes out of the generic status bar (operator-confirmed).
 
@@ -121,7 +121,7 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 ### Open questions
 1. **Default L2 behavior** — confirm: *ship each verified item on ready* (no batching) when L4 specifies nothing. *(PM rec: yes.)*
 2. **Extract L3 now vs later** — define the generic `skill-dev DM` L3 variant now (SquidSquad's DM becomes an instance), or keep SquidSquad's DM as L2+L4 and extract L3 when the frontend DM actually appears? *(PM rec: extract now — forces an honest L2/L3 boundary; a second variant is already foreseen.)*
-3. **Step 7 knowledge scope** — narrow (only delivery/release patterns) vs broad (any cross-connection in the *content* delivered — client/job/entity relationships). The operator's "client relates to another job" example points **broad**. *(PM rec: broad — the DM is the end-to-end catch-point; but it widens the DM's knowledge lane beyond process.)*
+3. **Step 6 knowledge scope** — narrow (only delivery/release patterns) vs broad (any cross-connection in the *content* delivered — client/job/entity relationships). The operator's "client relates to another job" example points **broad**. *(PM rec: broad — the DM is the end-to-end catch-point; but it widens the DM's knowledge lane beyond process.)*
 4. **Step addressability** — each spine step must be a stably-named unit (likely an H3 sub-section in the `responsibility`/`instructions` slot) so an L3/L4 op can target it by anchor. Confirm the authoring structure (one H3 per step) and which slot(s) the spine lives in.
 
 ## 7. Next steps
@@ -141,3 +141,4 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 - **2026-06-17 (vault content governance)** — Operator: no issue with format/skeleton; the L2/L3/L4 customization is **content** — specifically content *governance* ('we don't want certain info in the vault' = an instruction). Captured: default capture is **default-allow** (L1); layer instructions add **exclusions/inclusions** (e.g. L4 law-firm: no privileged/PII content). Restructured the vault subsection into three buckets — L1-fixed (skeleton + default capture), layer content-*form* (role-shaped), layer content-*governance* (admissibility instructions). Guardrail finding now two-fold (body free + admissibility customizable) → VAULT-ARCH #10838.
 - **2026-06-17 (governance composes like everything else)** — Operator: what should/shouldn't enter the vault is specified-or-overridden at **each level**, and **compose** merges all L1–L4 into a final verdict — *just like the other parts*. Corrected my own over-fixing: the *default capture disposition* is an **L1 default, not a lock** — lower layers override it via compose. **Only the machine skeleton is genuinely fixed.** Restructured the vault subsection into two categories (machine-fixed skeleton vs layered-&-composed content policy [governance + form]); guardrail finding broadened (body + form + admissibility all compose).
 - **2026-06-17 (Package/Publish + reorder)** — Operator: extracted the universal essence — **Package = make the deliverable *exist/available*; Publish = make it *known*** (announce/advertise). Brainstormed L3 mechanics across professions (software/frontend/library/mobile/law/accounting/content/design). **Confirmed reorder: Publish is the LAST step** — announce only after deploy+confirm+record+knowledge (new order: Detect→Pre-flight→Package→Confirm→Report→Knowledge→Publish; Failure cross-cutting). Enriched **Package**: produces a *complete, well-rounded product* — the DM **completes what technical workers don't** (product documentation: user guide/README/manuals for software/hardware, polish). Distinguished **product docs** (part of the deliverable, step 3) from the **delivery report** (a record about the delivery, step 5). Renumbered all cross-references.
+- **2026-06-17 (DS audit — pass 1, CONVERGED)** — DeepSeek audit (`AUDIT-DM-ARCH-2026-06-17.md`): 2 ERROR / 0 WARNING / 3 LOW, **VERDICT CONVERGED**. All cross-doc claims (compose override mechanism, L3/L4 paths, vault PARAG/Galaxy/wikilinks/L1-exclusive) verified accurate; both premises (10-feature in L2 DM; verifier increments the bump counter) confirmed against source; the guardrail finding adjudicated **fair (mild overstatement, properly deferred to #10838)**. Fixed: E1 §5 stale 'step 6 (Document)'→step 5; E2 §6 'Step 7 knowledge scope'→step 6; L1 two-stores (step 5 also reads vault for provenance); L2 tightened guardrail wording to match VAULT-ARCH's actual slot/spec scope; L3 §2 L1 source path precision.
