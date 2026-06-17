@@ -1,9 +1,26 @@
 # Working State
 
-- **Task**: #12509 → pending-test (PR #12517); #12493/#12492 held on gates; #12506 w/PM; #12511 next pickup
-- **Status**: 4 shipped; #12509 in verifier's hands; #12492/#12493 held; #12506 w/PM (§8.6); #12511 queued
-- **Updated**: 2026-06-16 (skill — event-mode)
+- **Task**: #12419 (installer migration-walk) STARTING — installer cluster serial #12419→#12420→#12450 (operator top-of-queue)
+- **Status**: #12509 re-submitted pending-test (cy251 fix); installer cluster activated HIGH; #12492/#12493/#12506 held on gates
+- **Updated**: 2026-06-17 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## >>> INSTALLER CLUSTER (operator-activated 2026-06-17, HIGH, SERIAL) — #12419 IN PROGRESS <<<
+PM: build in order #12419 (migration-walk §10) → #12420 (post-commit restart §10.3) → #12450 (unit-test detection, L3). All touch WIZARD.md/wizard.py → SERIAL. DS-review per change. NO stacking (base on main after each ships).
+
+### #12419 — BUILD COMPLETE, PR #12533, HOLDING pending-test on PM CQ-AC answer
+Branch `squidsquad/task/12419` (4 commits, pushed). Both increments done + BOTH DS-reviewed:
+- Inc1 (b83926278 + DS-c1 fixes 068dbfa36): deterministic foundation — references/VERSION, version-read/chain/stamp helpers, migrations/README, migration-plan/stamp-version CLI. DeepSeek c1: 6 warnings fixed (sentinel collision, iterdir guard, CRLF, installer-unknown flag, annotation parse, variant-stamp dedup).
+- Inc3 (0a6f22971 + DS-c2 fixes 403f56447): WIZARD.md Step 0b rewrite — Upgrade(default)/Full-rebuild/Abort; Upgrade=§10 three-gate walk; preserves Step 7.1. DeepSeek c2: 3 errors + 1 warning fixed (wrong step-refs, before-Step-7 invariant carve-out, write-ordering write-then-validate-revert, resume→re-walk-idempotent).
+- Tests: 43 migration-walk unit + 24 runbook = green; 381 wizard-suite green. **NOTE: full `pytest tests/` collection BROKEN on this branch (the #12509 harness.py shadow, unmerged) — run wizard tests FILE-SCOPED.**
+- **GATE before pending-test:** PM CQ-AC answer (Step 7.4 — WIZARD.md is LLM-consumed, cf #11613 CQ spec; flagged on #12419). Also flagged PM: INSTALLER-ARCH §4.3/§10 stale "not implemented" banners (PM doc lane) + §10 "before any write"/"resumes at k" reconciliation. **When PM confirms CQ scope → mark pending-test.**
+
+### NEXT (installer cluster + new HIGH, all queued behind #12419 / fresh context):
+- #12420 (post-commit harness restart §10.3) → #12450 (unit-test detection L3) — rest of the SERIAL cluster, base on main after #12419 merges.
+- #12525 (HIGH — minimal bare-harness launcher start-harness.bat), #12527 (HIGH — greenfield installer smoke on a FOREIGN throwaway repo), #12526 (bug — start.ps1/.sh clone-sync uses git pull --rebase). All role:skill, approved/open.
+
+## >>> #12509 → RE-SUBMITTED pending-test (PR #12517) — QA cy251 FAIL fixed <<<
+Verifier FAIL (cy251): my regression test contaminated sys.modules['harness'] (popped + re-imported, restored only sys.path). Fixed (commit 728142808): snapshot + restore exact prior binding in finally. Re-confirmed: QA repro both directions pass, full pytest tests/ exit 0, run_tests.py OK. Back to verifier.
 
 ## >>> #12509 → PENDING-TEST (PR #12517) — test 'harness' basename shadow <<<
 Renamed `tests/integration/harness.py` → `integration_harness.py` (git mv) so it stops shadowing `references/scripts/harness.py` in sys.modules — `pytest tests/` now collects 4706 / 0 errors (was Interrupted, 2 errors). Updated 3 importers + 2 e2e stale comments; regression guard `tests/test_12509_no_harness_basename_shadow.py`. Verified: collection clean, 8 harness-importing files + guard = 432 passed, integration collects 53. Test-only → no DS/CQ. (Branch off main.)
