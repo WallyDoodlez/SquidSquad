@@ -1066,6 +1066,167 @@ def migration_walk_plan(base_dir=None):
 
 
 # ---------------------------------------------------------------------------
+# Step 7.5c — post-commit harness restart (INSTALLER-ARCH §10.3, #12420)
+# ---------------------------------------------------------------------------
+#
+# After Phase 8's commit (WIZARD.md Step 7.5) the runbook calls `restart-agents`
+# so a *running* squad picks up the freshly-composed CLAUDE.md. The probe +
+# routing + per-alias HTTP are deterministic and belong here, not in runbook
+# prose. The HTTP touchpoint is isolated in `_http_request` so the unit tests
+# can monkeypatch it and never open a socket.
+
+HARNESS_DEFAULT_PORT = 7373       # harness.py default; mirrors cycle_post._HARNESS_DEFAULT_PORT
+HARNESS_PROBE_TIMEOUT = 5         # §10.3: 5-second /status probe
+
+
+def _read_harness_port(base_dir=None):
+    """Read `base_dir/.squidsquad/.harness-port` as an int.
+
+    Defaults to ``HARNESS_DEFAULT_PORT`` when the file is missing, empty, or not
+    a valid integer — same fail-safe the agent boot probe uses
+    (cycle_post._discover_harness_port / WIZARD step:cycle/boot).
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    port_file = Path(base_dir) / ".squidsquad" / ".harness-port"
+    try:
+        return int(port_file.read_text(encoding="utf-8").strip())
+    except (OSError, UnicodeDecodeError, ValueError):
+        return HARNESS_DEFAULT_PORT
+
+
+def _http_request(method, url, timeout, data=None):
+    """The single network seam for the §10.3 restart. Returns ``(status, body)``.
+
+    Raises on any transport failure (``urllib.error.URLError``, ``OSError``,
+    ``socket.timeout`` …). This is the ONLY place the restart helpers touch the
+    network, so the unit tests monkeypatch ``wizard._http_request`` to exercise
+    both the reachable and unreachable branches without a live harness.
+    """
+    import urllib.request
+    if method == "POST" and data is None:
+        data = b""  # explicit Content-Length: 0 — some servers reject body-less POSTs
+    req = urllib.request.Request(url, data=data, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        status = getattr(resp, "status", None) or resp.getcode()
+        return status, resp.read().decode("utf-8", "replace")
+
+
+def _harness_reachable(port, timeout):
+    """True iff ``GET /status`` returns a 2xx within ``timeout`` seconds.
+
+    Any failure — connection refused, timeout, non-2xx, malformed response —
+    means "treat the harness as down and fall through to the cold-start path".
+    """
+    try:
+        status, _ = _http_request("GET", f"http://127.0.0.1:{port}/status", timeout)
+    except Exception:
+        return False
+    return 200 <= status < 300
+
+
+def _install_aliases(base_dir=None):
+    """Sorted alias list from `base_dir/.squidsquad/config.md` `## Aliases`.
+
+    Returns ``[]`` when the config is unreadable or the registry won't parse;
+    the caller surfaces that as an error (a reachable harness with no known
+    aliases cannot be restarted).
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    config_path = Path(base_dir) / ".squidsquad" / "config.md"
+    try:
+        text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    import config as _cfg
+    try:
+        registry = _cfg.parse_aliases_registry(text=text)
+    except Exception:
+        return []
+    return sorted(registry.keys())
+
+
+def _restart_one_alias(base_url, alias, timeout):
+    """POST stop then start for one alias. Returns ``(ok, error_or_None)``."""
+    for action in ("stop", "start"):
+        try:
+            status, _ = _http_request("POST", f"{base_url}/{alias}/{action}", timeout)
+        except Exception as exc:
+            return False, f"{action}: {type(exc).__name__}: {exc}"
+        if not (200 <= status < 300):
+            return False, f"{action}: HTTP {status}"
+    return True, None
+
+
+def restart_agents(base_dir=None, timeout=HARNESS_PROBE_TIMEOUT):
+    """INSTALLER-ARCH §10.3 post-commit harness restart.
+
+    Probe ``GET /status`` (port from `.harness-port`, default 7373, ``timeout``s),
+    then branch:
+
+    - **Reachable** — for each install alias (config `## Aliases`),
+      ``POST /agents/<alias>/stop`` then ``POST /agents/<alias>/start`` (the
+      HARNESS-ARCH §4.1 lifecycle routes; ``{role}`` path-param carries the
+      alias). Best-effort: a per-alias failure is recorded, not fatal — the
+      other agents still restart. The agents respawn in their own process trees
+      and boot the refreshed CLAUDE.md (AC2: no stale-instruction agents).
+    - **Unreachable** — the wizard is ephemeral (Q-new21); it does NOT spawn a
+      detached harness. Report the user-driven cold-start command and let the
+      runbook surface ``./start.sh`` to the user (AC1 "falls through to
+      start.sh").
+
+    ``ok`` is False only when the harness was reachable AND a restart failed (or
+    no aliases were found); an unreachable harness is a normal branch, not an
+    error. Returns a JSON-able dict the runbook consumes.
+    """
+    port = _read_harness_port(base_dir)
+    if not _harness_reachable(port, timeout):
+        return {
+            "ok": True,
+            "reachable": False,
+            "port": port,
+            "cold_start_cmd": "./start.sh",
+            "detail": (
+                f"Harness not reachable on port {port} within {timeout}s — "
+                f"no running squad to refresh. Cold start is user-driven "
+                f"(run ./start.sh); the wizard is ephemeral and never spawns "
+                f"the harness itself (Q-new21)."
+            ),
+        }
+    aliases = _install_aliases(base_dir)
+    if not aliases:
+        return {
+            "ok": False,
+            "reachable": True,
+            "port": port,
+            "aliases": [],
+            "restarted": [],
+            "failures": [],
+            "detail": (
+                "Harness reachable but no aliases found in "
+                ".squidsquad/config.md `## Aliases` — cannot restart."
+            ),
+        }
+    base_url = f"http://127.0.0.1:{port}/agents"
+    restarted, failures = [], []
+    for alias in aliases:
+        ok_alias, err = _restart_one_alias(base_url, alias, timeout)
+        if ok_alias:
+            restarted.append(alias)
+        else:
+            failures.append({"alias": alias, "error": err})
+    return {
+        "ok": not failures,
+        "reachable": True,
+        "port": port,
+        "aliases": aliases,
+        "restarted": restarted,
+        "failures": failures,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Step 1 — project details (auto-fill from gh repo view + git)
 # ---------------------------------------------------------------------------
 
@@ -3006,6 +3167,20 @@ def cmd_stamp_version(args):
     return 0 if ok else 1
 
 
+def cmd_restart_agents(args):
+    """CLI: §10.3 post-commit harness restart (#12420).
+
+    Usage: wizard.py restart-agents [base_dir]
+    Exit 0 on a clean restart OR an unreachable harness (a normal branch — the
+    runbook surfaces ./start.sh); exit 1 when the harness was reachable but a
+    restart failed, so the runbook can show the operator which aliases failed.
+    """
+    base_dir = args[0] if args else None
+    result = restart_agents(base_dir)
+    _print_json(result, ok=result.get("ok", False))
+    return 0 if result.get("ok") else 1
+
+
 def pr_flow_prompt():
     """Return the PR Flow question text and options for the setup agent."""
     return {
@@ -3488,6 +3663,7 @@ def main():
         "upgrade": cmd_upgrade,
         "migration-plan": cmd_migration_plan,
         "stamp-version": cmd_stamp_version,
+        "restart-agents": cmd_restart_agents,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

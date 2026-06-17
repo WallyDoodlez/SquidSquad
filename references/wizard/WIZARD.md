@@ -234,9 +234,9 @@ modify this field themselves.)
 standard installer exactly as in the fresh case. Step 7.3 scaffolds and
 recomposes every `.squidsquad/<alias>/CLAUDE.md` inline from the
 now-current source + migrated L4, writing only fresh-scaffold paths (it
-never overwrites existing files); Step 7.5 commits and pushes. The
-post-commit harness restart is tracked separately (#12420, §10.3) and is
-not yet in this runbook. Existing vault / `working-state.md` /
+never overwrites existing files); Step 7.5 commits and pushes, and Step
+7.5c restarts a running squad so it picks up the refreshed CLAUDE.md
+(INSTALLER-ARCH §10.3). Existing vault / `working-state.md` /
 `iterations/` are never touched.
 
 > **Pre-1.0 / no migrations yet.** `references/migrations/` ships empty
@@ -830,16 +830,56 @@ them plainly that the harness will not start until the deps are installed, and
 show the exact command. (Without `watchdog` specifically, the harness still
 boots but L4 auto-recompose is silently disabled — see #11403.)
 
+### 7.5c — Restart a running squad (INSTALLER-ARCH §10.3)
+
+The commit in 7.5 refreshed every `.squidsquad/<alias>/CLAUDE.md`, but a squad
+that is **already running** is still executing the *old* instructions in memory.
+Restart it so the new instructions take effect — otherwise the re-install
+silently leaves stale-instruction agents live. Run:
+
+```bash
+python references/scripts/wizard.py restart-agents
+```
+
+Parse the JSON envelope. This helper probes the harness (`GET /status` on the
+port in `.squidsquad/.harness-port`, 5s timeout) and branches on `reachable`:
+
+- **`reachable: true`** — a squad is live. The helper has already called
+  `stop` then `start` for each alias (the agents respawn in their own terminals
+  and boot the refreshed CLAUDE.md). Read the result:
+  - `failures` empty (`ok: true`): tell the user, in domain terms, that their
+    running team has been refreshed with the new setup — no action needed.
+  - `failures` non-empty (`ok: false`): list which agents failed to restart
+    (`failures[].alias` / `.error`) and tell the user they can re-run
+    `./start.sh` (Linux/macOS) or `.\start.ps1` (Windows) to bring the whole
+    team back up cleanly. Do NOT roll back — the on-disk install is valid.
+- **`reachable: false`** — no squad is running (nothing to refresh). This is the
+  normal fresh-install / stopped-squad case. The helper does NOT start anything
+  (you are ephemeral — see 7.6); fall through to the cold-start message in 7.6.
+
+**Never auto-spawn the harness yourself here.** On the unreachable path the
+helper deliberately reports the cold-start command instead of running it; the
+user boots the team in their own terminal (Q-new21).
+
 ### 7.6 — Print the "ready" message and exit
 
-Print exactly this (adjust the boot command per OS):
+Then print the closing message. **Adjust it to what 7.5c found** (and adjust
+the boot command per OS):
 
-> SquidSquad ready. To start your team, run:
->
->     ./start.sh            (Linux / macOS)
->     .\\start.ps1          (Windows)
->
-> The harness boots all agents (PM, Verifier, DM, workers) automatically.
+- **A running squad was refreshed** (7.5c `reachable: true`, `ok: true`):
+
+  > SquidSquad is set up and your running team has been refreshed with the new
+  > configuration — no need to restart anything.
+
+- **No squad was running** (7.5c `reachable: false`) — or some agents failed to
+  restart — show the cold-start instructions:
+
+  > SquidSquad ready. To start your team, run:
+  >
+  >     ./start.sh            (Linux / macOS)
+  >     .\\start.ps1          (Windows)
+  >
+  > The harness boots all agents (PM, Verifier, DM, workers) automatically.
 
 Then **exit the conversation**. You are ephemeral (Q-new21) — do NOT
 start the loop yourself, do NOT transition into PM, do NOT keep the
