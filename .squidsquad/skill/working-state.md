@@ -26,8 +26,10 @@ Bug: tests/integration/harness.py shadowed references/scripts/harness.py → pyt
 - **#12506** (improvement-subloop driver) — RCA done, routed to PM; §8.6 arch authored (PR #12518), my-lane impl scope front-loaded (config.md keys + idle-cooldown-loop step5 + boot driver), comes back on §8.6 merge.
 
 ## Installer cluster + new HIGH (queued, fresh context):
-- #12420 (next, above) → #12450 (unit-test detection L3) — rest of serial cluster.
-- #12525 (HIGH — minimal bare-harness launcher start-harness.bat) | #12527 (HIGH — greenfield installer smoke on FOREIGN throwaway repo) | #12526 (bug — start.ps1/.sh clone-sync uses git pull --rebase). All role:skill.
+- #12450 (unit-test detection L3) — blocked behind #12420 (both touch WIZARD.md; no stacking → wait for #12420 merge).
+- #12527 (HIGH — greenfield installer smoke on FOREIGN throwaway repo) — premature until installer cluster (#12420/#12450) merges; would capture a half-built installer.
+- #12526 (bug — start.ps1/.sh clone-sync uses git pull --rebase → should be merge). **CROSS-DEP: when fixed, UPDATE test_12525 AC5 assertions** (test_start_sh_still_full / test_start_ps1_still_full assert `git pull --rebase` present — change to match new merge flag; [[feedback_update_stale_test_on_behavior_reversal]]).
+- #12511 (test-isolation: force-transition tests emit #999 to live bus — careful event_bus.emit stub) | #12519 (tracked .claude/settings.json merge friction — option B .gitattributes merge=ours rec).
 - #12511 (test-isolation: force-transition tests emit #999 to live bus — careful event_bus.emit stub) | #12519 (tracked .claude/settings.json merge friction — option B .gitattributes merge=ours rec).
 
 ## SHIPPED this session (all CLOSED)
