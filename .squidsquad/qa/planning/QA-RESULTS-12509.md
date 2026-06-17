@@ -1,5 +1,45 @@
 # QA-RESULTS #12509 — harness basename shadow fix
 
+## Re-verification (cy273, 2026-06-17) — verdict: FAIL (3rd) → in-progress (skill)
+Branch squidsquad/task/12509 @ 59e5c9aa3 ("assert harness resolution via find_spec — no execute, no sys.modules mutation (QA cy270)").
+
+The cy270 recommendation #1 (find_spec, no import/execute) was applied. **Contamination still persists**
+— the count dropped 7→5 but `pytest tests/` still does NOT run clean.
+
+| TC | Result | Evidence |
+|----|--------|----------|
+| AC1 collection | ✅ PASS | `pytest tests/ --co` → 4709, 0 errors. |
+| AC2 full-run clean | ❌ **FAIL** | `12509 → feat_10681` → **5 failed**; trio `12509+12460+feat_10681` → **6 failed**. |
+| AC4 non-contaminating test | ❌ **FAIL** | culprit STILL `test_bare_harness_import_resolves_to_real_harness`: deselect it → **13 passed** (clean); controls clean (feat_10681 alone 11✓; test_12460→feat_10681 35✓). |
+
+### Investigation (why find_spec didn't fix it)
+- Isolated probe: `importlib.util.find_spec("harness")` does NOT mutate `sys.modules['harness']`
+  (same object, still cached) — find_spec is clean standalone.
+- The fn's only mutations now are `find_spec` + a leftover `sys.path.insert(0, SCRIPTS_DIR)` — and
+  `feat_10681` itself already does the identical `sys.path.insert(0, SCRIPTS)` + `from harness import
+  HarnessState` at collection (its lines 28-29). Yet running the fn in-suite still diverges the
+  module identity feat_10681 patches (`patch("harness.HARNESS_STATE_FILE")` no longer redirects →
+  `assertTrue(state_file.exists())` False — SAME failure class as cy251/cy270).
+- So the residual vector is an environmental collection-order interaction, not the obvious call. Two
+  in-process attempts (snapshot+restore sys.modules; find_spec) have now both failed to make this
+  isolation-safe.
+
+### Required fix (cy273) — DROP the function
+**Recommendation: delete `test_bare_harness_import_resolves_to_real_harness`.** The other two guards
+already FULLY lock the #12509 regression with ZERO import machinery and pass cleanly:
+- `test_renamed_helper_present_old_name_gone` — asserts `integration/harness.py` absent +
+  `integration_harness.py` present.
+- `test_no_test_dir_module_shadows_a_scripts_module` — asserts no test-dir basename collides with any
+  `references/scripts/` module (the general form — prevents ANY reintroduction).
+A reintroduced colliding basename fails those two; the third fn (asserting `import harness` resolves
+to the supervisor) adds marginal coverage at the cost of recurring suite contamination. If the
+"resolves to real harness" assertion is deemed essential, run it in a **subprocess** (cy270 option 2)
+so all import-state side effects die with the child — never in-process.
+
+After: confirm `pytest tests/` collects AND runs clean (check `12509 → feat_10681` ordering), run_tests.py green.
+
+---
+
 ## Re-verification (cy270, 2026-06-17) — verdict: FAIL (2nd) → in-progress (skill)
 Branch squidsquad/task/12509 @ 728142808 ("isolate the regression test's sys.modules mutation (QA cy251)").
 
