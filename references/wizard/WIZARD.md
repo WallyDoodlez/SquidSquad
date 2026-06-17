@@ -114,44 +114,114 @@ This creates `~/.squidsquad/`, `secrets` (restricted permissions), and `config` 
 
 ---
 
-## Step 0b — Re-run detection
+## Step 0b — Re-run detection + migration walk
 
 Run `python references/scripts/wizard.py check-existing` and parse JSON.
 
-- **`exists: false`**: skip to Step 1.
+- **`exists: false`** (fresh install): skip to Step 1.
 
-- **`exists: true`**: present the user with a 3-way prompt. Summarise
-  what was found using the `contents`, `has_config`, and `has_roles`
-  flags from the response. Example:
+- **`exists: true`** (existing install): the default path is the
+  **migration walk** (INSTALLER-ARCH §10) — there is no separate
+  "upgrade flow"; the walk is one step of the standard installer and
+  every other step runs identically. Summarise what was found (from
+  `contents`, `has_config`, `has_roles`) and offer three choices:
 
-  > I see you already have SquidSquad here: `pm/`, `designer/`, and `dm/`
-  > are set up. Config file is present. What would you like to do?
+  > I see SquidSquad is already set up here: `pm/`, `skill/`, `dm/`,
+  > config present. What would you like to do?
   >
-  > 1. **Abort** (default — no changes). Press Enter.
-  > 2. **Regenerate templates only** — refresh role CLAUDE.md files from
-  >    the latest upstream templates, leave your config and state alone.
-  > 3. **Full rebuild** — delete everything and start over (your
-  >    working state, iteration logs, and vault content will be lost).
+  > 1. **Upgrade** (default — press Enter). Bring this install up to the
+  >    current version by walking any pending migrations, then refresh
+  >    the composed agent files. Your config, vault, and working state
+  >    are preserved.
+  > 2. **Full rebuild** — delete everything and start over (working
+  >    state, iteration logs, and vault content will be lost).
+  > 3. **Abort** — no changes.
 
-  Pass the user's answer through
-  `python references/scripts/wizard.py validate-rerun-action <answer>`
-  and use the normalised `action` field:
+  - **Abort**: exit immediately with "no changes made". Exit code 0.
+  - **Full rebuild**: require a typed confirmation — ask the user to
+    type `delete and rebuild` exactly. Anything else returns to this
+    prompt. On confirmation, record the rebuild intent in memory and
+    proceed to Step 1; the actual deletion happens at Step 7.1 (the
+    user can still abort at the Step 6 review). (This is the only path
+    that wipes existing content — the upgrade path never does.)
+  - **Upgrade** (default): run the migration walk below, then continue
+    to Step 1.
 
-  - **`abort`**: exit immediately with "no changes made". Exit code 0.
-  - **`regenerate`**: delegate to `/squidsquad-upgrade` if it exists, or
-    (if no upgrade command exists yet) proceed to Step 7 with
-    `overwrite_existing=True`. Skip Steps 1-6 — we're not re-asking
-    the user's answers, just refreshing templates. The existing
-    `config.md` is read and used as the spec.
-  - **`full-rebuild`**: require a typed confirmation. Ask the user to
-    type the phrase `delete and rebuild` exactly. If they type anything
-    else, return to the 3-way prompt. If they confirm, record the
-    rebuild intent in memory and proceed to Step 1. The actual
-    deletion happens at Step 7 — not Step 0b. The user can still abort
-    at the review screen (Step 6).
+### Step 0b.1 — The migration walk (upgrade path, INSTALLER-ARCH §10)
 
-If `validate-rerun-action` returns `valid: false`, show the user the
-three options again and re-prompt.
+The installer never wipes existing content on the upgrade path: only a
+migration markdown changes existing state (under the three gates below),
+and anything no migration touches is preserved automatically because the
+later steps write only fresh-scaffold paths.
+
+**1. Read the walk plan.** Run
+`python references/scripts/wizard.py migration-plan` and parse JSON:
+
+- **`installer_version_unknown: true`** — `references/VERSION` is
+  missing/unreadable after the source pull; you cannot tell what version
+  this install is moving *to*. **Stop — do not guess.** Tell the
+  operator: "I can't determine the target SquidSquad version
+  (`references/VERSION` is missing) — pull the latest sources and re-run."
+- **`is_noop: true`** (and not unknown) — nothing to migrate (already at
+  or above the installer version, or no migration files apply). Say so
+  briefly ("Already up to date — no migrations to apply."), then skip
+  the per-file loop and go straight to step 4 (stamp + continue).
+- **otherwise** — `chain` is a non-empty ordered list of migration files;
+  proceed to step 2.
+
+**2. Walk the chain — one file at a time, three gates each (§10).** For
+each entry in `chain` **in order**, apply its `path` markdown to the
+on-disk state under all three gates, in order. Migration prose describes
+both **mechanical** changes (deterministic renames / additive defaults —
+apply straight through) and **judgment-call** changes (slot retirements /
+re-routing — surface options to the operator and wait for their choice).
+A file's changes apply **atomically** — all or none.
+
+- **Gate 1 — DeepSeek audit.** Have a deepseek-class model review your
+  planned writes for this file against the migration prose's stated
+  intent (flag a "mechanical" change that isn't deterministic; flag a
+  "judgment-call" change whose option-surfacing dialog is missing). A
+  rejection **stops the walk at this step** (clean — see step 3).
+- **Gate 2 — Mini-CQ.** Summarise the file's changes to the operator in
+  one plain-language line and ask to proceed (e.g. "Migration v1.4 → v1.5
+  wants to rename `Iteration_Interval` and retire the `## Vault` L4 slot
+  — OK?"). A rejection **stops the walk at this step** (clean).
+- **Gate 3 — Compose dry-run.** Run
+  `python references/scripts/compose.py deploy-all --check`. A failure
+  means the migration produced content that doesn't compose — **stop the
+  walk at this step** (clean).
+- All three gates pass → apply this file's changes to disk (atomically),
+  then move to the next chain entry.
+
+**3. Aborting mid-walk (§10.4).** A rejection or failure at any gate for
+step _k_ stops the walk: do **not** apply step _k_ or any later step, do
+**not** advance the version stamp, do **not** recompose, do **not**
+continue to Step 1. Steps 1..k-1 (already gated through and written)
+persist. Tell the operator where it stopped and why — the next installer
+re-run resumes at step _k_. This makes partial walks safe.
+
+**4. Stamp the version.** After the chain is fully applied (or on a
+no-op plan), run
+`python references/scripts/wizard.py stamp-version <installer_version>`
+(the `installer_version` from the plan). This writes the new
+`- **SquidSquad Version**:` line in `config.md` — the only field the
+installer writes outside the three gates. (Migration files MUST NOT
+modify this field themselves.)
+
+**5. Continue.** The walk is complete — proceed to Step 1 and run the
+standard installer exactly as in the fresh case. Step 6 (Phase 6)
+recompose regenerates every `.squidsquad/<alias>/CLAUDE.md` from the
+now-current source + migrated L4; Step 7 scaffolding writes only
+fresh paths (never overwrites existing files); Step 8 commits; Step 7.6
+handles the harness restart (#12420). Existing vault / `working-state.md`
+/ `iterations/` are never touched.
+
+> **Pre-1.0 / no migrations yet.** `references/migrations/` ships empty
+> of migration files until the first schema-break release, so on current
+> installs `migration-plan` returns `is_noop: true` with an empty
+> `chain` — the walk simply stamps the current version and continues to
+> Step 1. The walk gains something to iterate on once the first
+> `v<N-1>-to-v<N>.md` ships (see `references/migrations/README.md`).
 
 ---
 
