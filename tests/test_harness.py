@@ -1695,12 +1695,44 @@ class TestEndpointsViaTestClient(unittest.TestCase):
             self.assertEqual(agent.intent, AgentState.INTENT_RESTARTING)
 
     def test_post_shutdown_returns_202(self):
-        """POST /shutdown returns 202 Accepted (non-blocking)."""
+        """POST /shutdown returns 202 Accepted (non-blocking).
+
+        #12720: the handler spawns a `shutdown` DAEMON thread that sleeps
+        then calls ``os._exit(0)``. The ``patch("harness.os._exit")`` MUST
+        outlive that thread. The pre-#12720 version reverted the patch the
+        instant the POST returned 202 — but the daemon thread calls
+        os._exit ~1s LATER, so the REAL ``os._exit(0)`` fired from the
+        daemon thread, hard-killing the whole pytest process (exit 0, no
+        summary, ``pytest.main()`` never returns). In a full ``pytest
+        tests/`` run that surfaced as a false-green truncation at ~58%.
+
+        Fix: patch ``os._exit`` + ``time.sleep`` (drop the 1s wait) and
+        explicitly JOIN the `shutdown` thread inside the patch window so the
+        mock — not the real exit — is what fires, then assert it was called.
+        ``HARNESS_PORT_FILE`` is redirected to a non-existent tmp path so the
+        thread's port-file unlink can never touch the live discovery file.
+        """
+        import tempfile
+        import threading
         # #4792: removed `_has_stop_sentinel` patch — function deleted.
+        fake_port_file = Path(tempfile.gettempdir()) / "sq-12720-nonexistent.harness-port"
         with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
              patch("harness.boot_remote._get_clone_path", return_value="/fake"), \
-             patch("harness.os._exit"):  # Prevent actual exit
+             patch("harness.HARNESS_PORT_FILE", fake_port_file), \
+             patch("harness.time.sleep"), \
+             patch("harness.os._exit") as mock_exit:  # Prevent actual exit
             resp = self.client.post("/shutdown")
+            # The os._exit call happens in the `shutdown` daemon thread, not
+            # synchronously. Join it INSIDE the patch context so the mocked
+            # os._exit is what fires (else the real one kills the process).
+            for t in threading.enumerate():
+                if t.name == "shutdown":
+                    t.join(timeout=10)
+                    self.assertFalse(
+                        t.is_alive(),
+                        "shutdown thread did not finish — os._exit would fire "
+                        "after the patch context exits (#12720 regression)")
+            mock_exit.assert_called_once_with(0)
         self.assertEqual(resp.status_code, 202)
         data = resp.json()
         self.assertEqual(data["status"], "shutting_down")
