@@ -1,9 +1,25 @@
 # Working State
 
-- **Task**: 4 shipped; #12493 + #12492 held on gates; #12506 routed to PM (arch gap)
-- **Status**: #12460 shadow SHIPPED; #12492/#12493 held; #12506 RCA done → arch-first to PM, awaiting §8.6
+- **Task**: #12509 → pending-test (PR #12517); #12493/#12492 held on gates; #12506 w/PM; #12511 next pickup
+- **Status**: 4 shipped; #12509 in verifier's hands; #12492/#12493 held; #12506 w/PM (§8.6); #12511 queued
 - **Updated**: 2026-06-16 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## >>> #12509 → PENDING-TEST (PR #12517) — test 'harness' basename shadow <<<
+Renamed `tests/integration/harness.py` → `integration_harness.py` (git mv) so it stops shadowing `references/scripts/harness.py` in sys.modules — `pytest tests/` now collects 4706 / 0 errors (was Interrupted, 2 errors). Updated 3 importers + 2 e2e stale comments; regression guard `tests/test_12509_no_harness_basename_shadow.py`. Verified: collection clean, 8 harness-importing files + guard = 432 passed, integration collects 53. Test-only → no DS/CQ. (Branch off main.)
+
+## >>> #12511 (NEXT PICKUP, fresh context) — test-isolation: force-transition tests leak real events to live bus <<<
+PM-filed (MEDIUM), assigned to me. **My dup #12510 → CLOSED.** Root cause: unit tests calling real `tracker.transition(... --force)` (test_12475_force_bypasses_legality.py etc.) POST real `status-transition` events to the LIVE harness for placeholder #999 → wakes the whole team (the recurring #999 flurry that plagued THIS session). **Fix design:** autouse fixture in tests/conftest.py stubbing `event_bus.emit` (or the harness POST) for unit tests — CAREFUL: must not break tests that themselves assert emit was called (e.g. test_forced_transition_emits_status_event mocks event_bus directly — per-test mock must take precedence over the autouse no-op). Verify the #999 flurry stops. Active disruption was from MY suite runs (now stopped), so not urgent — but real test-hygiene (CI/other agents). Fresh context warranted (event_bus internals + fixture-interaction care).
+
+## >>> #12506 IMPL SCOPE (front-loaded; HANDS BACK to skill when PR #12518 §8.6 merges) <<<
+PM's DS-audit (deepseek-v4-pro, .squidsquad/pm/planning/AUDIT-AGENT-RUNTIME-86-83-2026-06-16.md) split the work. PM-lane doc fixes already on PR #12518. **MY-LANE items (must land WITH my impl — §8.6.1 arch flags them knowingly-inconsistent until then):**
+1. **config.md `## Improvement Scanning`:** add `- **Idle Scan Burst**: 3`; add `m` unit → `Improvement Scan Cool-Down: 30m` (currently unitless `30`, drifts vs sub-skill/arch).
+2. **idle-cooldown-loop.md step 5:** REMOVE the false 'Monitor delivers NUDGE at a short fixed cadence' claim (the exact #12506 bug); name the **§8.6.1 periodic driver** as the cadence source; KEEP the 'if NUDGE arrives' branch (orthogonal forge-event wake) + cool-down eligibility check unchanged.
+3. **idle-cooldown-loop.md 'Cool-Down Configuration':** document the new `Idle Scan Burst` key (default 3 = bounded burst per idle period).
+4. **The actual driver:** schedule a low-freq cron/`/loop` self-wake at event-mode boot (per §8.6.1), alongside the Monitor (two orthogonal wake sources, no harness change). Wire into event-mode-contract / boot. + tests.
+§8.6.1 audited COMPLEMENTARY to HARNESS-ARCH §15 liveness (no conflict — driver tool-calls generate §15 activity heartbeats).
+**DS-audit pass-2 (CONVERGED, AUDIT-...-pass2.md) refinements:** (a) step-5 rewrite = the WHOLE 'After each empty poll interval' procedural block → describe **periodic-driver-tick re-entry**, not Monitor-poll cadence (the surrounding logic carries the same stale model, not just the one sentence); (b) ship the 3 artifacts ATOMICALLY (step-5 edit + Idle Scan Burst key + m-unit) — do NOT slice #12506.
+**GATE: PR #12518 merge (operator) → reassigns #12506 to skill.** Read both audit files (pass1 + pass2) when on main.
 
 ## >>> #12506 (improvement subloop dormant team-wide) — RCA DONE, routed to PM as ARCH gap <<<
 **RCA (confirmed):** event-mode boot schedules NO periodic driver for idle work — only forge-event wakes. So an idle event-mode agent (pm/skill/dm) never wakes to evaluate the improvement-scan cool-down → scan never fires (dormant for weeks). `idle-cooldown-loop` step 5 ASSUMES a 'fixed-cadence Monitor wake' that `event_poll.py` never delivers (it only NUDGEs on forge events, L325 `if clean or evicted`).

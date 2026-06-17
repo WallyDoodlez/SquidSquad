@@ -105,6 +105,126 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"
+            ],
+            "async": true,
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"
+            ],
+            "async": true,
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"
+            ],
+            "async": true,
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:7373/hooks/pause",
+            "timeout": 5,
+            "headers": {
+              "X-Agent-Role": "${SQUIDSQUAD_ROLE}"
+            },
+            "allowedEnvVars": [
+              "SQUIDSQUAD_ROLE"
+            ]
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:7373/hooks/pause",
+            "timeout": 5,
+            "headers": {
+              "X-Agent-Role": "${SQUIDSQUAD_ROLE}"
+            },
+            "allowedEnvVars": [
+              "SQUIDSQUAD_ROLE"
+            ]
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:7373/hooks/pause",
+            "timeout": 5,
+            "headers": {
+              "X-Agent-Role": "${SQUIDSQUAD_ROLE}"
+            },
+            "allowedEnvVars": [
+              "SQUIDSQUAD_ROLE"
+            ]
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://127.0.0.1:7373/hooks/pause",
+            "timeout": 5,
+            "headers": {
+              "X-Agent-Role": "${SQUIDSQUAD_ROLE}"
+            },
+            "allowedEnvVars": [
+              "SQUIDSQUAD_ROLE"
+            ]
+          }
+        ]
+      }
     ]
   }
 }

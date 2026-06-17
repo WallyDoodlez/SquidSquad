@@ -22,7 +22,7 @@ Establish a single source of truth for how SquidSquad **composes** the per-agent
 >
 > CLI flag names in this codebase (`--role`, `SQUIDSQUAD_ROLE`, `cycle.py status-bar <role>`, `compose.py deploy <role>`) accept **alias** values, not role-class names — the `<role>` parameter name predates the alias/role-class distinction and is preserved for code-compat. Callers (including the installer's Phase 6 invocation, see INSTALLER-ARCH §4.9) pass the install-time alias (e.g. `pm`, `frontend-1`, `verifier`) as the argument. Compose internally resolves the alias → role-class via `.squidsquad/config.md`'s `## Aliases` registry to find the right L4 file. See [AGENT-RUNTIME §5.3 Vocabulary note](AGENT-RUNTIME.md) and [HARNESS-ARCH §10](HARNESS-ARCH.md).
 
-The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault slot content. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their authored sources under `references/sub-skills/` (plain markdown fragments). A **project-scoped Claude-skills installer** that materializes each sub-skill into the project's local `.claude/skills/<name>/SKILL.md` is target-state but not yet shipped — see §4.5.1 Gap.
+The composed CLAUDE.md is a **thin orchestration layer** — it declares an agent's identity, soul, ordered step references, project context, and vault slot content. It does **not** contain the bodies of sub-skills; instead it references them by name from [`sub-skill-catalog.md`](sub-skill-catalog.md). Sub-skill bodies live in their authored sources under `references/sub-skills/` (plain markdown fragments) and are resolved by in-context catalog-lookup when their `→ run sub-skill:` reference is reached. Materializing sub-skills as project-local Claude skills was **decided against** — see §4.5.1.
 
 The composition must:
 
@@ -456,7 +456,7 @@ Compose processes L1-L3 deterministically:
 
 The output of steps 4–5 is the **L1-L3 base composition** — the SquidSquad-shipped orchestration with each layer's inline ops resolved, sub-skill names referenced (not their bodies), and no project (L4) customization yet applied.
 
-**Why references and not inlining**: today's behavior inlined sub-skill bodies via `{{include}}` directives, producing 50KB+ composed CLAUDE.md files where most content was duplicated sub-skill text. Under v2, composed CLAUDE.md is the thin orchestration (5–10KB) and the model invokes sub-skills via the Skill tool when their description matches the situation. The transition is staged — see §10 migration plan.
+**Why references and not inlining**: today's behavior inlined sub-skill bodies via `{{include}}` directives, producing 50KB+ composed CLAUDE.md files where most content was duplicated sub-skill text. Under v2, composed CLAUDE.md is the thin orchestration (5–10KB) and the agent resolves sub-skills by in-context catalog-lookup when an explicit `→ run sub-skill: <name>` reference is reached (see §4.5.1) — not by Skill-tool/description matching. The transition is staged — see §10 migration plan.
 
 ### 4.2 Link: Creative L4 application
 
@@ -540,7 +540,7 @@ Because composed CLAUDE.md emits sub-skill *references* (not bodies) in the `ins
 1. **Extract** every `→ run sub-skill: <name>` reference from the composed-in-memory `instructions` content (grammar defined in §6.2).
 2. **Resolve** each `<name>` against [`sub-skill-catalog.md`](sub-skill-catalog.md). The catalog is the **authoritative gate**:
    - Every reference must have a matching catalog entry. Sub-skills not indexed in the catalog are *not* valid references, even if a same-named file exists on disk.
-   - The catalog's recorded **source path** for that entry must point at an existing file. Today that path is `references/sub-skills/<...>/<name>.md` (plain markdown fragments). Once the project-scoped Claude-skills installer ships (see §4.5.1 Gap callout below), the installer is responsible for materializing each catalog entry as a real Claude skill under the project's local `.claude/skills/` — at that point the catalog's source path stays the same (the `references/` source is authored once, then installed per-project).
+   - The catalog's recorded **source path** for that entry must point at an existing file: `references/sub-skills/<...>/<name>.md` (plain markdown fragments). That source is both the canonical authoring location and the in-context resolution target (catalog-lookup, §4.5.1).
 3. **Reject** if any reference fails either check above (no catalog entry OR catalog entry's source path missing on disk): abort with a diagnostic naming the offending step ID and unresolved sub-skill name. No partial output is written.
 4. **Catalog drift check**: every catalog entry must resolve to a real source file on disk, AND every sub-skill source file under `references/sub-skills/` must have a catalog entry. If either side is out of sync, compose emits a warning listing the drifted entries (catalog rows without a source file and/or source files without a catalog row), then aborts with a diagnostic. The warning before abort is intentional — it gives the operator a complete drift report rather than just the first unresolved name. This is an in-pipeline check, distinct from the §8 source-output sync gates which guard the orthogonal "composed CLAUDE.md is stale relative to its L1-L3 sources" failure mode.
 
@@ -574,22 +574,15 @@ flowchart TB
 
 This is the v2 analogue of v1's "every `{{include}}` directive must resolve to a file" rule — now expressed in terms of sub-skill names against a catalog rather than file paths. The catalog-gated structure (catalog first, then source-path existence) is enforced sequentially: no "union of sources" — a sub-skill is only resolvable if its catalog entry exists *and* its catalog-recorded source file exists.
 
-#### 4.5.1 Gap — Project-scoped Claude-skills installer (not yet shipped)
+#### 4.5.1 Sub-skill resolution model — catalog-lookup (settled)
 
-The composed CLAUDE.md emits `→ run sub-skill: <name>` references in the `instructions` slot, but **today there is no installer step that converts each `references/sub-skills/<name>.md` source into a real Claude skill the agent can invoke via the Skill tool**. Until this installer ships:
+The composed CLAUDE.md emits `→ run sub-skill: <name>` references in the `instructions` slot. An agent resolves each one by **reading the catalog-recorded source file** under `references/sub-skills/` and executing its instructions **in-context**. This is the **settled resolution model**, not a stopgap:
 
 - Catalog rows point at `references/sub-skills/<...>/<name>.md` (markdown sources).
-- An agent encountering `→ run sub-skill: pipeline-sentinel` resolves it by **reading the catalog-recorded source file** and executing its instructions in-context — *not* by invoking the Skill tool.
-- The §4.5 diagram's `references/sub-skills/` lookup is the only on-disk check; there is no `.claude/skills/` lookup today.
+- An agent encountering `→ run sub-skill: pipeline-sentinel` reads the catalog-recorded source file and executes its instructions in-context.
+- The §4.5 diagram's `references/sub-skills/` lookup is the only on-disk check; there is no `.claude/skills/` lookup.
 
-**Target state** (deferred follow-up):
-
-- A new installer step (under `INSTALLER-ARCH.md`) materializes each sub-skill listed in the catalog as a project-local Claude skill at `<project-root>/.claude/skills/<name>/SKILL.md` with appropriate frontmatter. **Project-scope only** — never installed at user-scope (`~/.claude/skills/`); each SquidSquad install owns its own sub-skill set, and skills from one project must not leak into another.
-- Agents would then invoke sub-skills via the Skill tool (`Skill({skill: "<name>"})`) rather than reading source files. The `→ run sub-skill: <name>` reference grammar in composed CLAUDE.md stays the same; only the resolution mechanism changes.
-- Catalog source paths remain rooted at `references/sub-skills/` (the *authored* source). The installer reads from there and writes to the project-local `.claude/skills/`. Catalog entries do not point at `.claude/skills/` — that's an install artifact, not the canonical authoring location.
-- Re-install / version-bump semantics, frontmatter generation, and skill-tool argument grammar all need to be specified in INSTALLER-ARCH before implementation.
-
-Tracker reference: [#10362](https://github.com/WallyDoodlez/SquidSquad/issues/10362) — installer spec follow-up filed against this PR (depends on #10359 merge).
+**Materializing sub-skills as project-local Claude skills** (`.claude/skills/<name>/SKILL.md`, invoked via the Skill tool) **was decided against** — see [[project_subskills_not_skills]] (decided 2026-06-05): sub-skills (agent-internal, compose-time) and Claude Skills (human-facing, slash-invocable) are separate, non-overlapping domains, and materializing sub-skills as Claude Skills would merge them. The former installer follow-up (#10362) is **closed as superseded** (2026-06-16). Any future reduction of in-context load is pursued via **runtime sub-skill resolution (#9968)** — a non-Claude-Skill mechanism — not by converting sub-skills into Claude Skills.
 
 ### 4.6 Assemble: coherence rewrite
 
@@ -1189,7 +1182,7 @@ Today's standalone H2 sections like `## Issue Filing Protocol`, `## Discussion P
 ...
 ```
 
-The how-to for issue filing lives in `references/sub-skills/common/issue-filing.md` (the authored source — a markdown fragment). Once the project-scoped Claude-skills installer ships (§4.5.1), the same source will also be materialized as `<project-root>/.claude/skills/issue-filing/SKILL.md` for invocation via the Skill tool. The composed CLAUDE.md never duplicates that content.
+The how-to for issue filing lives in `references/sub-skills/common/issue-filing.md` (the authored source — a markdown fragment), resolved by in-context catalog-lookup (§4.5.1). The composed CLAUDE.md never duplicates that content.
 
 If the same sub-skill is referenced from multiple steps, the catalog is the single index — composed CLAUDE.md references the sub-skill by name from each step that uses it, and the catalog disambiguates which roles use it and how.
 
@@ -1674,7 +1667,7 @@ Total: ~14 sub-PRs. Comparable to event-arch v2's implementation epic (6 PRs in 
 | **Step ID** | A stable identifier for an instruction step. Grammar: `step:<sub-slot>/<kebab-name>`. Stable across refactors. |
 | **Sub-slot** | A sub-grouping within the `instructions` slot: `boot`, `cycle`, `shutdown`. |
 | **Sub-procedure** | A reusable named procedure (e.g. "file a bug") authored as a **sub-skill** with its own source file and catalog entry in [`sub-skill-catalog.md`](sub-skill-catalog.md). Referenced by name from cycle steps in the composed CLAUDE.md; **never inlined** into it. Replaces today's standalone H2 protocol sections. |
-| **Sub-skill** | A self-contained unit of agent functionality (e.g. `pipeline-sentinel`, `cycle-runner`, `vault-remember`). Authored source lives under `references/sub-skills/` as a markdown fragment. Once the project-scoped Claude-skills installer ships (§4.5.1), the same source is also materialized per-install at `<project-root>/.claude/skills/<name>/SKILL.md` for Skill-tool invocation. Catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md); referenced from composed CLAUDE.md by name. Distinct from the L1-L4 layers — see "Sub-skills vs L1-L4" in the catalog. |
+| **Sub-skill** | A self-contained unit of agent functionality (e.g. `pipeline-sentinel`, `cycle-runner`, `vault-remember`). Authored source lives under `references/sub-skills/` as a markdown fragment, resolved by in-context catalog-lookup (§4.5.1). Catalogued in [`sub-skill-catalog.md`](sub-skill-catalog.md); referenced from composed CLAUDE.md by name. Distinct from the L1-L4 layers — see "Sub-skills vs L1-L4" in the catalog. |
 | **Composed output** | The generated `.squidsquad/<alias>/CLAUDE.md` file — one per running agent instance (alias-keyed, not role-class-keyed; see §1 path-keying terminology). Marked `DO NOT EDIT`; regenerated on every compose run. |
 | **Compose pipeline** | The deterministic L1-L3 merge + creative L4 overlay process implemented in `references/scripts/compose.py`. |
 
