@@ -68,7 +68,17 @@ def test_no_test_dir_module_shadows_a_scripts_module():
 
 def test_bare_harness_import_resolves_to_real_harness():
     """`import harness` resolves to references/scripts/harness.py (the agent
-    supervisor), not a test helper — the exact symbol the victims needed."""
+    supervisor), not a test helper — the exact symbol the victims needed.
+
+    Isolation (QA cy251 / #12509): this asserts a *fresh* resolution, so it must
+    pop the cached `harness` binding — but it MUST then restore the EXACT prior
+    `sys.modules['harness']` object in `finally`. Restoring only `sys.path` (the
+    original bug) leaves a freshly re-imported module bound, so sibling tests
+    collected after this one that do `from harness import ...` bind a different
+    module object than their fixtures set up → order-dependent failures. We
+    snapshot and restore both `sys.modules['harness']` and our `sys.path` insert.
+    """
+    _prior_harness = sys.modules.get("harness")  # may be None (not yet imported)
     sys.path.insert(0, str(SCRIPTS_DIR))
     try:
         # Drop any cached binding so this asserts resolution, not a prior import.
@@ -77,5 +87,11 @@ def test_bare_harness_import_resolves_to_real_harness():
         assert Path(harness.__file__).resolve() == (SCRIPTS_DIR / "harness.py").resolve()
         assert hasattr(harness, "HarnessState"), "real harness must expose HarnessState"
     finally:
+        # Restore the EXACT prior binding so this test cannot poison neighbors.
+        # If there was no prior binding, remove the one we created (absent state).
+        if _prior_harness is not None:
+            sys.modules["harness"] = _prior_harness
+        else:
+            sys.modules.pop("harness", None)
         if sys.path and sys.path[0] == str(SCRIPTS_DIR):
             sys.path.pop(0)
