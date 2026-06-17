@@ -35,17 +35,28 @@ Any delivery manager, any project, runs this lifecycle. Steps 3–4 are the *act
 4. **Publish** — execute the delivery. *(mechanics = L3)*
 5. **Confirm landing** — it reached its destination intact.
 6. **Generate the delivery report** — synthesize the **facts already recorded in the forge** (issue discussion, PR, commits, verification) into a report of what was delivered, done, investigated, changed, and why. **The L2 act is "generate a report from the forge facts"; *what* the report contains, its format, audience, and destination are determined per L3/L4** (an internal audit trail, external release notes, or both — it's a parameter, not a fixed L2 structure). Versioning, changelog format, and release tags are L4 facets of this report; a version-less project still produces a report. **Storage note:** the forge is the audit store for *code/work* facts (what step 6 reads); it is **not** the right home for *new knowledge gained* — that routes to the vault in step 7.
-7. **Contribute institutional knowledge** — having seen the finished deliverable end-to-end, the DM harvests durable learnings and **cross-connections** (e.g. "this client/job relates to that other one," recurring patterns) into the institutional memory (**vault** — the store the forge can't serve, because knowledge is not code-audit).
+7. **Contribute institutional knowledge (vault)** — like **every role at every stage** (planning, task-creation, build, verification, delivery), the DM contributes knowledge gained to the **vault**. *This is not a DM invention:* the vault is the team's **universal (L1)** institutional memory — domain-agnostic, shared by the whole team, and contributed to by all roles (see VAULT-ARCH / the L1 `vault-remember` discipline). The DM's *distinctive* contribution is one of **vantage**: it is the only role that sees the *completed deliverable end-to-end*, so it surfaces cross-connections no single-stage role can (e.g. "this client/job relates to that other one," recurring patterns).
 8. **Handle failure** *(cross-cutting)* — on a failed delivery, roll back and/or route the work back to its owner.
 
 **Default (no L4 policy):** ship each verified item as it's ready — no batching, no version concept.
 
+### Two stores (steps 6 & 7 substrates)
+
+The DM's two "meaning" steps read/write two **distinct stores with different universality**:
+
+| Store | Universality | Holds | DM step |
+|---|---|---|---|
+| **System of record** | **domain-specific** (forge/GitHub for code; an email+spreadsheet store, CRM, etc. for a non-code team) | raw work artifacts + the code/work audit trail | step 6 **reads** it → generates the report |
+| **Vault** | **universal (L1)**, domain-agnostic | distilled institutional knowledge that **references** the external artifacts (rather than storing them) | step 7 **writes** it (as do all roles) |
+
+Consequence: **step 6's fact-source is L3-bound** ("the forge" is the *code* binding of "the system of record"); **step 7's store is L1-universal** (the vault is the same for every team and domain).
+
 ## 4. What the DM fundamentally is
 
-Not a "shipper." The DM is the **deliverer + the historian + the knowledge-harvester**:
+Not a "shipper." The DM is the **deliverer + the historian + an end-to-end knowledge vantage**:
 - **Deliverer** (steps 3–5) — gets verified work to its destination.
-- **Historian** (step 6) — produces the definitive operator-facing record / audit trail of what happened.
-- **Knowledge-harvester** (step 7) — the natural catch-point for content-level cross-connections, because it sees completed deliverables whole.
+- **Historian** (step 6) — generates the report from the system-of-record facts.
+- **End-to-end vantage** (step 7) — the DM is *not* the only knowledge contributor (every role feeds the universal L1 vault); it is distinguished only by **vantage** — it sees completed deliverables whole, so it catches cross-connections single-stage roles miss.
 
 **The original problem dissolves:** "bump every 10 features" is simply an **L4 record-policy** layered onto step 6 — *accumulate deliveries; every 10th, the record stamps a semver bump + tag.* The generic DM never knows about it.
 
@@ -66,8 +77,8 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 | 3 | Package | **L3-overridable** | *what a deliverable is* = domain mechanics |
 | 4 | Publish | **L3-overridable** (+ L4 target) | mechanism class = L3; concrete target = L4 |
 | 5 | Confirm landing | **L2-complete** (+ L3 probe) | "did it arrive" is universal; the probe may be domain-specific |
-| 6 | Generate the delivery report | **L2 act + L3/L4 output** | L2 = "generate a report from the forge facts"; the report's *content/format/audience/destination* (incl. version, changelog, release notes) = L3/L4. Reads forge (code/work audit store). |
-| 7 | Contribute institutional knowledge | **L2 act + L3/L4 flavor** | the *harvest* is universal; *what to look for* may be domain/project flavored. Writes the **vault** (the store the forge can't serve). |
+| 6 | Generate the delivery report | **L2 act + L3 fact-source + L3/L4 output** | L2 = "generate a report from the facts in the system of record"; the **system of record is L3-bound** (forge=code); report *content/format/audience/destination* (version, changelog, release notes) = L3/L4. |
+| 7 | Contribute institutional knowledge | **L1 mechanism + DM vantage** | the vault-contribution *act* is **universal L1** (all roles, all stages — not DM-invented); the DM's only distinction is its end-to-end **vantage** (surfaces cross-connections). Writes the **vault** (L1, domain-agnostic). |
 | 8 | Handle failure | **L2-complete** (+ L3 rollback) | route-back is universal; rollback mechanics may be domain |
 
 ### Open questions
@@ -86,3 +97,4 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 - **2026-06-17 (DRAFT kickoff)** — Created from operator+PM discussion. Captured: the layering principle (L2 parameterizes, never hardcodes), the L2 lifecycle spine (with the operator's correction that *version* is not a spine step and *document the delivery / audit trail* is the universal step), the DM-as-deliverer+historian+knowledge-harvester conception, the verifier-counter-leak correction, and three open questions for the polish pass.
 - **2026-06-17 (reframe — override = existing compose)** — Operator correction: the override mechanism is NOT new — it is the existing L1–L4 compose machinery (slot + ordinal + the `replace`/`insert`/`append` op grammar, COMPOSE-ARCHITECTURE §3.2–§3.3). Reframed §2: "L2 is mostly slots" = the spine authored as addressable step-units; L3/L4 override the *how* of specific steps via the standard op grammar. The real work is per-step **classification** (§6: L2-complete / L3-overridable / L4-overridable) + step **addressability**, not designing a mechanism. Added §6 classification table + Q4 (addressability).
 - **2026-06-17 (step 6 deep-dive)** — Operator refinement: step 6 L2 act = **"generate a report from the facts in the forge"**; the report's content/format/audience/destination are L3/L4 (collapses the earlier 6a/6b split into a single L2 act with L3/L4-parameterized output). **Storage-by-type** distinction added: forge = code/work audit store (step 6 reads it); vault = new-knowledge store (step 7 writes it), because the forge isn't the right home for knowledge.
+- **2026-06-17 (step 7 / vault elevation)** — Operator: institutional knowledge is **universal (L1)** — every role at every stage (plan / task / verify / build / deliver), in **any domain** (a code team or an accountant team on emails+spreadsheets), contributes knowledge to the **vault**, which holds distilled knowledge and **references** external artifacts. So step 7 is NOT a DM invention — it is the DM's instance of the L1 vault-contribution, distinguished only by the DM's **end-to-end vantage**. Added the **two-stores** model (system-of-record = domain-specific/L3-bound, read by step 6; vault = universal/L1, written by step 7), which also resolves the step-6 fact-source question (fact-source is L3-bound; 'the forge' is the code binding of 'the system of record').
