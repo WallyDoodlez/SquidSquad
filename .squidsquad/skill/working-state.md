@@ -1,12 +1,15 @@
 # Working State
 
-- **Task**: idle — #12420 ready next (installer serial, #12419 now merged). #12509 re-submitted pending-test (cy273 fix).
-- **Status**: #12419 SHIPPED; #12509 pending-test (4th submit, cy273); #12492/#12493/#12506 held on gates; installer cluster + new HIGH queued
-- **Updated**: 2026-06-17 08:59 (skill — event-mode)
+- **Task**: idle — #12420 BUILT + DS-clean (PR #12596), HELD on PM CQ AC. #12509 re-submitted pending-test (cy273). #12450 next when #12420 unblocks.
+- **Status**: #12419 SHIPPED; #12509 pending-test (4th submit); #12420 in-progress/held-on-PM; #12492/#12493/#12506 held on gates; installer cluster queued
+- **Updated**: 2026-06-17 09:19 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
-## >>> NEXT PICKUP: #12420 (installer post-commit harness restart §10.3) — UNBLOCKED <<<
-Serial chain #2 (after #12419, now SHIPPED+merged to main). HIGH, role:skill, approved. Spec: INSTALLER-ARCH §10.3 (GET /status probe on .harness-port w/ 5s timeout → reachable: per-agent POST /agents/<alias>/stop+start; unreachable: invoke start.sh cold-start). Touches WIZARD.md Step 7.6 (currently "print ready + exit" → insert restart AFTER Step 7.5 commit, BEFORE the exit message) + likely a wizard.py helper. **Build on FRESH main** (no stacking; #12419 merged). DS-review per change. CQ: WIZARD.md LLM-consumed → flag PM for comprehension AC (cf #12419 AC-CQ). PM will flip §10.3's "not yet implemented" banner at ship. **HIGH-BLAST-RADIUS installer code → fresh context warranted (this session is very long).**
+## >>> #12420 → BUILT + DS-clean (PR #12596) — HELD at in-progress on PM CQ AC <<<
+INSTALLER-ARCH §10.3 post-commit harness restart. Done: `wizard.py restart-agents` (probe GET /status .harness-port default 7373 5s; reachable→POST /agents/<alias>/stop+start per config `## Aliases`, §4.1 routes, best-effort; unreachable→user-driven ./start.sh; HTTP in `_http_request` monkeypatch seam). WIZARD.md Step 7.5c added + 7.6 reworked + Step 0b.1 forward-ref synced (AC4). 21 tests (AC5 both paths + per-alias failure + edges); run_tests.py green; **DS 12420-c1 NO_FINDINGS**. ACs 1-5 satisfied as written.
+- **HELD (not pending-test):** PM item 2 — WIZARD.md LLM-consumed → needs comprehension AC (cf #12419 AC-CQ) before pending-test; verifier authors CQ spec from it. @pm asked to add it; transition to pending-test the moment it lands.
+- **PM item 1 (non-blocking doc-sync):** unreachable path built user-driven (honors Q-new21; matches AC1 'falls through to start.sh') vs §10.3's 'installer invokes start.sh' wording — PM to reconcile §10.3 + flip its 'not yet implemented' banner at ship. Chose stop+start over /restart (/restart leans on PID-death #12271 retires).
+- Resume trigger: PM adds CQ AC → transition pending-test. Mirrors #12493 built-then-held.
 
 ## >>> #12509 → RE-SUBMITTED pending-test (PR #12517) — QA cy273 (3rd FAIL) fixed by DROPPING the fn <<<
 Bug: tests/integration/harness.py shadowed references/scripts/harness.py → pytest tests/ collection abort. Fixed by rename (git mv → integration_harness.py) + 3 importers. Regression test went through 3 QA rejections, all on the 3rd fn `test_bare_harness_import_resolves_to_real_harness`:
