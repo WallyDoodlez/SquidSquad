@@ -1,5 +1,54 @@
 # QA-RESULTS #12509 — harness basename shadow fix
 
+## Re-verification (cy270, 2026-06-17) — verdict: FAIL (2nd) → in-progress (skill)
+Branch squidsquad/task/12509 @ 728142808 ("isolate the regression test's sys.modules mutation (QA cy251)").
+
+The cy251 fix WAS applied — `test_bare_harness_import_resolves_to_real_harness` now snapshots
+`_prior_harness = sys.modules.get("harness")` and restores the exact prior binding (or removes it)
+in `finally`, not just `sys.path`. That addressed my literal cy251 suggestion. **But the
+contamination persists** — my cy251 root-cause was necessary-but-INSUFFICIENT.
+
+| TC | AC | Result | Evidence |
+|----|----|--------|----------|
+| TC1 | AC1 collection | ✅ PASS | `pytest tests/ --co -q` → 4709 collected, 0 errors. |
+| TC2 | AC2 full-run clean | ❌ **FAIL** | `12509 + 12460 + feat_10681` → **6 failed, 32 passed**. `12509 → feat_10681` → **7 failed**. |
+| TC3 | AC3 integration | ✅ PASS | `run_tests.py` exit 0, cleanup OK. |
+| TC4 | AC4 non-contaminating regression test | ❌ **FAIL** | culprit pinned (below). |
+| TC5 | AC5 no product regression | ✅ PASS | feat_10681 ALONE → 11 passed; test_12460 ALONE → 24 passed. |
+
+### Culprit pinned exactly
+`tests/test_12509_no_harness_basename_shadow.py::test_bare_harness_import_resolves_to_real_harness`:
+- DESELECT it → `12509 + feat_10681` = **13 passed, 1 deselected** (clean).
+- That fn alone + feat_10681 → **7 failed**.
+- Reversed (feat_10681 → 12509) → 14 passed (strictly "12509 runs first poisons later").
+
+### Why the cy251 fix didn't work (mechanism)
+The fn still executes a LIVE `import harness` after `sys.modules.pop("harness", None)`. That
+RE-EXECUTES the load-bearing `references/scripts/harness.py` mid-suite, creating a second module
+object and perturbing global import state in ways the snapshot/restore of *only*
+`sys.modules['harness']` + `sys.path` does NOT undo. Proof of residue: after this fn runs,
+`test_feat_10681`'s `with patch("harness.HARNESS_STATE_FILE", state_file)` no longer redirects the
+write — `save_state()` writes elsewhere and `assertTrue(state_file.exists())` fails (the patched
+module object and the `HarnessState` the test imported at collection have diverged). The re-import
+has side effects beyond the single restored key, so snapshot-one-key can't make it safe.
+
+### Required fix (worker) — stronger than cy251
+Do NOT pop + live-`import` a load-bearing module inside an in-process test. Pick one:
+1. **Assert resolution without importing**: `importlib.util.find_spec("harness").origin` ==
+   `references/scripts/harness.py` (SCRIPTS_DIR on path) — same assertion, zero global-state mutation.
+2. **Subprocess isolation**: run the `import harness; assert harness.__file__...` check in a
+   subprocess so import-state side effects die with the child.
+3. **Drop the fn**: the other two guards (`test_renamed_helper_present_old_name_gone` +
+   `test_no_test_dir_module_shadows_a_scripts_module`) already lock the regression statically without
+   touching import state — fn #3 is redundant AND harmful.
+
+After the fix re-confirm: `pytest tests/` collects AND runs clean (check `12509 → feat_10681`
+specifically), and `run_tests.py` still green.
+
+---
+
+## (cy251, 2026-06-16 — first verdict: FAIL → in-progress)
+
 **Verdict: FAIL** → in-progress (skill). **Cycle 251, 2026-06-16. Branch squidsquad/task/12509, PR #12517.**
 
 ## Results
