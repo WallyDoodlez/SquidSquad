@@ -40,6 +40,23 @@ Any delivery manager, any project, runs this lifecycle. Steps 3–4 produce + co
 
 **Default (no L4 policy):** ship each verified item as it's ready — no batching, no version concept.
 
+### Package & Publish across professions (L3 mechanics)
+
+The L2 essence is **Package = make it *exist/available* ("it's there"); Publish = make it *known* ("they know it's there")**. The *mechanics* are the L3 binding:
+
+| Profession | **Package** = make available (complete product) | **Publish** = make known |
+|---|---|---|
+| **Software** | build + **deploy** to prod (+ user docs / README) | release announcement / version tag / notify users |
+| **Frontend/web** | build bundle + deploy to host/CDN (+ docs) | announce release, share prod URL, marketing |
+| **Library (npm/pypi)** | build the distributable (+ API docs) | `npm publish` to registry + release notes |
+| **Mobile** | build + sign the binary (+ store assets) | submit to store + store listing |
+| **Law firm** | assemble + **file** the document/filing (+ exhibits, cover) | **notify the client/court** it's filed & ready |
+| **Accounting** | finalize the return/report (+ summary memo) | submit to the authority + notify client |
+| **Content/marketing** | finalize the asset | post it live + **promote/advertise** |
+| **Design** | export final assets (+ usage guide) | deliver to client + portfolio/announce |
+
+Validations: for **library** and **content**, "package"/"publish" are *literally* the domain verbs. **SquidSquad's DM (L3 skill-dev):** Package = merge-to-main + `compose`; Publish = ship-comment + CHANGELOG. The parenthetical "(+ docs)" in each Package cell is the DM **completing the product** — what the technical workers don't finish.
+
 ### Two stores (steps 5 & 6 substrates)
 
 The DM's two "meaning" steps read/write two **distinct stores with different universality**:
