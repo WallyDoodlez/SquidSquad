@@ -169,7 +169,7 @@ import reboot_agent
 
 try:
     from fastapi import FastAPI, HTTPException, Request
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse, Response
     import uvicorn
 except ImportError:
     print(
@@ -2731,7 +2731,13 @@ async def receive_event(request: Request):
         )
         # 204 No Content — caller succeeds (emit is fire-and-forget per
         # event_bus.emit's contract) but we don't store the event.
-        return JSONResponse(status_code=204, content={})
+        # MUST be body-less: a 204 carrying a JSON body (the old
+        # `JSONResponse(status_code=204, content={})`) makes h11 raise
+        # `LocalProtocolError: Too much data for declared Content-Length` on the
+        # real uvicorn server — h11 forbids a body on 204, so the 2-byte `{}`
+        # overruns the (zero) allowed length, poisoning the keep-alive
+        # connection and stalling subsequent event delivery (#12574).
+        return Response(status_code=204)
 
     # Stamp received_at for ordering (#5622)
     body["received_at"] = time.time()
