@@ -100,12 +100,10 @@ def pytest_runtest_protocol(item, nextitem):
     return (yield)
 
 
-@pytest.hookimpl(wrapper=True)
-def pytest_runtest_teardown(item, nextitem):
-    res = yield  # run the real teardown (a test that joins its thread cleans up)
+def _assert_no_leaked_threads(item):
     baseline = getattr(item, "_sq_thread_baseline", None)
     if baseline is None:
-        return res
+        return
     leaked = _guard_leaked_threads(baseline)
     if leaked:
         desc = ", ".join(f"{t.name!r}(daemon={t.daemon})" for t in leaked)
@@ -118,6 +116,21 @@ def pytest_runtest_teardown(item, nextitem):
             f"join it INSIDE the os._exit patch context.",
             pytrace=False,
         )
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown(item, nextitem):
+    # The leak check MUST run even when the real teardown raises — a test that
+    # fails teardown AND leaks a `shutdown` thread must not escape the guard
+    # (DS-c1 F5). On the exception path the original teardown error is re-raised
+    # only if there is no leak; a leak supersedes it (it is the safety-critical
+    # signal — it would otherwise hard-kill the process).
+    try:
+        res = yield
+    except BaseException:
+        _assert_no_leaked_threads(item)
+        raise
+    _assert_no_leaked_threads(item)
     return res
 
 

@@ -12,10 +12,22 @@ These lock the guard's classification logic so a future edit can't silently
 neuter it (the guard catches its own regressions only if it still works).
 """
 
+import sys
 import threading
 import time
+from pathlib import Path
 
-import conftest  # tests/conftest.py — on sys.path during the run (#11394 gate)
+# Match the repo convention (cf. test_11394_static_discovery.py,
+# test_references.py): make tests/ importable so `import conftest` resolves
+# without relying on another test file having inserted the path first (DS-c1
+# F1). pytest's prepend importmode loads tests/conftest.py as module `conftest`
+# (there is no tests/__init__.py), so this reuses that same module — it does
+# not double-register the hooks.
+TESTS_DIR = Path(__file__).resolve().parent
+if str(TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(TESTS_DIR))
+
+import conftest  # noqa: E402  — tests/conftest.py (the thread-leak guard)
 
 
 def _baseline():
@@ -73,6 +85,9 @@ def test_dangerous_named_daemon_is_flagged():
 def test_allowlisted_thread_is_tolerated():
     base = _baseline()
     stop = threading.Event()
+    assert conftest._GUARD_ALLOWED_THREAD_NAMES, (
+        "_GUARD_ALLOWED_THREAD_NAMES is empty — cannot verify allowlist logic "
+        "(DS-c1 F3)")
     name = next(iter(conftest._GUARD_ALLOWED_THREAD_NAMES))
     t = threading.Thread(target=stop.wait, name=name, daemon=False)
     t.start()

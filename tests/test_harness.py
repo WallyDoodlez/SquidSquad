@@ -11,7 +11,7 @@ import sys
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 # Add scripts to path
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "references" / "scripts"
@@ -1716,26 +1716,45 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         import threading
         # #4792: removed `_has_stop_sentinel` patch — function deleted.
         fake_port_file = Path(tempfile.gettempdir()) / "sq-12720-nonexistent.harness-port"
+        thread_found = False
+        thread_alive_after_join = None
+        # NOTE: time.sleep is deliberately NOT patched. The daemon thread does
+        # time.sleep(1) before os._exit, so leaving the real sleep in place
+        # guarantees the thread is still alive (sleeping) when we enumerate it
+        # right after the POST — eliminating the race where a no-op sleep lets
+        # the thread finish before we can find and join it (DS-c1 F4 follow-up).
         with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
              patch("harness.boot_remote._get_clone_path", return_value="/fake"), \
              patch("harness.HARNESS_PORT_FILE", fake_port_file), \
-             patch("harness.time.sleep"), \
              patch("harness.os._exit") as mock_exit:  # Prevent actual exit
             resp = self.client.post("/shutdown")
             # The os._exit call happens in the `shutdown` daemon thread, not
             # synchronously. Join it INSIDE the patch context so the mocked
             # os._exit is what fires (else the real one kills the process).
+            # CAPTURE state here but assert OUTSIDE the block: a failing assert
+            # inside would revert the os._exit patch while the thread may still
+            # be alive, letting the REAL os._exit(0) hard-kill pytest — the very
+            # bug under test (DS-c1 F4).
             for t in threading.enumerate():
                 if t.name == "shutdown":
+                    thread_found = True
                     t.join(timeout=10)
-                    self.assertFalse(
-                        t.is_alive(),
-                        "shutdown thread did not finish — os._exit would fire "
-                        "after the patch context exits (#12720 regression)")
-            mock_exit.assert_called_once_with(0)
+                    thread_alive_after_join = t.is_alive()
+                    break
+            exit_call_count = mock_exit.call_count
+            exit_call_args = mock_exit.call_args
         self.assertEqual(resp.status_code, 202)
         data = resp.json()
         self.assertEqual(data["status"], "shutting_down")
+        # Assertions OUTSIDE the patch context — by here os._exit is the real
+        # builtin again, but the daemon thread has already been joined dead.
+        self.assertTrue(thread_found, "shutdown daemon thread was never spawned")
+        self.assertFalse(
+            thread_alive_after_join,
+            "shutdown thread did not finish within join timeout — its os._exit "
+            "would fire after the patch context exits (#12720 regression)")
+        self.assertEqual(exit_call_count, 1, "os._exit not called exactly once")
+        self.assertEqual(exit_call_args, call(0), "os._exit not called with 0")
 
     def test_unknown_role_returns_404(self):
         """POST /agents/{unknown}/start returns 404."""
