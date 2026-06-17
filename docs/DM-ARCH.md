@@ -23,35 +23,35 @@ This doc defines the DM as a layered role so the generic essence lives at L2, do
 
 **L3-vs-L4 crux:** L3 = the *mechanism class* ("deploy to a host"); L4 = the *concrete target* ("**this** Vercel project, **this** branch"). Keep them separate or the L3 variants won't be reusable across installs.
 
-**The real design work** is therefore NOT a mechanism — it is **(a)** author each spine step as a discrete, stably-addressable unit (so ops can target "step 6: Document" specifically), and **(b)** classify each step's *how* as **L2-complete** (universal), **L3-overridable** (domain mechanics), or **L4-overridable** (project policy). §6 tracks that classification.
+**The real design work** is therefore NOT a mechanism — it is **(a)** author each spine step as a discrete, stably-addressable unit (so ops can target a step (e.g. "Package" or "Publish") specifically), and **(b)** classify each step's *how* as **L2-complete** (universal), **L3-overridable** (domain mechanics), or **L4-overridable** (project policy). §6 tracks that classification.
 
 ## 3. The generic DM lifecycle (L2 spine)
 
-Any delivery manager, any project, runs this lifecycle. Steps 3–4 are the *act* of delivery; steps 6–7 are its *meaning*.
+Any delivery manager, any project, runs this lifecycle. Steps 3–4 produce + confirm the deliverable; 5–6 are its *meaning* (record + knowledge); 7 announces it. **Publish is the last step** — you only advertise once it's deployed, confirmed, recorded, and learnings captured.
 
 1. **Detect ready work** — something is verified and cleared for delivery.
 2. **Pre-flight** — the deliverable is coherent and complete (nothing half-merged, deps satisfied).
-3. **Package** — assemble the actual deliverable (the thing that goes out). *(form = L3)*
-4. **Publish** — execute the delivery. *(mechanics = L3)*
-5. **Confirm landing** — it reached its destination intact.
-6. **Generate the delivery report** — synthesize the **facts in the system of record** (for code: forge issue discussion, PR, commits, verification) **and traverse the vault knowledge graph** to attribute *what knowledge informed the delivery* (e.g. "this delivery drew on knowledge K, which summarizes external doc D"). Covers what was delivered, done, investigated, changed, why — plus provenance. **The L2 act is "generate a report from the recorded facts + the knowledge graph"; *what* the report contains, its format, audience, and destination are determined per L3/L4** (internal audit trail, external release notes, or both — a parameter, not a fixed L2 structure). Versioning, changelog format, and release tags are L4 facets; a version-less project still produces a report.
-7. **Contribute institutional knowledge (vault graph)** — like **every role at every stage** (planning, task-creation, build, verification, delivery), the DM contributes knowledge gained to the **vault**. *This is not a DM invention:* the vault is the team's **universal, L1-exclusive** institutional memory — a **knowledge graph** (PARAG + Galaxy Zettelkasten; `[[wikilinks]]` are the edges; `resources/` **summarize-and-reference** external artifacts) — domain-agnostic and contributed to by all roles (see VAULT-ARCH / the L1 `vault-remember` discipline). The DM **adds nodes and `[[wikilink]]` edges**; its *distinctive* edges are the **cross-connections** its end-to-end **vantage** surfaces ("this client/job relates to that other one," recurring patterns) that no single-stage role sees.
-8. **Handle failure** *(cross-cutting)* — on a failed delivery, roll back and/or route the work back to its owner.
+3. **Package** — produce a **complete, well-rounded product** at its destination — *not just the raw technical artifact.* The technical workers produce the technical work; the DM **completes the product** by adding what they don't: **product documentation** (user guide / README / API ref / manuals for software or hardware), polish, and completeness, so a *consumer* receives a finished product, not raw output. *(mechanic = L3 — deploy / file / export / sign; what "completes the product" = L3.)* **Note — two different "documentations":** the **product docs** here are *part of the deliverable* (ship with it); the **delivery report** in step 5 is *a record about the delivery* (not part of the product).
+4. **Confirm landing** — the deliverable reached its destination intact / is available. *(probe = L2 + L3.)*
+5. **Generate the delivery report** — synthesize the **facts in the system of record** (for code: forge issue discussion, PR, commits, verification) **and traverse the vault knowledge graph** to attribute *what knowledge informed the delivery* (e.g. "this delivery drew on knowledge K, which summarizes external doc D"). Covers what was delivered, done, investigated, changed, why — plus provenance. **The L2 act is "generate a report from the recorded facts + the knowledge graph"; *what* the report contains, its format, audience, and destination are determined per L3/L4** (internal audit trail, external release notes, or both — a parameter, not a fixed L2 structure). Versioning, changelog format, and release tags are L4 facets; a version-less project still produces a report.
+6. **Contribute institutional knowledge (vault graph)** — like **every role at every stage** (planning, task-creation, build, verification, delivery), the DM contributes knowledge gained to the **vault**. *This is not a DM invention:* the vault is the team's **universal, L1-exclusive** institutional memory — a **knowledge graph** (PARAG + Galaxy Zettelkasten; `[[wikilinks]]` are the edges; `resources/` **summarize-and-reference** external artifacts) — domain-agnostic and contributed to by all roles (see VAULT-ARCH / the L1 `vault-remember` discipline). The DM **adds nodes and `[[wikilink]]` edges**; its *distinctive* edges are the **cross-connections** its end-to-end **vantage** surfaces ("this client/job relates to that other one," recurring patterns) that no single-stage role sees.
+7. **Publish (the last step)** — **make the delivery *known*** to its audience: announce/advertise that it is available. (Package made it *exist*; publish makes it *known*.) For code = release announcement / version tag / notify users; law firm = notify the client/court it's filed; content = promote it. *(mechanic + audience = L3/L4.)*
+8. **Handle failure** *(cross-cutting)* — on a failed delivery at any step, roll back and/or route the work back to its owner.
 
 **Default (no L4 policy):** ship each verified item as it's ready — no batching, no version concept.
 
-### Two stores (steps 6 & 7 substrates)
+### Two stores (steps 5 & 6 substrates)
 
 The DM's two "meaning" steps read/write two **distinct stores with different universality**:
 
 | Store | Universality | Holds | DM step |
 |---|---|---|---|
-| **System of record** | **domain-specific** (forge/GitHub for code; an email+spreadsheet store, CRM, etc. for a non-code team) | raw work artifacts + the code/work audit trail | step 6 **reads** it → generates the report |
-| **Vault** | **universal (L1)**, domain-agnostic | distilled institutional knowledge that **references** the external artifacts (rather than storing them) | step 7 **writes** it (as do all roles) |
+| **System of record** | **domain-specific** (forge/GitHub for code; an email+spreadsheet store, CRM, etc. for a non-code team) | raw work artifacts + the code/work audit trail | step 5 **reads** it → generates the report |
+| **Vault** | **universal (L1)**, domain-agnostic | distilled institutional knowledge that **references** the external artifacts (rather than storing them) | step 6 **writes** it (as do all roles) |
 
-Consequence: **step 6's fact-source is L3-bound** ("the forge" is the *code* binding of "the system of record"); **step 7's store is L1-universal** (the vault is the same for every team and domain).
+Consequence: **step 5's fact-source is L3-bound** ("the forge" is the *code* binding of "the system of record"); **step 6's store is L1-universal** (the vault is the same for every team and domain).
 
-> **The vault is a knowledge graph, owned by VAULT-ARCH — not by this doc.** Nodes = distilled knowledge summaries; edges = `[[wikilinks]]` (internal↔internal) and `resources/` summarize-and-reference links (internal→external). Built incrementally across the lifecycle: a role (e.g. PM at intake) reads an external doc → summarizes it → references the source → the node persists and any agent can reuse it later. **DM-ARCH only describes the DM's *participation*** (step 6 traverses, step 7 adds nodes/edges); it does not define the graph. The **usage-provenance** edge ("what knowledge was used in doing what") and **forward-reuse / retrieval** ("a future task reuses this node") that the DM's report depends on are vault-graph capabilities tracked in **#10690 (wiki-link rework)** and **#10838 (VAULT-ARCH alignment)** — reconcile there, not here.
+> **The vault is a knowledge graph, owned by VAULT-ARCH — not by this doc.** Nodes = distilled knowledge summaries; edges = `[[wikilinks]]` (internal↔internal) and `resources/` summarize-and-reference links (internal→external). Built incrementally across the lifecycle: a role (e.g. PM at intake) reads an external doc → summarizes it → references the source → the node persists and any agent can reuse it later. **DM-ARCH only describes the DM's *participation*** (step 5 traverses, step 6 adds nodes/edges); it does not define the graph. The **usage-provenance** edge ("what knowledge was used in doing what") and **forward-reuse / retrieval** ("a future task reuses this node") that the DM's report depends on are vault-graph capabilities tracked in **#10690 (wiki-link rework)** and **#10838 (VAULT-ARCH alignment)** — reconcile there, not here.
 
 ### Vault: what's machine-fixed vs what composes from the layers
 
@@ -60,7 +60,7 @@ Two categories — only the first is truly fixed:
 - **Machine-fixed (non-overridable):** the machine-readable **skeleton** — `[[wikilink]]` syntax, frontmatter schema, PARAG placement. Load-bearing (the tooling parses it to build the graph — see the resolution note above), so it cannot vary by layer. **This is the *only* part that is genuinely fixed.**
 - **Layered & composed — *all* content policy:** both **content governance** (*what may/may-not enter the vault* — exclusions/inclusions) and **content form** (*the kind/specificity* a role produces) are **authored across L1–L4 and merged by `compose` into a final per-agent verdict — exactly like every other slot.** L1 sets sensible **defaults** (e.g. default-allow: *anything newly learned → input*); L2/L3/L4 **specify or override** (e.g. L4 law-firm *"exclude privileged/PII"*; a worker's *technical-note form*); `compose` reconciles them (link + assemble, higher layer wins on conflict) into the agent's effective vault-content policy. Example verdict: L1 *default-allow* ⊕ L4 *exclude PII* → *"capture new knowledge, except PII."* **Nothing special — same op grammar as the rest of the role.**
 
-So step 7's *how* = the **machine-fixed skeleton** + the **composed content policy** (governance + form) for that agent. For SquidSquad's DM: *"deliverable summary + cross-connection edges, under this install's admissibility policy."*
+So step 6's *how* = the **machine-fixed skeleton** + the **composed content policy** (governance + form) for that agent. For SquidSquad's DM: *"deliverable summary + cross-connection edges, under this install's admissibility policy."*
 
 > **Guardrail finding:** the current "the *whole* vault contract is L1-exclusive" guardrail is over-broad — the note **body/prose**, the content-**form**, and the content-**admissibility policy** all compose from the layers like any other slot. **Only the machine skeleton is genuinely L1-fixed** (the *default* capture disposition is an L1 default, not a lock — lower layers override it via compose). Scope-clarification belongs to **VAULT-ARCH (#10838)**, not here.
 
@@ -75,10 +75,10 @@ So step 7's *how* = the **machine-fixed skeleton** + the **composed content poli
 
 Not a "shipper." The DM is the **deliverer + the historian + an end-to-end knowledge vantage**:
 - **Deliverer** (steps 3–5) — gets verified work to its destination.
-- **Historian** (step 6) — generates the report from the system-of-record facts.
-- **End-to-end vantage** (step 7) — the DM is *not* the only knowledge contributor (every role feeds the universal L1 vault); it is distinguished only by **vantage** — it sees completed deliverables whole, so it catches cross-connections single-stage roles miss.
+- **Historian** (step 5) — generates the report from the system-of-record facts.
+- **End-to-end vantage** (step 6) — the DM is *not* the only knowledge contributor (every role feeds the universal L1 vault); it is distinguished only by **vantage** — it sees completed deliverables whole, so it catches cross-connections single-stage roles miss.
 
-**The original problem dissolves:** "bump every 10 features" is simply an **L4 record-policy** layered onto step 6 — *accumulate deliveries; every 10th, the record stamps a semver bump + tag.* The generic DM never knows about it.
+**The original problem dissolves:** "bump every 10 features" is simply an **L4 record-policy** layered onto step 5 — *accumulate deliveries; every 10th, the record stamps a semver bump + tag.* The generic DM never knows about it.
 
 ## 5. Design corrections already agreed
 
@@ -94,11 +94,11 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 |---|---|---|---|
 | 1 | Detect ready work | **L2-complete** | universal — react to the verified/cleared signal |
 | 2 | Pre-flight | **L2-complete** (+ L3 checks) | coherence/completeness is universal; domain may add checks |
-| 3 | Package | **L3-overridable** | *what a deliverable is* = domain mechanics |
-| 4 | Publish | **L3-overridable** (+ L4 target) | mechanism class = L3; concrete target = L4 |
-| 5 | Confirm landing | **L2-complete** (+ L3 probe) | "did it arrive" is universal; the probe may be domain-specific |
-| 6 | Generate the delivery report | **L2 act + L3 fact-source + L3/L4 output** | L2 = "generate a report from the facts in the system of record"; the **system of record is L3-bound** (forge=code); report *content/format/audience/destination* (version, changelog, release notes) = L3/L4. |
-| 7 | Contribute institutional knowledge | **machine-fixed skeleton + composed content policy** | ONLY the machine skeleton (wikilink/frontmatter/PARAG) is L1-fixed. All content policy — governance (admissibility) AND form — is authored L1→L4 and **composed into a per-agent verdict** like every slot (L1 default-allow ⊕ L4 'exclude PII' → 'capture except PII'). |
+| 3 | Package | **L3-overridable** | produce a *complete* product — technical artifact + **product docs** + polish; the DM completes what the workers don't. Mechanic (deploy/file/export) + what-completes-it = L3. |
+| 4 | Confirm landing | **L2-complete** (+ L3 probe) | "did it arrive / is it available" is universal; the probe may be domain-specific |
+| 5 | Generate the delivery report | **L2 act + L3 fact-source + L3/L4 output** | L2 = "generate a report from the facts in the system of record"; the **system of record is L3-bound** (forge=code); report *content/format/audience/destination* (version, changelog, release notes) = L3/L4. |
+| 6 | Contribute institutional knowledge | **machine-fixed skeleton + composed content policy** | ONLY the machine skeleton (wikilink/frontmatter/PARAG) is L1-fixed. All content policy — governance (admissibility) AND form — is authored L1→L4 and **composed into a per-agent verdict** like every slot (L1 default-allow ⊕ L4 'exclude PII' → 'capture except PII'). |
+| 7 | Publish *(last step)* | **L3-overridable** (+ L4 audience) | **make-known** — announce/advertise that it's available; mechanism + audience = L3/L4 |
 | 8 | Handle failure | **L2-complete** (+ L3 rollback) | route-back is universal; rollback mechanics may be domain |
 
 ### Open questions
@@ -109,7 +109,7 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 
 ## 7. Next steps
 
-- **Polish/brainstorm pass** — confirm §6's per-step layer classification; nail step addressability (§6 Q4); define what an L3 DM-variant file concretely contains (which step-units it overrides + with what op); enumerate the L4 plug-in points (cadence, scheme, targets, record format); reconcile step 7 with the institutional-memory architecture (VAULT-ARCH).
+- **Polish/brainstorm pass** — confirm §6's per-step layer classification; nail step addressability (§6 Q4); define what an L3 DM-variant file concretely contains (which step-units it overrides + with what op); enumerate the L4 plug-in points (cadence, scheme, targets, record format); reconcile the knowledge step (now step 6) with the institutional-memory architecture (VAULT-ARCH).
 - **Then** file the refactor tasks: strip policy from L2 DM, add the L3 skill-dev variant, move SquidSquad specifics + counter to L4, remove the status-bar counter, move the bump-counter increment off the verifier onto the DM.
 
 ## Revision log
@@ -123,3 +123,4 @@ The override *mechanism* is settled (§2 — existing compose op grammar). The r
 - **2026-06-17 (vault format: skeleton-fixed, body-free)** — Operator: a vault note is just agent text output — the format/grammar shouldn't be fixed unless there's a real constraint. Confirmed (facts, VAULT-ARCH tooling): there IS a narrow load-bearing constraint — the **machine-readable skeleton** (`[[wikilink]]` edge syntax parsed by `vault_check.py`, frontmatter schema, PARAG placement) — *because it powers the graph* (the traversal/provenance/retrieval step 6 depends on). The **note body/prose is free + role-shaped**. So the current 'whole contract is L1-exclusive' guardrail is slightly over-broad — only the skeleton is load-bearing. Scope-clarification flagged for VAULT-ARCH (#10838), not owned here.
 - **2026-06-17 (vault content governance)** — Operator: no issue with format/skeleton; the L2/L3/L4 customization is **content** — specifically content *governance* ('we don't want certain info in the vault' = an instruction). Captured: default capture is **default-allow** (L1); layer instructions add **exclusions/inclusions** (e.g. L4 law-firm: no privileged/PII content). Restructured the vault subsection into three buckets — L1-fixed (skeleton + default capture), layer content-*form* (role-shaped), layer content-*governance* (admissibility instructions). Guardrail finding now two-fold (body free + admissibility customizable) → VAULT-ARCH #10838.
 - **2026-06-17 (governance composes like everything else)** — Operator: what should/shouldn't enter the vault is specified-or-overridden at **each level**, and **compose** merges all L1–L4 into a final verdict — *just like the other parts*. Corrected my own over-fixing: the *default capture disposition* is an **L1 default, not a lock** — lower layers override it via compose. **Only the machine skeleton is genuinely fixed.** Restructured the vault subsection into two categories (machine-fixed skeleton vs layered-&-composed content policy [governance + form]); guardrail finding broadened (body + form + admissibility all compose).
+- **2026-06-17 (Package/Publish + reorder)** — Operator: extracted the universal essence — **Package = make the deliverable *exist/available*; Publish = make it *known*** (announce/advertise). Brainstormed L3 mechanics across professions (software/frontend/library/mobile/law/accounting/content/design). **Confirmed reorder: Publish is the LAST step** — announce only after deploy+confirm+record+knowledge (new order: Detect→Pre-flight→Package→Confirm→Report→Knowledge→Publish; Failure cross-cutting). Enriched **Package**: produces a *complete, well-rounded product* — the DM **completes what technical workers don't** (product documentation: user guide/README/manuals for software/hardware, polish). Distinguished **product docs** (part of the deliverable, step 3) from the **delivery report** (a record about the delivery, step 5). Renumbered all cross-references.
