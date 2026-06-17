@@ -1,0 +1,121 @@
+"""Regression for #12574 — harness HTTP `LocalProtocolError: Too much data for
+declared Content-Length`.
+
+Root cause: the `POST /events` unknown-role drop path returned
+`JSONResponse(status_code=204, content={})` — a 204 No Content carrying a 2-byte
+`{}` body. h11 forbids a body on 204 (allowed length 0), so the body event
+overruns and raises `LocalProtocolError`, poisoning the keep-alive connection
+and stalling subsequent event delivery (the 2026-06-17 overnight squad freeze).
+
+Note on the original RCA hypothesis (multi-byte UTF-8 Content-Length mismatch on
+GET /events/for // /status): it does NOT hold — those endpoints use
+`JSONResponse`, which encodes UTF-8 and sets a byte-correct Content-Length
+(pinned by `TestJSONResponseUTF8ByteCorrect` below). The real fault was the
+body-on-204.
+
+TestClient (httpx ASGI transport) is lenient about a 204-with-body and never
+surfaced the h11 error, so the **source guard** here is the authoritative
+regression catch; the functional test is a secondary check.
+"""
+
+import ast
+import sys
+import time
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = REPO_ROOT / "references" / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+HARNESS_SRC = (SCRIPTS_DIR / "harness.py").read_text(encoding="utf-8")
+
+# RFC 9110: 1xx, 204, and 304 responses MUST NOT carry a message body.
+_BODY_FORBIDDEN = {100, 101, 102, 103, 204, 304}
+
+try:
+    from fastapi.testclient import TestClient
+    from fastapi.responses import JSONResponse
+    from harness import app, state
+    _HTTP_OK = True
+except Exception:  # pragma: no cover - import guard
+    _HTTP_OK = False
+
+
+class TestNoBodyForbiddenStatusWithBody(unittest.TestCase):
+    """Authoritative source guard — TestClient cannot reproduce the h11 error,
+    so scan the source for the anti-pattern directly."""
+
+    def test_no_jsonresponse_with_body_forbidden_status(self):
+        tree = ast.parse(HARNESS_SRC)
+        offenders = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            name = getattr(fn, "id", None) or getattr(fn, "attr", None)
+            if name != "JSONResponse":
+                continue
+            for kw in node.keywords:
+                if kw.arg == "status_code" and isinstance(kw.value, ast.Constant):
+                    if kw.value.value in _BODY_FORBIDDEN:
+                        offenders.append((getattr(node, "lineno", "?"), kw.value.value))
+        self.assertEqual(
+            offenders, [],
+            f"JSONResponse always renders a body; pairing it with a "
+            f"body-forbidden status is the #12574 bug class (h11 raises "
+            f"LocalProtocolError on the real server). Use "
+            f"`Response(status_code=<N>)`. Offenders (line, status): {offenders}",
+        )
+
+
+@unittest.skipUnless(_HTTP_OK, "fastapi / harness not importable")
+class TestUnknownRoleDropIsBodyless204(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        state.start_time = time.time()
+        state.port = 7373
+        cls.client = TestClient(app, raise_server_exceptions=False)
+
+    def test_unknown_role_drop_is_bodyless_204(self):
+        """#12574: the unknown-role drop returns 204 with NO body (was a 2-byte
+        `{}` JSON body). Still the #9242/#11404 fire-and-forget drop contract."""
+        from harness import event_lifecycle
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch.object(event_lifecycle, "append") as mock_append:
+            resp = self.client.post(
+                "/events",
+                json={"event_type": "status-transition", "role": "bogus-role-xyz"},
+            )
+        self.assertEqual(resp.status_code, 204)
+        self.assertEqual(resp.content, b"", "a 204 must not carry a body")
+        mock_append.assert_not_called()
+
+
+@unittest.skipUnless(_HTTP_OK, "fastapi not importable")
+class TestJSONResponseUTF8ByteCorrect(unittest.TestCase):
+    """Pins the property the original RCA worried about: JSONResponse sets
+    Content-Length to the UTF-8 BYTE length, not the character count — so the
+    emoji/non-ASCII payloads all over the bus do NOT cause a mismatch on the
+    real endpoints (GET /events/for, /status)."""
+
+    def test_emoji_content_length_is_byte_length(self):
+        payload = {"comment_preview": "🦑 status — café résumé"}
+        r = JSONResponse(content=payload)
+        headers = {k.decode().lower(): v.decode() for k, v in r.raw_headers}
+        declared = int(headers["content-length"])
+        self.assertEqual(
+            declared, len(r.body),
+            "Content-Length must equal the encoded body's BYTE length",
+        )
+        # The body genuinely contains multi-byte chars, so its byte length
+        # strictly exceeds its character length — a char-based Content-Length
+        # would under-declare and overrun (the failure mode the #12574 RCA
+        # hypothesised for these endpoints). byte-len > char-len proves both.
+        self.assertGreater(len(r.body), len(r.body.decode("utf-8")))
+
+
+if __name__ == "__main__":
+    unittest.main()
