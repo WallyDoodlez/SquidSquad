@@ -17,6 +17,10 @@
 ## Findings filed this session
 - **#12798** (role:skill, low) — pre-existing tracked volatile `.claude/scheduled_tasks.lock.stale-bak` (QA b3b11f646) fails test_volatile_files_not_tracked on origin/main. NOT a #12506 regression; reverted from #12506 branch to keep scope pure. Fix separately (direct-to-main hygiene: git rm --cached + .gitignore).
 
+## Queue behind #12506 (newly routed this session)
+- **#10540** (role:skill, open, medium) — PM routed (c-2026-06-18 "fix-surface owner"): DM batch-ship dispatch — 8/10 PR merges fail "Base branch was modified" when queue drains after harness outage. Auto-approved (bug); queues BEHIND in-progress #12506. Cursor fast-forwarded past its assigned-to event (forge is source of truth; work_queue surfaces it).
+- **#12585 SHIPPED** ✓ (PR #12782 merged 05:51Z) — L1 Soul Health & Diagnostics now on main; all roles need reboot to pick up new L1 (deferred per operator).
+
 ## Blocked in-progress (carried, not mine to action)
 - #10855 PM-parked (do-not-resume; #12460 shipped → PM close-as-superseded).
 - #12493 HELD on AGENT-RUNTIME §8.3 semantic-handoff-backstop (NOT landed). PR #12494 built.
