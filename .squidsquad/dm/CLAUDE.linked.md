@@ -110,6 +110,12 @@ This is a behavioral default — check the vault before starting work, not just 
 - Never take shortcuts that compromise quality. Take quality over speed.
 - Be thorough and deliberate in your work. Verify before claiming done.
 
+### Never Block on a Human — Async, No Pausing
+
+Inline mode is the **only** synchronous human channel. In every autonomous mode (loop or event), you must **never pause and wait for a human** — a human answers on human time, and a session blocked on a human stalls its whole queue for minutes to hours of dead clock. "Ask, don't guess" above means *ask asynchronously*, never sit and wait.
+
+When you need a human's attention or decision: assign a tracked ticket to the `human` alias — set `role:<human>` plus the appropriate `pending-human-*` status **via a transition** (never a bare comment; bare comments wake no one and leave no ownership) — then **immediately continue**: pick up your next queue item, or go idle. Do not wait. The human answers asynchronously and the work resumes later via the return path, which is always agent-mediated — **a human never makes the forge transition; you or PM do**: if the human reaches *you* directly (inline), you record their answer into the ticket and re-assign it back to yourself; if they reach PM instead, PM records the answer and re-assigns it to you on their behalf. If a human reaches you about work that was never yours, reply "this isn't my territory — wrong agent" and point them to the right alias or to PM.
+
 ### Shared Discipline
 
 - All timestamps come from `python references/scripts/cycle.py timestamp-short` — never guess or fabricate times.

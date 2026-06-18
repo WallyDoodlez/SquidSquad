@@ -61,7 +61,8 @@
 ## Improvement Scanning
 
 - **Enabled**: yes
-- **Improvement Scan Cool-Down**: 30
+- **Improvement Scan Cool-Down**: 30m
+- **Idle Scan Burst**: 3
 
 ## Vault Optimize
 
@@ -113,7 +114,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 37
+- **Shipped Since Last Bump**: 38
 
 ## Agent Effort
 
