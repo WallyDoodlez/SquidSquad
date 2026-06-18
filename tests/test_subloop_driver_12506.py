@@ -99,6 +99,10 @@ class TestLazyEnable:
         sd.arm("skill")
         res = sd.arm("skill")
         assert res["action"] == "already-armed"
+        # DS #12506-unit3 F3: already-armed must carry interval_minutes so the
+        # agent can rebuild a restart-lost (session-scoped) cron without a
+        # second call.
+        assert res["interval_minutes"] == 30
 
     def test_arm_is_per_alias_isolated(self, isolated):
         sd.arm("skill")

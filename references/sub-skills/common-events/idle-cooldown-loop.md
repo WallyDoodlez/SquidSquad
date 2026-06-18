@@ -27,18 +27,24 @@ The cool-down accounting lives in the driver state file `.squidsquad/<alias>/.su
 1. Run `python references/scripts/subloop_driver.py arm <alias>`.
    - `action=schedule` → the driver just transitioned disarmed→armed (lazy first-idle enable). You must create the self-wake.
    - `action=already-armed` → the state already considers the driver armed (e.g. earlier this idle period).
-2. **Confirm a live driver cron exists in *this* session** via `CronList`. The cron is `durable: false`, so a restart loses the in-memory job even though `.subloop-driver.json` still says `armed`. If no driver job is listed (either `action=schedule`, or `already-armed` after a restart), create one:
+2. **Confirm a live driver cron exists in *this* session** via `CronList`. The cron is `durable: false`, so a restart loses the in-memory job even though `.subloop-driver.json` still says `armed`. **If no driver job is listed in `CronList`, create one — regardless of what `arm` returned.** (A missing cron arises in two ways: `action=schedule` from a fresh arm, or `action=already-armed` after a restart dropped the session-scoped cron. Both are handled by the same rule: no live cron ⇒ create one.)
 
    ```
    CronCreate(
-     cron: "7,37 * * * *",          # ≈ every 30m, off the :00/:30 fleet-alignment marks
+     cron: "<expr>",                # derived from interval_minutes — see below; default 30 → "7,37 * * * *"
      recurring: true,
      durable: false,
      prompt: "SquidSquad idle-driver tick (<alias>): forge-read work_queue(), then run subloop_driver.py tick and act on the action per idle-cooldown-loop Step B."
    )
    ```
 
-   Record the returned job ID for `CronDelete`. (Recover it later via `CronList` — match on the `idle-driver tick` prompt marker — if it falls out of conversation context.) Build the `cron` expression from `arm`'s `interval_minutes` (default 30 → `7,37 * * * *`); the exact minutes are not load-bearing — the `tick` throttle gate enforces real cool-down eligibility, so the cron is only a heartbeat.
+   Record the returned job ID for `CronDelete`. (Recover it later via `CronList` — match on the `idle-driver tick` prompt marker — if it falls out of conversation context.)
+
+   **Building `<expr>` from `interval_minutes`** (the value in the `arm` / `reidle` / `already-armed` output; default 30): pick an off-peak minute offset `s` in 1–9 (avoid `0` and `30` — every agent picking those aligns the whole fleet's wakes), then —
+   - `interval_minutes` divides 60 evenly (15, 20, 30, 60) → fire at `s, s+interval, s+2·interval, … < 60`. E.g. 30, s=7 → `7,37 * * * *`; 20, s=7 → `7,27,47 * * * *`; 60, s=7 → `7 * * * *`.
+   - otherwise → round `interval_minutes` **down** to the nearest of {15, 20, 30} and use that.
+
+   The cron is **only a heartbeat** — `tick`'s `cooldown_elapsed` gate (Step B) enforces the real cool-down before any scan — so the exact minutes never cause an early or extra scan; approximation is safe.
 3. Re-enter Monitor idle-wait. A `NUDGE` (Step C) or a driver-tick prompt (Step B) will wake you.
 
 **Step B — Driver tick fires** (the cron-enqueued prompt re-enters you). Per §8.6.1 the driver **forge-reads `work_queue()` first** — so it doubles as a safety-net against a missed nudge. Then run `python references/scripts/subloop_driver.py tick <alias> --drained <true|false>` (`drained=true` iff `work_queue()` returned empty) and act on the `action`:
@@ -52,13 +58,17 @@ The cool-down accounting lives in the driver state file `.squidsquad/<alias>/.su
 
   Then record it: `python references/scripts/subloop_driver.py record-scan <alias>`. If the output has `at_cap: true`, the burst limit is reached — **cancel the driver**: run `subloop_driver.py cancel <alias>` and `CronDelete(<job id>)`. Otherwise leave the cron running for the next tick.
 - `wait` → drained but the throttle window has not elapsed. Do nothing; leave the cron running (the next tick re-checks eligibility).
-- `cancel` → the driver is already disarmed (defensive: a stale tick fired after a cancel). `CronDelete(<job id>)` if it is still scheduled.
+- `cancel` → stop the driver. **Check `reason`:**
+  - `reason: at-cap` → the driver hit the burst limit but is **still armed** (this is the path when a tick — e.g. the first tick after a restart that reloaded `scan_count` already at the cap — finds the burst exhausted without having just scanned). You MUST run `subloop_driver.py cancel <alias>` to flip `armed` to false, **and** `CronDelete(<job id>)`. Skipping the `cancel` CLI leaves `armed: true` with no cron — a permanent dormancy (the #12506 bug) that repeats on every restart.
+  - `reason: disarmed` → the driver is already disarmed (defensive: a stale tick fired after a `cancel`). Just `CronDelete(<job id>)` if it is still scheduled.
+
+  (The `scan` path above already runs `subloop_driver.py cancel` + `CronDelete` when `record-scan` reports `at_cap: true` — that is the normal at-cap exit. The `cancel`/`at-cap` action here is the same disarm for the case where the cap is discovered on a tick rather than right after a scan.)
 
 **Step C — `NUDGE` arrives while idle** (forge event). Handle it as Case B in [[event-mode-contract]]: `GET /events/for/{role}?since=<cursor>`, forge-read, pick up new work if any. The driver cron keeps running in the background; when the work completes and you re-idle, go to **Step D**.
 
 **Step D — Re-idle after processing forge work** (a fresh idle period). Run `python references/scripts/subloop_driver.py reidle <alias>` — this re-arms the driver and **resets `scan_count` to 0** (a fresh burst), while preserving `last_run` so the global cool-down throttle still holds across the re-arm.
 - `action=schedule` → the driver had cancelled at cap; create a new self-wake (`CronCreate` as in Step A, record the new job ID).
-- `action=already-armed` → the driver is still running; the counter is reset, no new cron needed (but still confirm a live cron via `CronList` per Step A.2 if this is the first idle since a restart).
+- `action=already-armed` → the counter is reset; no *new* cron is needed, but **always** confirm a live cron exists via `CronList` (as in Step A.2) and create one if none is listed — the cron is session-scoped and may have been lost across a restart. Do not try to reason about whether a restart happened; the `CronList` check is cheap and idempotent.
 
 Net per sustained-idle stretch: up to `Idle Scan Burst` scans, then the driver quiesces (cron cancelled) until new forge activity re-idles it — bounded, not a perpetual loop.
 

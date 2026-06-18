@@ -179,7 +179,12 @@ def arm(alias):
     """
     state = read_state(alias)
     if state["armed"]:
-        return {"action": "already-armed", "scan_count": state["scan_count"]}
+        # interval_minutes is included even on the already-armed path: after a
+        # restart the session-scoped cron is gone while the state file still
+        # reads armed, so the agent must be able to rebuild the cron from this
+        # return without a second call (DS #12506-unit3 F3).
+        return {"action": "already-armed", "scan_count": state["scan_count"],
+                "interval_minutes": cooldown_minutes()}
     state["armed"] = True
     state["scan_count"] = 0
     write_state(alias, state)
