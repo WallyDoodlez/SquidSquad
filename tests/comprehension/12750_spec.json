@@ -1,0 +1,49 @@
+{
+  "issue": 12750,
+  "title": "Plan-in-PR — PM (task-intake Phase 3B) + worker (task-pickup) comprehension",
+  "source_files": [
+    "references/sub-skills/roles/pm/task-intake.md (Phase 3B)",
+    "references/sub-skills/common/task-pickup.md"
+  ],
+  "method": "Two fresh agents. The plan-in-PR instructions live in RUNTIME-loaded sub-skills (→ run sub-skill markers), not inlined in composed CLAUDE.md — so each agent is given the relevant sub-skill section (following the marker), no other context. Pass = zero misreads of: where the plan goes (branch commit 1 / draft PR, never main), the draft-PR seeding, and the worker adopting the existing branch (not creating a fresh one).",
+  "model": "sonnet",
+  "agents": [
+    {
+      "role": "pm",
+      "source": "references/sub-skills/roles/pm/task-intake.md — Phase 3B",
+      "questions": [
+        {
+          "id": "CQ-PM1",
+          "q": "After you finish planning a task (issue #N), where does the plan file go?",
+          "expected": "Committed onto a NEW task branch squidsquad/task/<N> as the FIRST commit (`plan(#N): <title>`), which opens/seeds a DRAFT PR. NEVER committed straight to main."
+        },
+        {
+          "id": "CQ-PM2",
+          "q": "Do you create the branch before or after writing the plan file, and why?",
+          "expected": "Create the branch FIRST (git_ops.py task-begin), THEN write the plan — because task-begin resets the working tree to origin/main, so writing the plan first risks the checkout clobbering it."
+        },
+        {
+          "id": "CQ-PM3",
+          "q": "Besides the plan body, should you add other .squidsquad/ state (working-state, iterations, vault) to that first commit?",
+          "expected": "No — only the <N>-body.md plan body is exempt from the #11511 state-guard and survives onto the branch; other .squidsquad/ state must NOT be added (it would be stripped / risks the merge-spiral)."
+        }
+      ]
+    },
+    {
+      "role": "worker",
+      "source": "references/sub-skills/common/task-pickup.md",
+      "questions": [
+        {
+          "id": "CQ-W1",
+          "q": "You pick up an approved task #N. Do you create the task branch?",
+          "expected": "No — you ADOPT the EXISTING plan-seeded branch squidsquad/task/<N> (task-begin checks out the existing branch). PM already seeded it with the plan as commit 1. Do NOT create a fresh branch; your implementation commits ride on top of the plan commit."
+        },
+        {
+          "id": "CQ-W2",
+          "q": "Where is the source-of-truth spec for what you're implementing, and do you need to find RESEARCH.md / CONTEXT.md?",
+          "expected": "The committed plan body .squidsquad/<pm_alias>/planning/<N>-body.md (commit 1 on the branch) is the source of truth. RESEARCH.md / CONTEXT.md were PM's planning inputs, are NOT on the branch, and you do not need to locate them."
+        }
+      ]
+    }
+  ]
+}
