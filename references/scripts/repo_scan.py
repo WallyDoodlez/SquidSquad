@@ -18,6 +18,7 @@ Exit codes:
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -115,6 +116,33 @@ TEST_FILES = {
     "setup.cfg": "pytest",  # may contain pytest config
     "conftest.py": "pytest",
     "Cargo.toml": "cargo-test",  # rust has built-in tests
+}
+
+# Conventional unit-test directory names (checked at repo root and one level in).
+TEST_LOCATION_DIRS = ("tests", "test", "spec", "__tests__")
+
+# Test file-name conventions: (prefix, suffix, human label). Empty prefix means
+# "suffix only". Used to spot co-located tests when no conventional dir exists.
+TEST_FILE_PATTERNS = (
+    ("test_", ".py", "test_*.py"),
+    ("", "_test.py", "*_test.py"),
+    ("", ".test.ts", "*.test.ts"),
+    ("", ".test.tsx", "*.test.tsx"),
+    ("", ".test.js", "*.test.js"),
+    ("", ".spec.ts", "*.spec.ts"),
+    ("", ".spec.js", "*.spec.js"),
+    ("", "_test.go", "*_test.go"),
+    ("", "Test.java", "*Test.java"),
+    ("", "_spec.rb", "*_spec.rb"),
+)
+
+# Coverage tooling markers (file presence).
+COVERAGE_FILES = {
+    ".coveragerc": "coverage.py",
+    "codecov.yml": "codecov",
+    ".codecov.yml": "codecov",
+    ".nycrc": "nyc",
+    ".nycrc.json": "nyc",
 }
 
 # Deploy target detection
@@ -244,6 +272,184 @@ def _check_python_deps(root, *dep_names):
     return found
 
 
+def _file_contains(root, name, needle):
+    """True if file ``name`` exists at root and contains ``needle`` (case-insensitive)."""
+    path = Path(root) / name
+    if not path.exists():
+        return False
+    try:
+        return needle.lower() in path.read_text(encoding="utf-8", errors="ignore").lower()
+    except OSError:
+        return False
+
+
+def _read_package_json_script(root, name):
+    """Return the package.json ``scripts.<name>`` command string, or None."""
+    pkg = Path(root) / "package.json"
+    if not pkg.exists():
+        return None
+    try:
+        data = json.loads(pkg.read_text(encoding="utf-8"))
+        val = data.get("scripts", {}).get(name)
+        return val if isinstance(val, str) and val.strip() else None
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _makefile_has_test_target(root):
+    """True if a Makefile defines a ``test:`` target."""
+    for name in ("Makefile", "makefile", "GNUmakefile"):
+        mk = Path(root) / name
+        if not mk.exists():
+            continue
+        try:
+            text = mk.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        # A target line begins at column 0 with `test` then `:` (not `:=` assignment).
+        if re.search(r"(?m)^test\s*:(?!=)", text):
+            return True
+    return False
+
+
+def _framework_from_command(command):
+    """Best-effort: name the test framework referenced by a run command string."""
+    cmd = (command or "").lower()
+    for tool in ("jest", "vitest", "playwright", "cypress", "mocha", "ava",
+                 "jasmine", "pytest"):
+        if tool in cmd:
+            return tool
+    return None
+
+
+def _has_python_test_files(root):
+    """Bounded walk: True if any ``test_*.py`` / ``*_test.py`` file exists."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for f in filenames:
+            if f.endswith(".py") and (f.startswith("test_") or f.endswith("_test.py")):
+                return True
+    return False
+
+
+def _detect_test_location(root):
+    """Detect the repo's test-location convention. Returns a label string or None."""
+    root = Path(root)
+    if not root.is_dir():
+        return None
+    # Conventional test directory at repo root.
+    for dirname in TEST_LOCATION_DIRS:
+        if (root / dirname).is_dir():
+            return dirname + "/"
+    # One level deep (e.g. src/tests, app/__tests__).
+    for child in sorted(root.iterdir()):
+        if child.is_dir() and child.name not in SKIP_DIRS:
+            for dirname in TEST_LOCATION_DIRS:
+                if (child / dirname).is_dir():
+                    return f"{child.name}/{dirname}/"
+    # Co-located file-name conventions (bounded walk).
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for f in filenames:
+            for prefix, suffix, label in TEST_FILE_PATTERNS:
+                if (not prefix or f.startswith(prefix)) and f.endswith(suffix):
+                    return f"{label} (co-located)"
+    return None
+
+
+def _detect_coverage(root):
+    """Detect coverage tooling. Returns a tool name or None."""
+    for fname, tool in COVERAGE_FILES.items():
+        if _check_file_exists(root, fname):
+            return tool
+    if _check_python_deps(root, "pytest-cov", "coverage"):
+        return "coverage.py"
+    if _check_package_json_deps(root, "nyc", "c8"):
+        return "nyc"
+    return None
+
+
+def _detect_test_run(root):
+    """Detect the primary test framework + run command. Returns (framework, command) or (None, None).
+
+    Ordered by signal strength: an explicit ``package.json`` test script or a
+    pytest config beats a language default, which beats a Makefile wrapper,
+    which beats the bare-unittest fallback. First match wins.
+    """
+    root = Path(root)
+
+    # 1. Node — explicit author intent via package.json scripts.test.
+    script = _read_package_json_script(root, "test")
+    if script:
+        return (_framework_from_command(script) or "npm", "npm test")
+
+    # 2. Python — pytest signalled by config/dep/marker.
+    if (_check_file_exists(root, "pytest.ini")
+            or _check_file_exists(root, "conftest.py")
+            or bool(_check_python_deps(root, "pytest"))
+            or _file_contains(root, "setup.cfg", "[tool:pytest]")
+            or _file_contains(root, "pyproject.toml", "[tool.pytest")):
+        return ("pytest", "pytest")
+
+    # 3. Go — built-in testing when a module is present.
+    if _check_file_exists(root, "go.mod"):
+        return ("go test", "go test ./...")
+
+    # 4. Rust — built-in testing.
+    if _check_file_exists(root, "Cargo.toml"):
+        return ("cargo test", "cargo test")
+
+    # 5. Java/JVM.
+    if _check_file_exists(root, "pom.xml"):
+        return ("junit", "mvn test")
+    if _check_file_exists(root, "build.gradle") or _check_file_exists(root, "build.gradle.kts"):
+        return ("gradle", "./gradlew test")
+
+    # 6. Ruby.
+    if _check_file_exists(root, "Gemfile"):
+        if _file_contains(root, "Gemfile", "rspec"):
+            return ("rspec", "bundle exec rspec")
+        return ("minitest", "rake test")
+
+    # 7. Node test-runner dep without an explicit script.
+    node_tool = (_check_package_json_deps(root, "jest", "vitest", "mocha", "ava")
+                 or [None])[0]
+    if node_tool:
+        return (node_tool, f"npx {node_tool}")
+
+    # 8. Makefile test target (generic wrapper).
+    if _makefile_has_test_target(root):
+        return ("make", "make test")
+
+    # 9. Bare Python unittest (test files present, no pytest).
+    if _has_python_test_files(root):
+        return ("unittest", "python -m unittest discover")
+
+    return (None, None)
+
+
+def detect_test_strategy(root=None):
+    """Detect the repo's unit-testing strategy.
+
+    Returns a dict ``{framework, run_command, location, coverage, detected}``.
+    ``detected`` is True when at least one of framework / run_command / location
+    was found — the installer uses it to decide whether to seed the L4 Project
+    Context or fall back to asking the human (task #12450).
+    """
+    if root is None:
+        root = REPO_ROOT
+    framework, run_command = _detect_test_run(root)
+    location = _detect_test_location(root)
+    coverage = _detect_coverage(root)
+    return {
+        "framework": framework,
+        "run_command": run_command,
+        "location": location,
+        "coverage": coverage,
+        "detected": bool(framework or run_command or location),
+    }
+
+
 def scan(root=None):
     """Scan a repository and return structured detection results.
 
@@ -261,6 +467,7 @@ def scan(root=None):
         "frameworks": [],
         "ci_cd": [],
         "test_frameworks": [],
+        "test_strategy": {},
         "deploy_targets": [],
         "documentation": [],
         "monorepo": [],
@@ -320,6 +527,9 @@ def scan(root=None):
     for dep in test_deps:
         detected_tests.add(dep)
     result["test_frameworks"] = sorted(detected_tests)
+
+    # Unit-testing strategy detection (framework + run command + location).
+    result["test_strategy"] = detect_test_strategy(root)
 
     # Deploy target detection
     for filename, target in DEPLOY_FILES.items():

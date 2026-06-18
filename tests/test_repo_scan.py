@@ -203,3 +203,155 @@ class TestScanCurrentRepo:
         """Scanning the actual SquidSquad repo should detect Python."""
         result = repo_scan.scan()
         assert "python" in result["languages"]
+
+
+class TestTestStrategyDetection:
+    """Unit-testing-strategy detection (task #12450) — framework + run command + location."""
+
+    # --- run command / framework, ordered by ecosystem ---
+
+    def test_pytest_via_ini(self, tmp_path):
+        (tmp_path / "pytest.ini").write_text("[pytest]\n")
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["framework"] == "pytest"
+        assert ts["run_command"] == "pytest"
+        assert ts["detected"] is True
+
+    def test_pytest_via_conftest(self, tmp_path):
+        (tmp_path / "conftest.py").write_text("")
+        assert repo_scan.detect_test_strategy(tmp_path)["framework"] == "pytest"
+
+    def test_pytest_via_pyproject(self, tmp_path):
+        (tmp_path / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
+        assert repo_scan.detect_test_strategy(tmp_path)["run_command"] == "pytest"
+
+    def test_pytest_via_setup_cfg(self, tmp_path):
+        (tmp_path / "setup.cfg").write_text("[tool:pytest]\n")
+        assert repo_scan.detect_test_strategy(tmp_path)["framework"] == "pytest"
+
+    def test_pytest_via_requirements(self, tmp_path):
+        (tmp_path / "requirements.txt").write_text("pytest==8.0\n")
+        assert repo_scan.detect_test_strategy(tmp_path)["framework"] == "pytest"
+
+    def test_node_explicit_test_script(self, tmp_path):
+        (tmp_path / "package.json").write_text(
+            json.dumps({"scripts": {"test": "jest --coverage"}})
+        )
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["run_command"] == "npm test"
+        assert ts["framework"] == "jest"  # inferred from the script body
+
+    def test_node_test_script_unknown_tool(self, tmp_path):
+        (tmp_path / "package.json").write_text(
+            json.dumps({"scripts": {"test": "node ./run-tests.js"}})
+        )
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["run_command"] == "npm test"
+        assert ts["framework"] == "npm"  # falls back to npm when tool unrecognised
+
+    def test_node_dep_without_script(self, tmp_path):
+        (tmp_path / "package.json").write_text(
+            json.dumps({"devDependencies": {"vitest": "^1.0"}})
+        )
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["framework"] == "vitest"
+        assert ts["run_command"] == "npx vitest"
+
+    def test_go(self, tmp_path):
+        (tmp_path / "go.mod").write_text("module example.com/x\n")
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["framework"] == "go test"
+        assert ts["run_command"] == "go test ./..."
+
+    def test_rust(self, tmp_path):
+        (tmp_path / "Cargo.toml").write_text("[package]\nname='x'\n")
+        assert repo_scan.detect_test_strategy(tmp_path)["run_command"] == "cargo test"
+
+    def test_maven(self, tmp_path):
+        (tmp_path / "pom.xml").write_text("<project/>")
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["framework"] == "junit"
+        assert ts["run_command"] == "mvn test"
+
+    def test_gradle(self, tmp_path):
+        (tmp_path / "build.gradle").write_text("plugins { id 'java' }")
+        assert repo_scan.detect_test_strategy(tmp_path)["run_command"] == "./gradlew test"
+
+    def test_ruby_rspec(self, tmp_path):
+        (tmp_path / "Gemfile").write_text("gem 'rspec'\n")
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["framework"] == "rspec"
+        assert ts["run_command"] == "bundle exec rspec"
+
+    def test_makefile_test_target(self, tmp_path):
+        (tmp_path / "Makefile").write_text("test:\n\techo running\n")
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["framework"] == "make"
+        assert ts["run_command"] == "make test"
+
+    def test_makefile_assignment_not_target(self, tmp_path):
+        # `test :=` is a variable assignment, not a target — must not match.
+        (tmp_path / "Makefile").write_text("test := foo\n")
+        assert repo_scan.detect_test_strategy(tmp_path)["run_command"] is None
+
+    def test_bare_unittest_fallback(self, tmp_path):
+        (tmp_path / "test_app.py").write_text("import unittest\n")
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts["framework"] == "unittest"
+        assert ts["run_command"] == "python -m unittest discover"
+
+    def test_explicit_script_beats_pytest(self, tmp_path):
+        # Polyglot: an explicit package.json test script wins over a pytest signal.
+        (tmp_path / "pytest.ini").write_text("[pytest]\n")
+        (tmp_path / "package.json").write_text(
+            json.dumps({"scripts": {"test": "jest"}})
+        )
+        assert repo_scan.detect_test_strategy(tmp_path)["run_command"] == "npm test"
+
+    # --- location ---
+
+    def test_location_conventional_dir(self, tmp_path):
+        (tmp_path / "tests").mkdir()
+        assert repo_scan.detect_test_strategy(tmp_path)["location"] == "tests/"
+
+    def test_location_one_level_deep(self, tmp_path):
+        (tmp_path / "src" / "tests").mkdir(parents=True)
+        assert repo_scan.detect_test_strategy(tmp_path)["location"] == "src/tests/"
+
+    def test_location_colocated_pattern(self, tmp_path):
+        (tmp_path / "main_test.go").write_text("package x\n")
+        assert "co-located" in repo_scan.detect_test_strategy(tmp_path)["location"]
+
+    def test_location_skips_ignored_dirs(self, tmp_path):
+        nm = tmp_path / "node_modules" / "tests"
+        nm.mkdir(parents=True)
+        assert repo_scan.detect_test_strategy(tmp_path)["location"] is None
+
+    # --- coverage ---
+
+    def test_coverage_coveragerc(self, tmp_path):
+        (tmp_path / ".coveragerc").write_text("[run]\n")
+        assert repo_scan.detect_test_strategy(tmp_path)["coverage"] == "coverage.py"
+
+    def test_coverage_pytest_cov_dep(self, tmp_path):
+        (tmp_path / "requirements.txt").write_text("pytest-cov\n")
+        assert repo_scan.detect_test_strategy(tmp_path)["coverage"] == "coverage.py"
+
+    # --- empty / negative ---
+
+    def test_empty_repo_not_detected(self, tmp_path):
+        ts = repo_scan.detect_test_strategy(tmp_path)
+        assert ts == {
+            "framework": None,
+            "run_command": None,
+            "location": None,
+            "coverage": None,
+            "detected": False,
+        }
+
+    def test_scan_includes_test_strategy(self, tmp_path):
+        (tmp_path / "pytest.ini").write_text("[pytest]\n")
+        (tmp_path / "tests").mkdir()
+        result = repo_scan.scan(tmp_path)
+        assert result["test_strategy"]["framework"] == "pytest"
+        assert result["test_strategy"]["location"] == "tests/"
