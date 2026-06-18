@@ -80,6 +80,8 @@ python references/scripts/squidsquad_cli.py shutdown   # Stop agents + exit harn
 
 Requires the Python packages in `requirements.txt` (`pip install -r requirements.txt`) — the setup wizard offers to install these for you. The harness owns the full agent lifecycle — starting, stopping, restarting, health monitoring, and crash recovery are all managed through a single process. Each agent runs in its own terminal window; if the harness crashes, your agents keep running. Press Ctrl+C once for graceful shutdown (agents finish their current cycle), twice for a warning, three times for immediate exit.
 
+**Just the harness?** For debugging or a hands-on launch, `start-harness.sh` (macOS/Linux) and `start-harness.bat` (Windows — opens a visible window you can watch) start the harness on its own, with no clone-sync and no dependency install. Most people should use `squidsquad_cli.py start` above, which boots the harness *and* all your agents.
+
 ### 3. Work
 
 Talk to PM to file bugs, request features, and approve plans. Everything else happens automatically.
