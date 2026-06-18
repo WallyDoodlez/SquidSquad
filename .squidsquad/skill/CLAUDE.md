@@ -739,6 +739,7 @@ After implementing any task that touches LLM-consumed instructions: ensure the i
 
 - Use `git_ops.py task-begin` / `task-end` for feature branch checkout/return.
 - Branch pattern: `squidsquad/task/<number>` (unified branch — PM and worker share one branch per task).
+- Plan-in-PR (#12750): PM seeds the branch with the task plan (`.squidsquad/<pm-alias>/planning/<number>-body.md`) as commit 1, which opens the draft PR. On pickup you **adopt that existing branch** via `task-begin` — never create a fresh one — and add implementation commits on top of the plan; the plan and the code that fulfils it merge to main together. Flip the draft PR to ready when done. Plan bodies are exempt from the state-guard (`git_ops._is_plan_body`) so they survive on the branch.
 - PR flow enabled: create PRs with full summary via `git_ops.py pr-create`. Check `review:human-required` label — if present, hold for human review instead of auto-merge.
 - Run `git_ops.py has-changes` before transitioning to pending-test. If no changes, re-read the issue and apply the fix.
 - Always `git pull` before starting work. Never push without pulling first.
