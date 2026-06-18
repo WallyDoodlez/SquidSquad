@@ -2,7 +2,49 @@
 
 _Condensed 2026-06-15. Prior incident narrative (reboot saga, event-mode stabilization, #11505/#11511 churn, #12417 doc-reconciliation, restart procedure) preserved in iteration logs + on the forge — not re-copied here. Working-state = current active state only._
 
-## Current — 2026-06-16 (PM EVENT-mode, operator-active session)
+## Current — 2026-06-18 01:32 (PM EVENT-mode, post-restart fresh boot)
+
+**Boot clean + recovered a stale-main hazard.** Harness reachable :7373 (fresh boot, uptime <10m, git_sha 00757fe4→ now ab00fba6, v0.44.0). GH access OK. Cursor `5fd4f552` → boot drain EMPTY (fresh harness deque). bootup-complete emitted.
+
+**⚠️ Harness boot did NOT pull — local main was 14 BEHIND origin** (1 ahead = my pre-restart checkpoint commit 00757fe40). Origin had #12689 (DM-ARCH), #12518 (#12506 §8.6.1), #12749 post-ship, qa iters. **Merged origin/main → main (clean, zero conflicts) → pushed (ab00fba6). Now 0/0 in sync.** WATCH next boot: if local is behind again, the harness boot-pull is unreliable → file. (Could also be expected: my checkpoint commit predated the 14, so respawn had nothing to FF onto.)
+
+**Post-restart TODOs ALL RESOLVED:**
+1. ✅ DM-ARCH.md §5 (line 106): flipped "tracked as #12749" → "**was realized in #12749 (shipped 2026-06-18, PR #12689)**". skill had NOT flipped it. (PM-owned TRD doc-honesty.)
+2. ✅ skill-domain wiring documented in DM-ARCH.md (lines 15/20/56: L3 `dm/skill/` Package=merge-to-main+compose, Publish=ship-comment+CHANGELOG).
+3. ✅ pm/CLAUDE.md current — PM composed output contains NO cycle-runner/version_bump content (count 0); #12689's PM-listed source touches (cycle-runner.md/AGENT-RUNTIME.md/DM-ARCH.md/config.py) don't alter PM's *composed* doc. On-disk = committed. No recompose needed for PM.
+
+**#12506 HANDOFF EXECUTED (the big unblock) — PR #12518 (§8.6.1) is MERGED (06888b854).** Design contract landed. Reassigned role:pm→**skill**, status planning→approved. Handoff comment posted (3 atomic artifacts, no-harness-change AC8, also cures operator's "idle agents forget queued work" symptom). **EAD confirmed emitting assigned-to(target=skill) for #12506** → skill will pick up. High-pri, critical-path.
+
+**#10540 ROUTED PM → skill (long-standing BRIEFING TODO done).** DM batch-ship "Base branch was modified" race; DM requested routing twice (c411/c413). Fix shape validated on BOTH transports (harness-up serialized-POST+poll; harness-down per-item local-merge, drained 7 ships/4cy zero-fail, vault [[learning-dm-local-merge-when-harness-down]]). Fix surface = `delivery-packaging.md` + DM CLAUDE source = **compose-consumed = skill domain** (precedent #11334). Reassigned role:dm→skill; bug auto-approved (skill triages open→in-progress). **EAD confirmed assigned-to(target=skill).** Clearing this also unblocks DM's doc-improvement-loop scan gate (contributes to #12506 dormant-subloop).
+
+**Pipeline healthy (verified open-state):** 0 open pending-ship, 0 open pending-test (dm/verifier correctly idle). in-progress: pm=3 (parked coord-holds #11092/#11053/#9968), skill=3 (#12585 L1-Soul-health, #12493 L2-pipeline-sentinel, #10855 verifier-inert-boot) + now #12506 + #10540. No stalls.
+
+**⚠️ DATA-HYGIENE NOTE (investigated, NOT filed — by-design surface):** `tracker.py list-tasks <role> --status pending-ship` returns ~30 CLOSED issues with `status:pending-ship` labels (#605/#1075/#2351/#9184/#9965… all closed, role:skill). This is **#9837 by-design**: for handoff statuses (pending-ship/pending-test) list-tasks widens `state=all` because a PR can auto-close an issue before DM's shipped-transition. NOT a query bug. The real residue = those closed items never had pending-ship cleared (shipped-transition didn't fire, or closed outside ship flow) → permanent zombie entries in DM's list view. Live routing UNAFFECTED (EAD uses `--state open`; agents ship fine). Needs a careful label-reconcile pass (strip pending-ship from long-closed items / set shipped), NOT a quick file. Deferred — re-triage if it ever causes a real misroute. For true pipeline reads use `gh issue list --state open`.
+
+**(Prior 23:54 boot context — restart was pending; now executed. Below preserved.)**
+
+**#12749 SHIPPED + MERGED (01:04) — DM-ARCH layered refactor, clean pipeline:**
+- qa VERIFIED → PASS 8/8 ACs (04:56Z) → dm SHIPPED (01:04) → **PR #12689 MERGED**. AC3 resolved per PM ruling: live `dm/skill` wiring + c12-F1 critical fix (`config.py alias dm` strips `/domain` → DM identity intact). qa recovered fully (earlier respawn-watch resolved positive).
+- **Operator parser-model flag: now SHIPPED to main** (config.py `<class>/<domain>` bullet-parser). DS-hardened + tested + revertible. Operator still free to veto/redirect post-hoc; informed.
+- **#12689 touched pm-composed sources** (cycle-runner.md, AGENT-RUNTIME.md, DM-ARCH.md, config.py…) → `l4-recompose`/`restart-required` for pm emitted (01:01). Harness/l4_file_watcher owns recompose+restart (do NOT manually `compose.py deploy-all` — race risk; harness handles).
+- **PM POST-RESTART TODOs:** (1) flip `docs/DM-ARCH.md` §5 "tracked as #12749" → "realized" — DM-ARCH.md WAS in #12689 files_changed, so **check if skill already flipped it**; (2) confirm DM-ARCH.md documents the skill-domain wiring (23:54 doc-honesty flag); (3) confirm composed `pm/CLAUDE.md` current after harness recompose+restart.
+
+**#12506 heartbeat directive (operator 2026-06-18) — RESOLVED in planning, gated:**
+- Operator: "agents forget queued work" → fold heartbeat fix into #12506, ensure arch-doc updated w/ change + DS-audit after. Confirmed routing to **skill** (not DM — DM=delivery only; operator OK'd).
+- **CRITICAL correction:** my floated "event_poll idle-heartbeat" mechanism would VIOLATE the already-locked, DS-audited §8.6.1 design (hard no-harness-change constraint, AC8). #12506 is fully planned (12 ACs) with an **agent-side periodic self-wake driver** — that fix ALSO cures forgotten-work (driver tick re-enters §8.1 loop → re-reads work_queue). Operator asks already = AC12 (DS-audit) + AC7/AC9 (arch-doc/sub-skill reconcile). No plan change. Symptom appended as #12506 comment.
+- **BLOCKER = PR #12518** (§8.6.1 arch doc): verified clean/mergeable but UNMERGED since 06-16 (~1.5d). §8.6.1 NOT on main (grep=0). **Merging #12518 unblocks the whole #12506 build — ESCALATED to operator (present).** Head branch `squidsquad/task/12506-arch-86`.
+
+**dm** idle — shipped #12750 + #12420 + #12749 cleanly, zero manual nudges (#12442 routing holding). **pm (this)** going idle for restart.
+
+**Own-domain housekeeping done this boot:** removed stray 0-byte garbage file (PUA-named `**Status**:`) from repo root.
+
+**Shipped 2026-06-17 (verified via forge):** #12750 (plan-in-PR guard, PR #12751), #12420 (post-commit harness restart INSTALLER-ARCH §10.3, PR #12596). Recent commit 1e7e101e flipped INSTALLER-ARCH §10.3 banner → implemented.
+
+**Carry-over parked (unchanged):** #11092, #11053 (in-progress coordination-holds), #9968, #10855(→skill), cutover #12271/#12460/#12492 chain. See prior sections.
+
+---
+
+## Prior — 2026-06-16 (PM EVENT-mode, operator-active session)
 
 **Cutover #12271/#12460 — SHADOW SHIPPED, observation window NOT yet open.** Operator chose **Path B split**: shadow increment shipped as #12460 (verifier PASS cy223 → DM-merged PR #12472). Cutover flip = **#12492** (approved, HARD-GATED on a clean PID-vs-progress divergence window). **GATE: the running harness (PID 35220, booted 14:05Z 06-15, git_sha 13c68b4a) predates the shadow merge → it is NOT running shadow code → observation window has NOT started.** Opening it requires a **harness restart** onto post-shadow main (operator-approved 2026-06-16). After restart verify: agents ready, qa loop-pin (59999) intact, .local-config has qa, harness git_sha advanced. Once a clean window logs → #12492 unblocks → #12409 + qa→event-mode unblock.
 
@@ -56,5 +98,6 @@ _Condensed 2026-06-15. Prior incident narrative (reboot saga, event-mode stabili
 
 ## Improvement Scan
 Status: idle
-Last completed: (none this session)
-Next scan after: (eligible — no prior scan this session)
+Last completed: 2026-06-18 01:37
+Next scan after: 2026-06-18 02:07
+(Focused scan this boot: surfaced list-tasks closed-item surface → determined #9837 by-design, no filable gap; label-hygiene residue noted above for careful future triage. No process-gap filed.)

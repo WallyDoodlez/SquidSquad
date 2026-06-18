@@ -103,4 +103,4 @@ Not a "shipper." The DM is the **deliverer + the historian + an end-to-end knowl
 
 ## 5. Implementation
 
-The L1–L4 refactor that realizes this architecture (strip the project policy from L2, move package/publish mechanics into the existing `dm/skill/` L3 variant, place the SquidSquad release policy in the `dm.md` L4 file, remove the status-bar counter, move the release-counter increment off the verifier onto the DM, and the descriptive-doc syncs) is tracked as a single coordinated delivery in **#12749** — doc and code land together in one PR.
+The L1–L4 refactor that realizes this architecture (strip the project policy from L2, move package/publish mechanics into the existing `dm/skill/` L3 variant, place the SquidSquad release policy in the `dm.md` L4 file, remove the status-bar counter, move the release-counter increment off the verifier onto the DM, and the descriptive-doc syncs) was realized in **#12749** (shipped 2026-06-18, PR #12689) — doc and code landed together in one PR.
