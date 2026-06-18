@@ -19,7 +19,7 @@ SquidSquad has a small fixed set of **role classes** and a per-install set of **
 | **`pm`** | Coordinates the team and the human; manages workflow and process |
 | **`verifier`** | Verifies the product being delivered; does not do technical implementation |
 | **`worker`** | Implements technical work to acceptance criteria |
-| **`dm`** | Delivers (CHANGELOG, version bumps, releases) |
+| **`dm`** | Delivers verified work, generates the delivery report, captures end-to-end knowledge (CHANGELOG / version bumps / releases are L4 project policy, not universal — see DM-ARCH) |
 
 **Agent aliases** (1..N per class, install-defined in `.squidsquad/config.md` `## Aliases`):
 
@@ -1094,7 +1094,7 @@ flowchart TD
 - **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
 - **verifier**: TEST-PLAN backlog catch-up
 - **worker**: doc-scan or test-coverage scan on owned modules
-- **dm**: doc realignment + CHANGELOG hygiene + version-bump readiness
+- **dm**: doc realignment + delivery-report/record hygiene (CHANGELOG + version-bump readiness only where L4 policy defines them)
 
 Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and routes it). That nudges the owning alias into work — via the same `/work/assign` path everything else uses.
 

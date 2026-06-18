@@ -337,6 +337,13 @@ class TestBulletFormFallback:
         with pytest.raises(config.AliasesRegistryError):
             config.parse_aliases_registry(_wrap_with_aliases(body))
 
+    def test_class_slash_domain_multi_slash_raises(self):
+        # The domain half must be a single path segment — a value like
+        # `dm/skill/extra` would be (mis)read as a nested compose dir.
+        body = "- **dm**: dm/skill/extra\n"
+        with pytest.raises(config.AliasesRegistryError):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
+
     def test_unrecognized_value_raises_with_diagnostic(self):
         # Per DS-10751 review: an unrecognized bullet value raises so
         # a typo cannot slip past the operator. The diagnostic names

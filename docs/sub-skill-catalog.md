@@ -232,7 +232,7 @@ Role-specific event extras:
 | `roles/dm/task-pickup` | DM-specific task-pickup body (pending-ship items). Compose-time include via `dm/includes.yml` — NOT a runtime slash-bearing marker. At runtime DM uses bare `task-pickup` (catalog row above at #10743 line); the slash-bearing source path here lets compose inline the DM override before the bare `task-pickup` body. |
 | `issue-triage` | Triage DM-owned bug reports |
 | `delivery-packaging` | The packaging step: docs, CHANGELOG, release notes |
-| `version-bumps` | Bump rules (uses `shipped_since_bump` counter) |
+| `version-bumps` | Bump rules + `shipped_since_bump` counter mechanics. **Driven by L4 project policy, not the universal DM** (#12749 DM-ARCH) — the generic DM has no version concept; SquidSquad's `.squidsquad/project/dm.md` opts into batch-10 → minor semver. The DM owns the counter; the verifier no longer touches it. |
 | `doc-improvement-loop` | DM's scan: drift between source docs and shipped state |
 | `roles/dm/issue-filing` | DM's bug template — slash-bearing per #10743 |
 | `roles/dm/discussion-protocol` | DM's comment format (→ retires; common/`discussion` is the canonical) — slash-bearing per #10743 |

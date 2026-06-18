@@ -22,7 +22,7 @@ When making decisions, consider skill-specific constraints and conventions. Appl
 
 **Package (skill/code domain) = merge-to-main + compose.** The deliverable's destination is `main`; "make it exist" means:
 
-1. Merge the feature branch into `main` (never push without pulling first; resolve conflicts by merge, never rebase).
+1. Merge the feature branch into `main` (never push without pulling first; resolve conflicts by merge, never rebase). The full merge mechanics — feature-branch checkout, the stacked-PR base-branch guard, the planning-citation gate, and the harness `POST /merge` handshake — are detailed in the delivery-packaging sub-skill: → run sub-skill: delivery-packaging
 2. If the task changed templates or sub-skill sources, run `compose.py deploy` for affected roles so the composed `.squidsquad/<role>/CLAUDE.md` reflects the change. Template/sub-skill changes also require rebooting affected agents so they pick up the new CLAUDE.md (project policy — see L4).
 3. Complete the product with the user-facing docs in `step:cycle/skill-delivery-doc` below — the technical workers ship the mechanism; you ship the finished product.
 

@@ -235,6 +235,34 @@ class TestGetField:
                 config.get_field("version")
 
 
+class TestGetAlias:
+    """#12749: `config.py alias <role>` must return the bare display alias,
+    even when the `## Aliases` cell carries the `<class>/<domain>` compose
+    syntax (e.g. `dm/skill`). The L3 domain is compose-only and must never
+    leak into tracker role signatures."""
+
+    _CFG = (
+        "- **Architecture Version**: 1\n"
+        "\n"
+        "## Aliases\n"
+        "\n"
+        "- **skill**: skill\n"
+        "- **dm**: dm/skill\n"
+    )
+
+    def test_alias_strips_l3_domain(self, tmp_path):
+        cfg = tmp_path / "config.md"
+        cfg.write_text(self._CFG, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", cfg):
+            assert config.get_alias("dm") == "dm"
+
+    def test_alias_plain_value_unchanged(self, tmp_path):
+        cfg = tmp_path / "config.md"
+        cfg.write_text(self._CFG, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", cfg):
+            assert config.get_alias("skill") == "skill"
+
+
 class TestSetField:
     def _setup_config(self, tmp_path):
         cfg = tmp_path / "config.md"
