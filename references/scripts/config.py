@@ -413,6 +413,27 @@ def _parse_aliases_bullet_form(section_text):
             l3_domain = None
         elif value in _BULLET_LEGACY_WORKER_L3_DOMAINS:
             role_class, l3_domain = "worker", value
+        elif "/" in value:
+            # Explicit `<role_class>/<l3_domain>` form (e.g. `dm/skill`).
+            # Generalizes domain attachment beyond the worker shorthand
+            # above to any role-class, so a non-worker role (e.g. a
+            # skill-domain DM) can carry an L3 variant in the bullet form
+            # without migrating the whole section to the table form. The
+            # legacy role-class shim still applies to the class half
+            # (`qa/<d>` → verifier, `dev/<d>` → worker).
+            class_part, _, domain_part = value.partition("/")
+            class_part, domain_part = class_part.strip(), domain_part.strip()
+            class_part = _BULLET_LEGACY_ROLE_CLASS_SHIM.get(class_part, class_part)
+            if class_part not in ALIASES_ROLE_CLASSES or not domain_part:
+                raise AliasesRegistryError(
+                    f"`## Aliases` bullet form has unrecognized "
+                    f"`<role-class>/<l3-domain>` value `{value}` for alias "
+                    f"`{alias}`. The class half must be a role-class "
+                    f"({sorted(ALIASES_ROLE_CLASSES)}) or legacy shim "
+                    f"({sorted(_BULLET_LEGACY_ROLE_CLASS_SHIM)}); the "
+                    f"domain half must be non-empty."
+                )
+            role_class, l3_domain = class_part, domain_part
         else:
             # Unrecognized value — raise so a typo can't slip past
             # the operator. Names the bullet that failed AND the
