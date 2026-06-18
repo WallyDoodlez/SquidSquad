@@ -12,9 +12,12 @@ Teardown runs automatically after integration tests, even on failure.
 Static analysis tests do not require cleanup (no side effects).
 """
 
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 # Windows consoles default to cp1252, which cannot encode the em-dash / arrow
@@ -115,8 +118,75 @@ def run_cleanup_only():
         print("  All clean.")
 
 
+def _static_gate_verdict(returncode, junit_path):
+    """Decide PASS/FAIL for a static-gate pytest run WITHOUT trusting the
+    process returncode alone (#12408).
+
+    A test that hard-exits the pytest process mid-run (``os._exit(0)``,
+    ``sys.exit(0)``, ``pytest.exit(..., returncode=0)``) forces returncode 0
+    while skipping pytest's session teardown — so NO junit report is written
+    (pytest emits it from ``pytest_sessionfinish``, which the hard-exit
+    bypasses), the failure aggregation never runs, and the truncated run
+    reports false-green. That is the #12408 bug: a real failure reached
+    pending-test because ``run_static_tests()`` returned ``returncode == 0``.
+
+    The durable defense is cause-agnostic: require positive proof the session
+    finished — a parseable junit recording >0 tests with 0 failures/errors —
+    and fail closed on anything else. A missing junit is the canonical
+    mid-run-hard-exit signature (the session-finish hook never fired).
+
+    Returns ``(passed: bool, reason: str)``.
+    """
+    if not junit_path.exists():
+        return False, (
+            "INCOMPLETE RUN — pytest never wrote its junit report, so the "
+            "session did not reach session-finish (a gated test likely "
+            "hard-exited the process mid-run via os._exit/sys.exit, forcing a "
+            "false-green returncode 0). Failing the gate closed (#12408)."
+        )
+    try:
+        root = ET.parse(junit_path).getroot()
+    except ET.ParseError as exc:
+        return False, (
+            f"INCOMPLETE RUN — junit report is malformed ({exc}); the session "
+            f"did not finish writing it. Failing the gate closed (#12408)."
+        )
+    # pytest's xunit2 wraps suites in <testsuites>; older/--junit-family=xunit1
+    # uses a bare <testsuite> root. Handle both.
+    if root.tag == "testsuites":
+        suites = root.findall("testsuite")
+    elif root.tag == "testsuite":
+        suites = [root]
+    else:
+        suites = root.findall(".//testsuite")
+    total = sum(int(s.get("tests", "0")) for s in suites)
+    failures = sum(int(s.get("failures", "0")) for s in suites)
+    errors = sum(int(s.get("errors", "0")) for s in suites)
+    if total == 0:
+        return False, (
+            "INCOMPLETE RUN — junit recorded 0 tests; nothing executed "
+            "(collection error or empty session). Failing the gate closed."
+        )
+    if failures or errors:
+        return False, (
+            f"{failures} failure(s) + {errors} error(s) across {total} gated "
+            f"test(s)."
+        )
+    if returncode != 0:
+        return False, (
+            f"pytest returned non-zero ({returncode}) despite a clean junit — "
+            f"failing the gate closed."
+        )
+    return True, f"{total} gated test(s) passed (0 failures, 0 errors)."
+
+
 def run_static_tests():
-    """Run static analysis tests via pytest (auto-discovered — #11394)."""
+    """Run static analysis tests via pytest (auto-discovered — #11394).
+
+    The gate is fail-closed (#12408): it does not trust pytest's returncode
+    alone but requires a complete junit report proving the session reached
+    session-finish. See _static_gate_verdict for the rationale.
+    """
     print("\n=== Static Analysis Tests (pytest) ===\n")
     modules = discover_static_modules()
     # Guard: an empty module list would make pytest fall back to recursive
@@ -143,12 +213,27 @@ def run_static_tests():
         for name, kind, reason in excluded:
             print(f"  - {name} [{kind}]: {reason}")
         print()
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-v", "--tb=short"]
-        + [str(TESTS_DIR / f"{mod}.py") for mod in modules],
-        cwd=str(TESTS_DIR.parent),
-    )
-    return result.returncode == 0
+    # Always emit a junit report to a unique temp path. Its later EXISTENCE is
+    # our positive proof pytest reached session-finish; a mid-run hard-exit
+    # leaves it absent (#12408). Unlink the empty mkstemp placeholder first so
+    # only pytest itself can (re)create the file.
+    junit_fd, junit_name = tempfile.mkstemp(prefix="sq_static_gate_", suffix=".xml")
+    os.close(junit_fd)
+    junit_path = Path(junit_name)
+    junit_path.unlink()
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "-v", "--tb=short",
+             "--junit-xml", str(junit_path)]
+            + [str(TESTS_DIR / f"{mod}.py") for mod in modules],
+            cwd=str(TESTS_DIR.parent),
+        )
+        passed, reason = _static_gate_verdict(result.returncode, junit_path)
+        print(f"\n[static-gate] {'PASS' if passed else 'FAIL'} — {reason}")
+        return passed
+    finally:
+        if junit_path.exists():
+            junit_path.unlink()
 
 
 def run_integration_tests(targets):

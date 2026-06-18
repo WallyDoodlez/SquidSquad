@@ -1,32 +1,38 @@
 # Working State
 
-- **Task**: #12506 (in-progress) — event-mode periodic driver, build to LOCKED AGENT-RUNTIME §8.6.1. Branch `squidsquad/task/12506` (pushed). **Units 1+2 DONE + committed**; units 3-5 remain.
-- **Prior this session**: #12585 → pending-test (PR #12782, L1 Soul Health & Diagnostics) — DONE, verifier lane.
+- **Task**: none. Idle. Three items completed across recent session(s), all in verifier's lane.
+- **Just completed this cycle**:
+  - **#12408** → pending-test (PR #12819, branch squidsquad/task/12408). Static gate fail-closed on incomplete run. See block below.
+- **Earlier (prior session, may already be shipped)**:
+  - **#12506** → pending-test (PR #12812). Event-mode periodic driver, §8.6.1. (QA-RESULTS-12506 landed via pull — likely verified/shipping.)
+  - **#12798** → pending-test (direct-to-main). `.claude/scheduled_tasks.lock.stale-bak` untrack + gitignore `.lock*`.
 
-## #12506 PROGRESS
-**DONE (committed on branch, pushed):**
-- **Unit 1** `references/scripts/subloop_driver.py` — deterministic arm/tick/record-scan/reidle/cancel state machine (§8.6.1). 29 unit tests `tests/test_subloop_driver_12506.py` GREEN. DS review (deepseek exit0): F1-3 fixed (TypeError guards, read_state type-coercion, tick armed-gate), F4 declined (fixed-cadence per spec). Record: `.squidsquad/skill/planning/DS-REVIEW-12506-unit1.md`.
-- **Unit 2** config wiring: `config.py` idle-scan-burst FIELD_MAP + default 3; `wizard.py` new-installs `Cool-Down: 30m` + `Idle Scan Burst: 3`; `test_config_functions.py` SAMPLE_CONFIG carries new field (#5366 FieldMapCoverage).
+## #12408 — DONE this cycle (pending-test, PR #12819)
+- **Root cause**: `run_static_tests()` returned `subprocess.returncode == 0` alone. A mid-run hard-exit (`os._exit(0)`/`sys.exit(0)`) forces rc 0 with NO junit written → false-green truncation. (This is how #12380 reached pending-test; how #12798 was masked.)
+- **AC2 already satisfied by #12720** (commit e92dfd657): the *specific* culprit (/shutdown daemon-thread os._exit race) was fixed earlier. Full static run now completes 100% — 4547 passed, junit written. I verified this firsthand (the bug does NOT currently reproduce).
+- **Fix (this PR) = the durable hardening (AC3)**: gate now emits `--junit-xml` and routes through new `_static_gate_verdict(returncode, junit_path)` — requires a parseable junit (>0 tests, 0 failures/errors) as positive proof of session-finish; fails closed on missing/malformed/empty junit. A missing junit IS the canonical hard-exit signature (session-finish hook never fired). Cause-agnostic — defends the whole class, not just #12720's instance.
+- **AC1**: returncode-nonzero AND recorded-failure both fail the gate; regression test locks it.
+- **Tests**: `tests/test_12408_static_gate_completeness.py` — 13 tests (8 verdict-logic + 5 run_static_tests wiring incl. false-green-hard-exit sim + temp-file cleanup). #11394 suite still green. Full static gate green (4547).
+- **Definitive proof**: injected a real `os._exit(0)` test into the gated set → gate exited **1** (`INCOMPLETE RUN`), was false-green 0 before. Injection removed.
+- **DS review**: NO_FINDINGS. Record `DS-REVIEW-12408.md` (on main).
+- **No CQ needed**: pure test-infra code, not LLM-consumed instructions. Not in installer-files.txt/manifest (tests are dev-only).
 
-**REMAINING:**
-- **Unit 3 (BIG, high-blast-radius)** `references/sub-skills/common-events/idle-cooldown-loop.md`: rewrite step 5 + "after each empty poll interval" to the driver-tick re-entry model. NAME §8.6.1 driver as cadence source (NOT Monitor fixed-cadence — that's the bug). KEEP NUDGE branch + cooldown eligibility. Document `Idle Scan Burst` in Cool-Down Configuration. Agent maps subloop_driver decisions → scheduling tool call. → AC2/AC5/AC7. **PRIMITIVE DECISION still open**: ScheduleWakeup (recommended, single-shot self-reschedule) vs CronCreate+CronDelete vs /loop — settle by checking each tool's semantics + how loop-mode /loop cancels. DS-review this change (AC12, high-blast-radius).
-- **Unit 4** `compose.py deploy-all` + verify driver instruction in event-mode composed CLAUDE.md (AC9); harness.py untouched (AC8).
-- **Finalize**: re-apply live `.squidsquad/config.md` `Cool-Down: 30`→`30m` + add `Idle Scan Burst: 3` (commit-code reset it; graceful default covers function meanwhile) → commit-state at main-landing. AC10 comprehension (PM-authored in body; verifier makes spec). Full `run_tests.py` green. pr-create + → pending-test (ATOMIC — all units one PR per §8.6.1).
-- **Resume entry point**: Unit 3. Read idle-cooldown-loop.md (current step 5 wrongly assumes Monitor fixed-cadence wakes) + the ScheduleWakeup/CronCreate/CronList tool schemas + how loop-mode cancels /loop.
+## KEY LEARNINGS (see also personal memory)
+- **#11511 pre-commit guard**: state files (`config.md`, `.squidsquad/<role>/planning/*`, working-state) are main-only; code goes on PR branch. `commit-code` commits code to the feature branch, pushes, and returns to main — so after it, `run_tests.py` "looks reverted" on main (it's on the branch). Not a bug.
+- **#12720** fixed the static-gate hard-exit culprit; **#12408** (this PR) is the gate hardening that makes the class non-recurring.
+- **compose.py deploy** invokes an LLM-polish step (`claude -p`) per role; non-deterministic; DM main-landing concern, not a worker feature-branch step.
 
-## Findings filed this session
-- **#12798** (role:skill, low) — pre-existing tracked volatile `.claude/scheduled_tasks.lock.stale-bak` (QA b3b11f646) fails test_volatile_files_not_tracked on origin/main. NOT a #12506 regression; reverted from #12506 branch to keep scope pure. Fix separately (direct-to-main hygiene: git rm --cached + .gitignore).
+## Queue (skill) — next pickup candidates
+- **#12799** (HIGH, open) — L1 async-no-pause (agents must never block on a human). Instruction change → CQ test. **Recommended next.**
+- **#10540** (medium, open) — DM batch-ship dispatch "Base branch was modified" (PM routed to skill as fix-surface owner).
+- Open bugs also on queue: #12748/#12747 (env-gated live tests ERROR vs SKIP), #12526, #12519, #12511, #12409, #12397, #12363, #12294, #11716, #11600.
+- Approved tasks (high): #12801 (Harness TUI action bar), #12800 (human as non-agent role), #12527, #12492, #12450, #12271. (medium): #10690, #10686.
 
-## Queue behind #12506 (newly routed this session)
-- **#10540** (role:skill, open, medium) — PM routed (c-2026-06-18 "fix-surface owner"): DM batch-ship dispatch — 8/10 PR merges fail "Base branch was modified" when queue drains after harness outage. Auto-approved (bug); queues BEHIND in-progress #12506. Cursor fast-forwarded past its assigned-to event (forge is source of truth; work_queue surfaces it).
-- **#12585 SHIPPED** ✓ (PR #12782 merged 05:51Z) — L1 Soul Health & Diagnostics now on main; all roles need reboot to pick up new L1 (deferred per operator).
+## Blocked / not mine
+- #10855 PM-parked (do-not-resume). #12493 HELD on §8.3 (PR #12494 built). #12585 SHIPPED (L1 Soul; reboot deferred per operator).
 
-## Blocked in-progress (carried, not mine to action)
-- #10855 PM-parked (do-not-resume; #12460 shipped → PM close-as-superseded).
-- #12493 HELD on AGENT-RUNTIME §8.3 semantic-handoff-backstop (NOT landed). PR #12494 built.
-
-- **Status**: #12506 in-progress (units 1-2 done; unit 3 next). #12585 pending-test.
-- **Updated**: 2026-06-18 02:05 (skill — event-mode)
+- **Status**: idle. #12408 → pending-test (PR #12819). Next pickup: #12799 (HIGH) or an open bug.
+- **Updated**: 2026-06-18 16:50 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## Improvement Scan

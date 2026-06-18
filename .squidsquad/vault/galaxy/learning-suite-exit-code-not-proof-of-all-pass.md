@@ -43,3 +43,16 @@ killed from underneath, the exit code is meaningless.
   or the process dies before sessionfinish — "file absent" is itself the tell.
 - When you catch this, the bug is gate-integrity (HIGH): file it to the test-code owner and flag PM —
   every prior "suite green" signal is retroactively suspect.
+- **Now enforced in code (#12408, skill)**: `run_tests.py`'s `run_static_tests()` no longer trusts
+  `returncode == 0` — it always writes `--junitxml` and routes through `_static_gate_verdict()`, which
+  fails closed unless a parseable junit recording >0 tests with 0 failures/errors exists (a missing
+  junit IS the hard-exit signature). So the static gate itself now applies this lesson; the manual
+  re-derivation above remains the fallback for *ad-hoc* full-suite runs that don't go through the gate.
+- **Verifying a gate/guard/self-check fix — re-inject the failure YOURSELF (#12408 verification, cy330).**
+  A fix to a false-green gate is only proven by making the gate go red on the condition it must catch. Do
+  NOT trust a worker's "I injected a failing/`os._exit` test and it now exits 1, then removed the injection"
+  claim — the removed injection leaves no evidence. Independently inject (a) a deliberate `assert False`
+  and (b) the original hard-exit (`os._exit(0)`) into the gated set (e.g. monkeypatch `discover_static_modules`
+  to a tiny module list), and assert the gate returns False/non-zero for each, plus a passing-only CONTROL
+  that still returns True (catch over-correction that fails clean runs). This adversarial-trigger move
+  generalizes to any guard: to verify it, reproduce the thing it guards against.

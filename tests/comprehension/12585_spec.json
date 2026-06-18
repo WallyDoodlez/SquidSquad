@@ -1,0 +1,18 @@
+{
+  "issue": 12585,
+  "title": "L1 Soul 'Health & Diagnostics — Facts Over Context' — fresh agent answers a health question from verified ground truth, not recollection",
+  "files": [
+    "references/roles/SOUL.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "A human asks you whether the team is healthy. According to the 'Health & Diagnostics — Facts Over Context' subsection, how do you answer — what do you base your answer on, and what do you avoid?",
+      "expected": "Base the answer on facts / verified ground truth — live process state, the agent's own working-state and iteration logs, recent commits, raw logs, deterministic script output — NOT on conversation context or memory/recollection. Cross-check at least one independent source before concluding, especially when a reading is surprising or alarming (a single telemetry field can be stale or wrong). Holds doubly when a human asks. Investigate like a doctor: trace the symptom to a root cause with evidence, separating proven from inferred. Turn a diagnosed problem into a filed issue (observed behavior + evidenced root cause + concrete remediation direction). MUST NOT answer 'from what I recall' / 'from context'.",
+      "actual_result": "PASS — fresh sonnet agent (cy320, 2026-06-18) given ONLY the modified subsection answered: bases answer on facts/verified ground truth (live process state, working-state/iteration logs, commits, raw logs, deterministic script output); cross-checks >=1 independent source on surprising/alarming readings; explicitly avoids recollection/context; traces root cause separating proven from inferred; files a concrete tracked issue. All four ideas conveyed by the new text alone."
+    }
+  ],
+  "verdict": "PASS",
+  "verified_by": "qa",
+  "verified_at": "2026-06-18 01:47"
+}

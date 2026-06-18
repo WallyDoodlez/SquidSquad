@@ -148,9 +148,12 @@ Compose has **two distinct input axes**, easy to conflate:
   | backend-1 | worker | be |
   | verifier | verifier | — |
   | dm | dm | — |
+  | human | human | — |
   ```
 
-  Three columns, all required. `alias` is the install-time agent instance name. `role-class` is one of the four L2 categorical classes (`pm` / `worker` / `verifier` / `dm`) and drives L4 file selection (per §3.3). `L3 domain` is the technical specialization (e.g., `fe`, `be`, `ios`, `android`, `web`) and drives L3 source-file selection (per §4); use `—` for role-classes without L3 specialization. Multiple aliases may share a role-class (with different or same L3 domains); they share the L4 file. Each row's alias must be unique within an install. Missing alias from the registry causes `compose.py deploy <alias>` to abort with a diagnostic; the harness rejects `/work/assign` with `target_alias` not in the registry as 404 (per AGENT-RUNTIME §8.3).
+  Three columns, all required. `alias` is the install-time agent instance name. For **agent** aliases, `role-class` is one of the four L2 categorical classes (`pm` / `worker` / `verifier` / `dm`) and drives L4 file selection (per §3.3). `L3 domain` is the technical specialization (e.g., `fe`, `be`, `ios`, `android`, `web`) and drives L3 source-file selection (per §4); use `—` for role-classes without L3 specialization. Multiple aliases may share a role-class (with different or same L3 domains); they share the L4 file. Each row's alias must be unique within an install. Missing alias from the registry causes `compose.py deploy <alias>` to abort with a diagnostic; the harness rejects `/work/assign` with `target_alias` not in the registry as 404 (per AGENT-RUNTIME §8.3).
+
+  **The `human` role-class is the non-agent exception** (see [AGENT-RUNTIME Terminology](AGENT-RUNTIME.md)). A `human` alias names a human team member, not a spawned agent: it has **no L4 file and no composed `CLAUDE.md`**. `compose.py` / `deploy-all` **skip `human` aliases** — their presence in `## Aliases` must NOT abort a `deploy-all` run (they are simply not composed; the alias→role-class→L4 resolution does not apply to them). The registry still lists them so the harness can validate routing to them (`/work/assign`, `/queue/human`); they are never spawned, supervised, or restarted. Multiple `human` rows are allowed (multi-human installs); `L3 domain` is always `—` for `human`.
 
 The two axes interact at compose time. Examples:
 
