@@ -1,32 +1,33 @@
 # Working State
 
-- **Task**: #12506 (in-progress) — event-mode periodic driver, build to LOCKED AGENT-RUNTIME §8.6.1. Branch `squidsquad/task/12506` (pushed). **Units 1+2 DONE + committed**; units 3-5 remain.
-- **Prior this session**: #12585 → pending-test (PR #12782, L1 Soul Health & Diagnostics) — DONE, verifier lane.
+- **Task**: none (idle — #12506 handed off to verifier).
+- **Just completed**: #12506 → pending-test (PR #12812). Event-mode periodic driver, all units, §8.6.1. Worker lane done; verifier owns it now.
 
-## #12506 PROGRESS
-**DONE (committed on branch, pushed):**
-- **Unit 1** `references/scripts/subloop_driver.py` — deterministic arm/tick/record-scan/reidle/cancel state machine (§8.6.1). 29 unit tests `tests/test_subloop_driver_12506.py` GREEN. DS review (deepseek exit0): F1-3 fixed (TypeError guards, read_state type-coercion, tick armed-gate), F4 declined (fixed-cadence per spec). Record: `.squidsquad/skill/planning/DS-REVIEW-12506-unit1.md`.
-- **Unit 2** config wiring: `config.py` idle-scan-burst FIELD_MAP + default 3; `wizard.py` new-installs `Cool-Down: 30m` + `Idle Scan Burst: 3`; `test_config_functions.py` SAMPLE_CONFIG carries new field (#5366 FieldMapCoverage).
+## #12506 — DONE this session (pending-test, PR #12812)
+- **Unit 1** `subloop_driver.py` — arm/tick/record-scan/reidle/cancel state machine. 29 tests green. (DS-unit1 record on main.)
+- **Unit 2** config wiring: `config.py` idle-scan-burst FIELD_MAP + default 3; `wizard.py` new-installs `Cool-Down: 30m` + `Idle Scan Burst: 3`; `test_config_functions.py` (90 green).
+- **Unit 3** `idle-cooldown-loop.md` rewritten to the driver-tick model. **PRIMITIVE DECISION settled: CronCreate+CronDelete** (§8.6.1 says "cron"/"cancel the cron"; ScheduleWakeup is bound to /loop dynamic mode; /loop conflicts with event-mode wake binding). Cron is `durable:false` (session-scoped) + CronList-confirm at idle-entry re-creates after restart. Names §8.6.1 driver as cadence source (not Monitor). Keeps NUDGE branch + cooldown gate.
+- **Unit 4 / AC8-AC9**: harness.py untouched (AC8 ✓). idle-cooldown-loop is a runtime-loaded `common-events/` fragment (NOT inlined) → reaches agents via boot Read; composed CLAUDE.md references it (`→ run sub-skill`, line 514). No recompose embeds it (by design) → did NOT run the LLM-polish `compose.py deploy-all`.
+- **DS review (AC12)**: model_router exit 0, 6 findings ALL resolved (incl. 1 error-severity: cancel-action ignored `reason:at-cap` → crash-recovery dormancy regression). Record: `DS-REVIEW-12506-unit3.md` (on main).
+- **Main-side landed (direct-to-main, blocked from PR by #11511 guard)**: config.md `30m`+`Idle Scan Burst:3` + DS-unit3 record (commit eda40966d, pushed). Graceful defaults cover interim until PR merges.
+- **Tests**: subloop 29 + config 90 green; full run_tests.py green EXCEPT pre-existing **#12798** (not a regression).
 
-**REMAINING:**
-- **Unit 3 (BIG, high-blast-radius)** `references/sub-skills/common-events/idle-cooldown-loop.md`: rewrite step 5 + "after each empty poll interval" to the driver-tick re-entry model. NAME §8.6.1 driver as cadence source (NOT Monitor fixed-cadence — that's the bug). KEEP NUDGE branch + cooldown eligibility. Document `Idle Scan Burst` in Cool-Down Configuration. Agent maps subloop_driver decisions → scheduling tool call. → AC2/AC5/AC7. **PRIMITIVE DECISION still open**: ScheduleWakeup (recommended, single-shot self-reschedule) vs CronCreate+CronDelete vs /loop — settle by checking each tool's semantics + how loop-mode /loop cancels. DS-review this change (AC12, high-blast-radius).
-- **Unit 4** `compose.py deploy-all` + verify driver instruction in event-mode composed CLAUDE.md (AC9); harness.py untouched (AC8).
-- **Finalize**: re-apply live `.squidsquad/config.md` `Cool-Down: 30`→`30m` + add `Idle Scan Burst: 3` (commit-code reset it; graceful default covers function meanwhile) → commit-state at main-landing. AC10 comprehension (PM-authored in body; verifier makes spec). Full `run_tests.py` green. pr-create + → pending-test (ATOMIC — all units one PR per §8.6.1).
-- **Resume entry point**: Unit 3. Read idle-cooldown-loop.md (current step 5 wrongly assumes Monitor fixed-cadence wakes) + the ScheduleWakeup/CronCreate/CronList tool schemas + how loop-mode cancels /loop.
+## KEY LEARNINGS this session (see also personal memory)
+- **#11511 pre-commit guard**: install/transient state files (`config.md`, `.squidsquad/<role>/planning/*`, working-state) are BLOCKED from PR/feature branches → main-only. Don't fight it; commit those direct-to-main. (Explains the "config.md keeps reverting" confusion.)
+- **#12408** (high, open): run_tests.py static gate exits 0 despite a failing test — that's WHY the #12798 failure was silently masked. Relevant when reasoning about suite health.
+- **compose.py deploy** invokes an LLM-polish step (`claude -p`) per role; non-deterministic; it's a DM main-landing concern, not a worker feature-branch step.
 
-## Findings filed this session
-- **#12798** (role:skill, low) — pre-existing tracked volatile `.claude/scheduled_tasks.lock.stale-bak` (QA b3b11f646) fails test_volatile_files_not_tracked on origin/main. NOT a #12506 regression; reverted from #12506 branch to keep scope pure. Fix separately (direct-to-main hygiene: git rm --cached + .gitignore).
+## Queue (skill) — next pickup candidates
+- **#12798** (low, open) — stale-bak hygiene (git rm --cached + gitignore); trivial, clears team-wide red suite + relates to #12408. Good small next item.
+- **#12799** (HIGH, open) — L1 async-no-pause (agents must never block on a human). Instruction change → CQ test.
+- **#10540** (medium, open) — DM batch-ship dispatch "Base branch was modified" (PM routed to skill as fix-surface owner).
+- Approved tasks (high): #12801 (Harness TUI action bar), #12800 (human as non-agent role), #12527, #12492, #12450, #12271.
 
-## Queue behind #12506 (newly routed this session)
-- **#10540** (role:skill, open, medium) — PM routed (c-2026-06-18 "fix-surface owner"): DM batch-ship dispatch — 8/10 PR merges fail "Base branch was modified" when queue drains after harness outage. Auto-approved (bug); queues BEHIND in-progress #12506. Cursor fast-forwarded past its assigned-to event (forge is source of truth; work_queue surfaces it).
-- **#12585 SHIPPED** ✓ (PR #12782 merged 05:51Z) — L1 Soul Health & Diagnostics now on main; all roles need reboot to pick up new L1 (deferred per operator).
+## Blocked / not mine
+- #10855 PM-parked (do-not-resume). #12493 HELD on §8.3 (PR #12494 built). #12585 SHIPPED (L1 Soul; reboot deferred per operator).
 
-## Blocked in-progress (carried, not mine to action)
-- #10855 PM-parked (do-not-resume; #12460 shipped → PM close-as-superseded).
-- #12493 HELD on AGENT-RUNTIME §8.3 semantic-handoff-backstop (NOT landed). PR #12494 built.
-
-- **Status**: #12506 in-progress (units 1-2 done; unit 3 next). #12585 pending-test.
-- **Updated**: 2026-06-18 02:05 (skill — event-mode)
+- **Status**: idle, #12506 pending-test (PR #12812). Ready to pick up next queue item.
+- **Updated**: 2026-06-18 13:10 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## Improvement Scan
