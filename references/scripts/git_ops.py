@@ -491,6 +491,33 @@ def _is_state_file(path):
     return any(path.startswith(p) for p in STATE_PREFIXES)
 
 
+def _is_plan_body(path):
+    """Plan-in-PR (#12750): task plan bodies belong ON the task branch, not stripped to main.
+
+    A plan body lives at ``.squidsquad/<role>/planning/<n>-body.md`` where ``<n>``
+    is the issue number. PM commits it as commit 1 of the task branch (which opens
+    the draft PR); on merge it lands on the working branch co-located with the code
+    that fulfilled it (#12750). These are versioned deliverables, not transient
+    state, so the pre-commit state guard must NOT strip them from a feature branch.
+
+    Kept deliberately narrow — only the ``<n>-body.md`` plan, never
+    ``working-state.md`` / ``iterations/`` / vault notes — so it cannot reintroduce
+    the #11511 merge-spiral (those siblings are rewritten every cycle and overlap
+    across branches; a one-shot per-issue plan body does not). git always reports
+    forward-slash paths in ``diff --cached``, so a plain ``/`` split is sufficient.
+    """
+    parts = path.split("/")
+    if len(parts) != 4:
+        return False
+    if parts[0] != ".squidsquad" or parts[2] != "planning":
+        return False
+    name = parts[3]
+    if not name.endswith("-body.md"):
+        return False
+    stem = name[: -len("-body.md")]
+    return stem.isdigit()
+
+
 def _auto_resolve_state_conflicts():
     """Auto-resolve unmerged state files (#8653).
 
@@ -1057,11 +1084,16 @@ def guard_staged_state():
 
     - On the configured working branch (or a detached/unknown HEAD): no-op.
     - On any other (feature) branch: unstage every staged file classified as
-      state/ephemeral by ``_is_state_file`` (the SAME classifier ``commit_code``
-      uses, so routing stays single-source). The files stay in the working
-      tree for the next working-branch cycle to commit: ``.squidsquad/`` files
-      via ``commit_state``; ``.claude/`` files via the working branch's normal
-      state-commit path (``commit_state`` stages only ``.squidsquad/``).
+      state/ephemeral by ``_is_state_file`` (the same classifier ``commit_code``
+      uses), **except plan bodies** — ``_is_plan_body`` paths
+      (``.squidsquad/<role>/planning/<n>-body.md``) are exempted so a task's
+      committed plan rides the feature branch into the PR (plan-in-PR, #12750).
+      That carve-out is guard-local: ``commit_code`` / ``commit_state`` /
+      ``_auto_resolve_state_conflicts`` still treat plan bodies as state. The
+      stripped files stay in the working tree for the next working-branch cycle
+      to commit: ``.squidsquad/`` files via ``commit_state``; ``.claude/`` files
+      via the working branch's normal state-commit path (``commit_state`` stages
+      only ``.squidsquad/``).
 
     FAIL-OPEN: always returns normally (exit 0 at the call site). A pre-commit
     hook that aborts could wedge every agent's cycle, so this guard only ever
@@ -1081,8 +1113,16 @@ def guard_staged_state():
     staged = _run_list(["git", "diff", "--cached", "--name-only"], check=False)
     if staged.returncode != 0:
         return []
-    state_staged = [p.strip().strip('"') for p in staged.stdout.splitlines()
-                    if p.strip() and _is_state_file(p.strip().strip('"'))]
+    # Plan bodies (#12750) are versioned deliverables that ride the task branch
+    # into the PR — exempt them from the strip even though they live under
+    # .squidsquad/. Everything else under .squidsquad/ / .claude/ is still state.
+    state_staged = []
+    for raw in staged.stdout.splitlines():
+        p = raw.strip().strip('"')
+        if not p:
+            continue
+        if _is_state_file(p) and not _is_plan_body(p):
+            state_staged.append(p)
     if not state_staged:
         return []
 
