@@ -2,7 +2,34 @@
 
 _Condensed 2026-06-15. Prior incident narrative (reboot saga, event-mode stabilization, #11505/#11511 churn, #12417 doc-reconciliation, restart procedure) preserved in iteration logs + on the forge — not re-copied here. Working-state = current active state only._
 
-## Current — 2026-06-16 (PM EVENT-mode, operator-active session)
+## Current — 2026-06-17 23:54 (PM EVENT-mode, fresh reincarnated boot)
+
+**Boot clean.** Harness reachable :7373 (up 2h, git_sha 23ebc3a9, v0.44.0). GH access OK. Cursor was `990f84b1` → drained 41 events, all no-ops (forge-reflected ships + test-bus garbage on issues #999/#42/#1/#55/#87654/#269). The one pm-targeted event (`assigned-to`/l4-recompose/restart-required, fired 22:51 after PR #12751 merged pm-composed source) was **already honored by this fresh spawn** (~23:50). Cursor advanced to head `2456da7f`.
+
+**RESTART PENDING — operator restarting agents (skill requested) once pm idle (start.bat may have failed when PM-launched last time → operator doing it). Everything below checkpointed for clean resume.**
+
+**#12749 SHIPPED + MERGED (01:04) — DM-ARCH layered refactor, clean pipeline:**
+- qa VERIFIED → PASS 8/8 ACs (04:56Z) → dm SHIPPED (01:04) → **PR #12689 MERGED**. AC3 resolved per PM ruling: live `dm/skill` wiring + c12-F1 critical fix (`config.py alias dm` strips `/domain` → DM identity intact). qa recovered fully (earlier respawn-watch resolved positive).
+- **Operator parser-model flag: now SHIPPED to main** (config.py `<class>/<domain>` bullet-parser). DS-hardened + tested + revertible. Operator still free to veto/redirect post-hoc; informed.
+- **#12689 touched pm-composed sources** (cycle-runner.md, AGENT-RUNTIME.md, DM-ARCH.md, config.py…) → `l4-recompose`/`restart-required` for pm emitted (01:01). Harness/l4_file_watcher owns recompose+restart (do NOT manually `compose.py deploy-all` — race risk; harness handles).
+- **PM POST-RESTART TODOs:** (1) flip `docs/DM-ARCH.md` §5 "tracked as #12749" → "realized" — DM-ARCH.md WAS in #12689 files_changed, so **check if skill already flipped it**; (2) confirm DM-ARCH.md documents the skill-domain wiring (23:54 doc-honesty flag); (3) confirm composed `pm/CLAUDE.md` current after harness recompose+restart.
+
+**#12506 heartbeat directive (operator 2026-06-18) — RESOLVED in planning, gated:**
+- Operator: "agents forget queued work" → fold heartbeat fix into #12506, ensure arch-doc updated w/ change + DS-audit after. Confirmed routing to **skill** (not DM — DM=delivery only; operator OK'd).
+- **CRITICAL correction:** my floated "event_poll idle-heartbeat" mechanism would VIOLATE the already-locked, DS-audited §8.6.1 design (hard no-harness-change constraint, AC8). #12506 is fully planned (12 ACs) with an **agent-side periodic self-wake driver** — that fix ALSO cures forgotten-work (driver tick re-enters §8.1 loop → re-reads work_queue). Operator asks already = AC12 (DS-audit) + AC7/AC9 (arch-doc/sub-skill reconcile). No plan change. Symptom appended as #12506 comment.
+- **BLOCKER = PR #12518** (§8.6.1 arch doc): verified clean/mergeable but UNMERGED since 06-16 (~1.5d). §8.6.1 NOT on main (grep=0). **Merging #12518 unblocks the whole #12506 build — ESCALATED to operator (present).** Head branch `squidsquad/task/12506-arch-86`.
+
+**dm** idle — shipped #12750 + #12420 + #12749 cleanly, zero manual nudges (#12442 routing holding). **pm (this)** going idle for restart.
+
+**Own-domain housekeeping done this boot:** removed stray 0-byte garbage file (PUA-named `**Status**:`) from repo root.
+
+**Shipped 2026-06-17 (verified via forge):** #12750 (plan-in-PR guard, PR #12751), #12420 (post-commit harness restart INSTALLER-ARCH §10.3, PR #12596). Recent commit 1e7e101e flipped INSTALLER-ARCH §10.3 banner → implemented.
+
+**Carry-over parked (unchanged):** #11092, #11053 (in-progress coordination-holds), #9968, #10855(→skill), cutover #12271/#12460/#12492 chain. See prior sections.
+
+---
+
+## Prior — 2026-06-16 (PM EVENT-mode, operator-active session)
 
 **Cutover #12271/#12460 — SHADOW SHIPPED, observation window NOT yet open.** Operator chose **Path B split**: shadow increment shipped as #12460 (verifier PASS cy223 → DM-merged PR #12472). Cutover flip = **#12492** (approved, HARD-GATED on a clean PID-vs-progress divergence window). **GATE: the running harness (PID 35220, booted 14:05Z 06-15, git_sha 13c68b4a) predates the shadow merge → it is NOT running shadow code → observation window has NOT started.** Opening it requires a **harness restart** onto post-shadow main (operator-approved 2026-06-16). After restart verify: agents ready, qa loop-pin (59999) intact, .local-config has qa, harness git_sha advanced. Once a clean window logs → #12492 unblocks → #12409 + qa→event-mode unblock.
 
