@@ -542,7 +542,7 @@ The previous "preserved during upgrade" framing is retired — there is no separ
 
 ### 10.3 Post-installer harness restart
 
-> **Status: target — not yet implemented in the runbook (#12420).** `WIZARD.md` Step 7.6 currently prints the "run ./start.sh" message and exits without probing the harness or restarting agents. The behavior below is the agreed target.
+> **Status: implemented (#12420, shipped 2026-06-17).** `WIZARD.md` Step 7.5c probes the harness and restarts agents (stop+start per alias when reachable; user-driven `./start.sh` cold-start when not), via `wizard.py restart-agents`. The behavior below is live.
 
 After Phase 8 commits the new tree, the installer triggers a per-agent restart so running agents pick up the new composed CLAUDE.md. This is **separate from Phase 8** (which is just commit+push per §4.11) and **separate from the migration walk** (which completes before Phase 1). Restart happens after Phase 8's atomic commit and before Phase 9's exit message.
 
