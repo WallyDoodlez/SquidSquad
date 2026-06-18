@@ -21,6 +21,8 @@ SquidSquad has a small fixed set of **role classes** and a per-install set of **
 | **`worker`** | Implements technical work to acceptance criteria |
 | **`dm`** | Delivers verified work, generates the delivery report, captures end-to-end knowledge (CHANGELOG / version bumps / releases are L4 project policy, not universal — see DM-ARCH) |
 
+**The `human` role (non-agent).** In addition to the four agent classes, `human` is a first-class **routable role** — agents assign work to a human the same way they assign to any alias (decisions, approvals, setup, reboot green-lights). It is a *non-agent* role: a human has no composed `CLAUDE.md`, no L1–L4, no `SOUL.md`, and is not spawned, supervised, health-checked, or restarted by the harness — "humans have their own L1–L4." Human aliases are registered in `## Aliases` like agent aliases, and **multiple humans are supported** (multi-instance, exactly like multi-instance workers: `human`, or `wallace`/`alice`). `compose.py` / `deploy-all` **skip human aliases** (they produce no `CLAUDE.md` and have no L4 file; the role-class resolver must not map a human alias to an agent class). A human is **not on the event bus**: an `assigned-to <human>` event is appended for forge/audit correctness but is never consumed via the bus — the human reads it on the forge (GitHub assignee/notification) or hears it inline (§3). The rule governing *when* and *how* agents assign to a human — never block, always async — is the async-no-pause rule in §3.
+
 **Agent aliases** (1..N per class, install-defined in `.squidsquad/config.md` `## Aliases`):
 
 - Every running agent has a unique alias. The alias IS the agent's name in all routing.
@@ -115,14 +117,33 @@ flowchart LR
 Concrete consequences for an inline turn:
 
 - `cycle_pre.py` does not run; `cycle-input.json` is not written for the turn.
-- `cycle_post.py` does not run; the iteration log is not appended; `working-state.md` is not mechanically updated; the status-bar `current-state` file is not touched.
+- `cycle_post.py` does not run; the iteration log is not appended; `working-state.md` is not mechanically updated.
+- **The status-bar current-event indicator IS set to `inline`** for the duration of the inline session. Because the cycle wrappers don't fire, the agent self-writes the `inline` value when it detects a human (inline) turn and clears it — back to its normal idle/working state — when the inline session ends (the human signals done, or the next autonomous wake fires). This makes "this agent is in a live human conversation" visible at a glance instead of leaving the bar stale.
 - Reactions to the human's request — tracker comments, transitions, PR work — still flow through the forge via `tracker.py`. Durability of side-effects is unchanged.
 
-**Monitoring impact.** PM's pipeline sentinel must treat absence of `cycle-input.json` updates, stale `current-state` writes, and unchanged `working-state.md` during inline-mode periods as **expected** rather than as stall signals (#9358).
+**Monitoring impact.** PM's pipeline sentinel must treat absence of `cycle-input.json` updates and unchanged `working-state.md` during inline-mode periods as **expected** rather than as stall signals (#9358). The status bar itself is **not** ambiguous during inline mode — it reads `inline` (above), so the sentinel reads an explicit state rather than inferring intent from a stale `current-state` write.
 
 **Override discipline.** Human instructions delivered inline take precedence over autonomous cycle work. They do NOT override safety gates: instructions that would cross a role boundary, violate a vault-recorded prohibition, or require destructive / hard-to-reverse action without confirmation must still be flagged before action.
 
 **Resuming autonomous mode after an inline session.** In **loop mode**, re-invoke `/loop` per the recovery directive in `references/sub-skills/common/boot-bootstrap.md` (POLLING block). In **event mode**, no action is required: the Monitor tool is invoked with `persistent: true` (per `references/sub-skills/common-events/event-mode-contract.md`) so it stays active across inline turns — the next nudge after the inline interaction wakes the agent automatically. **Do not re-invoke Monitor manually** — `event-mode-contract.md` explicitly forbids it (a Monitor exit is the signal that the harness owns recovery). The session's wake mode itself does NOT change — it stays whichever was selected at boot (§9.3 establishes mode-stickiness for the session).
+
+### 3.1 Never block on a human — async-no-pause (L1)
+
+Inline mode is the **only** synchronous human channel. In every autonomous mode (loop or event), an agent **must never pause and wait for a human**. This is an **L1 rule — all roles.**
+
+> **When you need a human's attention or decision, assign a tracked ticket to a `human` alias and immediately continue.** Set `role:<human>` + the appropriate `pending-human-*` status (the assignment is a *transition*, never a bare comment — bare comments wake no one and leave no ownership), then release to your normal flow: pick up your next queue item, or go idle. Do not sit and wait. The human answers asynchronously; the work resumes later via the return path below.
+
+Rationale: a human responds on human time, not agent time. An agent that blocks on a human stalls its whole queue for minutes-to-hours of dead clock. Assign-and-continue keeps the pipeline flowing and turns "waiting on a human" into one tracked, owned, auditable ticket instead of a wedged session.
+
+**The return path (human-mediated).** A human answers through inline mode, and the answer is carried back to the originating agent by a person-in-the-loop — there is no automatic bus delivery (a human isn't on the event bus):
+
+- **Human → originating agent (inline):** the agent records the human's answer into the ticket and **re-assigns the ticket back to itself** (`/work/assign` to its own alias via a transition), which resumes the work.
+- **Human → PM (inline):** PM records the answer into the ticket and **assigns it back to the originating agent on its behalf.**
+- **Human → the wrong agent** (neither the originator nor PM): that agent replies **"this isn't my territory — you've reached the wrong agent,"** and points the human to the right alias or to PM. (Same posture as §8.3 mis-route recovery, applied to a human who mis-addressed.)
+
+No special metadata is needed to find the originator: the ticket's prior `role:*` label records who owned it before it went to the human, so whoever helps re-assign knows where to send it back.
+
+**Routing consequence (see §8.3):** "an agent needs a human" handoffs (`* → pending-human-review`, `* → pending-human-setup`) target a **`human` alias** — not PM. PM is no longer the mandatory funnel for human-attention work; agents assign to the human directly (PM still curates/surfaces, but does not gate). The inverse direction — "a human gave input an agent must act on," e.g. a human-authored forge comment — still routes to an **agent** (`pm`).
 
 ---
 
@@ -960,8 +981,8 @@ In practice agents never call `/work/assign` directly for transition-driven hand
 | `planned → approved` | alias from issue's `role:*` label; if none, route to `pm` with `event_context="unowned-approval"` | `"ready-for-pickup"` |
 | `approved → in-progress` | (no assign — self-pickup) | — |
 | `pending-ship → shipped` | (no assign — terminal) | — |
-| `* → pending-human-review` | `pm` | `"human-needed"` |
-| `* → pending-human-setup` | `pm` | `"human-needed"` |
+| `* → pending-human-review` | a `human`-role alias (single-instance default `human`); see §3.1 | `"human-needed"` |
+| `* → pending-human-setup` | a `human`-role alias (single-instance default `human`); see §3.1 | `"human-needed"` |
 
 The issue's `role:*` label IS the target alias (aliases and label values use the same namespace). The label *key* is `role:` for legacy code-compat reasons, but the label *value* is always alias-typed — in a single-instance install, alias = class name; in a multi-instance install, the label is the specific agent's alias (e.g., `role:frontend-1`, not `role:worker`). A rename of the label key from `role:` to `alias:` is in the same family as #10358 (`role` → `alias` identifier rename) but is currently out of scope on that task to limit blast radius — every existing issue label would need editing in lockstep with `tracker.py`, every care-filter caller, and every composed agent file that mentions `role:<name>`. Revisit once #10358 has phased through code-side first.
 
@@ -1303,6 +1324,12 @@ Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last P
   - **event_poll port discovery ordering**: harness writes `.squidsquad/.harness-port` and flushes to disk BEFORE spawning `event_poll`. HARNESS-ARCH §7.2 step 4 expanded with the ordering guarantee.
   - **event_poll vs EAD floor rationale**: `event_poll`'s 2s floor is safe because it polls the LOCAL harness HTTP API, not an external service; EAD's 5s floor is GitHub REST rate-limit safety. §8.0 cadence block annotated.
   - **§8.0 initial-queue ordering invariant** (rev 14 finalized) — already added; this rev confirms the placement decision matches it.
+- **2026-06-18 (rev 16) — `human` as a non-agent role + L1 async-no-pause + explicit inline status bar.** Operator-locked in a polish-mode session (design record: `.squidsquad/pm/planning/HUMAN-AS-ROLE-ASYNC-DESIGN.md`). Three coordinated additions:
+  - **`human` is a first-class routable role** (Terminology §): agents assign work to a human like any alias; aliases allowed; multiple humans supported (multi-instance). Non-agent — no composed `CLAUDE.md`, no L1–L4, no SOUL; not spawned/supervised/health-checked/restarted by the harness; not on the event bus (an `assigned-to <human>` is appended for forge/audit but never bus-consumed). `compose.py`/`deploy-all` must skip human aliases.
+  - **L1 async-no-pause** (§3.1, new): in any autonomous mode an agent must never block waiting on a human — it assigns a tracked ticket to a `human` alias (`role:<human>` + `pending-human-*` via a transition, never a bare comment) and immediately continues. Inline mode is the only synchronous human channel. Motivated by the observed skill-agent pausing-for-prompt-human-reply bug. Return path is human-mediated (originator self-reassigns, or PM reassigns on its behalf; wrong-agent → "not my territory"). This is L1 source work for skill.
+  - **Inline = explicit status bar** (§3): the status-bar current-event indicator reads `inline` for the duration of an inline session (agent self-writes/clears it, since cycle wrappers don't fire). Reverses the prior "current-state untouched in inline mode" text and supersedes the #9358 "treat staleness as expected" workaround.
+  - **Routing** (§8.3): `* → pending-human-review|setup` target a `human` alias (was `pm`); human-*provided* `human-comment` still routes to `pm`. PM is no longer the mandatory human funnel.
+  - **Implementation** is filed to skill (config.md human aliases, compose skip-human, tracker `role:human`, L1 async-no-pause rule, inline status-bar self-write, §8.3 routing). DS-audit + cross-pair audit pending per prose-drift discipline before settled.
   - **Linked-body write timing (COMPOSE §5.6)**: linked composite held in memory through assemble; `CLAUDE.linked.md` written to disk only on assemble success as part of the atomic triple. Assemble pass is unconditional — no `Assemble: no` opt-out exists.
   - **config.md path phrasing (COMPOSE §4.0)**: replaced "sibling of `.squidsquad/project/`" with "directly inside `.squidsquad/` alongside `project/` and `<alias>/`" — clearer.
   - **INSTALLER migration walk version-read clarification**: the `squidsquad_version:` field read at Phase 0b step 2 was written by **the prior** installer run's Phase 5 — `.squidsquad/config.md` is on disk before the current re-run starts. Fresh-install case skips the walk entirely (`.squidsquad/` doesn't exist). §11 step 2 expanded.
