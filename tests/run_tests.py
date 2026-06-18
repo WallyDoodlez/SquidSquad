@@ -32,7 +32,7 @@ INTEGRATION_DIR = TESTS_DIR / "integration"
 sys.path.insert(0, str(TESTS_DIR))
 sys.path.insert(0, str(INTEGRATION_DIR))
 
-from integration.harness import cleanup_all, verify_clean
+from integration.integration_harness import cleanup_all, verify_clean
 
 # ---------------------------------------------------------------------------
 # Static-gate test discovery (#11394)

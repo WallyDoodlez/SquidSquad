@@ -57,12 +57,12 @@ SCRIPTS = REPO_ROOT / "references" / "scripts"
 
 try:
     from fastapi.testclient import TestClient  # type: ignore
-    # Load the harness module under a unique name to dodge a
-    # sys.modules collision: tests/integration/harness.py (a
-    # cleanup utility) is imported first by run_tests.py and binds
-    # `harness` in sys.modules, so a plain `from harness import app`
-    # resolves to the test utility — which has no `app`. Same fix
-    # test_event_mode_e2e.py applies.
+    # Load the harness module under a unique name via importlib. The basename
+    # collision that originally forced this — the cleanup helper used to be
+    # `tests/integration/harness.py`, binding `harness` in sys.modules and
+    # shadowing the real `references/scripts/harness.py` — was resolved in
+    # #12509 (helper renamed to `integration_harness.py`). Retained as
+    # belt-and-suspenders: a private module name can never be shadowed.
     import importlib.util as _ilu
     _spec = _ilu.spec_from_file_location(
         "_harness_for_agent_subprocess", SCRIPTS / "harness.py"

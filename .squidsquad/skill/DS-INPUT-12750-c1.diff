@@ -1,0 +1,285 @@
+diff --git a/references/scripts/git_ops.py b/references/scripts/git_ops.py
+index 0b77d8ce2..3e2cba937 100644
+--- a/references/scripts/git_ops.py
++++ b/references/scripts/git_ops.py
+@@ -491,6 +491,33 @@ def _is_state_file(path):
+     return any(path.startswith(p) for p in STATE_PREFIXES)
+ 
+ 
++def _is_plan_body(path):
++    """Plan-in-PR (#12750): task plan bodies belong ON the task branch, not stripped to main.
++
++    A plan body lives at ``.squidsquad/<role>/planning/<n>-body.md`` where ``<n>``
++    is the issue number. PM commits it as commit 1 of the task branch (which opens
++    the draft PR); on merge it lands on the working branch co-located with the code
++    that fulfilled it (#12750). These are versioned deliverables, not transient
++    state, so the pre-commit state guard must NOT strip them from a feature branch.
++
++    Kept deliberately narrow — only the ``<n>-body.md`` plan, never
++    ``working-state.md`` / ``iterations/`` / vault notes — so it cannot reintroduce
++    the #11511 merge-spiral (those siblings are rewritten every cycle and overlap
++    across branches; a one-shot per-issue plan body does not). git always reports
++    forward-slash paths in ``diff --cached``, so a plain ``/`` split is sufficient.
++    """
++    parts = path.split("/")
++    if len(parts) != 4:
++        return False
++    if parts[0] != ".squidsquad" or parts[2] != "planning":
++        return False
++    name = parts[3]
++    if not name.endswith("-body.md"):
++        return False
++    stem = name[: -len("-body.md")]
++    return stem.isdigit()
++
++
+ def _auto_resolve_state_conflicts():
+     """Auto-resolve unmerged state files (#8653).
+ 
+@@ -1081,8 +1108,16 @@ def guard_staged_state():
+     staged = _run_list(["git", "diff", "--cached", "--name-only"], check=False)
+     if staged.returncode != 0:
+         return []
+-    state_staged = [p.strip().strip('"') for p in staged.stdout.splitlines()
+-                    if p.strip() and _is_state_file(p.strip().strip('"'))]
++    # Plan bodies (#12750) are versioned deliverables that ride the task branch
++    # into the PR — exempt them from the strip even though they live under
++    # .squidsquad/. Everything else under .squidsquad/ / .claude/ is still state.
++    state_staged = []
++    for raw in staged.stdout.splitlines():
++        p = raw.strip().strip('"')
++        if not p:
++            continue
++        if _is_state_file(p) and not _is_plan_body(p):
++            state_staged.append(p)
+     if not state_staged:
+         return []
+ 
+diff --git a/references/sub-skills/common/task-pickup.md b/references/sub-skills/common/task-pickup.md
+index c440de02c..22a36a41e 100644
+--- a/references/sub-skills/common/task-pickup.md
++++ b/references/sub-skills/common/task-pickup.md
+@@ -20,8 +20,8 @@ If the queue returns an approved task (not just role-specific items like pending
+    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role [ROLE]-lead
+    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Picking up. Status -> In Progress."
+    ```
+-4. **Branch checkout**: `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]`
+-5. Read planning artifacts if available (`.squidsquad/[PM_ALIAS]/planning/`).
++4. **Adopt the plan-seeded branch** (#12750): `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]`. PM seeded `squidsquad/task/[NUMBER]` with the plan as **commit 1** and opened a draft PR — `task-begin` checks out that **existing** local/remote branch. Do **NOT** create a fresh branch; your implementation commits ride on top of the plan commit (the plan and the code that fulfils it merge to `main` together).
++5. Read the plan: the committed plan body `.squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md` (commit 1 on this branch) is the source of truth for the spec; RESEARCH.md / CONTEXT.md inform it.
+ 6. Implement the task per acceptance criteria.
+ 7. Run tests: `python tests/run_tests.py`
+ 8. **Verify changes exist**: `python references/scripts/git_ops.py has-changes`
+@@ -30,6 +30,6 @@ If the queue returns an approved task (not just role-specific items like pending
+    python references/scripts/tracker.py transition [NUMBER] in-progress pending-test --role [ROLE]-lead
+    python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Implementation complete. Status -> Pending Test."
+    ```
+-10. Return to working branch: `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]`
++10. **Flip the draft PR to ready** for review (`gh pr ready [PR_NUMBER]`), then return to working branch: `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]`
+ 
+ If the queue is empty, proceed to role-specific work (delivery scanning, verification, etc.).
+diff --git a/references/sub-skills/roles/pm/task-intake.md b/references/sub-skills/roles/pm/task-intake.md
+index 283c5c414..0e8123715 100644
+--- a/references/sub-skills/roles/pm/task-intake.md
++++ b/references/sub-skills/roles/pm/task-intake.md
+@@ -314,32 +314,48 @@ If any answer is unclear, the AC is incomplete — refine before filing.
+ 
+ **Clear planning phase flag** after the issue is filed. Normal PM cycling auto-resumes.
+ 
+-### Phase 3B — Draft PR for Planning Review (#4979)
++### Phase 3B — Plan-in-PR: seed the task branch with the plan, open a draft PR (#12750)
++
++The plan goes **into the task PR, not onto `main`**. Committing the plan onto a fresh
++task branch spawns the draft PR; the worker implements on that **same** branch; on
++merge the plan lands on the working branch **co-located with the code that fulfilled
++it** — one permanent, reviewable track record. **Never commit the plan straight to
++`main`.**
+ 
+ After Phase 3 (AC drafting + issue filing) completes:
+ 
+-1. **Create feature branch**: `python references/scripts/git_ops.py task-begin [ROLE] [ISSUE_NUMBER]` — capture the branch name from stdout.
+-2. **Commit planning artifacts** to the branch:
++1. **Write the plan file** to `.squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md` — the
++   full spec (the same content that seeds the issue body). This committed file is the
++   **source of truth** for the spec; the issue body is the synced summary copy
++   (strengthens [[feedback_issue_body_must_match_context]] — one authoring location).
++   RESEARCH.md / CONTEXT.md remain your planning inputs that inform this plan.
++2. **Create the task branch**: `python references/scripts/git_ops.py task-begin [PM_ROLE] [NUMBER]`
++   — this checks out (or creates from `main`) `squidsquad/task/[NUMBER]`, the **unified
++   branch the worker will adopt**. Capture the branch name from stdout.
++3. **Commit the plan as commit 1** of the branch:
+    ```bash
+-   git add .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-*
+-   git commit -m "[ROLE]: #[NUMBER] — planning artifacts for [title]"
++   git add .squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md
++   git commit -m "plan(#[NUMBER]): [title]"
+    ```
+-3. **Push and create draft PR** (use the branch name from task-begin).
++   The plan body (`[NUMBER]-body.md`) is exempt from the #11511 state-guard, so it
++   rides the feature branch into the PR rather than being stripped to `main`
++   (`git_ops._is_plan_body`). Do **not** add other `.squidsquad/` state to this commit
++   — only the plan body survives the guard by design.
++4. **Push and open a DRAFT PR** seeded with just the plan (use the branch name from task-begin).
+ 
+    → run sub-skill: `pr-protocol` for the wire mechanics (`git_ops.py pr-create` is canonical; bare `gh pr create` is non-canonical and skips base-branch and body-shape coordination).
+ 
+-   Planning-review PRs use a distinct title + body shape from code-review PRs (this is the only carve-out from the standard PR body shape in `pr-protocol`):
+-
+    ```bash
+    git push -u origin [BRANCH]
+-   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title] (planning review)" \
+-     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n\nVerifier will produce \`.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nPending human review — approve via PR comments."
++   python references/scripts/git_ops.py pr-create "[DRAFT] [title] (#[NUMBER])" \
++     "## Plan for #[NUMBER]\n\nThis draft PR is seeded with the task plan (\`.squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md\`, commit 1). The worker adopts THIS branch and adds implementation commits on top; on merge the plan lands on \`main\` co-located with the code.\n\nVerifier produces \`.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nDraft — pending human review; approve the task via the issue or PR comments."
+    ```
+-4. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Planning artifacts committed. PR [URL] ready for review."`
+-5. **Return to working branch**: `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]`
++   Open the PR as a **draft** (`gh pr create --draft`, handled by `pr-protocol`).
++5. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role [PM_ROLE]-lead --message "Plan committed to squidsquad/task/[NUMBER] (commit 1) — draft PR [URL]. Worker adopts this branch."`
++6. **Return to working branch**: `python references/scripts/git_ops.py task-end [PM_ROLE] [NUMBER]`
+ 
+-The human reviews planning artifacts via PR comments (inline feedback on specific sections). When the human approves:
+-- PM converts the draft PR to ready
++The human reviews the plan via PR comments (inline feedback on specific sections). When the human approves:
++- PM converts the draft PR to ready (metadata only) — or leaves it draft for the worker to flip when implementation is done
+ - PM transitions the task status to `Approved`
+ 
+ Ask the human if they want to approve the task now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
+diff --git a/tests/test_12750_plan_in_pr_guard.py b/tests/test_12750_plan_in_pr_guard.py
+new file mode 100644
+index 000000000..c8d00d302
+--- /dev/null
++++ b/tests/test_12750_plan_in_pr_guard.py
+@@ -0,0 +1,132 @@
++"""Tests for the plan-in-PR guard exemption (#12750).
++
++The #11511 pre-commit state guard (``git_ops.guard_staged_state``) strips every
++staged ``.squidsquad/`` / ``.claude/`` file from a feature-branch commit so
++transient state never pollutes a PR. Plan-in-PR (#12750) requires ONE narrow
++carve-out: a task's plan body (``.squidsquad/<role>/planning/<n>-body.md``) is a
++versioned deliverable committed as commit 1 of the task branch — it must ride the
++branch into the PR rather than being stripped to main. These tests lock both the
++classifier (``_is_plan_body``) and the guard's use of it.
++"""
++
++import sys
++from pathlib import Path
++from unittest.mock import MagicMock, patch
++
++import pytest
++
++SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
++sys.path.insert(0, str(SCRIPTS))
++
++import git_ops
++
++
++def _mock_result(stdout="", stderr="", returncode=0):
++    r = MagicMock()
++    r.stdout = stdout
++    r.stderr = stderr
++    r.returncode = returncode
++    return r
++
++
++class TestIsPlanBodyClassifier:
++    """`_is_plan_body` matches ONLY ``.squidsquad/<role>/planning/<n>-body.md``."""
++
++    @pytest.mark.parametrize("path", [
++        ".squidsquad/pm/planning/12750-body.md",
++        ".squidsquad/skill/planning/9-body.md",
++        ".squidsquad/web/planning/100000-body.md",
++    ])
++    def test_plan_bodies_match(self, path):
++        assert git_ops._is_plan_body(path) is True
++
++    @pytest.mark.parametrize("path", [
++        # transient state siblings that MUST stay stripped (#11511)
++        ".squidsquad/skill/working-state.md",
++        ".squidsquad/skill/iterations/iter-5.md",
++        ".squidsquad/vault/BRIEFING.md",
++        # other planning artifacts are not the plan body
++        ".squidsquad/pm/planning/FEAT-PM-001-RESEARCH.md",
++        ".squidsquad/pm/planning/CONTEXT-12750.md",
++        ".squidsquad/pm/planning/12750-liveness-map.md",
++        # non-numeric stem
++        ".squidsquad/pm/planning/draft-body.md",
++        # wrong depth (no role segment / nested)
++        ".squidsquad/planning/12-body.md",
++        ".squidsquad/pm/planning/sub/12-body.md",
++        # not under .squidsquad
++        ".claude/settings.json",
++        # ordinary code file
++        "references/scripts/git_ops.py",
++        "tests/test_12750_plan_in_pr_guard.py",
++    ])
++    def test_non_plan_bodies_do_not_match(self, path):
++        assert git_ops._is_plan_body(path) is False
++
++    def test_plan_body_is_still_a_state_file(self):
++        """The plan body is still under .squidsquad/ — the carve-out lives in the
++        guard, not in _is_state_file (which other consumers rely on)."""
++        assert git_ops._is_state_file(".squidsquad/pm/planning/12750-body.md") is True
++
++
++class TestGuardExemptsPlanBody:
++    """`guard_staged_state` strips state on a feature branch but keeps the plan body."""
++
++    def _run_guard(self, staged_paths):
++        """Drive guard_staged_state on feature branch 'squidsquad/task/12750'
++        with the given staged paths; return (unstaged_list, reset_calls)."""
++        reset_calls = []
++
++        def fake_run(cmd, check=True):
++            # only call: `git branch --show-current`
++            return _mock_result(stdout="squidsquad/task/12750\n")
++
++        def fake_run_list(cmd, check=True):
++            if cmd[:3] == ["git", "diff", "--cached"]:
++                return _mock_result(stdout="\n".join(staged_paths) + "\n")
++            if cmd[:2] == ["git", "reset"]:
++                reset_calls.append(cmd[-1])  # the path arg
++                return _mock_result()
++            return _mock_result()
++
++        with patch.object(git_ops, "_get_working_branch", return_value="main"), \
++                patch.object(git_ops, "_run", side_effect=fake_run), \
++                patch.object(git_ops, "_run_list", side_effect=fake_run_list):
++            unstaged = git_ops.guard_staged_state()
++        return unstaged, reset_calls
++
++    def test_plan_body_survives_state_siblings_stripped(self):
++        staged = [
++            ".squidsquad/pm/planning/12750-body.md",   # keep
++            ".squidsquad/skill/working-state.md",        # strip
++            ".claude/settings.json",                     # strip
++            "references/scripts/git_ops.py",             # code — never touched
++        ]
++        unstaged, reset_calls = self._run_guard(staged)
++        assert ".squidsquad/pm/planning/12750-body.md" not in unstaged
++        assert ".squidsquad/skill/working-state.md" in unstaged
++        assert ".claude/settings.json" in unstaged
++        assert "references/scripts/git_ops.py" not in unstaged
++        # the plan body must NOT have been reset out of the index
++        assert ".squidsquad/pm/planning/12750-body.md" not in reset_calls
++
++    def test_only_plan_body_staged_is_a_noop(self):
++        """A commit that stages only the plan body strips nothing (the whole
++        point — PM's commit-1 of the plan goes through cleanly)."""
++        unstaged, reset_calls = self._run_guard(
++            [".squidsquad/pm/planning/12750-body.md"]
++        )
++        assert unstaged == []
++        assert reset_calls == []
++
++    def test_on_working_branch_is_noop(self):
++        """Guard is a no-op on the working branch regardless of staged state."""
++        def fake_run(cmd, check=True):
++            return _mock_result(stdout="main\n")
++
++        with patch.object(git_ops, "_get_working_branch", return_value="main"), \
++                patch.object(git_ops, "_run", side_effect=fake_run), \
++                patch.object(git_ops, "_run_list") as m_list:
++            unstaged = git_ops.guard_staged_state()
++        assert unstaged == []
++        m_list.assert_not_called()
