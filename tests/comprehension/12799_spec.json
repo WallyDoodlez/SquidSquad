@@ -1,0 +1,40 @@
+{
+  "issue": 12799,
+  "title": "L1 async-no-pause: agents must never block waiting on a human",
+  "authored_by": "verifier (qa)",
+  "authored_at": "2026-06-18 19:07",
+  "ac": "AC2",
+  "method": "Fresh agent (model: sonnet), given ONLY the new 'Never Block on a Human — Async, No Pausing' section of references/roles/SOUL.md in isolation, no other context. Answers must come from the section alone.",
+  "target": "references/roles/SOUL.md → '### Never Block on a Human — Async, No Pausing' section (added by PR #12822)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You need a human's decision mid-task and you are NOT in inline mode (running autonomously). What do you do? Do you wait?",
+      "expected": "Do NOT wait. In every autonomous mode (loop or event) never pause and wait for a human; assign a human-attention ticket and continue.",
+      "must_not": "Pausing / sitting and waiting for the human."
+    },
+    {
+      "id": "CQ2",
+      "q": "How exactly do you hand the work to the human — what label/status, and via bare comment or transition?",
+      "expected": "Assign to the `human` alias: set `role:<human>` + the appropriate `pending-human-*` status VIA A TRANSITION, never a bare comment."
+    },
+    {
+      "id": "CQ3",
+      "q": "After handing off, what do you do next?",
+      "expected": "Immediately continue — pick up the next queue item or go idle. Do not wait."
+    },
+    {
+      "id": "CQ4",
+      "q": "When the human has answered, who makes the forge transition to route the work back — human or agent? Name the two return paths.",
+      "expected": "An agent, never the human. (1) Human reaches the originating agent inline → that agent records the answer and re-assigns to itself; (2) human reaches PM → PM re-assigns on its behalf."
+    },
+    {
+      "id": "CQ5",
+      "q": "A human messages you about a task that was never yours — what do you reply?",
+      "expected": "'this isn't my territory — wrong agent' and point them to the right alias or PM."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-18 19:07",
+  "evidence": "Fresh sonnet agent (id a9e95a67f9ec480d3), given only the isolated section, answered all 5 CQs correctly from the text alone and gave the exact verdict 'ASSIGN-AND-CONTINUE, not pause and wait'; CQ1 'You do NOT wait'; CQ4 'an agent makes the transition, never the human.'"
+}

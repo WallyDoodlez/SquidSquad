@@ -1,0 +1,40 @@
+{
+  "issue": 12506,
+  "title": "Event-mode periodic driver (improvement-subloop dormancy fix)",
+  "authored_by": "verifier (qa)",
+  "authored_at": "2026-06-18 13:41",
+  "ac": "AC10",
+  "method": "Fresh agent (model: sonnet), given ONLY references/sub-skills/common-events/idle-cooldown-loop.md, no other context. Answers must come from the file alone.",
+  "target_file": "references/sub-skills/common-events/idle-cooldown-loop.md",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You are an event-mode agent, idle, with ZERO forge events arriving. How and when does your next improvement scan fire? What wakes you to run it?",
+      "expected": "A periodic self-wake driver (a cron job scheduled at first idle via CronCreate) re-enters the loop on a timer; the driver tick (Step B) runs the scan when drained and the cool-down has elapsed. NOT the Monitor.",
+      "must_not": "Claiming the Monitor/event_poll wakes the agent on a fixed cadence."
+    },
+    {
+      "id": "CQ2",
+      "q": "Does the persistent Monitor / event_poll deliver wake signals on a fixed/short cadence? What does event_poll do on an empty poll?",
+      "expected": "No. event_poll emits a NUDGE only when real forge events arrive past the cursor; it is silent on an empty poll and does NOT deliver fixed-cadence wakes — which is why a separate periodic driver is required (the #12506 dormancy)."
+    },
+    {
+      "id": "CQ3",
+      "q": "After how many idle scans does the driver stop, and what exactly do you do to stop it? What resets that count?",
+      "expected": "After Idle Scan Burst (default 3) scans; run subloop_driver.py cancel + CronDelete. scan_count resets to 0 on re-idle after forge work (Step D, subloop_driver.py reidle)."
+    },
+    {
+      "id": "CQ4",
+      "q": "When a driver tick fires, what is the FIRST thing you do before deciding whether to scan, and why?",
+      "expected": "Forge-read work_queue() first — the driver doubles as a safety net against a missed nudge; absorb work if the queue is not drained."
+    },
+    {
+      "id": "CQ5",
+      "q": "Which scheduling tool primitive creates the self-wake, and what are its key flags?",
+      "expected": "CronCreate with recurring:true and durable:false (session-scoped). CronList re-confirm re-creates it after a restart."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-18 13:41",
+  "evidence": "Fresh sonnet agent (id afdbb9101b2bb1e7a) answered all 5 CQs correctly from the file alone, explicitly identifying the periodic cron driver (not the Monitor) as the idle-scan cadence source, event_poll silence on empty poll, the burst cap + cancel sequence, forge-read-first, and CronCreate recurring:true/durable:false."
+}
