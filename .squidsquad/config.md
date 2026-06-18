@@ -15,7 +15,7 @@
 
 - **skill**: skill
 - **pm**: pm
-- **dm**: dm
+- **dm**: dm/skill
 - **qa**: qa
 
 
@@ -113,7 +113,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 34
+- **Shipped Since Last Bump**: 35
 
 ## Agent Effort
 
