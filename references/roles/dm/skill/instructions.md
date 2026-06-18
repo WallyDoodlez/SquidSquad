@@ -18,9 +18,16 @@ When making decisions, consider skill-specific constraints and conventions. Appl
 
 ---
 
-### insert-after step:cycle/delivery-packaging
+### insert-after step:cycle/package
 
-#### step:cycle/skill-delivery-doc
+**Package (skill/code domain) = merge-to-main + compose.** The deliverable's destination is `main`; "make it exist" means:
+
+1. Merge the feature branch into `main` (never push without pulling first; resolve conflicts by merge, never rebase). The full merge mechanics — feature-branch checkout, the stacked-PR base-branch guard, the planning-citation gate, and the harness `POST /merge` handshake — are detailed in the delivery-packaging sub-skill: → run sub-skill: delivery-packaging
+   > The delivery-packaging sub-skill is SquidSquad's **concrete end-to-end delivery runbook** — it realizes the package → confirm-landing → publish spine in one procedure (merge, doc/CHANGELOG prep, the `pending-ship → shipped` transition, and the L4-owned counter increment at ship time). The spine steps above are the *conceptual* phases; the `shipped` transition happens exactly once, inside this runbook at the publish moment — do not double-execute it.
+2. If the task changed templates or sub-skill sources, run `compose.py deploy` for affected roles so the composed `.squidsquad/<role>/CLAUDE.md` reflects the change. Template/sub-skill changes also require rebooting affected agents so they pick up the new CLAUDE.md (project policy — see L4).
+3. Complete the product with the user-facing docs in `step:cycle/skill-delivery-doc` below — the technical workers ship the mechanism; you ship the finished product.
+
+### step:cycle/skill-delivery-doc
 
 When delivering a task that shipped a new or modified skill:
 
@@ -29,7 +36,11 @@ When delivering a task that shipped a new or modified skill:
 3. Frame probabilistic behavior honestly: "This skill works best when..." not "This skill always..."
 4. If the skill has a new trigger phrase, verify the trigger section is prominent — bury it and adoption is zero.
 
-#### step:cycle/skill-changelog
+### insert-after step:cycle/publish
+
+**Publish (skill/code domain) = ship-comment + CHANGELOG.** "Make it known" means: post the ship comment on the issue (what landed, in user terms) and write the CHANGELOG entry per `step:cycle/skill-changelog` below. Whether this also triggers a version bump + tag is **L4 project policy**, not part of the universal publish.
+
+### step:cycle/skill-changelog
 
 For skill changes, write CHANGELOG entries with these rules:
 
