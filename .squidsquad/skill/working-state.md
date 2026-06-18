@@ -1,6 +1,7 @@
 # Working State
 
-- **Task**: none. Two items completed this session, both pending-test (verifier's lane).
+- **Task**: 12408 — run_tests.py static gate exits 0 despite failing tests (mid-suite hard-exit ~56% truncates run, masks failures). In-progress, picked up fresh-context this session.
+- **#12408 plan**: (1) reproduce mid-suite hard-exit; (2) bisect 159 gated modules for os._exit/sys.exit/pytest.exit culprit; (3) isolate it; (4) harden run_static_tests() — missing junit / no session-finish = failure; (5) regression test.
 - **Just completed**:
   - **#12506** → pending-test (PR #12812). Event-mode periodic driver, all units, §8.6.1.
   - **#12798** → pending-test (direct-to-main, no PR). Untracked `.claude/scheduled_tasks.lock.stale-bak` + gitignore glob `.lock*`. Cleared the team-wide red suite (test_volatile_files_not_tracked). Verified green.
