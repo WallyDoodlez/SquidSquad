@@ -1,0 +1,26 @@
+Rigorous PROSE-DRIFT CONSISTENCY AUDIT of docs/DM-ARCH.md (a DRAFT architecture doc reframing the SquidSquad Delivery Manager into a generic, layerable role). Audit BOTH internal consistency and cross-document accuracy. Be skeptical — verify claims against the actual source, do not take the draft's word.
+
+DOC UNDER AUDIT: docs/DM-ARCH.md
+AUDIT AGAINST: docs/COMPOSE-ARCHITECTURE.md, docs/VAULT-ARCH.md, references/roles/dm/instructions.md, references/roles/dm/responsibility.md, references/sub-skills/roles/verifier/verification.md
+
+CHECK 1 — INTERNAL CONSISTENCY of DM-ARCH:
+- The spine (§3) was REORDERED so Publish is the last step (new order: 1 Detect, 2 Pre-flight, 3 Package, 4 Confirm, 5 Report, 6 Knowledge, 7 Publish, 8 Failure). Verify EVERY step-number cross-reference in the doc matches this order — §2 anchor examples, the "Two stores (steps 5 & 6)" section, the §4 "fundamentally is" list, the §6 classification table row numbers/labels, the §7 next-steps. Flag ANY stale number (e.g. a reference that still implies Publish=4 or Document=6 or Knowledge=7).
+- Internal contradictions between sections (e.g. §2 layer table vs §6 classification; the "Package=L3" vs the step-3 prose; the "Publish last" vs any text implying publish mid-flow).
+
+CHECK 2 — CROSS-DOC ACCURACY vs COMPOSE-ARCHITECTURE:
+- §2 claims the override mechanism is the existing compose machinery: slot+ordinal, op grammar (replace/insert-before/insert-after/append), L2-L3 inline ops then L4 file ops, higher-layer-wins/assemble. Verify this matches COMPOSE-ARCHITECTURE §3.2-§3.3 / §4.6. Flag any misstatement.
+- §2 claims L3 path = references/roles/dm/<domain>/ and L4 path = .squidsquad/project/dm.md. Verify against COMPOSE-ARCHITECTURE's documented L3/L4 source locations.
+
+CHECK 3 — CROSS-DOC ACCURACY vs VAULT-ARCH (highest-risk — the draft makes strong claims):
+- Vault = PARAG + Galaxy Zettelkasten, [[wikilinks]] as edges, links: frontmatter auto-maintained, resources/ = summarize-and-reference externals, vault contract L1-exclusive. Verify each against VAULT-ARCH. Flag misrepresentation.
+- CRITICAL: the draft makes a "guardrail finding" claiming the existing "the WHOLE vault contract is L1-exclusive" guardrail is OVER-BROAD — that only the machine skeleton (wikilink/frontmatter/PARAG placement) is truly load-bearing/L1, while note body/prose, content form, and content-admissibility policy should be layer-customizable. Check this claim against the ACTUAL VAULT-ARCH §2 guardrail text. Is this a FAIR reading, or does the draft overreach/contradict a deliberate VAULT-ARCH decision? This is the most important finding to adjudicate. The draft says it defers this to VAULT-ARCH (#10838) rather than deciding it — confirm the draft does NOT unilaterally change the guardrail, only flags it.
+- The draft says the vault is L1-EXCLUSIVE (L2/L3/L4 cannot contribute slot:vault content) BUT ALSO says content-governance/form is layer-customizable. Is there a latent self-contradiction? The draft's resolution is "the role-flavor lives in the role's OWN layers (instructions/responsibility slots), not the vault slot." Verify this resolution is coherent and consistent with VAULT-ARCH's slot model — or flag if it's hand-waving around a real contradiction.
+
+CHECK 4 — PREMISE VERIFICATION (facts):
+- §1 / the doc premise: the "bump every 10 features" policy is currently baked into the UNIVERSAL (L2) DM role. Verify in references/roles/dm/instructions.md + responsibility.md.
+- The draft claims the VERIFIER currently increments the bump counter (a release concern leaking into verification). Verify in references/sub-skills/roles/verifier/verification.md.
+- If either premise is wrong/overstated, that's an ERROR (the doc's motivation rests on it).
+
+KNOWN/DEFERRED (note once, don't over-flag): the doc is an explicit DRAFT; Package/Publish L3 variant FILE contents are not yet specified (intentional, polish-pass scope); the /work/assign-style items are out of scope.
+
+OUTPUT (concise markdown): header (date 2026-06-17, docs audited); one-line "N ERROR / N WARNING / N LOW"; findings grouped by severity, each with an ID, exact location (file+section), the precise issue (cite actual text), and a concrete fix. Then a one-line VERDICT: CONVERGED (internally consistent + cross-doc accurate, residuals are intentional-draft-scope) or NOT CONVERGED (list blocking items). Adjudicate CHECK 3's guardrail claim explicitly. Do not invent problems — if a claim is accurate, say so.
