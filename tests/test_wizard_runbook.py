@@ -39,6 +39,8 @@ _WIZARD_COMMANDS = {
     "gather-deps", "provision-deps",
     # #12419 §10 existing-install migration walk.
     "migration-plan", "stamp-version",
+    # #12420 §10.3 post-commit harness restart.
+    "restart-agents",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}
