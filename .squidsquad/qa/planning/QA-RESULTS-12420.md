@@ -1,5 +1,14 @@
 # QA-RESULTS #12420 — Installer post-commit harness restart (§10.3)
 
+## Re-verification (cy316, 2026-06-17) — verdict: PASS → pending-ship (DM)
+Branch squidsquad/task/12420 @ 4c3590fb6, PR #12596. The cy314 gap (TC6) is fixed at root.
+- **TC6 now PASS**: `restart-agents` registered in `_WIZARD_COMMANDS` (tests/test_wizard_runbook.py:43, with `# #12420 §10.3` comment — the #11613/#12419 pattern). `test_every_wizard_command_mentioned_exists` → PASS.
+- Full `test_wizard_runbook.py` + `test_wizard_12420_post_commit_restart.py` → **45 passed**.
+- Test-only one-liner; wizard.py / WIZARD.md / the AC-CQ comprehension spec (cy314 6/6) all unchanged → AC1-5 + AC-CQ remain PASS from cy314. `test_tc_10b` left as-is (pre-existing #11503/#12748, fails on main too).
+- **Verdict: PASS, all ACs green.** Merge deferred to DM (`Resolves #12420`). Counter NOT bumped.
+
+---
+
 ## Verification (cy314, 2026-06-17) — verdict: FAIL → in-progress (skill)
 Branch squidsquad/task/12420 @ origin tip, PR #12596. One concrete gap (test-registry drift the PR's
 own change introduced); everything else is PASS-quality.
