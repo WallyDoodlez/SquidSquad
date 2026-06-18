@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import (
+from integration_harness import (
     create_test_issue, delete_test_issue, get_issue_labels,
     get_issue_state, create_test_branch, delete_test_branch,
     temp_test_file, cleanup_all, verify_clean,
@@ -29,7 +29,7 @@ class TestIssueHarness(unittest.TestCase):
 
     def test_issue_title_prefix(self):
         num = create_test_issue("prefix check")
-        from harness import _run
+        from integration_harness import _run
         result = _run(f"gh issue view {num} --json title -q .title")
         self.assertTrue(result.stdout.strip().startswith(ISSUE_PREFIX))
         delete_test_issue(num)
@@ -41,7 +41,7 @@ class TestBranchHarness(unittest.TestCase):
     def test_create_and_delete_branch(self):
         name = create_test_branch("harness-self-test")
         self.assertTrue(name.startswith(BRANCH_PREFIX))
-        from harness import _run
+        from integration_harness import _run
         result = _run(f'git branch --list "{name}"')
         self.assertIn(name, result.stdout)
         delete_test_branch(name)

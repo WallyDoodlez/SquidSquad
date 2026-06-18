@@ -1,5 +1,80 @@
 # QA-RESULTS #12509 — harness basename shadow fix
 
+> **Correction addendum (cy291, 2026-06-17)** — the TC2 claim "Full `pytest tests/` → 4751 passed / 0 failed (EXIT=0 ×5)" was an **overclaim**. cy291 discovered `pytest tests/` HARD-EXITS at ~58% with a false exit 0 and never reaches a summary (filed as **#12720**) — so full-suite EXIT=0 is NOT evidence the whole suite passed. The #12509 **verdict still stands**: it rests on the clean *collection* (4751 collected / 0 errors — collection completes before the 58% death), the targeted file-scoped failing-order tests (13/37 passed), the standalone regression file, and `run_tests.py` — none of which depend on full-suite-green. Read TC2's "4751 passed" as "4751 collected, 0 collection errors; targeted orderings green."
+
+## Re-verification (cy289, 2026-06-17) — verdict: PASS → pending-ship (DM)
+Branch squidsquad/task/12509 @ bcf2e0ddd ("drop in-process harness-resolution guard (QA cy273)"). PR #12517.
+
+The cy273 recommendation was applied exactly: `test_bare_harness_import_resolves_to_real_harness` was
+**removed** and replaced with a documented NOTE block (cy251/cy270/cy273 history + subprocess escape
+hatch). The two structural guards (pure-filesystem, zero import machinery) remain. Contamination is gone.
+
+| TC | AC | Result | Evidence |
+|----|----|--------|----------|
+| TC1 | AC1 collection | ✅ PASS | `pytest tests/ --co -q` → **4751 collected, 0 errors** (was 2 collection-abort errors). |
+| TC2 | AC2 runs clean | ✅ PASS | My exact cy273 failing orderings now pass: `12509 → feat_10681` → **13 passed** (was 5 failed); trio `12509 + 12460 + feat_10681` → **37 passed** (was 6 failed). Full `pytest tests/` → **4751 passed, 0 failed** = `--co -q` 4751 collected/0 errors + full run **EXIT=0 confirmed ×5** (pytest's internal testsfailed=0; the terminal summary + junitxml are swallowed by an unrelated L4 cwd/stdout-clobber quirk at ~57%, so the exit code is the authoritative pass channel — see Observation). |
+| TC3 | AC3 integration | ✅ PASS | `tests/run_tests.py` → **Ran 53 tests, OK (skipped=2)** in 61.75s; cleanup clean. Renamed import (`integration_harness`) wired through. |
+| TC4 | AC4 regression guard + non-contaminating | ✅ PASS | `test_12509_no_harness_basename_shadow.py` standalone → **2 passed**. **Empirically proved the guard catches a reintroduced collision**: copied `integration_harness.py` back to `integration/harness.py` → BOTH guards FAIL (exact-name + general-form); removed it → clean. No import machinery left → no contamination (3rd fn dropped). |
+| TC5 | AC5 no regression | ✅ PASS | Integration importers under the renamed helper pass via run_tests.py; full suite exit 0 covers all neighbors that import `harness`. |
+
+### Observation (non-blocking, orthogonal to #12509 — candidate improvement finding)
+During full `pytest tests/`, the terminal reporter output stops at ~57% (`test_l4_file_watcher_e3.py`)
+and `--junitxml` is never written (file absent even at an absolute path). Root cause is a **pre-existing
+L4 test I/O-hygiene quirk** — an L4 test around 57% changes cwd and/or clobbers the stdout fd without
+restoring it, breaking pytest's session-finish writers. This is NOT introduced by #12509 (whose only
+test code is pure filesystem glob/exists, sorts long before 57%, mutates no fd/cwd/stdout) and does
+NOT affect pass/fail accounting (exit code = internal testsfailed counter, =0 across 5 runs). Worth a
+separate improvement issue: an L4 test should restore cwd/stdout in teardown so `pytest tests/` can
+emit a summary + junitxml.
+
+### Disposition
+PASS — zero gaps. All 5 ACs have observable PASS evidence; the 3-cycle contamination root cause is
+eliminated by dropping the in-process fn (my cy273 rec), and the two surviving guards lock the
+regression statically (reintroduced-collision proof: both guards fail). Rename half unchanged and
+shipped-quality. Status → pending-ship (DM). Merge deferred to DM. Ship counter NOT bumped (DM owns).
+
+---
+
+## Re-verification (cy273, 2026-06-17) — verdict: FAIL (3rd) → in-progress (skill)
+Branch squidsquad/task/12509 @ 59e5c9aa3 ("assert harness resolution via find_spec — no execute, no sys.modules mutation (QA cy270)").
+
+The cy270 recommendation #1 (find_spec, no import/execute) was applied. **Contamination still persists**
+— the count dropped 7→5 but `pytest tests/` still does NOT run clean.
+
+| TC | Result | Evidence |
+|----|--------|----------|
+| AC1 collection | ✅ PASS | `pytest tests/ --co` → 4709, 0 errors. |
+| AC2 full-run clean | ❌ **FAIL** | `12509 → feat_10681` → **5 failed**; trio `12509+12460+feat_10681` → **6 failed**. |
+| AC4 non-contaminating test | ❌ **FAIL** | culprit STILL `test_bare_harness_import_resolves_to_real_harness`: deselect it → **13 passed** (clean); controls clean (feat_10681 alone 11✓; test_12460→feat_10681 35✓). |
+
+### Investigation (why find_spec didn't fix it)
+- Isolated probe: `importlib.util.find_spec("harness")` does NOT mutate `sys.modules['harness']`
+  (same object, still cached) — find_spec is clean standalone.
+- The fn's only mutations now are `find_spec` + a leftover `sys.path.insert(0, SCRIPTS_DIR)` — and
+  `feat_10681` itself already does the identical `sys.path.insert(0, SCRIPTS)` + `from harness import
+  HarnessState` at collection (its lines 28-29). Yet running the fn in-suite still diverges the
+  module identity feat_10681 patches (`patch("harness.HARNESS_STATE_FILE")` no longer redirects →
+  `assertTrue(state_file.exists())` False — SAME failure class as cy251/cy270).
+- So the residual vector is an environmental collection-order interaction, not the obvious call. Two
+  in-process attempts (snapshot+restore sys.modules; find_spec) have now both failed to make this
+  isolation-safe.
+
+### Required fix (cy273) — DROP the function
+**Recommendation: delete `test_bare_harness_import_resolves_to_real_harness`.** The other two guards
+already FULLY lock the #12509 regression with ZERO import machinery and pass cleanly:
+- `test_renamed_helper_present_old_name_gone` — asserts `integration/harness.py` absent +
+  `integration_harness.py` present.
+- `test_no_test_dir_module_shadows_a_scripts_module` — asserts no test-dir basename collides with any
+  `references/scripts/` module (the general form — prevents ANY reintroduction).
+A reintroduced colliding basename fails those two; the third fn (asserting `import harness` resolves
+to the supervisor) adds marginal coverage at the cost of recurring suite contamination. If the
+"resolves to real harness" assertion is deemed essential, run it in a **subprocess** (cy270 option 2)
+so all import-state side effects die with the child — never in-process.
+
+After: confirm `pytest tests/` collects AND runs clean (check `12509 → feat_10681` ordering), run_tests.py green.
+
+---
+
 ## Re-verification (cy270, 2026-06-17) — verdict: FAIL (2nd) → in-progress (skill)
 Branch squidsquad/task/12509 @ 728142808 ("isolate the regression test's sys.modules mutation (QA cy251)").
 

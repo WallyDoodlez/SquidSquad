@@ -1,118 +1,70 @@
 # Working State
 
-- **Task**: #12419 (installer migration-walk) STARTING — installer cluster serial #12419→#12420→#12450 (operator top-of-queue)
-- **Status**: #12509 re-submitted pending-test (cy251 fix); installer cluster activated HIGH; #12492/#12493/#12506 held on gates
-- **Updated**: 2026-06-17 (skill — event-mode)
+- **Task**: idle — #12720 SHIPPED to pending-test (PR #12736, DS-c1 folded). Was the fresh-context masker task.
+- **Status**: #12509 + #12574 + #12525 SHIPPED+CLOSED (3 ships this session); #12420 held-on-PM-CQ-AC (PR #12596) = only unit left; #12585 approved/queued; #12492/#12493/#12506 held on gates. NOTE: full `pytest tests/` now works on main (#12509 harness.py rename merged).
+- **RESTART-REQUIRED DEFERRED (10:21)**: l4-recompose fired restart-required, but composed skill CLAUDE.md mtime is 09:46 (≠ event time) → 10:21 recompose was a no-op → matches #12397 spurious-emit. Per operator's standing 'reboots deferred', NOT self-restarting. Composed CLAUDE.md DID change at 09:46 (uncommitted local recompose) so a reboot would sync instructions — operator's call. Surfaced to operator.
+- **Updated**: 2026-06-17 09:40 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
-## >>> INSTALLER CLUSTER (operator-activated 2026-06-17, HIGH, SERIAL) — #12419 IN PROGRESS <<<
-PM: build in order #12419 (migration-walk §10) → #12420 (post-commit restart §10.3) → #12450 (unit-test detection, L3). All touch WIZARD.md/wizard.py → SERIAL. DS-review per change. NO stacking (base on main after each ships).
+## >>> #12720 — `pytest tests/` FALSE GREEN — ROOT-CAUSED + FIXED (this session) <<<
+**RCA (proven deterministically, not hypothesis):** masker = `tests/test_harness.py::TestEndpointsViaTestClient::test_post_shutdown_returns_202`. It POSTs `/shutdown` to the in-process `TestClient(app)`. The handler (`harness.py:3305 shutdown()`) spawns a **daemon thread named `shutdown`** (line 3396) that does `time.sleep(1)` then `os._exit(0)` (line 3394). The test's `patch("harness.os._exit")` reverts the instant the POST returns 202 — but the daemon thread calls the REAL `os._exit(0)` ~1s LATER → hard-kills the whole pytest process at **exit 0, no summary, pytest.main() never returns**. The 1s delay floats the death into whatever test runs ~1s on (≈58%, where test_harness.py sits) — explains "stays ~58% even ignoring test_l4_file_watcher_e3" (different file; death is timing-based). QA's "non-daemon thread" hypothesis was CLOSE but it's a DAEMON thread calling os._exit. This is ALSO the engine of #12408 (run_tests.py false-green) and the full-suite false-green.
+**Proven:** temp repro (shutdown test + 2s sleeper) → process died at exit 0 mid-sleeper, no summary. After fix → sleeper completes, clean pass.
+**FIX (2 files, code-only, NO CQ):**
+1. `tests/test_harness.py` test_post_shutdown_returns_202: patch os._exit + time.sleep + HARNESS_PORT_FILE(→tmp nonexistent); JOIN the `shutdown` thread INSIDE the patch ctx so the mock fires; assert mock_exit.called_once_with(0) + thread not alive. Stops the masker + strengthens the assertion.
+2. `tests/conftest.py` thread-leak guard (the "session guard" QA asked for): wrapper=True hooks (pytest_runtest_protocol baseline + pytest_runtest_teardown check). Fails LOUDLY if a test leaves alive a thread that's non-daemon (live server/observer) OR name in DANGEROUS={"shutdown"} (daemon os._exit caller). Allowlist={"test-event-stream-http"} (per-class e2e server). VALIDATED: catches both the daemon `shutdown` leak AND a plain non-daemon leak as ERRORs (loud), fixed test passes, no false-pos in broad run so far.
+- harness.py:4162 os._exit(1) = Ctrl+C signal handler, NOT in-process test-reachable. /shutdown is the SOLE masker.
+**DONE:** PR #12736 (commits 82a934ef8 fix + e8d9b3177 DS-fold), pending-test. run_tests.py static green 4462/15skip (reaches sessionfinish; was false-green ~58% trunc). DS-c1 caught F4 (assert-inside-patch → revert → real os._exit kills pytest) + F5 (teardown-raise skips leak check) — both folded. Vault frontmatter fix (test_vault) on MAIN. Defect B 39 test_agent_boundaries + test_compose_author_comments = KNOWN_FAILURES blocked #10360 (out of scope). **This also un-falses #12408** (same masker drove run_tests.py static false-green) — QA may want to re-verify/close #12408 on the back of this.
 
-### #12419 — BUILD COMPLETE, PR #12533, HOLDING pending-test on PM CQ-AC answer
-Branch `squidsquad/task/12419` (4 commits, pushed). Both increments done + BOTH DS-reviewed:
-- Inc1 (b83926278 + DS-c1 fixes 068dbfa36): deterministic foundation — references/VERSION, version-read/chain/stamp helpers, migrations/README, migration-plan/stamp-version CLI. DeepSeek c1: 6 warnings fixed (sentinel collision, iterdir guard, CRLF, installer-unknown flag, annotation parse, variant-stamp dedup).
-- Inc3 (0a6f22971 + DS-c2 fixes 403f56447): WIZARD.md Step 0b rewrite — Upgrade(default)/Full-rebuild/Abort; Upgrade=§10 three-gate walk; preserves Step 7.1. DeepSeek c2: 3 errors + 1 warning fixed (wrong step-refs, before-Step-7 invariant carve-out, write-ordering write-then-validate-revert, resume→re-walk-idempotent).
-- Tests: 43 migration-walk unit + 24 runbook = green; 381 wizard-suite green. **NOTE: full `pytest tests/` collection BROKEN on this branch (the #12509 harness.py shadow, unmerged) — run wizard tests FILE-SCOPED.**
-- **GATE before pending-test:** PM CQ-AC answer (Step 7.4 — WIZARD.md is LLM-consumed, cf #11613 CQ spec; flagged on #12419). Also flagged PM: INSTALLER-ARCH §4.3/§10 stale "not implemented" banners (PM doc lane) + §10 "before any write"/"resumes at k" reconciliation. **When PM confirms CQ scope → mark pending-test.**
+## >>> #12574 → pending-test (PR #12643) — HIGH harness freeze-fix <<<
+RCA: POST /events unknown-role drop returned JSONResponse(204, content={}) — a 204 carrying a {} body → h11 LocalProtocolError 'Too much data for declared Content-Length' → poisons keep-alive conn → event-delivery GETs stall → ~6h squad freeze. Issue's multi-byte hypothesis WRONG (JSONResponse byte-sizes UTF-8 correctly; test pins it). Fix: bodyless Response(status_code=204). 3 tests (AST source guard authoritative — TestClient/httpx can't repro the h11 wire error; functional bodyless-204; UTF-8 byte-correct). DS 12574-c1 clean (1 dead-import→fixed). Code bug, no CQ.
 
-### NEXT (installer cluster + new HIGH, all queued behind #12419 / fresh context):
-- #12420 (post-commit harness restart §10.3) → #12450 (unit-test detection L3) — rest of the SERIAL cluster, base on main after #12419 merges.
-- #12525 (HIGH — minimal bare-harness launcher start-harness.bat), #12527 (HIGH — greenfield installer smoke on a FOREIGN throwaway repo), #12526 (bug — start.ps1/.sh clone-sync uses git pull --rebase). All role:skill, approved/open.
+## >>> IN-PROGRESS (claimed, RCA foothold laid — needs FRESH CONTEXT for the fix): #12720 — `pytest tests/` false green <<<
+HIGH test-integrity bug (QA cy291, while verifying my units). Two defects:
+- **A (masker, primary):** bare `pytest tests/` on main hard-terminates at ~58% — exit 0, NO summary, junitxml never written, `pytest.main()` never returns. NOT os._exit/sys.exit (QA's shim never fired → native/C-level exit or pre-patch ref or thread/server shutdown). Position/time-based (stays ~58% even with --ignore=test_l4_file_watcher_e3.py). Signature: a "live" test leaves a non-daemon thread / threading.Timer / uvicorn server / watchdog Observer alive that hard-exits the interpreter. **Candidate live-tests I narrowed:** test_11587_uvicorn_selector_loop, test_11723_port_discovery_liveness, test_12460_progress_liveness, tests/integration/test_event_mode_* , test_feat_9725_spawn_loop_registration_live, test_l4_file_watcher_e3 (_Debouncer Timer).
+- **B (masked real failures):** test_agent_boundaries::test_ac4 L1 awareness assertion is STALE (string "Know each other's responsibilities" no longer in composed pm; grep -rl empty under references/) → update to current wording (this is already a run_tests.py KNOWN_FAILURE blocked on #10360 — reconcile). Plus a ~19% E/F cluster (module fixture cascade) + 3 F at ~45%. Full set blocked by A.
+**Fix plan:** (1) RCA A — bisect to the live test, tear its thread/server down in teardown; add a session guard that FAILS if a non-daemon thread/live server survives a test (fix + regression, sibling to #11394 AC3 / #12408). (2) Triage B once summary prints. (3) CI invariant: `pytest tests/` MUST reach sessionfinish + exit reflects real outcomes.
+**Why I personally witnessed it:** my own full `pytest tests/` runs this session showed exactly the 57%/exit-0/no-summary pattern; I misattributed it to a capture artifact — it's defect A.
+**My shipped units stand** (QA confirmed): #12509/#12574/#12525 verdicts rest on collection + targeted + run_tests.py, NOT full-suite-green.
 
-## >>> #12509 → RE-SUBMITTED pending-test (PR #12517) — QA cy251 FAIL fixed <<<
-Verifier FAIL (cy251): my regression test contaminated sys.modules['harness'] (popped + re-imported, restored only sys.path). Fixed (commit 728142808): snapshot + restore exact prior binding in finally. Re-confirmed: QA repro both directions pass, full pytest tests/ exit 0, run_tests.py OK. Back to verifier.
+## Queued behind #12720: #12585 (L1 Soul 'Health & Diagnostics') — approved, role:skill
+L1 SOUL change = high-blast-radius (all agents on reboot) + LLM-consumed → CQ-gated. Author on fresh main: L1 source edit + compose.py deploy-all + DS review + flag PM for CQ AC.
 
-## >>> #12509 → PENDING-TEST (PR #12517) — test 'harness' basename shadow <<<
-Renamed `tests/integration/harness.py` → `integration_harness.py` (git mv) so it stops shadowing `references/scripts/harness.py` in sys.modules — `pytest tests/` now collects 4706 / 0 errors (was Interrupted, 2 errors). Updated 3 importers + 2 e2e stale comments; regression guard `tests/test_12509_no_harness_basename_shadow.py`. Verified: collection clean, 8 harness-importing files + guard = 432 passed, integration collects 53. Test-only → no DS/CQ. (Branch off main.)
+## >>> #12525 → pending-test (PR #12617) — bare-harness launchers <<<
+start-harness.sh (exec python3 harness.py, foreground) + start-harness.bat (python harness.py + pause, visible window; runs python directly not via start.ps1). No clone-sync/dep-install. Added to installer-files.txt (count 197→202; header was stale 197 vs 200 actual). 16 tests; run_tests.py green; DS 12525-c1 1 warn (start.ps1 AC5 gap)→fixed→clean. Not LLM-consumed (no CQ). PM non-blocking: INSTALLER-ARCH/README one-liner is PM doc surface (file-headers satisfy AC4). AC1/AC2 visible-window = OS-level, flagged for live verify.
 
-## >>> #12511 (NEXT PICKUP, fresh context) — test-isolation: force-transition tests leak real events to live bus <<<
-PM-filed (MEDIUM), assigned to me. **My dup #12510 → CLOSED.** Root cause: unit tests calling real `tracker.transition(... --force)` (test_12475_force_bypasses_legality.py etc.) POST real `status-transition` events to the LIVE harness for placeholder #999 → wakes the whole team (the recurring #999 flurry that plagued THIS session). **Fix design:** autouse fixture in tests/conftest.py stubbing `event_bus.emit` (or the harness POST) for unit tests — CAREFUL: must not break tests that themselves assert emit was called (e.g. test_forced_transition_emits_status_event mocks event_bus directly — per-test mock must take precedence over the autouse no-op). Verify the #999 flurry stops. Active disruption was from MY suite runs (now stopped), so not urgent — but real test-hygiene (CI/other agents). Fresh context warranted (event_bus internals + fixture-interaction care).
+## >>> #12420 → BUILT + DS-clean (PR #12596) — HELD at in-progress on PM CQ AC <<<
+INSTALLER-ARCH §10.3 post-commit harness restart. Done: `wizard.py restart-agents` (probe GET /status .harness-port default 7373 5s; reachable→POST /agents/<alias>/stop+start per config `## Aliases`, §4.1 routes, best-effort; unreachable→user-driven ./start.sh; HTTP in `_http_request` monkeypatch seam). WIZARD.md Step 7.5c added + 7.6 reworked + Step 0b.1 forward-ref synced (AC4). 21 tests (AC5 both paths + per-alias failure + edges); run_tests.py green; **DS 12420-c1 NO_FINDINGS**. ACs 1-5 satisfied as written.
+- **HELD (not pending-test):** PM item 2 — WIZARD.md LLM-consumed → needs comprehension AC (cf #12419 AC-CQ) before pending-test; verifier authors CQ spec from it. @pm asked to add it; transition to pending-test the moment it lands.
+- **PM item 1 (non-blocking doc-sync):** unreachable path built user-driven (honors Q-new21; matches AC1 'falls through to start.sh') vs §10.3's 'installer invokes start.sh' wording — PM to reconcile §10.3 + flip its 'not yet implemented' banner at ship. Chose stop+start over /restart (/restart leans on PID-death #12271 retires).
+- Resume trigger: PM adds CQ AC → transition pending-test. Mirrors #12493 built-then-held.
 
-## >>> #12506 IMPL SCOPE (front-loaded; HANDS BACK to skill when PR #12518 §8.6 merges) <<<
-PM's DS-audit (deepseek-v4-pro, .squidsquad/pm/planning/AUDIT-AGENT-RUNTIME-86-83-2026-06-16.md) split the work. PM-lane doc fixes already on PR #12518. **MY-LANE items (must land WITH my impl — §8.6.1 arch flags them knowingly-inconsistent until then):**
-1. **config.md `## Improvement Scanning`:** add `- **Idle Scan Burst**: 3`; add `m` unit → `Improvement Scan Cool-Down: 30m` (currently unitless `30`, drifts vs sub-skill/arch).
-2. **idle-cooldown-loop.md step 5:** REMOVE the false 'Monitor delivers NUDGE at a short fixed cadence' claim (the exact #12506 bug); name the **§8.6.1 periodic driver** as the cadence source; KEEP the 'if NUDGE arrives' branch (orthogonal forge-event wake) + cool-down eligibility check unchanged.
-3. **idle-cooldown-loop.md 'Cool-Down Configuration':** document the new `Idle Scan Burst` key (default 3 = bounded burst per idle period).
-4. **The actual driver:** schedule a low-freq cron/`/loop` self-wake at event-mode boot (per §8.6.1), alongside the Monitor (two orthogonal wake sources, no harness change). Wire into event-mode-contract / boot. + tests.
-§8.6.1 audited COMPLEMENTARY to HARNESS-ARCH §15 liveness (no conflict — driver tool-calls generate §15 activity heartbeats).
-**DS-audit pass-2 (CONVERGED, AUDIT-...-pass2.md) refinements:** (a) step-5 rewrite = the WHOLE 'After each empty poll interval' procedural block → describe **periodic-driver-tick re-entry**, not Monitor-poll cadence (the surrounding logic carries the same stale model, not just the one sentence); (b) ship the 3 artifacts ATOMICALLY (step-5 edit + Idle Scan Burst key + m-unit) — do NOT slice #12506.
-**GATE: PR #12518 merge (operator) → reassigns #12506 to skill.** Read both audit files (pass1 + pass2) when on main.
+## >>> #12509 → RE-SUBMITTED pending-test (PR #12517) — QA cy273 (3rd FAIL) fixed by DROPPING the fn <<<
+Bug: tests/integration/harness.py shadowed references/scripts/harness.py → pytest tests/ collection abort. Fixed by rename (git mv → integration_harness.py) + 3 importers. Regression test went through 3 QA rejections, all on the 3rd fn `test_bare_harness_import_resolves_to_real_harness`:
+- cy251: test popped+restored sys.modules['harness'] but still did live `import harness` (re-execute).
+- cy270: assert via `importlib.util.find_spec` — helped (7→5 fail) but contamination persisted via collection-order interaction.
+- cy273 (FINAL, commit bcf2e0ddd): per QA recommendation, DROPPED the fn entirely. The 2 structural guards (renamed-helper-present + no-test-dir-basename-shadow) lock the regression with zero import machinery. Repros pass (12509→feat_10681 13✓; trio 37✓); collect 4751/0 err; full pytest tests/ exit 0 (3 runs); run_tests.py OK. NOTE block left in test file recording why + subprocess escape hatch.
 
-## >>> #12506 (improvement subloop dormant team-wide) — RCA DONE, routed to PM as ARCH gap <<<
-**RCA (confirmed):** event-mode boot schedules NO periodic driver for idle work — only forge-event wakes. So an idle event-mode agent (pm/skill/dm) never wakes to evaluate the improvement-scan cool-down → scan never fires (dormant for weeks). `idle-cooldown-loop` step 5 ASSUMES a 'fixed-cadence Monitor wake' that `event_poll.py` never delivers (it only NUDGEs on forge events, L325 `if clean or evicted`).
-**Operator (2026-06-16) reframed it ARCH-FIRST** (I had started a transport-layer fix — idle-tick in event_poll.py — operator correctly called it the wrong layer; **BACKED OUT**, branch deleted). Correct fix = scheduling layer using the existing cron/`/loop` primitive: event-mode boot should schedule a low-freq self-wake for idle work, alongside the Monitor. **Routed #12506 → planning (PM)** for AGENT-RUNTIME §8.6 spec (event-mode periodic driver + how a cron/`/loop` tick coexists with the persistent Monitor + reconcile idle-cooldown-loop step 5). **Comes back to skill for the code impl once §8.6 lands** (same shape as #12493). Leads 2 (dm #10540 gate, PM) + 3 (qa loop-mode staleness, separate path) noted, not in this arch.
+## Other in-flight (held on gates / others' lanes)
+- **#12492** (cutover flip) — held on the #12460 shadow divergence window (now live on harness; PM/operator declares clean → wakes me).
+- **#12493** (pipeline-sentinel) — built + DS-SHIP (PR #12494), held on PM's AGENT-RUNTIME §8.3 arch.
+- **#12506** (improvement-subloop driver) — RCA done, routed to PM; §8.6 arch authored (PR #12518), my-lane impl scope front-loaded (config.md keys + idle-cooldown-loop step5 + boot driver), comes back on §8.6 merge.
 
-## >>> #12493 (pipeline-sentinel) — BUILT + DS-SHIP, HELD on arch-first gate <<<
-Operator restructured #12493 **arch-first** (2026-06-16): PM authors a semantic-handoff-backstop subsection in **AGENT-RUNTIME §8.3** FIRST (the sentinel backstops *semantic/comment-only* handoffs the way EAD backstops *forge-state* changes — EAD polls state, not comment bodies, so a comment-only handoff like #12460 rides no event + no EAD catch). **#12493 impl is GATED on §8.3 landing** (impl conforms to + cites arch, not reverse). My #12495 (work-assign doc/impl gap) was folded into the SAME §8.3 reconciliation (PM owns arch).
-- **Built + ready**: branch `squidsquad/task/12493` → PR #12494. Rewrote pipeline-sentinel.md §2: progress-based halt detection (incl. comment-only failed-handoff), 4-class investigate, event-effective remedies (authorized transition→EAD wake; NO bare-comment handoffs; does NOT prescribe phantom work-assign), PM-authority boundary, escalate-with-options (pending-human-review + options), #12460 worked example. 2 DS reviews (R1 BLOCK→fixed, R2 SHIP). compose+catalog green (159); marker-loaded sub-skill (AC8 = marker present in PM CLAUDE.md, body runtime-loaded not inlined). installer-files.txt already lists it (AC9 no-op). CQ AC7 in body (verifier authors spec).
-- **ON RESUME when §8.3 lands** (watch for a wake event from PM — bare comment won't reach me): (1) add citation to the new §8.3 semantic-handoff-backstop subsection, (2) reconcile class-naming/terminology to match arch verbatim, (3) re-compose + re-DS, (4) → pending-test.
+## Installer cluster + new HIGH (queued, fresh context):
+- #12450 (unit-test detection L3) — blocked behind #12420 (both touch WIZARD.md; no stacking → wait for #12420 merge).
+- #12527 (HIGH — greenfield installer smoke on FOREIGN throwaway repo) — premature until installer cluster (#12420/#12450) merges; would capture a half-built installer.
+- #12526 (bug — start.ps1/.sh clone-sync uses git pull --rebase → should be merge). **CROSS-DEP: when fixed, UPDATE test_12525 AC5 assertions** (test_start_sh_still_full / test_start_ps1_still_full assert `git pull --rebase` present — change to match new merge flag; [[feedback_update_stale_test_on_behavior_reversal]]).
+- #12511 (test-isolation: force-transition tests emit #999 to live bus — careful event_bus.emit stub) | #12519 (tracked .claude/settings.json merge friction — option B .gitattributes merge=ours rec).
+- #12511 (test-isolation: force-transition tests emit #999 to live bus — careful event_bus.emit stub) | #12519 (tracked .claude/settings.json merge friction — option B .gitattributes merge=ours rec).
 
-## >>> #12460 → pending-test (SHADOW) + #12492 held cutover — operator PATH B split <<<
-
-## >>> #12460 → PENDING-TEST (SHADOW) + #12492 HELD CUTOVER — operator PATH B split (2026-06-16) <<<
-Operator chose **PATH B (formal split)** on my #12460 fork:
-- **#12460 = the SHADOW increment** (observational): progress_liveness() computed alongside PID in update_health(), divergence LOGGED, reboot decision UNCHANGED. Advanced → pending-test (PR #12472, branch refreshed onto main bd1072f05, 303 green). Verifier scope: reboot behavior unchanged + shadow CAN produce a 'dead' verdict for a constructed zombie + suite green. NOT the flip. (Unread-feedback guard blocked the first transition; cleared after posting my scoped handoff comment.)
-- **#12492 = the CUTOVER flip** (approved, role:skill, HIGH, **HARD-GATED**): remove PID-poll as reboot decider, progress-liveness authoritative, PID→teardown-only. **DO NOT START** until #12460's shadow has MERGED + run on the live harness and produced a clean PID-vs-progress divergence window (no false pos/neg). I hold the cutover commits (foundation: progress_liveness/should_advance_dispatch/last_dispatch_at already on the #12460 branch; the flip itself = replace `alive = boot_remote._is_process_alive(pid)` ~harness.py:542 with progress-derived under self._lock, demote PID, remove #10101/#10440 walk from liveness path; AC: cite the divergence window as evidence, slow-boot agent (qa #12409) not falsely rebooted). Front-load map: planning/12460-liveness-map.md. Vault: [[learning-activity-liveness-redispatch-must-not-reset-grace]]. **WATCH for: DM pr-merged on #12472 → then the observation window opens → then #12492.**
-
-## LEARNED THIS SESSION (process)
-- A bare tracker-comment wakes NO agent in event mode — my 22:03 #12460 ask stalled ~2.5h until PM re-raised it via a real event. **To get an agent to act, post + ensure a routing event fires (transition/assigned-to/@mention that the harness emits), not just a comment.**
-
-## Shipped this session (all 3 CLOSED)
-- **#12475** SHIPPED+CLOSED (PR #12486 DM-merged) — tracker.py `--force` full legality override (+ authority + unread-feedback); ship-integrity gates kept hard. Forced swap strips LIVE status labels (no double-label corruption — DS R1 catch). 2 DS reviews, 17 tests. Vault: [[learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate]].
-- **#11613** SHIPPED+CLOSED (PR #12471) — installer dep auto-provisioning. Vault: [[learning-shell-out-provisioning-has-three-sharp-edges]].
-- **#12473** SHIPPED+CLOSED (PR #12474) — L1 no-action-wake plain-language comms.
-
-## Next queue (fresh-context pickups; not yet started)
-- **#12450** (approved + assigned, medium) — installer auto-detect unit-test strategy (L3). Operator locked a design Q in the approval comment — read it. Independent of harness (branch off main).
-- **#12451** (status bar event-vs-loop) — planning-complete + operator-approved 22:10; pick up when its approved/assigned-to routes.
-- Then reboot-churn: #12409 ask-1 → #12408 (fix EARLY) → #12397 (no-op recompose restart-required — note: this very class of event) → #12363 → features #10690/#10686.
+## SHIPPED this session (all CLOSED)
+#11613 (dep-provisioning), #12473 (L1 comms), #12475 (--force legality override), #12460-shadow (liveness divergence logging), #12419 (installer migration-walk §10), #12509 (harness.py basename-shadow / pytest collection fix, 4th submit), #12574 (HIGH harness h11 bodyless-204 freeze-fix), #12525 (bare-harness launchers start-harness.sh/.bat).
 
 ## Process / standing directives
-- Operator (06-15): proceed WIP-safe (commit incrementally + checkpoint), DS-review-per-change.
-- Feature-branch pre-commit guard (#11511) STRIPS .squidsquad/ from task-branch commits → vault/working-state land on MAIN directly (working branch), not in feature PRs.
-- Verify `git branch --show-current` before commits (task-begin switches branch). Always merge main into branch, never rebase.
-- Verify with pytest exit codes, not run_tests.py gate (#12408 masks failures).
-
-## Improvement Scan
-Status: idle
-Last completed: (none this session)
-Next scan after: (eligible)
-
-## >>> ON RESUME — #12460 (#12271 slice-d CUTOVER), high priority, HIGHEST blast radius <<<
-Operator APPROVED the cutover (2026-06-15 18:02) with the **shadow/parallel validation** mandate: run progress-based liveness ALONGSIDE PID-liveness first → log divergence → confirm no false-pos/neg → THEN remove PID-liveness. Restart resume directive (a771871299) reaffirms: "Resume the APPROVED cutover #12460 ... shadow-mode strategy ... Commit incrementally."
-
-**SHADOW PHASE = DONE + DEPLOY-READY** (3 commits on branch, PR #12472 OPEN):
-- `73dab2d58` progress-liveness foundation — `AgentState.progress_liveness(now)` + `last_dispatch_at` dispatch-reference + `should_advance_dispatch()` (re-nudge of unacted work must NOT reset grace — the DS-c1 trap; `ACTIVITY_GRACE_SECONDS=600` == `_HANDOFF_REEMIT_SECONDS=600`). EAD emit site stamps `last_dispatch_at` under lock, guarded by `should_advance_dispatch()`.
-- `3b16ebba0` DS review fixes (c1, 4 findings).
-- `4f9f15c82` shadow divergence logging in `update_health()` (OBSERVATIONAL — computes `progress_liveness` alongside PID `alive`, logs "LIVENESS DIVERGENCE / candidate-zombie / candidate-false-reboot-avoided"; does NOT change `alive` or the reboot decision).
-- This cycle: merged current `origin/main` (clean — main's 6 new commits = #11613 ship + qa/pm ops, zero harness.py/roles overlap), full suite **GREEN 303 passed**, pushed → PR #12472 current & mergeable (`f8b23e350`).
-- Tests: `tests/test_12460_progress_liveness.py` (24 — zombie repro #10855, re-emit-never-resets-grace, persistence, update_health divergence logging).
-- Front-load map: `.squidsquad/skill/planning/12460-liveness-map.md`. DS reviews: `DS-REVIEW-12460-c1.md`, `-c2.md`.
-- Vault: [[learning-activity-liveness-redispatch-must-not-reset-grace]].
-
-**CUTOVER (ACs 1 & 4) = HELD, NOT YET WRITTEN.** Gated on the shadow MERGING + running on the live harness to produce a PID-vs-progress divergence window (per the mandate; writing the flip before observing violates "run alongside first → confirm → THEN remove"). Cutover commit when unblocked:
-- Replace `alive = boot_remote._is_process_alive(pid)` (~harness.py:542) with progress-derived liveness; call `progress_liveness()` UNDER `self._lock`.
-- Demote PID to teardown-only; remove #10101/#10440 descendant-walk from the LIVENESS path (keep for teardown/kill).
-- AC4 + zombie repro e2e (#10855 inert-boot pattern); AC5 no-regression (genuine death still reboots; #12244 backoff, #12442 routing, SessionEnd graceful-vs-crash intact).
-- Then → pending-test. Completes #12271; subsumes #10855 + #12409 ask-2.
-
-**Decision posted to #12460 (22:03):** shadow deploy-ready; asked DM to merge PR #12472 so the observation window opens (I keep #12460 in-progress + hold cutover), OR PM to formally split (shadow = shippable now via #12460→pending-test, cutover = follow-up task). Awaiting PM/DM. WATCH for a transition/assigned-to on #12460, or a DM pr-merged on #12472.
-
-## >>> NEXT QUEUE (do NOT bulldoze mid-#12460-hold; fresh context for substantive ones) <<<
-- **#12450** (approved + assigned, medium) — installer auto-detect **unit-test strategy** (L3 software-dev). Operator locked one design Q in the approval comment (read it). Fresh-context warm-up; independent of harness (branches off main, no #12460 conflict).
-- **#12451** (status bar event-vs-loop mode) — **NOT ready**: operator state-corrected approved→**planning** (21:59, swept into an "approve-all" then pulled back). PM still planning. Do NOT pick up until re-approved.
-- Then reboot-churn cluster + features: #12409 ask-1 (freq breaker) → #12408 (run_tests gate masking — fix EARLY) → #12397 (no-op recompose) → #12363 (orphan kill-tree) → #10690 (sub-skill CQ+DS+compose) → #10686 (V2 migration smoke).
-
-## Shipped this session
-- **#11613** SHIPPED + CLOSED (PR #12471 DM-merged) — installer dependency auto-provisioning (gather-all → consent → provision → re-verify, INSTALLER-ARCH §4.1). wizard.py `gather_deps`/`provision_deps` + helpers + CLI; WIZARD.md Step 0; 55 tests. Vault: [[learning-shell-out-provisioning-has-three-sharp-edges]].
-- **#12473** SHIPPED + CLOSED (PR #12474 DM-merged) — operator L1 comms fix: no-action wake shows plain one-liner (`🦑 Checked the latest activity …`), prohibits internal jargon. SOUL.md User-Facing Communication subsection + instructions.md §3 ref; all 4 roles recomposed/verified.
-- **#12418 / #12443 / #12458** (slices a/b/c of #12271) shipped earlier — SessionEnd-reason, activity-heartbeat, pause-aware guard. All on main; slice-d (#12460) consumes them.
-
-## Process / standing directives
-- Operator (06-15) stands: **proceed WIP-safe (commit incrementally + checkpoint every step), DS-review-per-change.**
-- DS per-change review caught real regressions (#12342, #12380, #12418-C, #12460-c1) that forward-only tests missed — hold pending-test for DS on high-blast-radius.
-- Verify with pytest exit codes, NOT run_tests.py gate (#12408 masks failures).
-- Always merge main into branch, never rebase. Verify `git branch --show-current` before every commit (task-begin can switch branch mid-cycle).
+- Operator: WIP-safe (commit incrementally + checkpoint), DS-review-per-change.
+- Verifier rejection = highest priority (fix before new work). 2 QA rounds on #12509 both legit.
+- Feature-branch pre-commit guard strips .squidsquad/ → working-state/vault land on MAIN.
+- Always merge main into branch, never rebase. Verify branch before commits. No stacking (base follow-ups on main).
+- Full `pytest tests/` collection needs #12509 merged (the harness.py rename); pre-merge, run file-scoped.
 
 ## Improvement Scan
 Status: idle
