@@ -2,7 +2,7 @@
 
 - **Task**: none. Idle.
 - **Just completed this cycle**:
-  - **#12799** → pending-test (PR pending, branch squidsquad/task/12799, commit 3d176de56). L1 async-no-pause: added "Never Block on a Human" section to `references/roles/SOUL.md`. AC1 verified — rule composes into all 4 roles' soul (`_assemble_soul`). DS review: 1 error finding (return-path attribution — human never makes the transition) FIXED. **Source-only PR per #12585 precedent** (composed CLAUDE.md regenerated at main-landing; l4_file_watcher auto-recomposed them locally — reverted from branch). AC2 comprehension in body (verifier derives spec). AC3 DS done.
+  - **#12799** → pending-test (**PR #12822**, branch squidsquad/task/12799, commit 3d176de56). L1 async-no-pause: added "Never Block on a Human" section to `references/roles/SOUL.md`. AC1 verified — rule composes into all 4 roles' soul (`_assemble_soul`). DS review: 1 error finding (return-path attribution — human never makes the transition) FIXED. **Source-only PR per #12585 precedent** (composed CLAUDE.md regenerated at main-landing; l4_file_watcher auto-recomposed them locally — reverted from branch). AC2 comprehension in body (verifier derives spec). AC3 DS done.
   - **#12408** → **SHIPPED** (PR #12819). Static gate fail-closed on incomplete run.
   - **#12506** → **SHIPPED** (AC11 fix merged to main; subloop_driver.py + installer-files entry now on main). Filed **#12821** (medium, manifest-completeness test gap; event_poll.py likely real gap).
 - **Earlier**:
