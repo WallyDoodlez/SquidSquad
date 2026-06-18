@@ -15,7 +15,7 @@
 
 - **skill**: skill
 - **pm**: pm
-- **dm**: dm
+- **dm**: dm/skill
 - **qa**: qa
 
 

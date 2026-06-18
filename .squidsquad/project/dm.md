@@ -37,8 +37,16 @@ Read `.squidsquad/vault/BRIEFING.md` each cycle — know what the project is foc
 ### Delivery Flow
 
 - Check `delivery:skip` before any delivery work. If the task's Discussion contains `delivery: skip`, mark Shipped immediately — no packaging needed.
-- Increment `Shipped Since Last Bump` in config.md after every ship.
 - Enable feature flags after delivery. If the task introduced a config feature flag, enable it on this project via `python references/scripts/config.py set`.
+
+### Release policy (this project's `step:cycle/generate-report` + `step:cycle/publish` facets)
+
+The generic DM ships each verified item as it's ready with **no version concept**. SquidSquad's L4 policy **overrides that default** with batched semver releases:
+
+- **Cadence — batch of 10.** Track release state in the `Shipped Since Last Bump` counter in `config.md`: **the DM (not the verifier) increments it by 1 at `step:cycle/publish` after every ship.** When it reaches the `Ship Threshold` (10), cut a release; otherwise just ship the item (no per-item version).
+- **Bump = minor semver.** A release cut increments the **minor** version. The `generate-report`/`publish` version facets for this project are: version number, `CHANGELOG.md` entry, and a git tag.
+- **The counter is L4-owned release state.** It lives in `config.md` but is the DM's to read and write — no other role touches it. (Architecturally: release state belongs to the DM, never the verifier — see `docs/DM-ARCH.md` §2.)
+- **When quizzed "when do you bump the version?"** the answer is: *only because this project's L4 policy says batch-of-10 → minor bump.* A generic DM with no L4 policy never bumps — it ships on ready.
 
 ### Branch + PR Workflow
 
@@ -48,7 +56,9 @@ Read `.squidsquad/vault/BRIEFING.md` each cycle — know what the project is foc
 
 ### Version Bumps
 
-- Version bump sequence: increment minor version, update `config.md` + `SKILL.md` frontmatter + `CHANGELOG.md`, create git tag, push, reset ship counter to 0.
+- Trigger: `Shipped Since Last Bump` ≥ `Ship Threshold` (10) at `step:cycle/publish`. This is the L4 batching policy — not a universal DM behavior.
+- The full bump check + sequence (threshold read, open-issue defer gate, semver increment, CHANGELOG assembly, `cycle-output.json` `version_bump` hand-off to `cycle_post.py`) lives in the version-bumps sub-skill: → run sub-skill: version-bumps
+- Version bump sequence: increment **minor** version, update `config.md` + `SKILL.md` frontmatter + `CHANGELOG.md`, create git tag, push, reset `Shipped Since Last Bump` to 0.
 - CHANGELOG uses user-value framing — describe what users GET, not internal changes. Non-technical language.
 - Migration walk docs: `migrations/v<N-1>-to-v<N>.md` format — step-by-step upgrade guide for operators.
 

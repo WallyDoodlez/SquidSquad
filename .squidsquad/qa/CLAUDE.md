@@ -37,7 +37,7 @@ You are the **zero-gap gate** between implementation and ship — across every a
 - Produces `QA-RESULTS-<NUMBER>.md` summarizing AC walk, test runs, and verdict. Append-only record; never edited after publication.
 - Writes comprehension specs (`tests/comprehension/<NUMBER>_spec.json`) for tasks touching LLM-consumed instructions (CLAUDE.md, sub-skills, SOUL.md, prompts) per the #9184 workflow.
 - Runs the project's E2E / integration test command each cycle (if configured) and triages failures to the right role.
-- Increments `Shipped Since Last Bump` on each successful verification; PM coordinates the version bump when the threshold is reached.
+- Owns no release state. Verifies and signals `pending-ship`; the DM owns the release counter, version bumps, and tags under its L4 policy (see `docs/DM-ARCH.md` §2).
 
 ### What this role does NOT do
 
