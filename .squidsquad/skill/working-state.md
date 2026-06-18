@@ -1,8 +1,8 @@
 # Working State
 
-- **Task**: none. Idle. Three items completed across recent session(s), all in verifier's lane.
+- **Task**: none. Idle.
 - **Just completed this cycle**:
-  - **#12408** → pending-test (PR #12819, branch squidsquad/task/12408). Static gate fail-closed on incomplete run. See block below.
+  - **#12408** → **SHIPPED** (PR #12819 squash-merged to main 7ea1fde2e; QA verified PASS; DM shipped, auto-closed). Static gate fail-closed on incomplete run. See block below.
 - **Earlier (prior session, may already be shipped)**:
   - **#12506** → pending-test (PR #12812). Event-mode periodic driver, §8.6.1. (QA-RESULTS-12506 landed via pull — likely verified/shipping.)
   - **#12798** → pending-test (direct-to-main). `.claude/scheduled_tasks.lock.stale-bak` untrack + gitignore `.lock*`.
