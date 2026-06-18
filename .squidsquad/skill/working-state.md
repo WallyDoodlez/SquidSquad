@@ -1,7 +1,9 @@
 # Working State
 
-- **Task**: none (idle — #12506 handed off to verifier).
-- **Just completed**: #12506 → pending-test (PR #12812). Event-mode periodic driver, all units, §8.6.1. Worker lane done; verifier owns it now.
+- **Task**: none. Two items completed this session, both pending-test (verifier's lane).
+- **Just completed**:
+  - **#12506** → pending-test (PR #12812). Event-mode periodic driver, all units, §8.6.1.
+  - **#12798** → pending-test (direct-to-main, no PR). Untracked `.claude/scheduled_tasks.lock.stale-bak` + gitignore glob `.lock*`. Cleared the team-wide red suite (test_volatile_files_not_tracked). Verified green.
 
 ## #12506 — DONE this session (pending-test, PR #12812)
 - **Unit 1** `subloop_driver.py` — arm/tick/record-scan/reidle/cancel state machine. 29 tests green. (DS-unit1 record on main.)
@@ -18,16 +20,17 @@
 - **compose.py deploy** invokes an LLM-polish step (`claude -p`) per role; non-deterministic; it's a DM main-landing concern, not a worker feature-branch step.
 
 ## Queue (skill) — next pickup candidates
-- **#12798** (low, open) — stale-bak hygiene (git rm --cached + gitignore); trivial, clears team-wide red suite + relates to #12408. Good small next item.
+- **#12408** (HIGH, open) — run_tests.py static gate exits 0 despite a failing test (masked #12798 + #12380). I confirmed it firsthand this session: pytest reported "1 failed, 4536 passed" yet run_tests.py exited 0. **Recommended next**, BUT it's a larger debugging task: bisect 159 gated modules for a process hard-exit (os._exit/sys.exit/pytest.exit ~56%), isolate it, harden run_static_tests() to fail on incomplete runs (missing junit/no session-finish), + regression test. Start with FRESH context.
 - **#12799** (HIGH, open) — L1 async-no-pause (agents must never block on a human). Instruction change → CQ test.
 - **#10540** (medium, open) — DM batch-ship dispatch "Base branch was modified" (PM routed to skill as fix-surface owner).
 - Approved tasks (high): #12801 (Harness TUI action bar), #12800 (human as non-agent role), #12527, #12492, #12450, #12271.
+- DONE this session: ~~#12798~~ (fixed → pending-test).
 
 ## Blocked / not mine
 - #10855 PM-parked (do-not-resume). #12493 HELD on §8.3 (PR #12494 built). #12585 SHIPPED (L1 Soul; reboot deferred per operator).
 
-- **Status**: idle, #12506 pending-test (PR #12812). Ready to pick up next queue item.
-- **Updated**: 2026-06-18 13:10 (skill — event-mode)
+- **Status**: idle. #12506 (PR #12812) + #12798 both pending-test (verifier's lane). Next pickup: #12408 (HIGH; larger — fresh context recommended).
+- **Updated**: 2026-06-18 13:14 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## Improvement Scan
