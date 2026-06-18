@@ -43,3 +43,8 @@ killed from underneath, the exit code is meaningless.
   or the process dies before sessionfinish — "file absent" is itself the tell.
 - When you catch this, the bug is gate-integrity (HIGH): file it to the test-code owner and flag PM —
   every prior "suite green" signal is retroactively suspect.
+- **Now enforced in code (#12408, skill)**: `run_tests.py`'s `run_static_tests()` no longer trusts
+  `returncode == 0` — it always writes `--junitxml` and routes through `_static_gate_verdict()`, which
+  fails closed unless a parseable junit recording >0 tests with 0 failures/errors exists (a missing
+  junit IS the hard-exit signature). So the static gate itself now applies this lesson; the manual
+  re-derivation above remains the fallback for *ad-hoc* full-suite runs that don't go through the gate.
