@@ -314,32 +314,48 @@ If any answer is unclear, the AC is incomplete — refine before filing.
 
 **Clear planning phase flag** after the issue is filed. Normal PM cycling auto-resumes.
 
-### Phase 3B — Draft PR for Planning Review (#4979)
+### Phase 3B — Plan-in-PR: seed the task branch with the plan, open a draft PR (#12750)
+
+The plan goes **into the task PR, not onto `main`**. Committing the plan onto a fresh
+task branch spawns the draft PR; the worker implements on that **same** branch; on
+merge the plan lands on the working branch **co-located with the code that fulfilled
+it** — one permanent, reviewable track record. **Never commit the plan straight to
+`main`.**
 
 After Phase 3 (AC drafting + issue filing) completes:
 
-1. **Create feature branch**: `python references/scripts/git_ops.py task-begin [ROLE] [ISSUE_NUMBER]` — capture the branch name from stdout.
-2. **Commit planning artifacts** to the branch:
+1. **Write the plan file** to `.squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md` — the
+   full spec (the same content that seeds the issue body). This committed file is the
+   **source of truth** for the spec; the issue body is the synced summary copy
+   (strengthens [[feedback_issue_body_must_match_context]] — one authoring location).
+   RESEARCH.md / CONTEXT.md remain your planning inputs that inform this plan.
+2. **Create the task branch**: `python references/scripts/git_ops.py task-begin [PM_ROLE] [NUMBER]`
+   — this checks out (or creates from `main`) `squidsquad/task/[NUMBER]`, the **unified
+   branch the worker will adopt**. Capture the branch name from stdout.
+3. **Commit the plan as commit 1** of the branch:
    ```bash
-   git add .squidsquad/[ROLE]/planning/FEAT-[ROLE_UPPER]-XXX-*
-   git commit -m "[ROLE]: #[NUMBER] — planning artifacts for [title]"
+   git add .squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md
+   git commit -m "plan(#[NUMBER]): [title]"
    ```
-3. **Push and create draft PR** (use the branch name from task-begin).
+   The plan body (`[NUMBER]-body.md`) is exempt from the #11511 state-guard, so it
+   rides the feature branch into the PR rather than being stripped to `main`
+   (`git_ops._is_plan_body`). Do **not** add other `.squidsquad/` state to this commit
+   — only the plan body survives the guard by design.
+4. **Push and open a DRAFT PR** seeded with just the plan (use the branch name from task-begin).
 
    → run sub-skill: `pr-protocol` for the wire mechanics (`git_ops.py pr-create` is canonical; bare `gh pr create` is non-canonical and skips base-branch and body-shape coordination).
 
-   Planning-review PRs use a distinct title + body shape from code-review PRs (this is the only carve-out from the standard PR body shape in `pr-protocol`):
-
    ```bash
    git push -u origin [BRANCH]
-   python references/scripts/git_ops.py pr-create "[ROLE]: #[NUMBER] — [title] (planning review)" \
-     "## Planning Artifacts for Review\n\nPlanning artifacts for #[NUMBER].\n\n### Artifacts\n- RESEARCH.md\n- CONTEXT.md\n\nVerifier will produce \`.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nPending human review — approve via PR comments."
+   python references/scripts/git_ops.py pr-create "[DRAFT] [title] (#[NUMBER])" \
+     "## Plan for #[NUMBER]\n\nThis draft PR is seeded with the task plan (\`.squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md\`, commit 1). The worker adopts THIS branch and adds implementation commits on top; on merge the plan lands on \`main\` co-located with the code.\n\nVerifier produces \`.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md\` independently from the AC list at verification time (#9184).\n\n### Status\nDraft — pending human review; approve the task via the issue or PR comments."
    ```
-4. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Planning artifacts committed. PR [URL] ready for review."`
-5. **Return to working branch**: `python references/scripts/git_ops.py task-end [ROLE] [NUMBER]`
+   Open the PR as a **draft** (`gh pr create --draft`, handled by `pr-protocol`).
+5. **Comment PR link on the issue**: `python references/scripts/tracker.py comment [NUMBER] --role [PM_ROLE]-lead --message "Plan committed to squidsquad/task/[NUMBER] (commit 1) — draft PR [URL]. Worker adopts this branch."`
+6. **Return to working branch**: `python references/scripts/git_ops.py task-end [PM_ROLE] [NUMBER]`
 
-The human reviews planning artifacts via PR comments (inline feedback on specific sections). When the human approves:
-- PM converts the draft PR to ready
+The human reviews the plan via PR comments (inline feedback on specific sections). When the human approves:
+- PM converts the draft PR to ready (metadata only) — or leaves it draft for the worker to flip when implementation is done
 - PM transitions the task status to `Approved`
 
 Ask the human if they want to approve the task now or leave as `Pending`. This is the **only** point in the lifecycle where approval should be offered — never at initial filing time.
