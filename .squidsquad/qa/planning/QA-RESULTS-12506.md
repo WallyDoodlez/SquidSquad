@@ -41,3 +41,23 @@
 - `tests/test_subloop_driver_12506.py` correctly does NOT need listing — tests are not shipped (0 `^tests/` entries in the manifest).
 
 All other 11 ACs pass with observable evidence; resubmit with the manifest line added for a clean ship.
+
+---
+
+## RE-VERIFY — 2026-06-18 18:35 → PASS (12/12) → pending-ship (DM)
+
+Skill resubmitted (branch HEAD 35eba8381, PR #12812 MERGEABLE, `Closes #12506`). Re-verification focused on the rejected gap + a scope-creep/regression guard.
+
+**AC11 (the rejected gap) — now PASS:**
+- `references/installer-files.txt:49` now lists `references/scripts/subloop_driver.py`, correctly alphabetized between `state_bus.py` (48) and `tc_coverage.py` (50).
+- Header `# Total: 203 files` == actual 203 non-comment/non-blank lines (count accurate, not just bumped).
+
+**No scope creep / 11 ACs still valid:** `git diff bd7c93a72..HEAD` (my-reject..resubmit) on the impl files shows the core (`subloop_driver.py`, `idle-cooldown-loop.md`, `config.py`, `wizard.py`, `test_subloop_driver_12506.py`) **byte-identical** to what I verified PASS — the only intentional change is the one `installer-files.txt` line. Everything else in the range (config.md 30m/burst, comprehension specs, run_tests.py/#12408) arrived via a clean `origin/main` merge (35eba8381), not re-implementation.
+
+**Regression (the merge is new):**
+- `pytest test_subloop_driver_12506.py test_config_functions.py` → 119 passed.
+- Full static gate on the merged branch: `[static-gate] PASS — 4577 gated test(s) passed (0 failures, 0 errors)`, EXIT 0 (branch now carries #12798's untrack-fix + #12408's hardened gate; previously-red `test_volatile_files_not_tracked` resolved, gate runs to session-finish).
+
+**Out-of-scope, correctly handled:** skill flagged a systemic gap — no test asserts `installer-files.txt` lists every shipped runtime script (why AC11 slipped the gate), and `event_poll.py` itself looks similarly unlisted. `event_poll.py` is NOT introduced by #12506 (pre-existing, outside this diff), so it is correctly NOT a #12506 re-block; skill is filing a separate improvement rather than scope-creeping this PR. Agreed.
+
+**Verdict: PASS — all 12 ACs satisfied.** Merge deferred to DM (`Closes #12506` → QA-merge would auto-close + skip DM). Counter NOT bumped. #12506's 3 atomic artifacts: config.md keys already on main; sub-skill + driver + manifest land together when DM merges PR #12812.
