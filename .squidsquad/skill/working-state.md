@@ -1,7 +1,14 @@
 # Working State
 
-- **Task**: idle — #12720 SHIPPED to pending-test (PR #12736, DS-c1 folded). Was the fresh-context masker task.
-- **Status**: #12509 + #12574 + #12525 SHIPPED+CLOSED (3 ships this session); #12420 held-on-PM-CQ-AC (PR #12596) = only unit left; #12585 approved/queued; #12492/#12493/#12506 held on gates. NOTE: full `pytest tests/` now works on main (#12509 harness.py rename merged).
+- **Task**: idle — #12750 plan-in-PR SHIPPED to pending-test (PR #12751 ready, DS-c1 5/5 folded). THIS session also: #12420 → pending-test (PR #12596).
+- **Status**: #12420 → pending-test (PR #12596, merged main, run_tests green, both PM items cleared). #12750 built on its own plan-seeded branch (dogfood). #12509/#12574/#12525/#12720 SHIPPED earlier. #12493 still held on PM §8.3 backstop; #10855 operator-DEFERRED (superseded #12271/#12460). Approved queue: #12749 (DM-ARCH, branch squidsquad/dm-arch ready), #12585 (L1 Soul), #12527/#12450 (premature/blocked until #12420 merges).
+
+## >>> #12750 — plan-in-PR (PR #12751) — BUILT, awaiting DS-c1 <<<
+**Adopted** existing plan-seeded branch squidsquad/task/12750 (PM's plan = commit 1, draft PR #12751). Dogfood: PR now carries plan + code together.
+**SCOPE FINDING (folded in):** #11511 state-guard (`guard_staged_state`) strips ALL `.squidsquad/` from feature branches → defeats plan-in-PR. Verified empirically. FIX: `git_ops._is_plan_body()` narrow allowlist exempting `.squidsquad/<role>/planning/<n>-body.md` (only plan bodies; working-state/iterations/vault still stripped → no #11511 merge-spiral regression). commit_code/commit_state/_auto_resolve untouched (guard-only change).
+**Delivery:** PR (code) = git_ops.py guard + task-intake.md Phase3B (plan-in-PR) + task-pickup.md (adopt branch) + test_12750 (19 tests). MAIN (state) = worker.md L4 Branch+PR bullet + recompose. ACs: 1✓(task-intake runtime sub-skill) 2✓(task-pickup+worker.md L4) 3✓pending-merge(plan+code co-located in PR#12751) 4✓grep-clean 5✓not-in-installer-files 6✓deploy-all green 7=verifier CQ spec.
+**Code commit:** 08d8192d8 on branch. **NOTE for verifier:** plan-in-PR behavior lives in RUNTIME-loaded sub-skills (task-intake/task-pickup markers) — quiz must let the agent follow `→ run sub-skill` markers.
+**LESSON:** `git reset --hard HEAD~1` to clean a probe commit ALSO discarded uncommitted git_ops.py edits (tracked). Re-applied. Never reset --hard with uncommitted work; commit real work first or use --mixed.
 - **RESTART-REQUIRED DEFERRED (10:21)**: l4-recompose fired restart-required, but composed skill CLAUDE.md mtime is 09:46 (≠ event time) → 10:21 recompose was a no-op → matches #12397 spurious-emit. Per operator's standing 'reboots deferred', NOT self-restarting. Composed CLAUDE.md DID change at 09:46 (uncommitted local recompose) so a reboot would sync instructions — operator's call. Surfaced to operator.
 - **Updated**: 2026-06-17 09:40 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
