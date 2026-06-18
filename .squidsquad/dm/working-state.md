@@ -5,6 +5,12 @@
 - **Task**: none
 - **Status**: idle
 
+### #12749 SHIPPED 2026-06-18 01:04 ✅ (DM-ARCH layered refactor — FIRST real EAD auto-route to event-mode DM)
+- Merge PR #12689 → main `bf92f3a8` (squash, harness /merge). Main-landing `873afee4d` (same window, NO fiction window): config alias dm→dm/skill + L4 batch-10 release policy + statusline sync + deploy-all (dm+qa CLAUDE.md changed; pm/skill no-op). Counter 34→35 (verifier increment REMOVED; DM owns counter now). Manual label→shipped (no closing keyword), auto-closed. qa PASS 8/8, ship-contingency satisfied.
+- **⚠️ REBOOT PENDING (dm + qa)**: their CLAUDE.md changed on main; running dm(me)+qa on pre-refactor spine until restart. Folded into PENDING TEAM REBOOT window (#12473/#12750). Recompose DONE+committed; restarts deferred per standing operator directive. On green-light: restart dm + qa.
+- CHANGELOG batched to held v0.45.0: "DM is now a generic, layerable role — version/release policy lives in project config (L4), release-state ownership moved entirely to the DM."
+- **MILESTONE**: EAD auto-route reached event-mode DM directly (assigned-to target_alias=dm). Closes #12442 gap in practice. Flag PM/operator to confirm via harness event log.
+
 ## >>> FLAG @PM — .claude/settings.json merge friction (volatile-shared-file class) <<<
 - 2026-06-16: a pull aborted because `.claude/settings.json` was locally dirty (compose regenerates its activity/pause hooks block per-clone), and a stash-pop hit a UU conflict because origin also changed it. Resolved by resetting to HEAD (committed version is generic — hooks use ${CLAUDE_PROJECT_DIR}/${SQUIDSQUAD_ROLE}, serves all clones per #12418/#12443).
 - **This is [[feedback_merge_spiral_volatile_file]]**: a tracked file that compose rewrites per-clone will keep blocking pulls. Structural fix = untrack + gitignore .claude/settings.json (compose regenerates it on deploy). NOT a DM-domain decision + the file may be intentionally committed (the #12418 'one committed settings.json serves all clones' design) → flag @pm/skill, don't unilaterally untrack.
@@ -20,11 +26,12 @@ Status: **GATED** — doc-improvement-loop issue-gate trips on open #10540 (stat
 Last completed: R73 (cycle 1715, 2026-05-31) — 0 findings, full 7-file rotation. rotation_count=74.
 Next scan after: #10540 routed/closed (then quiet-gate resumes).
 
-## Session Context (EVENT-mode, boot @ 2026-06-14)
-- **Wake mode: EVENT** — boot probe succeeded on :7373 (port file = 7373, NOT the old 59999 pin). Prior session's PM port-pin (forced LOOP via dead :59999) is GONE this session. Mode is sticky — do NOT re-probe mid-session, do NOT self-heal .harness-port.
-- Booted cleanly: drained 5 boot events, queried forge, armed Monitor — i.e. NOT inert. #10855 (event-mode inert boot) either resolved or doesn't bite this manual-spawn path. Functional in event mode.
-- Cursor advanced to `15399ccc39154b8f` (past all 5 boot-drain events; all terminal/no-op: #11745 already shipped, #87654 skill-lane, #11511 now shipped+closed).
-- Version: **v0.44.0**; Shipped Since Last Bump: **17/10** (config.md authoritative — OVER threshold).
+## Session Context (EVENT-mode, boot @ 2026-06-17 23:51)
+- **Wake mode: EVENT** — boot probe succeeded on :7373 (port file = 7373). Mode is sticky — do NOT re-probe mid-session, do NOT self-heal .harness-port.
+- Booted cleanly: emitted bootup-complete; Monitor armed. Cursor now `95166c32cf7b6c4a` (harness-owned). Initial boot drain 0 events @ `a6676dd232f32c12`.
+- **SYNTHETIC TEST-EVENT STORM in progress (2026-06-18 ~00:07–00:10):** two bursts (10 then 13 events) of status-transition noise on tiny/fake issue numbers (#1, #42, #55, #269, #999) + a couple plausible-but-CLOSED reals (#9967, #12451). Duplicated identical transitions (e.g. #42 pending-ship→shipped ×4) + nonsensical sequences (shipped→in-progress) = bus-injection test, not real forge activity. Forge-verified: #9967/#42 CLOSED, zero open DM pending-ship. All acked as no-op. If storm persists, likely someone exercising EAD/event-bus routing.
+- **Queue EMPTY**: pending-ship list = stale labels on CLOSED issues (re-verified #9965 = CLOSED). Open DM items: #10540 (status:open, parked on PM routing, NOT DM-actionable) + 17 status:pending (await PM approval). No real DM delivery work.
+- Version: **v0.44.0**; Shipped Since Last Bump: **34/10** (config.md authoritative — OVER threshold, bump HELD per operator green-light).
 
 ## SHIPPED THIS SESSION (2026-06-14)
 - **#12282** (PR #12341, test-isolation leak fix; test-only tests/test_cycle_post.py; merge 3a37845). Verifier PASS + live E2E (zero /restart leaks). Transition-only ship (qa-side pre-merged). Counter 15→16.
