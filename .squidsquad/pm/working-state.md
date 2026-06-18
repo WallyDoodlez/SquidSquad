@@ -19,7 +19,7 @@ _Condensed 2026-06-15. Prior incident narrative (reboot saga, event-mode stabili
 
 **Pipeline healthy (verified open-state):** 0 open pending-ship, 0 open pending-test (dm/verifier correctly idle). in-progress: pm=3 (parked coord-holds #11092/#11053/#9968), skill=3 (#12585 L1-Soul-health, #12493 L2-pipeline-sentinel, #10855 verifier-inert-boot) + now #12506 + #10540. No stalls.
 
-**⚠️ DATA-HYGIENE NOTE (not yet filed):** `tracker.py list-tasks <role> --status pending-ship` returns ~30 CLOSED issues carrying stale `status:pending-ship` labels (e.g. #605/#1075/#2351/#9184/#9965 — all closed, role:skill). The query doesn't filter `--state open` → misleading pipeline reads. Use `gh issue list --state open` for true state. Candidate skill bug (tracker.py query) OR a label-cleanup pass; low-pri, deferred (closed items don't affect live pipeline).
+**⚠️ DATA-HYGIENE NOTE (investigated, NOT filed — by-design surface):** `tracker.py list-tasks <role> --status pending-ship` returns ~30 CLOSED issues with `status:pending-ship` labels (#605/#1075/#2351/#9184/#9965… all closed, role:skill). This is **#9837 by-design**: for handoff statuses (pending-ship/pending-test) list-tasks widens `state=all` because a PR can auto-close an issue before DM's shipped-transition. NOT a query bug. The real residue = those closed items never had pending-ship cleared (shipped-transition didn't fire, or closed outside ship flow) → permanent zombie entries in DM's list view. Live routing UNAFFECTED (EAD uses `--state open`; agents ship fine). Needs a careful label-reconcile pass (strip pending-ship from long-closed items / set shipped), NOT a quick file. Deferred — re-triage if it ever causes a real misroute. For true pipeline reads use `gh issue list --state open`.
 
 **(Prior 23:54 boot context — restart was pending; now executed. Below preserved.)**
 
@@ -98,5 +98,6 @@ _Condensed 2026-06-15. Prior incident narrative (reboot saga, event-mode stabili
 
 ## Improvement Scan
 Status: idle
-Last completed: (none this session)
-Next scan after: (eligible — no prior scan this session)
+Last completed: 2026-06-18 01:37
+Next scan after: 2026-06-18 02:07
+(Focused scan this boot: surfaced list-tasks closed-item surface → determined #9837 by-design, no filable gap; label-hygiene residue noted above for careful future triage. No process-gap filed.)
