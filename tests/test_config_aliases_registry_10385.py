@@ -285,20 +285,64 @@ class TestBulletFormFallback:
         assert result == {"skill": ("worker", "skill")}
 
     def test_full_live_repo_install_bullets(self):
-        # Matches the live config.md on this repo exactly.
+        # Matches the live config.md on this repo exactly. The DM is a
+        # skill-domain delivery manager (#12749 DM-ARCH) — `dm/skill`
+        # gives the `dm` alias the skill L3 variant so package/publish
+        # mechanics (merge-to-main + compose) compose into it.
         body = (
             "- **skill**: skill\n"
             "- **pm**: pm\n"
-            "- **dm**: dm\n"
+            "- **dm**: dm/skill\n"
             "- **qa**: qa\n"
         )
         result = config.parse_aliases_registry(_wrap_with_aliases(body))
         assert result == {
             "skill": ("worker", "skill"),
             "pm": ("pm", None),
-            "dm": ("dm", None),
+            "dm": ("dm", "skill"),
             "qa": ("verifier", None),
         }
+
+    def test_explicit_class_slash_domain_form(self):
+        # #12749: `<role_class>/<l3_domain>` bullet value attaches an L3
+        # domain to any role-class (not just the worker shorthand), so a
+        # skill-domain DM can be declared in the legacy bullet form.
+        body = "- **dm**: dm/skill\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {"dm": ("dm", "skill")}
+
+    def test_class_slash_domain_applies_role_class_shim(self):
+        # The class half still honors the legacy role-class shim
+        # (`qa` → verifier, `dev` → worker) before validation.
+        body = "- **qa**: qa/skill\n- **dev1**: dev/web\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {
+            "qa": ("verifier", "skill"),
+            "dev1": ("worker", "web"),
+        }
+
+    def test_class_slash_domain_bad_class_raises(self):
+        # An unknown class half in the slash form raises rather than
+        # silently producing a bogus (class, domain) pair.
+        body = "- **x**: bogus/skill\n"
+        with pytest.raises(
+            config.AliasesRegistryError,
+            match="role-class",
+        ):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
+
+    def test_class_slash_domain_empty_domain_raises(self):
+        # A trailing-slash value with no domain half is malformed.
+        body = "- **dm**: dm/\n"
+        with pytest.raises(config.AliasesRegistryError):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
+
+    def test_class_slash_domain_multi_slash_raises(self):
+        # The domain half must be a single path segment — a value like
+        # `dm/skill/extra` would be (mis)read as a nested compose dir.
+        body = "- **dm**: dm/skill/extra\n"
+        with pytest.raises(config.AliasesRegistryError):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
 
     def test_unrecognized_value_raises_with_diagnostic(self):
         # Per DS-10751 review: an unrecognized bullet value raises so

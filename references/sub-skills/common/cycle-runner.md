@@ -72,7 +72,7 @@ Then run:
 python references/scripts/cycle_post.py [ROLE]
 ```
 
-The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM), and status bar cleanup. Context pressure exit is detected mechanically — `cycle_post.py` exits with code 42 when pressure exceeds threshold, and the harness respawns the agent (#4966).
+The script handles: status transitions, tracker comments, iteration logging, git commits, pushes, version bumps (DM — only when the project's L4 policy defines a version scheme; the generic DM has none), and status bar cleanup. Context pressure exit is detected mechanically — `cycle_post.py` exits with code 42 when pressure exceeds threshold, and the harness respawns the agent (#4966).
 
 ### Role-Specific Fields
 
@@ -94,5 +94,5 @@ The script handles: status transitions, tracker comments, iteration logging, git
 
 **DM** cycle-output extras:
 - `bugs_fixed`, `deliveries`
-- `version_bump`: `{new_version, items_included}`
+- `version_bump`: `{new_version, items_included}` — emitted only when the project's L4 release policy defines a version scheme (e.g. SquidSquad's batch-10 → minor bump); a version-less project never emits it
 <!-- /sub-skill: cycle-runner -->

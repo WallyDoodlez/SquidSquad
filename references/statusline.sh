@@ -311,15 +311,6 @@ read_backlog_cache() {
 
 # === PM-specific segments ===
 if [ "$ROLE" = "pm" ]; then
-  # Ship counter: 📦 N/threshold, 🚀 if near bump
-  SHIPPED=$(grep 'Shipped Since Last Bump' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
-  SHIP_THRESHOLD=$(grep 'Ship Threshold' "$SQDIR/config.md" 2>/dev/null | grep -oE '[0-9]+')
-  SHIPPED=${SHIPPED:-0}
-  SHIP_THRESHOLD=${SHIP_THRESHOLD:-10}
-  SHIP_STR="📦 ${SHIPPED}/${SHIP_THRESHOLD}"
-  NEAR_BUMP=$(( SHIP_THRESHOLD - 1 ))
-  [ "$SHIPPED" -ge "$NEAR_BUMP" ] && SHIP_STR="${SHIP_STR} 🚀"
-
   # Planning phase: 📋 #NNN — check for features in Planning status via cached GH Issues
   PLANNING_STR=""
   PLANNING_NUM=$(read_backlog_cache "pm" "planning")
@@ -387,7 +378,7 @@ if [ "$ROLE" = "pm" ]; then
   fi
 
   # Build PM line 1 — health icons right-aligned
-  LINE1="🦑 ${ROLE_LABEL} v${VERSION} │ ${SHIP_STR}"
+  LINE1="🦑 ${ROLE_LABEL} v${VERSION}"
   [ -n "$PLANNING_STR" ] && LINE1="${LINE1} │ ${PLANNING_STR}"
   [ -n "$GIT_SYNC" ] && LINE1="${LINE1} │ ${GIT_SYNC}"
   [ -n "$VAULT_Q" ] && LINE1="${LINE1} │ ${VAULT_Q}"

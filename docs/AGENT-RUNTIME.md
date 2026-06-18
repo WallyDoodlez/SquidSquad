@@ -19,7 +19,7 @@ SquidSquad has a small fixed set of **role classes** and a per-install set of **
 | **`pm`** | Coordinates the team and the human; manages workflow and process |
 | **`verifier`** | Verifies the product being delivered; does not do technical implementation |
 | **`worker`** | Implements technical work to acceptance criteria |
-| **`dm`** | Delivers (CHANGELOG, version bumps, releases) |
+| **`dm`** | Delivers verified work, generates the delivery report, captures end-to-end knowledge (CHANGELOG / version bumps / releases are L4 project policy, not universal — see DM-ARCH) |
 
 **Agent aliases** (1..N per class, install-defined in `.squidsquad/config.md` `## Aliases`):
 
@@ -146,7 +146,7 @@ flowchart TB
 
     Forge[("Forge<br/>GitHub Issues")]
 
-    subgraph agents_row["Agents (one box per running alias; multi-instance installs add boxes here)"]
+    subgraph agents_row["Agents (one box per running alias — multi-instance installs add boxes here)"]
         direction LR
         subgraph pm_box["PM agent"]
             PMTree["cmd → thin_launcher → claude<br/>+ event_poll (Monitor child, in tree)"]
@@ -203,7 +203,7 @@ flowchart TB
 
     HarnessAPI[("Harness HTTP API")]
     Poll -- "GET /events/for/alias ?since=cursor (event mode only)" --> HarnessAPI
-    Claude -- "POST /events (booted, ack-cursor); POST /work/assign" --> HarnessAPI
+    Claude -- "POST /events (booted, ack-cursor) + POST /work/assign" --> HarnessAPI
     Poll -- "NUDGE on stdout" --> Monitor
 ```
 
@@ -845,7 +845,7 @@ sequenceDiagram
             H-->>A: []
             alt improvement cooldown elapsed
                 Note over A: §8.6 — run one bounded<br/>improvement subloop task
-                Note over A: loop continues — re-check (other agents may have<br/>assigned work during subloop; subloop forge writes<br/>can trigger EAD-emitted assigned-to for this alias)
+                Note over A: loop continues — re-check (other agents may have<br/>assigned work during subloop — subloop forge writes<br/>can trigger EAD-emitted assigned-to for this alias)
             else cooldown not elapsed
                 Note over A: idle wait<br/>(Monitor blocks until next NUDGE)
                 EP->>M: next NUDGE
@@ -876,6 +876,7 @@ These move independently. The operator sets `intent`; the harness updates `statu
 
 ```mermaid
 stateDiagram-v2
+    state "crash-looping" as crashLooping
     [*] --> stopped
     stopped --> booting: operator start
     booting --> ready: booted received
@@ -884,8 +885,8 @@ stateDiagram-v2
     stopping --> stopped: ack-stop or timeout
     ready --> crashed: process death detected
     crashed --> booting: harness auto-respawn
-    crashed --> crash-looping: 3+ fast deaths (<60s each)
-    crash-looping --> booting: backoff window elapsed
+    crashed --> crashLooping: 3+ fast deaths (under 60s each)
+    crashLooping --> booting: backoff window elapsed
     crashed --> stopped: operator gives up
 ```
 
@@ -899,7 +900,7 @@ State semantics:
 
 Two fields, not one, so recovery semantics are explicit. After a host reboot, the harness reads `.squidsquad/.harness-state.json`, sees `intent=running` but no live PID → respawn. If collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed."
 
-> **Proposed redesign (not implemented — #12271):** the `ready → crashed` edge above is driven today by **PID death-detection** in the harness health poll, which cannot distinguish a *functioning* agent from an *inert* one — a process can be alive while the agent loop is wedged (see [HARNESS-ARCH.md §13.7](HARNESS-ARCH.md) / #10855, the ~22h zombie). A proposed redesign replaces PID-liveness with **progress signals emitted by the agent's real loop** — `SessionStart` / `Pre`+`PostToolUse` / `Stop` / `SessionEnd` claude-code hooks plus `event_poll` idle-ticks and acks — demoting PID to teardown-only. If it lands, the agent-side emitter wiring is documented in this section and the harness-side liveness/reboot decision in [HARNESS-ARCH.md §15](HARNESS-ARCH.md). Full model: HARNESS-ARCH §15.
+> **Proposed redesign (not implemented — #12271):** the `ready → crashed` edge above is driven today by **PID death-detection** in the harness health poll, which cannot distinguish a *functioning* agent from an *inert* one — a process can be alive while the agent loop is wedged (see [HARNESS-ARCH.md §13.7](HARNESS-ARCH.md) / #10855, the ~22h zombie). A proposed redesign replaces PID-liveness with **progress signals emitted by the agent's real loop** — `SessionStart` / `Pre`+`PostToolUse` / `Stop` / `SessionEnd` claude-code hooks plus `cycle_post` heartbeats (with a pause-aware guard) — demoting PID to teardown-only. If it lands, the agent-side emitter wiring is documented in this section and the harness-side liveness/reboot decision in [HARNESS-ARCH.md §15](HARNESS-ARCH.md). Full model: HARNESS-ARCH §15.
 
 ### 8.3 Work handoff: explicit `/work/assign`
 
@@ -1071,32 +1072,59 @@ The branch fires only when the queue is observably drained — there is no harne
 
 ```mermaid
 flowchart TD
-    Start(["per-event ack just emitted;<br/>top of §8.1 eager loop"])
+    Start(["per-event ack just emitted —<br/>top of §8.1 eager loop"])
     QEmpty{"GET returns empty?<br/>no events past cursor"}
+    Arm["arm periodic driver if not armed<br/>(lazy first idle, resets scan_count on re-arm) §8.6.1"]
     Throttle{"cooldown elapsed?<br/>time-based throttle"}
-    Subloop["run improvement subloop:<br/>one bounded task"]
-    Idle["idle wait for next nudge"]
+    Subloop["run improvement subloop:<br/>one bounded task, scan_count++"]
+    Cap{"scan_count ≥<br/>Idle Scan Burst?"}
+    Cancel["cancel periodic driver<br/>(re-arms on next idle period)"]
+    Idle["idle wait"]
     Process["process next event<br/>(§8.1 inner loop body)"]
 
     Start --> QEmpty
     QEmpty -->|"no — more events past cursor"| Process
     Process --> Start
-    QEmpty -->|"yes — drained"| Throttle
+    QEmpty -->|"yes — drained"| Arm
+    Arm --> Throttle
     Throttle -->|"recent subloop ran<br/>within throttle window"| Idle
     Throttle -->|"cooldown elapsed"| Subloop
-    Subloop --> Start
+    Subloop --> Cap
+    Cap -->|"no"| Start
+    Cap -->|"yes"| Cancel
+    Cancel --> Idle
     Idle -->|"NUDGE wakes agent"| Start
+    Idle -->|"periodic-driver tick (§8.6.1)"| Start
 ```
 
-**Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
+**Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30m, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
 
 **What the subloop does** (role-class-specific, one bounded task per fire):
 - **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
 - **verifier**: TEST-PLAN backlog catch-up
 - **worker**: doc-scan or test-coverage scan on owned modules
-- **dm**: doc realignment + CHANGELOG hygiene + version-bump readiness
+- **dm**: doc realignment + delivery-report/record hygiene (CHANGELOG + version-bump readiness only where L4 policy defines them)
 
 Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and routes it). That nudges the owning alias into work — via the same `/work/assign` path everything else uses.
+
+#### 8.6.1 The event-mode periodic driver (idle-work scheduler)
+
+§8.6's "idle → wake → re-check" loop has an implicit dependency the rest of §8 doesn't satisfy: **something must re-enter the loop on a timer when no forge events arrive.** Loop mode gets this for free — `/loop 30m` *is* a periodic driver, and the subloop fires at `step:cycle/cleanup`. Event mode arms the Monitor but schedules **nothing periodic**; `event_poll` emits a NUDGE only on *forge events* (it is silent on an empty poll). So a genuinely idle event-mode agent (zero forge events) never re-enters the loop, never re-checks the throttle, and **the subloop never fires** — the dormancy observed in #12506 (no improvement scan across event-mode agents for weeks).
+
+**The driver.** It is **not scheduled at boot.** The **first time the agent reaches the idle/drained state** (§8.6's empty-GET branch), it **schedules a dedicated low-frequency self-wake** using the same cron/`/loop` scheduling primitive loop mode uses, at the throttle cadence (≈ the cool-down, default 30m) — so an agent that stays busy on forge events never creates one. Event mode therefore has **two independent, orthogonal wake sources**:
+
+- **Monitor / `event_poll`** → forge-event NUDGEs → *productive* work (§8.1).
+- **Periodic driver (cron)** → timer tick → *idle-work* check: re-enter one §8.1 drained-queue evaluation.
+
+**On a driver tick** the agent (1) forge-reads `work_queue()` first — absorbing any work that arrived (so the driver doubles as a safety-net against a missed nudge); then (2) if the queue is drained **and** the throttle window has elapsed, runs one bounded subloop task (existing §8.6 logic). The driver runs only this **narrow drained-check — not a full loop-mode cycle**; event mode stays event-driven for productive work, and the driver covers *only* the idle window.
+
+**Integration with the Monitor.** The cron tick and the persistent Monitor coexist in one session — a tick arriving mid-task or mid-stream is handled exactly like a mid-task NUDGE (noted, then absorbed by the next forge-read; atomicity preserved per §8.5). The cron fires as a Claude Code scheduled tool-invocation, **not** on Monitor's stdin, so it does not race with NUDGE delivery — both wake sources feed the same §8.1 loop entry. **No harness change is required**: the scheduling primitive is runtime-side, scheduled by the agent when it first goes idle.
+
+**Driver lifecycle (lazy + bounded — not a permanent loop).** *Enable* on the first idle/drained state, **not** after a scan has run: gating on a scan having fired would strand an agent whose first idle check finds the throttle not-yet-elapsed — it would never scan, so the driver would never be created, and the agent would never scan again (the exact #12506 dormancy). So the trigger is *reaching idle*; the driver's ticks then handle throttle eligibility. *Bound:* the driver carries a **scan counter**, and when the count reaches the configured threshold (`Idle Scan Burst` — a new `config.md` key under `## Improvement Scanning`, default 3, added by the #12506 impl), the agent **cancels the cron** — a bounded burst, not a perpetual loop. *Re-arm:* the counter and driver reset when the agent re-enters the idle/drained state after processing forge work (a fresh idle period). Net per sustained-idle stretch: up to `threshold` improvement scans, then quiesce until new activity — versus *zero* (pre-fix) and versus an unbounded forever-cron.
+
+**Reconciliations.** The §8.6 diagram's `Idle` state now has a second exit, `periodic-driver tick → Start`. The `idle-cooldown-loop` sub-skill's step-5 assumption ("the persistent Monitor delivers wakes at a short fixed cadence") is corrected to name this driver as the cadence source. **That sub-skill edit — plus adding the `Idle Scan Burst` key (default 3) and the `m` unit on `Improvement Scan Cool-Down` in `config.md` — are part of the #12506 implementation and MUST land with it; until they do, the arch doc, the `idle-cooldown-loop` sub-skill, and `config.md` are knowingly inconsistent.**
+
+*Scope:* covers the event-mode driver (pm/skill/dm). dm's #10540 gate (separate, PM routing) and qa's loop-mode staleness (separate path) are out of scope per the #12506 RCA.
 
 ---
 

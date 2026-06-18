@@ -6,6 +6,8 @@ roles: [dm]
 
 ### Step 3 — Version Bump Check
 
+**This step runs ONLY when the project's L4 policy defines a version scheme** (e.g. SquidSquad's batch-10 → minor bump). A generic DM with no L4 version policy has no version concept and skips this entire step — versioning is an optional L4 facet, not a universal DM duty (see `docs/DM-ARCH.md` §2).
+
 After marking any item `Shipped`, check if a version bump is due:
 
 1. Read `Ship Threshold`: `python references/scripts/config.py get ship-threshold`
