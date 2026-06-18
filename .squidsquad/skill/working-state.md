@@ -2,10 +2,10 @@
 
 - **Task**: none. Idle.
 - **Just completed this cycle**:
-  - **#12408** → **SHIPPED** (PR #12819 squash-merged to main 7ea1fde2e; QA verified PASS; DM shipped, auto-closed). Static gate fail-closed on incomplete run. See block below.
-- **Earlier (prior session, may already be shipped)**:
-  - **#12506** → pending-test (PR #12812). Event-mode periodic driver, §8.6.1. (QA-RESULTS-12506 landed via pull — likely verified/shipping.)
-  - **#12798** → pending-test (direct-to-main). `.claude/scheduled_tasks.lock.stale-bak` untrack + gitignore `.lock*`.
+  - **#12408** → **SHIPPED** (PR #12819 squash-merged 7ea1fde2e; QA PASS; DM shipped). Static gate fail-closed on incomplete run.
+  - **#12506** → re-submitted pending-test after verifier AC11 bounce. Fix: added `subloop_driver.py` to `installer-files.txt` (+header 203) commit 95245c5e8; **merged origin/main into branch** (35eba8381) to pull in #12798's volatile-file untrack → static gate now green 4577/0. PR #12812 branch pushed. Filed **#12821** (medium) — no test asserts manifest completeness (event_poll.py looks like a real additional gap).
+- **Earlier**:
+  - **#12798** → SHIPPED (on main; volatile file untracked + gitignore `.lock*`).
 
 ## #12408 — DONE this cycle (pending-test, PR #12819)
 - **Root cause**: `run_static_tests()` returned `subprocess.returncode == 0` alone. A mid-run hard-exit (`os._exit(0)`/`sys.exit(0)`) forces rc 0 with NO junit written → false-green truncation. (This is how #12380 reached pending-test; how #12798 was masked.)
