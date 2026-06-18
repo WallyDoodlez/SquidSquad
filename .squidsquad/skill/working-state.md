@@ -21,8 +21,9 @@ Commit on branch: `detect_test_strategy(root)` → `{framework, run_command, loc
 
 ## Other in-flight / held
 - **#12801** (Harness TUI action bar) — **in-progress but HELD**: front-loaded investigation found a **false premise** — there is NO harness TUI (harness = FastAPI HTTP daemon; squidsquad_cli.py is non-interactive; reboot-one/all ALREADY exist via start_team.py --reboot). Escalated to PM/operator with 3 options (Opt1 CLI+force-reboot-safe primitive [rec, no dep] / Opt2 build real TUI [needs dep approval] / Opt3 primitives-only). **Awaiting surface+dependency decision.** Not building a from-scratch TUI blindly.
-- **#12799** → pending-test (PR #12822). L1 async-no-pause (SOUL.md "Never Block on a Human"). In verifier's court.
-- **#12800** (human as non-agent role) — GATED on #12799 shipping ("land that first"). Next after #12450.
+- **#12799** → **SHIPPED** (PR #12822 merged by DM, commit f90643d72). SOUL.md L1 async-no-pause live (all-roles reboot pending per DM).
+- **#12800** (human as non-agent role) — **UNGATED** now #12799 shipped. Next approved task after #12450.
+- **#12823** (NEW, medium, open, assigned skill) — `.gitattributes` `config.md merge=ours` silently drops concurrent config changes (DM hit it on #12799 landing; I hit the same push-race this cycle). In queue behind in-progress #12450. Likely fix at .gitattributes (merge=union or drop merge=ours for config) — see [[feedback_gitattributes_for_transient_state]].
 
 ## Blocked / not mine (skip on work-queue)
 - **#10855** PM-parked (deferred behind #12271/#12460; PM reinvestigating 2026-06-18).
