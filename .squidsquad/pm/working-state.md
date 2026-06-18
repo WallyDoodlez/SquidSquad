@@ -2,11 +2,26 @@
 
 _Condensed 2026-06-15. Prior incident narrative (reboot saga, event-mode stabilization, #11505/#11511 churn, #12417 doc-reconciliation, restart procedure) preserved in iteration logs + on the forge — not re-copied here. Working-state = current active state only._
 
-## Current — 2026-06-17 23:54 (PM EVENT-mode, fresh reincarnated boot)
+## Current — 2026-06-18 01:32 (PM EVENT-mode, post-restart fresh boot)
 
-**Boot clean.** Harness reachable :7373 (up 2h, git_sha 23ebc3a9, v0.44.0). GH access OK. Cursor was `990f84b1` → drained 41 events, all no-ops (forge-reflected ships + test-bus garbage on issues #999/#42/#1/#55/#87654/#269). The one pm-targeted event (`assigned-to`/l4-recompose/restart-required, fired 22:51 after PR #12751 merged pm-composed source) was **already honored by this fresh spawn** (~23:50). Cursor advanced to head `2456da7f`.
+**Boot clean + recovered a stale-main hazard.** Harness reachable :7373 (fresh boot, uptime <10m, git_sha 00757fe4→ now ab00fba6, v0.44.0). GH access OK. Cursor `5fd4f552` → boot drain EMPTY (fresh harness deque). bootup-complete emitted.
 
-**RESTART PENDING — operator restarting agents (skill requested) once pm idle (start.bat may have failed when PM-launched last time → operator doing it). Everything below checkpointed for clean resume.**
+**⚠️ Harness boot did NOT pull — local main was 14 BEHIND origin** (1 ahead = my pre-restart checkpoint commit 00757fe40). Origin had #12689 (DM-ARCH), #12518 (#12506 §8.6.1), #12749 post-ship, qa iters. **Merged origin/main → main (clean, zero conflicts) → pushed (ab00fba6). Now 0/0 in sync.** WATCH next boot: if local is behind again, the harness boot-pull is unreliable → file. (Could also be expected: my checkpoint commit predated the 14, so respawn had nothing to FF onto.)
+
+**Post-restart TODOs ALL RESOLVED:**
+1. ✅ DM-ARCH.md §5 (line 106): flipped "tracked as #12749" → "**was realized in #12749 (shipped 2026-06-18, PR #12689)**". skill had NOT flipped it. (PM-owned TRD doc-honesty.)
+2. ✅ skill-domain wiring documented in DM-ARCH.md (lines 15/20/56: L3 `dm/skill/` Package=merge-to-main+compose, Publish=ship-comment+CHANGELOG).
+3. ✅ pm/CLAUDE.md current — PM composed output contains NO cycle-runner/version_bump content (count 0); #12689's PM-listed source touches (cycle-runner.md/AGENT-RUNTIME.md/DM-ARCH.md/config.py) don't alter PM's *composed* doc. On-disk = committed. No recompose needed for PM.
+
+**#12506 HANDOFF EXECUTED (the big unblock) — PR #12518 (§8.6.1) is MERGED (06888b854).** Design contract landed. Reassigned role:pm→**skill**, status planning→approved. Handoff comment posted (3 atomic artifacts, no-harness-change AC8, also cures operator's "idle agents forget queued work" symptom). **EAD confirmed emitting assigned-to(target=skill) for #12506** → skill will pick up. High-pri, critical-path.
+
+**#10540 ROUTED PM → skill (long-standing BRIEFING TODO done).** DM batch-ship "Base branch was modified" race; DM requested routing twice (c411/c413). Fix shape validated on BOTH transports (harness-up serialized-POST+poll; harness-down per-item local-merge, drained 7 ships/4cy zero-fail, vault [[learning-dm-local-merge-when-harness-down]]). Fix surface = `delivery-packaging.md` + DM CLAUDE source = **compose-consumed = skill domain** (precedent #11334). Reassigned role:dm→skill; bug auto-approved (skill triages open→in-progress). **EAD confirmed assigned-to(target=skill).** Clearing this also unblocks DM's doc-improvement-loop scan gate (contributes to #12506 dormant-subloop).
+
+**Pipeline healthy (verified open-state):** 0 open pending-ship, 0 open pending-test (dm/verifier correctly idle). in-progress: pm=3 (parked coord-holds #11092/#11053/#9968), skill=3 (#12585 L1-Soul-health, #12493 L2-pipeline-sentinel, #10855 verifier-inert-boot) + now #12506 + #10540. No stalls.
+
+**⚠️ DATA-HYGIENE NOTE (not yet filed):** `tracker.py list-tasks <role> --status pending-ship` returns ~30 CLOSED issues carrying stale `status:pending-ship` labels (e.g. #605/#1075/#2351/#9184/#9965 — all closed, role:skill). The query doesn't filter `--state open` → misleading pipeline reads. Use `gh issue list --state open` for true state. Candidate skill bug (tracker.py query) OR a label-cleanup pass; low-pri, deferred (closed items don't affect live pipeline).
+
+**(Prior 23:54 boot context — restart was pending; now executed. Below preserved.)**
 
 **#12749 SHIPPED + MERGED (01:04) — DM-ARCH layered refactor, clean pipeline:**
 - qa VERIFIED → PASS 8/8 ACs (04:56Z) → dm SHIPPED (01:04) → **PR #12689 MERGED**. AC3 resolved per PM ruling: live `dm/skill` wiring + c12-F1 critical fix (`config.py alias dm` strips `/domain` → DM identity intact). qa recovered fully (earlier respawn-watch resolved positive).
