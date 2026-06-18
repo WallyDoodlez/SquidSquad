@@ -1623,12 +1623,16 @@ def build_config_md(spec):
     lines.append("")
 
     # --- ## Improvement Scanning ---
-    # #11091 — cool-down field for event-mode idle scan loop. Default 30 min
+    # #11091 — cool-down field for event-mode idle scan loop. Default 30m
     # matches Iteration Interval > Minutes so cool-down semantically equals
     # "at most one improvement scan per iteration cycle" even in event mode.
+    # #12506 — Idle Scan Burst bounds the event-mode periodic driver: at most
+    # N idle scans per sustained-idle stretch before the driver self-cancels
+    # (re-arms on the next activity→idle transition). See AGENT-RUNTIME §8.6.1.
     lines.append("## Improvement Scanning")
     lines.append("")
-    lines.append("- **Improvement Scan Cool-Down**: 30")
+    lines.append("- **Improvement Scan Cool-Down**: 30m")
+    lines.append("- **Idle Scan Burst**: 3")
     lines.append("")
 
     # --- ## Git Branches ---
