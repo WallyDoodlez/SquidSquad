@@ -1,0 +1,32 @@
+{
+  "issue": 12749,
+  "title": "DM-ARCH layered DM refactor — generic delivery spine + L4 release policy",
+  "fixture": ".squidsquad/dm/CLAUDE.md (composed DM, full main-landing state: dm/skill alias + L4 release policy)",
+  "method": "Fresh sonnet agent given ONLY the composed DM CLAUDE.md, no prior context. Answers must come from the file alone.",
+  "questions": [
+    {
+      "id": "CQ1",
+      "prompt": "When do you bump the version?",
+      "expected": "Only because THIS project's L4 policy says so (batch-of-10 ships → minor semver bump). A generic DM with no L4 version policy has no version concept and never bumps — it ships each verified item as it's ready (ship-on-ready). Versioning is an optional L4 facet, not a universal DM duty.",
+      "fail_if": "Answers 'every 10 features/ships' as a universal/inherent DM rule without attributing it to the project's L4 policy, OR says the DM always bumps versions."
+    },
+    {
+      "id": "CQ2",
+      "prompt": "Who owns the 'Shipped Since Last Bump' release counter — you (the DM) or the verifier? Who increments it and when?",
+      "expected": "The DM owns it entirely (L4-owned release state). The DM increments it by 1 at step:cycle/publish after every ship. The verifier no longer touches it.",
+      "fail_if": "Says the verifier increments it, or that the verifier owns/shares the counter."
+    },
+    {
+      "id": "CQ3",
+      "prompt": "In your delivery spine, what does the 'package' step mean concretely for this project (skill/code domain)?",
+      "expected": "Merge the feature branch into main + run compose.py deploy for affected roles (merge-to-main + compose). Plus completing the product with user-facing docs.",
+      "fail_if": "Cannot identify merge-to-main + compose as the concrete package mechanic, or treats package as version-bumping."
+    },
+    {
+      "id": "CQ4",
+      "prompt": "What is step:cycle/contribute-knowledge and what are you supposed to do there?",
+      "expected": "Contribute knowledge gained to the vault at two granularities: the part-level detail of your own delivery slice, AND the broad task/job-level knowledge that only the DM's end-to-end vantage can see. Fires at task completion.",
+      "fail_if": "Cannot describe the vault knowledge-capture at two granularities, or omits the broad end-to-end job-level capture."
+    }
+  ]
+}
