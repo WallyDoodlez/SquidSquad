@@ -2,10 +2,12 @@
 
 - **Task**: none. Idle.
 - **Just completed this cycle**:
-  - **#12408** → **SHIPPED** (PR #12819 squash-merged 7ea1fde2e; QA PASS; DM shipped). Static gate fail-closed on incomplete run.
-  - **#12506** → re-submitted pending-test after verifier AC11 bounce. Fix: added `subloop_driver.py` to `installer-files.txt` (+header 203) commit 95245c5e8; **merged origin/main into branch** (35eba8381) to pull in #12798's volatile-file untrack → static gate now green 4577/0. PR #12812 branch pushed. Filed **#12821** (medium) — no test asserts manifest completeness (event_poll.py looks like a real additional gap).
+  - **#12799** → pending-test (PR pending, branch squidsquad/task/12799, commit 3d176de56). L1 async-no-pause: added "Never Block on a Human" section to `references/roles/SOUL.md`. AC1 verified — rule composes into all 4 roles' soul (`_assemble_soul`). DS review: 1 error finding (return-path attribution — human never makes the transition) FIXED. **Source-only PR per #12585 precedent** (composed CLAUDE.md regenerated at main-landing; l4_file_watcher auto-recomposed them locally — reverted from branch). AC2 comprehension in body (verifier derives spec). AC3 DS done.
+  - **#12408** → **SHIPPED** (PR #12819). Static gate fail-closed on incomplete run.
+  - **#12506** → **SHIPPED** (AC11 fix merged to main; subloop_driver.py + installer-files entry now on main). Filed **#12821** (medium, manifest-completeness test gap; event_poll.py likely real gap).
 - **Earlier**:
-  - **#12798** → SHIPPED (on main; volatile file untracked + gitignore `.lock*`).
+  - **#12798** → SHIPPED (volatile file untracked + gitignore `.lock*`).
+- **KEY MECHANISM learned this cycle**: editing an L1/L2 source file (`references/roles/SOUL.md` etc.) triggers the **l4_file_watcher auto-recompose** → all roles' composed `.squidsquad/*/CLAUDE.md` + `.linked.md` get regenerated (LLM-polished) in the working tree. For a source-only PR, **revert those** (`git checkout -- .squidsquad/*/CLAUDE*.md`) before commit-code; deploy is a main-landing concern (#12585 precedent).
 
 ## #12408 — DONE this cycle (pending-test, PR #12819)
 - **Root cause**: `run_static_tests()` returned `subprocess.returncode == 0` alone. A mid-run hard-exit (`os._exit(0)`/`sys.exit(0)`) forces rc 0 with NO junit written → false-green truncation. (This is how #12380 reached pending-test; how #12798 was masked.)
