@@ -78,7 +78,10 @@ class TestGuardExemptsPlanBody:
         reset_calls = []
 
         def fake_run(cmd, check=True):
-            # only call: `git branch --show-current`
+            # guard_staged_state's only _run call is `git branch --show-current`.
+            # Inspect cmd so an unexpected/added _run call fails loudly rather
+            # than passing on coincidental mock data.
+            assert cmd == "git branch --show-current", f"unexpected _run: {cmd!r}"
             return _mock_result(stdout="squidsquad/task/12750\n")
 
         def fake_run_list(cmd, check=True):
@@ -122,6 +125,7 @@ class TestGuardExemptsPlanBody:
     def test_on_working_branch_is_noop(self):
         """Guard is a no-op on the working branch regardless of staged state."""
         def fake_run(cmd, check=True):
+            assert cmd == "git branch --show-current", f"unexpected _run: {cmd!r}"
             return _mock_result(stdout="main\n")
 
         with patch.object(git_ops, "_get_working_branch", return_value="main"), \

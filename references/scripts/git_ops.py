@@ -1084,11 +1084,16 @@ def guard_staged_state():
 
     - On the configured working branch (or a detached/unknown HEAD): no-op.
     - On any other (feature) branch: unstage every staged file classified as
-      state/ephemeral by ``_is_state_file`` (the SAME classifier ``commit_code``
-      uses, so routing stays single-source). The files stay in the working
-      tree for the next working-branch cycle to commit: ``.squidsquad/`` files
-      via ``commit_state``; ``.claude/`` files via the working branch's normal
-      state-commit path (``commit_state`` stages only ``.squidsquad/``).
+      state/ephemeral by ``_is_state_file`` (the same classifier ``commit_code``
+      uses), **except plan bodies** — ``_is_plan_body`` paths
+      (``.squidsquad/<role>/planning/<n>-body.md``) are exempted so a task's
+      committed plan rides the feature branch into the PR (plan-in-PR, #12750).
+      That carve-out is guard-local: ``commit_code`` / ``commit_state`` /
+      ``_auto_resolve_state_conflicts`` still treat plan bodies as state. The
+      stripped files stay in the working tree for the next working-branch cycle
+      to commit: ``.squidsquad/`` files via ``commit_state``; ``.claude/`` files
+      via the working branch's normal state-commit path (``commit_state`` stages
+      only ``.squidsquad/``).
 
     FAIL-OPEN: always returns normally (exit 0 at the call site). A pre-commit
     hook that aborts could wedge every agent's cycle, so this guard only ever

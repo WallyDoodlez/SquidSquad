@@ -324,14 +324,16 @@ it** — one permanent, reviewable track record. **Never commit the plan straigh
 
 After Phase 3 (AC drafting + issue filing) completes:
 
-1. **Write the plan file** to `.squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md` — the
-   full spec (the same content that seeds the issue body). This committed file is the
+1. **Create the task branch FIRST**: `python references/scripts/git_ops.py task-begin [PM_ROLE] [NUMBER]`
+   — this checks out (or creates from `main`) `squidsquad/task/[NUMBER]`, the **unified
+   branch the worker will adopt**. Capture the branch name from stdout. (Branch-before-write
+   matters: `task-begin` resets the working tree to `origin/main`, so writing the plan first
+   would let the checkout clobber it if `[NUMBER]-body.md` were already tracked on `main`.)
+2. **Write the plan file** on the branch to `.squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md`
+   — the full spec (the same content that seeds the issue body). This committed file is the
    **source of truth** for the spec; the issue body is the synced summary copy
    (strengthens [[feedback_issue_body_must_match_context]] — one authoring location).
    RESEARCH.md / CONTEXT.md remain your planning inputs that inform this plan.
-2. **Create the task branch**: `python references/scripts/git_ops.py task-begin [PM_ROLE] [NUMBER]`
-   — this checks out (or creates from `main`) `squidsquad/task/[NUMBER]`, the **unified
-   branch the worker will adopt**. Capture the branch name from stdout.
 3. **Commit the plan as commit 1** of the branch:
    ```bash
    git add .squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md
