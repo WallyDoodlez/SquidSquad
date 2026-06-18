@@ -1,27 +1,32 @@
 # Working State
 
-- **Task**: #12506 (in-progress) — event-mode periodic driver (fixes dormant improvement subloop across all event-mode agents). Build to LOCKED AGENT-RUNTIME §8.6.1 (PR #12518, on main 06888b854). role:skill, high. Plan published as comment 01:47.
-- **Prior this session**: #12585 → pending-test (PR #12782, L1 Soul Health & Diagnostics) — DONE, in verifier lane.
+- **Task**: #12506 (in-progress) — event-mode periodic driver, build to LOCKED AGENT-RUNTIME §8.6.1. Branch `squidsquad/task/12506` (pushed). **Units 1+2 DONE + committed**; units 3-5 remain.
+- **Prior this session**: #12585 → pending-test (PR #12782, L1 Soul Health & Diagnostics) — DONE, verifier lane.
 
-## #12506 PLAN (work contract — published on issue)
-**Seam:** driver-lifecycle decisions (lazy-arm@first-idle, scan_count++, cancel@`Idle Scan Burst`, re-arm+reset@re-idle, config reads) → NEW testable module `references/scripts/subloop_driver.py` (deterministic core, makes AC1/3/4/6 unit-testable). Scheduling tool call stays in prose (idle-cooldown-loop.md). State file `.squidsquad/<alias>/.subloop-driver.json` (armed, scan_count, last_run).
-**Primitive:** recommend ScheduleWakeup (single-shot self-reschedule: arm=first wake; tick=scan+reschedule while under cap; cap=stop=natural cancel; re-arm=schedule again). Fallback CronCreate+CronDelete. Confirm in unit 1.
-**Units (ATOMIC — one PR per §8.6.1 DS-audit Q1):**
-1. subloop_driver.py + unit tests → AC1/AC3/AC4/AC6. ← NEXT (primitive-agnostic, build+test first)
-2. config.md `## Improvement Scanning`: `Cool-Down: 30`→`30m`; add `- **Idle Scan Burst**: 3` → AC6/AC11.
-3. idle-cooldown-loop.md rewrite step5 + "after each empty poll interval" → driver-tick model; name §8.6.1 as cadence; KEEP NUDGE branch + cooldown check; doc Idle Scan Burst → AC2/AC5/AC7.
-4. compose deploy-all + verify driver instruction in event-mode composed CLAUDE.md → AC9; harness.py untouched → AC8.
-5. comprehension AC10 (PM-authored in body; verifier makes spec per TEST-PLAN).
-**Discipline:** DS-review per change (AC12) w/ Sonnet fallback on model_router exit1/2/3; run_tests.py green before pending-test; if harness change needed → STOP + route to PM (§8.6.1 constraint).
-**TODO before unit 1:** read existing throttle machinery — `.subloop-last-run` (§8.6) vs `## Improvement Scan` working-state block (idle-cooldown-loop.md) — integrate, don't duplicate. Check scan_index.py throttle logic.
+## #12506 PROGRESS
+**DONE (committed on branch, pushed):**
+- **Unit 1** `references/scripts/subloop_driver.py` — deterministic arm/tick/record-scan/reidle/cancel state machine (§8.6.1). 29 unit tests `tests/test_subloop_driver_12506.py` GREEN. DS review (deepseek exit0): F1-3 fixed (TypeError guards, read_state type-coercion, tick armed-gate), F4 declined (fixed-cadence per spec). Record: `.squidsquad/skill/planning/DS-REVIEW-12506-unit1.md`.
+- **Unit 2** config wiring: `config.py` idle-scan-burst FIELD_MAP + default 3; `wizard.py` new-installs `Cool-Down: 30m` + `Idle Scan Burst: 3`; `test_config_functions.py` SAMPLE_CONFIG carries new field (#5366 FieldMapCoverage).
+
+**REMAINING:**
+- **Unit 3 (BIG, high-blast-radius)** `references/sub-skills/common-events/idle-cooldown-loop.md`: rewrite step 5 + "after each empty poll interval" to the driver-tick re-entry model. NAME §8.6.1 driver as cadence source (NOT Monitor fixed-cadence — that's the bug). KEEP NUDGE branch + cooldown eligibility. Document `Idle Scan Burst` in Cool-Down Configuration. Agent maps subloop_driver decisions → scheduling tool call. → AC2/AC5/AC7. **PRIMITIVE DECISION still open**: ScheduleWakeup (recommended, single-shot self-reschedule) vs CronCreate+CronDelete vs /loop — settle by checking each tool's semantics + how loop-mode /loop cancels. DS-review this change (AC12, high-blast-radius).
+- **Unit 4** `compose.py deploy-all` + verify driver instruction in event-mode composed CLAUDE.md (AC9); harness.py untouched (AC8).
+- **Finalize**: re-apply live `.squidsquad/config.md` `Cool-Down: 30`→`30m` + add `Idle Scan Burst: 3` (commit-code reset it; graceful default covers function meanwhile) → commit-state at main-landing. AC10 comprehension (PM-authored in body; verifier makes spec). Full `run_tests.py` green. pr-create + → pending-test (ATOMIC — all units one PR per §8.6.1).
+- **Resume entry point**: Unit 3. Read idle-cooldown-loop.md (current step 5 wrongly assumes Monitor fixed-cadence wakes) + the ScheduleWakeup/CronCreate/CronList tool schemas + how loop-mode cancels /loop.
+
+## Findings filed this session
+- **#12798** (role:skill, low) — pre-existing tracked volatile `.claude/scheduled_tasks.lock.stale-bak` (QA b3b11f646) fails test_volatile_files_not_tracked on origin/main. NOT a #12506 regression; reverted from #12506 branch to keep scope pure. Fix separately (direct-to-main hygiene: git rm --cached + .gitignore).
+
+## Queue behind #12506 (newly routed this session)
+- **#10540** (role:skill, open, medium) — PM routed (c-2026-06-18 "fix-surface owner"): DM batch-ship dispatch — 8/10 PR merges fail "Base branch was modified" when queue drains after harness outage. Auto-approved (bug); queues BEHIND in-progress #12506. Cursor fast-forwarded past its assigned-to event (forge is source of truth; work_queue surfaces it).
+- **#12585 SHIPPED** ✓ (PR #12782 merged 05:51Z) — L1 Soul Health & Diagnostics now on main; all roles need reboot to pick up new L1 (deferred per operator).
 
 ## Blocked in-progress (carried, not mine to action)
-- #10855 PM-parked (do-not-resume; #12460 shipped → PM to close-as-superseded). Stale PR #10952 hygiene deferred.
-- #12493 HELD on §8.3 semantic-handoff-backstop (NOT landed). PR #12494 built.
+- #10855 PM-parked (do-not-resume; #12460 shipped → PM close-as-superseded).
+- #12493 HELD on AGENT-RUNTIME §8.3 semantic-handoff-backstop (NOT landed). PR #12494 built.
 
-- **Branch**: squidsquad/task/12506 (adopting via task-begin).
-- **Status**: #12506 in-progress (planning done, building unit 1).
-- **Updated**: 2026-06-18 01:47 (skill — event-mode)
+- **Status**: #12506 in-progress (units 1-2 done; unit 3 next). #12585 pending-test.
+- **Updated**: 2026-06-18 02:05 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## Improvement Scan
