@@ -1542,6 +1542,30 @@ class EventLifecycleManager:
         """
         return self._cursors.get(role)
 
+    def lag_for(self, role: str) -> int:
+        """Events-behind-head for ``role``'s cursor (#12801 TUI cursor-lag bar).
+
+        Returns how many events in the deque are newer than the role's cursor:
+        0 = caught up (cursor at the head), N = N events behind. A role with no
+        cursor yet (never acked) OR a cursor that predates the retained deque
+        (evicted) reads as fully behind = current deque length. Lock-free read
+        of the cursor (per ``get_cursor``); position via ``find_positions``.
+
+        Cosmetic metric (drives a status-bar visual), so the brief window
+        between the ``len`` and ``find_positions`` snapshots is acceptable —
+        the result is clamped at 0 to stay sane if the deque shrinks mid-read.
+        """
+        depth = len(self._stream)
+        if depth == 0:
+            return 0
+        cursor = self._cursors.get(role)
+        if not cursor:
+            return depth
+        _t_pos, c_pos = self._stream.find_positions(None, cursor)
+        if c_pos < 0:
+            return depth  # cursor evicted → maximally behind
+        return max(0, (depth - 1) - c_pos)
+
     def advance_cursor(self, role: str, event_id: str):
         """Advance the cursor for ``role`` to ``event_id``. Called from the
         ack-cursor handler (off the asyncio loop via ``asyncio.to_thread``).
@@ -2194,6 +2218,12 @@ async def get_status():
     code_version["boot_time_iso"] = time.strftime(
         "%Y-%m-%dT%H:%M:%SZ", time.gmtime(state.start_time)
     )
+    # #12801: per-agent cursor `lag` (events-behind-head) for the TUI
+    # cursor-lag bar. Harness owns each cursor + the deque, so this is a
+    # cheap derive; non-event-bus aliases simply read 0 / full-depth.
+    agents = state.all_agents()
+    for agent in agents:
+        agent["lag"] = event_lifecycle.lag_for(agent.get("role"))
     return {
         "harness": {
             "status": "running",
@@ -2202,7 +2232,7 @@ async def get_status():
             "uptime_human": f"{uptime // 3600}h {(uptime % 3600) // 60}m {uptime % 60}s",
             "code_version": code_version,
         },
-        "agents": state.all_agents(),
+        "agents": agents,
     }
 
 
