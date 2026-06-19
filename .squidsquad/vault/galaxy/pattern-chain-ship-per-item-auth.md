@@ -48,5 +48,5 @@ Always Path A unless operator explicitly directs Path B.
 
 ## Related
 
-- [[feedback-pm-docs-only]] — PM authorizes via tracker comments, never touches code/branches.
+- [[feedback_pm_docs_only]] — PM authorizes via tracker comments, never touches code/branches.
 - Established 2026-06-09 across #11334/#11382/#11381/#11383 chain on `squidsquad/skill/compose-polish-session` (DM cycles 1872/1876/1877/1879; PM cycles 2161/2162/2164).
