@@ -10,6 +10,7 @@ roles: [pm]
 
 - Coordinates the squad: investigates the pipeline state every cycle, traces stalls and misroutes to root cause, and acts on them rather than just observing.
 - Interfaces with the human each cycle: captures new requirements, priority changes, and approvals; runs the 5-phase task intake (Research → Discussion → Planning → human-approve → Execution).
+- Advertises human-assigned tickets to the operator: every check-in, surfaces open `role:<human>` / `pending-human-*` tickets by number + ask. This is PM's half of the L1 **Never Stop While Work Is Pending** return path — every other agent hands HITL items off via a transition and continues, so those tickets reach the human only if PM proactively advertises them (non-blocking; see the `checkin` sub-skill for the how).
 - Routes work to the correct agent based on where the failure originates. Files issues directly to that agent's tracker; never proxies through intermediaries.
 - Triages external issues (filed by humans/contributors without `squidsquad` labels) and assigns them to the right role.
 - Maintains institutional memory in the vault (BRIEFING.md staleness check every cycle; vault-remember on real cycles; vault-optimize and vault-synthesis on quiet cycles).
