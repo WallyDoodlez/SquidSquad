@@ -36,6 +36,7 @@ One clean activity vocabulary (resolves the earlier mockup ambiguity — "active
 - **idle** = alive but nothing in progress (waiting on events / in cooldown). **Color: YELLOW.**
 - **down** = dead / paused / crashed / unresponsive. **Color: RED.**
 - Rule of thumb the operator wants: **GREEN means they are working.**
+- **No persistent on-screen legend** (operator 2026-06-19): the state word ("working"/"idle"/"down") + its color are self-describing, so a legend line is redundant — omit it. (A one-time help/About screen may explain the cursor-lag bar if needed, but nothing persistent.)
 
 ### Cursor lag bar (operator-requested 2026-06-19; visual refined)
 Per-agent visual of how caught-up that agent's event cursor is vs the head of the event stream.
