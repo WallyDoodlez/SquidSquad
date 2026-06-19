@@ -189,9 +189,14 @@ def real_harness(
         env["SQUIDSQUAD_DIR"] = str(squid_dir)
         env["SQUIDSQUAD_HARNESS_NO_AUTO_START"] = "1"
 
+        # Always pass an explicit --port so the test harness takes the
+        # explicit-port branch (ephemeral when 0) and NEVER the production
+        # singleton path, which refuses to start when the live harness on a
+        # dev box already holds the canonical port (#12820). port_hint=None
+        # → --port 0 (OS-assigned ephemeral); the real port is read back from
+        # the isolated .harness-port file by _wait_for_port_file().
         cmd = [sys.executable, str(HARNESS_PATH)]
-        if port_hint is not None:
-            cmd.extend(["--port", str(port_hint)])
+        cmd.extend(["--port", str(port_hint if port_hint is not None else 0)])
 
         # Pipe stdout/stderr to files in the tmpdir, NOT to PIPE
         # handles. The harness chats heavily on stdout (lifespan,
