@@ -35,4 +35,10 @@ pm clone booted **13 behind origin** again (recurring harness boot-pull lag; cf 
 - **#11140** — flagged as possible misroute (source-layer prose = skill domain); did not reroute unilaterally.
 - **#9969** (low) — deferred.
 
-**Boot otherwise quiet.** No new human messages, no external issues, no work picked up. Entering idle (Monitor armed).
+## Post-boot event work
+
+- **#12837 (HIGH, qa-filed, operator-routed-to-pm-for-triage) → ROUTED to skill.** Harness emits `evicted:true`+`oldest_id:null`+`events:[]` (anchorless eviction marker) → event_poll exit 2 → kills agent event listener (qa hit it this session, no work lost). Fix = `harness.py` eviction-marker (~1409-1421) + `event_poll.py` guard (~298-304) = skill domain. Triaged + posted routing comment + swapped role:pm→role:skill (auto-approved bug). **Cross-linked #12511 as the LIVE TRIGGER** — independently corroborated from the pm listener: continuous synthetic flood on issues 1/42/55/269/999/9967/87654 (illegal transitions at single timestamps) churning the deque = the condition that exposes the latent contract bug.
+- **#12511 (test-isolation leak: test events on LIVE bus) — ESCALATED medium→high** + cross-link comment. Justification: it's now a confirmed trigger for a HIGH-sev liveness failure, not just noise. Same root-enabler family as #12837; recommended skill investigate together. Related lane #12409.
+- **Explains the recurring no-action wakes this session** — the #999/#42/etc. flood I'd been acking through IS #12511's leak. Now properly tracked + escalated.
+
+**Boot otherwise quiet.** No new human messages, no external issues, no PM work picked up (approved queue = operator-paced PRDs). Idle (Monitor armed).
