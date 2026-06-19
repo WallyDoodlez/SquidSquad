@@ -68,6 +68,13 @@ SQUIDSQUAD_DIR = _resolve_squidsquad_dir()
 HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
+# #12825: dedicated exit code that signals the supervised launcher
+# (restart-harness.bat / .sh) to RELAUNCH the harness, vs a clean exit 0 (do not
+# relaunch). Mirrors the agent self-restart exit-42 convention (HARNESS-ARCH
+# §7.4) — the wrapper owns harness lifecycle the way the harness owns agent
+# lifecycle. POST /restart triggers this exit; the one-shot launcher ignores it
+# (harness simply ends) so the behavior degrades gracefully without the wrapper.
+HARNESS_RESTART_EXIT_CODE = 42
 HEALTH_POLL_INTERVAL = 5  # seconds
 # PRD-E E3 (#10682): cadence of the L4-write file-watcher supervisor.
 # The watchdog Observer runs as its own thread; this interval governs
@@ -3411,83 +3418,86 @@ async def restart_agent(role: str):
     }
 
 
-@app.post("/shutdown", status_code=202)
-async def shutdown():
-    """Stop all agents, then exit harness. Only stops agents that are running.
+def _teardown_and_exit(exit_code, delete_port_file):
+    """Stop all running agents, optionally clean the port file, then exit the
+    harness process with ``exit_code`` (#12825).
 
-    Returns 202 Accepted immediately. Shutdown work runs in a background thread
-    to avoid blocking the async event loop (time.sleep in async = blocked responses).
+    Shared by ``/shutdown`` (exit 0, delete port file — the harness is gone) and
+    ``/restart`` (exit ``HARNESS_RESTART_EXIT_CODE``, keep the port file — the
+    supervised launcher relaunches on the same port and the new harness rewrites
+    it at boot). Runs in a background daemon thread so the async event loop is
+    never blocked by the agent-idle wait / sleeps.
     """
-    _log("Shutdown requested — starting background shutdown...")
+    roles = boot_remote._get_all_roles()
 
-    def _do_shutdown():
-        """Background thread: stop agents, clean port file, exit."""
-        roles = boot_remote._get_all_roles()
+    running_roles = []
+    for role in roles:
+        # Use intent to check if already stopping (#4949)
+        agent = state.get_agent(role)
+        if agent and agent.intent == AgentState.INTENT_STOPPING:
+            _log(f"  {role}: skip (already stopping)")
+            continue
+        # #11640: _needs_boot resolves the clone and now raises for an
+        # unregistered / missing one. Such a role cannot be running in a
+        # clone we refuse to resolve — skip it rather than crashing the
+        # teardown thread.
+        try:
+            needs_boot, _, _ = boot_remote._needs_boot(role)
+        except boot_remote.CloneResolutionError as e:
+            _log(f"  {role}: skip (clone unresolved — {e})")
+            continue
+        if needs_boot:
+            _log(f"  {role}: skip (not running)")
+            continue
+        running_roles.append(role)
 
-        running_roles = []
-        for role in roles:
-            # Use intent to check if already stopping (#4949)
-            agent = state.get_agent(role)
-            if agent and agent.intent == AgentState.INTENT_STOPPING:
-                _log(f"  {role}: skip (already stopping)")
-                continue
-            # #11640: _needs_boot resolves the clone and now raises for an
-            # unregistered / missing one. Such a role cannot be running in a
-            # clone we refuse to resolve — skip it rather than crashing the
-            # shutdown thread.
-            try:
-                needs_boot, _, _ = boot_remote._needs_boot(role)
-            except boot_remote.CloneResolutionError as e:
-                _log(f"  {role}: skip (clone unresolved — {e})")
-                continue
-            if needs_boot:
-                _log(f"  {role}: skip (not running)")
-                continue
-            running_roles.append(role)
+    if running_roles:
+        _log(f"Stopping running agents: {', '.join(running_roles)}")
+        for role in running_roles:
+            clone_path = boot_remote._get_clone_path(role)
+            # Set intent — cycle_post.py queries API for intent (#4966).
+            # Only stamp intent_set_at on the transition INTO STOPPING so a
+            # repeat call does not extend the 60s force-kill clock.
+            agent = state.get_agent(role) or AgentState(role, clone_path)
+            if agent.intent != AgentState.INTENT_STOPPING:
+                agent.intent = AgentState.INTENT_STOPPING
+                agent.intent_set_at = time.time()  # #4792 Phase 1
+            state.set_agent(role, agent)
+        # NOTE: this `state.save_state()` runs inside the sync teardown daemon
+        # thread (see threading.Thread in the endpoints below), NOT on the
+        # asyncio event loop, so it is intentionally NOT wrapped in
+        # `asyncio.to_thread`.
+        state.save_state()
 
-        if running_roles:
-            _log(f"Stopping running agents: {', '.join(running_roles)}")
+        _log("Waiting for agents to idle (max 30s)...")
+        for _ in range(6):
+            all_idle = True
             for role in running_roles:
-                clone_path = boot_remote._get_clone_path(role)
-                # Set intent — cycle_post.py queries API for intent (#4966).
-                # Only stamp intent_set_at on the transition INTO STOPPING so a
-                # repeat /shutdown call does not extend the 60s force-kill clock.
-                agent = state.get_agent(role) or AgentState(role, clone_path)
-                if agent.intent != AgentState.INTENT_STOPPING:
-                    agent.intent = AgentState.INTENT_STOPPING
-                    agent.intent_set_at = time.time()  # #4792 Phase 1
-                state.set_agent(role, agent)
-            # NOTE: this `state.save_state()` runs inside the sync
-            # `_do_shutdown` daemon thread (see threading.Thread
-            # below), NOT on the asyncio event loop, so it is
-            # intentionally NOT wrapped in `asyncio.to_thread`.
-            state.save_state()
+                state_file = SQUIDSQUAD_DIR / role / "current-state"
+                try:
+                    content = state_file.read_text(encoding="utf-8").strip()
+                    if not content.startswith("idle"):
+                        all_idle = False
+                        break
+                except (OSError, FileNotFoundError):
+                    pass
+            if all_idle:
+                break
+            time.sleep(5)
 
-            _log("Waiting for agents to idle (max 30s)...")
-            for _ in range(6):
-                all_idle = True
-                for role in running_roles:
-                    state_file = SQUIDSQUAD_DIR / role / "current-state"
-                    try:
-                        content = state_file.read_text(encoding="utf-8").strip()
-                        if not content.startswith("idle"):
-                            all_idle = False
-                            break
-                    except (OSError, FileNotFoundError):
-                        pass
-                if all_idle:
-                    break
-                time.sleep(5)
+        for role in running_roles:
+            clone_path = boot_remote._get_clone_path(role)
+            claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
+            if alive and claude_pid:
+                _log(f"  Killing {role} (PID {claude_pid})...")
+                reboot_agent._kill_process(claude_pid)
+    else:
+        _log("No running agents to stop.")
 
-            for role in running_roles:
-                clone_path = boot_remote._get_clone_path(role)
-                claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
-                if alive and claude_pid:
-                    _log(f"  Killing {role} (PID {claude_pid})...")
-                    reboot_agent._kill_process(claude_pid)
-        else:
-            _log("No running agents to stop.")
-
+    # #12825: only the permanent shutdown removes the port file. On restart the
+    # supervised launcher relaunches immediately and the new harness rewrites
+    # the port file at boot — deleting it would open a needless discovery gap.
+    if delete_port_file:
         for attempt in range(3):
             try:
                 if HARNESS_PORT_FILE.exists():
@@ -3498,13 +3508,46 @@ async def shutdown():
                 _log(f"WARNING: Could not delete port file (attempt {attempt + 1}/3): {e}")
                 time.sleep(0.5)
 
-        _log("Harness exiting.")
-        time.sleep(1)
-        os._exit(0)
+    _log(f"Harness exiting (code {exit_code}).")
+    time.sleep(1)
+    os._exit(exit_code)
 
-    threading.Thread(target=_do_shutdown, daemon=True, name="shutdown").start()
 
+@app.post("/shutdown", status_code=202)
+async def shutdown():
+    """Stop all agents, then exit harness (code 0 — permanent; not relaunched).
+
+    Returns 202 Accepted immediately. Teardown runs in a background thread to
+    avoid blocking the async event loop (time.sleep in async = blocked responses).
+    """
+    _log("Shutdown requested — starting background shutdown...")
+    threading.Thread(
+        target=_teardown_and_exit, args=(0, True),
+        daemon=True, name="shutdown",
+    ).start()
     return {"status": "shutting_down", "message": "Shutdown initiated. Harness will exit shortly."}
+
+
+@app.post("/restart", status_code=202)
+async def restart():
+    """Restart the harness (#12825): stop all agents cleanly, then exit with
+    ``HARNESS_RESTART_EXIT_CODE`` so the supervised launcher relaunches it.
+
+    Distinct from ``/shutdown`` (which exits 0 and is NOT relaunched). This is
+    the agent-callable harness-restart trigger — the requesting agent's own
+    session ends with the harness and respawns fresh under the relaunched one.
+    Under the one-shot launcher (no wrapper) the harness simply exits and is not
+    relaunched; the wrapper is what makes restart self-healing.
+    """
+    _log(f"Restart requested — tearing down for relaunch (exit "
+         f"{HARNESS_RESTART_EXIT_CODE})...")
+    threading.Thread(
+        target=_teardown_and_exit, args=(HARNESS_RESTART_EXIT_CODE, False),
+        daemon=True, name="restart",
+    ).start()
+    return {"status": "restarting",
+            "message": "Restart initiated. Harness will exit with the restart "
+                       "code; the supervised launcher will relaunch it."}
 
 
 # ---------------------------------------------------------------------------

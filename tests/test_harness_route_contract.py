@@ -64,6 +64,10 @@ EXPECTED_CALLERS = {
     ("GET",  "/events/lifecycle"):              _EXTERNAL,
     ("GET",  "/human/queue"):                   _EXTERNAL,
     ("POST", "/shutdown"):                      ["squidsquad_cli"],
+    # #12825 — agent-triggerable harness restart: POSTed by an agent (PM, for
+    # recovery) per the harness-restart sub-skill, or by an operator/curl. No
+    # in-repo Python module caller in this slice → _EXTERNAL.
+    ("POST", "/restart"):                       _EXTERNAL,
     ("POST", "/merge"):                         _EXTERNAL,
     # #12418 — SessionEnd telemetry hook: POSTed only by Claude Code's native
     # type:http hook wired in .claude/settings.json (no in-repo Python caller).
