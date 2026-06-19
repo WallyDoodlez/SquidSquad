@@ -3,7 +3,14 @@
 > **L4-recompose restart-required was a NO-OP (2026-06-14):** Harness emitted `restart-required` (reason l4-recompose, target_alias=dm). Acked it (loop-safe). Attempted cooperative /quit — but **/quit is a no-op in this session** (Monitor kept delivering nudges; session did not terminate). Then verified: my `.squidsquad/dm/CLAUDE.md` is byte-identical (last commit f8d867a9d 2026-06-12, working tree clean) → the recompose changed nothing to pick up. So NOT restarting was correct; /quit no-op was harmless. **Finding for PM/skill:** l4_file_watcher.py emits restart-required on compose *success* regardless of whether composed output actually changed (l4_file_watcher.py:149-156) — should diff CLAUDE.md before requesting a restart, else no-op L4 writes churn restarts. Also: this event-mode session cannot self-terminate via /quit; rely on harness/operator restart or context-pressure exit-42.
 
 - **Task**: none
-- **Status**: idle (queue empty; bootup-complete emitted; idle-driver armed, cron 1d9648ba @ 7,37)
+- **Status**: idle (queue empty; idle-driver re-armed)
+
+### #12800 SHIPPED 2026-06-19 ~14:1x ✅ (human as non-agent role + inline status-bar indicator)
+- PR #12902 base=main, qa PASS 8/8 + comprehension 5/5 zero-regress. DM merged via harness POST /merge (success). No delivery:skip; citation N/A; base=main not stacked. pending-ship→shipped (auto-closed). Counter **43→44**.
+- **MAIN-LANDING (commit a023a658e)**: instructions.md (#12800 inline status-bar self-write) recomposed → all 4 composed CLAUDE.md. **ALSO REPAIRED #12853 composed revert**: committed CLAUDE.md on main had reverted SOUL title to 'Never Block on a Human' (stale-source recompose from a behind clone; source SOUL.md always correct). deploy-all from current origin/main restored 'Never Stop While Work Is Pending' in all 4. Confirmed source current (HEAD==origin/main 45611907c) before committing — I was NOT the behind clone. See [[learning-stale-source-recompose-reverts-shipped-on-behind-clone]].
+- **⚠️ harness.py changed (§8.3 pending-human routing + no-reemit) → needs HARNESS restart** (operator/supervised-launcher; running harness predates it).
+- **⚠️ ALL-ROLES REBOOT PENDING** (all 4 composed CLAUDE.md changed) → folds into deferred TEAM REBOOT window; NOT auto-firing per operator.
+- CHANGELOG batched held v0.45.0 (operator-facing: human-as-role + inline status-bar visibility).
 
 ## SESSION BOOT 2026-06-19 ~10:08 EDT (EVENT mode, harness uptime ~13h40m on :7373, code v0.44.0/git b15e7fc5)
 - Boot probe OK (:7373), check-gh OK. Resumed mid-flight #12853 delivery (working-state had it in-progress DELIVERING). Boot drain found: assigned-to(dm,#12853) + **pr-merged PR #12894 success:true requesting_role:dm** — prior DM session already merged to main (cacee6db9). Recompose already committed by **skill** (f14424b68); my deploy-all re-run = clean no-op → all 4 composed CLAUDE.md carry generalized rule (AC4 verified live). Cursor boot=6f13fdd0, now at 59d3799c (all session events acked, queue drained 0).
