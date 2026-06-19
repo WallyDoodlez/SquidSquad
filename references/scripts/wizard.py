@@ -1822,24 +1822,75 @@ def _write_l4_project_files(spec, project_dir, summary):
 
     project_info = spec.get("project", {})
 
+    # Read the detected test strategy specifics (framework / location) from the
+    # persisted scan artifact (#12450, design call X). The agent spec only
+    # carries the run_command string; the richer test_strategy dict lives in
+    # .repo-scan.json (written by the scaffold), which is the source of truth
+    # that survives both --yes and interactive installs. Graceful: any
+    # absence/parse-failure leaves test_strategy empty and we fall back to the
+    # per-agent test_command below.
+    test_strategy = {}
+    scan_file = project_dir.parent / ".repo-scan.json"
+    if scan_file.exists():
+        try:
+            test_strategy = (
+                json.loads(scan_file.read_text(encoding="utf-8")).get(
+                    "test_strategy"
+                )
+                or {}
+            )
+        except (OSError, ValueError):
+            test_strategy = {}
+
     # shared-stack-details.md — detected tech stack and test commands
     stack_file = project_dir / "shared-stack-details.md"
     if stack_file.exists():
         summary.setdefault("preserved", []).append(str(stack_file))
     else:
         stack = scan_data.get("stack", "Not detected")
-        test_cmd = scan_data.get("test_command", "Not detected")
         name = project_info.get("name", "Unknown")
+        test_section = _format_test_strategy_section(
+            test_strategy, scan_data.get("test_command")
+        )
         stack_file.write_text(
             f"## Project Stack Details — {name}\n\n"
             f"These details apply to all agents on this project.\n\n"
             f"### Stack\n\n- **Detected stack**: {stack}\n\n"
-            f"### Test Command\n\n- **Test command**: `{test_cmd}`\n\n"
+            f"{test_section}"
             f"### Conventions\n\n"
             f"_To be populated by the installer agent or human with "
             f"project-specific conventions, patterns, and preferences._\n",
             encoding="utf-8",
         )
+
+
+def _format_test_strategy_section(test_strategy, fallback_command):
+    """Render the L4 '### Testing Strategy' markdown block for #12450.
+
+    When the scan detected a strategy, emit run command + framework + location
+    + coverage so workers reference the detected strategy rather than inventing
+    one. Otherwise emit a single 'Not detected' test-command line (legacy shape),
+    using ``fallback_command`` if the spec carried one.
+    """
+    if test_strategy.get("detected"):
+        run_command = test_strategy.get("run_command") or "Not detected"
+        framework = test_strategy.get("framework") or "Not detected"
+        location = test_strategy.get("location") or "Not detected"
+        lines = [
+            "### Testing Strategy\n",
+            f"- **Run command**: `{run_command}`",
+            f"- **Framework**: {framework}",
+            f"- **Test location**: {location}",
+        ]
+        if test_strategy.get("coverage"):
+            lines.append(f"- **Coverage tool**: {test_strategy['coverage']}")
+        lines.append(
+            "\n_Auto-detected at install (task #12450). Run the project's existing "
+            "tests with the run command above — do not invent a new test setup._\n"
+        )
+        return "\n".join(lines) + "\n"
+    test_cmd = fallback_command or "Not detected"
+    return f"### Test Command\n\n- **Test command**: `{test_cmd}`\n\n"
 
 
 def _copy_l4_seed_stubs(project_dir, summary):
@@ -3339,17 +3390,25 @@ def generate_default_spec(scan_data=None, repo_info=None):
     project_name = info.get("name", "")
     project_repo = info.get("repo", "")
 
-    # Detect test command from scan
-    test_frameworks = scan.get("test_frameworks", [])
+    # Detect test command from scan. Prefer the richer test_strategy run_command
+    # (#12450 — a detection ladder over package.json scripts / pytest / go / cargo
+    # / mvn / gradle / rspec / make, far beyond the four-framework heuristic);
+    # fall back to the legacy test_frameworks heuristic when test_strategy is
+    # absent (older scan artifacts) or detected nothing.
+    test_strategy = scan.get("test_strategy") or {}
     test_command = ""
-    if "pytest" in test_frameworks:
-        test_command = "pytest"
-    elif "jest" in test_frameworks:
-        test_command = "npx jest"
-    elif "vitest" in test_frameworks:
-        test_command = "npx vitest"
-    elif "mocha" in test_frameworks:
-        test_command = "npx mocha"
+    if test_strategy.get("detected") and test_strategy.get("run_command"):
+        test_command = test_strategy["run_command"]
+    else:
+        test_frameworks = scan.get("test_frameworks", [])
+        if "pytest" in test_frameworks:
+            test_command = "pytest"
+        elif "jest" in test_frameworks:
+            test_command = "npx jest"
+        elif "vitest" in test_frameworks:
+            test_command = "npx vitest"
+        elif "mocha" in test_frameworks:
+            test_command = "npx mocha"
 
     # Detect stack from scan
     langs = scan.get("languages", [])
