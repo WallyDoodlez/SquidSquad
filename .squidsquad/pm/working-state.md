@@ -14,7 +14,11 @@ _Condensed 2026-06-19 10:08. Prior incident narrative (reboot saga, #12506 self-
 - **#12853 SHIPPED** (DM, was pending-ship → shipped this session). The new SOUL I operate under.
 - **#12800 SHIPPED** (DM, ~14:13 UTC) — human-as-role infra now LIVE (pending-human-* routing backs my advertise-duty). PR #12902 source-only.
 - **#12800 PR #12902 merge → l4-recompose/restart-required(target=pm)** fired ~14:10 UTC (8m into my session). **My intent stayed `running` (no flip)** — did NOT self-quit (stale/late-delivery event + #12397 no-op-restart-required known). Clone 0/0 in sync → a recompose now would be correct (no #12895 risk). Harness owns recompose+restart; awaiting a real intent flip if one comes. **WATCH: restart-required-without-intent-flip — possible #12397 spurious OR a restart-gap.**
-- **#12895 → pending-human-review (ADVERTISED to operator).** skill RCA done; 3 options (C interim / A untrack / C-permanent+#12526 durable). PM rec on ticket: land C now, lean C+#12526 over A (preserves git-as-audit-trail). #12519 folded in.
+- **#12895 (recompose regression) — operator APPROVED the deploy-signal approach; now in-progress umbrella, phased:**
+  - **Phase 1 #12906 SHIPPED** (pull-first recompose guard, harness.py — **activates on next harness restart**).
+  - **Design doc-first DONE**: DEPLOY-SIGNAL-DESIGN-12895.md v2 (adversarial-review-folded) + TRDs merged (HARNESS-ARCH §7.1/7.3/7.4/7.5/7.6/10/11 + AGENT-RUNTIME §5.2/7.8/8.1/8.2/8.6/9.2). PM review caught+fixed 2 issues in the drafted edits (§7.x renumbering drift; cursor-advance infinite-loop gap).
+  - **Phase 2 #12912 FILED** (approved, role:skill, 12 ACs) — durable deploy-signal model. Auto-dispatched to skill. #12895 closes when #12912 ships.
+  - Bonus: #12912 also resolves #12397 (spurious restart on no-op recompose). #12519 (settings.json) fold = AC11.
 - **0 untriaged externals.**
 
 **RESOLVED this session (were watch items, now CLOSED):** #12824 (assigned-to 500s), #12820 (qa port-desync), #12506, #12442, #11394, #12408, #12585. #9969 closed (decision-recorded). BRIEFING.md refreshed (improvement scan).
