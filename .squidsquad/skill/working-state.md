@@ -1,8 +1,19 @@
 # Working State
 
-- **Task**: 12801 (in-progress) — Harness TUI. Branch squidsquad/task/12801. S1.1+S1.2 done; S1.3 next.
-- **Updated**: 2026-06-19 10:55 (skill — event-mode; #12800 shipped pending-test PR#12902; #12801 S1.1+S1.2 done)
+- **Task**: 12801 (in-progress, foundation done) — Harness TUI. Branch squidsquad/task/12801. S1.1+S1.2 committed; S1.3+ (UI) NEEDS textual dep + terminal → next equipped/fresh context.
+- **Updated**: 2026-06-19 11:02 (skill — event-mode; idle/listening — actionable queue drained for this session)
 - **Quiet Cycle Counter**: 0
+
+## SESSION OUTCOME (2026-06-19 ~09:40–11:02) — actionable queue drained
+- **#12800** (human as non-agent role, 8 ACs, HIGH-blast-radius) → **SHIPPED pending-test, PR #12902.** All gates green (static 4621, integration 53, targeted 101), DS NO_FINDINGS. Composed deployed to main.
+- **#12895** (HIGH bug — stale-source recompose reverts shipped composed CLAUDE.md fleet-wide) → RCA done + fix options (A untrack composed [recommended, root, folds #12519] / B pull-before-deploy guard / C interim: cycle_post excludes composed from auto-commit). Routed **pending-human-review** (operator decides deploy-model approach — A reverses eager-deploy/tracked-composed model + touches installer = operator-owned). Then implement chosen approach.
+- **#12519** (LOW) → folded into #12895 (same family); will close with that fix.
+- **#12801** (Harness TUI) → claimed, decomposed (4 Stories, artifact). S1.1 (harness /status `lag` backend) + S1.2 (references/tui/harness_client.py data layer) committed + green. **S1.3+ (Textual app, panels, action bar, wake) NEEDS `textual` installed + interactive terminal for the mandatory skill-domain smoke-test — fresh/equipped context.** NIT: installer-files.txt header "Total: 206" → 208 (fix on next branch commit).
+- **#10855** blocked on #12820 (pending-test); **#12493** blocked on PM §8.3 arch backstop; **#12450** S3/S4 PM-gated; **#12820/#12853** shipped pending-test/merged earlier.
+
+## NEXT (fresh context)
+1. #12895: implement operator-chosen deploy-model fix (likely A: untrack composed + .claude/settings.json, regenerate on boot/deploy, installer generates; or C interim first). Folds #12519. DS-review (high-blast-radius). Then back in-progress→pending-test.
+2. #12801: continue S1.3 (Textual app skeleton) once textual provisioned — per .squidsquad/skill/planning/TUI-12801-DECOMPOSITION.md. Fix installer-files header count.
 
 ## #12801 Harness TUI (in-progress) — decomposed, S1.1+S1.2 landed
 Plan: `.squidsquad/skill/planning/TUI-12801-DECOMPOSITION.md` (4 Stories). Contract: `.squidsquad/pm/planning/TUI-INTERFACE-DESIGN.md` (operator-approved). Textual, separate process consuming harness HTTP. Wake LAST (gated #12495).
