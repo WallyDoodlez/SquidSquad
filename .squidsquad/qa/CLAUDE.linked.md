@@ -108,11 +108,13 @@ This is a behavioral default — check the vault before starting work, not just 
 - Never take shortcuts that compromise quality. Take quality over speed.
 - Be thorough and deliberate in your work. Verify before claiming done.
 
-### Never Block on a Human — Async, No Pausing
+### Never Stop While Work Is Pending
 
-Inline mode is the **only** synchronous human channel. In every autonomous mode (loop or event), you must **never pause and wait for a human** — a human answers on human time, and a session blocked on a human stalls its whole queue for minutes to hours of dead clock. "Ask, don't guess" above means *ask asynchronously*, never sit and wait.
+You never voluntarily end your turn or loop while work is pending — you always move ahead to your next queue item. Pausing to wait for another party to act — a teammate agent (verifier, DM, another worker) **or** a human — is a **stop**, and stops are forbidden in every autonomous mode (loop or event). A handoff is never a reason to stop: when work leaves your lane you hand it off **by a status transition** (which wakes the new owner) and **immediately continue** to your own next item. Deferring to verification, waiting on a review, "I'll resume when they reply" — all the same anti-pattern: they strand your queue for minutes to hours of dead clock while a human or teammate works on their own time.
 
-When you need a human's attention or decision: assign a tracked ticket to the `human` alias — set `role:<human>` plus the appropriate `pending-human-*` status **via a transition** (never a bare comment; bare comments wake no one and leave no ownership) — then **immediately continue**: pick up your next queue item, or go idle. Do not wait. The human answers asynchronously and the work resumes later via the return path, which is always agent-mediated — **a human never makes the forge transition; you or PM do**: if the human reaches *you* directly (inline), you record their answer into the ticket and re-assign it back to yourself; if they reach PM instead, PM records the answer and re-assigns it to you on their behalf. If a human reaches you about work that was never yours, reply "this isn't my territory — wrong agent" and point them to the right alias or to PM.
+**Stop vs idle — not the same thing.** Going **idle** is fine and expected: the event-bus wait between nudges and the improvement-scan cool-down loop both **auto-resume** (a nudge or a cool-down tick wakes you), so they strand nothing. **Stopping** — ending the turn to wait for another party — is what's forbidden, because nothing wakes you back up. The only legitimate ways a session ends are lifecycle events the harness manages: a context-pressure exit-42, a `stop-requested`, or Monitor death. You never end a session yourself to wait for someone.
+
+**Human handoff is the same rule, async.** A human is just one instance of "another party," and inline mode is the **only** synchronous human channel — so in any autonomous mode you never sit and wait on a human. ("Ask, don't guess" above means *ask asynchronously*, never sit and wait.) When you need a human's attention or decision: assign a tracked ticket to the `human` alias — set `role:<human>` plus the appropriate `pending-human-*` status **via a transition** (never a bare comment; bare comments wake no one and leave no ownership) — then **immediately continue**: pick up your next queue item, or go idle. The human answers asynchronously and the work resumes later via the return path, which is always agent-mediated — **a human never makes the forge transition; you or PM do**: if the human reaches *you* directly (inline), you record their answer into the ticket and re-assign it back to yourself; if they reach PM instead, PM records the answer and re-assigns it to you on their behalf. If a human reaches you about work that was never yours, reply "this isn't my territory — wrong agent" and point them to the right alias or to PM.
 
 ### Shared Discipline
 
@@ -590,6 +592,12 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 → run sub-skill: l4-curation
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the safety-gate pipeline, and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+
+### Harness recovery (when the harness itself is degraded)
+
+→ run sub-skill: harness-restart
+
+When the harness process is alive but degraded in a way an agent-restart can't fix — event dispatch stopped waking agents, the L4 file-watch died, `/status` reports stale state a single reboot won't clear — a clean harness relaunch via `POST /restart` may be the remedy. The sub-skill covers when a restart is the right remedy (vs an operator-relaunch or code-fix situation), how to POST it, what to expect (the requesting agent's own session ends and the whole team respawns fresh under the supervised launcher), and post-restart verification from facts. A harness restart respawns the whole team, so prefer routing the recovery to PM (via a tracked status transition, not a bare comment) and let PM trigger it; self-serve the `POST /restart` directly only when waiting on PM would prolong an active outage, or when PM itself is the unreachable/degraded party, and you have confirmed the symptom from facts.
 
 #### Step 7.1 — step:cycle/verify
 
