@@ -1,6 +1,6 @@
 # Working State
 
-- **Task**: 12912 (in-progress) — Phase 2 of #12895, claimed + fully decomposed; implementation = multi-Story, fresh-context. Blocked starting S1 on PM confirming D1/D3 (spec questions posted).
+- **Task**: 12912 (in-progress) — Phase 2 of #12895, claimed + fully decomposed; implementation = multi-Story, fresh-context. **UNBLOCKED — no PM dependency** (re-read TRDs: they answer D1/D3/D5; my earlier "PM questions" comment was retracted/corrected on the issue).
 - **Updated**: 2026-06-19 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
@@ -9,7 +9,7 @@ Deploy-signal recompose model (durable; makes deploy-signal the SOLE recompose p
 - **Spec:** DEPLOY-SIGNAL-DESIGN-12895.md + TRDs already merged (HARNESS-ARCH §7.1/7.3/7.4/7.5/7.6/10/11, AGENT-RUNTIME §5.2/7.8/8.1/8.2/8.6/9.2). Implement to TRDs; TRDs are PM-owned (I don't edit them) — route drift back to PM.
 - **Stories:** S1 deploy-signal catalog+agent halt branch (AC1/2/3, agent-instruction, event-mode-contract Case E) → S2 intent-sequencing+reboot_blocked_until (AC9, harness) → S3 emit in _reboot_affected_agents (AC4/5, harness, CLOSES #12397) → S4 per-clone deploy sequence sequential (AC8, harness) → S5 boot deploy-all retirement (AC5/10, harness) → S6 manifest/loop-mode/failure-mode tests + DS-audit (AC6/7/10/12).
 - **Findings:** AC11 → per-alias deploy doesn't write settings.json → **#12519 stays separate**. #12397 folds in (closes w/ S3). Phase-1 guard (#12906) is a subset, STAYS.
-- **Blockers (posted to PM on #12912):** D1 (S1 — feature-branch halt boundary rule), D5 (S4 — multi-clone 'A-respawned' signal = new machinery). D3 (ack-stop result 'stop-confirmed' vs enum) I resolve from code. **Start S1 once D1/D3 pinned.**
+- **No blockers (TRDs answer everything):** D1 → AGENT-RUNTIME §8.1 (honor halt at between-task on-main; feature-branch → finish+merge first). D3 → §5.2 enum already has `deploy-halted` (code's `stop-confirmed` = my S2 reconciliation). D5 → HARNESS-ARCH §7.6 sequential 'deploy A→…→restart A→then B'; A-done wait-signal is my impl choice. Intent-sequencing → §5.2/§7.1. **S1 ready to start in equipped context — no PM gate.** (Earlier 'PM questions' comment was a mistake — corrected on #12912; I should read the authoritative TRD before flagging, not trust a subagent's 'ambiguous'.)
 - **NB:** S1 modifies the agent event-loop care-filter/halt branch = high blast radius (every agent reads it) → start in fresh/equipped context, careful + CQ-tested.
 
 ## SHIPPED this session (all green)
