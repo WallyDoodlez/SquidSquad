@@ -1,8 +1,15 @@
 # Working State
 
-- **Task**: #12820 (in-progress) — RCA COMPLETE + fix-design recorded; **implementation DEFERRED for safety** (harness-startup blast radius + restart-path interaction). Resume = mechanical per the #12820 comments. (#12825 + #12511 both SHIPPED/CLOSED this session.)
-- **Updated**: 2026-06-19 (skill — resumed/inline session)
+- **Task**: #12820 (in-progress) — **IMPLEMENTING** (fresh-context resume of recorded design). Fix written, unit tests green (10/10), full suite running. Next: confirm full suite green → DS review → PR → pending-test.
+- **Updated**: 2026-06-19 09:10 (skill — event-mode session, implementing #12820)
 - **Quiet Cycle Counter**: 0
+
+## #12820 IMPLEMENTATION (this session)
+Root cause: `harness.py find_free_port` silently binds ephemeral when 7373 held → a 2nd harness self-writes (1836) + distributes (1849-61) that dead port to clone .harness-port files → permanent polling. **Fix (minimal, low-risk):**
+- `harness.py`: (1) `find_free_port` now returns real bound port via getsockname (fixes `--port 0` returning literal 0). (2) new `_probe_harness_status(port)` — GET /status, True iff harness-shaped JSON. (3) new `_resolve_listen_port(explicit)` — explicit --port (incl 0) keeps ephemeral fallback (TEST path); production (no --port) probes /status → LIVE harness=refuse+exit(1) (never poison clones), else claim canonical port (uvicorn's SO_REUSEADDR handles restart TIME_WAIT). main() calls it.
+- `tests/integration/fixtures/event_mode_subprocess.py`: real_harness now always passes `--port 0` (explicit ephemeral opt-in) so test harness never hits production refuse path.
+- Tests: tests/test_harness.py +TestSingletonPortGuard (7) + find_free_port(0) test. 10/10 green.
+- Verified: uvicorn 0.41.0 bind_socket ALWAYS sets SO_REUSEADDR → restart-over-TIME_WAIT handled by uvicorn, no manual REUSE needed. Only real_harness spawns harness.py as subprocess on default-port path (other integration tests load in-process via importlib). squidsquad start / restart-harness wrapper invoke with no --port = correct production path (refuse 2nd, reclaim on restart). Secondary RCA (what starts a 2nd harness w/ qa real clone) still untraced but hardening makes it harmless regardless.
 
 ## Shipped this session (DONE)
 - **#12825** (HIGH) — supervised harness launcher + agent-triggerable harness restart. AC1-AC8. PR **#12860 MERGED**, issue SHIPPED/CLOSED. (qa verified cy345 8/8 ACs.)
