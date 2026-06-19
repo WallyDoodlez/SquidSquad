@@ -69,7 +69,8 @@ SAMPLE_CONFIG = """# SquidSquad Config
 ## Improvement Scanning
 
 - **Enabled**: yes
-- **Improvement Scan Cool-Down**: 30
+- **Improvement Scan Cool-Down**: 30m
+- **Idle Scan Burst**: 3
 
 ## Vault Optimize
 
