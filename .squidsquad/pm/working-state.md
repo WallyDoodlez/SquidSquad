@@ -2,7 +2,56 @@
 
 _Condensed 2026-06-15. Prior incident narrative (reboot saga, event-mode stabilization, #11505/#11511 churn, #12417 doc-reconciliation, restart procedure) preserved in iteration logs + on the forge — not re-copied here. Working-state = current active state only._
 
-## Current — 2026-06-18 01:32 (PM EVENT-mode, post-restart fresh boot)
+## >>> POST-RESTART CHECKLIST (operator restarting harness ~19:2x to clear #12824) — fresh pm DO FIRST <<<
+
+Operator is restarting the harness to clear **#12824** (harness `assigned-to` POST 500s — broke nudge + handoff routing). On your fresh boot, verify (facts, cross-check):
+1. **Harness back + all 4 agents respawned.** `/status` healthy. skill/dm/pm → EVENT (probe :7373 OK); **qa → POLLING expected** (its clone `.harness-port` is desynced #12820 → probe refused → polling; that's SAFE/desired, do NOT try to force qa to event).
+2. **#12824 cleared?** Test: a benign assigned-to POST should now return `{"status":"ok"}` not 500. If still 500 after restart → escalate (deeper harness bug, not just stale state).
+3. **pm clone was 13 behind origin** — confirm boot-pull caught up (recurring boot-pull lag, cf earlier). If still behind, merge origin/main (clean).
+4. **#12506 driver CONFIRMED WORKING pre-restart** (skill self-woke ~6-8min cooldown). Post-restart skill/dm boot onto driver fresh → dormancy should be self-healing. No babysit needed unless driver regresses.
+5. **#12801 self-held by skill** (no-TUI capability escalation) — pending operator decision; not a stall.
+6. Open filed-this-session items to track (all role:skill): **#12824** (harness assigned-to 500), **#12820** (qa port-desync), **#12818** (L2 PM brief-no-action — operator directive), **#12825 approved** (supervised harness launcher + agent-triggerable restart + sub-skill + catalog — gives PM/system harness-restart ability; operator-requested, deployment-relevant). #12506/#12799 SHIPPED.
+7. **Harness restart is currently OPERATOR-ONLY** (start-harness.bat is one-shot, no relaunch loop → an agent can `/shutdown` but can't relaunch; #12825 fixes this). Don't attempt to self-restart the harness until #12825 ships.
+
+---
+
+## Current — 2026-06-18 16:23 (PM EVENT-mode, fresh boot after self-restart)
+
+**Boot clean.** Harness :7373 reachable (uptime 15h, git_sha 00757fe4, v0.44.0). GH OK. Cursor `3050d070742dc2e9` → boot drain EMPTY. bootup-complete emitted (ok). 0 untriaged external. Pipeline: **0 open pending-test, 0 open pending-ship** (forge-verified).
+
+**⚠️ FACTS-OVER-CONTEXT CORRECTIONS to prior section (new Soul #12585 in effect — cross-checked ≥2 sources):**
+
+1. **qa is ALIVE, NOT inert** — harness `/status` shows qa bootup=False / last_activity ~894m (looks dead), BUT git log shows qa committing iter-322→328 (POLLING mode) from 4h ago to 22m ago. Independent source (git) overrides stale telemetry. qa recovered into polling (operator re-launched per the recovery noted last session). Non-blocking (0 PT). The harness inert-telemetry for a polling-mode agent is expected (polling agents don't do the event-bus bootup handshake) — known, not a new bug.
+
+2. **#12506 (critical-path self-wake driver) BOUNCED + skill WEDGED:** skill built all 4 units → PR #12812 → pending-test → **qa verified FAIL on AC11** (`references/scripts/subloop_driver.py` missing from `references/installer-files.txt`) → routed back to in-progress/skill ~3h ago. Since then skill has NOT acted. **skill is wedged-idle:** process alive (pid 51776, bootup was True, spawned 227m ago — NOT respawned by the "team reboot" 17m ago despite prior working-state claim), last_activity 192m ago, **50 events backlogged past its cursor undrained**, of which **0 are skill-targeted**. Critically the qa route-back (pending-test→in-progress) emitted **NO skill-targeted `assigned-to` wake event** → even a healthy skill wouldn't auto-resume. This is the exact idle-stall / forgotten-queued-work class that #12506 itself fixes — biting #12506's own AC11 fix. Route-back-no-wake is already covered by in-flight #12506 (periodic self-wake driver re-reads work_queue) + #12493 (L2 pipeline-sentinel HALT detect incl. route-back) → NOT filing a duplicate.
+
+   **ACTION: requested harness restart of skill** (`POST /agents/skill/restart`). Graceful restart STUCK on the wedge (intent flipped to `restarting`, bootup→False, but same pid 51776 — wedged agent never reaches a cycle boundary to exit; harness force-kill grace not yet fired). **If still stuck → OS force-kill skill tree (taskkill /F /T terminal pid 54072) → auto-reboot (ON) respawns fresh → skill boots → work_queue() finds #12506 in-progress → resumes AC11 fix.** AC11 fix is compose-consumed code = skill domain (PM cannot do it; #11334 precedent).
+
+   *Sub-observation worth operator awareness:* harness graceful-restart of a **wedged idle** event-mode agent does not force-kill promptly — it waits for a cooperative exit that never comes. Relates to #12271 liveness redesign / harness-sole-lifecycle. Note, not yet filed (watch if it recurs as a pattern).
+
+3. **Handoffs confirmed on forge (all correctly routed):** #12585 CLOSED/shipped (the Facts-Over-Context Soul this boot runs on). #12506 OPEN/in-progress/role:skill. #10540 OPEN/status:open/role:skill (auto-approved bug, awaiting skill open→in-progress triage). #12799 OPEN/status:open/role:skill (async-no-pause, severity:high). #12800 OPEN/approved/role:skill (human-as-role build). skill's queue is correctly loaded; the wedge is what's blocking it, not routing.
+
+**#10855 REINVESTIGATED (operator-requested 16:xx) — major reframe:** qa is NOT inert/zombie (my prior-session conclusion was wrong, built on stale harness telemetry). Ground truth = qa's own clone working-state/current-state/git: **qa alive + actively verifying #12408 in POLLING**. Harness /status shows qa inert only because polling agents don't heartbeat the event bus. **Real blocker to event-mode qa = harness-port desync** in qa's clone: `.harness-port`=18209 (prior 34198/26411) vs live harness :7373 → boot probe refused → polling fallback every session. Gitignored/per-clone/locally-written → desync is in qa's port-discovery, not git. **Filed #12820** (severity:medium→skill, behavior+evidence only) + commented reframe on #10855 (can't confirm inert-boot reproduces until #12820 fixed — polling kicks in first; may share root = clone-state-desync-post-harness-restart). Also noted: 4-day-old orphan claude.exe pid 46948 (Jun 14) + qa thin_launcher pid 21900 — process-hygiene debt (cf #12363). **#12820 = first domino for "switch qa to event"** (operator asked); chain #12271/#12492/#12409 still stands behind it. Operator considering bump-to-high + resequence.
+
+**>>> #12506 SHIPPED (18:40, PR #12812 merged 8cc207af, DM) — self-wake driver on origin/main <<<** + #12799 → pending-test (skill, via nudge). **ACTIVATION pending reboot:** driver only arms on fresh boot; running agents on old code until rebooted. **skill REBOOTED onto driver** (boot_remote, see below) → skill self-wakes going forward. **dm/pm still old code — operator deciding fleet reboot** (recommend reboot skill[done]/dm/pm to activate; EXCLUDE qa = polling, dormancy-immune + reboot re-triggers #12820 port-desync/inert-boot). My pm clone 13 behind origin (harness boot-pull lag — recurring, cf 01:32 boot 14-behind; not blocking).
+
+**⚠️ TWO HARNESS RELIABILITY ISSUES surfaced ~18:4x under test-event flood (watching before filing — may be load-transient from skill's heavy suite; both are skill/harness-code domain):**
+1. **`assigned-to` event-POST 500s** — GET /status + `ack-cursor` POST both OK, but `POST /events {event_type:assigned-to}` returned 500 x3 (broke my nudge mechanism). Earlier assigned-to injects (#12506/#12799) worked; #12800 failed. If persistent → also breaks harness handoff routing for event-mode dm. Likely harness EAD/enrichment path choking under bus flood.
+2. **Graceful restart killed but did NOT respawn** — `POST /agents/skill/restart` → harness killed skill (pid→None) but never respawned it (intent=restarting + pid=None ~4+ min, harness GET healthy). Recovered via `boot_remote.py --role skill` → skill back (pid 45360, active, driver present in clone). Harness lifecycle bug (kill-without-respawn leaves agent dead) — SAFETY concern; file if recurs.
+
+**>>> DRIVER CONFIRMED WORKING (19:1x) — BABYSIT RETIRED <<<** skill self-woke from a ~6-8min idle (mid-#12801) with ZERO successful nudges from me (assigned-to POST was 500-ing) → the #12506 self-wake driver fired on its own. Recovers on a cooldown-length latency (~6-8min, NOT instant; NOT 30m). Dormancy is now handled by the driver → babysit loop (bbvz27bxc) STOPPED. skill productively cycling post-reboot: #12799 shipped, #12450 surface-1 done, #12823 queued, #12800 ungated, **#12801 self-HELD by skill ("no-TUI escalation"** — skill lacks a TUI capability; it parked #12801 in-progress and moved on — may need operator attention on the capability).
+
+**#12824 FILED (high, skill) — harness `assigned-to` POST 500s persistently** (ack-cursor OK, NOT gh-ratelimit 4998/5000, NOT load). Breaks PM nudge + likely harness handoff-routing for event-mode dm. **Now NON-URGENT** for agent-dormancy (driver self-wakes), but still real for handoff routing → a harness restart would clear it + restore nudge/routing whenever convenient (operator-domain; leaves qa safely in polling via #12820 port-desync). Pending-test/ship both 0 so no handoff being dropped right now.
+
+**BABYSIT LOOP ACTIVE (operator-directed 16:xx) until #12506 ships:** Manually nudging skill through the dormancy bug (#12506 — idle event-mode agent doesn't self-wake to pull next queued item; agent finishes task, notes next pickup, then stalls instead of running work_queue). Mechanism: inject `assigned-to(target=skill, issue=<next>)` via `POST :7373/events` (harness only auto-dispatches assigned-to for open/pending, NOT in-progress → stranded in-progress items need manual wake). **Running a periodic heartbeat Monitor (task bbvz27bxc, 240s)** emitting `BABYSIT_TICK skill_idle=Xm state=set/active`; on each tick: nudge skill if dormant w/ pickup-able queue, check #12506 progress (pending-test→qa→pending-ship→shipped), **TEAR DOWN loop + stop nudging once #12506 ships** (dormancy self-fixes then). NOTE: harness event-POST intermittently 500s under test-churn load → retry. **#12506 progress so far:** my wake → skill did AC11 fix → #12506 → pending-test (PR #12812) → now awaiting qa (polling, 30m cadence). skill re-nudged onto #12799 after.
+
+**Operator directive (inline 16:xx):** on no-action wakes, keep user-facing reports to a **brief summary** — do NOT enumerate other agents' specifics (issue#s, event counts). Token economy. Complying inline this session + filed **#12818** (approved, role:skill) to make it durable as an L2 PM refinement of the L1 User-Facing Communication rule (5 ACs incl. compose-consumption + comprehension test). L2-source edit = skill domain (PM docs-only).
+
+**PM approved queue = operator-paced, NOT autonomously actionable** (#10839/#10838/#10837 umbrella PRDs need DS re-audit; #10690 gated). #12818 now in skill's approved queue. in-progress coordination-holds unchanged: #11092, #11053, #9968.
+
+---
+
+## Superseded — 2026-06-18 01:32 (PM EVENT-mode, post-restart fresh boot)
 
 **Boot clean + recovered a stale-main hazard.** Harness reachable :7373 (fresh boot, uptime <10m, git_sha 00757fe4→ now ab00fba6, v0.44.0). GH access OK. Cursor `5fd4f552` → boot drain EMPTY (fresh harness deque). bootup-complete emitted.
 
