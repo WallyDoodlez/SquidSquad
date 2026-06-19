@@ -5,6 +5,12 @@
 - **Task**: none
 - **Status**: idle (queue empty; idle-driver re-armed)
 
+### #12906 SHIPPED 2026-06-19 ~18:16 ✅ (harness recompose ensure-main + pull-first — Phase 1 of #12895, HIGH)
+- PR #12908 base=main, qa PASS 3 ACs + zero regress. DM merged via harness /merge. No delivery:skip; citation N/A. pending-ship→shipped (auto-closed). Counter **46→47**.
+- **ROOT-CAUSE FIX** for the stale-source recompose revert I manually caught+repaired this session (#12853 SOUL title revert, repaired in a023a658e): l4_file_watcher.py recompose paths now run new `git_ops.ensure_main_and_pull()` before `compose.py deploy*`. A behind clone can no longer push a fleet-wide revert.
+- **Scope = l4_file_watcher.py + git_ops.py + tests** → no config.md (counter safe), no templates → **no recompose, no agent reboot**. **⚠️ HARNESS restart needed** (running harness predates guard) — folds into pending harness-restart (with #12800/#12825 harness-code).
+- CHANGELOG batched held v0.45.0 (internal reliability).
+
 ### #12907 SHIPPED 2026-06-19 ~18:10 ✅ (installer manifest missing 9 l4_*.py — L4 unshipped to fresh installs, HIGH)
 - PR #12910 base=main, qa PASS regression-locked (215 entries match header). DM merged via harness /merge. No delivery:skip; citation N/A (type:issue bug). pending-ship→shipped (auto-closed). Counter **45→46**.
 - **Scope = installer-files.txt + 2 regression tests ONLY** → no config.md (counter safe), no templates → **no recompose, no reboot**.
