@@ -1,3 +1,10 @@
+---
+type: pattern
+title: Ship gate — ship the verified atomic unit, file expanded scope as a follow-up
+created: 2026-06-19
+roles: [dm, pm]
+---
+
 # pattern-ship-gate-preserve-expanded-scope
 
 **Type:** pattern (DM delivery)
