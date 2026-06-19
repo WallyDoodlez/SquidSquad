@@ -266,6 +266,44 @@ class TestInstallerFileManifest:
         dupes = [f for f in manifest_entries if manifest_entries.count(f) > 1]
         assert not dupes, f"Duplicate entries in installer-files.txt: {set(dupes)}"
 
+    def test_l4_subsystem_scripts_listed(self, manifest_entries):
+        """#12907: the L4 customization + file-watch subsystem must ship.
+
+        harness.py imports l4_file_watcher (start_l4_watcher) and the L4
+        customization pipeline (parser/op-processor/audit-gate/…) is
+        driven at runtime — none of these were in the manifest, so fresh
+        installs received no L4 subsystem. Lock the whole family so the
+        omission can't silently recur.
+        """
+        l4_scripts = sorted(
+            f"references/scripts/{p.name}"
+            for p in (REPO_ROOT / "references" / "scripts").glob("l4_*.py")
+        )
+        assert l4_scripts, "no l4_*.py scripts found on disk — test stale"
+        missing = [s for s in l4_scripts if s not in manifest_entries]
+        assert not missing, (
+            f"installer-files.txt missing L4 subsystem scripts: {missing}"
+        )
+
+    def test_header_total_matches_entry_count(self):
+        """The '# Total: N files' header must match the real entry count.
+
+        A stale header is the canary for an add-without-counting edit —
+        the omission that left the L4 family (#12907) out for so long.
+        """
+        text = INSTALLER_MANIFEST.read_text(encoding="utf-8")
+        m = re.search(r"#\s*Total:\s*(\d+)\s*files", text)
+        assert m, "installer-files.txt is missing a '# Total: N files' header"
+        declared = int(m.group(1))
+        actual = sum(
+            1 for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        )
+        assert declared == actual, (
+            f"installer-files.txt header says {declared} files but lists "
+            f"{actual} — update the '# Total:' line when adding/removing entries"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Helpers

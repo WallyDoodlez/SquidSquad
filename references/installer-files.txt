@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 206 files
+# Total: 215 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -36,6 +36,15 @@ references/scripts/forgejo_setup.py
 references/scripts/git_ops.py
 references/scripts/harness.py
 references/scripts/health_check.py
+references/scripts/l4_audit_gate.py
+references/scripts/l4_compose_dryrun.py
+references/scripts/l4_conflict_preempt.py
+references/scripts/l4_file_watcher.py
+references/scripts/l4_mini_cq.py
+references/scripts/l4_op_processor.py
+references/scripts/l4_parser.py
+references/scripts/l4_removal.py
+references/scripts/l4_write_commit.py
 references/scripts/manifest.py
 references/scripts/migrate_state_branch.py
 references/scripts/model_router.py
