@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 203 files
+# Total: 206 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -11,6 +11,8 @@ start.sh
 start.ps1
 start-harness.sh
 start-harness.bat
+restart-harness.sh
+restart-harness.bat
 references/commands/squidsquad-compose.md
 references/commands/squidsquad-upgrade.md
 references/wizard/WIZARD.md
@@ -144,6 +146,7 @@ references/sub-skills/common/consensus-protocol.md
 references/sub-skills/common/context-pressure.md
 references/sub-skills/common/cycle-runner.md
 references/sub-skills/common/git-commit.md
+references/sub-skills/common/harness-restart.md
 references/sub-skills/common/improvement-scan-slim.md
 references/sub-skills/common/improvement-scan.md
 references/sub-skills/common/interval-sync.md
