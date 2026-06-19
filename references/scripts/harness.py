@@ -30,6 +30,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -2044,6 +2045,65 @@ app = FastAPI(
 )
 
 
+# ---------------------------------------------------------------------------
+# Error capture (#12824) — persist unhandled-exception tracebacks to disk.
+#
+# The #12824 assigned-to 500 transient could not be root-caused: the traceback
+# went only to the harness terminal stdout, which was lost by the time the bug
+# was investigated. These helpers write method+path+traceback to a persisted
+# log so the NEXT 500 (or any swallowed internal hiccup) is diagnosable.
+# ---------------------------------------------------------------------------
+
+
+def _harness_error_log_path() -> Path:
+    """Path to the persisted harness error log. Resolved per-call so test
+    isolation (SQUIDSQUAD_DIR override) is honored and the helper is patchable."""
+    return SQUIDSQUAD_DIR / "harness-errors.log"
+
+
+def _persist_harness_error(context: str) -> None:
+    """Append the *current* exception's traceback to the harness error log.
+
+    Call from inside an ``except`` block — ``traceback.format_exc()`` captures
+    the active exception. ``context`` describes where it fired (method+path, or
+    the swallowed-work site). Best-effort: any failure writing the log is
+    itself swallowed so the error-logger can never mask the original fault.
+    """
+    tb = traceback.format_exc()
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    entry = f"\n===== {ts} {context} =====\n{tb}\n"
+    try:
+        log_path = _harness_error_log_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as fh:
+            fh.write(entry)
+    except Exception:
+        # Never let the error-logger itself raise — it runs on the failure path.
+        pass
+
+
+@app.exception_handler(Exception)
+async def _capture_unhandled_exception(request: Request, exc: Exception):
+    """Global 500 handler (#12824): persist the traceback, then return the
+    standard 500 contract.
+
+    Starlette routes ``HTTPException`` (the intentional 400/404 raises) through
+    its own handler, so this only fires on genuinely-unhandled exceptions — the
+    500s we want diagnosable. The response body matches Starlette's default
+    ``ServerErrorMiddleware`` 500 so no caller contract changes; the only added
+    behavior is the on-disk traceback.
+    """
+    _persist_harness_error(
+        f"{request.method} {request.url.path} :: "
+        f"{type(exc).__name__}: {exc}"
+    )
+    _log(
+        f"500 on {request.method} {request.url.path}: "
+        f"{type(exc).__name__}: {exc} (traceback → harness-errors.log)"
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
+
 def _validate_role(role: str) -> str:
     """Validate that a role is configured. Returns the role name or raises 404."""
     configured = boot_remote._get_all_roles()
@@ -2839,11 +2899,38 @@ async def receive_event(request: Request):
                 # #9242: disk write off the asyncio event loop.
                 await asyncio.to_thread(state.save_state)
 
-    # Update AgentState from event
-    _update_agent_from_event(body)
+    # Update AgentState from event.
+    # #12824: fail-soft. The event_lifecycle.append above is the
+    # routing-critical work (it is what wakes event-mode agents); this
+    # post-append bookkeeping is non-critical. A throw here must NOT 500 the
+    # emission path — assigned-to nudges and EAD handoff routing ride this same
+    # path, and a 500 on it silently breaks waking dormant agents (#12824).
+    # Swallow + persist the traceback (so the next occurrence is diagnosable)
+    # rather than failing the request.
+    try:
+        _update_agent_from_event(body)
+    except Exception:
+        _persist_harness_error(
+            f"POST /events post-append _update_agent_from_event "
+            f"(type={event_type!r}, role={role!r})"
+        )
+        _log(
+            f"post-append _update_agent_from_event failed for "
+            f"type={event_type!r} role={role!r} — swallowed (see harness-errors.log)"
+        )
 
     # Log to console
-    _log_event(body)
+    try:
+        _log_event(body)
+    except Exception:
+        _persist_harness_error(
+            f"POST /events post-append _log_event "
+            f"(type={event_type!r}, role={role!r})"
+        )
+        _log(
+            f"post-append _log_event failed for type={event_type!r} "
+            f"role={role!r} — swallowed (see harness-errors.log)"
+        )
 
     return {"status": "ok"}
 
