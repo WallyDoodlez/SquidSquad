@@ -39,6 +39,14 @@ Operator strengthened the principle:
 - **Outcome intent:** assigned work must be ATTENDED TO (every item looked at within available time/resources), even if not all COMPLETED. Human-decision items → assigned to human + parked; everything else pushed as far as possible. ("Assign a pile before bed → by morning all attended to, not necessarily done.")
 - **Reconcile:** AGENT-RUNTIME §3 inline definition + inline status-bar indicator must clear on the 20-min resume. Tracked in **#12853** (expanded spec).
 
+**Locked behavior hierarchy (precedence), operator-confirmed 2026-06-19:**
+1. **Pending work** (assigned OR discovered) → work RELENTLESSLY, no rest.
+2. **No work** → jump to **self-improvement** (improvement scan).
+3. **Self-improvement capped: 3 runs then cooldown** — KEEP the existing improvement-loop design (the burst-of-3 + cooldown is the token-burn guardrail; do NOT make continuous, do NOT remove cooldown).
+4. **Inline mode** = the only pause; auto-releases after 20 min human silence → resume.
+
+The cooldown is rest from SCANNING only — never rest from actual pending WORK. 'No rest at all' = never idle-sleeping; always working, self-improving (3x), or briefly cooling down between scan-bursts.
+
 ## Boundaries / nuance
 
 - **Idle ≠ stop.** Going idle (event-bus wait / cool-down loop, which auto-resumes on nudge/cooldown) is correct and is NOT a stop. Ending the turn to wait for another party IS a stop and is forbidden.
