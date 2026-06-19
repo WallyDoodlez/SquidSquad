@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
+  "last_scanned": "docs/DM-ARCH.md",
   "rotation_count": 75,
   "scan_history": [
     {
@@ -411,6 +411,13 @@
       "findings": 1,
       "fixes": [],
       "note": "line ~49 sub-skill-guide authoring invitation contradicts #11144 internal-only; covered by #11400 back-reference sweep (added concrete line refs to #11400, not fixed inline)"
+    },
+    {
+      "file": "docs/DM-ARCH.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "in-lane domain doc (out of fixed rotation; 5 rotation docs already covered this session). #12749 layered refactor documented as realized + counter ownership on DM; L4 batch-10 correct; current"
     }
   ],
   "doc_inventory": {
