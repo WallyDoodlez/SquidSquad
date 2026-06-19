@@ -1,6 +1,6 @@
 # Harness TUI — Interface Design (WIP, design-first)
 
-**Status:** In design with operator (2026-06-19). Tracks #12801 (status:planning, role:pm). Build PAUSED until this design is agreed, then handed to skill. Supersedes the narrow "bottom action bar" scope of #12801.
+**Status:** ✅ APPROVED by operator (2026-06-19) — ready to build. This doc is the interface CONTRACT for #12801; #12801 → role:skill, status:approved. Supersedes the narrow "bottom action bar" scope of #12801.
 
 **Prior context:** #8704 shipped backend endpoints only (`GET /human/queue`, etc.); a full TUI was an explicit non-goal there (deferred to #3963 web UI). No TUI code exists. #3963 (web UI) is a parallel future surface, not this. #9895 (TUI ack-viz) can layer on later.
 
@@ -36,6 +36,7 @@ One clean activity vocabulary (resolves the earlier mockup ambiguity — "active
 - **idle** = alive but nothing in progress (waiting on events / in cooldown). **Color: YELLOW.**
 - **down** = dead / paused / crashed / unresponsive. **Color: RED.**
 - Rule of thumb the operator wants: **GREEN means they are working.**
+- **No persistent on-screen legend** (operator 2026-06-19): the state word ("working"/"idle"/"down") + its color are self-describing, so a legend line is redundant — omit it. (A one-time help/About screen may explain the cursor-lag bar if needed, but nothing persistent.)
 
 ### Cursor lag bar (operator-requested 2026-06-19; visual refined)
 Per-agent visual of how caught-up that agent's event cursor is vs the head of the event stream.
@@ -68,10 +69,32 @@ Live recent events / commits feed.
 - **Inline "Answer a human-ticket"** — dropped (too complex). Answering stays fully interactive with PM via Bring-PM-Forward.
 - Web UI (#3963), TUI ack-viz (#9895) — separate/later.
 
-## Open / to-confirm with operator
-- Primary-job ranking (monitoring vs control vs needs-you) → drives layout emphasis.
-- Final panel set + layout proportions.
-- Whether Wake is v1 or fast-follow.
+## Resolved (operator 2026-06-19)
+- **Primary job:** no hard ranking — balanced layout as drawn (monitor + control + needs-you all first-class).
+- **Panel set + layout:** as designed (title bar, Agents, Needs You, Pipeline, Activity, action bar, Options menu).
+- **Wake button:** v1, BUT **depends on #12495** (the wake-injection/work-assign primitive). Sequence the Wake button after #12495 lands (or stub it disabled until then). All other action-bar buttons (Reboot/Reboot All/Force) have no such dependency.
+- **No persistent legend** (state word + color are self-describing).
 
-## Hand-off plan
-Once agreed → this doc is the interface contract; route #12801 back to skill (role:skill, approved) to build. Skill decomposes (per TRD→PRD→Stories→Tasks): Story1 TUI foundation + harness `lag` endpoint + data layer; Story2 panels; Story3 action bar + Wake; Story4 Bring-PM-Forward hotkey.
+## Mockups (visual contract)
+
+Main dashboard (healthy):
+```
+🦑 SquidSquad · <project>                                     [ ⚙ Options ]
+╭─ Agents ───────────────────────────────────╮╭─ Needs You ──────────────╮
+│ skill   ● working   #12801   2m   [----→-]  ││ ⚠ #10837  sequence PRDs  │
+│ qa      ● idle      —        0m   [-----→]  ││ ⚠ #10838  sequence PRDs  │
+│ dm      ● idle      —        4m   [-----→]  ││                          │
+│ pm      ● working   design   now  [-----→]  ││ 2 items await you        │
+╰─────────────────────────────────────────────╯╰──────────────────────────╯
+╭─ Pipeline ──────────────────────╮╭─ Activity ──────────────────────────╮
+│ in-prog 6  pend-test 0  ship 0  ││ 21:14  skill  #12511 merged         │
+│                                  ││ 21:09  pm     #12801 design update  │
+╰──────────────────────────────────╯╰──────────────────────────────────────╯
+ [ Reboot ]   [ Reboot All ]   [ Force ]   [ Wake ]       [P] PM   [⚙] Options
+```
+Trouble (qa down + lagging — red): qa row RED (down); qa/skill cursor bars show RED left dashes (far behind).
+Force-reboot confirm modal (busy-aware): names the agent, shows it's WORKING + in-flight time, warns force is immediate and does NOT count as a crash; [Cancel] / [Force reboot].
+Options menu: ⚙ panel, first item "Change background", extensible.
+
+## Hand-off (DONE 2026-06-19)
+This doc is the interface contract. #12801 → role:skill, status:approved. Skill decomposes (per TRD→PRD→Stories→Tasks): Story1 TUI foundation (Textual app + harness-HTTP data layer + harness `lag` endpoint + dependency wiring) → Story2 panels (Agents incl. cursor-lag bar + work-state colors, Needs You, Pipeline, Activity) + title-bar branding → Story3 action bar (Reboot/Reboot All/Force, busy-aware) + Options menu (Change background) + Bring-PM-Forward hotkey → Story4 Wake button (gated on #12495).
