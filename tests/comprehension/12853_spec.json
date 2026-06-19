@@ -1,0 +1,48 @@
+{
+  "issue": 12853,
+  "title": "L1 SOUL generalized: Never Stop While Work Is Pending (any handoff — agent or human — is transition + continue, never a stop); PM advertises human-assigned tickets",
+  "authored_by": "skill",
+  "authored_at": "2026-06-19 09:40",
+  "ac": "AC5",
+  "method": "Fresh agent (model: sonnet), given ONLY the relevant new section(s) in isolation, no other context. CQ1-CQ5 are given the new '### Never Stop While Work Is Pending' section of references/roles/SOUL.md. CQ6 (PM-targeted) is given the 'Advertise human-assigned tickets' paragraph of the PM check-in step (references/sub-skills/roles/pm/checkin.md). Answers must come from the supplied text alone.",
+  "target": "references/roles/SOUL.md -> '### Never Stop While Work Is Pending' (CQ1-CQ5); references/sub-skills/roles/pm/checkin.md -> 'Advertise human-assigned tickets' (CQ6)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You just handed work off to another agent (e.g. transitioned an issue to pending-test for the verifier) and there is more approved work in your queue. Do you end your turn and wait for the verifier, or continue?",
+      "expected": "Continue immediately to your next queue item. A handoff is never a reason to stop; you always move ahead while work is pending.",
+      "must_not": "Ending the turn / waiting for the verifier (or any teammate) to act."
+    },
+    {
+      "id": "CQ2",
+      "q": "How do you hand verification work to the verifier, and does that handoff count as a 'stop'?",
+      "expected": "By a status transition (which wakes the new owner), then immediately continue to your own next item. It is NOT a stop.",
+      "must_not": "Treating the handoff as a stop or pausing to wait for the new owner."
+    },
+    {
+      "id": "CQ3",
+      "q": "What are the only legitimate ways your session ends?",
+      "expected": "Lifecycle events the harness manages: a context-pressure exit-42, a stop-requested, or Monitor death. You never end a session yourself to wait for someone."
+    },
+    {
+      "id": "CQ4",
+      "q": "Is going idle — the event-bus wait between nudges, or the improvement-scan cool-down loop — a 'stop'? Why or why not?",
+      "expected": "No. Idle auto-resumes (a nudge or a cool-down tick wakes you) so it strands nothing. Stopping is ending the turn to wait for another party, which nothing wakes you from — that is what is forbidden. Stop != idle.",
+      "must_not": "Claiming idle is forbidden / is the same as stopping."
+    },
+    {
+      "id": "CQ5",
+      "q": "You need a human's decision mid-task while running autonomously (not inline). What do you do?",
+      "expected": "Do NOT wait. Assign role:<human> + the appropriate pending-human-* status VIA A TRANSITION (not a bare comment), then immediately continue — next queue item or idle. The human handoff is the same rule as any other handoff, just async."
+    },
+    {
+      "id": "CQ6",
+      "q": "(PM) During check-in, what must you do about tickets assigned to the human (role:<human> with a pending-human-* status)?",
+      "expected": "Proactively advertise/surface any open ones to the operator — by number and one-line ask — in your check-in note. PM is the return path that gets HITL items human attention; it is non-blocking (name them and continue, never wait).",
+      "must_not": "Silently leaving human-assigned tickets unsurfaced / blocking the loop to wait on them."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-19 09:30",
+  "evidence": "Two fresh sonnet agents given only the isolated section(s). Agent a560d0715cca6360a (SOUL section) answered CQ1-CQ5 correctly: CQ1 'Continue immediately... ending your turn to wait for the verifier is a stop, which is forbidden'; CQ2 'status transition... not a stop'; CQ3 'context-pressure exit-42, stop-requested, or Monitor death... never end a session yourself'; CQ4 'idle is not a stop because... a nudge or cool-down tick wakes you'; CQ5 'role:<human> + pending-human-* via a transition, then immediately continue... do not wait'. Agent a247b47d2f2bf5d5b (PM paragraph) answered CQ6 correctly: 'surface any open ones by number and one-line ask... non-blocking — name them and continue without waiting'."
+}

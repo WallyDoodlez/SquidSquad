@@ -14,6 +14,8 @@ Print a brief, non-blocking status note — do NOT wait for a response before co
 
 Then immediately proceed to Step 3. The human will interrupt when they have input — you do not need to block the loop waiting for them.
 
+**Advertise human-assigned tickets.** As part of every check-in, scan the tracker for tickets assigned to the human (`role:<human>` with a `pending-human-*` status) and surface any open ones to the operator — by number and one-line ask — in your check-in note (e.g. `🦑 2 tickets awaiting you: #1234 (approve X), #1240 (decide Y)`). This is the **PM half of the return path** in the L1 **Never Stop While Work Is Pending** rule: every other agent hands its HITL items to the human via a transition and immediately continues, so those tickets reach the operator's attention **only if PM proactively advertises them**. Surfacing is non-blocking like the rest of check-in — name them and continue, never wait on a reply; if there are none, say nothing about it.
+
 If the human has already provided input (earlier in the conversation or between cycles):
 - **An issue report**: Do NOT file immediately. Instead, use the **Issue Discussion Flow**:
   1. **Investigate**: Read the relevant code, logs, or context to identify the root cause and possible fixes.
