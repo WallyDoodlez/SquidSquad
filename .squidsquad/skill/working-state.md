@@ -1,55 +1,29 @@
 # Working State
 
-- **Task**: #12825 (in-progress, branch `squidsquad/task/12825`) — supervised harness launcher + agent restart. **AC1+AC2 DONE; AC3-AC8 next.** (Also: #12450 S1+S2 done, S3/S4 PM-gated; #12824 shipped pending-test.)
-- **Updated**: 2026-06-18 21:25 (skill — event-mode)
+- **Task**: #12820 (in-progress) — RCA COMPLETE + fix-design recorded; **implementation DEFERRED for safety** (harness-startup blast radius + restart-path interaction). Resume = mechanical per the #12820 comments. (#12825 + #12511 both SHIPPED/CLOSED this session.)
+- **Updated**: 2026-06-19 (skill — resumed/inline session)
 - **Quiet Cycle Counter**: 0
 
-## #12825 — IN PROGRESS (branch squidsquad/task/12825) — AC1+AC2 DONE
-Operator-requested harness control surface (motivated by #12824: PM couldn't self-serve a harness restart). Confirmed NOT gated by #12801 (that was a harness-TUI false premise; this is concrete).
-- **AC2 DONE** — `POST /restart` (harness.py): refactored shared teardown into `_teardown_and_exit(exit_code, delete_port_file)`; `/shutdown`=exit 0 + delete port file, `/restart`=exit `HARNESS_RESTART_EXIT_CODE` (42, mirrors agent exit-42) + keep port file. Added to route-contract manifest (_EXTERNAL).
-- **AC1 DONE** — `restart-harness.bat`/`.sh` (repo root): supervised relaunch loop. exit 42→relaunch, 0/Ctrl+C→stop, abnormal→relaunch w/ crash-loop guard (give up after N). `SQUIDSQUAD_HARNESS_CMD` override = test seam. One-shot start-harness.* still works (graceful degradation).
-- Tests: `tests/test_12825_harness_restart.py` (7: endpoint args, teardown exit/port-file, bash launcher relaunch/clean-stop/crash-guard). Harness regression 337 passed.
-- **REMAINING (next slice):** AC3 new sub-skill (WHEN/HOW to request harness restart; requesting agent's own session ends) — LLM-consumed → **AC7 CQ** (AC7 already in issue body; verifier derives spec per skill-cq). AC4 catalog. AC5 installer ships launcher as default + installer-files.txt (launchers at repo ROOT — check how start-harness.* gets installed). AC6 compose-consumption verify (PM at least). AC8 DS audit on exit-code/endpoint. Then full suite → has-changes → pending-test.
+## Shipped this session (DONE)
+- **#12825** (HIGH) — supervised harness launcher + agent-triggerable harness restart. AC1-AC8. PR **#12860 MERGED**, issue SHIPPED/CLOSED. (qa verified cy345 8/8 ACs.)
+- **#12511** (HIGH bug) — test-isolation leak. Fix = autouse `_block_live_harness_egress` guard in tests/conftest.py + regression test. PR **#12867**, issue SHIPPED/CLOSED. (qa verified cy346 with on-the-wire A/B proof.)
 
-## #12450 — IN PROGRESS (branch squidsquad/task/12450)
-PM lock: **L3 = behavior, L4-seed = specifics** (detection mechanism + fallback = my call). Predecessors #12419/#12420 SHIPPED (last in installer serial cluster — all touch wizard.py/WIZARD.md).
+## Filed / deduped
+- **#12861** (LOW) — installer-files.txt omits shipped shared sub-skills (l4-curation/pr-protocol/tracker-protocol/common/task-pickup). Overlaps **#12821** (no manifest-completeness test); consolidated finding onto #12821, flagged #12861 for PM dedup.
 
-### Surface 1 — DONE + COMMITTED (repo_scan.py)
-Commit on branch: `detect_test_strategy(root)` → `{framework, run_command, location, coverage, detected}` + new `test_strategy` key in `scan()` (kept `test_frameworks` list for back-compat). Run-cmd ladder: npm test(package.json scripts) → pytest → go test ./... → cargo test → mvn test → ./gradlew test → bundle exec rspec/rake test → npx <tool> → make test → python -m unittest discover. Location: tests/·test/·spec/·__tests__/ (root + 1-deep) → co-located *_test.py/*.spec.ts/*_test.go. **25 new tests in test_repo_scan.py; 55 green; 323 green across repo_scan+wizard+installer_wiring (no regression).**
+## QA agent — CORRECTION: never inert; healthy in POLLING (#12820 misread)
+Initial /status read (bootup_complete=false, stale last_activity) led me to conclude qa was inert + reboot it. WRONG — that's the #12820 polling artifact: qa boots POLLING (dead ephemeral .harness-port) and doesn't heartbeat the event bus, so /status can't see it. Clone ground truth (SquidSquad-qa working-state/current-state) shows qa ALIVE and verifying — it PASSED #12825 (cy345) + #12511 (cy346) in polling. My reboot was an unnecessary disruption (operator's first "I don't think QA is inert" was right).
+**RCA root (#12820): harness.py find_free_port (3786-3800) silently binds an ephemeral port when 7373 is taken** → a 2nd harness (run with SQUIDSQUAD_DIR=qa's real clone) self-writes (harness.py:1836) that dead port to qa's clone .harness-port → permanent polling. Posted evidenced RCA on #12820; corrected misdiagnosis on #10855/#12409; #11600 RESOLVED. Vault: [[learning-polling-agent-reads-as-inert-on-status]].
+**#12820 fix DESIGN (recorded on issue, deferred):** ephemeral fallback + self-write are LOAD-BEARING for the integration suite (real_harness fixture spawns harness in tmp dir, reads self-written .harness-port to discover port — breaks if disabled). Fix must DISTINGUISH prod-singleton (default 7373, real clones) from test (tmp dir, explicit --port 0). Candidate: on default-port path, if find_free_port falls back to ephemeral (7373 held), refuse-to-start OR skip self-write+distribute — BUT must probe /status (live singleton=refuse vs stale/TIME_WAIT=proceed+SO_REUSEADDR) to NOT break the #12825 exit-42 restart relaunch. Coordinated harness.py + fixture change + full integration-suite verify + regression test. Untraced trigger: what runs a harness w/ SQUIDSQUAD_DIR=qa real clone (not boot_remote/thin_launcher).
+Separately noted (#11600 comment): cross-clone .local-config divergence (skill clone lists skill→../SquidSquad-skill, dm→../SquidSquad-2-dm vs running harness skill=SquidSquad-2, dm=SquidSquad-3) — low-impact (only PM-clone's .local-config is consequential), can file if not tracked.
 
-### Surface 2 — DONE + COMMITTED (wizard.py) 2026-06-18
-**Design call resolved = X** (specifics persist via `.repo-scan.json`, NOT config.md whitelist — survives both --yes + interactive). Commit on branch:
-- `generate_default_spec` (wizard.py ~3342) now prefers `scan["test_strategy"]["run_command"]` over the legacy 4-framework heuristic; falls back when test_strategy absent/undetected.
-- `_write_l4_project_files` (wizard.py ~1815) reads `.repo-scan.json` (at `project_dir.parent`) and emits a `### Testing Strategy` block (run command + framework + location + coverage) via new helper `_format_test_strategy_section`; graceful fallback to legacy `### Test Command` line when nothing detected (= non-software-dev/empty-repo path, AC4).
-- Tests: `tests/test_12450_test_strategy_l4_seed.py` (13). Regression: wizard+repo_scan 337 passed.
-- **DS review S2 DONE** (3 commits on branch: S2 + F1 followup): F1 (markdown backtick injection) → `_md_inline_code()` sanitizer applied to both code spans + test. F3 (gate on run_command truthiness) / F4 (.exists+try/except) / F5 (mutually-exclusive sections) were already satisfied by impl — added explicit edge tests. **F2** (cmd_scan_summary:3436 unguarded `.repo-scan.json` read) = pre-existing, out-of-scope → **filed #12846** (low). **Run full suite before pending-test (after S3/S4).**
+## In-flight / held (unchanged)
+- **#12450** S1+S2 done; S3 (WIZARD.md + PM CQ AC) + S4 (L3 placement, PM-gated) pending. Next feature after current burndown.
+- **#12801** HELD (false-premise TUI; awaiting PM/operator). **#12800** HIGH approved ungated. **#12837** HIGH open (harness evicted:true/null oldest_id). **#12846** LOW (mine, wizard unguarded read). **#12823** medium (.gitattributes config.md merge=ours).
+- **#12824** SHIPPED (closed).
 
-### Surfaces 3–4 — REMAINING (PM-dependent)
-3. **WIZARD.md Phase-1 (AC3 fallback).** WIZARD.md:303 lists "Test commands" as info-gap; wire repo-scan test-strategy into Phase-1 → pre-fill if `detected`, **ASK human if not** (no silent guess). LLM-consumed → **CQ needed** (PM authors comprehension AC per skill-cq — re-flagging to PM in #12450 comment).
-4. **L3 behavior placement — FLAGGED to PM** (comment): L3 domain sources at `references/roles/worker/<domain>/` (per-stack leaves; no `software-dev` dir). Options (a) dup into each stack L3 [**my rec**], (b) L2 worker, (c) new shared software-dev L3 layer (compose change). Reversible. **Do S4 after PM nod (or proceed on (a) if no objection by next pickup).**
-
-**AC checklist:** [x] AC5 detection tests (S1) · [~] AC1 detected framework+location+run-cmd reach worker composed CLAUDE.md (**S2 lands them in L4 seed**; full path needs S4 L3 + compose) · [ ] AC2 worker references detected strategy / no inventing (S4) · [ ] AC3 undetectable → installer ASKS human (S3) · [x] AC4 non-software-dev path = graceful "Not detected" fallback (S2; S4 will gate L3 on domain).
-**Next-increment order:** ~~S2~~ DONE → **S3 (WIZARD.md + needs PM CQ AC)** → S4 (per PM's L3 answer) → DS review → has-changes → pending-test (only when all ACs observable + full suite green + CQ AC present).
-
-## Other in-flight / held
-- **#12824** (HIGH bug, Harness assigned-to POST 500s) — **SHIPPED to pending-test 2026-06-18 (PR #12836, branch squidsquad/task/12824).** Implemented the RCA deliverable: (1) global `@app.exception_handler(Exception)` persists method+path+traceback → `.squidsquad/harness-errors.log` + standard 500 (4xx unaffected — Starlette ServerErrorMiddleware vs ExceptionMiddleware split; defensive isinstance re-raise added); (2) fail-soft non-critical post-append `_update_agent_from_event`/`_log_event` in receive_event; (3) 1MB single-file log rotation (DS-F3). DS-review: F1 false-positive (404-stays-404 test proves it), F3 valid (rotation), F2 declined (fail-softing ack-cursor would wedge cursor — non-200 IS the retry signal). 9 tests green; full suite 4559 pass. **Takes effect on next harness restart.** Awaiting verifier.
-- **#12801** (Harness TUI action bar) — **in-progress but HELD**: front-loaded investigation found a **false premise** — there is NO harness TUI (harness = FastAPI HTTP daemon; squidsquad_cli.py is non-interactive; reboot-one/all ALREADY exist via start_team.py --reboot). Escalated to PM/operator with 3 options (Opt1 CLI+force-reboot-safe primitive [rec, no dep] / Opt2 build real TUI [needs dep approval] / Opt3 primitives-only). **Awaiting surface+dependency decision.** Not building a from-scratch TUI blindly.
-- **#12799** → **SHIPPED** (PR #12822 merged by DM, commit f90643d72). SOUL.md L1 async-no-pause live (all-roles reboot pending per DM).
-- **#12800** (human as non-agent role) — **UNGATED** now #12799 shipped. Next approved task after #12450.
-- **#12823** (NEW, medium, open, assigned skill) — `.gitattributes` `config.md merge=ours` silently drops concurrent config changes (DM hit it on #12799 landing; I hit the same push-race this cycle). In queue behind in-progress #12450. Likely fix at .gitattributes (merge=union or drop merge=ours for config) — see [[feedback_gitattributes_for_transient_state]].
-
-## Approved queue (post-reboot burndown order)
-- ~~#12824-fix~~ — SHIPPED to pending-test (PR #12836); see in-flight section.
-- **#12450** S2→S3→S4 (in-progress feature; S4 gated on PM L3 answer) — **NEXT.**
-- **#12825** (NEW HIGH, approved, assigned skill) — Supervised harness launcher + agent-triggerable harness restart (restart.bat/.sh) + sub-skill + catalog. Pairs thematically with #12824/#12801 (harness control surface).
-- **#12800** (HIGH, approved, ungated) — human as non-agent role.
-- **#12823** (medium bug) — .gitattributes config.md merge=ours.
-- Then: #12527 (operator-manual smoke), #12492 (gated #12460), #12271, #12818, #12451, #10690, #10686.
-
-## Blocked / not mine (skip on work-queue)
-- **#10855** PM-parked (deferred behind #12271/#12460; PM reinvestigating 2026-06-18).
-- **#12493** HELD on AGENT-RUNTIME §8.3 backstop (PM doc work not yet landed; verified no HALT/backstop subsection on main). PR #12494 built.
-- **#12492** HARD-GATED on #12460 shadow window. **#12527** operator-manual (foreign-repo smoke test).
+## Queue note
+Next approved: #12853 (L1 Soul Never-Block→Never-Stop), #12800 (human as non-agent role), then HIGH open bugs (#12837, #12409, #12397, #11600). Several qa/reboot-health bugs open (#10855/#12409/#11600/#12820) — cluster worth front-loaded planning if picked up.
 
 ## Improvement Scan
 Status: idle
