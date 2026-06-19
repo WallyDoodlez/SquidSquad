@@ -1,10 +1,21 @@
 # Working State
 
-- **Task**: none — #12800 (human as non-agent role) shipped to pending-test this session (branch squidsquad/task/12800, PR pending).
-- **Updated**: 2026-06-19 10:35 (skill — event-mode; #12800 → pending-test)
+- **Task**: 12801 (in-progress) — Harness TUI. Branch squidsquad/task/12801. S1.1 done; S1.2 next.
+- **Updated**: 2026-06-19 10:48 (skill — event-mode; #12800 shipped pending-test PR#12902; #12801 S1.1 done)
 - **Quiet Cycle Counter**: 0
 
-## #12800 SHIPPED → pending-test (8 ACs, high-blast-radius)
+## #12801 Harness TUI (in-progress) — decomposed, S1.1 landed
+Plan: `.squidsquad/skill/planning/TUI-12801-DECOMPOSITION.md` (4 Stories). Contract: `.squidsquad/pm/planning/TUI-INTERFACE-DESIGN.md` (operator-approved). Textual, separate process consuming harness HTTP. Wake LAST (gated #12495).
+- **S1.1 DONE** (branch squidsquad/task/12801): harness.py `EventLifecycleManager.lag_for(role)` (events-behind-head; 0=caught up, N=behind, no-cursor/evicted=full depth) + GET /status injects per-agent `lag`. Tests TestCursorLag12801 (6); full test_harness.py 293 passed.
+- **S1.2 NEXT**: TUI data layer (references/tui/harness_client.py) — poll /status + /human/queue, derive work-state (working/idle/down) + lag→bar. Pure fns, testable w/o Textual.
+- **S1.3**: Textual app skeleton (references/tui/app.py + entry) — title bar 🦑 SquidSquad · <project>, refresh loop, placeholders.
+- **S1.4**: textual dep → requirements + installer-files.txt + start scripts (NEW references/tui/ files MUST be in installer-files.txt — AC).
+- **S2**: panels (Agents+lag bar+GREEN/YELLOW/RED, Needs You, Pipeline, Activity) + branding.
+- **S3** (AC core): action bar Reboot/Reboot All/Force (busy-aware via lifecycle intent SM, force≠crash per #12244) + Options(Change background) + Bring-PM-Forward. May need small reboot_agent/harness flag for force-not-a-crash.
+- **S4**: Wake GATED on #12495.
+- AC8: HARNESS-ARCH update for /status `lag` + force-not-a-crash. DS-review per Story. PR when substantially built.
+
+## #12800 SHIPPED → pending-test (PR #12902) (8 ACs, high-blast-radius)
 All gates green: targeted 101 passed, static gate 4621 passed (0 fail), integration 53 OK, DS review NO_FINDINGS, deploy-all rc=0, AC2 e2e verified.
 - **AC1** (alias registers): config.py role-class split — AGENT_ROLE_CLASSES{pm,worker,verifier,dm} + NON_AGENT_ROLE_CLASSES{human}; ALIASES_ROLE_CLASSES=union. tracker.py already accepts role:human (free-form labels; FEEDBACK_ROLES has human). Tests: human accepted table+bullet, multi-human, canonicalize human.
 - **AC2** (compose skips human): compose.deploy_alias_v2 + check_alias_staged_l4 skip NON_AGENT (return None / role_class); deploy + deploy-all treat None as clean no-op. Tests + e2e deploy-all-skips-2-humans.
