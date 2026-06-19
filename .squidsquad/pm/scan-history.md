@@ -510,3 +510,17 @@
 - **Findings**: BRIEFING.md heavily stale — Team State 4 days old ("pm inline / qa LOOP pinned"); #12506/#12853/#12442/#11394/#12408/#12585/#12824/#12820/#12749 all shipped but still listed in-flight or as active constraints; retired #12442 manual-dm-nudge workaround still listed as a live constraint
 - **Auto-fixed**: BRIEFING.md refreshed (PM own-domain) — new 2026-06-19 Active-Priorities increment (verified ships + #12895 decision + boot-pull-lag), Team State rewritten from /status (pm/dm/skill EVENT, qa POLLING-alive), Constraints updated (boot-pull-lag chronic + #12442 retired), Recently-Shipped 06-18/19 line added
 - **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 14:15 (local ~11:15→ actually 18:15 UTC; 2nd burst scan)
+
+- **Files scanned**: repo-wide grep "Never Block on a Human" across *.md (post-#12853/#12800 SOUL-rename drift check — verify the rename to 'Never Stop While Work Is Pending' was complete in load-bearing source/spec files)
+- **Findings**: none — ZERO occurrences in references/ or docs/ (source + specs). All 12 *.md hits are historical records (working-state, iter logs, qa/planning QA-RESULTS/TEST-PLAN) or intentional rename references (BRIEFING, decision-agents-never-stop-while-work-pending). #12853 rename clean in source.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 18:42 UTC (3rd burst scan)
+
+- **Files scanned**: vault wikilink integrity (`vault_check.py check-wikilinks`) across .squidsquad/vault/
+- **Findings**: intra-vault link integrity CLEAN (0 broken decision-/pattern-/learning-/style- targets). All ~20 WARN are cross-layer references the checker can't resolve — vault→memory (feedback_*/project_*) and vault→docs (AGENT-RUNTIME/VAULT-ARCH) — which are intentional, not breakage. Tooling note: check-wikilinks is low-signal because cross-layer refs dominate the output (a real intra-vault break would be buried). NOT filed (low value, likely known limitation; vault_check.py = skill code domain).
+- **Auto-fixed**: pattern-chain-ship-per-item-auth.md — `[[feedback-pm-docs-only]]` → `[[feedback_pm_docs_only]]` (hyphen→underscore, canonical memory-note name)
+- **Items rejected by human**: (none)
