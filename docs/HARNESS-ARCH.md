@@ -228,10 +228,13 @@ Per-agent, persisted in `.squidsquad/.harness-state.json`:
 | `stopping` | graceful stop requested; cycle ends → exit | no |
 | `restarting` | graceful restart requested; cycle ends → exit → respawn | yes (one cycle) |
 | `stopped` | agent died as requested | no |
+| `deploying` | deploy-in-progress: harness is running ensure-main → pull → recompose → commit → push for this agent's clone before respawning | yes (after deploy completes) |
 
 Transitions are HTTP-API-driven (`POST /agents/{role}/start|stop|restart`). The harness writes the new intent immediately and the health poller observes process state to drive auto-respawn vs no-respawn decisions.
 
-> The "Auto-respawn on death?" column describes **default** operation. The `--no-auto-reboot` escape hatch (§7.6) suppresses respawn — and the restart-driven teardown paths — entirely; when it is set, no row in this table auto-respawns.
+**Deploy flow** (entered when the harness receives a `deploy-halted` ack-stop from an agent): the harness sets `intent=deploying` before the agent halts (so that PID death is not misread as a crash). Once the agent exits, the harness runs the deploy sequence for that clone: ensure-main → `git pull origin main` → `compose.py deploy [alias]` → `git commit` → `git push` → **advance the agent's cursor past the deploy-signal event** → respawn the agent. The cursor-advance is essential: the agent halts *without* acking the deploy-signal (AGENT-RUNTIME §8.1), so the harness — which owns the cursor (§5.1) — acks it here on the agent's behalf; otherwise the respawned agent's initial drain would re-fetch the same deploy-signal and re-halt in an infinite deploy loop. `reboot_blocked_until` (§7.3) is set at `deploy-halted` receipt and cleared on respawn, suppressing health-poll-triggered premature respawn during the git/compose operations. See §7.3 for the `reboot_blocked_until` detail and §11 for harness-git failure modes.
+
+> The "Auto-respawn on death?" column describes **default** operation. The `--no-auto-reboot` escape hatch (§7.6) suppresses respawn — and the restart-driven teardown paths — entirely; when it is set, no row in this table auto-respawns. Deploy-flow respawn (intent=`deploying`) is also suppressed under `--no-auto-reboot`.
 
 ### 7.1.1 Status state machine
 
@@ -293,6 +296,8 @@ Every 5 seconds, for each agent with intent=`running`:
 1. Read `claude_pid` (and `terminal_pid` for diagnostics) from in-memory `AgentState` — loaded at boot from `.harness-state.json`'s per-alias record (§7.5). This in-memory value is the **primary** liveness source. If it is absent or its process is no longer alive, health-poll **falls back** to the on-disk `.squidsquad/<alias>/.claude-pid` file — the singleton handle written by `thin_launcher` (contents = the resolved `claude.exe` PID, per §9 / §7.2 step 3) — and adopts that PID; a final legacy fallback is `health_check.py`. The resolution order in `update_health` is: in-memory `claude_pid` → `.claude-pid` file → `health_check.py`.
 2. Check process liveness of `claude_pid` — `OpenProcess` on Windows, `kill -0` on Linux/macOS (POSIX). The §5.5 "per-agent `claude` PID" check refers to this in-memory `claude_pid` value (primary), with the `.claude-pid` file as the step-1 fallback source.
 3. If dead AND intent=`running`: re-spawn (auto-respawn) — **with crash-loop backoff** (§13.8). The harness records `last_spawn_at` per agent. A death whose lifetime was ≥ `FAST_DEATH_WINDOW_SECONDS` (60s), or any one-off death, respawns immediately and resets `consecutive_fast_deaths` to 0. A death with lifetime < 60s increments `consecutive_fast_deaths`; once it reaches `FAST_DEATH_THRESHOLD` (3), respawn is held off for `min(30s · 2^over, 1800s)` (exponential, 30-minute cap; `over = count − 3`), `status` flips to `crash-looping`, and `reboot_blocked_until` records the resume time. A later poll past that time clears the block and respawns; an agent that survives the window resets the streak. (Entire respawn path — including this backoff — is suppressed under the `--no-auto-reboot` hatch, §7.6.)
+
+   **Deploy-halt branch**: when the harness receives an `ack-stop(result=deploy-halted)` from an agent, it sets `reboot_blocked_until` to a time well beyond the expected git/compose window (e.g., `now + 300s`, overridden on completion) and transitions `intent` to `deploying`. This suppresses the normal health-poll auto-respawn during the pull → compose → commit → push sequence. On completion (or on failure with defined recovery — §11), `reboot_blocked_until` is cleared and the agent is respawned under the normal path.
 4. If dead AND intent=`stopping` or `restarting`: handle per intent.
 
 ```mermaid
@@ -323,6 +328,12 @@ When `cycle_post.py` detects context-pressure exceeded OR harness intent has fli
 - intent=`running` + exit 42: respawn (context pressure cleared by fresh session).
 - intent=`stopping` + exit 42: mark stopped; no respawn.
 - intent=`restarting` + exit 42: respawn.
+- intent=`deploying` + exit 42 (or any death after `deploy-halted` ack-stop): do NOT auto-respawn yet; harness proceeds with the deploy sequence (ensure-main → pull → recompose → commit → push) and respawns the agent only after the deploy completes successfully (or applies the defined recovery if it fails — §11). The `deploy-halted` ack-stop is the signal that triggers this path, distinct from both context-pressure exit-42 and the `stopping`/`restarting` cooperative exits.
+
+**Three distinct cooperative exit variants**:
+1. **Context-pressure exit**: `cycle_post.py` detects high context usage; checkpoints and exits for a fresh session.
+2. **Stop/restart exit**: harness intent flipped to `stopping` or `restarting`; agent drains current work and exits.
+3. **Deploy-halt exit**: agent received a `deploy-signal` event (§7.6 / AGENT-RUNTIME §5.2 / §8.1), finished its current atomic unit, emitted `ack-stop(result=deploy-halted)`, and halted. The harness runs the deploy sequence before respawning. This exit is agent-cooperative and harness-driven — the agent does not recompose itself.
 
 A **60-second force-kill safety net** fires if the agent doesn't exit within the cooperative window (intent set time + 60s) — except under the `--no-auto-reboot` hatch, where it is skipped for intent=`restarting` (a kill with no respawn is pure harm) and preserved for intent=`stopping` (see §7.6).
 
@@ -356,7 +367,7 @@ One file per install (at the install root). Persisted across harness restarts. S
 }
 ```
 
-**`last_compose_checksum`** (top-level, install-scoped) — sha256 hex of the compose source tree (`.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`) at the last successful `compose.py deploy-all` run. The harness boot-time freshness check reads this, recomputes the current checksum, and runs `compose.py deploy-all` BEFORE spawning agents if they differ or the field is absent (first boot, post-`git pull`, etc.). See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md) for the three-layer harness-owned freshness model.
+**`last_compose_checksum`** (top-level, install-scoped) — sha256 hex of the compose source tree (`.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`) at the last successful pull-first `compose.py deploy-all` run. On harness boot the freshness check recomputes the current checksum and compares it against this field. If they differ or the field is absent, the harness does **not** recompose locally; instead, it emits a deploy signal to each affected agent so that the pull-first deploy path (§7.6) handles the recompose from current source. See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md) for the three-layer harness-owned freshness model. **Invariant**: a committed `CLAUDE.md` on `main` is always the product of a pull-first deploy; the harness never produces a composed output from a potentially-stale local source tree.
 
 **Two distinct fields per agent** (per [AGENT-RUNTIME.md §8.2](AGENT-RUNTIME.md)):
 
@@ -382,10 +393,12 @@ Two operator-facing flags (each with a matching env var) gate the auto-spawn / a
 
 1. **Health-poll respawn (§7.3)** — death is logged, not respawned (the original #10538 behavior).
 2. **Restart endpoint** — `POST /agents/{alias}/restart` is **refused** (returns `success:false`, agent left running); operators use explicit `/stop` then `/start` for a real cycle.
-3. **Compose-affected restart** — `_reboot_affected_agents` (the post-merge recompose path) is **skipped**.
+3. **Deploy-signal emit** — `_reboot_affected_agents` (the deploy-signal emitter — see below) is **skipped**.
 4. **Force-kill safety net (§7.4)** — skipped for intent=`restarting` (a kill with no respawn is pure harm). **Preserved for intent=`stopping`** — an explicit operator stop legitimately wants the process dead even with reboots off.
 
 This is the shipped behavior (ref 162aa29a2). It is an incident/diagnostic control, not steady-state; normal runs leave both hatches off and §§7.1–7.4 apply unmodified.
+
+**`_reboot_affected_agents` is the deploy-signal emitter.** In normal operation (no `--no-auto-reboot`), when the harness detects that compose-source files have changed (via the `last_compose_checksum` drift check at boot — §7.5, or via L4-write trigger from COMPOSE-ARCHITECTURE §8.1), it calls `_reboot_affected_agents`. Under the new architecture, this function does **not** recompose locally and restart directly. Instead it emits a **deploy signal** (`assigned-to` event with `event_context="deploy-signal"` and `event_type="deploy-signal"`) to each affected agent's alias. The agent receives the deploy signal via its normal event bus, finishes its current atomic unit, emits `ack-stop(result=deploy-halted)`, and halts — whereupon the harness runs the full pull-first deploy sequence (§7.1 deploy flow / §7.4 deploy-halt exit). Each affected clone is deployed sequentially (deploy A → pull/compose/commit/push/restart A → then B …) to avoid push races on the shared `main` ref. The `last_compose_checksum` is updated after each successful per-clone push.
 
 ---
 
@@ -435,7 +448,7 @@ All harness-owned files are atomic-write (`.tmp` + `mv`) and persisted across re
 When the harness restarts (operator-driven or after a crash):
 
 1. **Read `.squidsquad/.harness-state.json`** — recover per-agent intent + PID + clone path + `last_compose_checksum`.
-1b. **Compose freshness check** — recompute the checksum over `.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`; compare against `last_compose_checksum`. If they differ or the field is absent (first boot, post-`git pull`, post-installer migration walk), run `compose.py deploy-all` BEFORE proceeding to step 2 and write the new checksum back to state. See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md).
+1b. **Compose drift check (deploy-signal path, NOT local compose)** — recompute the checksum over `.squidsquad/config.md` + `.squidsquad/project/*.md` + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`; compare against `last_compose_checksum`. If they differ or the field is absent, the harness does **not** run `compose.py deploy-all` locally. Instead, after agents are spawned (step 2), it emits a **deploy signal** to each affected agent via `_reboot_affected_agents` (§7.6). The pull-first deploy sequence (ensure-main → pull → recompose → commit → push → restart) then runs per-clone as each agent responds with `deploy-halted` (§7.1 deploy flow / §7.4). **Rationale**: local recompose at boot has no guarantee the source tree is current (the repo may be behind `origin/main`), which is the root cause of the stale-source revert bug. The deploy-signal path is pull-first by construction. **Invariant**: a committed `CLAUDE.md` on `main` is always the product of a pull-first deploy; boot never composes locally. First-ever install compose stays with the installer. See [COMPOSE-ARCHITECTURE §8.1](COMPOSE-ARCHITECTURE.md) for the three-layer model.
 2. **Verify live PIDs** — for each agent with intent=`running`, check if the recorded PID is still alive.
    - Alive: resume monitoring.
    - Dead: respawn (since intent=`running`) — default; suppressed under the `--no-auto-reboot` hatch (§7.6).
@@ -463,6 +476,10 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 | **Agent process alive but inert (zombie)** | NOT detected today — PID-liveness reports it healthy indefinitely (§13.7, #10855). Recovery is operator-triggered restart. Proposed fix: progress-based liveness (§15). |
 | **Port collision at startup** | Harness logs warning, picks next free port (probes upward from 7373). Updates `.squidsquad/.harness-port`. |
 | **uvicorn / FastAPI exception** | Logged; the affected endpoint returns 500; other endpoints continue to serve. |
+| **Deploy: `git pull` non-fast-forward or conflict** | The affected clone's working tree is dirty or its `main` has diverged. Recovery: harness logs the error, clears `reboot_blocked_until`, and respawns the agent on its existing (pre-deploy) `CLAUDE.md`. A tracker comment is filed to the `pm` alias with `event_context="deploy-error"` so the conflict is investigated and re-triggered. The `last_compose_checksum` is NOT updated (drift remains detectable). |
+| **Deploy: `compose.py` error (bad source)** | Compose exits non-zero (template parse error, missing slot, etc.). Recovery: harness logs the error, clears `reboot_blocked_until`, and respawns the agent on its existing committed `CLAUDE.md` (the corrupt output is never committed). Files a `deploy-error` event to `pm`. No state corruption — the committed output on `main` is unchanged. |
+| **Deploy: `git push` rejection (non-fast-forward to `main`)** | Another clone pushed while this clone's deploy was in flight. Recovery: harness retries the deploy sequence for the affected clone (pull → recompose → commit → push) up to 2 times. After 2 failures, clears `reboot_blocked_until`, respawns on existing `CLAUDE.md`, and files a `deploy-error` event to `pm`. Sequential per-clone deploy (§7.6) makes this rare but possible if two clones' deploy windows overlap. |
+| **Deploy: multi-clone consistency window** | Between sequential per-clone pushes, `origin/main` has some agents' updated output and others' stale output. This window is bounded (closes when each clone's deploy sequence completes) and rare. Accepted by design — each clone is internally consistent at its own deploy boundary, and the next pull-first deploy overwrites any residual stale output on `main`. |
 
 ---
 
