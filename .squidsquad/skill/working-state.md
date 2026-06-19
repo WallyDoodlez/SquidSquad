@@ -1,14 +1,14 @@
 # Working State
 
-- **Task**: 12801 (in-progress) — Harness TUI. Branch squidsquad/task/12801. S1.1 done; S1.2 next.
-- **Updated**: 2026-06-19 10:48 (skill — event-mode; #12800 shipped pending-test PR#12902; #12801 S1.1 done)
+- **Task**: 12801 (in-progress) — Harness TUI. Branch squidsquad/task/12801. S1.1+S1.2 done; S1.3 next.
+- **Updated**: 2026-06-19 10:55 (skill — event-mode; #12800 shipped pending-test PR#12902; #12801 S1.1+S1.2 done)
 - **Quiet Cycle Counter**: 0
 
-## #12801 Harness TUI (in-progress) — decomposed, S1.1 landed
+## #12801 Harness TUI (in-progress) — decomposed, S1.1+S1.2 landed
 Plan: `.squidsquad/skill/planning/TUI-12801-DECOMPOSITION.md` (4 Stories). Contract: `.squidsquad/pm/planning/TUI-INTERFACE-DESIGN.md` (operator-approved). Textual, separate process consuming harness HTTP. Wake LAST (gated #12495).
 - **S1.1 DONE** (branch squidsquad/task/12801): harness.py `EventLifecycleManager.lag_for(role)` (events-behind-head; 0=caught up, N=behind, no-cursor/evicted=full depth) + GET /status injects per-agent `lag`. Tests TestCursorLag12801 (6); full test_harness.py 293 passed.
-- **S1.2 NEXT**: TUI data layer (references/tui/harness_client.py) — poll /status + /human/queue, derive work-state (working/idle/down) + lag→bar. Pure fns, testable w/o Textual.
-- **S1.3**: Textual app skeleton (references/tui/app.py + entry) — title bar 🦑 SquidSquad · <project>, refresh loop, placeholders.
+- **S1.2 DONE** (branch): references/tui/harness_client.py (+__init__.py) — derive_work_state (working/idle/down + colors), lag_to_bar (→ arrow, left-third alert), agent_rows, fetch_status/fetch_human_queue (graceful None on unreachable). Tests test_tui_harness_client_12801 (17). Added both tui files to installer-files.txt. **NIT to fix on next branch commit: installer-files.txt header still says "Total: 206 files" → should be 208 (cosmetic, untested).**
+- **S1.3 NEXT**: Textual app skeleton (references/tui/app.py + entry script) — title bar 🦑 SquidSquad · <project>, refresh loop polling harness_client, panel placeholders. Needs textual dep installed to run (S1.4). **Substantial UI work — fresh context ideal.**
 - **S1.4**: textual dep → requirements + installer-files.txt + start scripts (NEW references/tui/ files MUST be in installer-files.txt — AC).
 - **S2**: panels (Agents+lag bar+GREEN/YELLOW/RED, Needs You, Pipeline, Activity) + branding.
 - **S3** (AC core): action bar Reboot/Reboot All/Force (busy-aware via lifecycle intent SM, force≠crash per #12244) + Options(Change background) + Bring-PM-Forward. May need small reboot_agent/harness flag for force-not-a-crash.
