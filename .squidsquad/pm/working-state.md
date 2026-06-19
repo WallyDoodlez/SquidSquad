@@ -40,7 +40,7 @@ _Condensed 2026-06-18 20:24. Prior incident narrative (reboot saga, event-mode s
 
 **Open role:pm issues (issue-gate redirected scan → fix issues):**
 - **#12495 (medium) — TRIAGED this boot, HELD for operator.** Fork: (a) build `assigned-to` same-status injection primitive [feature→skill] vs (b) correct docs to reality [doc-bug→PM, spans 5 docs, 32 refs in AGENT-RUNTIME §8.3 alone]. **Recommended (b)** — #12506 (shipped) removed the main need for a manual injection primitive; #12824 (open) says don't extend the buggy injection path yet. Posted recommendation + flagged operator. **If no operator objection → execute (b) doc-purge next cycle.** Defaulting HOLD because (b) forecloses a deliberate §8.3 design.
-- **#11140 (medium) — POSSIBLE MISROUTE to PM.** Orientation prose for composed CLAUDE.md must be authored in L1-L4 *source layers* (`references/`) — skill domain per the docs-only boundary (`no PM/skill split, file fully to dev`). Filed by skill-lead to role:pm deliberately though — needs a routing determination (does PM author prose content, or skill owns source-layer prose end-to-end?). Did NOT reroute unilaterally; revisit next cycle.
+- **#11140 (medium) — REROUTED pm→skill (2026-06-19).** Orientation prose lives in references/ source = skill domain. Posted full spec (per-H2 orientation intent + ACs) so it doesn't bounce. Cleared from PM queue.
 - **#9969 (low) — manifest.md CLAUDE.md-vs-instructions.md naming convention question.** Deferred.
 
 ---
