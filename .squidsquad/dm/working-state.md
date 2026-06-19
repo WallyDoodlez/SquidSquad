@@ -3,7 +3,12 @@
 > **L4-recompose restart-required was a NO-OP (2026-06-14):** Harness emitted `restart-required` (reason l4-recompose, target_alias=dm). Acked it (loop-safe). Attempted cooperative /quit — but **/quit is a no-op in this session** (Monitor kept delivering nudges; session did not terminate). Then verified: my `.squidsquad/dm/CLAUDE.md` is byte-identical (last commit f8d867a9d 2026-06-12, working tree clean) → the recompose changed nothing to pick up. So NOT restarting was correct; /quit no-op was harmless. **Finding for PM/skill:** l4_file_watcher.py emits restart-required on compose *success* regardless of whether composed output actually changed (l4_file_watcher.py:149-156) — should diff CLAUDE.md before requesting a restart, else no-op L4 writes churn restarts. Also: this event-mode session cannot self-terminate via /quit; rely on harness/operator restart or context-pressure exit-42.
 
 - **Task**: none
-- **Status**: idle (queue empty; idle-driver re-armed Step D)
+- **Status**: idle (queue empty; idle-driver re-armed)
+
+### #12907 SHIPPED 2026-06-19 ~18:10 ✅ (installer manifest missing 9 l4_*.py — L4 unshipped to fresh installs, HIGH)
+- PR #12910 base=main, qa PASS regression-locked (215 entries match header). DM merged via harness /merge. No delivery:skip; citation N/A (type:issue bug). pending-ship→shipped (auto-closed). Counter **45→46**.
+- **Scope = installer-files.txt + 2 regression tests ONLY** → no config.md (counter safe), no templates → **no recompose, no reboot**.
+- Fresh installs were missing the entire L4 customization subsystem (9 l4_*.py). Operator-facing. Broader 17-script manifest gap (incl. event_poll.py) tracked separately #12909 (skill). CHANGELOG batched held v0.45.0 (operator-facing installer fix).
 
 ### #12903 SHIPPED 2026-06-19 ~16:42 ✅ (run_tests.py integration_only guard drift fix)
 - PR #12904 base=main, qa PASS root-cause + 6 regression tests, zero regress. DM merged via harness /merge. No delivery:skip; citation N/A (type:issue bug). pending-ship→shipped (auto-closed). Counter **44→45**.
