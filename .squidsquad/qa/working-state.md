@@ -43,7 +43,7 @@
 - Subsequent #12271 slices (b heartbeat, c pause-guard, d retire PID-poll) flow to QA after #12418 ships.
 
 ## Improvement Scan
-Status: idle
-Last completed: 2026-06-18 01:25 (cy320 — 0 findings; both candidates resolved/deduped)
-Next scan after: 2026-06-18 10:00 (deferred again ~09:28 after a ~7h idle gap in event stream: only main-side change since boot scan is #12585 SOUL.md, verified clean; #12506 work still on feature branch, not main — no fresh surface I've read during real work)
+Status: idle (scan_count 1/3 burst, at_cap false — driver state authoritative in .subloop-driver.json)
+Last completed: 2026-06-19 01:16 (0 filings — evidence-first). Read this session: harness.py (#12824 diff + eviction get_recent/receive_event), event_poll.py, test_12824_harness_error_capture.py. Genuine harness finding (eviction null-anchor) → already filed as real bug #12837 (higher value than improvement-scan item). Minor: #12824 HTTP-path tests mock `_persist_harness_error` (verify it's *called*, not real-file end-to-end) — documented as not-a-gap in QA-RESULTS-12824 (my live check closed the loop); too marginal to file standalone + tracker.py create-issue carries no improvement-scan label. Not filing.
+Prior: 2026-06-18 01:25 (cy320 — 0 findings; both candidates resolved/deduped)
 - **cy320 scan outcome**: (1) "~53 live-tests ERROR-vs-SKIP" → already filed #12747/#12748 (deduped). (2) "test_l4_file_watcher_e3.py mutates cwd/stdout fd w/o teardown" candidate (cy317 TODO) → **DEBUNKED on inspection**: file uses only `tmp_path` (auto-cleaned) + module-level `sys.path.insert`; NO os.chdir/cwd=/stdout-fd mutation. Swallow symptom resolved by #12720 (suite reaches sessionfinish, junitxml written, per cy305). Not filing — evidence-first. cy317 TODO retired.
