@@ -20,6 +20,8 @@ _Condensed 2026-06-18 20:24. Prior incident narrative (reboot saga, event-mode s
 - **PM in-progress (parked coordination-holds, unchanged):** #11092, #11053, #9968.
 - **PM approved queue (operator-paced, NOT autonomously actionable):** #10839/#10838/#10837/#10690 umbrella PRDs need DS re-audit; #10690 gated.
 
+**qa RESTART (operator-directed, inline ~20:5x):** qa found DEAD (pid None, status paused, intent running, last_act stale) — its event listener had died (the #12837 bug it filed). Harness graceful-restart (`POST /agents/qa/restart`) STUCK (intent→restarting but no live process/cycle to exit → known kill-without-respawn gap). **Recovered via `boot_remote.py --role qa` → qa spawned pid 29072, status running, intent reconciled to running.** Booting. **WATCH: confirm qa reaches bootup-complete + doesn't go inert (#12409/#10855).** Lesson reinforced: for a DEAD agent (pid None), harness graceful-restart can't respawn — go straight to boot_remote.
+
 **Routed this session (post-boot event):**
 - **#12837 (HIGH) → skill.** Harness anchorless-eviction-marker bug (`evicted:true`+`oldest_id:null`+`events:[]`) kills agent event listener (event_poll exit 2); qa hit it. Triaged (code=skill domain), routed role:pm→role:skill, cross-linked #12511 as live trigger. operator-routed-to-pm-for-triage.
 - **#12511 ESCALATED medium→high** — test-isolation leak (test events on LIVE bus, the #999/#42 flood) is now a confirmed trigger for the #12837 liveness failure. Same family. role:skill. **This flood is the source of the recurring no-action wakes; expect it to continue until skill fixes #12511.**
