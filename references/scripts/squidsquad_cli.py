@@ -376,10 +376,13 @@ def _spawn_harness() -> int | None:
                 print(f"Failed to spawn via wt.exe: {e}", file=sys.stderr)
                 return None
         else:
-            # Fallback: cmd /c start
+            # Fallback: cmd /c start. The first token after `start` is the
+            # window TITLE only when quoted; an unquoted token is taken as the
+            # program to run. Pass an explicit empty title ("") so `start`
+            # treats `*tail` as the command, not the title (#12825 DS-F5).
             try:
                 subprocess.Popen(
-                    ["cmd", "/c", "start", "squidsquad-harness",
+                    ["cmd", "/c", "start", "",
                      *tail],
                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                     cwd=str(REPO_ROOT),

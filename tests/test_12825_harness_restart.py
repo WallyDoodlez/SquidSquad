@@ -49,6 +49,12 @@ class TestRestartEndpoint(unittest.TestCase):
         state.port = 7373
         cls.client = TestClient(app, raise_server_exceptions=False)
 
+    def setUp(self):
+        # The teardown guard (#12825 DS-F2) sets a module-global flag that the
+        # real process would clear by exiting. Tests reuse the process, so reset
+        # it before each case or the second endpoint call would 409.
+        harness._teardown_in_progress = False
+
     def _capture_teardown(self):
         """Patch _teardown_and_exit to record its args (and not exit the process).
         Returns (patcher, recorder dict, done Event)."""
@@ -82,6 +88,25 @@ class TestRestartEndpoint(unittest.TestCase):
 
     def test_restart_code_is_distinct_from_clean_exit(self):
         self.assertNotEqual(harness.HARNESS_RESTART_EXIT_CODE, 0)
+
+    def test_second_concurrent_teardown_is_rejected_409(self):
+        # DS-F2: once a teardown is underway, a second /restart or /shutdown must
+        # be rejected (409) rather than spawning a racing second teardown thread.
+        p, rec, done = self._capture_teardown()
+        with p:
+            first = self.client.post("/restart")
+            self.assertTrue(done.wait(3), "first teardown thread never ran")
+            # Flag is still set (real process would have exited); second loses.
+            second = self.client.post("/shutdown")
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(second.status_code, 409)
+        # Only the first teardown ran; its restart args are what was recorded.
+        self.assertEqual(rec["args"], (harness.HARNESS_RESTART_EXIT_CODE, False))
+
+    def test_begin_teardown_is_single_winner(self):
+        harness._teardown_in_progress = False
+        self.assertTrue(harness._begin_teardown())   # first claims the slot
+        self.assertFalse(harness._begin_teardown())  # second loses
 
 
 @unittest.skipUnless(_HTTP_OK, "fastapi / harness not importable")
@@ -164,6 +189,56 @@ class TestSupervisedLauncherSh(unittest.TestCase):
             self.assertEqual(r.returncode, 1)
             self.assertEqual((Path(tmp) / "count.txt").read_text(), "3")
             self.assertIn("crash-loop detected", r.stderr)
+
+
+@unittest.skipUnless(sys.platform == "win32", "restart-harness.bat is Windows-only")
+class TestSupervisedLauncherBat(unittest.TestCase):
+    """AC1 behavioral test (Windows): run restart-harness.bat against a scripted
+    stub harness and verify relaunch / clean-stop / crash-guard. Mirrors the .sh
+    class so both launchers carry equivalent coverage."""
+
+    _STUB = (
+        "import os\n"
+        "c = 'count.txt'\n"
+        "n = int(open(c).read()) if os.path.exists(c) else 0\n"
+        "open(c, 'w').write(str(n + 1))\n"
+        "seq = os.environ['SEQUENCE'].split(',')\n"
+        "code = int(seq[n]) if n < len(seq) else 0\n"
+        "raise SystemExit(code)\n"
+    )
+
+    def _run_launcher(self, tmp, extra_env=None):
+        scripts = Path(tmp) / "references" / "scripts"
+        scripts.mkdir(parents=True)
+        (scripts / "harness.py").write_text(self._STUB, encoding="utf-8")
+        shutil.copy2(REPO_ROOT / "restart-harness.bat", Path(tmp) / "restart-harness.bat")
+        env = dict(os.environ)
+        env["SQUIDSQUAD_HARNESS_CMD"] = f"{sys.executable} references\\scripts\\harness.py"
+        env["SQUIDSQUAD_HARNESS_CRASH_THRESHOLD"] = "3"
+        if extra_env:
+            env.update(extra_env)
+        return subprocess.run(
+            ["cmd", "/c", str(Path(tmp) / "restart-harness.bat")],
+            cwd=tmp, env=env, capture_output=True, text=True, timeout=60,
+        )
+
+    def test_relaunches_on_restart_code_then_stops_on_clean_exit(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            r = self._run_launcher(tmp, {"SEQUENCE": "42,42,0"})
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertEqual((Path(tmp) / "count.txt").read_text(), "3")
+            self.assertIn("relaunching", r.stdout)
+            self.assertIn("exited cleanly", r.stdout)
+
+    def test_crash_loop_guard_gives_up(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            # Fast consecutive crashes (elapsed < CRASH_WINDOW) → no reset → trip at 3.
+            r = self._run_launcher(tmp, {"SEQUENCE": "1,1,1,1,1"})
+            self.assertEqual(r.returncode, 1)
+            self.assertEqual((Path(tmp) / "count.txt").read_text(), "3")
+            self.assertIn("crash-loop detected", r.stdout + r.stderr)
 
 
 try:

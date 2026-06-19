@@ -54,7 +54,9 @@ while true; do
     fi
 
     # Abnormal exit → crash-loop guard. A run that lasted at least CRASH_WINDOW
-    # seconds was healthy (not a boot loop), so reset the streak.
+    # seconds was healthy (not a boot loop), so it FORGIVES prior crashes — the
+    # crash that ended it then starts a fresh streak at 1 (we still count it; a
+    # boot loop is rapid *consecutive* crashes, which is what this catches).
     if [ $((end - start)) -ge "$CRASH_WINDOW" ]; then
         crash_count=0
     fi

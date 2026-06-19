@@ -75,6 +75,26 @@ DEFAULT_PORT = 7373
 # lifecycle. POST /restart triggers this exit; the one-shot launcher ignores it
 # (harness simply ends) so the behavior degrades gracefully without the wrapper.
 HARNESS_RESTART_EXIT_CODE = 42
+# #12825 DS-F2: /shutdown and /restart each spawn a teardown thread that ends in
+# os._exit() with a different code (0 vs 42). Two concurrent teardown requests
+# would race to os._exit() — last writer wins the exit code, so the wrapper
+# might relaunch a harness an operator meant to stop (or vice-versa). This
+# lock+flag makes "begin teardown" a single-winner gate; the loser gets 409.
+_teardown_lock = threading.Lock()
+_teardown_in_progress = False
+
+
+def _begin_teardown() -> bool:
+    """Atomically claim the single teardown slot. Returns True for the first
+    caller (it should proceed), False if a teardown is already underway."""
+    global _teardown_in_progress
+    with _teardown_lock:
+        if _teardown_in_progress:
+            return False
+        _teardown_in_progress = True
+        return True
+
+
 HEALTH_POLL_INTERVAL = 5  # seconds
 # PRD-E E3 (#10682): cadence of the L4-write file-watcher supervisor.
 # The watchdog Observer runs as its own thread; this interval governs
@@ -3520,6 +3540,8 @@ async def shutdown():
     Returns 202 Accepted immediately. Teardown runs in a background thread to
     avoid blocking the async event loop (time.sleep in async = blocked responses).
     """
+    if not _begin_teardown():
+        raise HTTPException(status_code=409, detail="Teardown already in progress.")
     _log("Shutdown requested — starting background shutdown...")
     threading.Thread(
         target=_teardown_and_exit, args=(0, True),
@@ -3539,6 +3561,8 @@ async def restart():
     Under the one-shot launcher (no wrapper) the harness simply exits and is not
     relaunched; the wrapper is what makes restart self-healing.
     """
+    if not _begin_teardown():
+        raise HTTPException(status_code=409, detail="Teardown already in progress.")
     _log(f"Restart requested — tearing down for relaunch (exit "
          f"{HARNESS_RESTART_EXIT_CODE})...")
     threading.Thread(
