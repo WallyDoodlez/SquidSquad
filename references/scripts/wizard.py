@@ -1864,6 +1864,17 @@ def _write_l4_project_files(spec, project_dir, summary):
         )
 
 
+def _md_inline_code(value):
+    """Sanitize a value for an inline-code (backtick) span (#12450 DS-F1).
+
+    A literal backtick in a detected run command would break out of the code
+    span and corrupt the generated markdown. Backticks are illegal inside a
+    single-backtick span anyway, so replacing them with apostrophes is lossless
+    for any realistic test command.
+    """
+    return str(value).replace("`", "'")
+
+
 def _format_test_strategy_section(test_strategy, fallback_command):
     """Render the L4 '### Testing Strategy' markdown block for #12450.
 
@@ -1878,7 +1889,7 @@ def _format_test_strategy_section(test_strategy, fallback_command):
         location = test_strategy.get("location") or "Not detected"
         lines = [
             "### Testing Strategy\n",
-            f"- **Run command**: `{run_command}`",
+            f"- **Run command**: `{_md_inline_code(run_command)}`",
             f"- **Framework**: {framework}",
             f"- **Test location**: {location}",
         ]
@@ -1890,7 +1901,7 @@ def _format_test_strategy_section(test_strategy, fallback_command):
         )
         return "\n".join(lines) + "\n"
     test_cmd = fallback_command or "Not detected"
-    return f"### Test Command\n\n- **Test command**: `{test_cmd}`\n\n"
+    return f"### Test Command\n\n- **Test command**: `{_md_inline_code(test_cmd)}`\n\n"
 
 
 def _copy_l4_seed_stubs(project_dir, summary):

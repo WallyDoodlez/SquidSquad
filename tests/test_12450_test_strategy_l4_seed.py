@@ -74,6 +74,17 @@ class TestGenerateDefaultSpecTestCommand(unittest.TestCase):
         spec = wizard.generate_default_spec(scan_data=scan)
         self.assertEqual(self._skill_agent(spec)["test_command"], "pytest")
 
+    def test_detected_but_empty_run_command_falls_back(self):
+        """DS-F3: detected=True but no run_command (test files found, no runnable
+        command) must NOT yield an empty test_command — fall to the heuristic."""
+        scan = {
+            "test_strategy": {"framework": "pytest", "run_command": "",
+                              "location": "tests/", "detected": True},
+            "test_frameworks": ["pytest"],
+        }
+        spec = wizard.generate_default_spec(scan_data=scan)
+        self.assertEqual(self._skill_agent(spec)["test_command"], "pytest")
+
     def test_no_test_data_yields_empty_command(self):
         spec = wizard.generate_default_spec(scan_data={})
         self.assertEqual(self._skill_agent(spec)["test_command"], "")
@@ -108,6 +119,17 @@ class TestFormatTestStrategySection(unittest.TestCase):
     def test_undetected_no_fallback_is_not_detected(self):
         section = wizard._format_test_strategy_section({}, fallback_command=None)
         self.assertIn("Not detected", section)
+
+    def test_backtick_in_run_command_is_sanitized(self):
+        """DS-F1: a backtick in the run command must not break the inline-code
+        span (it would corrupt the generated markdown)."""
+        section = wizard._format_test_strategy_section(
+            {"run_command": "echo `id`", "framework": "x",
+             "location": "y", "detected": True},
+            fallback_command=None,
+        )
+        self.assertNotIn("`id`", section)
+        self.assertIn("echo 'id'", section)
 
 
 class TestWriteL4ReadsRepoScan(unittest.TestCase):
