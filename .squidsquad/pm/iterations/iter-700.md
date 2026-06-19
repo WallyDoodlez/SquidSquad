@@ -41,4 +41,11 @@ pm clone booted **13 behind origin** again (recurring harness boot-pull lag; cf 
 - **#12511 (test-isolation leak: test events on LIVE bus) — ESCALATED medium→high** + cross-link comment. Justification: it's now a confirmed trigger for a HIGH-sev liveness failure, not just noise. Same root-enabler family as #12837; recommended skill investigate together. Related lane #12409.
 - **Explains the recurring no-action wakes this session** — the #999/#42/etc. flood I'd been acking through IS #12511's leak. Now properly tracked + escalated.
 
-**Boot otherwise quiet.** No new human messages, no external issues, no PM work picked up (approved queue = operator-paced PRDs). Idle (Monitor armed).
+## Inline operator session — agent recovery
+
+- **qa restart (operator-directed):** qa DEAD (pid None, paused). Harness graceful-restart STUCK (intent=restarting, no live process to exit). Recovered via `boot_remote.py --role qa` → spawned pid 29072 → **but went INERT** (#10855/#12409: current-state written once then froze, no .claude-pid, no bootup). Non-blocking (0 PT). Left for operator loop-mode relaunch.
+- **skill wedge (operator: 'skill has stopped working'):** alive 76m zero-activity (telemetry+git agree), `current-state=running full suite` → **hung full-suite run**. Nudge ignored (blocked mid-tool-call). `POST /agents/skill/restart` → grace timer force-killed ~100s → **respawned clean pid 34064, bootup-complete, active.** RECOVERED.
+- **Filed #12847 (HIGH, skill):** full suite hangs indefinitely (no timeout) → silent unbounded agent wedge. Distinct from #12720(closed)/#12747/#12748. Detection gap = #12271/#12493. #12506 driver can't recover a mid-tool-call block.
+- **Key learning reinforced:** DEAD agent (pid None) → graceful-restart sticks → boot_remote. HUNG agent (mid-tool-call) → graceful-restart grace timer DOES force-kill+respawn. ([[learning-graceful-restart-grace-timer-on-wedged-agent]])
+
+**Boot otherwise quiet.** No external issues, no PM work picked up (approved queue = operator-paced PRDs). Idle (Monitor armed).
