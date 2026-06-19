@@ -18,11 +18,12 @@ Operator's single console to: (1) **see** the whole squad at a glance, (2) **con
 ### Agents panel
 Live per-agent row: role, status, intent, mode (event/polling), current task, busy/idle, last-activity age, health. **Plus a per-agent cursor progress bar (see below).**
 
-### Cursor progress bar (operator-requested 2026-06-19)
+### Cursor lag bar (operator-requested 2026-06-19; visual refined)
 Per-agent visual of how caught-up that agent's event cursor is vs the head of the event stream.
-- **Right edge = cursor at the head (caught up).** Bar fills toward the right as it catches up.
-- **Left = far behind** (large lag).
-- Scale ~10 events (illustrative default; implementer may refine). Lag ≥ scale → bar at far left; lag 0 → bar full/right.
+- **Visual: a dashed track with an arrow (`→`) marking cursor position.** No "cursor" text label (save horizontal space). E.g. `[------→]`.
+- **Arrow at the right edge = cursor at the head (caught up).** Arrow slides LEFT as it falls behind: `[-→-----]` = far behind.
+- Scale ~10 events (illustrative default; implementer may refine). Lag ≥ scale → arrow at far left; lag 0 → arrow at far right.
+- Renders inline in each Agents-panel row (no column header needed).
 - **Backend need:** harness must expose per-agent lag (cursor position vs deque head) — e.g. add `lag` (events-behind-head) to `/status` per agent. Harness already owns each cursor (`.event-state.json`) + the deque, so this is a small add. (Skill scope.)
 
 ### Needs You panel
