@@ -1,8 +1,18 @@
 # Working State
 
-- **Task**: none — #12820 SHIPPED to pending-test (PR #12883), handed to verifier.
-- **Updated**: 2026-06-19 09:24 (skill — event-mode session, #12820 → pending-test)
+- **Task**: #12853 (in-progress) — L1 SOUL generalize 'Never Block on a Human'→'Never Stop While Work Is Pending'. AC1-5 done, AC6 (DS audit) + full suite running. Next: confirm green → PR → pending-test.
+- **Updated**: 2026-06-19 09:40 (skill — event-mode session, implementing #12853)
 - **Quiet Cycle Counter**: 0
+
+## #12853 IMPLEMENTATION (this session)
+- **AC1+AC2** (SOUL.md): replaced `### Never Block on a Human` with `### Never Stop While Work Is Pending` — general rule (any handoff agent OR human = transition + immediate continue, never stop), stop-vs-idle disambiguation (idle auto-resumes = fine; ending turn to wait = forbidden), only lifecycle ends (exit-42/stop-requested/Monitor death). Human case retained as 3rd para (DRY special case).
+- **AC3** (PM L2): responsibility.md +duty bullet (Advertises human-assigned tickets) [inlined → composed]; checkin.md +actionable 'Advertise human-assigned tickets' para [runtime-loaded].
+- **AC4**: compose deploy-all rc=0; 'Never Stop While Work Is Pending' in all 4 composed; PM duty in pm composed only. Old rule name gone from all 4.
+- **AC5** (CQ HARD GATE): tests/comprehension/12853_spec.json — 6 CQs (CQ1-5 SOUL, CQ6 PM). Executed: 2 fresh sonnet agents answered all correctly from isolated text → result PASS.
+- **AC6** (DS prose-drift) DONE: reconciled docs/AGENT-RUNTIME.md §3.1 to general rule; DS audit found 4 (1 error: bad Case C/§8.1 ref; 3 warn: 'special case' contradiction, dangling §3 ref, session-end dup) — ALL applied. Fixed §9→§7.5 mis-ref I introduced. Added AGENT-RUNTIME rev-17 changelog entry. harness-restart.md ×2 + line-24 refs de-stale'd. Sweep: 0 stale 'async-no-pause' in references/ sources.
+- **Vault race (resolved)**: 2 qa galaxy notes landed WITHOUT frontmatter → broke test_vault gate. I added frontmatter, but qa fixed their OWN notes concurrently (commit 6739a80ba) — pull stash-pop duplicated frontmatter (malformed). Restored both to qa's committed version (git restore); their fix wins (correct ownership). Not in my PR.
+- Final full suite RUNNING (post DS-fixes + vault-fixes). Then: commit-state (composed CLAUDE.md ×8 + vault + working-state → main) + commit-code (sources → feature branch) → PR → pending-test.
+- #12820 SHIPPED to pending-test (PR #12883) earlier this session.
 
 ## #12820 DONE → pending-test (PR #12883)
 Root cause: `harness.py find_free_port` silently binds ephemeral when canonical port (7373) held → a 2nd harness self-writes (1836) + distributes (1849-61) that dead port to clone .harness-port files → permanent polling fallback (qa unreachable in event mode; also explains #10855/#12409 inert/zombie framing). **Fix (minimal, low-risk):**
