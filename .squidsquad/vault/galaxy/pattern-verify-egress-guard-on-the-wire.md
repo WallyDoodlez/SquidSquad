@@ -1,3 +1,13 @@
+---
+name: pattern-verify-egress-guard-on-the-wire
+description: Verify a test-isolation/egress guard on the wire (A/B live-server — control without the guard leaks, guarded is silent) rather than trusting the guard's own suppression-record assertions.
+metadata:
+  type: pattern
+type: pattern
+tags: [testing, verification, test-isolation, egress, qa, craft]
+created: 2026-06-19
+---
+
 # Pattern — Verify a test-isolation / egress guard ON THE WIRE, not by its own assertions
 
 **Validated 2026-06-19 (#12511 verification).**
