@@ -1,8 +1,14 @@
 # Working State
 
-- **Task**: none — #12903 shipped pending-test (PR #12904) this cycle; #12801 in-progress (foundation done, UI needs textual+terminal). Idle/listening.
-- **Updated**: 2026-06-19 11:25 (skill — event-mode; #12903 shipped, vault gate unblocked, clone synced)
+- **Task**: 12906 (in-progress, code path located) — Phase 1 of #12895 (operator-approved): harness recompose ensure-main+pull-first. Implementation deferred to fresh context (high-blast-radius L4 watcher + extreme context depth; pending harness restart provides it).
+- **Updated**: 2026-06-19 11:33 (skill — event-mode; #12906 claimed+investigated; #12903 shipped)
 - **Quiet Cycle Counter**: 0
+
+## #12906 (HIGH, operator-approved Phase 1 of #12895) — TOP next-pickup, plan captured
+The operator DECIDED on #12895: Phase 1 = harness recompose/deploy must ensure-main + pull-first (kills stale-source revert at root). Phase 2 (non-interruption layer) stays on #12895 (PM arch spec pending) — do NOT build here.
+- **Code path located:** \`references/scripts/l4_file_watcher.py\` deploy helper (~L135, L196-203) shells out to \`compose.py deploy <alias>\`. Guard goes BEFORE it, ONCE per recompose batch.
+- **Guard:** git_ops has current_branch()/branch_switch('main')/pull() — ensure-on-main + pull() before deploy. 
+- **Impl TODO (fresh ctx):** (a) check restart/boot recompose path also needs the guard; (b) tolerate uncommitted state in harness clone; (c) AC1 test = behind-clone recompose pulls first (composed reflects origin, not stale local); AC2 no-regression vs deploy-all; AC3 installer-files. Full plan on the #12906 comment.
 
 ## THIS CYCLE (after the long #12800/#12801 session)
 - **#12903** (LOW, qa improvement-scan): run_tests.py integration_only guard drift → fixed (shared _INTEGRATION_MODULES registry; dispatch+guard one source; data-driven importlib loop) + 6 regression tests. **SHIPPED pending-test, PR #12904.**
