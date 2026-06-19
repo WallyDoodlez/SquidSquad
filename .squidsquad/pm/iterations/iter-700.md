@@ -28,4 +28,11 @@ pm clone booted **13 behind origin** again (recurring harness boot-pull lag; cf 
 
 - **#12824 (harness assigned-to POST 500s)** — fresh harness restart MAY have cleared the stale state. Did NOT test with a spurious assigned-to inject (would misroute). bootup-complete + ack-cursor POSTs work fine. With the #12506 driver now active, assigned-to nudges are non-urgent for dormancy; the bug still matters for handoff routing → will reveal naturally on the next real handoff. Leave skill to own the fix.
 - **#12801 self-held by skill** (no-TUI capability escalation) — still pending operator decision; not a stall.
-- **Boot quiet otherwise.** No new human messages, no external issues, no work picked up. Entering idle (Monitor armed).
+## Issue work (issue gate redirected scan → fix issues)
+
+3 open role:pm issues; improvement scan skipped per gate. Made progress on the top one:
+- **#12495 TRIAGED + HELD for operator.** Posted fork (a build primitive / b correct docs) + recommendation (b), grounded in #12506-shipped + #12824-open facts. Held one cycle for operator nod since (b) forecloses a deliberate §8.3 design. Execute (b) next cycle if no objection.
+- **#11140** — flagged as possible misroute (source-layer prose = skill domain); did not reroute unilaterally.
+- **#9969** (low) — deferred.
+
+**Boot otherwise quiet.** No new human messages, no external issues, no work picked up. Entering idle (Monitor armed).
