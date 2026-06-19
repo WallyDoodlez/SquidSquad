@@ -3,7 +3,15 @@
 > **L4-recompose restart-required was a NO-OP (2026-06-14):** Harness emitted `restart-required` (reason l4-recompose, target_alias=dm). Acked it (loop-safe). Attempted cooperative /quit — but **/quit is a no-op in this session** (Monitor kept delivering nudges; session did not terminate). Then verified: my `.squidsquad/dm/CLAUDE.md` is byte-identical (last commit f8d867a9d 2026-06-12, working tree clean) → the recompose changed nothing to pick up. So NOT restarting was correct; /quit no-op was harmless. **Finding for PM/skill:** l4_file_watcher.py emits restart-required on compose *success* regardless of whether composed output actually changed (l4_file_watcher.py:149-156) — should diff CLAUDE.md before requesting a restart, else no-op L4 writes churn restarts. Also: this event-mode session cannot self-terminate via /quit; rely on harness/operator restart or context-pressure exit-42.
 
 - **Task**: none
-- **Status**: idle
+- **Status**: idle (queue empty; bootup-complete emitted; idle-driver armed, cron 1d9648ba @ 7,37)
+
+## SESSION BOOT 2026-06-19 ~10:08 EDT (EVENT mode, harness uptime ~13h40m on :7373, code v0.44.0/git b15e7fc5)
+- Boot probe OK (:7373), check-gh OK. Resumed mid-flight #12853 delivery (working-state had it in-progress DELIVERING). Boot drain found: assigned-to(dm,#12853) + **pr-merged PR #12894 success:true requesting_role:dm** — prior DM session already merged to main (cacee6db9). Recompose already committed by **skill** (f14424b68); my deploy-all re-run = clean no-op → all 4 composed CLAUDE.md carry generalized rule (AC4 verified live). Cursor boot=6f13fdd0, now at 59d3799c (all session events acked, queue drained 0).
+
+### #12853 SHIPPED 2026-06-19 10:10 ✅ (L1 SOUL generalize 'Never Block on a Human' → 'Never Stop While Work Is Pending')
+- PR #12894 merged main `cacee6db9` (by prior dm session). Recompose deploy-all by skill f14424b68 (clean no-op on re-run). No delivery:skip. Ship comment + CHANGELOG note posted; transition pending-ship→shipped (auto-closed); Counter **42→43**. CHANGELOG batched held v0.45.0 (internal agent-behavior).
+- **⚠️ ALL-ROLES REBOOT PENDING** (L1 SOUL → all 4 composed CLAUDE.md changed) → folds into deferred TEAM REBOOT window; NOT auto-firing per operator.
+- **⚠️ SCOPE-PRESERVATION**: operator strengthened #12853 mid-flight (13:13/13:17/13:19Z) into a 'relentless autonomy' deliverable (inline 20-min HARDCODED auto-timeout + next-event-resumes + #12506 driver backstop + inline-indicator-clear + expanded CQ). Skill+qa delivered/verified ONLY the original 6 ACs (L1 SOUL doc). To avoid orphaning operator scope on auto-close, filed **#12896 (role:pm, status:pending, priority:high)** routing the expansion to PM for decomposition. DM does not approve/plan — routing handoff only.
 
 ### #12749 SHIPPED 2026-06-18 01:04 ✅ (DM-ARCH layered refactor — FIRST real EAD auto-route to event-mode DM)
 - Merge PR #12689 → main `bf92f3a8` (squash, harness /merge). Main-landing `873afee4d` (same window, NO fiction window): config alias dm→dm/skill + L4 batch-10 release policy + statusline sync + deploy-all (dm+qa CLAUDE.md changed; pm/skill no-op). Counter 34→35 (verifier increment REMOVED; DM owns counter now). Manual label→shipped (no closing keyword), auto-closed. qa PASS 8/8, ship-contingency satisfied.

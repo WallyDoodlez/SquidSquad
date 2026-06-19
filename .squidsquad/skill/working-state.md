@@ -1,47 +1,47 @@
 # Working State
 
-- **Task**: #12853 (in-progress) — L1 SOUL generalize 'Never Block on a Human'→'Never Stop While Work Is Pending'. AC1-5 done, AC6 (DS audit) + full suite running. Next: confirm green → PR → pending-test.
-- **Updated**: 2026-06-19 09:40 (skill — event-mode session, implementing #12853)
+- **Task**: 12801 (in-progress, foundation done) — Harness TUI. Branch squidsquad/task/12801. S1.1+S1.2 committed; S1.3+ (UI) NEEDS textual dep + terminal → next equipped/fresh context.
+- **Updated**: 2026-06-19 11:02 (skill — event-mode; idle/listening — actionable queue drained for this session)
 - **Quiet Cycle Counter**: 0
 
-## #12853 IMPLEMENTATION (this session)
-- **AC1+AC2** (SOUL.md): replaced `### Never Block on a Human` with `### Never Stop While Work Is Pending` — general rule (any handoff agent OR human = transition + immediate continue, never stop), stop-vs-idle disambiguation (idle auto-resumes = fine; ending turn to wait = forbidden), only lifecycle ends (exit-42/stop-requested/Monitor death). Human case retained as 3rd para (DRY special case).
-- **AC3** (PM L2): responsibility.md +duty bullet (Advertises human-assigned tickets) [inlined → composed]; checkin.md +actionable 'Advertise human-assigned tickets' para [runtime-loaded].
-- **AC4**: compose deploy-all rc=0; 'Never Stop While Work Is Pending' in all 4 composed; PM duty in pm composed only. Old rule name gone from all 4.
-- **AC5** (CQ HARD GATE): tests/comprehension/12853_spec.json — 6 CQs (CQ1-5 SOUL, CQ6 PM). Executed: 2 fresh sonnet agents answered all correctly from isolated text → result PASS.
-- **AC6** (DS prose-drift) DONE: reconciled docs/AGENT-RUNTIME.md §3.1 to general rule; DS audit found 4 (1 error: bad Case C/§8.1 ref; 3 warn: 'special case' contradiction, dangling §3 ref, session-end dup) — ALL applied. Fixed §9→§7.5 mis-ref I introduced. Added AGENT-RUNTIME rev-17 changelog entry. harness-restart.md ×2 + line-24 refs de-stale'd. Sweep: 0 stale 'async-no-pause' in references/ sources.
-- **Vault race (resolved)**: 2 qa galaxy notes landed WITHOUT frontmatter → broke test_vault gate. I added frontmatter, but qa fixed their OWN notes concurrently (commit 6739a80ba) — pull stash-pop duplicated frontmatter (malformed). Restored both to qa's committed version (git restore); their fix wins (correct ownership). Not in my PR.
-- Final full suite RUNNING (post DS-fixes + vault-fixes). Then: commit-state (composed CLAUDE.md ×8 + vault + working-state → main) + commit-code (sources → feature branch) → PR → pending-test.
-- #12820 SHIPPED to pending-test (PR #12883) earlier this session.
+## SESSION OUTCOME (2026-06-19 ~09:40–11:02) — actionable queue drained
+- **#12800** (human as non-agent role, 8 ACs, HIGH-blast-radius) → **SHIPPED pending-test, PR #12902.** All gates green (static 4621, integration 53, targeted 101), DS NO_FINDINGS. Composed deployed to main.
+- **#12895** (HIGH bug — stale-source recompose reverts shipped composed CLAUDE.md fleet-wide) → RCA done + fix options (A untrack composed [recommended, root, folds #12519] / B pull-before-deploy guard / C interim: cycle_post excludes composed from auto-commit). Routed **pending-human-review** (operator decides deploy-model approach — A reverses eager-deploy/tracked-composed model + touches installer = operator-owned). Then implement chosen approach.
+- **#12519** (LOW) → folded into #12895 (same family); will close with that fix.
+- **#12801** (Harness TUI) → claimed, decomposed (4 Stories, artifact). S1.1 (harness /status `lag` backend) + S1.2 (references/tui/harness_client.py data layer) committed + green. **S1.3+ (Textual app, panels, action bar, wake) NEEDS `textual` installed + interactive terminal for the mandatory skill-domain smoke-test — fresh/equipped context.** NIT: installer-files.txt header "Total: 206" → 208 (fix on next branch commit).
+- **#10855** blocked on #12820 (pending-test); **#12493** blocked on PM §8.3 arch backstop; **#12450** S3/S4 PM-gated; **#12820/#12853** shipped pending-test/merged earlier.
 
-## #12820 DONE → pending-test (PR #12883)
-Root cause: `harness.py find_free_port` silently binds ephemeral when canonical port (7373) held → a 2nd harness self-writes (1836) + distributes (1849-61) that dead port to clone .harness-port files → permanent polling fallback (qa unreachable in event mode; also explains #10855/#12409 inert/zombie framing). **Fix (minimal, low-risk):**
-- `harness.py`: (1) `find_free_port` returns real bound port via getsockname (fixes `--port 0`→literal 0). (2) `_probe_harness_status(port)` — GET /status, True iff harness-shaped JSON. (3) `_resolve_listen_port(explicit)` — explicit --port (incl 0) keeps ephemeral fallback (TEST path); production (no --port) probes /status → LIVE harness=refuse+exit(1) (never bind ephemeral → never poison clones), else claim canonical port (uvicorn 0.41 SO_REUSEADDR handles restart TIME_WAIT reclaim). main() calls it.
-- `event_mode_subprocess.py`: real_harness now always passes `--port 0` (explicit ephemeral opt-in) so test harness never hits production refuse path.
-- Tests: test_harness.py TestSingletonPortGuard (7) + find_free_port(0). Full suite green: static 4567 passed, integration 53 OK. DS review 3 warnings applied (Win SO_REUSEADDR comment, test TOCTOU, import hygiene).
-- **Verifier note**: secondary RCA (what production invocation starts a 2nd harness with SQUIDSQUAD_DIR=qa's REAL clone) still untraced — hardening makes it harmless regardless; not a blocker. Restart path (#12825 exit-42 → wrapper relaunch) verified: old harness fully exits before relaunch, /status probe sees it dead → reclaims 7373.
-- Cluster: this fix is keystone for qa/reboot-health bugs #10855/#12409/#11600 (all downstream of the polling-fallback symptom).
+## NEXT (fresh context)
+1. #12895: implement operator-chosen deploy-model fix (likely A: untrack composed + .claude/settings.json, regenerate on boot/deploy, installer generates; or C interim first). Folds #12519. DS-review (high-blast-radius). Then back in-progress→pending-test.
+2. #12801: continue S1.3 (Textual app skeleton) once textual provisioned — per .squidsquad/skill/planning/TUI-12801-DECOMPOSITION.md. Fix installer-files header count.
 
-## Shipped this session (DONE)
-- **#12825** (HIGH) — supervised harness launcher + agent-triggerable harness restart. AC1-AC8. PR **#12860 MERGED**, issue SHIPPED/CLOSED. (qa verified cy345 8/8 ACs.)
-- **#12511** (HIGH bug) — test-isolation leak. Fix = autouse `_block_live_harness_egress` guard in tests/conftest.py + regression test. PR **#12867**, issue SHIPPED/CLOSED. (qa verified cy346 with on-the-wire A/B proof.)
+## #12801 Harness TUI (in-progress) — decomposed, S1.1+S1.2 landed
+Plan: `.squidsquad/skill/planning/TUI-12801-DECOMPOSITION.md` (4 Stories). Contract: `.squidsquad/pm/planning/TUI-INTERFACE-DESIGN.md` (operator-approved). Textual, separate process consuming harness HTTP. Wake LAST (gated #12495).
+- **S1.1 DONE** (branch squidsquad/task/12801): harness.py `EventLifecycleManager.lag_for(role)` (events-behind-head; 0=caught up, N=behind, no-cursor/evicted=full depth) + GET /status injects per-agent `lag`. Tests TestCursorLag12801 (6); full test_harness.py 293 passed.
+- **S1.2 DONE** (branch): references/tui/harness_client.py (+__init__.py) — derive_work_state (working/idle/down + colors), lag_to_bar (→ arrow, left-third alert), agent_rows, fetch_status/fetch_human_queue (graceful None on unreachable). Tests test_tui_harness_client_12801 (17). Added both tui files to installer-files.txt. **NIT to fix on next branch commit: installer-files.txt header still says "Total: 206 files" → should be 208 (cosmetic, untested).**
+- **S1.3 NEXT**: Textual app skeleton (references/tui/app.py + entry script) — title bar 🦑 SquidSquad · <project>, refresh loop polling harness_client, panel placeholders. Needs textual dep installed to run (S1.4). **Substantial UI work — fresh context ideal.**
+- **S1.4**: textual dep → requirements + installer-files.txt + start scripts (NEW references/tui/ files MUST be in installer-files.txt — AC).
+- **S2**: panels (Agents+lag bar+GREEN/YELLOW/RED, Needs You, Pipeline, Activity) + branding.
+- **S3** (AC core): action bar Reboot/Reboot All/Force (busy-aware via lifecycle intent SM, force≠crash per #12244) + Options(Change background) + Bring-PM-Forward. May need small reboot_agent/harness flag for force-not-a-crash.
+- **S4**: Wake GATED on #12495.
+- AC8: HARNESS-ARCH update for /status `lag` + force-not-a-crash. DS-review per Story. PR when substantially built.
 
-## Filed / deduped
-- **#12861** (LOW) — installer-files.txt omits shipped shared sub-skills (l4-curation/pr-protocol/tracker-protocol/common/task-pickup). Overlaps **#12821** (no manifest-completeness test); consolidated finding onto #12821, flagged #12861 for PM dedup.
+## #12800 SHIPPED → pending-test (PR #12902) (8 ACs, high-blast-radius)
+All gates green: targeted 101 passed, static gate 4621 passed (0 fail), integration 53 OK, DS review NO_FINDINGS, deploy-all rc=0, AC2 e2e verified.
+- **AC1** (alias registers): config.py role-class split — AGENT_ROLE_CLASSES{pm,worker,verifier,dm} + NON_AGENT_ROLE_CLASSES{human}; ALIASES_ROLE_CLASSES=union. tracker.py already accepts role:human (free-form labels; FEEDBACK_ROLES has human). Tests: human accepted table+bullet, multi-human, canonicalize human.
+- **AC2** (compose skips human): compose.deploy_alias_v2 + check_alias_staged_l4 skip NON_AGENT (return None / role_class); deploy + deploy-all treat None as clean no-op. Tests + e2e deploy-all-skips-2-humans.
+- **AC3** (routing flip): harness EAD _STATUS_ROUTING += pending-human-review|setup -> ('role_class','human'). is_handoff excludes non-agent role-classes (human not on bus → emit once, no #12442 re-emit pileup). Tests: routes-to-human ×2 + no-reemit-timer.
+- **AC4** (inline status bar): cycle.py status-bar-self 'inline'/clear. Instruction sources (instructions.md + 4 ralph-loop) updated. Test: inline write+clear.
+- **AC5** (return path): async via work_queue — ticket keeps role:<originator> (EAD routes pending-human by role_class not label), returns at in-progress, surfaces in originator work_queue. Test added.
+- **AC6/AC8** (docs reconcile): AGENT-RUNTIME Terminology/§3/§8.3 already rev-16; added L124 #9358-superseded + rev-17 changelog. Stale #9358 inline text replaced in 5 sources.
+- **AC7**: no new source files → installer-files.txt unchanged (CONFIRMED).
+- **AC8** (DS-audit): DS review NO_FINDINGS (.squidsquad/skill/planning/DS-REVIEW-12800.md); 8 paths audited incl human-never-an-agent invariant. DS thoroughness note: _get_entry_file_for_role('human') falls back to worker but only reachable via wizard which validates references/roles/human/ exists first (doesn't) → ValueError before composition. No realistic path.
 
-## QA agent — CORRECTION: never inert; healthy in POLLING (#12820 misread)
-Initial /status read (bootup_complete=false, stale last_activity) led me to conclude qa was inert + reboot it. WRONG — that's the #12820 polling artifact: qa boots POLLING (dead ephemeral .harness-port) and doesn't heartbeat the event bus, so /status can't see it. Clone ground truth (SquidSquad-qa working-state/current-state) shows qa ALIVE and verifying — it PASSED #12825 (cy345) + #12511 (cy346) in polling. My reboot was an unnecessary disruption (operator's first "I don't think QA is inert" was right).
-**RCA root (#12820): harness.py find_free_port (3786-3800) silently binds an ephemeral port when 7373 is taken** → a 2nd harness (run with SQUIDSQUAD_DIR=qa's real clone) self-writes (harness.py:1836) that dead port to qa's clone .harness-port → permanent polling. Posted evidenced RCA on #12820; corrected misdiagnosis on #10855/#12409; #11600 RESOLVED. Vault: [[learning-polling-agent-reads-as-inert-on-status]].
-**#12820 fix DESIGN (recorded on issue, deferred):** ephemeral fallback + self-write are LOAD-BEARING for the integration suite (real_harness fixture spawns harness in tmp dir, reads self-written .harness-port to discover port — breaks if disabled). Fix must DISTINGUISH prod-singleton (default 7373, real clones) from test (tmp dir, explicit --port 0). Candidate: on default-port path, if find_free_port falls back to ephemeral (7373 held), refuse-to-start OR skip self-write+distribute — BUT must probe /status (live singleton=refuse vs stale/TIME_WAIT=proceed+SO_REUSEADDR) to NOT break the #12825 exit-42 restart relaunch. Coordinated harness.py + fixture change + full integration-suite verify + regression test. Untraced trigger: what runs a harness w/ SQUIDSQUAD_DIR=qa real clone (not boot_remote/thin_launcher).
-Separately noted (#11600 comment): cross-clone .local-config divergence (skill clone lists skill→../SquidSquad-skill, dm→../SquidSquad-2-dm vs running harness skill=SquidSquad-2, dm=SquidSquad-3) — low-impact (only PM-clone's .local-config is consequential), can file if not tracked.
+## Shipped earlier this session
+- #12820 (PR #12883 MERGED, shipped), #12853 (PR #12894 MERGED, shipped).
 
-## In-flight / held (unchanged)
-- **#12450** S1+S2 done; S3 (WIZARD.md + PM CQ AC) + S4 (L3 placement, PM-gated) pending. Next feature after current burndown.
-- **#12801** HELD (false-premise TUI; awaiting PM/operator). **#12800** HIGH approved ungated. **#12837** HIGH open (harness evicted:true/null oldest_id). **#12846** LOW (mine, wizard unguarded read). **#12823** medium (.gitattributes config.md merge=ours).
-- **#12824** SHIPPED (closed).
-
-## Queue note
-Next approved: #12853 (L1 Soul Never-Block→Never-Stop), #12800 (human as non-agent role), then HIGH open bugs (#12837, #12409, #12397, #11600). Several qa/reboot-health bugs open (#10855/#12409/#11600/#12820) — cluster worth front-loaded planning if picked up.
+## Next pickup (verify via work-queue, don't trust this)
+Per boot work-queue: in-progress items #10855 (medium, prior misdiagnosis-resolved non-bug — check if stale), #12493, #12450 (S3/S4 PM-gated); #12801 (approved, TUI bottom action bar, handed to me). HIGH open bugs #12837/#12409/#12397/#11600.
 
 ## Improvement Scan
 Status: idle

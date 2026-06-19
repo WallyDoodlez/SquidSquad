@@ -1,0 +1,44 @@
+{
+  "issue": 12800,
+  "title": "human as a (non-agent) role: inline status-bar self-write + async-no-pause comprehension",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-19 11:10",
+  "method": "Fresh sonnet agent given ONLY the modified instruction text (instructions.md inline-mode block + ralph-loop-overview inline block + composed CLAUDE.md async-no-pause section). No prior context. Answers must come from the supplied text alone.",
+  "instruction_surfaces_under_test": [
+    "references/roles/instructions.md (inline-mode / status-bar block)",
+    "references/sub-skills/roles/{dm,pm,verifier,worker}/ralph-loop-overview.md (inline-mode block)",
+    "composed .squidsquad/<role>/CLAUDE.md (async-no-pause + inline status bar)"
+  ],
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You are an agent and a human just sent you a direct (inline) message. What, specifically, should you do with the status-bar current-event indicator at the start of that turn, and why is it you (not a cycle wrapper) doing it?",
+      "expected": "Self-write the current-event indicator to `inline` (e.g. `cycle.py status-bar-self inline \"\"`). You do it because the cycle wrappers (cycle_pre/cycle_post) do NOT fire during an inline turn, so nothing else updates the bar.",
+      "anti": "Saying the wrapper/harness sets it, or that the bar is left stale/untouched."
+    },
+    {
+      "id": "CQ2",
+      "q": "When does the `inline` status-bar value get cleared, and to what?",
+      "expected": "Cleared back to the agent's normal idle/working state when the inline session ends — the human signals done, or the next autonomous wake fires.",
+      "anti": "Saying it persists, or that the human/harness clears it."
+    },
+    {
+      "id": "CQ3",
+      "q": "Does the older #9358 'treat a stale current-state bar as expected during inline mode' guidance still govern? Explain what replaced it.",
+      "expected": "No — it is superseded. The bar is no longer stale during inline mode; the agent self-writes an explicit `inline` value, so PM's sentinel reads an explicit state instead of tolerating staleness.",
+      "anti": "Saying #9358 still applies / the sentinel should still treat the bar as stale."
+    },
+    {
+      "id": "CQ4",
+      "q": "You need a human decision mid-task and you are NOT in an inline session (you're in autonomous loop/event mode). What do you do — wait for the human, or something else? Be specific about the mechanism.",
+      "expected": "Do NOT wait. Assign a tracked ticket to the `human` alias (set role:<human> + the appropriate pending-human-* status) via a transition (not a bare comment), then immediately continue — pick up your next queue item or go idle. The human answers asynchronously.",
+      "anti": "Saying you pause/block/sit and wait for the human, or that you leave a bare comment."
+    },
+    {
+      "id": "CQ5",
+      "q": "After you have assigned a 'need human' ticket to the human alias, how does the answer come back and who makes the forge transition to resume the work?",
+      "expected": "The return path is agent-mediated — a human never makes the forge transition. If the human reaches you (inline), you record the answer and re-assign the ticket back to yourself; if they reach PM, PM records it and re-assigns it to you on your behalf.",
+      "anti": "Saying the human makes the transition themselves, or that the ticket auto-routes back with no agent action."
+    }
+  ]
+}
