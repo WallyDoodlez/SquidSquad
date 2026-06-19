@@ -1,3 +1,13 @@
+---
+name: learning-closing-keyword-in-state-commit-autocloses-issue
+description: A GitHub closing keyword (Closes/Fixes/Resolves #N) in any commit landing on main auto-closes the issue — QA verdict commits that quote a PR's keyword must reword it.
+metadata:
+  type: learning
+type: learning
+tags: [git, github, tracker, qa, pending-ship, gotcha]
+created: 2026-06-19
+---
+
 # Learning — A closing keyword in a commit to main auto-closes the issue
 
 **Surfaced 2026-06-19 (cy345, #12825 verification).**

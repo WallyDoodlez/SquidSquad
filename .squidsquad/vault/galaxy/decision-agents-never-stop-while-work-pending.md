@@ -29,6 +29,24 @@ Agents must **always move ahead and never voluntarily stop while there is pendin
 
 The operator hit this live: skill stopped autonomous cycling on a "QA tangent" (deferring to verification) and needed a manual nudge. The #12799 rule only forbade blocking on *humans*, so nothing forbade stopping to defer to another *agent*. The #12506 self-wake driver doesn't recover this — it re-reads the queue from an *idle* state, but a turn that *ended waiting* is not idle. Result: silent stall needing a manual nudge. Autonomy is the whole point of the system; a voluntary stop with pending work is a defect.
 
+## Strengthened 2026-06-19 — Relentless autonomy + inline auto-timeout
+
+Operator strengthened the principle:
+
+- **Default = RELENTLESS.** Agents work nonstop to *attend to* all assigned work; the ONLY thing that pauses an agent is **explicit human engagement (inline mode)**. Nothing else stops it.
+- **Inline mode auto-releases after 20 minutes of human silence — HARDCODED, NON-CONFIGURABLE** (explicit operator directive: do not add a config field). Once ≥20 min elapse since the human's last inline message, the **next event the agent detects** resumes autonomous work.
+- **Backstop (PM rec):** the #12506 self-wake driver tick counts as a qualifying "event" so a dead-silent 20-min window still resumes (no permanent inline limbo).
+- **Outcome intent:** assigned work must be ATTENDED TO (every item looked at within available time/resources), even if not all COMPLETED. Human-decision items → assigned to human + parked; everything else pushed as far as possible. ("Assign a pile before bed → by morning all attended to, not necessarily done.")
+- **Reconcile:** AGENT-RUNTIME §3 inline definition + inline status-bar indicator must clear on the 20-min resume. Tracked in **#12853** (expanded spec).
+
+**Locked behavior hierarchy (precedence), operator-confirmed 2026-06-19:**
+1. **Pending work** (assigned OR discovered) → work RELENTLESSLY, no rest.
+2. **No work** → jump to **self-improvement** (improvement scan).
+3. **Self-improvement capped: 3 runs then cooldown** — KEEP the existing improvement-loop design (the burst-of-3 + cooldown is the token-burn guardrail; do NOT make continuous, do NOT remove cooldown).
+4. **Inline mode** = the only pause; auto-releases after 20 min human silence → resume.
+
+The cooldown is rest from SCANNING only — never rest from actual pending WORK. 'No rest at all' = never idle-sleeping; always working, self-improving (3x), or briefly cooling down between scan-bursts.
+
 ## Boundaries / nuance
 
 - **Idle ≠ stop.** Going idle (event-bus wait / cool-down loop, which auto-resumes on nudge/cooldown) is correct and is NOT a stop. Ending the turn to wait for another party IS a stop and is forbidden.
