@@ -13,6 +13,18 @@ Operator's single console to: (1) **see** the whole squad at a glance, (2) **con
 - **Textual** (PM choice, operator-approved dependency) — async-native (fits asyncio harness), interactive, best-in-class Python TUI.
 - **Separate process** consuming harness HTTP endpoints (the #8704 model) — NOT in-process in harness.py.
 
+## Branding & chrome (operator-requested 2026-06-19)
+
+- **Title bar** at the top: `🦑 SquidSquad · <project-name>`.
+  - **🦑 squid icon** used here and anywhere else it fits suitably (About screen, headers, loading) — brand presence without clutter.
+  - **"SquidSquad"** name always shown.
+  - **Project / team name** shown next to it — so a user running MULTIPLE TUIs (one per team/project) can identify which team this window belongs to. Source: project/repo identifier (e.g. from `config.md` / repo name; implementer picks the canonical source).
+
+## Options menu (operator-requested 2026-06-19)
+
+- An **⚙ Options menu** (hotkey + clickable), extensible.
+- **First option: Change background** — change the TUI background (theme / background color). Textual's theming/CSS supports this; build it so more options can be added later.
+
 ## Panels (v1)
 
 ### Agents panel
@@ -50,6 +62,7 @@ Live recent events / commits feed.
 
 ## Hotkeys
 - **Bring PM Forward (operator-requested 2026-06-19):** a hotkey that foregrounds PM's terminal window so the operator jumps straight into the inline human↔PM conversation (for answering human-tickets / decisions). Feasible: harness tracks each agent's `terminal_pid`; foreground PM's window by that handle (OS window-management; Windows-first).
+- **Options** (`⚙`) — opens the Options menu (Change background, …).
 
 ## Explicitly OUT of v1
 - **Inline "Answer a human-ticket"** — dropped (too complex). Answering stays fully interactive with PM via Bring-PM-Forward.
