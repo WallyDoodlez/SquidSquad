@@ -236,47 +236,42 @@ def run_static_tests():
             junit_path.unlink()
 
 
+# #12903: single source of truth for integration target names + their
+# modules. Both run_integration_tests() (dispatch) AND main()'s
+# `integration_only` guard derive from this tuple, so the two can never
+# drift again. (The bug: #9398 added the last two targets to the dispatch
+# but not to the guard, so `run_tests.py real_agent_subprocess` fell through
+# to run the full static gate first.)
+_INTEGRATION_MODULES = (
+    ("harness", "test_harness"),
+    ("status_flow", "test_status_flow"),
+    ("event_mode_e2e", "test_event_mode_e2e"),
+    ("agent_subprocess", "test_event_mode_agent_subprocess"),
+    # #9398 Phase A real-subprocess scenarios — heavy (spawns real harness +
+    # agent subprocesses; ~10-15s per test on Windows).
+    ("real_agent_subprocess", "test_9398_real_agent_subprocess"),
+    # #9398 Phase A — gh PATH-shim <-> tracker.py handshake (subprocess-spawns
+    # tracker.py with the shim on PATH; fast).
+    ("gh_shim_tracker", "test_9398_gh_shim_tracker_integration"),
+)
+# Canonical integration target names — the only names both the guard and the
+# dispatch recognize.
+INTEGRATION_TARGET_NAMES = tuple(name for name, _ in _INTEGRATION_MODULES)
+
+
 def run_integration_tests(targets):
     """Run integration tests via unittest."""
     print("\n=== Integration Tests (unittest) ===\n")
+    import importlib
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
 
-    if not targets or "harness" in targets:
-        from integration import test_harness
-        suite.addTests(loader.loadTestsFromModule(test_harness))
-
-    if not targets or "status_flow" in targets:
-        from integration import test_status_flow
-        suite.addTests(loader.loadTestsFromModule(test_status_flow))
-
-    if not targets or "event_mode_e2e" in targets:
-        from integration import test_event_mode_e2e
-        suite.addTests(loader.loadTestsFromModule(test_event_mode_e2e))
-
-    if not targets or "agent_subprocess" in targets:
-        from integration import test_event_mode_agent_subprocess
-        suite.addTests(
-            loader.loadTestsFromModule(test_event_mode_agent_subprocess)
-        )
-
-    if not targets or "real_agent_subprocess" in targets:
-        # #9398 Phase A real-subprocess scenarios. Heavy — spawns real
-        # harness + agent subprocesses; ~10-15s per test on Windows.
-        from integration import test_9398_real_agent_subprocess
-        suite.addTests(
-            loader.loadTestsFromModule(test_9398_real_agent_subprocess)
-        )
-
-    if not targets or "gh_shim_tracker" in targets:
-        # #9398 Phase A — gh PATH-shim ↔ tracker.py handshake.
-        # Subprocess-spawns tracker.py with shim on PATH; fast.
-        from integration import test_9398_gh_shim_tracker_integration
-        suite.addTests(
-            loader.loadTestsFromModule(
-                test_9398_gh_shim_tracker_integration
-            )
-        )
+    # Lazy per-target import preserved (modules import only when their target
+    # runs) — now driven by the shared _INTEGRATION_MODULES registry.
+    for name, module_name in _INTEGRATION_MODULES:
+        if not targets or name in targets:
+            module = importlib.import_module(f"integration.{module_name}")
+            suite.addTests(loader.loadTestsFromModule(module))
 
     runner = unittest.TextTestRunner(verbosity=2)
     try:
@@ -301,9 +296,9 @@ def main():
 
     targets = [a for a in sys.argv[1:] if not a.startswith("-")]
     static_only = targets == ["static"]
-    integration_only = any(
-        t in targets for t in ("harness", "status_flow", "event_mode_e2e", "agent_subprocess")
-    )
+    # #12903: derive from the shared registry so the guard always matches the
+    # set of targets run_integration_tests() actually dispatches.
+    integration_only = any(t in targets for t in INTEGRATION_TARGET_NAMES)
 
     all_passed = True
 
