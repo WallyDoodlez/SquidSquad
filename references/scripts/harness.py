@@ -31,6 +31,8 @@ import sys
 import threading
 import time
 import traceback
+import urllib.error
+import urllib.request
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -3851,12 +3853,19 @@ def _reboot_affected_agents(pr_number, files_changed):
 # ---------------------------------------------------------------------------
 
 def find_free_port(default: int = DEFAULT_PORT) -> int:
-    """Find an available port, preferring the default."""
+    """Find an available port, preferring the default.
+
+    When ``default`` is 0 the OS assigns an ephemeral port; this returns the
+    actually-bound port number (not 0) so a caller that opts into ephemeral
+    binding via ``--port 0`` (the integration test harness) gets the real
+    number to advertise in its ``.harness-port`` file (#12820).
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.bind(("127.0.0.1", default))
+        actual = s.getsockname()[1]
         s.close()
-        return default
+        return actual
     except OSError:
         s.close()
         # Find any free port
@@ -3887,6 +3896,77 @@ def _read_config_port() -> int:
         pass
 
     return DEFAULT_PORT
+
+
+def _probe_harness_status(port: int, timeout: float = 2.0) -> bool:
+    """Return True iff a live SquidSquad harness answers ``GET /status`` on ``port``.
+
+    The production singleton path (#12820) uses this to tell apart:
+    - a LIVE harness already holding the canonical port → refuse to start, so
+      a second harness can never bind an ephemeral port and poison every
+      clone's ``.harness-port`` file (the root cause of #12820); and
+    - a stale socket / TIME_WAIT slot left by a just-exited harness mid-restart
+      → safe to reclaim the canonical port (uvicorn's ``SO_REUSEADDR`` bind
+      rebinds a TIME_WAIT slot cleanly).
+
+    A ``200`` from some unrelated server that lacks the harness-shaped
+    ``harness`` key reads as "not a harness" (False) — better to try to claim
+    our reserved port than refuse to boot for an unrelated squatter.
+    """
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/status", timeout=timeout
+        ) as resp:
+            if resp.status != 200:
+                return False
+            body = json.loads(resp.read().decode("utf-8"))
+            return isinstance(body, dict) and "harness" in body
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def _resolve_listen_port(explicit_port) -> int:
+    """Resolve the port the harness listens on, or refuse to start (#12820).
+
+    ``explicit_port`` is ``args.port`` — ``None`` when no ``--port`` was passed.
+
+    - **Explicit** (including ``--port 0``): legacy ``find_free_port`` behavior,
+      ephemeral fallback allowed. This is the integration test harness path
+      (``real_harness`` passes ``--port 0``); it self-writes its port into an
+      isolated tmp ``.harness-port`` and never touches real clones.
+    - **None** (production singleton): probe the canonical port. A live harness
+      there → ``SystemExit(1)`` (refuse — never bind an ephemeral port and
+      poison clone ``.harness-port`` files). Otherwise claim the canonical port;
+      uvicorn's ``SO_REUSEADDR`` bind reclaims a TIME_WAIT slot left by a
+      just-exited harness during a supervised restart.
+
+    Returns the resolved port. Raises ``SystemExit(1)`` on refuse-to-start.
+    """
+    if explicit_port is not None:
+        actual = find_free_port(explicit_port)
+        if actual != explicit_port and explicit_port != 0:
+            print(f"Port {explicit_port} in use — using {actual}")
+        return actual
+
+    desired = _read_config_port()
+    if _probe_harness_status(desired):
+        print(
+            f"A SquidSquad harness is already running and responding on "
+            f"127.0.0.1:{desired}. Refusing to start a second instance — a "
+            f"second harness would bind an ephemeral port and poison every "
+            f"clone's .harness-port file, forcing the team into polling "
+            f"fallback (#12820). Use the running harness, or stop it first."
+        )
+        sys.exit(1)
+    # Free, or a stale/TIME_WAIT slot from a just-exited harness (restart):
+    # claim the canonical port. uvicorn's bind sets SO_REUSEADDR so a
+    # TIME_WAIT slot rebinds cleanly. A genuinely live *non-harness* squatter
+    # on the reserved canonical port is an operator configuration error: on
+    # Unix uvicorn's bind then fails loudly (EADDRINUSE — SO_REUSEADDR only
+    # bypasses TIME_WAIT, not a live listener); on Windows SO_REUSEADDR may
+    # permit a duplicate bind, but the /status probe above already rules out a
+    # live *harness* peer, which is the case that actually matters for #12820.
+    return desired
 
 
 # ---------------------------------------------------------------------------
@@ -4443,12 +4523,12 @@ def main():
         or env_freshness.lower() in ("1", "true", "yes")
     )
 
-    # Determine port
-    desired_port = args.port or _read_config_port()
-    actual_port = find_free_port(desired_port)
-
-    if actual_port != desired_port:
-        print(f"Port {desired_port} in use — using {actual_port}")
+    # Determine port (#12820 — see _resolve_listen_port). The production
+    # singleton path (no --port) acquires the canonical port or refuses; it
+    # never binds an ephemeral port, so it cannot poison clone .harness-port
+    # files. An explicit --port (incl. --port 0) keeps the legacy
+    # ephemeral-fallback behavior the integration test harness relies on.
+    actual_port = _resolve_listen_port(args.port)
 
     state.port = actual_port
     _print_banner(actual_port)

@@ -1222,6 +1222,97 @@ class TestPortManagement(unittest.TestCase):
         finally:
             s.close()
 
+    def test_find_free_port_zero_returns_real_port(self):
+        """#12820: find_free_port(0) returns the OS-assigned ephemeral port,
+        not the literal 0 — so a --port 0 caller can advertise the real port."""
+        from harness import find_free_port
+        port = find_free_port(0)
+        self.assertNotEqual(port, 0)
+        self.assertGreater(port, 0)
+
+
+class TestSingletonPortGuard(unittest.TestCase):
+    """#12820: production harness must acquire the canonical port or refuse —
+    never bind an ephemeral port (which would poison clone .harness-port files).
+    """
+
+    def _serve(self, body: bytes):
+        """Spin a throwaway HTTP server returning ``body`` for GET /status.
+        Returns (port, shutdown_callable). Lets HTTPServer bind an OS-assigned
+        ephemeral port itself (no probe-then-rebind gap) and reads the actual
+        port back from server_address — avoids a TOCTOU race on the port."""
+        import http.server
+        import threading
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):  # silence test noise
+                pass
+
+        httpd = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+        port = httpd.server_address[1]
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        return port, httpd.shutdown
+
+    def test_probe_no_server(self):
+        """No listener on the port → not a live harness."""
+        from harness import _probe_harness_status, find_free_port
+        dead_port = find_free_port(0)  # found free, nothing bound to it now
+        self.assertFalse(_probe_harness_status(dead_port, timeout=1.0))
+
+    def test_probe_live_harness(self):
+        """A server returning harness-shaped /status JSON → live harness."""
+        from harness import _probe_harness_status
+        port, shutdown = self._serve(b'{"harness": {"status": "running"}, "agents": []}')
+        try:
+            self.assertTrue(_probe_harness_status(port, timeout=2.0))
+        finally:
+            shutdown()
+
+    def test_probe_non_harness_200(self):
+        """A 200 from an unrelated server lacking the 'harness' key → not ours."""
+        from harness import _probe_harness_status
+        port, shutdown = self._serve(b'{"hello": "world"}')
+        try:
+            self.assertFalse(_probe_harness_status(port, timeout=2.0))
+        finally:
+            shutdown()
+
+    def test_resolve_explicit_port_zero_is_ephemeral(self):
+        """--port 0 takes the explicit path and yields a real ephemeral port."""
+        from harness import _resolve_listen_port
+        port = _resolve_listen_port(0)
+        self.assertGreater(port, 0)
+
+    def test_resolve_explicit_specific_free_port(self):
+        """An explicit free --port is returned unchanged (no probe, no refuse)."""
+        from harness import _resolve_listen_port, find_free_port
+        free = find_free_port(0)
+        self.assertEqual(_resolve_listen_port(free), free)
+
+    def test_resolve_production_free_claims_canonical(self):
+        """Production path (no --port): canonical port free → claim it."""
+        import harness
+        with patch.object(harness, "_read_config_port", return_value=59321), \
+             patch.object(harness, "_probe_harness_status", return_value=False):
+            self.assertEqual(harness._resolve_listen_port(None), 59321)
+
+    def test_resolve_production_live_harness_refuses(self):
+        """Production path: a live harness on the canonical port → refuse (exit 1),
+        never falls back to an ephemeral port that would poison clones."""
+        import harness
+        with patch.object(harness, "_read_config_port", return_value=59322), \
+             patch.object(harness, "_probe_harness_status", return_value=True):
+            with self.assertRaises(SystemExit) as ctx:
+                harness._resolve_listen_port(None)
+            self.assertEqual(ctx.exception.code, 1)
+
 
 class TestCLIPortDiscovery(unittest.TestCase):
     """Test CLI port discovery from .harness-port file."""
