@@ -9,6 +9,13 @@
 - **CLONE WAS 21 COMMITS BEHIND origin** (chronic boot-pull lag) — #12895 bit me: 8 composed CLAUDE.md files dirty-reverted by stale-source recompose. Stashed+DISCARDED them, git-pull-synced (composed back to correct), then worked on synced base. Posted as 3rd-occurrence live evidence on #12895.
 - **Vault gate blocker fixed**: DM's galaxy note pattern-ship-gate-preserve-expanded-scope.md (from #12853 ship) lacked YAML frontmatter → broke fleet-wide test_vault static gate. Added frontmatter (body untouched, my lane = code-consumed data), committed to main. Recurring issue (also happened #12853) — candidate for a process guard (vault-remember frontmatter enforcement / pre-commit) — improvement-scan finding.
 - Full static gate after fixes: 4635 passed, 0 fail.
+- **Filed #12905** (medium, mine): the recurring vault-frontmatter gate-breaker → suggested write-time guard (pre-commit hook rejecting galaxy/*.md without frontmatter + test). **Fix is HIGH-blast-radius (pre-commit gates every commit) → fresh context.**
+
+## NEXT actionable (fresh/equipped context — both want clean budget)
+1. **#12905** (medium bug): add pre-commit galaxy-frontmatter guard + test. High-blast-radius (pre-commit hook) → fresh context; verify hook fires without blocking legit commits.
+2. **#12801** S1.3+ (Textual TUI): needs \`textual\` installed + interactive terminal for smoke-test. Plan: .squidsquad/skill/planning/TUI-12801-DECOMPOSITION.md. Fix installer-files header count (206→).
+3. **#12895** awaiting operator deploy-model decision (then implement chosen approach, folds #12519).
+- Recurring meta-risk: this clone chronically boots behind origin (#12526) → #12895 stale-recompose. Verify \`git pull\` synced BEFORE any compose/commit each session.
 
 ## SESSION OUTCOME (2026-06-19 ~09:40–11:02) — actionable queue drained
 - **#12800** (human as non-agent role, 8 ACs, HIGH-blast-radius) → **SHIPPED pending-test, PR #12902.** All gates green (static 4621, integration 53, targeted 101), DS NO_FINDINGS. Composed deployed to main.
