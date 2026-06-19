@@ -8,9 +8,33 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CHANGELOG.md",
+  "last_scanned": "docs/ARCHITECTURE.md",
   "rotation_count": 74,
   "scan_history": [
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "note": "R74 scan-4 (event-mode driver tick). ARCHITECTURE.md freshly updated by #12749 (commit bf92f3a8c 2026-06-18) — Agent Roles table now Worker/Verifier + DM-ARCH L2/L3/L4 layering + DM-ARCH.md deep-dive link. 6-layer model (transport→memory) internally consistent. VERIFIED-accurate (not drift): includes.yml exists for all 4 roles (line 119/127); {{runtime:}} + {{include:}} directives still present in compose.py/catalog_parser.py (lines 128/140). event-bus→git-only-polling fallback (255/278) matches live behavior. .claude-pid/process-tree/#12271-PID detail still current (cutover #12492 pending). 0 fixes."
+    },
+    {
+      "file": "SKILL.md:sections-4-6",
+      "date": "2026-06-19",
+      "findings": 1,
+      "note": "R74 scan-3 (event-mode driver tick). SKILL.md lines 185-345 (per-role Ralph Loops, Git Protocol, Branch/PR, Auto-Merge, Setup taxonomy). FIXED 1: removed dead `references/sub-skills/capabilities/<capability>/` installer-taxonomy bullet (dir removed 2026-05-27 per sub-skill-catalog; capability config superseded by per-agent post-install runtime concern, INSTALLER-ARCH §8) + dropped 'capability' from the follow-on 'Adding a new role/preset' sentence + added a one-line pointer to §8. Confirmed dir GONE on disk; remaining repo hits are pm/planning history (not user-facing). Considered-but-skipped: Ralph-Loop sections (185-266) frame loop-mode as THE model (event mode canonical now) — larger SKILL-vs-AGENT-RUNTIME framing question, not a clean scan fix, needs PM/arch alignment; line 242 QA current-state-mtime liveness (QA domain + #12271 is harness-side liveness, QA health-check method not clearly stale)."
+    },
+    {
+      "file": "SKILL.md:sections-1-3",
+      "date": "2026-06-19",
+      "findings": 1,
+      "note": "R74 scan-2 (event-mode driver tick). SKILL.md lines 1-185 (intro/architecture/roles/tracker/Ralph Loop). Frontmatter version 0.44.0 = config (correct; 0.45.0 bump held). FIXED 1: line 103 vault access 'PM and dev agents R/W, QA and DM read-only' -> 'all agents read/write per their own lane' (ground truth: vault-protocol.md L8 'All agents have read/write', L10 per-role write lanes incl verifier+DM). DEFERRED candidate: lines 100-102 L4 project/ diagram shows only legacy multi-file seeds w/ {dev,...,qa} names — disk has BOTH legacy worker-*/verifier-* AND v2 <role>.md seeds; entangled with deferred dev/qa->worker/verifier rename (#6274/#10839) + in-flight #10359 L4-model impl, NOT a clean unilateral fix — carry to next SKILL scan, revisit when rename/#10359 lands. Considered-but-skipped: line 177 PID-primary liveness (still accurate — #12271 cutover #12492 pending, shadow #12460 leaves reboot decision unchanged); line 179 auto-versioning (product feature, accurate at design level)."
+    },
+    {
+      "file": "README.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "note": "R74 scan-1 (event-mode driver tick). README re-verified post-#11613/#12525 edits. 0 dead links (all 7 doc-table targets + LICENSE resolve). Version-agnostic (no version refs to drift). Harness code_version + event-bus 30m-polling-fallback claims match live behavior observed at boot. SQLite scan-targeting claim (line 35) CONFIRMED backed by scan_index.py \u2014 not drift. #11613 dep-provisioning + #12525 bare-harness launchers covered. DEFERRED candidate: line 33 'wizard fills Project Context in each agent SOUL.md' \u2014 post-v2 wizard writes L4 project files, not SOUL.md; needs wizard.py verification before any fix, carry to next README scan. 0 fixes."
+    },
     {
       "file": "CHANGELOG.md",
       "date": "2026-05-31",
@@ -338,16 +362,16 @@
   ],
   "doc_inventory": {
     "README.md": {
-      "last_scanned": "2026-05-24",
+      "last_scanned": "2026-06-19",
       "sections": 12,
       "status": "current"
     },
     "SKILL.md": {
-      "last_scanned": "2026-05-24",
+      "last_scanned": "2026-06-19",
       "status": "current"
     },
     "docs/ARCHITECTURE.md": {
-      "last_scanned": "2026-05-23",
+      "last_scanned": "2026-06-19",
       "status": "current"
     },
     "docs/sub-skill-guide.md": {

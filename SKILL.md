@@ -100,7 +100,7 @@ When you invoke SquidSquad, it creates the following inside your project root. O
 │   ├── shared-{instructions,responsibility,soul-directives}.md  ← all-agents L4 overrides
 │   ├── {dev,dm,pm,qa}-{instructions,responsibility,soul-directives}.md  ← per-role L4 overrides
 │   └── setup-upgrade-gate.md   ← optional gate-script invoked during setup/upgrade
-└── vault/                      ← shared memory layer (PM and dev agents R/W, QA and DM read-only)
+└── vault/                      ← shared memory layer (all agents read/write per their own lane)
     ├── BRIEFING.md             ← daily context briefing read by all agents at boot
     ├── projects/               ← active project context, goals, constraints
     ├── areas/                  ← ongoing concerns: conventions, preferences, values
@@ -334,14 +334,12 @@ The taxonomy the installer uses is **not** a hardcoded table. It lives in:
 
 - `references/roles/<role>/` — per-role directory containing `manifest.yaml`,
   `SOUL.md`, and `instructions.md` (the entry file for composition)
-- `references/sub-skills/capabilities/<capability>/` — per-capability registry
-  with `manifest.yaml`, `setup.md` (infrastructure walkthrough), and
-  `sub-skill.md` (agent-facing usage composed into consuming role CLAUDE.md
-  at runtime)
 - `references/presets/<preset>/` — preset manifests declaring
   `role_install_order` (PM, QA, and DM are implicit and always installed)
 
-Adding a new role, capability, or preset is a pure data change: drop in a new
+(Per-agent tool/MCP/CLI configuration is no longer part of the install taxonomy — it's a post-install runtime concern handled per agent; see INSTALLER-ARCH.md §8.)
+
+Adding a new role or preset is a pure data change: drop in a new
 directory, run the validator, re-deploy. No wizard code change required.
 
 ---
