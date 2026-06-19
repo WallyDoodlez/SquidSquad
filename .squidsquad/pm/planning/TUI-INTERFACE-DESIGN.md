@@ -16,13 +16,21 @@ Operator's single console to: (1) **see** the whole squad at a glance, (2) **con
 ## Panels (v1)
 
 ### Agents panel
-Live per-agent row: role, status, intent, mode (event/polling), current task, busy/idle, last-activity age, health. **Plus a per-agent cursor progress bar (see below).**
+Live per-agent row: role, **work-state** (see vocabulary), mode (event/polling), current task, last-activity age, health. **Plus a per-agent cursor lag bar (see below).**
+
+### Work-state vocabulary + color semantics (operator-locked 2026-06-19)
+One clean activity vocabulary (resolves the earlier mockup ambiguity — "active" and "busy" were two words for the same thing; collapsed into "working"):
+- **working** = a cycle/task is in flight (`/status` `current_cycle` set / `in_flight_until` future / recent activity). **Color: GREEN.** (Merges old "busy"/"active".)
+- **idle** = alive but nothing in progress (waiting on events / in cooldown). **Color: YELLOW.**
+- **down** = dead / paused / crashed / unresponsive. **Color: RED.**
+- Rule of thumb the operator wants: **GREEN means they are working.**
 
 ### Cursor lag bar (operator-requested 2026-06-19; visual refined)
 Per-agent visual of how caught-up that agent's event cursor is vs the head of the event stream.
 - **Visual: a dashed track with an arrow (`→`) marking cursor position.** No "cursor" text label (save horizontal space). E.g. `[------→]`.
 - **Arrow at the right edge = cursor at the head (caught up).** Arrow slides LEFT as it falls behind: `[-→-----]` = far behind.
 - Scale ~10 events (illustrative default; implementer may refine). Lag ≥ scale → arrow at far left; lag 0 → arrow at far right.
+- **Color: when the cursor is far behind (arrow near the left edge), the LEFT-edge dashes turn RED** — a lag alert. A red bar on an otherwise-GREEN (working) agent = "working but falling behind on its event stream." (Threshold for "far behind" = implementer default, ~left third.)
 - Renders inline in each Agents-panel row (no column header needed).
 - **Backend need:** harness must expose per-agent lag (cursor position vs deque head) — e.g. add `lag` (events-behind-head) to `/status` per agent. Harness already owns each cursor (`.event-state.json`) + the deque, so this is a small add. (Skill scope.)
 
