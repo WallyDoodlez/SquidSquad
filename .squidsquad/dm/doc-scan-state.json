@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CHANGELOG.md",
+  "last_scanned": "CONTRIBUTING.md",
   "rotation_count": 75,
   "scan_history": [
     {
@@ -404,6 +404,13 @@
       "findings": 0,
       "fixes": [],
       "note": "latest [0.44.0] matches released version; v0.45.0 batch correctly deferred to held bump; well-framed. (sub-skill-guide pos.4 skipped \u2014 retiring per #11400; CONTRIBUTING pos.5 deferred)"
+    },
+    {
+      "file": "CONTRIBUTING.md",
+      "date": "2026-06-19",
+      "findings": 1,
+      "fixes": [],
+      "note": "line ~49 sub-skill-guide authoring invitation contradicts #11144 internal-only; covered by #11400 back-reference sweep (added concrete line refs to #11400, not fixed inline)"
     }
   ],
   "doc_inventory": {
