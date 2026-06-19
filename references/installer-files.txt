@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 215 files
+# Total: 229 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -20,10 +20,14 @@ references/VERSION
 references/migrations/README.md
 references/scripts/activity_hook.py
 references/scripts/add_role.py
+references/scripts/atomic_emit.py
 references/scripts/boot_remote.py
 references/scripts/capability_check.py
+references/scripts/catalog_drift.py
+references/scripts/catalog_parser.py
 references/scripts/comms_adapter.py
 references/scripts/compose.py
+references/scripts/compose_freshness.py
 references/scripts/config.py
 references/scripts/cycle.py
 references/scripts/cycle_post.py
@@ -31,6 +35,9 @@ references/scripts/cycle_pre.py
 references/scripts/diagnostics.py
 references/scripts/event_bus.py
 references/scripts/event_bus_reader.py
+references/scripts/event_catalog.py
+references/scripts/event_poll.py
+references/scripts/event_validator.py
 references/scripts/forge_adapter.py
 references/scripts/forgejo_setup.py
 references/scripts/git_ops.py
@@ -45,9 +52,12 @@ references/scripts/l4_op_processor.py
 references/scripts/l4_parser.py
 references/scripts/l4_removal.py
 references/scripts/l4_write_commit.py
+references/scripts/link_stage_validator.py
 references/scripts/manifest.py
 references/scripts/migrate_state_branch.py
 references/scripts/model_router.py
+references/scripts/orphan_cleanup.py
+references/scripts/process_utils.py
 references/scripts/reboot_agent.py
 references/scripts/repo_scan.py
 references/scripts/run_comprehension_test.py
@@ -55,13 +65,17 @@ references/scripts/scan_index.py
 references/scripts/shared_fs.py
 references/scripts/squidsquad_cli.py
 references/scripts/soul_adaptation.py
+references/scripts/source_frontmatter.py
 references/scripts/start_team.py
 references/scripts/state_bus.py
+references/scripts/statusline_data.py
 references/scripts/subloop_driver.py
 references/scripts/tc_coverage.py
 references/scripts/thin_launcher.py
 references/scripts/tracker.py
 references/scripts/triage.py
+references/scripts/v2_catalog_gate.py
+references/scripts/v2_link_stage.py
 references/scripts/vault_check.py
 references/scripts/vault_entity.py
 references/scripts/vault_optimize.py

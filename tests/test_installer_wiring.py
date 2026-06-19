@@ -304,6 +304,59 @@ class TestInstallerFileManifest:
             f"{actual} — update the '# Total:' line when adding/removing entries"
         )
 
+    # #12909: every references/scripts/*.py must be either shipped (in the
+    # manifest) or explicitly excluded here with a reason. This is the
+    # general completeness gate — it would have caught both the l4 family
+    # (#12907) and this batch. Dev/CI/migration-only scripts that must NOT
+    # ship to fresh installs go here; adding a new runtime script without
+    # a manifest entry now fails CI instead of silently un-shipping a
+    # whole subsystem (as happened with event_poll.py, statusline_data.py).
+    MANIFEST_EXCLUDED_SCRIPTS = {
+        # one-time #6274 label-rename migration + its verifier — historical,
+        # never invoked at runtime; nothing to migrate on a fresh install.
+        "references/scripts/migrate_labels_6274.py",
+        "references/scripts/verify_dual_label_6274.py",
+        # smoke-test helper for the Monitor event poller — dev/CI only.
+        "references/scripts/monitor_smoke_poller.py",
+    }
+
+    def test_every_runtime_script_listed_or_excluded(self, manifest_entries):
+        scripts_dir = REPO_ROOT / "references" / "scripts"
+        on_disk = {
+            f"references/scripts/{p.name}"
+            for p in scripts_dir.glob("*.py")
+        }
+        listed = set(manifest_entries)
+        unaccounted = sorted(
+            s for s in on_disk
+            if s not in listed and s not in self.MANIFEST_EXCLUDED_SCRIPTS
+        )
+        assert not unaccounted, (
+            "references/scripts/*.py neither in installer-files.txt nor in "
+            f"MANIFEST_EXCLUDED_SCRIPTS: {unaccounted}. Add runtime scripts "
+            "to the manifest; add dev/CI/migration-only scripts to the "
+            "allowlist with a reason."
+        )
+
+    def test_excluded_scripts_are_not_also_listed(self, manifest_entries):
+        """An allowlisted script must not also be shipped (contradiction)."""
+        listed = set(manifest_entries)
+        both = sorted(self.MANIFEST_EXCLUDED_SCRIPTS & listed)
+        assert not both, (
+            f"scripts both allowlisted AND in the manifest: {both} — "
+            "decide: ship it (drop from allowlist) or not (drop from manifest)"
+        )
+
+    def test_excluded_scripts_exist_on_disk(self):
+        """Keep the allowlist honest — no stale entries for deleted scripts."""
+        missing = sorted(
+            s for s in self.MANIFEST_EXCLUDED_SCRIPTS
+            if not (REPO_ROOT / s).exists()
+        )
+        assert not missing, (
+            f"MANIFEST_EXCLUDED_SCRIPTS lists non-existent files: {missing}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Helpers
