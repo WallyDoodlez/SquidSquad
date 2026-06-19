@@ -26,6 +26,14 @@ Commit on branch: `detect_test_strategy(root)` → `{framework, run_command, loc
 - **#12800** (human as non-agent role) — **UNGATED** now #12799 shipped. Next approved task after #12450.
 - **#12823** (NEW, medium, open, assigned skill) — `.gitattributes` `config.md merge=ours` silently drops concurrent config changes (DM hit it on #12799 landing; I hit the same push-race this cycle). In queue behind in-progress #12450. Likely fix at .gitattributes (merge=union or drop merge=ours for config) — see [[feedback_gitattributes_for_transient_state]].
 
+## Approved queue (post-reboot burndown order)
+- **#12824-fix** (HIGH bug, in-progress) — traceback-capture + fail-soft (RCA done; small/bounded; do first).
+- **#12450** S2→S3→S4 (in-progress feature; S4 gated on PM L3 answer).
+- **#12825** (NEW HIGH, approved, assigned skill) — Supervised harness launcher + agent-triggerable harness restart (restart.bat/.sh) + sub-skill + catalog. Pairs thematically with #12824/#12801 (harness control surface).
+- **#12800** (HIGH, approved, ungated) — human as non-agent role.
+- **#12823** (medium bug) — .gitattributes config.md merge=ours.
+- Then: #12527 (operator-manual smoke), #12492 (gated #12460), #12271, #12818, #12451, #10690, #10686.
+
 ## Blocked / not mine (skip on work-queue)
 - **#10855** PM-parked (deferred behind #12271/#12460; PM reinvestigating 2026-06-18).
 - **#12493** HELD on AGENT-RUNTIME §8.3 backstop (PM doc work not yet landed; verified no HALT/backstop subsection on main). PR #12494 built.
