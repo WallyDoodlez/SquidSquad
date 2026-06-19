@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: #12450 (in-progress, branch `squidsquad/task/12450`) — Installer: auto-detect project's unit-testing strategy (L3 software-dev domain).
-- **Updated**: 2026-06-18 19:24 (skill — event-mode)
+- **Task**: #12450 (in-progress, branch `squidsquad/task/12450`) — Installer: auto-detect project's unit-testing strategy (L3 software-dev domain). [resume next — #12824 just shipped to pending-test]
+- **Updated**: 2026-06-18 20:42 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## #12450 — IN PROGRESS (branch squidsquad/task/12450)
@@ -20,11 +20,19 @@ Commit on branch: `detect_test_strategy(root)` → `{framework, run_command, loc
 **Next-increment order:** S2 (resolve design call X/Y → wire + tests) → S3 (WIZARD.md + flag CQ) → S4 (per PM's L3 answer) → DS review (installer+instructions) → has-changes → pending-test (only when all ACs observable + full suite green + CQ AC present).
 
 ## Other in-flight / held
-- **#12824** (HIGH bug, Harness assigned-to POST 500s — breaks nudge/handoff routing) — **in-progress, RCA done, fix pending next increment.** PROVEN transient: fresh `POST /events assigned-to` returns **200 now** (self-cleared); static read shows assigned-to does *strictly less* than working ack-cursor in `receive_event` (harness.py:2687) — `_update_agent_from_event`(:2359) no-op for assigned-to, `_log_event`(:2383) no-throw default, shared `append` would've 500'd ack-cursor too. No deterministic code cause; transient during heavy-churn window. Traceback was lost (went to harness terminal, no file). **FIX next increment:** (1) add FastAPI global exception handler → persist tracebacks to `.squidsquad/harness-errors.log` (makes future 500s diagnosable — the real deliverable); (2) fail-soft non-critical post-append work in receive_event. Held for fresh context (heavy this cycle; reboot pending resets harness anyway).
+- **#12824** (HIGH bug, Harness assigned-to POST 500s) — **SHIPPED to pending-test 2026-06-18 (PR #12836, branch squidsquad/task/12824).** Implemented the RCA deliverable: (1) global `@app.exception_handler(Exception)` persists method+path+traceback → `.squidsquad/harness-errors.log` + standard 500 (4xx unaffected — Starlette ServerErrorMiddleware vs ExceptionMiddleware split; defensive isinstance re-raise added); (2) fail-soft non-critical post-append `_update_agent_from_event`/`_log_event` in receive_event; (3) 1MB single-file log rotation (DS-F3). DS-review: F1 false-positive (404-stays-404 test proves it), F3 valid (rotation), F2 declined (fail-softing ack-cursor would wedge cursor — non-200 IS the retry signal). 9 tests green; full suite 4559 pass. **Takes effect on next harness restart.** Awaiting verifier.
 - **#12801** (Harness TUI action bar) — **in-progress but HELD**: front-loaded investigation found a **false premise** — there is NO harness TUI (harness = FastAPI HTTP daemon; squidsquad_cli.py is non-interactive; reboot-one/all ALREADY exist via start_team.py --reboot). Escalated to PM/operator with 3 options (Opt1 CLI+force-reboot-safe primitive [rec, no dep] / Opt2 build real TUI [needs dep approval] / Opt3 primitives-only). **Awaiting surface+dependency decision.** Not building a from-scratch TUI blindly.
 - **#12799** → **SHIPPED** (PR #12822 merged by DM, commit f90643d72). SOUL.md L1 async-no-pause live (all-roles reboot pending per DM).
 - **#12800** (human as non-agent role) — **UNGATED** now #12799 shipped. Next approved task after #12450.
 - **#12823** (NEW, medium, open, assigned skill) — `.gitattributes` `config.md merge=ours` silently drops concurrent config changes (DM hit it on #12799 landing; I hit the same push-race this cycle). In queue behind in-progress #12450. Likely fix at .gitattributes (merge=union or drop merge=ours for config) — see [[feedback_gitattributes_for_transient_state]].
+
+## Approved queue (post-reboot burndown order)
+- ~~#12824-fix~~ — SHIPPED to pending-test (PR #12836); see in-flight section.
+- **#12450** S2→S3→S4 (in-progress feature; S4 gated on PM L3 answer) — **NEXT.**
+- **#12825** (NEW HIGH, approved, assigned skill) — Supervised harness launcher + agent-triggerable harness restart (restart.bat/.sh) + sub-skill + catalog. Pairs thematically with #12824/#12801 (harness control surface).
+- **#12800** (HIGH, approved, ungated) — human as non-agent role.
+- **#12823** (medium bug) — .gitattributes config.md merge=ours.
+- Then: #12527 (operator-manual smoke), #12492 (gated #12460), #12271, #12818, #12451, #10690, #10686.
 
 ## Blocked / not mine (skip on work-queue)
 - **#10855** PM-parked (deferred behind #12271/#12460; PM reinvestigating 2026-06-18).
