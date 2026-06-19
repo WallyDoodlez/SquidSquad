@@ -48,4 +48,12 @@ pm clone booted **13 behind origin** again (recurring harness boot-pull lag; cf 
 - **Filed #12847 (HIGH, skill):** full suite hangs indefinitely (no timeout) → silent unbounded agent wedge. Distinct from #12720(closed)/#12747/#12748. Detection gap = #12271/#12493. #12506 driver can't recover a mid-tool-call block.
 - **Key learning reinforced:** DEAD agent (pid None) → graceful-restart sticks → boot_remote. HUNG agent (mid-tool-call) → graceful-restart grace timer DOES force-kill+respawn. ([[learning-graceful-restart-grace-timer-on-wedged-agent]])
 
+## ROOT-CAUSE CORRECTION (operator, inline) — Facts-Over-Context miss
+
+Operator corrected: the multi-agent freeze was an **ACCOUNT USAGE LIMIT**, not per-agent bugs.
+- skill 'hung suite' (#12847) — **WRONG**, was the limit. #12847 RETRACTED + CLOSED. (No hung subprocess ever observed; I symptom-fit from current-state.)
+- qa 'inert-boot #10855/#12409' — **WRONG**, was the limit + operator talking to it inline (inline → no harness activity → looked dead).
+- **Lesson:** stale harness-activity ≠ dead. Rule out inline-conversation / usage-limit / genuine-wedge first; multiple agents freezing at once ⇒ shared cause (limit), not coincident bugs; ASK operator (they have limit ground truth). Extends [[feedback_health_checks_facts_not_context]].
+- qa rebooted on operator request (pid 52988, booting; limit now clear). ⚠️ My pre-emptive restart killed the session operator was mid-conversation with (apologized). Frozen-on-limit agents don't auto-recover — need restart.
+
 **Boot otherwise quiet.** No external issues, no PM work picked up (approved queue = operator-paced PRDs). Idle (Monitor armed).
