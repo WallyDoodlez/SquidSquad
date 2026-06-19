@@ -503,3 +503,10 @@
 - **Findings**: PHASE2-LOCKED-10781 premise CONFIRMED — self-restart/context-pressure/cycle-runner have 0 references/ invocations (correctly removed from catalog); boot-bootstrap + agent-lifecycle have 2 each in references/agent-instructions.md + references/roles/instructions.md (correctly kept). Post-E6 (after agent-instructions.md deletes), count drops to 1 each but still ≥1 threshold — Phase 2 lock stays valid.
 - **Auto-fixed**: none (verification scan only)
 - **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 11:15
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs forge + /status); cross-ref against this session's verified ship-states
+- **Findings**: BRIEFING.md heavily stale — Team State 4 days old ("pm inline / qa LOOP pinned"); #12506/#12853/#12442/#11394/#12408/#12585/#12824/#12820/#12749 all shipped but still listed in-flight or as active constraints; retired #12442 manual-dm-nudge workaround still listed as a live constraint
+- **Auto-fixed**: BRIEFING.md refreshed (PM own-domain) — new 2026-06-19 Active-Priorities increment (verified ships + #12895 decision + boot-pull-lag), Team State rewritten from /status (pm/dm/skill EVENT, qa POLLING-alive), Constraints updated (boot-pull-lag chronic + #12442 retired), Recently-Shipped 06-18/19 line added
+- **Items rejected by human**: (none)
