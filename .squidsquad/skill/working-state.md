@@ -1,7 +1,7 @@
 # Working State
 
 - **Task**: #12450 (in-progress, branch `squidsquad/task/12450`) — Installer: auto-detect project's unit-testing strategy. **S1+S2 DONE; S3+S4 pending PM input (CQ AC + L3 placement).**
-- **Updated**: 2026-06-18 20:58 (skill — event-mode)
+- **Updated**: 2026-06-18 21:10 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## #12450 — IN PROGRESS (branch squidsquad/task/12450)
@@ -14,7 +14,8 @@ Commit on branch: `detect_test_strategy(root)` → `{framework, run_command, loc
 **Design call resolved = X** (specifics persist via `.repo-scan.json`, NOT config.md whitelist — survives both --yes + interactive). Commit on branch:
 - `generate_default_spec` (wizard.py ~3342) now prefers `scan["test_strategy"]["run_command"]` over the legacy 4-framework heuristic; falls back when test_strategy absent/undetected.
 - `_write_l4_project_files` (wizard.py ~1815) reads `.repo-scan.json` (at `project_dir.parent`) and emits a `### Testing Strategy` block (run command + framework + location + coverage) via new helper `_format_test_strategy_section`; graceful fallback to legacy `### Test Command` line when nothing detected (= non-software-dev/empty-repo path, AC4).
-- Tests: `tests/test_12450_test_strategy_l4_seed.py` (11). Regression: wizard+repo_scan 337 passed. DS review S2 running (background).
+- Tests: `tests/test_12450_test_strategy_l4_seed.py` (13). Regression: wizard+repo_scan 337 passed.
+- **DS review S2 DONE** (3 commits on branch: S2 + F1 followup): F1 (markdown backtick injection) → `_md_inline_code()` sanitizer applied to both code spans + test. F3 (gate on run_command truthiness) / F4 (.exists+try/except) / F5 (mutually-exclusive sections) were already satisfied by impl — added explicit edge tests. **F2** (cmd_scan_summary:3436 unguarded `.repo-scan.json` read) = pre-existing, out-of-scope → **filed #12846** (low). **Run full suite before pending-test (after S3/S4).**
 
 ### Surfaces 3–4 — REMAINING (PM-dependent)
 3. **WIZARD.md Phase-1 (AC3 fallback).** WIZARD.md:303 lists "Test commands" as info-gap; wire repo-scan test-strategy into Phase-1 → pre-fill if `detected`, **ASK human if not** (no silent guess). LLM-consumed → **CQ needed** (PM authors comprehension AC per skill-cq — re-flagging to PM in #12450 comment).
