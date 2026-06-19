@@ -1,21 +1,28 @@
 # Working State
 
-_Condensed 2026-06-15. Prior incident narrative (reboot saga, event-mode stabilization, #11505/#11511 churn, #12417 doc-reconciliation, restart procedure) preserved in iteration logs + on the forge — not re-copied here. Working-state = current active state only._
+_Condensed 2026-06-18 20:24. Prior incident narrative (reboot saga, event-mode stabilization, #12506 wedge-recovery, #12417 doc-reconciliation) preserved in iteration logs (iter-699/700) + on the forge — not re-copied here. Working-state = current active state only._
 
-## >>> POST-RESTART CHECKLIST (operator restarting harness ~19:2x to clear #12824) — fresh pm DO FIRST <<<
+## Current — 2026-06-18 20:24 (PM EVENT-mode, fresh boot after OPERATOR TEAM REBOOT)
 
-Operator is restarting the harness to clear **#12824** (harness `assigned-to` POST 500s — broke nudge + handoff routing). On your fresh boot, verify (facts, cross-check):
-1. **Harness back + all 4 agents respawned.** `/status` healthy. skill/dm/pm → EVENT (probe :7373 OK); **qa → POLLING expected** (its clone `.harness-port` is desynced #12820 → probe refused → polling; that's SAFE/desired, do NOT try to force qa to event).
-2. **#12824 cleared?** Test: a benign assigned-to POST should now return `{"status":"ok"}` not 500. If still 500 after restart → escalate (deeper harness bug, not just stale state).
-3. **pm clone was 13 behind origin** — confirm boot-pull caught up (recurring boot-pull lag, cf earlier). If still behind, merge origin/main (clean).
-4. **#12506 driver CONFIRMED WORKING pre-restart** (skill self-woke ~6-8min cooldown). Post-restart skill/dm boot onto driver fresh → dormancy should be self-healing. No babysit needed unless driver regresses.
-5. **#12801 self-held by skill** (no-TUI capability escalation) — pending operator decision; not a stall.
-6. Open filed-this-session items to track (all role:skill): **#12824** (harness assigned-to 500), **#12820** (qa port-desync), **#12818** (L2 PM brief-no-action — operator directive), **#12825 approved** (supervised harness launcher + agent-triggerable restart + sub-skill + catalog — gives PM/system harness-restart ability; operator-requested, deployment-relevant). #12506/#12799 SHIPPED.
-7. **Harness restart is currently OPERATOR-ONLY** (start-harness.bat is one-shot, no relaunch loop → an agent can `/shutdown` but can't relaunch; #12825 fixes this). Don't attempt to self-restart the harness until #12825 ships.
+**Boot clean + full-fleet recovery.** Harness :7373 reachable (fresh boot, uptime <3m, git_sha b15e7fc5, v0.44.0). GH OK. Cursor `a88a25471a680d00` → boot drain EMPTY. bootup-complete emitted. 0 untriaged external. Pipeline: **0 open pending-test, 0 open pending-ship** (forge-verified).
+
+**This reboot = the operator fleet reboot prior session anticipated** (activate #12506 self-wake driver + new Soul). Ground-truth (Facts-Over-Context, cross-checked /status + git log):
+
+1. **All 4 agents respawned + healthy + EVENT mode + bootup=True** (dm/pm/qa/skill all running, recent activity). skill actively cycling during my boot (#12799 comprehension spec + vault notes).
+2. **qa reached bootup-complete in EVENT mode** — NOTABLE positive vs the long qa-inert/polling saga (#12820 port-desync / #10855 inert-boot). Fresh restart appears to have resynced qa's clone port. **WATCH next qa cycle to confirm it stays event-mode — single observation, do NOT declare #12820 fixed yet.**
+3. **#12506 SHIPPED** (PR #12812, `references/scripts/subloop_driver.py`) + **#12408 SHIPPED** (PR #12819, static-gate fail-closed). iter-699 wedge fully resolved. Driver arms on fresh boot → all 4 agents now armed → **dormancy/idle-stall class self-healing**.
+4. **Boot-pull lag (recurring, now chronic):** pm clone booted 13 behind origin AGAIN (cf iter-699 14-behind). Recovered: committed 3 artifacts → merged origin/main clean (x2, concurrent skill pushes) → pushed → in sync (HEAD aefd6178f). **Pattern chronic across reboots — candidate to file if it persists; harness boot-pull unreliable for pm clone specifically.**
+
+**Open items to track:**
+- **#12824** (high, skill) — harness `assigned-to` POST 500s. Fresh restart MAY have cleared stale state; did NOT test with spurious inject (would misroute). bootup-complete + ack-cursor POSTs work fine. #12506 driver makes it NON-URGENT for dormancy; still matters for handoff routing → reveals on next real handoff (0 PT/PS now = nothing dropped). skill owns the fix.
+- **#12801** (skill) — TUI bottom-bar, self-HELD by skill (no-TUI capability escalation). Pending operator decision; not a stall.
+- **skill in-progress:** #12824, #12801, #12493 (L2 pipeline-sentinel), #12450 (installer unit-test detect), #10855 (verifier inert-boot).
+- **PM in-progress (parked coordination-holds, unchanged):** #11092, #11053, #9968.
+- **PM approved queue (operator-paced, NOT autonomously actionable):** #10839/#10838/#10837/#10690 umbrella PRDs need DS re-audit; #10690 gated.
 
 ---
 
-## Current — 2026-06-18 16:23 (PM EVENT-mode, fresh boot after self-restart)
+## Superseded — 2026-06-18 16:23 (PM EVENT-mode, fresh boot after self-restart)
 
 **Boot clean.** Harness :7373 reachable (uptime 15h, git_sha 00757fe4, v0.44.0). GH OK. Cursor `3050d070742dc2e9` → boot drain EMPTY. bootup-complete emitted (ok). 0 untriaged external. Pipeline: **0 open pending-test, 0 open pending-ship** (forge-verified).
 
