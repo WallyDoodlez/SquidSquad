@@ -58,6 +58,8 @@ references/scripts/vault_entity.py
 references/scripts/vault_optimize.py
 references/scripts/vault_remember.py
 references/scripts/wizard.py
+references/tui/__init__.py
+references/tui/harness_client.py
 references/git-hooks/pre-commit
 references/roles/worker/android/includes.yml
 references/roles/worker/android/instructions.md

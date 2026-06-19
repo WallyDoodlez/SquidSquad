@@ -1,0 +1,138 @@
+"""Tests for the TUI harness data layer (#12801 Story 1.2).
+
+Pure derivation functions (work-state, cursor-lag bar, row shaping) +
+graceful fetch failure. No Textual, no running harness.
+"""
+
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "references" / "tui"))
+
+import harness_client as hc  # noqa: E402
+
+
+NOW = 1_000_000.0
+
+
+# --- derive_work_state -----------------------------------------------------
+
+class TestDeriveWorkState:
+    def test_working_when_current_cycle_set(self):
+        a = {"status": "running", "intent": "running", "current_cycle": 42}
+        assert hc.derive_work_state(a, NOW) == hc.WORK_STATE_WORKING
+
+    def test_working_when_in_flight_future(self):
+        a = {"status": "running", "intent": "running",
+             "current_cycle": None, "in_flight_until": NOW + 100}
+        assert hc.derive_work_state(a, NOW) == hc.WORK_STATE_WORKING
+
+    def test_idle_when_alive_and_nothing_in_progress(self):
+        a = {"status": "running", "intent": "running",
+             "current_cycle": None, "in_flight_until": None}
+        assert hc.derive_work_state(a, NOW) == hc.WORK_STATE_IDLE
+
+    def test_idle_when_in_flight_in_past(self):
+        a = {"status": "running", "intent": "running",
+             "current_cycle": None, "in_flight_until": NOW - 100}
+        assert hc.derive_work_state(a, NOW) == hc.WORK_STATE_IDLE
+
+    def test_down_when_not_running(self):
+        a = {"status": "stopped", "intent": "running", "current_cycle": 7}
+        assert hc.derive_work_state(a, NOW) == hc.WORK_STATE_DOWN
+
+    def test_down_when_intent_restarting(self):
+        # qa's real /status shape during a restart: running + restarting.
+        a = {"status": "running", "intent": "restarting", "current_cycle": None}
+        assert hc.derive_work_state(a, NOW) == hc.WORK_STATE_DOWN
+
+    def test_color_mapping(self):
+        assert hc.WORK_STATE_COLOR[hc.WORK_STATE_WORKING] == "green"
+        assert hc.WORK_STATE_COLOR[hc.WORK_STATE_IDLE] == "yellow"
+        assert hc.WORK_STATE_COLOR[hc.WORK_STATE_DOWN] == "red"
+
+
+# --- lag_to_bar ------------------------------------------------------------
+
+class TestLagToBar:
+    def test_caught_up_arrow_at_right_no_alert(self):
+        bar, alert = hc.lag_to_bar(0, scale=10, width=6)
+        assert bar == "[-----→]"  # arrow at far right
+        assert alert is False
+
+    def test_far_behind_arrow_at_left_alert(self):
+        bar, alert = hc.lag_to_bar(10, scale=10, width=6)
+        assert bar == "[→-----]"  # arrow at far left
+        assert alert is True
+
+    def test_lag_beyond_scale_clamps_to_left(self):
+        bar, alert = hc.lag_to_bar(999, scale=10, width=6)
+        assert bar == "[→-----]"
+        assert alert is True
+
+    def test_negative_lag_treated_as_caught_up(self):
+        bar, alert = hc.lag_to_bar(-5, scale=10, width=6)
+        assert bar == "[-----→]"
+        assert alert is False
+
+    def test_exactly_one_arrow_in_bar(self):
+        for lag in range(0, 12):
+            bar, _ = hc.lag_to_bar(lag, scale=10, width=6)
+            assert bar.count("→") == 1
+            assert len(bar) == 8  # "[" + 6 + "]"
+
+
+# --- agent_rows ------------------------------------------------------------
+
+class TestAgentRows:
+    def test_shapes_rows_with_derived_fields(self):
+        status = {"agents": [
+            {"role": "skill", "status": "running", "intent": "running",
+             "current_cycle": 5, "last_activity_at": NOW, "lag": 0},
+            {"role": "qa", "status": "running", "intent": "restarting",
+             "current_cycle": None, "lag": 10},
+        ]}
+        rows = hc.agent_rows(status, NOW)
+        by_role = {r["role"]: r for r in rows}
+        assert by_role["skill"]["work_state"] == "working"
+        assert by_role["skill"]["color"] == "green"
+        assert by_role["skill"]["lag_alert"] is False
+        assert by_role["qa"]["work_state"] == "down"
+        assert by_role["qa"]["color"] == "red"
+        assert by_role["qa"]["lag_alert"] is True
+
+    def test_missing_lag_defaults_to_zero(self):
+        status = {"agents": [{"role": "dm", "status": "running",
+                              "intent": "running", "current_cycle": None}]}
+        rows = hc.agent_rows(status, NOW)
+        assert rows[0]["lag"] == 0
+        assert rows[0]["lag_alert"] is False
+
+    def test_empty_agents(self):
+        assert hc.agent_rows({"agents": []}, NOW) == []
+        assert hc.agent_rows({}, NOW) == []
+
+
+# --- fetch_json graceful failure ------------------------------------------
+
+class TestFetchJson:
+    def test_returns_none_on_unreachable(self):
+        # Nothing listening on this port → URLError → None (graceful).
+        assert hc.fetch_json("http://127.0.0.1:9", "/status", timeout=1) is None
+
+    def test_parses_ok(self, monkeypatch):
+        import io
+
+        class _Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return b'{"agents": []}'
+
+        monkeypatch.setattr(hc.urllib.request, "urlopen", lambda *a, **k: _Resp())
+        assert hc.fetch_json("http://x", "/status") == {"agents": []}
