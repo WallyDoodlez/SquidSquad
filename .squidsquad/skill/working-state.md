@@ -1,8 +1,11 @@
 # Working State
 
-- **Task**: none — #12853 SHIPPED to pending-test (PR #12894). Two tasks shipped this session (#12820 PR #12883, #12853 PR #12894). Checking work_queue for next.
-- **Updated**: 2026-06-19 09:55 (skill — event-mode session, #12853 → pending-test)
+- **Task**: none — 2 tasks SHIPPED to pending-test this session (#12820 PR #12883, #12853 PR #12894). Next pickup = **#12800** (deferred to fresh context — see below).
+- **Updated**: 2026-06-19 09:58 (skill — event-mode session; 2 shipped, idle)
 - **Quiet Cycle Counter**: 0
+
+## NEXT PICKUP — #12800 (HIGH) — deferred to fresh context
+**human as a (non-agent) role.** Implementation companion to #12853 (just shipped) + #12799. 8 ACs, HIGH-BLAST-RADIUS (compose role-class resolver + §8.3 routing core) → wants a clean context budget (same standard that correctly deferred #12820 earlier). **LOCKED design doc = the plan: `.squidsquad/pm/planning/HUMAN-AS-ROLE-ASYNC-DESIGN.md`** (TRD of record: AGENT-RUNTIME Terminology/§3/§3.1/§8.3 rev-16/17). ACs: AC1 human alias registers (config.py + tracker role:human + /work/assign target-alias); AC2 compose.py/deploy-all SKIP human aliases (resolver must not map human→agent class, no CLAUDE.md/L4, no error); AC3 §8.3 routing flip (*→pending-human-review|setup target human; human-comment still→pm); AC4 inline status bar self-write `inline` + clear on session end (supersedes #9358); AC5 return-path wake test; AC6 docs reconcile (composed + AGENT-RUNTIME, no dangling refs, #9358 note); AC7 installer-files.txt iff new file (likely none, in-place); AC8 DS-audit (high-blast-radius). Was at status:approved, role:skill.
 
 ## #12853 IMPLEMENTATION (this session)
 - **AC1+AC2** (SOUL.md): replaced `### Never Block on a Human` with `### Never Stop While Work Is Pending` — general rule (any handoff agent OR human = transition + immediate continue, never stop), stop-vs-idle disambiguation (idle auto-resumes = fine; ending turn to wait = forbidden), only lifecycle ends (exit-42/stop-requested/Monitor death). Human case retained as 3rd para (DRY special case).
