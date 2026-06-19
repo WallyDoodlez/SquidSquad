@@ -3293,6 +3293,7 @@ class TestEADStatusRouting12342(unittest.TestCase):
         "pm": ("pm", None),
         "verifier": ("verifier", None),
         "dm": ("dm", None),
+        "human": ("human", None),  # #12800: non-agent role-class
     }
 
     def _issue(self, num, status, role="skill", updated="2099-01-01T00:00:00Z"):
@@ -3335,6 +3336,37 @@ class TestEADStatusRouting12342(unittest.TestCase):
         _, emitted = self._run([self._issue(2, "pending-ship", role="skill")])
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0]["target_alias"], "dm")
+
+    def test_pending_human_review_routes_to_human(self):
+        """#12800 AC3: an agent-needs-human handoff routes to the install's
+        `human` alias (was pm), resolved via the role-class registry."""
+        _, emitted = self._run(
+            [self._issue(20, "pending-human-review", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "human",
+                         "pending-human-review must route to the human alias "
+                         "(#12800), NOT pm and NOT the issue's worker label")
+
+    def test_pending_human_setup_routes_to_human(self):
+        """#12800 AC3: worker-pause-for-setup also routes to the human alias."""
+        _, emitted = self._run(
+            [self._issue(21, "pending-human-setup", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "human")
+
+    def test_pending_human_does_not_enter_handoff_reemit_12800(self):
+        """#12800: a human is NOT on the event bus, so the assigned-to <human>
+        is emitted once for forge/audit but must NOT enter the #12442 handoff
+        re-emit cadence (re-nudging would pile up never-consumed events). A
+        real agent handoff (pending-test → verifier) DOES seed the re-emit."""
+        det, emitted = self._run(
+            [self._issue(22, "pending-human-review", role="skill")])
+        self.assertEqual(emitted[0]["target_alias"], "human")
+        self.assertNotIn(22, det._handoff_emit_at,
+                         "human routing must not seed the handoff re-emit timer")
+        det2, _ = self._run([self._issue(23, "pending-test", role="skill")])
+        self.assertIn(23, det2._handoff_emit_at,
+                      "agent handoff (pending-test) must seed the re-emit timer")
 
     def test_approved_routes_to_worker_label(self):
         _, emitted = self._run([self._issue(3, "approved", role="skill")])

@@ -3960,6 +3960,14 @@ class ExternalActivityDetector:
         "status:approved": ("label", None),
         "status:pending-test": ("role_class", "verifier"),
         "status:pending-ship": ("role_class", "dm"),
+        # #12800: human-needed handoffs route to the install's `human`-class
+        # alias (AGENT-RUNTIME §8.3; was pm). Resolved via
+        # config.parse_aliases_registry; falls back to the bare class name
+        # `human` if no human alias is registered. An assigned-to <human>
+        # event is appended for forge/audit correctness — the human is not on
+        # the event bus and reads it on the forge (or inline), per §3.1.
+        "status:pending-human-review": ("role_class", "human"),
+        "status:pending-human-setup": ("role_class", "human"),
     }
 
     # #12442: terminal HANDOFF statuses route to a *different* agent than the
@@ -4136,6 +4144,17 @@ class ExternalActivityDetector:
 
         check_time = time.time()
 
+        # #12800: the #12442 re-emit cadence is a backstop for handoff work
+        # dispatched to an *agent* on the event bus (verifier/dm) that may be
+        # busy. Non-agent role-classes (`human`) are not on the bus and never
+        # consume the nudge, so they must emit once (forge/audit) but never
+        # re-emit. Resolve the agent role-class set once per poll.
+        try:
+            import config as _cfg_handoff
+            _agent_role_classes = _cfg_handoff.AGENT_ROLE_CLASSES
+        except Exception:
+            _agent_role_classes = frozenset({"pm", "worker", "verifier", "dm"})
+
         for issue in issues:
             issue_num = issue.get("number", 0)
             labels = {l.get("name", "") for l in issue.get("labels", [])}
@@ -4149,8 +4168,14 @@ class ExternalActivityDetector:
             # planned, pending, planning) emit nothing.
             routing = self._STATUS_ROUTING.get(status)
             # is_handoff: routes to a *different* agent than the builder
-            # (verifier/dm). These get the #12442 re-emit cadence.
-            is_handoff = bool(routing) and routing[0] == "role_class"
+            # (verifier/dm). These get the #12442 re-emit cadence. #12800:
+            # non-agent role-classes (`human`) route via role_class but are NOT
+            # on the bus — exclude them so they emit once and never re-nudge.
+            is_handoff = (
+                bool(routing)
+                and routing[0] == "role_class"
+                and routing[1] in _agent_role_classes
+            )
 
             # Change-detection (#12342): has the status changed since we last
             # recorded it for this issue? A different status will re-record
