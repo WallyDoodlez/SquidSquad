@@ -1542,6 +1542,13 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         cls.app = app
         cls.state = state
 
+    def setUp(self):
+        # #12825 DS-F2: /shutdown and /restart share a single-winner teardown
+        # guard whose flag the real process clears by exiting. Tests reuse the
+        # process (and the flag can leak in from other test files), so reset it.
+        import harness
+        harness._teardown_in_progress = False
+
     def test_get_status(self):
         """GET /status returns harness and agent info."""
         with patch.object(self.state, "update_health"):
