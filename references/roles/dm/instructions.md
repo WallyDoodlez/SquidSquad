@@ -112,3 +112,9 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 → run sub-skill: l4-curation
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the safety-gate pipeline, and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+
+### Harness recovery (when the harness itself is degraded)
+
+→ run sub-skill: harness-restart
+
+When the harness process is alive but degraded in a way an agent-restart can't fix — event dispatch stopped waking agents, the L4 file-watch died, `/status` reports stale state a single reboot won't clear — a clean harness relaunch via `POST /restart` may be the remedy. The sub-skill covers when a restart is the right remedy (vs an operator-relaunch or code-fix situation), how to POST it, what to expect (the requesting agent's own session ends and the whole team respawns fresh under the supervised launcher), and post-restart verification from facts. A harness restart respawns the whole team, so prefer routing the recovery to PM (via a tracked status transition, not a bare comment) and let PM trigger it; self-serve the `POST /restart` directly only when waiting on PM would prolong an active outage and you have confirmed the symptom from facts.

@@ -39,6 +39,12 @@ REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUIDSQUAD_DIR = REPO_ROOT / ".squidsquad"
 HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 HARNESS_SCRIPT = SCRIPT_DIR / "harness.py"
+# Supervised launchers (#12825) — the relaunch wrapper that owns harness
+# lifecycle. Spawning the harness UNDER the wrapper is what makes POST /restart
+# self-healing: the harness exits 42, the wrapper relaunches it in place. Live
+# at repo root (installed via installer-files.txt).
+RESTART_WRAPPER_BAT = REPO_ROOT / "restart-harness.bat"
+RESTART_WRAPPER_SH = REPO_ROOT / "restart-harness.sh"
 
 HARNESS_STARTUP_TIMEOUT = 15  # seconds to wait for harness to start
 API_TIMEOUT = 10  # seconds for individual API calls
@@ -312,8 +318,34 @@ def cmd_shutdown():
 # Harness spawning
 # ---------------------------------------------------------------------------
 
+def _harness_launch_tail(system: str) -> list[str]:
+    """Resolve the command tail that runs the harness for `system`.
+
+    Prefers the SUPERVISED launcher (restart-harness.*) so an agent's
+    ``POST /restart`` relaunches the harness in place (#12825). Falls back to
+    running ``harness.py`` directly when the wrapper file is absent (partial
+    install / dev tree) — that path still boots the harness, but ``POST
+    /restart`` will stop it WITHOUT relaunching (graceful degradation).
+
+    `system` is one of ``"windows"`` / ``"darwin"`` / ``"linux"``. The returned
+    list is the program+args to run; POSIX callers shell-join it, the Windows
+    caller appends it to the terminal-spawn argv.
+    """
+    if system == "windows":
+        if RESTART_WRAPPER_BAT.exists():
+            return [str(RESTART_WRAPPER_BAT)]
+    else:
+        if RESTART_WRAPPER_SH.exists():
+            return ["bash", str(RESTART_WRAPPER_SH)]
+    return ["python", str(HARNESS_SCRIPT)]
+
+
 def _spawn_harness() -> int | None:
-    """Spawn the harness in a new terminal window. Returns port or None."""
+    """Spawn the harness in a new terminal window. Returns port or None.
+
+    The harness runs under the supervised launcher when available (see
+    `_harness_launch_tail`) so it can be restarted in place via POST /restart.
+    """
     if not HARNESS_SCRIPT.exists():
         print(f"ERROR: harness.py not found at {HARNESS_SCRIPT}", file=sys.stderr)
         return None
@@ -327,6 +359,8 @@ def _spawn_harness() -> int | None:
     else:
         system = "linux"
 
+    tail = _harness_launch_tail(system)
+
     if system == "windows":
         wt = shutil.which("wt")
         if wt:
@@ -334,7 +368,7 @@ def _spawn_harness() -> int | None:
                 subprocess.Popen(
                     [wt, "new-tab", "--title", "squidsquad-harness",
                      "-d", str(REPO_ROOT),
-                     "python", str(HARNESS_SCRIPT)],
+                     *tail],
                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                     cwd=str(REPO_ROOT),
                 )
@@ -346,7 +380,7 @@ def _spawn_harness() -> int | None:
             try:
                 subprocess.Popen(
                     ["cmd", "/c", "start", "squidsquad-harness",
-                     "python", str(HARNESS_SCRIPT)],
+                     *tail],
                     creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                     cwd=str(REPO_ROOT),
                 )
@@ -359,7 +393,7 @@ def _spawn_harness() -> int | None:
             import shlex
             apple_script = (
                 f'tell application "Terminal" to do script '
-                f'"cd {shlex.quote(str(REPO_ROOT))} && python {shlex.quote(str(HARNESS_SCRIPT))}"'
+                f'"cd {shlex.quote(str(REPO_ROOT))} && {shlex.join(tail)}"'
             )
             subprocess.Popen(["osascript", "-e", apple_script])
         except Exception as e:
@@ -375,7 +409,7 @@ def _spawn_harness() -> int | None:
                 import shlex
                 subprocess.Popen(
                     [tmux, "new-session", "-d", "-s", "squidsquad-harness",
-                     f"cd {shlex.quote(str(REPO_ROOT))} && python {shlex.quote(str(HARNESS_SCRIPT))}"],
+                     f"cd {shlex.quote(str(REPO_ROOT))} && {shlex.join(tail)}"],
                 )
             except Exception as e:
                 print(f"Failed to spawn harness via tmux: {e}", file=sys.stderr)

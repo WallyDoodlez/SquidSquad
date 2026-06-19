@@ -107,6 +107,7 @@ Reusable across multiple roles.
 | `resume-working-state` | Resume in-flight work from `.squidsquad/<alias>/working-state.md` on cycle entry | all roles |
 | `interval-sync` | Honor the configured cycle interval | all roles |
 | `self-restart` | Detect context-pressure exit and let the harness respawn | PM, verifier, DM, worker |
+| `harness-restart` | **Reactive** (not a cycle step): request a clean harness relaunch via `POST /restart` when the harness is degraded beyond what an agent-restart fixes — requesting agent's own session ends, whole team respawns fresh under the supervised launcher. The harness-layer mirror of `self-restart`. PM is the coordinator; other roles route the request to PM. Wired v2-style (`→ run sub-skill: harness-restart` in all four role L2 `instructions.md`, NOT via `includes.yml`). | PM, verifier, DM, worker (reactive) |
 | `agent-lifecycle` | Heartbeat, singleton enforcement, reboot signaling | PM, verifier, DM, worker |
 | `boot-remote-agents` | PM-only: spawn stalled agents via `boot_remote.py` when the harness can't | PM |
 

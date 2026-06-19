@@ -127,6 +127,12 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the safety-gate pipeline, and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
 
+### Harness recovery (when the harness itself is degraded)
+
+→ run sub-skill: harness-restart
+
+When the harness process is alive but degraded in a way an agent-restart can't fix — event dispatch stopped waking agents, the L4 file-watch died, `/status` reports stale state a single reboot won't clear — request a clean harness relaunch via `POST /restart`. The sub-skill covers when a restart is the right remedy (vs an operator-relaunch or code-fix situation), how to POST it, what to expect (the requesting agent's own session ends and the whole team respawns fresh under the supervised launcher), and post-restart verification from facts. As PM you are the designated coordinator for this — other roles route harness-recovery requests to you, and you confirm the symptom from facts before triggering it.
+
 ### Issue filing (when a bug or task surfaces during the cycle)
 
 → run sub-skill: roles/pm/issue-filing

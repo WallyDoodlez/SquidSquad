@@ -8,8 +8,13 @@ Covers the deterministic foundation (this slice):
 - **AC1** — ``restart-harness.sh`` auto-relaunches on the restart code, stops on a
   clean exit, and gives up after a crash-loop (bash-gated behavioral test).
 
-AC3 (sub-skill), AC4 (catalog), AC5 (installer default), AC6 (compose), AC7 (CQ),
-AC8 (DS audit) land in the next slice.
+- **AC5** — ``squidsquad_cli._harness_launch_tail`` runs the harness UNDER the
+  supervised wrapper when present (so the canonical ``squidsquad_cli start`` path
+  is self-healing), and falls back to bare ``harness.py`` when the wrapper is
+  absent. The installer manifest ships both wrappers.
+
+AC3 (sub-skill), AC4 (catalog), AC6 (compose), AC7 (CQ), AC8 (DS audit) are
+verified outside this file (docs / composed output / comprehension specs).
 """
 
 import os
@@ -159,6 +164,51 @@ class TestSupervisedLauncherSh(unittest.TestCase):
             self.assertEqual(r.returncode, 1)
             self.assertEqual((Path(tmp) / "count.txt").read_text(), "3")
             self.assertIn("crash-loop detected", r.stderr)
+
+
+try:
+    import squidsquad_cli
+    _CLI_OK = True
+except Exception:  # pragma: no cover - import guard
+    _CLI_OK = False
+
+
+@unittest.skipUnless(_CLI_OK, "squidsquad_cli not importable")
+class TestCliSupervisedLaunch(unittest.TestCase):
+    """AC5 wiring: the canonical `squidsquad_cli start` path spawns the harness
+    under the supervised wrapper so POST /restart relaunches in place — with a
+    graceful fallback to bare harness.py when the wrapper is absent."""
+
+    def _tail(self, system, bat_exists, sh_exists):
+        bat = MagicMock()
+        bat.exists.return_value = bat_exists
+        bat.__str__ = lambda self: "/repo/restart-harness.bat"
+        sh = MagicMock()
+        sh.exists.return_value = sh_exists
+        sh.__str__ = lambda self: "/repo/restart-harness.sh"
+        with patch.object(squidsquad_cli, "RESTART_WRAPPER_BAT", bat), \
+             patch.object(squidsquad_cli, "RESTART_WRAPPER_SH", sh):
+            return squidsquad_cli._harness_launch_tail(system)
+
+    def test_windows_uses_wrapper_bat_when_present(self):
+        tail = self._tail("windows", bat_exists=True, sh_exists=False)
+        self.assertEqual(tail, ["/repo/restart-harness.bat"])
+
+    def test_posix_uses_wrapper_sh_via_bash_when_present(self):
+        for system in ("darwin", "linux"):
+            tail = self._tail(system, bat_exists=False, sh_exists=True)
+            self.assertEqual(tail, ["bash", "/repo/restart-harness.sh"])
+
+    def test_falls_back_to_bare_harness_when_wrapper_absent(self):
+        for system in ("windows", "darwin", "linux"):
+            tail = self._tail(system, bat_exists=False, sh_exists=False)
+            self.assertEqual(tail[0], "python")
+            self.assertTrue(tail[1].endswith("harness.py"))
+
+    def test_real_wrappers_exist_on_disk(self):
+        # The wrappers the manifest ships must actually be present at repo root.
+        self.assertTrue(squidsquad_cli.RESTART_WRAPPER_BAT.exists())
+        self.assertTrue(squidsquad_cli.RESTART_WRAPPER_SH.exists())
 
 
 if __name__ == "__main__":
