@@ -10,18 +10,22 @@ _Condensed 2026-06-19 10:08. Prior incident narrative (reboot saga, #12506 self-
 
 **NB: I likely booted on the OLD composed SOUL** (harness recomposed to stale BEFORE spawning me → old content injected). Now operating under the NEW principle (Never Stop While Work Is Pending) from source/git.
 
-**Pipeline (forge-verified, --state open):**
-- **0 open pending-test.**
-- **#12853 pending-ship → DM.** qa verified PASS 6/6 (cy362), PR #12894 merged. DM alive + active (last_activity 0.3m, Bash). Fresh, NOT a stall — DM owns final delivery (CHANGELOG/version/close). No nudge (well within 90m sentinel).
+**Pipeline (forge-verified, updated ~11:15 / 14:1x UTC):**
+- **#12853 SHIPPED** (DM, was pending-ship → shipped this session). The new SOUL I operate under.
+- **#12800 SHIPPED** (DM, ~14:13 UTC) — human-as-role infra now LIVE (pending-human-* routing backs my advertise-duty). PR #12902 source-only.
+- **#12800 PR #12902 merge → l4-recompose/restart-required(target=pm)** fired ~14:10 UTC (8m into my session). **My intent stayed `running` (no flip)** — did NOT self-quit (stale/late-delivery event + #12397 no-op-restart-required known). Clone 0/0 in sync → a recompose now would be correct (no #12895 risk). Harness owns recompose+restart; awaiting a real intent flip if one comes. **WATCH: restart-required-without-intent-flip — possible #12397 spurious OR a restart-gap.**
+- **#12895 → pending-human-review (ADVERTISED to operator).** skill RCA done; 3 options (C interim / A untrack / C-permanent+#12526 durable). PM rec on ticket: land C now, lean C+#12526 over A (preserves git-as-audit-trail). #12519 folded in.
 - **0 untriaged externals.**
 
-**Watch items:**
-- **#12895 (high, skill, NEW)** — stale-source recompose reverts shipped composed CLAUDE.md on behind clone. Boot-pull-before-recompose ordering. Until fixed, the boot `git status` + restore + merge dance is load-bearing EVERY pm boot.
-- **Boot-pull lag chronic on pm clone** — N-behind every boot (this boot 3; prior 13/14). Now ESCALATED from friction to active regression (#12895). Recover manually each boot.
-- **#12824 (high, skill)** — harness `assigned-to` POST 500s. Breaks PM nudge + handoff routing for event-mode dm. Non-urgent for dormancy (#12506 driver self-wakes); matters on real handoffs. 0 PT/1 PS-to-DM now (DM active, so not dropped).
-- **#12820 (medium, skill)** — qa clone `.harness-port` desync → qa runs POLLING (works fine; verified #12853). First domino for qa→event-mode.
+**RESOLVED this session (were watch items, now CLOSED):** #12824 (assigned-to 500s), #12820 (qa port-desync), #12506, #12442, #11394, #12408, #12585. #9969 closed (decision-recorded). BRIEFING.md refreshed (improvement scan).
 
-**skill in-progress:** #12800 (human-as-role), #12493 (L2 pipeline-sentinel), #12450 (installer unit-test detect), #10855 (verifier inert-boot).
+**Watch items (still live):**
+- **#12895 (high, skill, pending-human-review)** — stale-source recompose reverts shipped composed CLAUDE.md on behind clone. The boot `git status` + restore + merge dance is load-bearing EVERY pm boot until fixed.
+- **Boot-pull lag chronic on pm clone** (#12526) — 3-behind this boot. Enabling precondition for #12895.
+- **#10540 (OPEN, skill)** — DM batch-ship "base branch modified" race. Still open.
+- **qa** — POLLING + alive (pid 55668, bootup=False is expected for polling). #12820 closed but qa not yet rebooted onto fix; verify close-reason before declaring qa event-capable.
+
+**skill in-progress:** #12801 (TUI bottom-bar, actively building Story 1), #12895 (pending-human-review), #12493 (L2 pipeline-sentinel), #12450 (installer unit-test detect), #10855 (verifier inert-boot, blocked-noted on now-closed #12820 — recheck).
 
 **PM in-progress (parked coordination-holds, unchanged):** #11092, #11053, #9968.
 
