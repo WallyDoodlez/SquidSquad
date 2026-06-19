@@ -330,7 +330,17 @@ def set_field(field, value):
 # Greenfield: legacy bullet-form `- **alias**: value` still read by
 # `_parse_field_in_text` for `get_alias` etc., untouched by this function.
 
-ALIASES_ROLE_CLASSES = frozenset({"pm", "worker", "verifier", "dm"})
+# Agent role-classes — map to composed CLAUDE.md / L1-L4 sources and are
+# spawned + supervised by the harness.
+AGENT_ROLE_CLASSES = frozenset({"pm", "worker", "verifier", "dm"})
+# Non-agent role-classes (#12800) — routable on the forge but NOT agents: no
+# composed CLAUDE.md, no L1-L4, no SOUL, not spawned/supervised, not on the
+# event bus. `human` is the first: agents assign work to a human alias and a
+# person acts on it asynchronously. compose.py MUST skip these (no CLAUDE.md /
+# L4), and the harness must not poll them for liveness.
+NON_AGENT_ROLE_CLASSES = frozenset({"human"})
+# Every role-class accepted in the `## Aliases` registry (agent + non-agent).
+ALIASES_ROLE_CLASSES = AGENT_ROLE_CLASSES | NON_AGENT_ROLE_CLASSES
 
 # #6274 dual-aware shim mirror — bullet-form fallback and table-form
 # normalization both pre-map legacy aliases (`qa` → `verifier`,
