@@ -69,12 +69,22 @@ class TestGlobalExceptionHandler(unittest.TestCase):
         self.assertIn("RuntimeError", ctx)
         self.assertIn("boom-12824", ctx)
 
-    def test_intentional_httpexception_is_not_captured(self):
+    def test_intentional_400_httpexception_is_not_captured(self):
         """The 400 (missing fields) is an intentional ``HTTPException`` — Starlette
         routes it through its own handler, so it must NOT hit the 500 capture."""
         with patch("harness._persist_harness_error") as mock_persist:
             resp = self.client.post("/events", json={"role": "skill"})  # no event_type
         self.assertEqual(resp.status_code, 400)
+        mock_persist.assert_not_called()
+
+    def test_intentional_404_httpexception_is_not_captured(self):
+        """The 404 (unknown role via _validate_role) must also stay 404, not be
+        converted to 500 by the global handler (DS-review F1 — the invariant the
+        handler's isinstance re-raise guards)."""
+        with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
+             patch("harness._persist_harness_error") as mock_persist:
+            resp = self.client.get("/events/cursor/bogus-role-xyz")
+        self.assertEqual(resp.status_code, 404)
         mock_persist.assert_not_called()
 
 
@@ -149,6 +159,27 @@ class TestPersistHarnessError(unittest.TestCase):
             except ValueError:
                 # Must not propagate.
                 harness._persist_harness_error("ctx")
+
+    def test_log_rotates_past_size_cap(self):
+        """DS-review F3: an oversized log rotates to ``.1`` so a recurring fault
+        cannot grow it unbounded and exhaust the disk."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            log_path = Path(td) / "harness-errors.log"
+            rotated = Path(td) / "harness-errors.log.1"
+            # Seed an oversized current log.
+            log_path.write_text("X" * (harness._HARNESS_ERROR_LOG_MAX_BYTES + 10),
+                                encoding="utf-8")
+            with patch("harness._harness_error_log_path", return_value=log_path):
+                try:
+                    raise ValueError("post-rotation-entry")
+                except ValueError:
+                    harness._persist_harness_error("ROT /test")
+            # Old bulk moved aside; fresh log holds only the new entry.
+            self.assertTrue(rotated.exists(), "oversized log should rotate to .1")
+            fresh = log_path.read_text(encoding="utf-8")
+            self.assertIn("post-rotation-entry", fresh)
+            self.assertNotIn("XXXX", fresh)
 
 
 if __name__ == "__main__":

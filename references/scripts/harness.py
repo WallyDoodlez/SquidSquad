@@ -2055,6 +2055,13 @@ app = FastAPI(
 # ---------------------------------------------------------------------------
 
 
+# Bound the error log so a recurring fault can't fill the disk (#12824
+# DS-review F3): .squidsquad/ lives inside the repo checkout, so exhaustion
+# would break ALL harness persistence (state saves, event persistence, port
+# file). Single-file rotation caps total at ~2× this threshold.
+_HARNESS_ERROR_LOG_MAX_BYTES = 1_000_000
+
+
 def _harness_error_log_path() -> Path:
     """Path to the persisted harness error log. Resolved per-call so test
     isolation (SQUIDSQUAD_DIR override) is honored and the helper is patchable."""
@@ -2075,6 +2082,14 @@ def _persist_harness_error(context: str) -> None:
     try:
         log_path = _harness_error_log_path()
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Rotate before append if the log has grown past the cap (DS-review F3).
+        try:
+            if (log_path.exists()
+                    and log_path.stat().st_size > _HARNESS_ERROR_LOG_MAX_BYTES):
+                log_path.replace(log_path.with_name(log_path.name + ".1"))
+        except OSError:
+            # Rotation is best-effort — fall through to the append regardless.
+            pass
         with open(log_path, "a", encoding="utf-8") as fh:
             fh.write(entry)
     except Exception:
@@ -2087,12 +2102,19 @@ async def _capture_unhandled_exception(request: Request, exc: Exception):
     """Global 500 handler (#12824): persist the traceback, then return the
     standard 500 contract.
 
-    Starlette routes ``HTTPException`` (the intentional 400/404 raises) through
-    its own handler, so this only fires on genuinely-unhandled exceptions — the
-    500s we want diagnosable. The response body matches Starlette's default
-    ``ServerErrorMiddleware`` 500 so no caller contract changes; the only added
-    behavior is the on-disk traceback.
+    Starlette routes ``HTTPException`` (the intentional 400/404/503 raises)
+    through ``ServerErrorMiddleware``'s sibling ``ExceptionMiddleware``, so this
+    handler only fires on genuinely-unhandled exceptions — the 500s we want
+    diagnosable. The ``isinstance`` re-raise below is defensive belt-and-braces
+    (DS-review F1): it makes the "4xx are unaffected" invariant explicit and
+    robust even if that middleware split ever changes. The response body matches
+    Starlette's default ``ServerErrorMiddleware`` 500 so no caller contract
+    changes; the only added behavior is the on-disk traceback.
     """
+    if isinstance(exc, HTTPException):
+        # Intentional 4xx/503 — let Starlette render the real status. (Currently
+        # unreachable here; see docstring.)
+        raise exc
     _persist_harness_error(
         f"{request.method} {request.url.path} :: "
         f"{type(exc).__name__}: {exc}"
