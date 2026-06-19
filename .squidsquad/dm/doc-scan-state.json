@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "README.md",
+  "last_scanned": "CHANGELOG.md",
   "rotation_count": 75,
   "scan_history": [
     {
@@ -383,6 +383,27 @@
       "findings": 0,
       "fixes": [],
       "note": "current; sub-skill-guide framing staleness already tracked by #11400 back-reference sweep"
+    },
+    {
+      "file": "SKILL.md:frontmatter+versioning",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "version 0.44.0 matches config; auto-bump text is design-accurate (PM-signal hold is runtime preference, not doc bug)"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "6-layer structure coherent; no version drift, no dead commands; links DM-ARCH/VAULT-ARCH valid"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "latest [0.44.0] matches released version; v0.45.0 batch correctly deferred to held bump; well-framed. (sub-skill-guide pos.4 skipped \u2014 retiring per #11400; CONTRIBUTING pos.5 deferred)"
     }
   ],
   "doc_inventory": {

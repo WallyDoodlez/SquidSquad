@@ -3,7 +3,12 @@
 > **L4-recompose restart-required was a NO-OP (2026-06-14):** Harness emitted `restart-required` (reason l4-recompose, target_alias=dm). Acked it (loop-safe). Attempted cooperative /quit — but **/quit is a no-op in this session** (Monitor kept delivering nudges; session did not terminate). Then verified: my `.squidsquad/dm/CLAUDE.md` is byte-identical (last commit f8d867a9d 2026-06-12, working tree clean) → the recompose changed nothing to pick up. So NOT restarting was correct; /quit no-op was harmless. **Finding for PM/skill:** l4_file_watcher.py emits restart-required on compose *success* regardless of whether composed output actually changed (l4_file_watcher.py:149-156) — should diff CLAUDE.md before requesting a restart, else no-op L4 writes churn restarts. Also: this event-mode session cannot self-terminate via /quit; rely on harness/operator restart or context-pressure exit-42.
 
 - **Task**: none
-- **Status**: idle (queue empty; idle-driver re-armed)
+- **Status**: idle (queue empty; idle-driver re-armed Step D)
+
+### #12903 SHIPPED 2026-06-19 ~16:42 ✅ (run_tests.py integration_only guard drift fix)
+- PR #12904 base=main, qa PASS root-cause + 6 regression tests, zero regress. DM merged via harness /merge. No delivery:skip; citation N/A (type:issue bug). pending-ship→shipped (auto-closed). Counter **44→45**.
+- **Scope = run_tests.py + regression test ONLY** → no config.md (counter safe), no templates/sub-skills → **no recompose, no reboot**. (Verified merge stat: tests + run_tests.py only.)
+- Root fix: guard + dispatch derive from one shared `_INTEGRATION_MODULES` registry (can't drift again). Closes a loop qa filed in its own cy367 scan. CHANGELOG batched held v0.45.0 (dev-facing test-tooling).
 
 ### #12800 SHIPPED 2026-06-19 ~14:1x ✅ (human as non-agent role + inline status-bar indicator)
 - PR #12902 base=main, qa PASS 8/8 + comprehension 5/5 zero-regress. DM merged via harness POST /merge (success). No delivery:skip; citation N/A; base=main not stacked. pending-ship→shipped (auto-closed). Counter **43→44**.
