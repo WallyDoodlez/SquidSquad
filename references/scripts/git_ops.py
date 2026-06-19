@@ -5,6 +5,7 @@ Single source of truth for git operations used by agents.
 
 Usage:
     python scripts/git_ops.py pull                      # git pull (merge)
+    python scripts/git_ops.py ensure-main-and-pull [role]  # on-main + pull before a recompose (#12906)
     python scripts/git_ops.py add-all                   # git add -A
     python scripts/git_ops.py commit <role> <message>    # git commit with role prefix
     python scripts/git_ops.py push                      # git push
@@ -234,6 +235,48 @@ def pull(role=None):
         print("Pulled (stashed and popped)")
         _emit("git-pull", {"result": "stash"}, role=role)
     return True
+
+
+def ensure_main_and_pull(role=None):
+    """Put the clone on ``main`` and pull origin before a recompose/deploy.
+
+    #12906 (Phase 1 of #12895): every harness-side recompose path
+    (`compose.py deploy*` driven by the L4 file-watcher and the
+    post-merge deploy-all) MUST run against *current* source. A clone
+    that is on a feature branch or behind origin would otherwise
+    regenerate composed ``CLAUDE.md`` from stale source and push that
+    revert fleet-wide. This guard closes the root condition: ensure
+    main, then merge-pull origin.
+
+    Returns ``(ok: bool, detail: str)``. Never raises — the contract is
+    enforced here (a blanket ``try/except``) so every caller, including
+    the harness merge path that calls this directly, can trust ``ok`` and
+    abort the recompose on ``ok=False`` rather than wrap defensively. On
+    ``ok=False`` the agents keep their last-known-good composed output
+    until a later recompose succeeds.
+    """
+    try:
+        result = _run("git branch --show-current", check=False)
+        branch = result.stdout.strip() if result.returncode == 0 else ""
+        if branch != "main":
+            sw = _run_list(["git", "checkout", "main"], check=False)
+            if sw.returncode != 0:
+                detail = (sw.stderr or sw.stdout or "").strip()[:200]
+                print(
+                    f"WARNING: ensure_main_and_pull could not switch to main "
+                    f"from {branch!r}: {detail}",
+                    file=sys.stderr,
+                )
+                return False, f"checkout-main-failed (on {branch!r})"
+        if not pull(role=role):
+            return False, "pull-failed"
+        return True, "on-main-synced"
+    except Exception as exc:  # noqa: BLE001 — "Never raises" is the contract
+        print(
+            f"WARNING: ensure_main_and_pull raised unexpectedly: {exc!r}",
+            file=sys.stderr,
+        )
+        return False, f"unexpected: {exc!r}"
 
 
 def add_all():
@@ -1259,6 +1302,10 @@ def main():
 
     if cmd == "pull":
         pull(role=rest[0] if rest else None)
+    elif cmd == "ensure-main-and-pull":
+        ok, detail = ensure_main_and_pull(role=rest[0] if rest else None)
+        print(detail)
+        sys.exit(0 if ok else 1)
     elif cmd == "add-all":
         add_all()
     elif cmd == "commit":

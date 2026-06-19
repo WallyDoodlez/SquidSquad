@@ -3748,6 +3748,24 @@ async def merge_pr(request: Request):
 
             if refs_changed:
                 _log(f"PR #{pr_number} touched references/ — running compose...")
+                # #12906 (Phase 1 of #12895): the PR was merged on the
+                # remote — the local clone must be put on main + pulled
+                # BEFORE deploy-all, or compose regenerates every
+                # CLAUDE.md from pre-merge (stale) source and pushes that
+                # revert fleet-wide. If the clone can't be freshened,
+                # abort the recompose so agents keep last-known-good
+                # composed output until a later recompose succeeds.
+                fresh_ok, fresh_detail = git_ops.ensure_main_and_pull("harness")
+                if not fresh_ok:
+                    _log(f"WARNING: aborting compose after PR #{pr_number} — "
+                         f"could not freshen source ({fresh_detail}). Agents "
+                         f"keep current CLAUDE.md until next recompose.")
+                    _emit_event("compose-completed", "harness", payload={
+                        "success": False,
+                        "error": f"freshen-source-failed: {fresh_detail}",
+                        "trigger_pr": str(pr_number),
+                    })
+                    return
                 compose_result = subprocess.run(
                     [sys.executable, str(SCRIPT_DIR / "compose.py"), "deploy-all"],
                     capture_output=True, text=True, encoding="utf-8", errors="replace",
