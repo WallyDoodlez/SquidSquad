@@ -1,8 +1,15 @@
 # Working State
 
-- **Task**: #12450 (in-progress, branch `squidsquad/task/12450`) — Installer: auto-detect project's unit-testing strategy. **S1+S2 DONE; S3+S4 pending PM input (CQ AC + L3 placement).**
-- **Updated**: 2026-06-18 21:10 (skill — event-mode)
+- **Task**: #12825 (in-progress, branch `squidsquad/task/12825`) — supervised harness launcher + agent restart. **AC1+AC2 DONE; AC3-AC8 next.** (Also: #12450 S1+S2 done, S3/S4 PM-gated; #12824 shipped pending-test.)
+- **Updated**: 2026-06-18 21:25 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## #12825 — IN PROGRESS (branch squidsquad/task/12825) — AC1+AC2 DONE
+Operator-requested harness control surface (motivated by #12824: PM couldn't self-serve a harness restart). Confirmed NOT gated by #12801 (that was a harness-TUI false premise; this is concrete).
+- **AC2 DONE** — `POST /restart` (harness.py): refactored shared teardown into `_teardown_and_exit(exit_code, delete_port_file)`; `/shutdown`=exit 0 + delete port file, `/restart`=exit `HARNESS_RESTART_EXIT_CODE` (42, mirrors agent exit-42) + keep port file. Added to route-contract manifest (_EXTERNAL).
+- **AC1 DONE** — `restart-harness.bat`/`.sh` (repo root): supervised relaunch loop. exit 42→relaunch, 0/Ctrl+C→stop, abnormal→relaunch w/ crash-loop guard (give up after N). `SQUIDSQUAD_HARNESS_CMD` override = test seam. One-shot start-harness.* still works (graceful degradation).
+- Tests: `tests/test_12825_harness_restart.py` (7: endpoint args, teardown exit/port-file, bash launcher relaunch/clean-stop/crash-guard). Harness regression 337 passed.
+- **REMAINING (next slice):** AC3 new sub-skill (WHEN/HOW to request harness restart; requesting agent's own session ends) — LLM-consumed → **AC7 CQ** (AC7 already in issue body; verifier derives spec per skill-cq). AC4 catalog. AC5 installer ships launcher as default + installer-files.txt (launchers at repo ROOT — check how start-harness.* gets installed). AC6 compose-consumption verify (PM at least). AC8 DS audit on exit-code/endpoint. Then full suite → has-changes → pending-test.
 
 ## #12450 — IN PROGRESS (branch squidsquad/task/12450)
 PM lock: **L3 = behavior, L4-seed = specifics** (detection mechanism + fallback = my call). Predecessors #12419/#12420 SHIPPED (last in installer serial cluster — all touch wizard.py/WIZARD.md).
