@@ -39,7 +39,7 @@ _Condensed 2026-06-18 20:24. Prior incident narrative (reboot saga, event-mode s
 - **#12511 ESCALATED medium→high** — test-isolation leak (test events on LIVE bus, the #999/#42 flood) is now a confirmed trigger for the #12837 liveness failure. Same family. role:skill. **This flood is the source of the recurring no-action wakes; expect it to continue until skill fixes #12511.**
 
 **Open role:pm issues (issue-gate redirected scan → fix issues):**
-- **#12495 (medium) — TRIAGED this boot, HELD for operator.** Fork: (a) build `assigned-to` same-status injection primitive [feature→skill] vs (b) correct docs to reality [doc-bug→PM, spans 5 docs, 32 refs in AGENT-RUNTIME §8.3 alone]. **Recommended (b)** — #12506 (shipped) removed the main need for a manual injection primitive; #12824 (open) says don't extend the buggy injection path yet. Posted recommendation + flagged operator. **If no operator objection → execute (b) doc-purge next cycle.** Defaulting HOLD because (b) forecloses a deliberate §8.3 design.
+- **#12495 — RESOLVED (operator 2026-06-19): BUILD option (a).** Operator chose to build the wake-injection primitive (NOT correct-docs) as a BACKUP wake method (self-wake unproven) + PM babysitting tool for stuck agents. Reassigned role:pm→role:skill, operator-approved, full build spec posted. Cleared from PM queue.
 - **#11140 (medium) — REROUTED pm→skill (2026-06-19).** Orientation prose lives in references/ source = skill domain. Posted full spec (per-H2 orientation intent + ACs) so it doesn't bounce. Cleared from PM queue.
 - **#9969 (low) — manifest.md CLAUDE.md-vs-instructions.md naming convention question.** Deferred.
 
