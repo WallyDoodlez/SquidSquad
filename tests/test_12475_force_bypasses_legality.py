@@ -198,9 +198,13 @@ class TestForcedTransitionSideEffects:
         assert kwargs["add"] == ["status:planning"]
         assert sorted(kwargs["remove"]) == ["status:approved", "status:in-progress"]
 
-    def test_nonforced_swap_does_not_query_live_labels(self, monkeypatch, stub_forge):
-        """The hot non-forced path must NOT add a gh round-trip — it trusts
-        from_label (legality guarantees it is the real predecessor)."""
+    def test_nonforced_swap_queries_live_labels_for_single_status_invariant(
+        self, monkeypatch, stub_forge
+    ):
+        """#12914: the non-forced path now ALSO queries the live status labels
+        and strips all of them except the target, enforcing the single-status
+        invariant unconditionally. (Previously it trusted from_label and skipped
+        the query — the optimization that let stale status labels accumulate.)"""
         called = {"n": 0}
 
         def _spy(_n):
@@ -211,7 +215,44 @@ class TestForcedTransitionSideEffects:
         # in-progress -> approved is a legal edge for the assigned worker.
         monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda _n: {"skill"})
         tracker.transition(999, "in-progress", "approved", role="skill-lead", force=False)
-        assert called["n"] == 0
+        assert called["n"] == 1, "non-forced path must query live status labels (#12914)"
+        stub_forge.edit_labels.assert_called_once_with(
+            999, add=["status:approved"], remove=["status:in-progress"]
+        )
+
+    def test_nonforced_swap_strips_a_stale_extra_status_label(
+        self, monkeypatch, stub_forge
+    ):
+        """#12914 core fix: a NON-forced transition on an issue already carrying
+        a stale EXTRA status label (the accumulation defect) strips BOTH status
+        labels, landing exactly the target — so no issue can carry 2+ status
+        labels even on the hot path."""
+        # Issue is corrupted: carries the current in-progress PLUS a stale
+        # pending-test orphan (a prior leaked/raced transition). A legal
+        # in-progress -> approved swap must clean up the orphan too, not leave a
+        # third label behind.
+        monkeypatch.setattr(
+            tracker, "_get_issue_status_labels",
+            lambda _n: {"status:in-progress", "status:pending-test"},
+        )
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda _n: {"skill"})
+        tracker.transition(
+            999, "in-progress", "approved", role="skill-lead", force=False
+        )
+        args, kwargs = stub_forge.edit_labels.call_args
+        assert kwargs["add"] == ["status:approved"]
+        # BOTH prior status labels removed; the target is never in the remove set.
+        assert sorted(kwargs["remove"]) == ["status:in-progress", "status:pending-test"]
+
+    def test_nonforced_swap_falls_back_to_from_label_when_query_empty(
+        self, monkeypatch, stub_forge
+    ):
+        """When the live query returns nothing (API failure or a label-less
+        issue), fall back to removing from_label — never worse than the old
+        path."""
+        monkeypatch.setattr(tracker, "_get_issue_status_labels", lambda _n: set())
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda _n: {"skill"})
+        tracker.transition(999, "in-progress", "approved", role="skill-lead", force=False)
         stub_forge.edit_labels.assert_called_once_with(
             999, add=["status:approved"], remove=["status:in-progress"]
         )
