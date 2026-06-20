@@ -151,22 +151,40 @@ class TestRestartStep1bOrdering:
 
 
 class TestRestartAbortContract:
-    """AC2 — on compose failure the restart aborts in the sense that no
-    agents are spawned. Implementation lives in E1; this test pins the
-    contract from the restart-safety perspective."""
+    """AC2 — RETIRED by #12912 S5 (HARNESS-ARCH §10 step 1b). The boot path no
+    longer runs compose.py deploy-all locally, so there is no boot-compose
+    "failed" status and no boot-time spawn-refusal. Compose failures now surface
+    per-clone as deploy-error events (§11). The boot freshness check is
+    detect-only: on drift it flags for a deferred deploy-signal emit."""
 
-    def test_failed_status_sets_persistent_flag(self):
+    def test_boot_is_detect_only_no_failed_branch(self):
         src = _harness_source()
         start = src.index("async def lifespan(")
         end = src.index("app = FastAPI(", start)
         block = src[start:end]
-        assert 'status == "failed"' in block, (
-            "lifespan must branch on the failed status returned by "
-            "check_and_repair"
+        # Detect-only: the boot freshness call must pass detect_only=True and
+        # branch on "drift" (not the retired "failed"/"repaired" local-compose).
+        assert "detect_only=True" in block, (
+            "boot freshness check must be detect-only (no local compose) per "
+            "#12912 S5 / HARNESS-ARCH §10 step 1b"
         )
-        assert "compose_freshness_failed = True" in block, (
-            "lifespan must persist the failed flag on HarnessState so "
-            "every downstream spawn path can refuse"
+        assert 'status == "drift"' in block, (
+            "lifespan must branch on the detect-only 'drift' status and emit "
+            "deploy-signals instead of composing locally"
+        )
+        assert 'status == "failed"' not in block, (
+            "the retired boot-compose 'failed' branch must be gone (boot no "
+            "longer composes, so it cannot fail at boot)"
+        )
+
+    def test_drift_flags_deferred_deploy_signal(self):
+        src = _harness_source()
+        start = src.index("async def lifespan(")
+        end = src.index("app = FastAPI(", start)
+        block = src[start:end]
+        assert "_boot_deploy_drift = True" in block, (
+            "on drift the lifespan must flag _boot_deploy_drift so "
+            "_deferred_init emits deploy-signals after agent spawn"
         )
 
 
@@ -268,22 +286,19 @@ class TestPersistenceAcrossRestart:
         s.load_state()
         assert s.compose_freshness_failed is False
 
-    def test_lifespan_failed_branch_flushes_state(self):
-        # DS-10684 F2: the failed branch must call state.save_state()
-        # so the flag persists even if the harness crashes before any
-        # other path triggers a save. Static-grep instead of running
-        # the lifespan.
+    def test_lifespan_drift_branch_flushes_state(self):
+        # #12912 S5 (supersedes DS-10684 F2): the retired "failed" branch is
+        # gone. The detect-only "drift" branch must call state.save_state() so
+        # the _boot_deploy_drift flag (and the cleared compose_freshness_failed)
+        # survive a crash before _deferred_init runs. Static-grep.
         src = _harness_source()
         start = src.index("async def lifespan(")
         end = src.index("app = FastAPI(", start)
         block = src[start:end]
-        failed_idx = block.index('status == "failed"')
-        # The save_state() call must appear AFTER the flag-set line
-        # AND BEFORE the diagnostic logs end the branch — within the
-        # next ~500 chars.
-        branch_block = block[failed_idx:failed_idx + 800]
+        drift_idx = block.index('status == "drift"')
+        branch_block = block[drift_idx:drift_idx + 400]
         assert "state.save_state()" in branch_block, (
-            "the failed branch must call state.save_state() so the "
-            "flag persists across a crash before the next save-state-"
-            "triggering event (DS-10684 F2)"
+            "the drift branch must call state.save_state() so the "
+            "_boot_deploy_drift flag persists across a crash before "
+            "_deferred_init emits the deploy-signals (#12912 S5)"
         )

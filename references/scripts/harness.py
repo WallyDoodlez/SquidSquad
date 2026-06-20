@@ -244,6 +244,13 @@ class AgentState:
     INTENT_STOPPING = "stopping"
     INTENT_RESTARTING = "restarting"
     INTENT_STOPPED = "stopped"
+    # #12912 (deploy-signal recompose model): a coordinated deploy halt. Set the
+    # moment the harness emits a deploy-signal (AGENT-RUNTIME §5.2 intent-
+    # sequencing rule), BEFORE the agent halts and its PID dies — so the health
+    # poller does not misread the deploy-halt death as a crash and auto-respawn
+    # it out of order (AC9). The deploy sequence (HARNESS-ARCH §7.1) owns the
+    # respawn; it resets intent → RUNNING after the fresh PID boots.
+    INTENT_DEPLOYING = "deploying"
 
     def __init__(self, role: str, clone_path: str = ""):
         self.role = role
@@ -501,6 +508,12 @@ class HarnessState:
         # survives harness restart — a prior failure stays in effect
         # until the operator fixes the source set + restarts.
         self.compose_freshness_failed = False
+        # #12912 S5: set True by the boot freshness DETECT-only check when the
+        # compose source drifted (or no checksum is stored). _deferred_init reads
+        # it after auto-start and emits deploy-signals so each clone recomposes
+        # pull-first — the harness never runs compose.py deploy-all locally at
+        # boot (HARNESS-ARCH §10 step 1b retired). Boot-scoped: not persisted.
+        self._boot_deploy_drift = False
 
     def get_agent(self, role: str) -> AgentState | None:
         with self._lock:
@@ -701,11 +714,20 @@ class HarnessState:
                     # AND disarms the 60s force-kill safety net, so a wedged /
                     # non-cycling agent could never be restarted OR force-killed
                     # via the documented endpoint. Mirrors the STOPPING branch.
-                    if agent.intent == AgentState.INTENT_RESTARTING and pid_changed:
+                    if agent.intent in (
+                        AgentState.INTENT_RESTARTING,
+                        AgentState.INTENT_DEPLOYING,
+                    ) and pid_changed:
+                        # #12912: a fresh PID under intent=deploying means the
+                        # deploy sequence respawned the agent — settle back to
+                        # running exactly like a restart (the deploy sequence
+                        # also sets RUNNING explicitly; this is the defensive
+                        # health-poll mirror).
+                        prev_intent = agent.intent
                         agent.intent = AgentState.INTENT_RUNNING
                         agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
-                        _log(f"{role}: alive with new PID (restart complete), reset to running (#11538)")
+                        _log(f"{role}: alive with new PID ({prev_intent} complete), reset to running (#11538/#12912)")
                     elif agent.intent in (
                         AgentState.INTENT_STOPPING,
                         AgentState.INTENT_STOPPED,
@@ -743,6 +765,35 @@ class HarnessState:
                         AgentState.INTENT_STOPPING, AgentState.INTENT_STOPPED
                     ):
                         agent.status = "stopped"
+                    elif agent.intent == AgentState.INTENT_DEPLOYING:
+                        # #12912 (HARNESS-ARCH §7.1.1 / §7.4): a death while
+                        # intent=deploying is normally the EXPECTED deploy-halt
+                        # exit — the deploy sequence owns the respawn — so settle
+                        # to "deploying" (not is_dead below) and suppress the
+                        # crash-respawn path (AC9).
+                        # DS-12912 iter-3 Finding 2: BUT if the agent has been dead
+                        # at intent=deploying longer than the deploy window (it
+                        # crashed BEFORE emitting ack-stop, or the deploy thread
+                        # hung/died), the deploy will never complete and nothing
+                        # else will respawn it. Treat it as a crashed running agent
+                        # so the normal auto-reboot path respawns it on its
+                        # existing committed CLAUDE.md (next poll: "running" → dead
+                        # → "stalled" → reboot; mirrors the load_state recovery).
+                        _deploy_age = (
+                            time.time() - agent.intent_set_at
+                            if agent.intent_set_at is not None else None
+                        )
+                        if (_deploy_age is not None
+                                and _deploy_age > _DEPLOY_WINDOW_SECONDS):
+                            _log(f"{role}: dead at intent=deploying for "
+                                 f"{_deploy_age:.0f}s (> {_DEPLOY_WINDOW_SECONDS}s "
+                                 f"deploy window) — deploy never completed; "
+                                 f"recovering via auto-respawn")
+                            agent.intent = AgentState.INTENT_RUNNING
+                            agent.intent_set_at = None
+                            agent.status = "running"
+                        else:
+                            agent.status = "deploying"
                     elif prev_status == "running":
                         agent.status = "stalled"
                     elif agent.status not in ("stopped",):
@@ -1298,7 +1349,17 @@ class HarnessState:
                 # is left alone. A genuinely-wanted restart can be re-requested
                 # against THIS harness. STOPPING is deliberately NOT reset — an
                 # explicit operator stop MUST survive a harness restart.
-                if agent.intent == AgentState.INTENT_RESTARTING:
+                # #12912: INTENT_DEPLOYING is reset the same way — a deploy in
+                # progress is owned by the harness session that emitted the
+                # deploy-signal. If the harness restarted mid-deploy the sequence
+                # was interrupted; reset to RUNNING so the agent respawns on its
+                # existing committed CLAUDE.md. The deploy did not advance
+                # last_compose_checksum, so drift stays detectable and a future
+                # deploy-signal re-triggers.
+                if agent.intent in (
+                    AgentState.INTENT_RESTARTING,
+                    AgentState.INTENT_DEPLOYING,
+                ):
                     agent.intent = AgentState.INTENT_RUNNING
                     agent.intent_set_at = None
                 # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1,
@@ -1319,6 +1380,23 @@ class HarnessState:
                 agent.boot_time = agent_data.get("boot_time")
                 agent.claude_pid = agent_data.get("claude_pid")
                 agent.terminal_pid = agent_data.get("terminal_pid")
+                # DS-12912 iter-2 Finding 5: restore `status` (save_state persists
+                # it but load_state historically dropped it, so every agent came
+                # back as "unknown" — never in is_dead — and a dead-before-restart
+                # agent was never auto-rebooted). Restoring it lets the health
+                # poller recover: a restored "running" agent whose PID is dead
+                # settles to "stalled" (was_alive=True) and respawns; the
+                # crash-looping / paused resume branches also need their status
+                # back. Defaults to "unknown" for legacy/fresh state files.
+                agent.status = agent_data.get("status", "unknown")
+                # #12912: an interrupted mid-deploy (status="deploying") restored
+                # after a harness restart had its intent reset to RUNNING above;
+                # settle the status to "running" so the dead PID is treated as a
+                # crashed running agent and respawned on its existing committed
+                # CLAUDE.md. The deploy did not complete (checksum unadvanced), so
+                # a future deploy-signal re-triggers.
+                if agent.status == "deploying":
+                    agent.status = "running"
                 # #8695: restore so already-running agents stay ungated after
                 # a harness restart. Defaults to False for older state files.
                 agent.bootup_complete = agent_data.get("bootup_complete", False)
@@ -1963,6 +2041,14 @@ async def lifespan(app: FastAPI):
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
+            # #12912 S5: if boot detected compose-source drift, emit deploy-signals
+            # to the freshly-spawned agents so each recomposes pull-first (§10 step
+            # 1b). Safe to emit now even though agents are still booting — the
+            # harness holds their events until status=ready and the deploy-signal is
+            # delivered in the agent's boot drain (§8.2).
+            if getattr(state, "_boot_deploy_drift", False):
+                _emit_boot_deploy_signals()
+                state._boot_deploy_drift = False
         except Exception as e:
             _log(f"Auto-start failed: {e}")
 
@@ -2006,9 +2092,15 @@ async def lifespan(app: FastAPI):
     else:
         try:
             import compose_freshness as _cf
+            # #12912 S5 (HARNESS-ARCH §10 step 1b retired): DETECT-ONLY. The boot
+            # path no longer runs compose.py deploy-all locally — local compose
+            # has no guarantee the source tree is current (the clone may be behind
+            # origin/main), the root cause of the stale-source revert. On drift we
+            # emit deploy-signals (after spawn) so each clone recomposes pull-first.
             _freshness = _cf.check_and_repair(
                 repo_root=REPO_ROOT,
                 stored_checksum=state.get_last_compose_checksum(),
+                detect_only=True,
             )
         except Exception as e:  # noqa: BLE001 — defensive against import bugs
             _log(
@@ -2017,29 +2109,17 @@ async def lifespan(app: FastAPI):
             )
             _freshness = None
     if _freshness is not None:
-        if _freshness.status == "failed":
-            state.compose_freshness_failed = True
-            # DS-10684 F2: persist the flag immediately so a harness
-            # crash between here and the next save_state-triggering
-            # event doesn't lose the failure signal. Matches the
-            # `repaired` branch's flush pattern below.
+        # Detect-only never composes, so it never returns "failed"/"repaired".
+        # The legacy boot-compose spawn-refusal gate is retired — compose failures
+        # now surface per-clone as deploy-error events (§11) — so clear any stale
+        # persisted flag that would otherwise block auto-start forever.
+        state.compose_freshness_failed = False
+        if _freshness.status == "drift":
+            state._boot_deploy_drift = True
             state.save_state()
             _log(
-                "ERROR: compose freshness check FAILED — harness will NOT "
-                "spawn agents. Operator: fix the source issue + restart "
-                "the harness."
-            )
-            _log(f"  diagnostic: {_freshness.diagnostic}")
-            if _freshness.compose_stderr:
-                _log(
-                    f"  compose stderr (truncated): {_freshness.compose_stderr}"
-                )
-        elif _freshness.status == "repaired":
-            state.set_last_compose_checksum(_freshness.new_checksum)
-            state.save_state()
-            _log(
-                f"compose freshness: {_freshness.diagnostic} — checksum "
-                f"now {_freshness.new_checksum[:12]}..."
+                f"compose freshness: {_freshness.diagnostic} — deploy-signals "
+                f"will be emitted after agent spawn (no local compose)"
             )
         else:  # clean
             _log(
@@ -2969,6 +3049,51 @@ async def receive_event(request: Request):
                         pass
                 # #9242: disk write off the asyncio event loop.
                 await asyncio.to_thread(state.save_state)
+            elif ack_payload.get("result") == "deploy-halted":
+                # #12912 (HARNESS-ARCH §7.1 / §7.4 / AGENT-RUNTIME §5.2): the
+                # agent finished its current atomic unit and halted on a
+                # deploy-signal. Intent was set to DEPLOYING at emit time
+                # (intent-sequencing, AC9), so the imminent PID death is NOT
+                # auto-respawned by the health poller. Record the halt and hand
+                # off to the pull-first deploy sequence (ensure-main → pull →
+                # compose deploy <alias> → commit → push → respawn), which runs
+                # off the asyncio loop (S4).
+                with state._lock:
+                    agent = state.agents.get(role)
+                    if agent:
+                        if agent.intent != AgentState.INTENT_DEPLOYING:
+                            # Defensive: the emit side (S3) sets DEPLOYING; keep
+                            # the invariant even if a deploy-halted ack races the
+                            # emit-side intent write. On the boot-drift path the
+                            # emit side does NOT pre-set intent (pid_changed reset
+                            # race), so THIS is where DEPLOYING is established —
+                            # synchronously, before the agent's PID death is polled
+                            # (the agent exits only after emitting this ack-stop),
+                            # which is the intent-sequencing guarantee on the boot
+                            # path (DS-12912 Finding 4).
+                            agent.intent = AgentState.INTENT_DEPLOYING
+                            agent.intent_set_at = time.time()
+                        agent.status = "deploying"
+                        # DS-12912 Finding 3 (HARNESS-ARCH §7.3): arm a respawn-
+                        # suppression window across the git/compose deploy as
+                        # defense-in-depth (status="deploying" already keeps it out
+                        # of is_dead; the deploy sequence respawns explicitly and
+                        # clears this).
+                        agent.reboot_blocked_until = time.time() + _DEPLOY_WINDOW_SECONDS
+                await asyncio.to_thread(state.save_state)
+                _log(f"{role}: deploy-halted — handing off to deploy sequence")
+                # #12912 S4: run the pull-first per-clone deploy sequence off the
+                # asyncio loop. The thread serializes on _deploy_lock so multiple
+                # affected clones deploy sequentially (AC8), avoiding push races.
+                # The deploy-signal's event_id (ack_event_id, set by the agent per
+                # event-mode-contract Case E) is passed so the harness can advance
+                # the agent's cursor past the deploy-signal before respawn —
+                # without which the respawned agent re-fetches and re-halts on it
+                # (DS-12912 Finding 1 / AC4 infinite-loop guard).
+                threading.Thread(
+                    target=_run_deploy_sequence, args=(role, ack_event_id),
+                    daemon=True, name=f"deploy-{role}",
+                ).start()
 
     # Update AgentState from event.
     # #12824: fail-soft. The event_lifecycle.append above is the
@@ -3872,18 +3997,321 @@ def _reboot_affected_agents(pr_number, files_changed):
         _log(f"Compose after PR #{pr_number}: no agent templates changed — no reboots needed")
         return
 
-    _log(f"Compose after PR #{pr_number}: rebooting affected agents: {', '.join(sorted(affected_roles))}")
-    for role in affected_roles:
+    # #12912 (HARNESS-ARCH §7.6): _reboot_affected_agents is the deploy-signal
+    # EMITTER. It does NOT recompose-and-restart directly any more. For each
+    # affected alias it sets intent=DEPLOYING (intent-sequencing, AC9 — committed
+    # BEFORE the agent can possibly respond, so the deploy-halt death is never
+    # misread as a crash) and emits a deploy-signal. The agent halts at its next
+    # between-task on-main boundary and emits ack-stop(result=deploy-halted),
+    # whereupon the per-clone pull-first deploy sequence runs (§7.1 / S4).
+    # Emitting only on actual post-compose alias drift (the git-diff scope above)
+    # is what closes #12397 (no spurious restart on a no-op recompose).
+    # NB: bootup_complete is deliberately left TRUE — unlike the restart paths,
+    # the agent MUST still receive this deploy-signal off the event bus to halt
+    # cooperatively; suppressing dispatch would strand the signal undelivered.
+    _log(f"Compose after PR #{pr_number}: emitting deploy-signal to affected "
+         f"agents: {', '.join(sorted(affected_roles))}")
+    for role in sorted(affected_roles):
+        agent = state.get_agent(role)
+        # DS-12912 iter-3 Finding 1: only signal agents that are actually ALIVE.
+        # A crash-looping / paused / dead agent still carries intent=RUNNING;
+        # flipping it to DEPLOYING would lock it out of the crash-loop resume
+        # path (which needs should_reboot, excluding DEPLOYING) — a permanent
+        # wedge until harness restart. A non-running affected agent picks up the
+        # new CLAUDE.md when it next recovers/boots (a residual drift re-triggers
+        # a deploy-signal on the next boot drift-check).
+        if (agent and agent.intent == AgentState.INTENT_RUNNING
+                and agent.status == "running"):
+            agent.intent = AgentState.INTENT_DEPLOYING
+            agent.intent_set_at = time.time()
+            state.set_agent(role, agent)
+            state.save_state()  # commit intent BEFORE emit (sequencing)
+            _emit_event("deploy-signal", "harness", payload={
+                "target_alias": role,
+                "event_type": "deploy-signal",
+                "event_context": "deploy-signal",
+            })
+
+
+# ---------------------------------------------------------------------------
+# #12912 (HARNESS-ARCH §7.1 / §7.6 / §11): per-clone pull-first deploy sequence
+# ---------------------------------------------------------------------------
+
+# Serializes per-clone deploys so concurrent deploy-halts never race a push to
+# the shared origin/main ref (AC8 / design §3 decision 5). Each deploy-halt ack
+# spawns a thread that acquires this lock, so the deploys run one clone at a time
+# (deploy A → pull/compose/commit/push/restart A → then B …).
+_deploy_lock = threading.Lock()
+
+_DEPLOY_COMPOSED_FILES = ("CLAUDE.md", "SOUL.md", "CLAUDE.linked.md")
+# Respawn-suppression window armed when a deploy-halt ack arrives (HARNESS-ARCH
+# §7.3). Generous — covers ensure-main → pull → compose → commit → push. The
+# deploy sequence respawns explicitly and clears it well before this elapses.
+_DEPLOY_WINDOW_SECONDS = 300
+
+
+def _respawn_agent_process(role):
+    """Explicitly respawn a deploy-halted agent's claude process (DS-12912
+    Finding 2). The agent's PID is already dead (it halted on the deploy-signal),
+    and after a deploy its status is "deploying" — which is NOT in the health
+    poller's is_dead set, so the poller will NEVER auto-respawn it. We therefore
+    boot it directly and stamp fresh-spawn state, mirroring the auto-start path.
+
+    Returns True iff the respawn succeeded — a fresh process was spawned OR the
+    agent was already alive (boot_agent action="skip"); i.e. the agent is now
+    alive/recovering. Returns False only when boot_agent raised or reported
+    success=False (DS-12912 iter-3 Finding 4: the return feeds `respawn_ok` in
+    the deploy-error event, whose useful meaning to the operator is "is the agent
+    recovered" — not the narrower "was a brand-new PID spawned").
+
+    On ANY non-spawn outcome — boot_agent raised, returned success=False, or
+    returned a non-"spawn" action — the agent MUST NOT be left at
+    status="deploying" (it would be permanently stuck: not is_dead, never
+    auto-respawned — DS-12912 iter-2 Findings 1+2). We settle a failure to
+    "error" (which IS in is_dead) with intent=RUNNING so it is honest and
+    surfaced, and a success-without-spawn to "starting"."""
+    agent = state.get_agent(role) or AgentState(role)
+    agent.reboot_blocked_until = None
+    agent.intent = AgentState.INTENT_RUNNING
+    agent.intent_set_at = None
+    agent.bootup_complete = False
+    try:
+        result = boot_remote.boot_agent(role)
+    except Exception as e:
+        agent.status = "error"          # is_dead → honest, not a "deploying" wedge
+        agent.claude_pid = None
+        state.set_agent(role, agent)
+        state.save_state()
+        _log(f"{role}: deploy respawn boot_agent raised "
+             f"{type(e).__name__}: {e} — left status=error")
+        return False
+    spawned = bool(result.get("success") and result.get("action") == "spawn")
+    if spawned:
+        agent.status = "starting"
+        agent.boot_time = time.time()
+        agent.last_spawn_at = time.time()
+        agent.last_session_end = None
+        agent.last_dispatch_at = None
+        agent.terminal_pid = result.get("terminal_pid")
+    elif result.get("success"):
+        # Succeeded but did not spawn (e.g. action="skip" — already alive). The
+        # process exists; settle to "starting" so the next poll resolves it to
+        # "running" — never leave it at "deploying".
+        agent.status = "starting"
+    else:
+        agent.status = "error"
+        agent.claude_pid = None
+    state.set_agent(role, agent)
+    state.save_state()
+    ok = "OK" if result.get("success") else f"FAIL: {result.get('message')}"
+    _log(f"{role}: deploy respawn — {result.get('action')} {ok}")
+    return bool(result.get("success"))
+
+
+def _emit_boot_deploy_signals():
+    """#12912 S5 (HARNESS-ARCH §10 step 1b): on boot drift, emit a deploy-signal
+    to each running agent so it recomposes pull-first — the harness never composes
+    deploy-all locally at boot.
+
+    Unlike the post-merge emitter (_reboot_affected_agents), intent is NOT pre-set
+    to DEPLOYING here: a just-spawned agent's first health poll resets a DEPLOYING
+    intent back to RUNNING on pid_changed, so pre-setting at boot is futile. The
+    ack-stop(result=deploy-halted) handler sets DEPLOYING when the agent actually
+    halts — before its PID dies — which is the intent-sequencing guarantee on the
+    boot path. A no-op deploy (committed output already current — the common case
+    at boot) is a clean success, so emitting to every alias on drift is safe; at
+    boot the affected set is unknown without composing, and composing is exactly
+    what we are retiring. Called once per harness boot (from _deferred_init), so
+    post-deploy respawns never re-trigger it."""
+    if _NO_AUTO_REBOOT:
+        _log("[no-auto-reboot] boot deploy-signal emit skipped")
+        return
+    signaled = []
+    for role in boot_remote._get_all_roles():
         agent = state.get_agent(role)
         if agent and agent.intent == AgentState.INTENT_RUNNING:
-            agent.intent = AgentState.INTENT_RESTARTING
-            agent.intent_set_at = time.time()  # #4792 Phase 1
-            # #8695: match the other three restart paths — close the window
-            # where events would still dispatch after we've marked the agent
-            # for restart but before its process actually dies.
-            agent.bootup_complete = False
-            state.set_agent(role, agent)
-    state.save_state()
+            _emit_event("deploy-signal", "harness", payload={
+                "target_alias": role,
+                "event_type": "deploy-signal",
+                "event_context": "deploy-signal",
+            })
+            signaled.append(role)
+    if signaled:
+        _log(f"Boot drift: emitted deploy-signal to {', '.join(signaled)} "
+             f"(pull-first per-clone deploy; no local boot compose)")
+
+
+def _git_in_clone(clone_path, args, timeout=120):
+    """Run a git command inside a specific agent clone (the harness operating on
+    another clone is new machinery — design §0). Returns the CompletedProcess."""
+    return subprocess.run(
+        ["git", *args],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(clone_path), timeout=timeout,
+    )
+
+
+def _bump_compose_checksum(clone_path):
+    """Advance last_compose_checksum to the just-deployed source state (§7.6).
+    Best-effort: a checksum-compute failure must not fail an otherwise-good
+    deploy (the worst case is one redundant future deploy-signal)."""
+    try:
+        import compose_freshness as _cf
+        checksum = _cf.compute_compose_checksum(clone_path)
+        state.set_last_compose_checksum(checksum)
+        state.save_state()
+    except Exception as e:
+        _log(f"deploy: checksum update skipped ({type(e).__name__}: {e})")
+
+
+def _respawn_after_deploy(role):
+    """Successful deploy: respawn the halted agent against the freshly-committed
+    CLAUDE.md. The PID is dead and status is "deploying" (not in is_dead), so the
+    health poller will not do it — respawn explicitly (DS-12912 Finding 2)."""
+    _log(f"{role}: deploy complete — respawning on fresh CLAUDE.md")
+    _respawn_agent_process(role)
+
+
+def _deploy_recover_and_respawn(role, stage, detail):
+    """§11 failure recovery: respawn the agent on its EXISTING committed
+    CLAUDE.md, file a deploy-error event to pm, and do NOT advance the compose
+    checksum (drift stays detectable and re-triggers a future deploy-signal).
+    The respawn is explicit for the same reason as the success path (Finding 2)."""
+    _log(f"{role}: deploy FAILED at {stage}: {detail} — respawning on existing "
+         f"CLAUDE.md, filing deploy-error to pm (checksum NOT advanced)")
+    respawn_ok = _respawn_agent_process(role)
+    # DS-12912 iter-2 Finding 3: report the real respawn outcome so the operator
+    # is not misdirected by a "respawned" claim when the respawn itself failed.
+    _emit_event("deploy-error", "pm", payload={
+        "target_alias": "pm",
+        "event_context": "deploy-error",
+        "failed_role": role,
+        "stage": stage,
+        "detail": str(detail)[:500],
+        "respawn_ok": respawn_ok,
+    })
+
+
+def _stage_composed_outputs(clone_path, alias):
+    """Stage ONLY the alias's composed outputs (CLAUDE.md / SOUL.md /
+    CLAUDE.linked.md) — never the whole .squidsquad/<alias>/ dir, which also
+    holds working-state and other per-cycle churn. Returns True if anything was
+    staged. NB: per-alias `compose.py deploy` does NOT write .claude/settings.json
+    (AC11 / #12519) — that stays an installer-managed artifact, out of scope."""
+    staged_any = False
+    for fn in _DEPLOY_COMPOSED_FILES:
+        rel = f".squidsquad/{alias}/{fn}"
+        if (clone_path / rel).exists():
+            add = _git_in_clone(clone_path, ["add", "--", rel])
+            if add.returncode == 0:
+                staged_any = True
+    return staged_any
+
+
+def _run_deploy_sequence(role, deploy_signal_event_id=None):
+    """Pull-first per-clone deploy on a deploy-halted agent (HARNESS-ARCH §7.1).
+
+    ensure-main → pull → compose.py deploy <alias> → commit → push → respawn,
+    serialized across clones by _deploy_lock (AC8). Failure at any step routes to
+    §11 recovery (respawn on existing CLAUDE.md, deploy-error to pm, checksum
+    unchanged). Runs in a daemon thread, off the asyncio loop.
+    """
+    with _deploy_lock:
+        # DS-12912 Finding 1 / AC4 (infinite-loop guard): the agent did NOT
+        # ack-cursor the deploy-signal — the harness owns advancing past it.
+        # Do it up front so the cursor moves past the signal regardless of
+        # whether the deploy succeeds or hits §11 recovery; otherwise the
+        # respawned agent's boot drain re-fetches the deploy-signal, re-halts,
+        # and loops (deploy → respawn → re-halt → deploy …). A future drift
+        # still re-triggers via a NEW deploy-signal (checksum is only advanced
+        # on success), so advancing the cursor here loses nothing.
+        if deploy_signal_event_id:
+            # DS-12912 iter-2 Finding 4: a silent advance failure reintroduces the
+            # re-halt loop (the respawned agent re-fetches the signal). The normal
+            # return values are all safe — "advanced" (moved past it), "regression"
+            # (cursor already past it), "evicted" (signal no longer in the deque,
+            # so unreachable anyway). Only an exception is concerning; retry once,
+            # then log loudly so the loop risk is visible rather than silent.
+            for _attempt in range(2):
+                try:
+                    outcome = event_lifecycle.advance_cursor(
+                        role, deploy_signal_event_id)
+                    _log(f"{role}: advanced cursor past deploy-signal "
+                         f"{deploy_signal_event_id} ({outcome})")
+                    break
+                except Exception as e:
+                    if _attempt == 1:
+                        _log(f"{role}: WARNING deploy-signal cursor advance failed "
+                             f"after retry ({type(e).__name__}: {e}) — respawned "
+                             f"agent may re-halt on the stale signal")
+                    else:
+                        _log(f"{role}: deploy-signal cursor advance raised "
+                             f"{type(e).__name__}: {e} — retrying once")
+        try:
+            clone_path = Path(boot_remote._get_clone_path(role))
+        except Exception as e:
+            _deploy_recover_and_respawn(role, "clone-resolve", e)
+            return
+        import config as _cfg
+        alias = _cfg.get_alias(role) or role
+        scripts = clone_path / "references" / "scripts"
+
+        try:
+            # 1. ensure-main + fast-forward-only pull. Non-ff / conflict → §11.
+            co = _git_in_clone(clone_path, ["checkout", "main"])
+            if co.returncode != 0:
+                _deploy_recover_and_respawn(role, "checkout-main", co.stderr.strip()[:300])
+                return
+            pull = _git_in_clone(clone_path, ["pull", "--ff-only", "origin", "main"])
+            if pull.returncode != 0:
+                _deploy_recover_and_respawn(role, "pull", pull.stderr.strip()[:300])
+                return
+
+            # 2. compose the alias using the CLONE's own compose.py (so its repo
+            #    root is the clone). Bad source / parse error → §11.
+            comp = subprocess.run(
+                [sys.executable, str(scripts / "compose.py"), "deploy", alias],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                check=False, cwd=str(clone_path), timeout=300,
+            )
+            if comp.returncode != 0:
+                _deploy_recover_and_respawn(role, "compose", comp.stderr.strip()[:300])
+                return
+
+            # 3. commit + push the composed output. A no-op recompose (output
+            #    already current) is a clean, idempotent success — skip to respawn.
+            if not _stage_composed_outputs(clone_path, alias):
+                _bump_compose_checksum(clone_path)
+                _respawn_after_deploy(role)
+                return
+            commit = _git_in_clone(
+                clone_path,
+                ["commit", "-m",
+                 f"deploy: recompose {alias} CLAUDE.md (#12912 deploy-signal)"],
+            )
+            if commit.returncode != 0:
+                _deploy_recover_and_respawn(role, "commit", commit.stderr.strip()[:300])
+                return
+            push = _git_in_clone(clone_path, ["push", "origin", "main"])
+            if push.returncode != 0:
+                # DS-12912 iter-3 Finding 3: no retry loop. A rejected push means
+                # origin/main advanced (a concurrent clone pushed) — but this clone
+                # now holds a local compose commit, so `git pull --ff-only` cannot
+                # fast-forward the diverged branch, making a retry futile. The
+                # sequential _deploy_lock makes genuine concurrent pushes rare
+                # anyway. Go straight to §11 recovery: respawn on the existing
+                # CLAUDE.md + file deploy-error; the unadvanced checksum re-triggers
+                # a fresh deploy-signal on the next drift-check.
+                _deploy_recover_and_respawn(role, "push", push.stderr.strip()[:300])
+                return
+
+            # 4. success — advance the checksum, then respawn on fresh output.
+            _bump_compose_checksum(clone_path)
+            _respawn_after_deploy(role)
+        except subprocess.TimeoutExpired as e:
+            _deploy_recover_and_respawn(role, "timeout", e)
+        except Exception as e:
+            _deploy_recover_and_respawn(role, "unexpected", e)
 
 
 # ---------------------------------------------------------------------------
