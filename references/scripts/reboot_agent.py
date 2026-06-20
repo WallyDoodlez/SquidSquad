@@ -67,8 +67,12 @@ def _kill_process(pid):
         return
     if sys.platform == "win32":
         try:
+            # #12363: /T terminates the process TREE, not just the claude PID,
+            # so the Monitor-spawned event_poll.py sidecar (a descendant of
+            # claude) dies with it instead of orphaning. Without /T the host
+            # accumulated ~13 claude + ~12 event_poll across respawns.
             subprocess.run(
-                ["taskkill", "/F", "/PID", str(pid)],
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
                 check=False, capture_output=True,
             )
         except (OSError, FileNotFoundError):
@@ -76,14 +80,24 @@ def _kill_process(pid):
             # best-effort posture as the POSIX branch below.
             pass
     else:
+        # #12363: kill the process GROUP so the event_poll.py descendant dies
+        # with claude (a bare SIGKILL on the claude PID orphans it — the POSIX
+        # analogue of the Windows leak). SAFETY: never kill our OWN group — if a
+        # claude somehow shares the harness's group, killpg would take the
+        # harness down; fall back to a bare SIGKILL of the agent PID there (no
+        # regression vs the pre-#12363 behavior).
         try:
-            os.kill(pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, TypeError):
-            # Already dead (PLE), owned by a different UID (Permission),
-            # or a bad-type slipped past the guard (TypeError). All
-            # best-effort no-ops — the force-kill safety net in
-            # update_health will re-check on the next poll, and the
-            # operator can fall back to the harness API for diagnostics.
+            pgid = os.getpgid(pid)
+            if pgid != os.getpgid(0):
+                os.killpg(pgid, signal.SIGKILL)
+            else:
+                os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, TypeError, OSError):
+            # Already dead (PLE), owned by a different UID (Permission), a
+            # bad-type past the guard (TypeError), or a getpgid/killpg failure
+            # (OSError, e.g. the group vanished mid-call). All best-effort
+            # no-ops — the force-kill safety net in update_health re-checks on
+            # the next poll, and the operator can fall back to the harness API.
             pass
 
 
