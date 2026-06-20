@@ -25,6 +25,7 @@ Usage:
     python scripts/git_ops.py last-hash                 # print last commit hash (short)
     python scripts/git_ops.py check-real-conflict <base> <head>  # real conflict? exit 0=clean/1=conflict/2=err
     python scripts/git_ops.py guard-staged-state         # pre-commit hook: unstage state files on a feature branch (fail-open)
+    python scripts/git_ops.py guard-galaxy-frontmatter   # pre-commit hook: block a staged galaxy note missing YAML frontmatter (fail-closed on violation, fail-open on error)
     python scripts/git_ops.py install-hooks              # activate the pre-commit state guard (core.hooksPath)
     python scripts/git_ops.py --help
 """
@@ -1187,6 +1188,95 @@ def guard_staged_state():
     return state_staged
 
 
+# Galaxy-note basenames that are scaffolding, not real notes — skip the guard.
+_GALAXY_SKIP_NAMES = (".gitkeep",)
+
+
+def _galaxy_frontmatter_violation(content):
+    """Return a one-line reason string if CONTENT fails the galaxy-frontmatter
+    contract, else None. Mirrors ``tests/test_vault.py::TestGalaxyNotes::
+    test_galaxy_notes_have_frontmatter`` EXACTLY so the guard never rejects a
+    note the static gate would accept (no false positives)."""
+    if not content.startswith("---"):
+        return "missing YAML frontmatter (must start with '---')"
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return "malformed frontmatter ('---' block not closed)"
+    fm_keys = set()
+    for line in parts[1].strip().splitlines():
+        if ":" in line:
+            fm_keys.add(line.split(":", 1)[0].strip())
+    if not fm_keys:
+        return "empty frontmatter (no keys)"
+    if "type" not in fm_keys:
+        return "missing required 'type' key in frontmatter"
+    return None
+
+
+def guard_galaxy_frontmatter():
+    """Pre-commit guard: reject staged ``vault/galaxy/*.md`` notes that lack a
+    valid YAML frontmatter block (#12905).
+
+    Galaxy notes committed without frontmatter red the shared
+    ``tests/test_vault.py::TestGalaxyNotes`` static gate for the WHOLE fleet
+    (every agent's static run hits it) until someone notices and hand-fixes the
+    note — a recurring, cross-role hygiene drain with a stash/merge-race risk.
+    The root gap is no write-time enforcement; this is the deterministic
+    backstop, independent of which agent/sub-skill wrote the note.
+
+    Validates the STAGED blob (``git show :<path>``) — exactly what the commit
+    will record — against the test contract via ``_galaxy_frontmatter_violation``.
+    Returns the list of ``(path, reason)`` violations (empty = OK).
+
+    FAIL-CLOSED on a real violation: the CLI wrapper exits 1 so the commit is
+    blocked, stopping the bad note at the source. FAIL-OPEN on any guard-internal
+    error (the CLI wrapper catches and exits 0), so a guard bug can NEVER wedge
+    the fleet's commits — the static gate remains the safety net in that case.
+    """
+    staged = _run_list(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        check=False,
+    )
+    if staged.returncode != 0:
+        return []
+    violations = []
+    for raw in staged.stdout.splitlines():
+        p = raw.strip().strip('"')
+        if not p:
+            continue
+        norm = p.replace("\\", "/")
+        # Only galaxy notes under a vault/galaxy/ directory, *.md.
+        if "/vault/galaxy/" not in norm or not norm.endswith(".md"):
+            continue
+        name = norm.rsplit("/", 1)[-1]
+        if name in _GALAXY_SKIP_NAMES or name.endswith("-template.md"):
+            continue
+        blob = _run_list(["git", "show", f":{p}"], check=False)
+        if blob.returncode != 0:
+            # Unreadable staged blob — fail-open for this path; the static gate
+            # still catches a malformed note.
+            continue
+        reason = _galaxy_frontmatter_violation(blob.stdout)
+        if reason:
+            violations.append((p, reason))
+    if violations:
+        print(
+            f"ERROR: pre-commit guard BLOCKED commit — {len(violations)} galaxy "
+            f"note(s) lack valid YAML frontmatter (#12905; a frontmatter-less "
+            f"note reds tests/test_vault.py for the whole fleet):",
+            file=sys.stderr,
+        )
+        for p, reason in violations:
+            print(f"  {p}: {reason}", file=sys.stderr)
+        print(
+            "  Fix: prepend a '---' frontmatter block with at least a 'type:' "
+            "key (see references/vault-templates/galaxy-template.md), then "
+            "re-stage and commit.",
+            file=sys.stderr,
+        )
+    return violations
+
+
 def install_hooks():
     """Activate the tracked pre-commit guard by pointing core.hooksPath at it (#11511).
 
@@ -1297,7 +1387,7 @@ def main():
     # install_hooks() explicitly in dispatch -- self-healing first would emit a
     # duplicate foreign-hooksPath WARNING). Keeps the commit path lean and
     # avoids re-checking what's already active (#11511).
-    if cmd not in ("guard-staged-state", "install-hooks"):
+    if cmd not in ("guard-staged-state", "guard-galaxy-frontmatter", "install-hooks"):
         _ensure_hooks_installed()
 
     if cmd == "pull":
@@ -1405,6 +1495,20 @@ def main():
     elif cmd == "guard-staged-state":
         guard_staged_state()
         sys.exit(0)            # FAIL-OPEN: the guard never blocks a commit
+    elif cmd == "guard-galaxy-frontmatter":
+        # FAIL-CLOSED on a confirmed violation (exit 1 → commit blocked);
+        # FAIL-OPEN on any guard-internal error (exit 0 → a guard bug never
+        # wedges the fleet's commits, the static gate stays the safety net).
+        try:
+            violations = guard_galaxy_frontmatter()
+        except Exception as e:  # noqa: BLE001 — defensive fail-open
+            print(
+                f"WARNING: galaxy-frontmatter guard errored (fail-open, commit "
+                f"allowed): {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(0)
+        sys.exit(1 if violations else 0)
     elif cmd == "install-hooks":
         ok = install_hooks()
         sys.exit(0 if ok else 1)

@@ -1,19 +1,35 @@
 #!/bin/sh
-# SquidSquad pre-commit guard (#11511) — keep transient state off feature branches.
+# SquidSquad pre-commit guards (#11511, #12905). Two guards run on every commit:
 #
-# When a commit lands on a non-working (feature) branch, any staged
-# .squidsquad/ or .claude/ state/ephemeral file is UNSTAGED before the commit
-# is created. This backstops the raw-git path (POLLING mode / branch races)
-# that bypasses git_ops' already-safe commit-code / commit-state routing, which
-# is what flaps PR mergeability to CONFLICTING (transient state on main + the
-# feature branch -> GitHub sees an overlapping-line conflict).
+# 1. State guard (#11511) — FAIL-OPEN. When a commit lands on a non-working
+#    (feature) branch, any staged .squidsquad/ or .claude/ state/ephemeral file
+#    is UNSTAGED before the commit is created. Backstops the raw-git path
+#    (POLLING mode / branch races) that bypasses git_ops' safe commit routing,
+#    which is what flaps PR mergeability to CONFLICTING. Never blocks a commit
+#    (a blocking hook could wedge every agent's cycle) — it only narrows one.
 #
-# FAIL-OPEN by design: the guard never blocks a commit (a blocking hook could
-# wedge every agent's cycle). All logic lives in the tested git_ops subcommand;
-# this shim only invokes it and always exits 0.
-# No 2>&1: the guard prints its unstaged-file notice to stderr on purpose, and
-# merging it into stdout would hide it (git only reliably surfaces hook stderr).
+# 2. Galaxy-frontmatter guard (#12905) — FAIL-CLOSED on a confirmed violation.
+#    Blocks the commit if a staged vault/galaxy/*.md note lacks a valid YAML
+#    frontmatter block (a frontmatter-less note reds tests/test_vault.py for the
+#    WHOLE fleet). The subcommand exits 1 ONLY on a confirmed violation and exits
+#    0 on any guard-internal error (fail-open on bugs), so a guard defect can
+#    never wedge the fleet's commits — only a genuinely malformed note is blocked.
+#
+# No 2>&1: both guards print to stderr on purpose (git only reliably surfaces
+# hook stderr); merging into stdout would hide the notices.
+
+# Guard 1 — fail-open: always allow the commit to proceed.
 python references/scripts/git_ops.py guard-staged-state \
   || python3 references/scripts/git_ops.py guard-staged-state \
   || true
+
+# Guard 2 — fail-closed on violation. Run via whichever interpreter exists; a
+# non-zero exit (confirmed violation) aborts the commit. If no python is on PATH,
+# skip silently (fail-open — the static gate remains the safety net).
+if command -v python >/dev/null 2>&1; then
+  python references/scripts/git_ops.py guard-galaxy-frontmatter || exit 1
+elif command -v python3 >/dev/null 2>&1; then
+  python3 references/scripts/git_ops.py guard-galaxy-frontmatter || exit 1
+fi
+
 exit 0
