@@ -16,9 +16,18 @@
 ## FILED this session
 - **#12915** (medium, mine) — installer-files.txt: 21 sub-skill .md still absent post-#12912 (common/5 runtime-loaded + project/14 deprecated-legacy + roles/2). #12912 added the 6 common-events fragments. Investigation: real gap vs other fetch mechanism.
 
+## #12854 — RCA'd + routed (NOT shipped; coupled to #12451)
+- **#12854** (current-state goes stale): posted skill RCA. Root cause: `current-state` is a content-only write (`phase|description`, NO timestamp) via `cycle.py status_bar`, with no write-on-idle/stall/task-change discipline → lingers; statusline judges freshness by bare mtime, can't tell idle-fresh from stalled-stale. **Coupled to #12451** (event-model freshness redesign — a naive timestamp-staleness fix would re-introduce the false-stale problem #12451 exists to prevent) and the **#12271** liveness/heartbeat signal. Recommended to PM: fold #12854 in as an AC of #12451; holding a standalone patch. Implement within #12451's unit.
+
 ## Other actionable (when context fresh) — next-pickup candidates
-- **#10686** — PRD-E E7 V2 migration smoke (MANUAL, on this repo, post-E6). In approved queue. Likely needs manual/human steps — assess before claiming.
+- **#12451** (status bar event model, approved) — LARGE event-model freshness redesign; folds #12854; needs PM sequencing confirm + fresh context. Touches statusline_data.py / current-state.
+- **#10690** — wiki-link rework + documentation-linkage sub-skill. **GATED on E6+E7** (E7=#10686 not done).
+- **#10686** — PRD-E E7 V2 migration smoke (MANUAL, on this repo, post-E6). Likely needs manual/human steps.
 - **#12801** S1.3+ (Textual TUI) — needs textual + interactive terminal.
+- **#12527** — greenfield installer smoke on FOREIGN repo — needs interactive wizard walk + external repo.
+
+## This session (2026-06-19) — 6 shipped + 1 RCA'd
+#12912 (deploy-signal model), #12905 (galaxy-fm guard ✅closed), #12818 (L2 PM no-action brevity), #12837 (anchorless-eviction ✅closed), #12914 (tracker single-status invariant + repair tool; applied 6 safe, 198 ambiguous→DM), #12823 (ship-counter split). #12854 RCA'd→#12451. PRs: #12926/27/53/59/70/82.
 
 ## Gated / not mine now
 - #12493 (PM §8.3), #12450 (S3/S4 PM-gated), #12519 (settings.json — separate installer workstream, confirmed by #12912 AC11).
