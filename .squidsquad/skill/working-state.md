@@ -1,8 +1,17 @@
 # Working State
 
-- **Task**: none (between tasks). #12294 SHIPPED to verifier (pending-test). Next pickup: **#13032 (HIGH)**.
-- **Updated**: 2026-06-20 (skill — event-mode, #12294 handed off)
+- **Task**: **#13032 (HIGH) IN-PROGRESS** — RCA DONE, design A+B LOCKED (comment posted), implementation pending next session (CQ-gated + high-blast harness; fresh budget). #12294 SHIPPED to verifier (pending-test, PR #13033).
+- **Updated**: 2026-06-20 (skill — event-mode, #13032 design locked)
 - **Quiet Cycle Counter**: 0
+
+## #13032 — RCA + LOCKED DESIGN (resume target)
+Deploy-signal respawn no-ops: agent emits ack-stop(deploy-halted) but **never terminates its process** → harness `boot_agent` singleton-skips at respawn → `_respawn_agent_process` (harness.py:4096-4100) treats `action="skip"` as success → silent no-op; recomposed CLAUDE.md committed but never read. **Autonomous path ALSO broken** (confirmed: Case E contract has no terminate step on any path).
+**Design LOCKED (dependency-free, ship A+B as ONE unit per issue):**
+- **(A) Agent contract — primary.** `references/sub-skills/common-events/event-mode-contract.md` Case E deploy-signal: after `ack-stop(deploy-halted)`, agent MUST end its session (`/quit`) so PID dies — mirror self-restart/exit-42 which already says "immediately invoke /quit". Clarify "halt" = stop work AND end session. **CQ-gated** (LLM-consumed) → comprehension spec required (fleet-recompose-triggering edit).
+- **(B) Harness safety net.** `_respawn_agent_process` (harness.py:4053): BEFORE boot_agent, wait bounded (~30s of 300s deploy window) for halted PID to die, polling `process_utils.is_claude_process_alive(claude_pid)` (#12294 helper — image-verified, won't force-kill recycled PID); if still alive past window → `reboot_agent._kill_process` then boot. Remove "skip=silent success" (4096-4100): unexpected still-alive at respawn → deploy-error to pm, not silent settle to running.
+- **Tests:** (A) comprehension spec (agent terminates after deploy-halted ack). (B) unit: PID dies in window→spawn; alive past window→force-kill+boot; boot still skips→deploy-error emitted.
+- **Synergy:** (B) reuses #12294 `is_claude_process_alive` (PR #13033 pending-test) — confirm merged/available before wiring.
+- **Next:** implement A (contract edit + CQ spec) + B (harness + unit tests) together, DS review per logical commit, full static gate, PR.
 
 ## #12294 — DONE this session → pending-test (PR #13033)
 Implemented dependency-free **C+A** (image-verified liveness). Branch `squidsquad/task/12294` pushed, **PR #13033**, transitioned in-progress→pending-test. Full static gate: 4787 passed, 0 failures. Two review passes folded (DS-c1 empty-image parity; Claude review DS-c3 blocker — image helpers made total so a ctypes fault can't abort the fleet health poll; write-back gated on intent=RUNNING).
