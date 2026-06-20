@@ -1,8 +1,18 @@
 # Working State
 
-- **Task**: #12294 (.claude-pid authoritative across harness restart) IN-PROGRESS — RCA DONE, **dependency-free design LOCKED** (comment posted), implementation pending next session (fresh budget for high-blast harness ctypes). Branch `squidsquad/task/12294` created (no commits yet). SECONDARY in-progress: #12451 (status-bar) S1+S3 on branch (PR #13024), S2 PARKED on PM CQ-AC via **#13031**.
-- **Updated**: 2026-06-20 11:40 (skill — event-mode, post-harness-restart boot)
+- **Task**: #12294 (.claude-pid authoritative across harness restart) IN-PROGRESS — RCA DONE, design **C+A LOCKED & RE-VALIDATED**, IMPLEMENTING test-first this session on branch `squidsquad/task/12294`. SECONDARY in-progress: #12451 (status-bar) S1+S3 on branch (PR #13024), S2 PARKED on PM CQ-AC via **#13031**.
+- **Updated**: 2026-06-20 (skill — event-mode, implementing #12294)
 - **Quiet Cycle Counter**: 0
+
+## #12294 — NEW FINDING this session (terminal_pid dead-end → confirms psutil gate)
+Considered closing the never-recorded-orphan gap dependency-free by re-resolving claude.exe from the persisted `terminal_pid` (#10101 descendant walk). **DOESN'T WORK on Windows**: boot_remote.py:472-475 — terminal_pid = proc.pid of the `cmd /c start` cmd.exe, which **exits immediately** (self-closing window). Recorded terminal_pid is a dead short-lived process; claude.exe is detached, not its descendant. So orphan re-adoption genuinely needs psutil (cwd/cmdline) → stays a HUMAN GATE. Locked C+A scope stands.
+
+## #12294 — IMPL PLAN (this session)
+1. **process_utils.py**: add `image_name_for_pid(pid)` (win32 toolhelp / posix /proc comm; None=undetermined) + `is_claude_process_alive(pid)` (alive AND image∈{claude.exe,claude}; None-image → fall back to liveness = AC2-safe). Extend `_win32_kernel32` w/ toolhelp typing. + unit tests (mock snapshot).
+2. **thin_launcher.py**: factor `_win32_all_procs()` out of `_win32_list_descendants`; add local mirror `_image_name_for_pid`/`_is_claude_process_alive` (#8891 no-import); `_check_singleton` → image-verified (recycled PID no longer defeats singleton = A). + tests.
+3. **harness.py update_health (580-596)**: PID chain image-verified (in-mem → file), reclaim dead/recycled; (C) write-back .claude-pid via new `reboot_agent.write_claude_pid` when missing/divergent + image-verified-alive. + tests mocking helpers.
+4. **AC4 regression test**: (i) stale .claude-pid dead PID + live recorded in state → running not respawned; (ii) recycled non-claude PID at .claude-pid → reclaimed; (iii) missing file + recorded-in-state → running (self-heal write-back). True never-recorded orphan = psutil-gated (out of dependency-free scope; route to human via PM).
+5. DS review (high-blast) per logical commit.
 
 ## #12294 — RCA + LOCKED DESIGN (resume target)
 RCA: harness learns claude.exe PID ONLY from `.claude-pid` (harness.py:595 in update_health; NO spawn-time registration). Single point of failure: thin_launcher writes resolved PID (thin_launcher.py:584, #10101) but unclean exit leaves it STALE; never-recorded live claude.exe (dm/qa observed) is invisible; load_state (harness.py:1381) restores possibly-stale PID on restart.
