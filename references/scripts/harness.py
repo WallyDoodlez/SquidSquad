@@ -1407,13 +1407,19 @@ class EventStream:
         deque, the marker becomes::
 
             {
-                "oldest_id": <str|None>,
+                "oldest_id": <str>,
                 "evicted_count_hint": <int>,
             }
 
         - ``oldest_id`` is the id of the oldest event still retained
-          (the cursor's safe re-anchor point), or ``None`` if the
-          deque is empty.
+          (the cursor's safe re-anchor point). The marker is emitted
+          ONLY when the deque is non-empty, so ``oldest_id`` is always
+          a real id — never ``None``. When the cursor predates the
+          window but the deque is EMPTY (no anchor possible), the
+          marker is suppressed and ``(events, None)`` is returned
+          instead (a benign empty result), so the harness never emits
+          the self-contradictory ``evicted`` + empty + no-anchor triple
+          that trips event_poll's fatal guard (#12837).
         - ``evicted_count_hint`` is a coarse upper bound on the number
           of events that have been pushed out of the retained window
           since boot (lifetime emits − currently retained). Operators
@@ -1439,8 +1445,22 @@ class EventStream:
             # Cursor predates the retained window — emit the eviction
             # signal so the agent can log + advance to a known anchor
             # instead of silently moving past the gap.
+            #
+            # #12837: when the deque is EMPTY there is no anchor to advance
+            # to, so building a marker here would yield the self-contradictory
+            # triple ``evicted:true`` + ``events:[]`` + ``oldest_id:None``.
+            # That is exactly the "harness contract violation" event_poll's
+            # fatal guard (event_poll.py:304) refuses — it returns None and the
+            # agent's Monitor exits 2, taking down the event listener (#9742).
+            # A stale cursor against an empty (cold-start / fully-churned) deque
+            # is a benign "nothing to deliver", NOT an unrecoverable gap: return
+            # an empty result with NO marker. When a real event later lands, the
+            # next poll re-enters this path with a non-empty deque and a valid
+            # ``oldest_id``, and the agent re-anchors normally — no events lost.
+            if not items:
+                return [], None
             events = items[:limit] if len(items) > limit else items
-            oldest_id = items[0].get("id") if items else None
+            oldest_id = items[0].get("id")
             evicted_count_hint = max(
                 0, self._total_emitted_count - len(items)
             )
