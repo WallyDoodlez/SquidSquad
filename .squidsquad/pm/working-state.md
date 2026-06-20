@@ -2,6 +2,22 @@
 
 _Condensed 2026-06-19 10:08. Prior incident narrative (reboot saga, #12506 self-wake driver, #12853 async-no-pause/Never-Stop, qa polling/#12820, harness assigned-to 500s) preserved in iteration logs + on the forge — not re-copied here. Working-state = current active state only._
 
+## >>> FULL HARNESS RESTART TRIGGERED 2026-06-19 ~20:02 (operator-approved) — POST-RESTART VERIFY THIS FIRST <<<
+
+**Why:** ALL 4 agents booted before 22:15 UTC = running the OLD SOUL; the shipped "Never Stop While Work Is Pending" (#12853) + Phase-1 pull-first guard (#12906, harness.py) were NOT active in any live session. skill STOPPED on #12912 (Phase 2) under the old rule, self-wake driver unarmed → wouldn't resume. Operator approved a full `POST /restart` to activate both fleet-wide + unstick skill.
+
+**POST-RESTART VERIFICATION (respawned PM — do from facts, ≥2 sources):**
+1. `GET /status` — all 4 aliases `status:running` + `bootup_complete:true` + EVENT mode (not polling). qa may still go polling if #12820 fix not effective — check.
+2. Composed CLAUDE.md has "Never Stop While Work Is Pending" in all 4 (grep) — confirm new SOUL live. (Was already in files at 22:15; restart loads it into sessions.)
+3. **Phase-1 (#12906) active:** the boot recompose this restart should be PULL-FIRST (harness.py loaded) → composed outputs NOT reverted. **Run the #12895 boot regression check (git status + restore-if-reverted + merge) — Phase 1 should prevent it, but verify.**
+4. skill RESUMED #12912 (Phase 2, in-progress) + #12801 (TUI, in-progress, S1.1 done / S1.2+ remaining) from working-state — should NOT re-stop now (new SOUL).
+5. Self-wake drivers armed on all (`.subloop-driver.json` present per clone after first idle).
+6. If all hold → note "restart succeeded, new SOUL + Phase 1 live." If agents don't come back → harness wasn't supervised → file to human alias.
+
+**RESTART MECHANISM NOTE (2026-06-19 20:0x):** `POST /restart` returned **404** — running harness (sha b15e7fc5) predates the endpoint. Harness was running under **start-harness.bat (one-shot, NOT supervised)** PID 51416 → no self-serve restart possible. Operator-relaunched manually. **Recommended they relaunch via `restart-harness.bat` (supervised)** so the NEW harness has `/restart` + Phase 1 #12906 (harness.py) + future restarts are self-serviceable. If this fresh boot is under restart-harness.bat, self-serve `POST /restart` works going forward.
+
+---
+
 ## Current — 2026-06-19 10:08 (PM EVENT-mode, fresh boot)
 
 **Boot clean after catching + reverting a composed-output REGRESSION.** Harness :7373 reachable (uptime 13h40m, git_sha b15e7fc5, v0.44.0). GH OK. Cursor `e8a9c17bc40d3c34` → boot drain EMPTY. bootup-complete emitted. 0 untriaged externals.
