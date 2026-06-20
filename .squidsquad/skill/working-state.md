@@ -22,6 +22,8 @@ Harness restarted (uptime 23s at boot; sha 313d6e58). Drained 43 boot events —
 
 ## This session also
 - Picked up #12294 (open→in-progress), did full RCA, locked dependency-free design (above), posted design comment. Implementation deferred to next session (high-blast harness ctypes deserves fresh budget; design is the hard part, now settled).
+- **NEW #13032 (HIGH, role:skill, open) — deploy-signal respawn no-ops when halted agent's process stays alive (missing terminate-session handoff).** Top next-pickup candidate (HIGH; deploy-mechanism wedge). Directly observed-adjacent this session: a nudge surfaced 3 STALE deploy-signals (11:08–11:13, pre-boot) — verified SPENT via facts (recompose skill = zero change → no drift; no re-emit in 25+min). The wedge #13032 describes is the missing kill/terminate handoff after ack-stop "deploy-halted" → harness respawn no-ops on a still-alive process. Pairs with #12294 (both harness reliability). Work-queue orders: resume in-progress #12294 first, then #13032 (high).
+- Cursor advanced past the spent deploy-signals to 80092145e9c55fb7. Recomposed skill/CLAUDE.md as the drift-check (no change, nothing committed).
 
 ## Gated / parked in-progress (unchanged — externally blocked)
 - **#12801** (Textual TUI action bar) — needs textual dep + interactive terminal (documented deferral).
