@@ -1,8 +1,15 @@
 # Working State
 
-- **Task**: none (between tasks). FOUR harness fixes delivered this session. No open HIGH items remain in the skill queue.
-- **Updated**: 2026-06-20 (skill — event-mode; 4 harness fixes shipped/handed-off)
+- **Task**: **#11140 IN-PROGRESS** — RCA done + design LOCKED (comment posted), implementation pending fresh budget (CQ-gated, 6 source files, 4-role recompose). FOUR harness fixes delivered this session; no open HIGH items remain.
+- **Updated**: 2026-06-20 (skill — event-mode; 4 harness fixes done, #11140 design locked)
 - **Quiet Cycle Counter**: 0
+
+## #11140 — RCA + LOCKED DESIGN (resume target)
+Add orientation prose under each major composed H2 (Identity/Responsibility/Soul/Project Context/Agent Functions/Vault). Mechanism: `v2_link_stage.emit_v2_linked` (v2_link_stage.py:165) emits `## {slot}\n\n{body}`; orientation = leading para of the lowest-ordinal L1 source per slot.
+- **L1 files exist** for identity/SOUL/instructions/vault (`references/roles/*.md`) → prepend 1-2 sentence orientation para to each (1 edit → all 4 roles).
+- **responsibility + project-context have NO L1** → create new L1 orientation-only files `references/roles/responsibility.md` + `references/roles/project-context.md` (slot: + ordinal LOWER than role-level L2; body = orientation para only).
+- **CQ-gated** → spec 11140 (fresh agent states each section's purpose from orientation alone). Fleet impact: L1 edits change all 4 composed CLAUDE.md → recompose ×4 + verify each H2 has prose; deploy-signal propagates.
+- Steps: author paras → 4 edits + 2 new L1 files → compose.py deploy ×4 + verify → CQ spec → DS review → full gate. Use `git switch -c squidsquad/task/11140` BEFORE editing ([[feedback_create_branch_before_code_edits]]).
 
 ## DELIVERED this session (2026-06-20) — harness reliability cluster
 1. **#12294 SHIPPED + CLOSED** — .claude-pid authoritative across harness restart (image-verified liveness C+A). PR #13033 merged. `process_utils.is_claude_process_alive` / `image_name_for_pid` now on main. Residual psutil orphan re-adoption → **#13034** (human decision).
