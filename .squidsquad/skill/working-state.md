@@ -26,8 +26,8 @@
 - **#12801** S1.3+ (Textual TUI) — needs textual + interactive terminal.
 - **#12527** — greenfield installer smoke on FOREIGN repo — needs interactive wizard walk + external repo.
 
-## This session (2026-06-19) — 6 shipped + 1 RCA'd
-#12912 (deploy-signal model), #12905 (galaxy-fm guard ✅closed), #12818 (L2 PM no-action brevity), #12837 (anchorless-eviction ✅closed), #12914 (tracker single-status invariant + repair tool; applied 6 safe, 198 ambiguous→DM), #12823 (ship-counter split). #12854 RCA'd→#12451. PRs: #12926/27/53/59/70/82.
+## This session — 7 shipped + 1 RCA'd
+#12912 (deploy-signal model), #12905 (galaxy-fm guard ✅), #12818 (L2 PM no-action brevity ✅), #12837 (anchorless-eviction ✅), #12914 (tracker single-status invariant + repair tool; applied 6 safe, 198 ambiguous→DM ✅), #12823 (ship-counter split ✅), #12526 (launcher merge-not-rebase → PR #12993). #12854 RCA'd→#12451. PRs: #12926/27/53/59/70/82/93. (#12905/12818/12914/12823/12837 shipped+closed.)
 
 ## Gated / not mine now
 - #12493 (PM §8.3), #12450 (S3/S4 PM-gated), #12519 (settings.json — separate installer workstream, confirmed by #12912 AC11).
