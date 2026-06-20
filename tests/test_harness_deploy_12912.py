@@ -304,21 +304,111 @@ class TestRespawnAgentProcess(unittest.TestCase):
     """DS-12912 Finding 2: the deploy respawn boots the agent explicitly (the
     health poller never would — status='deploying' is not in is_dead)."""
 
-    def test_explicit_boot_and_running_intent(self):
+    def _respawn(self, boot_side_effect):
         import harness
         agent = AgentState("skill", "")
         agent.intent = AgentState.INTENT_DEPLOYING
         agent.status = "deploying"
-        boots = []
-        with patch.object(harness.boot_remote, "boot_agent",
-                          side_effect=lambda r: boots.append(r) or {"success": True, "action": "spawn", "message": "ok"}), \
+        with patch.object(harness.boot_remote, "boot_agent", side_effect=boot_side_effect), \
              patch.object(harness, "state", _DeployFakeState(agent)), \
              patch.object(harness, "_log"):
-            harness._respawn_agent_process("skill")
-        self.assertEqual(boots, ["skill"])                       # explicit boot
+            ok = harness._respawn_agent_process("skill")
+        return agent, ok
+
+    def test_explicit_boot_and_running_intent(self):
+        agent, ok = self._respawn(
+            lambda r: {"success": True, "action": "spawn", "message": "ok"})
+        self.assertTrue(ok)
         self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
         self.assertIsNone(agent.reboot_blocked_until)
         self.assertEqual(agent.status, "starting")
+
+    def test_boot_agent_raises_leaves_recoverable_error_status(self):
+        """DS iter-2 Finding 1: boot_agent raising must NOT leave the agent at
+        'deploying' (a permanent wedge) — settle to is_dead 'error'."""
+        def boom(r):
+            raise RuntimeError("spawn failed")
+        agent, ok = self._respawn(boom)
+        self.assertFalse(ok)
+        self.assertEqual(agent.status, "error")        # is_dead, not "deploying"
+        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
+
+    def test_success_non_spawn_does_not_leave_deploying(self):
+        """DS iter-2 Finding 2: success with action!='spawn' must still move the
+        status off 'deploying'."""
+        agent, ok = self._respawn(
+            lambda r: {"success": True, "action": "skip", "message": "already alive"})
+        self.assertTrue(ok)
+        self.assertNotEqual(agent.status, "deploying")
+        self.assertEqual(agent.status, "starting")
+
+    def test_boot_failure_returns_false_and_errors(self):
+        agent, ok = self._respawn(
+            lambda r: {"success": False, "action": "spawn", "message": "boom"})
+        self.assertFalse(ok)
+        self.assertEqual(agent.status, "error")
+
+    def test_deploy_error_reports_respawn_outcome(self):
+        """DS iter-2 Finding 3: deploy-error payload carries the real respawn_ok."""
+        import harness
+        agent = AgentState("skill", "")
+        emitted = []
+        with patch.object(harness, "state", _DeployFakeState(agent)), \
+             patch.object(harness, "_respawn_agent_process", return_value=False), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
+             patch.object(harness, "_log"):
+            harness._deploy_recover_and_respawn("skill", "pull", "conflict")
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][1]["payload"]["respawn_ok"], False)
+
+
+class TestLoadStateRestoresStatus(unittest.TestCase):
+    """DS-12912 iter-2 Finding 5: load_state must restore `status`."""
+
+    def _load(self, status_value, intent="running"):
+        import harness
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            sf = Path(tmp) / ".harness-state.json"
+            sf.write_text(json.dumps({
+                "harness_pid": 1, "start_time": 0.0, "port": 7373,
+                "agents": {"skill": {"intent": intent, "status": status_value,
+                                     "clone_path": "", "claude_pid": 999}},
+            }), encoding="utf-8")
+            with patch.object(harness, "HARNESS_STATE_FILE", sf), \
+                 patch.object(harness, "_log"):
+                hs = harness.HarnessState()
+                hs.load_state()
+                return hs.get_agent("skill")
+
+    def test_running_status_restored(self):
+        self.assertEqual(self._load("running").status, "running")
+
+    def test_deploying_settles_to_running(self):
+        """An interrupted mid-deploy restores to 'running' (dead PID → rebooted),
+        and its intent is reset away from DEPLOYING."""
+        from harness import AgentState as A
+        a = self._load("deploying", intent="deploying")
+        self.assertEqual(a.status, "running")
+        self.assertEqual(a.intent, A.INTENT_RUNNING)
+
+    def test_legacy_missing_status_defaults_unknown(self):
+        import harness
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            sf = Path(tmp) / ".harness-state.json"
+            sf.write_text(json.dumps({
+                "harness_pid": 1, "start_time": 0.0, "port": 7373,
+                "agents": {"skill": {"intent": "running", "clone_path": ""}},
+            }), encoding="utf-8")
+            with patch.object(harness, "HARNESS_STATE_FILE", sf), \
+                 patch.object(harness, "_log"):
+                hs = harness.HarnessState()
+                hs.load_state()
+                self.assertEqual(hs.get_agent("skill").status, "unknown")
 
 
 class TestDetectOnlyFreshness(unittest.TestCase):

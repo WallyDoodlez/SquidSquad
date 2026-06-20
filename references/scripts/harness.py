@@ -1359,6 +1359,23 @@ class HarnessState:
                 agent.boot_time = agent_data.get("boot_time")
                 agent.claude_pid = agent_data.get("claude_pid")
                 agent.terminal_pid = agent_data.get("terminal_pid")
+                # DS-12912 iter-2 Finding 5: restore `status` (save_state persists
+                # it but load_state historically dropped it, so every agent came
+                # back as "unknown" — never in is_dead — and a dead-before-restart
+                # agent was never auto-rebooted). Restoring it lets the health
+                # poller recover: a restored "running" agent whose PID is dead
+                # settles to "stalled" (was_alive=True) and respawns; the
+                # crash-looping / paused resume branches also need their status
+                # back. Defaults to "unknown" for legacy/fresh state files.
+                agent.status = agent_data.get("status", "unknown")
+                # #12912: an interrupted mid-deploy (status="deploying") restored
+                # after a harness restart had its intent reset to RUNNING above;
+                # settle the status to "running" so the dead PID is treated as a
+                # crashed running agent and respawned on its existing committed
+                # CLAUDE.md. The deploy did not complete (checksum unadvanced), so
+                # a future deploy-signal re-triggers.
+                if agent.status == "deploying":
+                    agent.status = "running"
                 # #8695: restore so already-running agents stay ungated after
                 # a harness restart. Defaults to False for older state files.
                 agent.bootup_complete = agent_data.get("bootup_complete", False)
@@ -3991,28 +4008,49 @@ def _respawn_agent_process(role):
     and after a deploy its status is "deploying" — which is NOT in the health
     poller's is_dead set, so the poller will NEVER auto-respawn it. We therefore
     boot it directly and stamp fresh-spawn state, mirroring the auto-start path.
-    Clears reboot_blocked_until so the new session is not gated."""
-    try:
-        result = boot_remote.boot_agent(role)
-    except Exception as e:
-        _log(f"{role}: deploy respawn boot_agent raised {type(e).__name__}: {e}")
-        return
+
+    Returns True iff a fresh process was spawned. On ANY non-spawn outcome —
+    boot_agent raised, returned success=False, or returned a non-"spawn" action —
+    the agent MUST NOT be left at status="deploying" (it would be permanently
+    stuck: not is_dead, never auto-respawned — DS-12912 iter-2 Findings 1+2).
+    We settle it to "error" (which IS in is_dead) with intent=RUNNING so the
+    failure is honest and surfaced, rather than a silent wedge."""
     agent = state.get_agent(role) or AgentState(role)
     agent.reboot_blocked_until = None
     agent.intent = AgentState.INTENT_RUNNING
     agent.intent_set_at = None
     agent.bootup_complete = False
-    if result.get("success") and result.get("action") == "spawn":
+    try:
+        result = boot_remote.boot_agent(role)
+    except Exception as e:
+        agent.status = "error"          # is_dead → honest, not a "deploying" wedge
+        agent.claude_pid = None
+        state.set_agent(role, agent)
+        state.save_state()
+        _log(f"{role}: deploy respawn boot_agent raised "
+             f"{type(e).__name__}: {e} — left status=error")
+        return False
+    spawned = bool(result.get("success") and result.get("action") == "spawn")
+    if spawned:
         agent.status = "starting"
         agent.boot_time = time.time()
         agent.last_spawn_at = time.time()
         agent.last_session_end = None
         agent.last_dispatch_at = None
         agent.terminal_pid = result.get("terminal_pid")
+    elif result.get("success"):
+        # Succeeded but did not spawn (e.g. action="skip" — already alive). The
+        # process exists; settle to "starting" so the next poll resolves it to
+        # "running" — never leave it at "deploying".
+        agent.status = "starting"
+    else:
+        agent.status = "error"
+        agent.claude_pid = None
     state.set_agent(role, agent)
     state.save_state()
     ok = "OK" if result.get("success") else f"FAIL: {result.get('message')}"
     _log(f"{role}: deploy respawn — {result.get('action')} {ok}")
+    return bool(result.get("success"))
 
 
 def _emit_boot_deploy_signals():
@@ -4086,13 +4124,16 @@ def _deploy_recover_and_respawn(role, stage, detail):
     The respawn is explicit for the same reason as the success path (Finding 2)."""
     _log(f"{role}: deploy FAILED at {stage}: {detail} — respawning on existing "
          f"CLAUDE.md, filing deploy-error to pm (checksum NOT advanced)")
-    _respawn_agent_process(role)
+    respawn_ok = _respawn_agent_process(role)
+    # DS-12912 iter-2 Finding 3: report the real respawn outcome so the operator
+    # is not misdirected by a "respawned" claim when the respawn itself failed.
     _emit_event("deploy-error", "pm", payload={
         "target_alias": "pm",
         "event_context": "deploy-error",
         "failed_role": role,
         "stage": stage,
         "detail": str(detail)[:500],
+        "respawn_ok": respawn_ok,
     })
 
 
@@ -4130,13 +4171,27 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
         # still re-triggers via a NEW deploy-signal (checksum is only advanced
         # on success), so advancing the cursor here loses nothing.
         if deploy_signal_event_id:
-            try:
-                outcome = event_lifecycle.advance_cursor(role, deploy_signal_event_id)
-                _log(f"{role}: advanced cursor past deploy-signal "
-                     f"{deploy_signal_event_id} ({outcome})")
-            except Exception as e:
-                _log(f"{role}: deploy-signal cursor advance raised "
-                     f"{type(e).__name__}: {e}")
+            # DS-12912 iter-2 Finding 4: a silent advance failure reintroduces the
+            # re-halt loop (the respawned agent re-fetches the signal). The normal
+            # return values are all safe — "advanced" (moved past it), "regression"
+            # (cursor already past it), "evicted" (signal no longer in the deque,
+            # so unreachable anyway). Only an exception is concerning; retry once,
+            # then log loudly so the loop risk is visible rather than silent.
+            for _attempt in range(2):
+                try:
+                    outcome = event_lifecycle.advance_cursor(
+                        role, deploy_signal_event_id)
+                    _log(f"{role}: advanced cursor past deploy-signal "
+                         f"{deploy_signal_event_id} ({outcome})")
+                    break
+                except Exception as e:
+                    if _attempt == 1:
+                        _log(f"{role}: WARNING deploy-signal cursor advance failed "
+                             f"after retry ({type(e).__name__}: {e}) — respawned "
+                             f"agent may re-halt on the stale signal")
+                    else:
+                        _log(f"{role}: deploy-signal cursor advance raised "
+                             f"{type(e).__name__}: {e} — retrying once")
         try:
             clone_path = Path(boot_remote._get_clone_path(role))
         except Exception as e:
