@@ -471,6 +471,12 @@ class TestForceKillSafetyNet(unittest.TestCase):
                   return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=pid_alive),
+            # #12294: update_health now resolves liveness via the image-verified
+            # helper, so control that instead of the bare liveness check; pin
+            # write-back to a no-op so the self-heal doesn't touch /clone.
+            patch("harness.process_utils.is_claude_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.time.time", return_value=fake_now),
             patch("harness._log"),
         ]
@@ -667,6 +673,10 @@ class TestCrashLoopBackoff(unittest.TestCase):
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=pid_alive),
+            # #12294: image-verified liveness is the path update_health uses now.
+            patch("harness.process_utils.is_claude_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid",
                   return_value=(None, False)),
             patch("harness.time.time", return_value=fake_now),
@@ -942,11 +952,29 @@ class TestRestartLifecycle(unittest.TestCase):
             (pid_changed=True).
         """
         kill = MagicMock()
+        # #12294: update_health resolves liveness via the image-verified helper
+        # for BOTH the stored PID and the .claude-pid file PID. Mirror the old
+        # two-source semantics with a per-PID side_effect: the stored PID's
+        # liveness is `stored_pid_alive`; the file PID's is `read_pid_return`'s
+        # alive flag. Write-back is pinned to a no-op (it would touch /clone).
+        stored_pid = hs.get_agent("skill").claude_pid
+        file_pid, file_alive = read_pid_return
+
+        def _claude_alive(pid):
+            if stored_pid is not None and pid == stored_pid:
+                return stored_pid_alive
+            if file_pid is not None and pid == file_pid:
+                return file_alive
+            return False
+
         patches = [
             patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=stored_pid_alive),
+            patch("harness.process_utils.is_claude_process_alive",
+                  side_effect=_claude_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid",
                   return_value=read_pid_return),
             patch("harness.reboot_agent._kill_process", kill),
@@ -1584,8 +1612,12 @@ class TestHarnessHealthPolling(unittest.TestCase):
             (role_dir / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
 
             hs = HarnessState()
+            # #12294: the test PID is this python process, not a claude.exe, so
+            # image verification would (correctly) reject it. Stub the
+            # image-verified check to True so the .claude-pid PID is adopted.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2203,6 +2235,7 @@ class TestIntentLifecycle(unittest.TestCase):
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
                  patch("harness.boot_remote.boot_agent", return_value=spawn_result), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2230,8 +2263,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = None  # PID cleared when agent died
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2257,8 +2293,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = None
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2283,8 +2322,12 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = os.getpid()  # Same PID — stop is in-flight
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True
+            # so the same-PID-alive case is exercised (intent stays STOPPING).
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
