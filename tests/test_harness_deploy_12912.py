@@ -271,7 +271,7 @@ class TestRunDeploySequence(unittest.TestCase):
              patch.object(harness, "_bump_compose_checksum",
                           side_effect=lambda cp: bumped.append(cp)), \
              patch.object(harness, "_respawn_agent_process",
-                          side_effect=lambda r: respawns.append(r)), \
+                          side_effect=lambda r: respawns.append(r) or True), \
              patch.object(harness, "_emit_event",
                           side_effect=lambda *a, **k: emitted.append((a, k))), \
              patch.object(harness, "_log"):
@@ -384,29 +384,27 @@ class TestRespawnAgentProcess(unittest.TestCase):
         """#13032: success with action='skip' (agent STILL ALIVE at respawn,
         after we waited for the PID to die) is the original no-op bug — it must
         NOT be settled to running on stale instructions. Fail honest (is_dead
-        'error', returns False) and surface a deploy-error to pm."""
+        'error', returns False). The deploy-error emit is owned by the caller
+        (_respawn_after_deploy / _deploy_recover_and_respawn), so
+        _respawn_agent_process itself emits nothing (DS-13032-B F1)."""
         agent, ok, emitted = self._respawn(
             lambda r: {"success": True, "action": "skip", "message": "already alive"})
         self.assertFalse(ok)
         self.assertEqual(agent.status, "error")        # is_dead, not silent "running"
-        self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0][0][0], "deploy-error")
-        self.assertEqual(emitted[0][1]["payload"]["stage"], "respawn-no-spawn")
-        self.assertFalse(emitted[0][1]["payload"]["respawn_ok"])
+        self.assertEqual(emitted, [])                  # caller owns the emit
 
     def test_boot_failure_returns_false_and_errors(self):
         agent, ok, emitted = self._respawn(
             lambda r: {"success": False, "action": "spawn", "message": "boom"})
         self.assertFalse(ok)
         self.assertEqual(agent.status, "error")
-        self.assertEqual(len(emitted), 1)              # surfaced, not silent
-        self.assertEqual(emitted[0][0][0], "deploy-error")
+        self.assertEqual(emitted, [])                  # caller owns the emit
 
-    def test_old_pid_still_alive_aborts_respawn_with_deploy_error(self):
+    def test_old_pid_still_alive_aborts_respawn(self):
         """#13032: if the deploy-halted agent's process never exits (didn't
-        /quit, or wedged), do NOT boot over it (singleton would no-op) — abort,
-        leave is_dead 'error', and surface a deploy-error. boot_agent must NOT
-        even be called."""
+        /quit, or wedged), do NOT boot over it (singleton would no-op) — abort
+        and leave is_dead 'error'. boot_agent must NOT even be called; the
+        deploy-error is the caller's to emit (DS-13032-B F1)."""
         called = []
         agent, ok, emitted = self._respawn(
             lambda r: called.append(r) or {"success": True, "action": "spawn"},
@@ -415,9 +413,7 @@ class TestRespawnAgentProcess(unittest.TestCase):
         self.assertEqual(called, [])                    # never booted over a live process
         self.assertEqual(agent.status, "error")
         self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
-        self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0][0][0], "deploy-error")
-        self.assertEqual(emitted[0][1]["payload"]["stage"], "respawn-pid-still-alive")
+        self.assertEqual(emitted, [])                  # caller owns the emit
 
     def test_old_pid_dies_then_boots_fresh(self):
         """#13032: once the old PID dies within the wait, the respawn boots a
@@ -442,6 +438,52 @@ class TestRespawnAgentProcess(unittest.TestCase):
             harness._deploy_recover_and_respawn("skill", "pull", "conflict")
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0][1]["payload"]["respawn_ok"], False)
+
+    def test_success_path_respawn_failure_emits_single_deploy_error(self):
+        """#13032 DS-13032-B F1/F2: a respawn failure on the SUCCESS path
+        (deploy composed/committed fine but the agent didn't come back) is no
+        longer silent — _respawn_after_deploy emits exactly one deploy-error."""
+        import harness
+        emitted = []
+        with patch.object(harness, "_respawn_agent_process", return_value=False), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
+             patch.object(harness, "_log"):
+            harness._respawn_after_deploy("skill")
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][0][0], "deploy-error")
+        self.assertEqual(emitted[0][1]["payload"]["stage"], "respawn")
+        self.assertFalse(emitted[0][1]["payload"]["respawn_ok"])
+
+    def test_success_path_respawn_ok_emits_nothing(self):
+        import harness
+        emitted = []
+        with patch.object(harness, "_respawn_agent_process", return_value=True), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
+             patch.object(harness, "_log"):
+            harness._respawn_after_deploy("skill")
+        self.assertEqual(emitted, [])
+
+    def test_recovery_path_emits_single_deploy_error_no_double(self):
+        """#13032 DS-13032-B F1: the recovery path emits ONE deploy-error (its
+        stage failure) — _respawn_agent_process no longer emits its own, so a
+        respawn failure during recovery does not double-emit."""
+        import harness
+        agent = AgentState("skill", "")
+        agent.claude_pid = 4242  # still-alive → respawn aborts inside the call
+        emitted = []
+        with patch.object(harness, "state", _DeployFakeState(agent)), \
+             patch.object(harness, "_await_pid_death", return_value=False), \
+             patch.object(harness.boot_remote, "boot_agent",
+                          side_effect=AssertionError("must not boot over live PID")), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
+             patch.object(harness, "_log"):
+            harness._deploy_recover_and_respawn("skill", "pull", "conflict")
+        self.assertEqual(len(emitted), 1)              # not two
+        self.assertEqual(emitted[0][1]["payload"]["stage"], "pull")
+        self.assertFalse(emitted[0][1]["payload"]["respawn_ok"])
 
 
 class TestAwaitPidDeath(unittest.TestCase):

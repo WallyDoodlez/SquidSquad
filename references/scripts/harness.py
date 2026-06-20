@@ -4053,11 +4053,16 @@ _DEPLOY_WINDOW_SECONDS = 300
 # claude process to exit (it `/quit`s itself per the event-mode Case E contract)
 # before booting its replacement. boot_agent's singleton guard refuses to spawn
 # over a live process, so booting too early no-ops the respawn and the agent
-# keeps running the stale pre-recompose CLAUDE.md. Bounded well within
-# _DEPLOY_WINDOW_SECONDS; the /quit is near-instant and the deploy's
-# pull/compose/commit/push already burned a few seconds before we get here, so
-# in practice the PID is usually already dead and the wait returns immediately.
-_DEPLOY_RESPAWN_PID_WAIT_S = 30
+# keeps running the stale pre-recompose CLAUDE.md. Kept SHORT because it is only
+# a tail-cover: the agent /quits the instant it emits ack-stop, and the deploy's
+# own cursor-advance + pull + compose (+ commit + push) already ran before we
+# get here, so the PID is normally already dead and the wait returns
+# immediately. A still-alive agent after this short window almost certainly did
+# not /quit at all (un-upgraded / wedged) → abort fast rather than block the
+# serialized _deploy_lock for long (DS-13032-B F3: a full fix moves the respawn
+# outside _deploy_lock so the wait never blocks other clones' deploys — tracked
+# follow-up).
+_DEPLOY_RESPAWN_PID_WAIT_S = 10
 
 
 def _await_pid_death(pid, timeout_s, poll_s=0.5):
@@ -4122,16 +4127,9 @@ def _respawn_agent_process(role):
         _log(f"{role}: deploy respawn ABORTED — old claude PID {old_pid} still "
              f"alive after {_DEPLOY_RESPAWN_PID_WAIT_S}s (agent did not exit on "
              f"the deploy-halt /quit) — left status=error")
-        _emit_event("deploy-error", "pm", payload={
-            "target_alias": "pm",
-            "event_context": "deploy-error",
-            "failed_role": role,
-            "stage": "respawn-pid-still-alive",
-            "detail": (f"old claude PID {old_pid} still alive after "
-                       f"{_DEPLOY_RESPAWN_PID_WAIT_S}s; respawn would no-op on "
-                       f"the singleton guard, leaving stale CLAUDE.md"),
-            "respawn_ok": False,
-        })
+        # The deploy-error emit is owned by the caller (DS-13032-B F1: avoids a
+        # double-emit when called from _deploy_recover_and_respawn, which emits
+        # its own stage failure).
         return False
 
     agent.reboot_blocked_until = None
@@ -4174,14 +4172,7 @@ def _respawn_agent_process(role):
               f"success={result.get('success')!r} after PID-death wait: "
               f"{result.get('message')}")
     _log(f"{role}: deploy respawn FAILED — {detail}")
-    _emit_event("deploy-error", "pm", payload={
-        "target_alias": "pm",
-        "event_context": "deploy-error",
-        "failed_role": role,
-        "stage": "respawn-no-spawn",
-        "detail": detail,
-        "respawn_ok": False,
-    })
+    # deploy-error emit owned by the caller (DS-13032-B F1).
     return False
 
 
@@ -4244,9 +4235,25 @@ def _bump_compose_checksum(clone_path):
 def _respawn_after_deploy(role):
     """Successful deploy: respawn the halted agent against the freshly-committed
     CLAUDE.md. The PID is dead and status is "deploying" (not in is_dead), so the
-    health poller will not do it — respawn explicitly (DS-12912 Finding 2)."""
+    health poller will not do it — respawn explicitly (DS-12912 Finding 2).
+
+    #13032 (DS-13032-B F1/F2): this success path owns the deploy-error emit for a
+    respawn failure. Previously a respawn that no-op'd here was SILENT (the agent
+    kept running stale instructions); now any respawn failure — agent didn't exit,
+    boot_agent raised, or boot no-op'd — surfaces a single deploy-error to pm."""
     _log(f"{role}: deploy complete — respawning on fresh CLAUDE.md")
-    _respawn_agent_process(role)
+    if not _respawn_agent_process(role):
+        _emit_event("deploy-error", "pm", payload={
+            "target_alias": "pm",
+            "event_context": "deploy-error",
+            "failed_role": role,
+            "stage": "respawn",
+            "detail": (f"{role}: deploy succeeded but the respawn failed (agent "
+                       f"did not exit on the deploy-halt /quit, boot raised, or "
+                       f"boot no-op'd) — see harness log; the agent may still be "
+                       f"on the stale pre-recompose CLAUDE.md"),
+            "respawn_ok": False,
+        })
 
 
 def _deploy_recover_and_respawn(role, stage, detail):
