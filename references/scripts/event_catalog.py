@@ -140,6 +140,19 @@ RECOGNIZED = {
         "planned_source": "harness.py intent API",
         "payload_fields": ["reason"],
     },
+    # #12912 (deploy-signal recompose model, Phase 2 of #12895): harness detects
+    # compose-source drift and requests a coordinated halt so the pull-first
+    # deploy sequence can run. Rides the assigned-to plumbing with an explicit
+    # event_type="deploy-signal" so the agent care filter branches on event_type
+    # (not just target_alias) and routes to the deploy-halt branch (AGENT-RUNTIME
+    # §5.2 / §8.1). RECOGNIZED here in S1 (agent halt branch references it but no
+    # script emits it yet); promoted to EMITTED in S3 when harness.py
+    # _reboot_affected_agents emits it.
+    "deploy-signal": {
+        "description": "Harness detected compose-source drift and requests a coordinated halt so the pull-first deploy sequence can run. Agent finishes its current atomic unit (on main, between tasks), emits ack-stop(result=deploy-halted), and halts without acking the deploy-signal cursor.",
+        "planned_source": "harness.py _reboot_affected_agents (drift detect → emit)",
+        "payload_fields": ["target_alias", "event_type", "event_context"],
+    },
     "shipped": {
         "description": "Item shipped — agent may need to update state or celebrate",
         "planned_source": "harness.py (on tracker transition to shipped)",

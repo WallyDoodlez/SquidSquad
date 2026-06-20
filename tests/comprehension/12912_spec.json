@@ -1,0 +1,44 @@
+{
+  "issue": 12912,
+  "title": "deploy-signal recompose model (Phase 2 of #12895) — S1: deploy-signal catalog + agent halt branch",
+  "authored_by": "skill",
+  "authored_at": "2026-06-19 18:10",
+  "ac": "AC1, AC2, AC4, AC7",
+  "method": "Fresh agent (model: sonnet) given ONLY the modified event-mode-contract.md (the event-mode wake contract, runtime-loaded at boot). The new '### Case E — Special events' deploy-signal bullet is the surface under test. Answers must come from the supplied text alone.",
+  "target": "references/sub-skills/common-events/event-mode-contract.md -> 'Case E — Special events' deploy-signal bullet",
+  "files": [
+    "references/sub-skills/common-events/event-mode-contract.md"
+  ],
+  "questions": [
+    {
+      "id": "CQ1",
+      "question": "An event arrives with target_alias equal to your alias, so it passes the care filter as 'cared'. Its event_type is 'deploy-signal'. Do you run your normal work wrapper (pre-cycle, do work, post-cycle) on it? What determines how you route it?",
+      "expected": "No — you do NOT run the normal work wrapper. You branch on event_type BEFORE the work wrapper: an event_type of 'deploy-signal' routes to the deploy-halt branch (Case E), not to work pickup. Passing the care filter (target_alias match) is not enough; the event_type field decides routing.",
+      "anti": "Saying you process it as ordinary assigned work, or that target_alias matching alone means you do the work."
+    },
+    {
+      "id": "CQ2",
+      "question": "You are a worker currently mid-task on a feature branch with unmerged work when a deploy-signal becomes the next event. Can you honor the deploy halt right now? If not, what must happen first?",
+      "expected": "No — you do not halt mid-task or mid-feature-branch. You honor a deploy-signal only at a between-task boundary where you are back on main with a clean working tree. First finish the current task to its normal handoff (complete it, transition it, return to main via task-end), then honor the deploy halt.",
+      "anti": "Saying you immediately halt/abandon the in-flight feature-branch work, or that a deploy-signal can be honored at any point mid-task."
+    },
+    {
+      "id": "CQ3",
+      "question": "At the between-task on-main boundary, what exactly do you emit to the harness for a deploy-signal, and what three things must you NOT do?",
+      "expected": "Emit ack-stop with result='deploy-halted' (POST /events, event_type='ack-stop', payload includes the deploy-signal's event_id, result='deploy-halted', and your alias as role). You must NOT pick up new work, must NOT enter the improvement-scan cool-down loop, and must NOT ack-cursor the deploy-signal.",
+      "anti": "Saying you ack-cursor the deploy-signal, pick up the next task, run the subloop, or emit a plain stop/crash instead of result='deploy-halted'."
+    },
+    {
+      "id": "CQ4",
+      "question": "Why must you specifically NOT post ack-cursor for the deploy-signal? Who advances the cursor past it, and what failure happens if the cursor is not advanced past it before respawn?",
+      "expected": "The harness advances your cursor past the deploy-signal itself, as part of the deploy sequence before it respawns you. If the cursor were not advanced past it, the respawned session would re-fetch and re-process the deploy-signal, re-halt, and loop forever (deploy -> respawn -> re-halt -> deploy ...).",
+      "anti": "Saying the agent should ack-cursor it anyway, or that nothing bad happens if the cursor is left at the deploy-signal."
+    },
+    {
+      "id": "CQ5",
+      "question": "Does a loop-mode (polling) agent consume a deploy-signal off the event bus? How does a loop-mode agent end up running the updated CLAUDE.md?",
+      "expected": "No — loop/polling-mode agents never consume a deploy-signal; the event bus is event-mode only. A loop-mode agent picks up the updated, already-committed CLAUDE.md at its next session start via cycle_pre.py's git pull (AGENT-RUNTIME §7.8). The deploy-halt branch does not apply in loop mode.",
+      "anti": "Saying a loop-mode agent halts on the deploy-signal, or that it recomposes its own CLAUDE.md."
+    }
+  ]
+}
