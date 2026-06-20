@@ -11,25 +11,37 @@
 # 2. Galaxy-frontmatter guard (#12905) — FAIL-CLOSED on a confirmed violation.
 #    Blocks the commit if a staged vault/galaxy/*.md note lacks a valid YAML
 #    frontmatter block (a frontmatter-less note reds tests/test_vault.py for the
-#    WHOLE fleet). The subcommand exits 1 ONLY on a confirmed violation and exits
-#    0 on any guard-internal error (fail-open on bugs), so a guard defect can
-#    never wedge the fleet's commits — only a genuinely malformed note is blocked.
-#
-# No 2>&1: both guards print to stderr on purpose (git only reliably surfaces
-# hook stderr); merging into stdout would hide the notices.
+#    WHOLE fleet). The decision to BLOCK keys on the explicit
+#    __SQUIDSQUAD_GALAXY_FM_BLOCK__ marker the subcommand prints ONLY after it
+#    ran and confirmed a real violation — NOT on the exit code. A module-level
+#    python crash (bad import/syntax in git_ops.py) also exits 1, so keying on
+#    the exit code would let such a crash wedge every commit fleet-wide
+#    (DS-12905 Finding 1). Keying on the marker fails OPEN on any crash/error.
+
+# Guard composition note: galaxy notes are main-only state, so on a FEATURE
+# branch Guard 1 unstages a staged galaxy note before Guard 2 runs — a
+# feature-branch commit never carries it and Guard 2 has nothing to check. The
+# galaxy guard therefore only fires on the working branch (where Guard 1
+# no-ops), which is exactly where galaxy notes land. A feature-branch smoke that
+# shows a bad note "allowed" is Guard 1 doing its job, not a Guard 2 miss.
 
 # Guard 1 — fail-open: always allow the commit to proceed.
 python references/scripts/git_ops.py guard-staged-state \
   || python3 references/scripts/git_ops.py guard-staged-state \
   || true
 
-# Guard 2 — fail-closed on violation. Run via whichever interpreter exists; a
-# non-zero exit (confirmed violation) aborts the commit. If no python is on PATH,
-# skip silently (fail-open — the static gate remains the safety net).
+# Guard 2 — fail-closed on a CONFIRMED violation (marker present), fail-open on
+# everything else (crash, error, no python). Capture output, surface it on
+# stderr (git only reliably shows hook stderr), then block only on the marker.
+GALAXY_OUT=""
 if command -v python >/dev/null 2>&1; then
-  python references/scripts/git_ops.py guard-galaxy-frontmatter || exit 1
+  GALAXY_OUT=$(python references/scripts/git_ops.py guard-galaxy-frontmatter 2>&1)
 elif command -v python3 >/dev/null 2>&1; then
-  python3 references/scripts/git_ops.py guard-galaxy-frontmatter || exit 1
+  GALAXY_OUT=$(python3 references/scripts/git_ops.py guard-galaxy-frontmatter 2>&1)
 fi
+[ -n "$GALAXY_OUT" ] && printf '%s\n' "$GALAXY_OUT" >&2
+case "$GALAXY_OUT" in
+  *__SQUIDSQUAD_GALAXY_FM_BLOCK__*) exit 1 ;;
+esac
 
 exit 0

@@ -106,11 +106,25 @@ class TestGuardGalaxyFrontmatter(unittest.TestCase):
         self.assertEqual(v, [])
 
     def test_gitkeep_and_template_skipped(self):
+        # .gitkeep is excluded by the .md extension check; *-template.md by the
+        # explicit template exclusion (DS-12905 F3).
         v = self._run_guard(
             [".squidsquad/vault/galaxy/.gitkeep",
              ".squidsquad/vault/galaxy/galaxy-template.md"],
             {".squidsquad/vault/galaxy/.gitkeep": "",
              ".squidsquad/vault/galaxy/galaxy-template.md": "# template\n"},
+        )
+        self.assertEqual(v, [])
+
+    def test_unanchored_vault_galaxy_path_ignored(self):
+        """DS-12905 Finding 2: a path that merely CONTAINS 'vault/galaxy' but is
+        NOT under .squidsquad/vault/galaxy/ must not be treated as a galaxy note
+        (the static gate only ever checks .squidsquad/vault/galaxy/)."""
+        v = self._run_guard(
+            ["docs/vault/galaxy/architecture.md",
+             "some/other/vault/galaxy/note.md"],
+            {"docs/vault/galaxy/architecture.md": "# no frontmatter\n",
+             "some/other/vault/galaxy/note.md": "# no frontmatter\n"},
         )
         self.assertEqual(v, [])
 
@@ -132,6 +146,71 @@ class TestGuardGalaxyFrontmatter(unittest.TestCase):
         self.assertEqual([p for p, _ in v], [".squidsquad/vault/galaxy/learning-bad.md"])
 
 
+class TestGuardComposition(unittest.TestCase):
+    """The two pre-commit guards compose by branch (the subtle interaction that
+    makes the galaxy guard's effective scope the WORKING branch).
+
+    Galaxy notes are main-only state: on a feature branch the #11511 state guard
+    UNSTAGES a staged galaxy note (it doesn't belong in a PR), so a feature-branch
+    commit never carries it and the galaxy guard has nothing left to check. The
+    galaxy guard therefore only ever fires where galaxy notes actually land — on
+    the working branch, where the state guard no-ops. A smoke run on a feature
+    branch shows the hook 'allowing' a bad note precisely because the state guard
+    already removed it — that is correct composition, not a guard miss.
+    """
+
+    def test_state_guard_strips_galaxy_note_on_feature_branch(self):
+        """On a feature branch, Guard 1 unstages the galaxy note before Guard 2."""
+        galaxy = ".squidsquad/vault/galaxy/learning-bad.md"
+        reset_calls = []
+
+        def fake_run(cmd, check=True):
+            if cmd == "git branch --show-current":
+                return _cp(0, "squidsquad/task/12905\n")  # NOT the working branch
+            return _cp(0, "")
+
+        def fake_run_list(cmd, check=True):
+            if cmd[:4] == ["git", "diff", "--cached", "--name-only"]:
+                return _cp(0, galaxy + "\n")
+            if cmd[:2] == ["git", "reset"]:
+                reset_calls.append(cmd[-1])
+                return _cp(0, "")
+            return _cp(0, "")
+
+        with patch.object(git_ops, "_get_working_branch", return_value="main"), \
+             patch.object(git_ops, "_run", side_effect=fake_run), \
+             patch.object(git_ops, "_run_list", side_effect=fake_run_list), \
+             patch.object(git_ops, "print"):
+            stripped = git_ops.guard_staged_state()
+        self.assertEqual(stripped, [galaxy])
+        self.assertIn(galaxy, reset_calls)  # actually unstaged
+
+    def test_state_guard_noops_on_working_branch_so_galaxy_guard_fires(self):
+        """On the working branch, Guard 1 no-ops, leaving the note for Guard 2."""
+        galaxy = ".squidsquad/vault/galaxy/learning-bad.md"
+
+        def fake_run(cmd, check=True):
+            if cmd == "git branch --show-current":
+                return _cp(0, "main\n")  # IS the working branch
+            return _cp(0, "")
+
+        def fake_run_list(cmd, check=True):
+            if cmd[:4] == ["git", "diff", "--cached", "--name-only"]:
+                return _cp(0, galaxy + "\n")
+            if cmd[:2] == ["git", "show"]:
+                return _cp(0, "# no frontmatter\n")
+            return _cp(0, "")
+
+        with patch.object(git_ops, "_get_working_branch", return_value="main"), \
+             patch.object(git_ops, "_run", side_effect=fake_run), \
+             patch.object(git_ops, "_run_list", side_effect=fake_run_list), \
+             patch.object(git_ops, "print"):
+            stripped = git_ops.guard_staged_state()       # Guard 1: no-op
+            violations = git_ops.guard_galaxy_frontmatter()  # Guard 2: catches it
+        self.assertEqual(stripped, [])
+        self.assertEqual([p for p, _ in violations], [galaxy])
+
+
 class TestCliExitCodes(unittest.TestCase):
     """CLI: exit 1 on a confirmed violation (fail-closed), exit 0 otherwise
     INCLUDING on any guard-internal error (fail-open)."""
@@ -144,11 +223,17 @@ class TestCliExitCodes(unittest.TestCase):
                 return e.code if e.code is not None else 0
         return 0
 
-    def test_violation_exits_1(self):
+    def test_violation_exits_1_and_emits_marker(self):
+        """Violation → exit 1 AND prints the block marker the shim keys on."""
+        printed = []
         with patch.object(git_ops, "guard_galaxy_frontmatter",
                           return_value=[("p", "missing")]), \
-             patch.object(git_ops, "_ensure_hooks_installed"):
+             patch.object(git_ops, "_ensure_hooks_installed"), \
+             patch("builtins.print",
+                   side_effect=lambda *a, **k: printed.append(" ".join(str(x) for x in a))):
             self.assertEqual(self._main_exit(), 1)
+        self.assertTrue(any("__SQUIDSQUAD_GALAXY_FM_BLOCK__" in line for line in printed),
+                        "violation must emit the block marker for the pre-commit shim")
 
     def test_clean_exits_0(self):
         with patch.object(git_ops, "guard_galaxy_frontmatter", return_value=[]), \
@@ -172,7 +257,10 @@ class TestHookWiring(unittest.TestCase):
                 / "references" / "git-hooks" / "pre-commit")
         text = hook.read_text(encoding="utf-8")
         self.assertIn("guard-galaxy-frontmatter", text)
-        self.assertIn("|| exit 1", text)  # fail-closed propagation
+        # DS-12905 F1: the shim BLOCKS on the explicit marker, not the exit code
+        # (a module-level python crash also exits 1 and must NOT wedge commits).
+        self.assertIn("__SQUIDSQUAD_GALAXY_FM_BLOCK__", text)
+        self.assertIn("exit 1", text)  # fail-closed on the marker match
 
     def test_cli_excluded_from_self_heal(self):
         """The guard subcommand must be in the self-heal exclusion tuple so it

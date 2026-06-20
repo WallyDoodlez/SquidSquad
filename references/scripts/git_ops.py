@@ -1188,10 +1188,6 @@ def guard_staged_state():
     return state_staged
 
 
-# Galaxy-note basenames that are scaffolding, not real notes — skip the guard.
-_GALAXY_SKIP_NAMES = (".gitkeep",)
-
-
 def _galaxy_frontmatter_violation(content):
     """Return a one-line reason string if CONTENT fails the galaxy-frontmatter
     contract, else None. Mirrors ``tests/test_vault.py::TestGalaxyNotes::
@@ -1245,11 +1241,17 @@ def guard_galaxy_frontmatter():
         if not p:
             continue
         norm = p.replace("\\", "/")
-        # Only galaxy notes under a vault/galaxy/ directory, *.md.
-        if "/vault/galaxy/" not in norm or not norm.endswith(".md"):
+        # Only galaxy notes under the ACTUAL vault location, *.md. Anchored to
+        # .squidsquad/vault/galaxy/ so an unrelated path that merely contains
+        # 'vault/galaxy' elsewhere (e.g. docs/vault/galaxy/architecture.md) is
+        # never wrongly blocked — the static gate only ever checks
+        # .squidsquad/vault/galaxy/ (DS-12905 Finding 2).
+        if ".squidsquad/vault/galaxy/" not in norm or not norm.endswith(".md"):
             continue
         name = norm.rsplit("/", 1)[-1]
-        if name in _GALAXY_SKIP_NAMES or name.endswith("-template.md"):
+        # Exclude templates (scaffolding). .gitkeep is already filtered by the
+        # .md check above, so no separate name-list is needed (DS-12905 F3).
+        if name.endswith("-template.md"):
             continue
         blob = _run_list(["git", "show", f":{p}"], check=False)
         if blob.returncode != 0:
@@ -1496,9 +1498,9 @@ def main():
         guard_staged_state()
         sys.exit(0)            # FAIL-OPEN: the guard never blocks a commit
     elif cmd == "guard-galaxy-frontmatter":
-        # FAIL-CLOSED on a confirmed violation (exit 1 → commit blocked);
-        # FAIL-OPEN on any guard-internal error (exit 0 → a guard bug never
-        # wedges the fleet's commits, the static gate stays the safety net).
+        # FAIL-CLOSED on a confirmed violation; FAIL-OPEN on any guard-internal
+        # error (a guard bug never wedges the fleet's commits; the static gate
+        # stays the safety net).
         try:
             violations = guard_galaxy_frontmatter()
         except Exception as e:  # noqa: BLE001 — defensive fail-open
@@ -1508,7 +1510,16 @@ def main():
                 file=sys.stderr,
             )
             sys.exit(0)
-        sys.exit(1 if violations else 0)
+        if violations:
+            # The pre-commit shim decides to BLOCK on THIS explicit marker, NOT
+            # on the exit code — a module-level python crash (bad import/syntax)
+            # also exits 1, and keying the block on the exit code would let such
+            # a crash wedge every commit fleet-wide (DS-12905 Finding 1). The
+            # marker is only ever emitted here, after the guard ran and confirmed
+            # a real violation.
+            print("__SQUIDSQUAD_GALAXY_FM_BLOCK__", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
     elif cmd == "install-hooks":
         ok = install_hooks()
         sys.exit(0 if ok else 1)
