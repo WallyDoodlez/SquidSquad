@@ -1,42 +1,30 @@
 # Working State
 
-- **Task**: **#13032 (HIGH) IN-PROGRESS** — RCA DONE, design A+B LOCKED (comment posted), implementation pending next session (CQ-gated + high-blast harness; fresh budget). #12294 SHIPPED to verifier (pending-test, PR #13033).
-- **Updated**: 2026-06-20 (skill — event-mode, #13032 design locked)
+- **Task**: picking up **#12409 (HIGH)** — qa slow event-mode reboot loop + inert-boot; #12244 backoff misses slow loops. RCA next.
+- **Updated**: 2026-06-20 (skill — event-mode; #12294 SHIPPED, #13032 pending-test)
 - **Quiet Cycle Counter**: 0
 
-## #13032 — RCA + LOCKED DESIGN (resume target)
-Deploy-signal respawn no-ops: agent emits ack-stop(deploy-halted) but **never terminates its process** → harness `boot_agent` singleton-skips at respawn → `_respawn_agent_process` (harness.py:4096-4100) treats `action="skip"` as success → silent no-op; recomposed CLAUDE.md committed but never read. **Autonomous path ALSO broken** (confirmed: Case E contract has no terminate step on any path).
-**Design LOCKED (dependency-free, ship A+B as ONE unit per issue):**
-- **(A) Agent contract — primary.** `references/sub-skills/common-events/event-mode-contract.md` Case E deploy-signal: after `ack-stop(deploy-halted)`, agent MUST end its session (`/quit`) so PID dies — mirror self-restart/exit-42 which already says "immediately invoke /quit". Clarify "halt" = stop work AND end session. **CQ-gated** (LLM-consumed) → comprehension spec required (fleet-recompose-triggering edit).
-- **(B) Harness safety net.** `_respawn_agent_process` (harness.py:4053): BEFORE boot_agent, wait bounded (~30s of 300s deploy window) for halted PID to die, polling `process_utils.is_claude_process_alive(claude_pid)` (#12294 helper — image-verified, won't force-kill recycled PID); if still alive past window → `reboot_agent._kill_process` then boot. Remove "skip=silent success" (4096-4100): unexpected still-alive at respawn → deploy-error to pm, not silent settle to running.
-- **Tests:** (A) comprehension spec (agent terminates after deploy-halted ack). (B) unit: PID dies in window→spawn; alive past window→force-kill+boot; boot still skips→deploy-error emitted.
-- **Synergy:** (B) reuses #12294 `is_claude_process_alive` (PR #13033 pending-test) — confirm merged/available before wiring.
-- **Next:** implement A (contract edit + CQ spec) + B (harness + unit tests) together, DS review per logical commit, full static gate, PR.
+## DONE this session (2026-06-20)
+- **#12294 SHIPPED + CLOSED** — .claude-pid authoritative across harness restart (image-verified liveness C+A). PR #13033 merged to main. Residual psutil orphan re-adoption → **#13034** (human decision). Now on main: `process_utils.is_claude_process_alive` / `image_name_for_pid` available.
+- **#13032 pending-test** — deploy-signal halt must END session (/quit) so respawn isn't singleton-blocked. PR #13037 (branch merges main incl. #12294; gate 4795 pass, CQ 13032 3/3). Part A contract + Part B harness respawn PID-death wait + honest-fail. DS-13032-B folded (single emit, 10s wait). F3 (respawn outside _deploy_lock) + F4 (refresh claude_pid post-spawn, pre-existing) → **#13036**.
 
-## #12294 — DONE this session → pending-test (PR #13033)
-Implemented dependency-free **C+A** (image-verified liveness). Branch `squidsquad/task/12294` pushed, **PR #13033**, transitioned in-progress→pending-test. Full static gate: 4787 passed, 0 failures. Two review passes folded (DS-c1 empty-image parity; Claude review DS-c3 blocker — image helpers made total so a ctypes fault can't abort the fleet health poll; write-back gated on intent=RUNNING).
-- **process_utils**: `image_name_for_pid` + `is_claude_process_alive` (total; None-image → fall back to liveness = AC2-safe).
-- **thin_launcher**: `_win32_all_procs()` factored; local mirrors; `_check_singleton` image-verified (recycled PID no longer defeats singleton).
-- **harness.update_health**: image-verifies in-mem + .claude-pid PIDs (AC1/AC3); self-heals .claude-pid via new `reboot_agent.write_claude_pid` (gated intent=RUNNING). Whole block guarded (fault → treat-as-dead, not fleet-abort).
-- **AC coverage**: AC1/AC3 full; AC2/AC4 covered for the realistic restart (harness persists claude_pid in .harness-state.json → restored + image-verified even with missing/stale .claude-pid + self-heal write-back). **Residual**: truly never-recorded orphan needs psutil → filed **#13034** (HUMAN DECISION). terminal_pid re-resolution ruled out (cmd /c start PID is dead/short-lived on Windows).
-
-## NEXT: #13032 (HIGH, role:skill, open) — deploy-signal respawn no-op
-Deploy-signal respawn no-ops when the halted agent's process stays alive (missing terminate-session handoff after ack-stop "deploy-halted" → harness respawn no-ops on a still-alive process). Pairs with #12294 (harness reliability). Pick up next.
+## NEXT (in progress): #12409 (HIGH, role:skill)
+qa was stable event-mode ~4h then degraded: (1) SLOW reboot loop — 4 auto-reboots in ~18min, each >60s lifetime so #12244 fast-death breaker (≥3 deaths <60s) MISSED it; (2) inert/zombie final respawn — bootup_complete=false 11+min, PID-alive so no further reboot (same class as #10855). PM pinned qa to loop mode (hybrid: skill/dm event, qa loop). Two gaps: (a) #12244 backoff doesn't catch slow loops; (b) inert-boot not detected by PID-liveness. Likely ties to #12271 progress-liveness (shadow data / cutover). RCA needed: read the issue fully + crash-loop backoff + progress_liveness + bootup_complete handling. NOTE: #12271 progress-liveness is OBSERVATIONAL/shadow only today — cutover gated. So inert-boot detection may need either the cutover or a bootup_complete-timeout reboot.
 
 ## SECONDARY in-progress (parked)
-- **#12451** (status-bar) S1+S3 on branch (PR #13024); S2 PARKED on PM CQ-AC via **#13031** (role:pm filed to wake PM). Resume S2 when PM lands the CQ-coverage AC.
+- **#12451** (status-bar) S1+S3 on branch (PR #13024); S2 PARKED on PM CQ-AC via **#13031**. Resume S2 when PM lands the CQ-coverage AC.
 
-## Gated / parked in-progress (externally blocked)
-- **#12801** (Textual TUI action bar) — needs textual dep + interactive terminal.
-- **#12493** (pipeline-sentinel HALT detection) — PR #12494 HELD pending §8.3 backstop (PR #12507 unmerged).
-- **#12450** (installer unit-test strategy detect) — S3/S4 PM-gated.
+## Gated / parked (externally blocked)
+- **#12801** (Textual TUI) — needs textual dep + interactive terminal.
+- **#12493** (pipeline-sentinel HALT) — PR #12494 HELD pending §8.3 backstop (PR #12507 unmerged).
+- **#12450** (installer unit-test strategy) — S3/S4 PM-gated.
 
-## Other open candidates (not started)
-- #12363 (orphaned claude.exe/event_poll accumulation — related to #12294/#13032 cluster), #11140 (composed CLAUDE.md header prose — CQ-gated), #10540 (DM batch-ship race), #12495/#12971/#12861/#12846/#12747/#12519/#11716 (lower).
-- #12527 (foreign-repo installer smoke — interactive), #12492 (cutover flip — gated on #12460), #12271 (liveness umbrella — gated/sliced), #10690 (gated E7), #10686 (manual).
+## Other open candidates
+- #11600 (HIGH) — prev verified-resolved + recommended close; still open (PM disposition pending; re-verify if picked up).
+- #12495/#12854/#12363/#11140/#10540 (medium); #12971/#12861/#12846/#12747/#12519/#11716 (low).
 
 ## Recurring meta-risk
-Clone chronically behind origin (#12526 SHIPPED — launcher no longer rebases). Always `git pull --ff-only` before compose/commit.
+Clone chronically behind origin. Always `git pull --ff-only` before compose/commit. Use `git -c credential.helper='!gh auth git-credential' push` (manager helper wedges).
 
 ## Improvement Scan
 Status: eligible (idle). Last completed: (none — productive session).
