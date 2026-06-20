@@ -262,6 +262,15 @@ class TestImageNameForPid:
         self._fake_snapshot(monkeypatch, [(4242, "")])
         assert process_utils.image_name_for_pid(4242) is None
 
+    def test_win32_fault_is_swallowed_to_none(self, monkeypatch):
+        """A ctypes/Win32 fault must degrade to None, never propagate — the
+        harness calls this inside the fleet health poll (DS-12294-c3 F1)."""
+        monkeypatch.setattr(process_utils.sys, "platform", "win32")
+        boom = MagicMock(name="kernel32")
+        boom.CreateToolhelp32Snapshot.side_effect = OSError("ctypes boom")
+        monkeypatch.setattr(process_utils, "_win32_kernel32", lambda: boom)
+        assert process_utils.image_name_for_pid(4242) is None
+
 
 class TestIsClaudeProcessAlive:
     """#12294: image-verified liveness — alive AND image is claude."""

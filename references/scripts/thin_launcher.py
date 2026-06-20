@@ -186,7 +186,14 @@ def _image_name_for_pid(pid):
     if pid is None or pid <= 0:
         return None
     if sys.platform == "win32":
-        ppid_name = _win32_all_procs().get(pid)
+        # Total: any toolhelp/ctypes fault degrades to "undetermined" (None)
+        # rather than propagating — _check_singleton runs at launch and the
+        # process_utils twin runs inside the harness health poll (DS-12294-c3
+        # Finding 1).
+        try:
+            ppid_name = _win32_all_procs().get(pid)
+        except Exception:
+            return None
         # `or None`: empty image name is "undetermined", not a non-match —
         # parity with the POSIX path / process_utils (DS-12294-c1).
         return (ppid_name[1].lower() or None) if ppid_name else None

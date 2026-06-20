@@ -155,9 +155,20 @@ def image_name_for_pid(pid):
 
 
 def _image_name_win32(pid):
-    """Win32 image-name lookup via toolhelp32. Returns lowercased name or None."""
+    """Win32 image-name lookup via toolhelp32. Returns lowercased name or None.
+
+    Total by construction: any ctypes/Win32 fault (snapshot failure, an
+    unexpected ArgumentError, a future API change) is swallowed and reported
+    as ``None`` (undetermined). The harness calls this from inside the health
+    poll loop — a raise here would abort liveness checks for the whole agent
+    fleet (DS-12294-c3 Finding 1), so the helper MUST never propagate.
+    """
     from ctypes import wintypes
 
+    # NOTE: the PROCESSENTRY32 field list below is mirrored verbatim in
+    # thin_launcher._win32_all_procs (kept separate per the #8891 no-import
+    # design). Any field-layout change MUST be replicated there (DS-12294-c3
+    # Finding 6) — there is no compile-time check that they agree.
     TH32CS_SNAPPROCESS = 0x00000002
     INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
@@ -175,26 +186,29 @@ def _image_name_win32(pid):
             ("szExeFile", ctypes.c_char * 260),
         ]
 
-    kernel32 = _win32_kernel32()
-    snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-    if snap is None or snap == INVALID_HANDLE_VALUE:
-        return None
     try:
-        entry = PROCESSENTRY32()
-        entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
-        if not kernel32.Process32First(snap, ctypes.byref(entry)):
+        kernel32 = _win32_kernel32()
+        snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+        if snap is None or snap == INVALID_HANDLE_VALUE:
             return None
-        while True:
-            if entry.th32ProcessID == pid:
-                # `or None`: an empty image name is "undetermined", not a
-                # non-match — keep parity with the POSIX path so AC2's
-                # fallback-to-liveness contract has no loophole (DS-12294-c1).
-                return entry.szExeFile.decode(
-                    "utf-8", errors="replace").lower() or None
-            if not kernel32.Process32Next(snap, ctypes.byref(entry)):
-                break
-    finally:
-        kernel32.CloseHandle(snap)
+        try:
+            entry = PROCESSENTRY32()
+            entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+            if not kernel32.Process32First(snap, ctypes.byref(entry)):
+                return None
+            while True:
+                if entry.th32ProcessID == pid:
+                    # `or None`: an empty image name is "undetermined", not a
+                    # non-match — keep parity with the POSIX path so AC2's
+                    # fallback-to-liveness contract has no loophole (DS-12294-c1).
+                    return entry.szExeFile.decode(
+                        "utf-8", errors="replace").lower() or None
+                if not kernel32.Process32Next(snap, ctypes.byref(entry)):
+                    break
+        finally:
+            kernel32.CloseHandle(snap)
+    except Exception:
+        return None
     return None
 
 
