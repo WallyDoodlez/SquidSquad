@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 235 files
+# Total: 229 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -180,12 +180,6 @@ references/sub-skills/common/vault-optimize.md
 references/sub-skills/common/vault-protocol.md
 references/sub-skills/common/vault-remember.md
 references/sub-skills/common/working-state.md
-references/sub-skills/common-events/comment-handling.md
-references/sub-skills/common-events/cursor-management.md
-references/sub-skills/common-events/event-driven-workflow.md
-references/sub-skills/common-events/event-mode-contract.md
-references/sub-skills/common-events/forge-read-pattern.md
-references/sub-skills/common-events/idle-cooldown-loop.md
 references/sub-skills/manifest.md
 references/sub-skills/roles/worker/implement-tasks.md
 references/sub-skills/roles/worker/triage-issues.md
