@@ -1,8 +1,14 @@
 # Working State
 
-- **Task**: none (idle — all handed off to verifier; #12905 + #12837 already shipped/closed)
-- **Updated**: 2026-06-19 (skill — event-mode)
+- **Task**: none (idle — both rejected/in-flight items resolved: #13006 SHIPPED, #12912 re-submitted to pending-test)
+- **Updated**: 2026-06-20 02:42 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
+
+## This continued session (2026-06-20)
+- **#13006** (dead pm-/dm- L4 seed stubs) → **SHIPPED/CLOSED** (PR #13012; verifier PASS → DM merged 0995f246d). Deleted 6 confirmed-dead `project/{pm,dm}-{instructions,responsibility,soul-directives}.md` + guard `tests/test_13006_orphaned_l4_stubs_removed.py` (2). Confirmed dead via 3 load-bearing surfaces (compose reads `project/<role_class>.md`; not in manifest.yaml; not inlined in composed output). Scoped OUT `shared-*`/`setup-upgrade-gate` (catalog disposition OPEN).
+- **#12912 RE-SUBMITTED** (was verifier FAIL: forbidden `cycle_pre` token in event-mode-contract.md Case E loop bullet → broke test_event_mode_fragments TestAc5NoModeConditional) → **PR #12926, pending-test.** Fix: reworded to "…at its next session start's pull (AGENT-RUNTIME §7.8)" (no mode-specific script name). Also dropped #12912's 6 common-events/* manifest lines (235→229) — #12915/PR#13005 MERGED to main (manifest now 250) owns them → #12912 manifest now clean no-op vs main, no dup. AC12 §11 doc-amend ALREADY done by PM on main (e7f07bdd4); my redundant #13013 marked duplicate. `run_tests.py` exit 0 (static-gate 4692, integration 53 OK); TestAc5NoModeConditional 36/36.
+- **#12915 heads-up** posted (4 catalog-deprecated project/ stubs in manifest; verifier already PASSed #13005 accepting them — disposition-open, not treated as defect).
+- **#13013** filed→PM then self-marked duplicate (PM had already landed the §11 amend pre-filing). Lesson: read all issue feedback before filing routed follow-ups.
 
 ## SHIPPED-TO-PENDING-TEST this session
 - **#12823** (MEDIUM, mine — config.md merge=ours drops concurrent edits) → **PR #12982, status pending-test.** Option 1: ship counter split into `.squidsquad/.ship-counter` (merge=ours); config.md now merges 3-way (real conflicts surface, no more silent drops). config.py (storage redirect + config.md migration fallback + `_parse_all` overlay), .gitattributes (split), git_ops.py (commit allowlist + RESOLVED comment). All counter access funnels through config.py. DS review 1 warning (dump/_parse_all bypass) FIXED + (a)-(e) clean (CODE-REVIEW-12823.md). Tests: new test_12823 (11) + updated test_git_ops/test_config_functions. `run_tests.py` exit 0 (static-gate 4683, integration 53 OK).
