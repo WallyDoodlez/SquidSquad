@@ -3298,8 +3298,13 @@ class TestReviewFixes(unittest.TestCase):
                     hs.load_state()
                 self.assertFalse(hs.get_agent("skill").bootup_complete)
 
-    def test_reboot_affected_agents_clears_bootup_complete(self):
-        """#8695 R2: compose-driven restart resets bootup_complete=False."""
+    def test_reboot_affected_agents_emits_deploy_signal(self):
+        """#12912 (supersedes #8695 R2): _reboot_affected_agents is now the
+        deploy-signal EMITTER. It sets intent=DEPLOYING and emits a deploy-signal
+        to the affected alias — and deliberately LEAVES bootup_complete=True so
+        the signal is actually delivered off the event bus (the cooperative
+        deploy-halt replaces the old slam-bootup_complete-False force restart;
+        the agent stops picking up work itself when it halts)."""
         from harness import HarnessState, AgentState
         hs = HarnessState()
         agent = AgentState("skill")
@@ -3309,18 +3314,26 @@ class TestReviewFixes(unittest.TestCase):
         import harness
         prev_state = harness.state
         harness.state = hs
-        # Fake git-diff output so the function decides skill's CLAUDE.md changed
         fake_git_diff = MagicMock()
         fake_git_diff.returncode = 0
         fake_git_diff.stdout = ".squidsquad/skill/CLAUDE.md\n"
+        emitted = []
         try:
             with patch("harness._log"), \
                  patch("harness.subprocess.run", return_value=fake_git_diff), \
+                 patch("harness._emit_event",
+                       side_effect=lambda *a, **k: emitted.append((a, k))), \
                  patch.object(hs, "save_state"):
                 harness._reboot_affected_agents(123, ["references/sub-skills/common/x.md"])
         finally:
             harness.state = prev_state
-        self.assertFalse(hs.get_agent("skill").bootup_complete)
+        updated = hs.get_agent("skill")
+        self.assertEqual(updated.intent, AgentState.INTENT_DEPLOYING)
+        # bootup_complete is intentionally NOT cleared (signal must be delivered).
+        self.assertTrue(updated.bootup_complete)
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][0][0], "deploy-signal")
+        self.assertEqual(emitted[0][1]["payload"]["target_alias"], "skill")
 
     # ---- #8694 review fixes ------------------------------------------------
 

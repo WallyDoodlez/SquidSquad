@@ -3908,18 +3908,32 @@ def _reboot_affected_agents(pr_number, files_changed):
         _log(f"Compose after PR #{pr_number}: no agent templates changed — no reboots needed")
         return
 
-    _log(f"Compose after PR #{pr_number}: rebooting affected agents: {', '.join(sorted(affected_roles))}")
-    for role in affected_roles:
+    # #12912 (HARNESS-ARCH §7.6): _reboot_affected_agents is the deploy-signal
+    # EMITTER. It does NOT recompose-and-restart directly any more. For each
+    # affected alias it sets intent=DEPLOYING (intent-sequencing, AC9 — committed
+    # BEFORE the agent can possibly respond, so the deploy-halt death is never
+    # misread as a crash) and emits a deploy-signal. The agent halts at its next
+    # between-task on-main boundary and emits ack-stop(result=deploy-halted),
+    # whereupon the per-clone pull-first deploy sequence runs (§7.1 / S4).
+    # Emitting only on actual post-compose alias drift (the git-diff scope above)
+    # is what closes #12397 (no spurious restart on a no-op recompose).
+    # NB: bootup_complete is deliberately left TRUE — unlike the restart paths,
+    # the agent MUST still receive this deploy-signal off the event bus to halt
+    # cooperatively; suppressing dispatch would strand the signal undelivered.
+    _log(f"Compose after PR #{pr_number}: emitting deploy-signal to affected "
+         f"agents: {', '.join(sorted(affected_roles))}")
+    for role in sorted(affected_roles):
         agent = state.get_agent(role)
         if agent and agent.intent == AgentState.INTENT_RUNNING:
-            agent.intent = AgentState.INTENT_RESTARTING
-            agent.intent_set_at = time.time()  # #4792 Phase 1
-            # #8695: match the other three restart paths — close the window
-            # where events would still dispatch after we've marked the agent
-            # for restart but before its process actually dies.
-            agent.bootup_complete = False
+            agent.intent = AgentState.INTENT_DEPLOYING
+            agent.intent_set_at = time.time()
             state.set_agent(role, agent)
-    state.save_state()
+            state.save_state()  # commit intent BEFORE emit (sequencing)
+            _emit_event("deploy-signal", "harness", payload={
+                "target_alias": role,
+                "event_type": "deploy-signal",
+                "event_context": "deploy-signal",
+            })
 
 
 # ---------------------------------------------------------------------------

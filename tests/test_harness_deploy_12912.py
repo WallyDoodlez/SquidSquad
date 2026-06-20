@@ -102,5 +102,75 @@ class TestAckStopDeployHalted(unittest.TestCase):
         self.assertIn("INTENT_DEPLOYING", block)
 
 
+class TestRebootAffectedAgentsEmitsDeploySignal(unittest.TestCase):
+    """S3 (AC4/AC5, closes #12397): _reboot_affected_agents is the deploy-signal
+    emitter — it sets intent=DEPLOYING and emits a deploy-signal to each affected
+    alias instead of force-restarting them directly."""
+
+    def _make_agent(self, intent):
+        a = AgentState("skill", "")
+        a.intent = intent
+        return a
+
+    def test_emits_deploy_signal_to_affected_running_agent(self):
+        import harness
+        agent = self._make_agent(AgentState.INTENT_RUNNING)
+
+        emitted = []
+
+        class _FakeState:
+            def get_agent(self, role):
+                return agent if role == "skill" else None
+
+            def set_agent(self, role, a):
+                pass
+
+            def save_state(self):
+                pass
+
+        class _FakeDiff:
+            returncode = 0
+            stdout = ".squidsquad/skill/CLAUDE.md\n"
+
+        with patch.object(harness, "_NO_AUTO_REBOOT", False), \
+             patch.object(harness, "state", _FakeState()), \
+             patch.object(harness, "subprocess") as msub, \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
+             patch.object(harness, "_log"), \
+             patch.object(harness, "time") as mtime:
+            msub.run.return_value = _FakeDiff()
+            mtime.time.return_value = 123.0
+            harness._reboot_affected_agents(99, ["references/roles/instructions.md"])
+
+        # Intent moved to DEPLOYING (sequencing), not RESTARTING.
+        self.assertEqual(agent.intent, AgentState.INTENT_DEPLOYING)
+        # Exactly one deploy-signal emitted, scoped to the affected alias.
+        self.assertEqual(len(emitted), 1)
+        args, kwargs = emitted[0]
+        self.assertEqual(args[0], "deploy-signal")
+        self.assertEqual(kwargs["payload"]["target_alias"], "skill")
+        self.assertEqual(kwargs["payload"]["event_type"], "deploy-signal")
+        self.assertEqual(kwargs["payload"]["event_context"], "deploy-signal")
+
+    def test_no_auto_reboot_suppresses_emit(self):
+        """HARNESS-ARCH §7.6: under --no-auto-reboot the emit is skipped."""
+        import harness
+        emitted = []
+        with patch.object(harness, "_NO_AUTO_REBOOT", True), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append(a)), \
+             patch.object(harness, "_log"):
+            harness._reboot_affected_agents(99, ["references/roles/instructions.md"])
+        self.assertEqual(emitted, [])
+
+    def test_no_direct_restart_intent_in_emitter(self):
+        """The emitter must not set INTENT_RESTARTING (that was the old path)."""
+        src = inspect.getsource(receive_event.__globals__["_reboot_affected_agents"])
+        self.assertIn("INTENT_DEPLOYING", src)
+        self.assertIn("deploy-signal", src)
+        self.assertNotIn("INTENT_RESTARTING", src)
+
+
 if __name__ == "__main__":
     unittest.main()

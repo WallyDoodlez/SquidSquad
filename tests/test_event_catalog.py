@@ -151,22 +151,27 @@ class TestAckEventTypes9873A:
 
 
 class TestDeploySignal12912:
-    """#12912 (deploy-signal recompose model, S1): the deploy-signal event type
-    is registered so the agent care filter can branch on it. RECOGNIZED in S1
-    (agent halt branch references it; no script emits it yet) → promoted to
-    EMITTED in S3 when harness.py _reboot_affected_agents emits it.
+    """#12912 (deploy-signal recompose model): the deploy-signal event type is
+    registered so the agent care filter can branch on it. Promoted to EMITTED in
+    S3 when harness.py _reboot_affected_agents began emitting it (was RECOGNIZED
+    in S1 while only the agent halt branch referenced it).
     """
 
-    def test_deploy_signal_is_recognized(self):
-        """S1: deploy-signal is a known, valid event type in the RECOGNIZED tier."""
-        assert "deploy-signal" in event_catalog.RECOGNIZED
-        assert event_catalog.get_tier("deploy-signal") == "recognized"
+    def test_deploy_signal_is_emitted(self):
+        """S3: harness.py emits deploy-signal → it is in the EMITTED tier."""
+        assert "deploy-signal" in event_catalog.EMITTED
+        assert event_catalog.get_tier("deploy-signal") == "emitted"
         assert event_catalog.is_valid("deploy-signal") is True
 
     def test_deploy_signal_payload_fields(self):
         """The care filter branches on event_type; the target alias scopes it."""
-        entry = event_catalog.RECOGNIZED["deploy-signal"]
+        entry = event_catalog.EMITTED["deploy-signal"]
         assert entry["payload_fields"] == ["target_alias", "event_type", "event_context"]
+
+    def test_deploy_signal_source_is_harness(self):
+        """EMITTED entries carry a concrete 'source' (the emitting script)."""
+        entry = event_catalog.EMITTED["deploy-signal"]
+        assert "harness.py" in entry["source"]
 
     def test_deploy_signal_description_names_halt_semantics(self):
         """Description must convey the coordinated-halt / pull-first-deploy intent."""
@@ -176,6 +181,6 @@ class TestDeploySignal12912:
         assert "halt" in lower
         assert "deploy-halted" in lower
 
-    def test_deploy_signal_not_in_emitted_yet(self):
-        """S1 invariant: no script emits deploy-signal until S3 promotes it."""
-        assert "deploy-signal" not in event_catalog.EMITTED
+    def test_deploy_signal_not_in_recognized(self):
+        """Promoted out of RECOGNIZED — must not be in both tiers (no overlap)."""
+        assert "deploy-signal" not in event_catalog.RECOGNIZED
