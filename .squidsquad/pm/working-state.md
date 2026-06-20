@@ -14,6 +14,8 @@ _Condensed 2026-06-19 10:08. Prior incident narrative (reboot saga, #12506 self-
 5. Self-wake drivers armed on all (`.subloop-driver.json` present per clone after first idle).
 6. If all hold → note "restart succeeded, new SOUL + Phase 1 live." If agents don't come back → harness wasn't supervised → file to human alias.
 
+**RESTART MECHANISM NOTE (2026-06-19 20:0x):** `POST /restart` returned **404** — running harness (sha b15e7fc5) predates the endpoint. Harness was running under **start-harness.bat (one-shot, NOT supervised)** PID 51416 → no self-serve restart possible. Operator-relaunched manually. **Recommended they relaunch via `restart-harness.bat` (supervised)** so the NEW harness has `/restart` + Phase 1 #12906 (harness.py) + future restarts are self-serviceable. If this fresh boot is under restart-harness.bat, self-serve `POST /restart` works going forward.
+
 ---
 
 ## Current — 2026-06-19 10:08 (PM EVENT-mode, fresh boot)
