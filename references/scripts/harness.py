@@ -244,6 +244,13 @@ class AgentState:
     INTENT_STOPPING = "stopping"
     INTENT_RESTARTING = "restarting"
     INTENT_STOPPED = "stopped"
+    # #12912 (deploy-signal recompose model): a coordinated deploy halt. Set the
+    # moment the harness emits a deploy-signal (AGENT-RUNTIME §5.2 intent-
+    # sequencing rule), BEFORE the agent halts and its PID dies — so the health
+    # poller does not misread the deploy-halt death as a crash and auto-respawn
+    # it out of order (AC9). The deploy sequence (HARNESS-ARCH §7.1) owns the
+    # respawn; it resets intent → RUNNING after the fresh PID boots.
+    INTENT_DEPLOYING = "deploying"
 
     def __init__(self, role: str, clone_path: str = ""):
         self.role = role
@@ -701,11 +708,20 @@ class HarnessState:
                     # AND disarms the 60s force-kill safety net, so a wedged /
                     # non-cycling agent could never be restarted OR force-killed
                     # via the documented endpoint. Mirrors the STOPPING branch.
-                    if agent.intent == AgentState.INTENT_RESTARTING and pid_changed:
+                    if agent.intent in (
+                        AgentState.INTENT_RESTARTING,
+                        AgentState.INTENT_DEPLOYING,
+                    ) and pid_changed:
+                        # #12912: a fresh PID under intent=deploying means the
+                        # deploy sequence respawned the agent — settle back to
+                        # running exactly like a restart (the deploy sequence
+                        # also sets RUNNING explicitly; this is the defensive
+                        # health-poll mirror).
+                        prev_intent = agent.intent
                         agent.intent = AgentState.INTENT_RUNNING
                         agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
-                        _log(f"{role}: alive with new PID (restart complete), reset to running (#11538)")
+                        _log(f"{role}: alive with new PID ({prev_intent} complete), reset to running (#11538/#12912)")
                     elif agent.intent in (
                         AgentState.INTENT_STOPPING,
                         AgentState.INTENT_STOPPED,
@@ -743,6 +759,14 @@ class HarnessState:
                         AgentState.INTENT_STOPPING, AgentState.INTENT_STOPPED
                     ):
                         agent.status = "stopped"
+                    elif agent.intent == AgentState.INTENT_DEPLOYING:
+                        # #12912 (HARNESS-ARCH §7.1.1 / §7.4): a death while
+                        # intent=deploying is the EXPECTED deploy-halt exit — the
+                        # agent halted on a deploy-signal and the deploy sequence
+                        # owns the respawn. Settle to "deploying" (not "stalled")
+                        # so it is not is_dead (below) and is never misread as a
+                        # crash + auto-respawned out of order (AC9).
+                        agent.status = "deploying"
                     elif prev_status == "running":
                         agent.status = "stalled"
                     elif agent.status not in ("stopped",):
@@ -1298,7 +1322,17 @@ class HarnessState:
                 # is left alone. A genuinely-wanted restart can be re-requested
                 # against THIS harness. STOPPING is deliberately NOT reset — an
                 # explicit operator stop MUST survive a harness restart.
-                if agent.intent == AgentState.INTENT_RESTARTING:
+                # #12912: INTENT_DEPLOYING is reset the same way — a deploy in
+                # progress is owned by the harness session that emitted the
+                # deploy-signal. If the harness restarted mid-deploy the sequence
+                # was interrupted; reset to RUNNING so the agent respawns on its
+                # existing committed CLAUDE.md. The deploy did not advance
+                # last_compose_checksum, so drift stays detectable and a future
+                # deploy-signal re-triggers.
+                if agent.intent in (
+                    AgentState.INTENT_RESTARTING,
+                    AgentState.INTENT_DEPLOYING,
+                ):
                     agent.intent = AgentState.INTENT_RUNNING
                     agent.intent_set_at = None
                 # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1,
@@ -2949,6 +2983,28 @@ async def receive_event(request: Request):
                         pass
                 # #9242: disk write off the asyncio event loop.
                 await asyncio.to_thread(state.save_state)
+            elif ack_payload.get("result") == "deploy-halted":
+                # #12912 (HARNESS-ARCH §7.1 / §7.4 / AGENT-RUNTIME §5.2): the
+                # agent finished its current atomic unit and halted on a
+                # deploy-signal. Intent was set to DEPLOYING at emit time
+                # (intent-sequencing, AC9), so the imminent PID death is NOT
+                # auto-respawned by the health poller. Record the halt and hand
+                # off to the pull-first deploy sequence (ensure-main → pull →
+                # compose deploy <alias> → commit → push → respawn), which runs
+                # off the asyncio loop (S4).
+                with state._lock:
+                    agent = state.agents.get(role)
+                    if agent:
+                        if agent.intent != AgentState.INTENT_DEPLOYING:
+                            # Defensive: the emit side (S3) sets DEPLOYING; keep
+                            # the invariant even if a deploy-halted ack races the
+                            # emit-side intent write.
+                            agent.intent = AgentState.INTENT_DEPLOYING
+                            agent.intent_set_at = time.time()
+                        agent.status = "deploying"
+                await asyncio.to_thread(state.save_state)
+                _log(f"{role}: deploy-halted — handing off to deploy sequence")
+                # S4 wires the actual deploy sequence invocation here.
 
     # Update AgentState from event.
     # #12824: fail-soft. The event_lifecycle.append above is the
