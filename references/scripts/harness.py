@@ -126,6 +126,19 @@ FAST_DEATH_THRESHOLD = 3
 CRASH_BACKOFF_BASE_SECONDS = 30
 CRASH_BACKOFF_CAP_SECONDS = 1800  # 30m — a sane ceiling, not infinite
 
+# #12409 — SLOW reboot-loop breaker (frequency-based), complementing the #12244
+# fast-death (lifetime) breaker above. #12244 only trips on >=FAST_DEATH_THRESHOLD
+# deaths that each lived <FAST_DEATH_WINDOW_SECONDS; a loop where each session
+# lives LONGER than that window (qa's incident: 4 auto-reboots in ~18min, each
+# >60s apart) keeps resetting consecutive_fast_deaths, so #12244 never engages
+# and the agent churns freely. This breaker is lifetime-agnostic: if an agent is
+# auto-rebooted >=SLOW_LOOP_THRESHOLD times within SLOW_LOOP_WINDOW_SECONDS, it
+# backs off (same capped-exponential machinery + crash-looping status) instead
+# of rebooting again. The two breakers compose — fast-death takes precedence; a
+# slow loop that escapes it is caught here. Cause-agnostic, same as #12244.
+SLOW_LOOP_WINDOW_SECONDS = 900  # 15m sliding window
+SLOW_LOOP_THRESHOLD = 3         # reboots within the window before backing off
+
 # #12458 (#12271 slice c) — pause-aware liveness guard. Agent silence / a dead
 # PID is treated as death ONLY when no hook explains it. Each "explained pause"
 # carries a STALENESS CEILING so a stuck/never-cleared flag can never mask a
@@ -226,6 +239,8 @@ class AgentState:
                  # #12244 P2 — crash-loop / session-limit backoff
                  "last_spawn_at", "consecutive_fast_deaths",
                  "reboot_blocked_until",
+                 # #12409 — frequency-based slow-loop breaker (reboot timestamps)
+                 "reboot_history",
                  # #12418 — last SessionEnd hook reason (graceful-exit signal)
                  "last_session_end",
                  # #12443 — activity heartbeat (progress-based liveness)
@@ -286,6 +301,10 @@ class AgentState:
         self.last_spawn_at = None
         self.consecutive_fast_deaths = 0
         self.reboot_blocked_until = None
+        # #12409 — auto-reboot timestamps (epoch) within the sliding
+        # SLOW_LOOP_WINDOW_SECONDS, for the frequency-based slow-loop breaker.
+        # Pruned to the window on every record/read; persisted across restarts.
+        self.reboot_history = []
         # #12418 — last SessionEnd hook report: {"reason": <stop_reason>,
         # "at": <epoch>}, or None if no SessionEnd seen since boot. The
         # PRESENCE of an entry stamped after last_spawn_at means the agent
@@ -367,6 +386,23 @@ class AgentState:
         at = sf.get("at") or 0
         return (cause in STOP_FAILURE_BACKOFF_CAUSES
                 and 0 <= now - at < STOP_FAILURE_RECENT_SECONDS)
+
+    def _prune_reboot_history(self, now):
+        """#12409 — drop reboot timestamps older than SLOW_LOOP_WINDOW_SECONDS."""
+        cutoff = now - SLOW_LOOP_WINDOW_SECONDS
+        self.reboot_history = [t for t in self.reboot_history if t >= cutoff]
+
+    def record_reboot(self, now):
+        """#12409 — record an auto-reboot for the frequency-based slow-loop
+        breaker, pruning to the sliding window."""
+        self.reboot_history.append(now)
+        self._prune_reboot_history(now)
+
+    def recent_reboot_count(self, now):
+        """#12409 — count of auto-reboots within SLOW_LOOP_WINDOW_SECONDS (prunes
+        as a side effect so a stable agent's history empties over time)."""
+        self._prune_reboot_history(now)
+        return len(self.reboot_history)
 
     def progress_liveness(self, now):
         """#12271 slice d — progress-based liveness verdict (HARNESS-ARCH §15.1).
@@ -456,6 +492,8 @@ class AgentState:
             "last_spawn_at": self.last_spawn_at,
             "consecutive_fast_deaths": self.consecutive_fast_deaths,
             "reboot_blocked_until": self.reboot_blocked_until,
+            # #12409 — slow-loop breaker reboot timestamps
+            "reboot_history": list(self.reboot_history),
             # #12418 — last SessionEnd hook reason (graceful-exit signal)
             "last_session_end": self.last_session_end,
             # #12443 — activity heartbeat (progress-based liveness)
@@ -1016,6 +1054,35 @@ class HarnessState:
                             f"session/usage limit or a startup crash; not "
                             f"hammering the respawn."
                         )
+                    elif agent.recent_reboot_count(now) >= SLOW_LOOP_THRESHOLD:
+                        # #12409 — frequency-based slow-loop breaker. The
+                        # fast-death streak above reset (this death lived long
+                        # enough), but the agent has still been auto-rebooted
+                        # SLOW_LOOP_THRESHOLD+ times within
+                        # SLOW_LOOP_WINDOW_SECONDS — a SLOW reboot loop #12244
+                        # cannot see. Back off (capped exponential keyed on how
+                        # far over the threshold we are) instead of rebooting,
+                        # reusing the crash-looping status + reboot_blocked_until
+                        # machinery so the resume path below wakes it.
+                        recent = agent.recent_reboot_count(now)
+                        over = recent - SLOW_LOOP_THRESHOLD
+                        backoff = min(
+                            CRASH_BACKOFF_BASE_SECONDS * (2 ** over),
+                            CRASH_BACKOFF_CAP_SECONDS,
+                        )
+                        agent.reboot_blocked_until = now + backoff
+                        agent.status = "crash-looping"
+                        agent.claude_pid = None
+                        agent.bootup_complete = False
+                        state_changed = True
+                        _log(
+                            f"{role}: {recent} auto-reboots within "
+                            f"{SLOW_LOOP_WINDOW_SECONDS}s — slow reboot-loop "
+                            f"breaker (#12409) backing off {backoff:.0f}s "
+                            f"(status=crash-looping). Each session outlived the "
+                            f"#12244 fast-death window, so this frequency breaker "
+                            f"is what catches it."
+                        )
                     else:
                         reboot_roles.append(role)
                         agent.status = "starting"
@@ -1090,6 +1157,10 @@ class HarnessState:
                             # other three spawn paths — a successful spawn always
                             # stamps, even if terminal_pid is absent.
                             agent.last_spawn_at = time.time()
+                            # #12409 — record this auto-reboot for the
+                            # frequency-based slow-loop breaker (lifetime-agnostic,
+                            # complements last_spawn_at's fast-death timing).
+                            agent.record_reboot(time.time())
                             # #12418 F3 — clear the prior lifecycle's SessionEnd
                             # so only a hook from THIS spawn can mark the next
                             # death graceful (closes the delayed-hook race).
@@ -1316,6 +1387,10 @@ class HarnessState:
                         "last_spawn_at": a.last_spawn_at,
                         "consecutive_fast_deaths": a.consecutive_fast_deaths,
                         "reboot_blocked_until": a.reboot_blocked_until,
+                        # #12409 — persist the slow-loop reboot history so a
+                        # harness restart mid-loop doesn't reset the frequency
+                        # breaker and re-enter a slow respawn loop.
+                        "reboot_history": list(a.reboot_history),
                         # #12418 — persist last SessionEnd reason so the
                         # graceful-vs-crash signal survives a harness restart.
                         "last_session_end": a.last_session_end,
@@ -1448,6 +1523,12 @@ class HarnessState:
                 agent.consecutive_fast_deaths = agent_data.get(
                     "consecutive_fast_deaths", 0) or 0
                 agent.reboot_blocked_until = agent_data.get("reboot_blocked_until")
+                # #12409 — restore the slow-loop reboot history (defaults [] for
+                # older state files / fresh agents). Coerce to a list of numbers
+                # defensively against a hand-edited/corrupt state file.
+                _rh = agent_data.get("reboot_history") or []
+                agent.reboot_history = [t for t in _rh
+                                        if isinstance(t, (int, float))]
                 # #12418 — restore last SessionEnd reason (defaults None for
                 # older state files / fresh agents).
                 agent.last_session_end = agent_data.get("last_session_end")
