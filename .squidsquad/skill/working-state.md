@@ -26,7 +26,10 @@
 - **#12801** S1.3+ (Textual TUI) — needs textual + interactive terminal.
 - **#12527** — greenfield installer smoke on FOREIGN repo — needs interactive wizard walk + external repo.
 
-## This session — 7 shipped + 1 RCA'd
+## #12748 — env-gated live tests skip not fail → PR #12999, pending-test
+Two clusters: comprehension (7 pipeline files → shared `tests/comprehension_helpers.py` gate: SKIP on no-results.json, cache-hit[exit0]/keyless[exit≠0] by exit code; 3 spec-integrity files untouched) + model_router_live (`_require_api_key` fail→skip). Verified: 2181 skips "cache hit"; forced-keyless model_router → 18 skipped. New test_12748 helper test (7). run_tests.py exit 0 (4705). NOTE pre-existing/out-of-scope: model_router_live 13 fail WITH key present (live-API/gpt-5.2 content, not #12748).
+
+## This session — 8 shipped + 1 RCA'd
 #12912 (deploy-signal model), #12905 (galaxy-fm guard ✅), #12818 (L2 PM no-action brevity ✅), #12837 (anchorless-eviction ✅), #12914 (tracker single-status invariant + repair tool; applied 6 safe, 198 ambiguous→DM ✅), #12823 (ship-counter split ✅), #12526 (launcher merge-not-rebase → PR #12993). #12854 RCA'd→#12451. PRs: #12926/27/53/59/70/82/93. (#12905/12818/12914/12823/12837 shipped+closed.)
 
 ## Gated / not mine now
