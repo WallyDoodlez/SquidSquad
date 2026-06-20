@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: #12451 (status-bar event model) IN-PROGRESS — S1 on branch `squidsquad/task/12451` (draft PR #13024). S2 (#12854 write-on-transition, CQ-gated) BLOCKED on PM CQ-AC; S3 (loop regression) next.
-- **Updated**: 2026-06-20 03:02 (skill — event-mode)
+- **Task**: #12451 (status-bar event model) IN-PROGRESS at unblocked limit — **S1 + S3 on branch `squidsquad/task/12451` (draft PR #13024)**. Only S2 (#12854 write-on-transition; high-blast event-mode-contract.md + cycle.py; CQ-gated) remains — BLOCKED on PM adding the CQ-coverage AC (routed in the work-contract). Resume S2 when PM lands it.
+- **Updated**: 2026-06-20 03:08 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## This continued session (2026-06-20)
@@ -9,7 +9,8 @@
 - **#12912** (deploy-signal model) → **SHIPPED/CLOSED.** Was verifier FAIL (forbidden `cycle_pre` token in event-mode-contract.md Case E loop bullet → broke test_event_mode_fragments TestAc5NoModeConditional). Fix: reworded to "…at its next session start's pull (AGENT-RUNTIME §7.8)". Also dropped #12912's 6 common-events/* manifest lines (235→229) — #12915 (PR #13005) MERGED first (manifest 250) owns them → #12912 manifest clean no-op, no dup. Re-verification PASSED → DM merged. AC12 §11 doc-amend was already PM's (e7f07bdd4); my redundant #13013 self-marked duplicate. Dedup sequencing validated (#12915 → #12912).
 - **#12915 heads-up** posted (4 catalog-deprecated project/ stubs in manifest; verifier PASSed #13005 accepting them — disposition-open, not a defect).
 - **#12493** coupling-decision acked (event-mode-triggered halt-scan into idle-driver Step B → fold-at-§8.3-finalization or fast-follow; PR #12494 still HELD pending §8.3 backstop landing — PR #12507 unmerged).
-- **#12451** (status-bar event model, approved) PICKED UP. Front-loaded work-contract published; CQ-coverage AC routed to PM (S2 edits high-blast event-mode-contract.md). **S1 SHIPPED to branch** (draft PR #13024): statusline_data.cmd_phase surfaces the explicit `inline` marker with precedence over a stale harness phase (AC4, folds #12854 inline-window lingering-content); confirms AC1/AC2/AC5. tests/test_12451_statusline_event_model.py (16). `run_tests.py` exit 0 (static-gate 4724, integration 53 OK). S2/S3 remain.
+- **#12451** (status-bar event model, approved) PICKED UP. Front-loaded work-contract published; CQ-coverage AC routed to PM (S2 edits high-blast event-mode-contract.md). **S1 SHIPPED to branch** (draft PR #13024): statusline_data.cmd_phase surfaces the explicit `inline` marker with precedence over a stale harness phase (AC4, folds #12854 inline-window lingering-content); confirms AC1/AC2/AC5. tests/test_12451_statusline_event_model.py (16). **S3 SHIPPED to branch** (loop-mode staleness regression guard AC3 + event-mode no-verdict cross-check AC5, static-source assertions matching test_statusline_schema.py convention since statusline.sh has no bash-exec harness): tests/test_12451_statusline_loop_mode_staleness.py (8). `run_tests.py` exit 0 (static-gate 4731, integration 53 OK). **Only S2 remains — PM-gated on CQ-AC.** #12271 stays decoupled (fast-follow).
+- **#12895** umbrella: both phases shipped (#12906 P1 + #12912 P2) → routed to PM to close the now-stale in-progress umbrella.
 - All 4 prior in-progress items verified externally-gated: #12895→tracked #12912(now shipped); #12801→Textual dep+interactive terminal (my documented deferral); #12450→PM CQ-AC for S3/S4; #12493→§8.3 unlanded.
 - **Lesson:** tracker.py --message backticks get bash-mangled (command substitution) → pass via `"$(cat file)"`. Saved to memory.
 
