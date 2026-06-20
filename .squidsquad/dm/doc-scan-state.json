@@ -8,7 +8,7 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/DM-ARCH.md",
+  "last_scanned": "docs/ Tier-2 org assessment",
   "rotation_count": 75,
   "scan_history": [
     {
@@ -418,6 +418,20 @@
       "findings": 0,
       "fixes": [],
       "note": "in-lane domain doc (out of fixed rotation; 5 rotation docs already covered this session). #12749 layered refactor documented as realized + counter ownership on DM; L4 batch-10 correct; current"
+    },
+    {
+      "file": "docs/AGENT-RUNTIME.md:\u00a73.1",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "post-ship verify of #12853+#12800 doc changes: live rule text uses 'Never Stop While Work Is Pending'; remaining async-no-pause refs are intentional rev-16 historical changelog; coherent"
+    },
+    {
+      "file": "docs/ (Tier-2 org)",
+      "date": "2026-06-19",
+      "findings": 1,
+      "fixes": [],
+      "note": "9 docs, no docs/README index -> filed #12913 (role:dm, low, pending). README table is partial index; flagged overlap for PM judgment"
     }
   ],
   "doc_inventory": {
