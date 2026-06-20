@@ -39,6 +39,19 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 CONFIG_PATH = REPO_ROOT / ".squidsquad" / "config.md"
 
+# #12823: the ship counter lives in its OWN file with `merge=ours`, separate from
+# config.md. config.md previously carried `merge=ours` solely to protect this one
+# DM-owned counter from regression when a stale sibling clone pushed an old value
+# — but `merge=ours` is all-or-nothing, so it silently dropped every OTHER agent's
+# concurrent config.md edit (a feature flag, a new key). Splitting the counter out
+# lets config.md merge 3-way normally (real conflicts surface; non-overlapping
+# edits merge cleanly), while the transient machine-regenerated counter keeps its
+# ours-wins protection in `.ship-counter`. This is the same separate-file +
+# `merge=ours` pattern already used for working-state / current-state / cycle-io.
+SHIP_COUNTER_PATH = REPO_ROOT / ".squidsquad" / ".ship-counter"
+# The single config field whose storage is redirected to SHIP_COUNTER_PATH.
+_SHIP_COUNTER_FIELD = "shipped-since-bump"
+
 # Harness wake-mode probe (#11401). Per AGENT-RUNTIME §2 the wake mechanism
 # is selected solely by the boot-time harness probe — there is no
 # `event-driven:` config field. These mirror the agent boot probe target.
@@ -174,12 +187,23 @@ def _parse_all(text):
         val = _parse_field(text, section, field_name)
         if val is not None:
             result[short_name] = val
+    # #12823: the ship counter is stored in .ship-counter, not config.md. Overlay
+    # the authoritative value so `dump`/`_parse_all` agree with `get_field` (else
+    # dump would report the stale/absent config.md field after migration).
+    sc = _read_ship_counter()
+    result[_SHIP_COUNTER_FIELD] = (
+        sc if sc is not None
+        else _FIELD_DEFAULTS.get(_SHIP_COUNTER_FIELD, "0")
+    )
     return result
 
 
 # Fields that default to a value when absent from config.md (rather than exiting)
 _FIELD_DEFAULTS = {
     "event-driven": "no",
+    # #12823 — a fresh install with neither .ship-counter nor a legacy config.md
+    # counter field starts the counter at 0.
+    "shipped-since-bump": "0",
     # #11091 — minutes between idle improvement-scans (event-mode cool-down loop)
     "improvement-scan-cool-down": "30",
     # #12506 — max idle improvement-scans per sustained-idle burst before the
@@ -188,12 +212,48 @@ _FIELD_DEFAULTS = {
 }
 
 
+def _read_ship_counter():
+    """Return the ship counter (#12823) as a string, or None if unavailable.
+
+    Source of truth is ``SHIP_COUNTER_PATH``. For backward compatibility with
+    installs that still carry the counter in config.md (pre-#12823), fall back to
+    the config.md ``Auto Versioning > Shipped Since Last Bump`` field when the
+    counter file is absent — so an in-place upgrade keeps reading the right value
+    until the next write migrates it. Never raises.
+    """
+    try:
+        if SHIP_COUNTER_PATH.exists():
+            raw = SHIP_COUNTER_PATH.read_text(encoding="utf-8").strip()
+            if raw:
+                return raw
+    except OSError:
+        pass
+    # Migration fallback: read the legacy in-config.md value.
+    section, field_name = FIELD_MAP[_SHIP_COUNTER_FIELD]
+    return _parse_field(_read_config(), section, field_name)
+
+
+def _write_ship_counter(value):
+    """Atomically write the ship counter (#12823) to ``SHIP_COUNTER_PATH``."""
+    SHIP_COUNTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(SHIP_COUNTER_PATH, f"{value}\n")
+    return value
+
+
 def get_field(field):
     """Get a config field by short name or full name.
 
     #6274 D2: for fields in `_DUAL_AWARE_CONFIG_FIELDS_6274`, read the new
     field first and fall back to the deprecated one with a stderr warning.
     """
+    # #12823: the ship counter is stored in its own file (.ship-counter), not
+    # config.md — redirect the read (with a config.md migration fallback).
+    if field == _SHIP_COUNTER_FIELD:
+        val = _read_ship_counter()
+        if val is None:
+            return _FIELD_DEFAULTS.get(_SHIP_COUNTER_FIELD, "0")
+        return val
+
     text = _read_config()
     entry = FIELD_MAP.get(field)
     if entry:
@@ -294,6 +354,13 @@ def get_wake_mode(role=None):
 
 def set_field(field, value):
     """Set a config field value."""
+    # #12823: the ship counter is stored in its own file (.ship-counter), not
+    # config.md — redirect the write there. This is also the migration write:
+    # once it runs, .ship-counter is authoritative and the (now-ignored) legacy
+    # config.md field, if any, is left for config.md's normal 3-way merge.
+    if field == _SHIP_COUNTER_FIELD:
+        return _write_ship_counter(value)
+
     text = _read_config()
     entry = FIELD_MAP.get(field)
     if entry:

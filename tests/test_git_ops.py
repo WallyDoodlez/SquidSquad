@@ -1257,7 +1257,12 @@ class TestGitattributesMergeStrategies:
     def test_ours_merge_for_overwrite_files(self):
         content = (Path(__file__).resolve().parent.parent / ".gitattributes").read_text()
         assert "working-state.md merge=ours" in content
-        assert "config.md merge=ours" in content
+        # #12823: the ship counter (the only field that needed ours-wins) moved
+        # to its own file; config.md itself no longer carries merge=ours.
+        assert ".squidsquad/.ship-counter merge=ours" in content
+        rule_lines = [ln.strip() for ln in content.splitlines()
+                      if ln.strip().startswith(".squidsquad/config.md")]
+        assert all("merge=ours" not in ln for ln in rule_lines)
 
     def test_vault_briefing_merge_ours(self):
         """#5674: BRIEFING.md uses merge=ours (last writer wins)."""
