@@ -3309,6 +3309,7 @@ class TestReviewFixes(unittest.TestCase):
         hs = HarnessState()
         agent = AgentState("skill")
         agent.intent = AgentState.INTENT_RUNNING
+        agent.status = "running"  # #12912 iter-3 F1: only ALIVE agents are signaled
         agent.bootup_complete = True
         hs.set_agent("skill", agent)
         import harness

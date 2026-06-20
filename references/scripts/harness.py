@@ -767,12 +767,33 @@ class HarnessState:
                         agent.status = "stopped"
                     elif agent.intent == AgentState.INTENT_DEPLOYING:
                         # #12912 (HARNESS-ARCH §7.1.1 / §7.4): a death while
-                        # intent=deploying is the EXPECTED deploy-halt exit — the
-                        # agent halted on a deploy-signal and the deploy sequence
-                        # owns the respawn. Settle to "deploying" (not "stalled")
-                        # so it is not is_dead (below) and is never misread as a
-                        # crash + auto-respawned out of order (AC9).
-                        agent.status = "deploying"
+                        # intent=deploying is normally the EXPECTED deploy-halt
+                        # exit — the deploy sequence owns the respawn — so settle
+                        # to "deploying" (not is_dead below) and suppress the
+                        # crash-respawn path (AC9).
+                        # DS-12912 iter-3 Finding 2: BUT if the agent has been dead
+                        # at intent=deploying longer than the deploy window (it
+                        # crashed BEFORE emitting ack-stop, or the deploy thread
+                        # hung/died), the deploy will never complete and nothing
+                        # else will respawn it. Treat it as a crashed running agent
+                        # so the normal auto-reboot path respawns it on its
+                        # existing committed CLAUDE.md (next poll: "running" → dead
+                        # → "stalled" → reboot; mirrors the load_state recovery).
+                        _deploy_age = (
+                            time.time() - agent.intent_set_at
+                            if agent.intent_set_at is not None else None
+                        )
+                        if (_deploy_age is not None
+                                and _deploy_age > _DEPLOY_WINDOW_SECONDS):
+                            _log(f"{role}: dead at intent=deploying for "
+                                 f"{_deploy_age:.0f}s (> {_DEPLOY_WINDOW_SECONDS}s "
+                                 f"deploy window) — deploy never completed; "
+                                 f"recovering via auto-respawn")
+                            agent.intent = AgentState.INTENT_RUNNING
+                            agent.intent_set_at = None
+                            agent.status = "running"
+                        else:
+                            agent.status = "deploying"
                     elif prev_status == "running":
                         agent.status = "stalled"
                     elif agent.status not in ("stopped",):
@@ -3972,7 +3993,15 @@ def _reboot_affected_agents(pr_number, files_changed):
          f"agents: {', '.join(sorted(affected_roles))}")
     for role in sorted(affected_roles):
         agent = state.get_agent(role)
-        if agent and agent.intent == AgentState.INTENT_RUNNING:
+        # DS-12912 iter-3 Finding 1: only signal agents that are actually ALIVE.
+        # A crash-looping / paused / dead agent still carries intent=RUNNING;
+        # flipping it to DEPLOYING would lock it out of the crash-loop resume
+        # path (which needs should_reboot, excluding DEPLOYING) — a permanent
+        # wedge until harness restart. A non-running affected agent picks up the
+        # new CLAUDE.md when it next recovers/boots (a residual drift re-triggers
+        # a deploy-signal on the next boot drift-check).
+        if (agent and agent.intent == AgentState.INTENT_RUNNING
+                and agent.status == "running"):
             agent.intent = AgentState.INTENT_DEPLOYING
             agent.intent_set_at = time.time()
             state.set_agent(role, agent)
@@ -3994,7 +4023,6 @@ def _reboot_affected_agents(pr_number, files_changed):
 # (deploy A → pull/compose/commit/push/restart A → then B …).
 _deploy_lock = threading.Lock()
 
-_DEPLOY_PUSH_RETRIES = 2          # §11 push-rejection recovery
 _DEPLOY_COMPOSED_FILES = ("CLAUDE.md", "SOUL.md", "CLAUDE.linked.md")
 # Respawn-suppression window armed when a deploy-halt ack arrives (HARNESS-ARCH
 # §7.3). Generous — covers ensure-main → pull → compose → commit → push. The
@@ -4009,12 +4037,19 @@ def _respawn_agent_process(role):
     poller's is_dead set, so the poller will NEVER auto-respawn it. We therefore
     boot it directly and stamp fresh-spawn state, mirroring the auto-start path.
 
-    Returns True iff a fresh process was spawned. On ANY non-spawn outcome —
-    boot_agent raised, returned success=False, or returned a non-"spawn" action —
-    the agent MUST NOT be left at status="deploying" (it would be permanently
-    stuck: not is_dead, never auto-respawned — DS-12912 iter-2 Findings 1+2).
-    We settle it to "error" (which IS in is_dead) with intent=RUNNING so the
-    failure is honest and surfaced, rather than a silent wedge."""
+    Returns True iff the respawn succeeded — a fresh process was spawned OR the
+    agent was already alive (boot_agent action="skip"); i.e. the agent is now
+    alive/recovering. Returns False only when boot_agent raised or reported
+    success=False (DS-12912 iter-3 Finding 4: the return feeds `respawn_ok` in
+    the deploy-error event, whose useful meaning to the operator is "is the agent
+    recovered" — not the narrower "was a brand-new PID spawned").
+
+    On ANY non-spawn outcome — boot_agent raised, returned success=False, or
+    returned a non-"spawn" action — the agent MUST NOT be left at
+    status="deploying" (it would be permanently stuck: not is_dead, never
+    auto-respawned — DS-12912 iter-2 Findings 1+2). We settle a failure to
+    "error" (which IS in is_dead) with intent=RUNNING so it is honest and
+    surfaced, and a success-without-spawn to "starting"."""
     agent = state.get_agent(role) or AgentState(role)
     agent.reboot_blocked_until = None
     agent.intent = AgentState.INTENT_RUNNING
@@ -4237,20 +4272,17 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
             if commit.returncode != 0:
                 _deploy_recover_and_respawn(role, "commit", commit.stderr.strip()[:300])
                 return
-            pushed = False
-            for attempt in range(_DEPLOY_PUSH_RETRIES + 1):
-                push = _git_in_clone(clone_path, ["push", "origin", "main"])
-                if push.returncode == 0:
-                    pushed = True
-                    break
-                # Push rejected (a concurrent clone pushed first) — re-pull and
-                # retry; sequential deploys make this rare but possible at the
-                # window edges (§11 push-rejection row).
-                _log(f"{role}: deploy push rejected (attempt {attempt + 1}/"
-                     f"{_DEPLOY_PUSH_RETRIES + 1}) — re-pulling and retrying")
-                _git_in_clone(clone_path, ["pull", "--ff-only", "origin", "main"])
-            if not pushed:
-                _deploy_recover_and_respawn(role, "push", "push rejected after retries")
+            push = _git_in_clone(clone_path, ["push", "origin", "main"])
+            if push.returncode != 0:
+                # DS-12912 iter-3 Finding 3: no retry loop. A rejected push means
+                # origin/main advanced (a concurrent clone pushed) — but this clone
+                # now holds a local compose commit, so `git pull --ff-only` cannot
+                # fast-forward the diverged branch, making a retry futile. The
+                # sequential _deploy_lock makes genuine concurrent pushes rare
+                # anyway. Go straight to §11 recovery: respawn on the existing
+                # CLAUDE.md + file deploy-error; the unadvanced checksum re-triggers
+                # a fresh deploy-signal on the next drift-check.
+                _deploy_recover_and_respawn(role, "push", push.stderr.strip()[:300])
                 return
 
             # 4. success — advance the checksum, then respawn on fresh output.

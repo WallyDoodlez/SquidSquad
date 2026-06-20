@@ -49,11 +49,14 @@ class TestHealthPollStatusSettling(unittest.TestCase):
         (HARNESS-ARCH §7.1.1), keeping it out of the is_dead crash set."""
         src = inspect.getsource(_HS)
         self.assertIn("INTENT_DEPLOYING", src)
-        # The settling branch must map DEPLOYING -> "deploying".
+        # The settling branch maps DEPLOYING -> "deploying" within the deploy
+        # window, and recovers to "running" past it (Finding 2 timeout).
         idx = src.find("agent.intent == AgentState.INTENT_DEPLOYING")
         self.assertNotEqual(idx, -1)
-        block = src[idx:idx + 700]
+        block = src[idx:idx + 2400]
         self.assertIn('agent.status = "deploying"', block)
+        self.assertIn("_DEPLOY_WINDOW_SECONDS", block)
+        self.assertIn('agent.status = "running"', block)
 
 
 class TestLoadStateResetsDeploying(unittest.TestCase):
@@ -109,9 +112,10 @@ class TestRebootAffectedAgentsEmitsDeploySignal(unittest.TestCase):
     emitter — it sets intent=DEPLOYING and emits a deploy-signal to each affected
     alias instead of force-restarting them directly."""
 
-    def _make_agent(self, intent):
+    def _make_agent(self, intent, status="running"):
         a = AgentState("skill", "")
         a.intent = intent
+        a.status = status
         return a
 
     def test_emits_deploy_signal_to_affected_running_agent(self):
@@ -154,6 +158,42 @@ class TestRebootAffectedAgentsEmitsDeploySignal(unittest.TestCase):
         self.assertEqual(kwargs["payload"]["target_alias"], "skill")
         self.assertEqual(kwargs["payload"]["event_type"], "deploy-signal")
         self.assertEqual(kwargs["payload"]["event_context"], "deploy-signal")
+
+    def test_crash_looping_agent_not_signaled(self):
+        """DS iter-3 Finding 1: an affected agent that is NOT alive (e.g.
+        crash-looping, intent still RUNNING) must NOT be flipped to DEPLOYING —
+        that would lock it out of crash-loop recovery."""
+        import harness
+        agent = self._make_agent(AgentState.INTENT_RUNNING, status="crash-looping")
+        emitted = []
+
+        class _FakeState:
+            def get_agent(self, role):
+                return agent if role == "skill" else None
+
+            def set_agent(self, role, a):
+                pass
+
+            def save_state(self):
+                pass
+
+        class _FakeDiff:
+            returncode = 0
+            stdout = ".squidsquad/skill/CLAUDE.md\n"
+
+        with patch.object(harness, "_NO_AUTO_REBOOT", False), \
+             patch.object(harness, "state", _FakeState()), \
+             patch.object(harness, "subprocess") as msub, \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
+             patch.object(harness, "_log"), \
+             patch.object(harness, "time") as mtime:
+            msub.run.return_value = _FakeDiff()
+            mtime.time.return_value = 123.0
+            harness._reboot_affected_agents(99, ["references/roles/instructions.md"])
+
+        self.assertEqual(emitted, [])                              # not signaled
+        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)  # intent untouched
 
     def test_no_auto_reboot_suppresses_emit(self):
         """HARNESS-ARCH §7.6: under --no-auto-reboot the emit is skipped."""
@@ -284,7 +324,9 @@ class TestRunDeploySequence(unittest.TestCase):
         self.assertEqual(len(r["emitted"]), 1)
         self.assertEqual(r["emitted"][0][1]["payload"]["stage"], "compose")
 
-    def test_push_rejection_retries_then_recovers(self):
+    def test_push_rejection_recovers_immediately(self):
+        """DS iter-3 Finding 3: a rejected push goes straight to §11 recovery
+        (no futile --ff-only retry of a diverged branch)."""
         pushes = []
 
         def router(clone_path, args, timeout=120):
@@ -293,8 +335,7 @@ class TestRunDeploySequence(unittest.TestCase):
                 return _CP(returncode=1, stderr="rejected")
             return _CP(returncode=0)
         r = self._run(router)
-        import harness
-        self.assertEqual(len(pushes), harness._DEPLOY_PUSH_RETRIES + 1)
+        self.assertEqual(len(pushes), 1)              # single push, no retry
         self.assertEqual(r["bumped"], [])
         self.assertEqual(len(r["emitted"]), 1)
         self.assertEqual(r["emitted"][0][1]["payload"]["stage"], "push")
