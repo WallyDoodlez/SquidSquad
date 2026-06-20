@@ -3004,7 +3004,13 @@ async def receive_event(request: Request):
                         agent.status = "deploying"
                 await asyncio.to_thread(state.save_state)
                 _log(f"{role}: deploy-halted — handing off to deploy sequence")
-                # S4 wires the actual deploy sequence invocation here.
+                # #12912 S4: run the pull-first per-clone deploy sequence off the
+                # asyncio loop. The thread serializes on _deploy_lock so multiple
+                # affected clones deploy sequentially (AC8), avoiding push races.
+                threading.Thread(
+                    target=_run_deploy_sequence, args=(role,), daemon=True,
+                    name=f"deploy-{role}",
+                ).start()
 
     # Update AgentState from event.
     # #12824: fail-soft. The event_lifecycle.append above is the
@@ -3934,6 +3940,176 @@ def _reboot_affected_agents(pr_number, files_changed):
                 "event_type": "deploy-signal",
                 "event_context": "deploy-signal",
             })
+
+
+# ---------------------------------------------------------------------------
+# #12912 (HARNESS-ARCH §7.1 / §7.6 / §11): per-clone pull-first deploy sequence
+# ---------------------------------------------------------------------------
+
+# Serializes per-clone deploys so concurrent deploy-halts never race a push to
+# the shared origin/main ref (AC8 / design §3 decision 5). Each deploy-halt ack
+# spawns a thread that acquires this lock, so the deploys run one clone at a time
+# (deploy A → pull/compose/commit/push/restart A → then B …).
+_deploy_lock = threading.Lock()
+
+_DEPLOY_PUSH_RETRIES = 2          # §11 push-rejection recovery
+_DEPLOY_COMPOSED_FILES = ("CLAUDE.md", "SOUL.md", "CLAUDE.linked.md")
+
+
+def _git_in_clone(clone_path, args, timeout=120):
+    """Run a git command inside a specific agent clone (the harness operating on
+    another clone is new machinery — design §0). Returns the CompletedProcess."""
+    return subprocess.run(
+        ["git", *args],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(clone_path), timeout=timeout,
+    )
+
+
+def _bump_compose_checksum(clone_path):
+    """Advance last_compose_checksum to the just-deployed source state (§7.6).
+    Best-effort: a checksum-compute failure must not fail an otherwise-good
+    deploy (the worst case is one redundant future deploy-signal)."""
+    try:
+        import compose_freshness as _cf
+        checksum = _cf.compute_compose_checksum(clone_path)
+        state.set_last_compose_checksum(checksum)
+        state.save_state()
+    except Exception as e:
+        _log(f"deploy: checksum update skipped ({type(e).__name__}: {e})")
+
+
+def _respawn_after_deploy(role):
+    """Successful deploy: flip the halted agent back to RUNNING so the health
+    poller respawns its (already-dead) PID against the freshly-committed
+    CLAUDE.md. reboot_blocked_until cleared so the respawn is immediate."""
+    agent = state.get_agent(role)
+    if agent:
+        agent.reboot_blocked_until = None
+        agent.bootup_complete = False
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.intent_set_at = None
+        state.set_agent(role, agent)
+        state.save_state()
+    _log(f"{role}: deploy complete — respawning on fresh CLAUDE.md")
+
+
+def _deploy_recover_and_respawn(role, stage, detail):
+    """§11 failure recovery: respawn the agent on its EXISTING committed
+    CLAUDE.md, file a deploy-error event to pm, and do NOT advance the compose
+    checksum (drift stays detectable and re-triggers a future deploy-signal)."""
+    _log(f"{role}: deploy FAILED at {stage}: {detail} — respawning on existing "
+         f"CLAUDE.md, filing deploy-error to pm (checksum NOT advanced)")
+    agent = state.get_agent(role)
+    if agent:
+        agent.reboot_blocked_until = None
+        agent.bootup_complete = False
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.intent_set_at = None
+        state.set_agent(role, agent)
+        state.save_state()
+    _emit_event("deploy-error", "pm", payload={
+        "target_alias": "pm",
+        "event_context": "deploy-error",
+        "failed_role": role,
+        "stage": stage,
+        "detail": str(detail)[:500],
+    })
+
+
+def _stage_composed_outputs(clone_path, alias):
+    """Stage ONLY the alias's composed outputs (CLAUDE.md / SOUL.md /
+    CLAUDE.linked.md) — never the whole .squidsquad/<alias>/ dir, which also
+    holds working-state and other per-cycle churn. Returns True if anything was
+    staged. NB: per-alias `compose.py deploy` does NOT write .claude/settings.json
+    (AC11 / #12519) — that stays an installer-managed artifact, out of scope."""
+    staged_any = False
+    for fn in _DEPLOY_COMPOSED_FILES:
+        rel = f".squidsquad/{alias}/{fn}"
+        if (clone_path / rel).exists():
+            add = _git_in_clone(clone_path, ["add", "--", rel])
+            if add.returncode == 0:
+                staged_any = True
+    return staged_any
+
+
+def _run_deploy_sequence(role):
+    """Pull-first per-clone deploy on a deploy-halted agent (HARNESS-ARCH §7.1).
+
+    ensure-main → pull → compose.py deploy <alias> → commit → push → respawn,
+    serialized across clones by _deploy_lock (AC8). Failure at any step routes to
+    §11 recovery (respawn on existing CLAUDE.md, deploy-error to pm, checksum
+    unchanged). Runs in a daemon thread, off the asyncio loop.
+    """
+    with _deploy_lock:
+        try:
+            clone_path = Path(boot_remote._get_clone_path(role))
+        except Exception as e:
+            _deploy_recover_and_respawn(role, "clone-resolve", e)
+            return
+        import config as _cfg
+        alias = _cfg.get_alias(role) or role
+        scripts = clone_path / "references" / "scripts"
+
+        try:
+            # 1. ensure-main + fast-forward-only pull. Non-ff / conflict → §11.
+            co = _git_in_clone(clone_path, ["checkout", "main"])
+            if co.returncode != 0:
+                _deploy_recover_and_respawn(role, "checkout-main", co.stderr.strip()[:300])
+                return
+            pull = _git_in_clone(clone_path, ["pull", "--ff-only", "origin", "main"])
+            if pull.returncode != 0:
+                _deploy_recover_and_respawn(role, "pull", pull.stderr.strip()[:300])
+                return
+
+            # 2. compose the alias using the CLONE's own compose.py (so its repo
+            #    root is the clone). Bad source / parse error → §11.
+            comp = subprocess.run(
+                [sys.executable, str(scripts / "compose.py"), "deploy", alias],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                check=False, cwd=str(clone_path), timeout=300,
+            )
+            if comp.returncode != 0:
+                _deploy_recover_and_respawn(role, "compose", comp.stderr.strip()[:300])
+                return
+
+            # 3. commit + push the composed output. A no-op recompose (output
+            #    already current) is a clean, idempotent success — skip to respawn.
+            if not _stage_composed_outputs(clone_path, alias):
+                _bump_compose_checksum(clone_path)
+                _respawn_after_deploy(role)
+                return
+            commit = _git_in_clone(
+                clone_path,
+                ["commit", "-m",
+                 f"deploy: recompose {alias} CLAUDE.md (#12912 deploy-signal)"],
+            )
+            if commit.returncode != 0:
+                _deploy_recover_and_respawn(role, "commit", commit.stderr.strip()[:300])
+                return
+            pushed = False
+            for attempt in range(_DEPLOY_PUSH_RETRIES + 1):
+                push = _git_in_clone(clone_path, ["push", "origin", "main"])
+                if push.returncode == 0:
+                    pushed = True
+                    break
+                # Push rejected (a concurrent clone pushed first) — re-pull and
+                # retry; sequential deploys make this rare but possible at the
+                # window edges (§11 push-rejection row).
+                _log(f"{role}: deploy push rejected (attempt {attempt + 1}/"
+                     f"{_DEPLOY_PUSH_RETRIES + 1}) — re-pulling and retrying")
+                _git_in_clone(clone_path, ["pull", "--ff-only", "origin", "main"])
+            if not pushed:
+                _deploy_recover_and_respawn(role, "push", "push rejected after retries")
+                return
+
+            # 4. success — advance the checksum, then respawn on fresh output.
+            _bump_compose_checksum(clone_path)
+            _respawn_after_deploy(role)
+        except subprocess.TimeoutExpired as e:
+            _deploy_recover_and_respawn(role, "timeout", e)
+        except Exception as e:
+            _deploy_recover_and_respawn(role, "unexpected", e)
 
 
 # ---------------------------------------------------------------------------

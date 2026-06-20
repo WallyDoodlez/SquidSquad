@@ -109,6 +109,15 @@ EMITTED = {
         "source": "harness.py _reboot_affected_agents (drift detect → emit)",
         "payload_fields": ["target_alias", "event_type", "event_context"],
     },
+    # #12912 S4 (HARNESS-ARCH §11): emitted to the pm alias when a per-clone
+    # deploy sequence fails (pull conflict / compose error / push rejection).
+    # The agent is respawned on its existing committed CLAUDE.md and the compose
+    # checksum is NOT advanced, so the drift re-triggers; pm investigates.
+    "deploy-error": {
+        "description": "A per-clone pull-first deploy sequence failed; the affected agent was respawned on its existing CLAUDE.md and last_compose_checksum was NOT advanced. Filed to pm for investigation.",
+        "source": "harness.py _deploy_recover_and_respawn",
+        "payload_fields": ["target_alias", "event_context", "failed_role", "stage", "detail"],
+    },
 }
 
 # Tier 2: recognized -planned/expected, referenced by filters but not yet

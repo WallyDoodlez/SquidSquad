@@ -172,5 +172,127 @@ class TestRebootAffectedAgentsEmitsDeploySignal(unittest.TestCase):
         self.assertNotIn("INTENT_RESTARTING", src)
 
 
+class _CP:
+    """Minimal CompletedProcess stand-in."""
+    def __init__(self, returncode=0, stdout="", stderr=""):
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+class _DeployFakeState:
+    def __init__(self, agent):
+        self._agent = agent
+        self.checksum = None
+
+    def get_agent(self, role):
+        return self._agent
+
+    def set_agent(self, role, a):
+        self._agent = a
+
+    def save_state(self):
+        pass
+
+    def set_last_compose_checksum(self, c):
+        self.checksum = c
+
+
+class TestRunDeploySequence(unittest.TestCase):
+    """S4 (AC8 / §11): the per-clone pull-first deploy sequence."""
+
+    def _run(self, git_router, compose_rc=0, staged=True):
+        import harness
+        agent = AgentState("skill", "")
+        agent.intent = AgentState.INTENT_DEPLOYING
+        fake_state = _DeployFakeState(agent)
+        emitted = []
+        bumped = []
+
+        import config as _cfg
+        with patch.object(harness.boot_remote, "_get_clone_path", return_value="/tmp/clone"), \
+             patch.object(_cfg, "get_alias", return_value="skill"), \
+             patch.object(harness, "state", fake_state), \
+             patch.object(harness, "_git_in_clone", side_effect=git_router), \
+             patch.object(harness, "subprocess") as msub, \
+             patch.object(harness, "_stage_composed_outputs", return_value=staged), \
+             patch.object(harness, "_bump_compose_checksum",
+                          side_effect=lambda cp: bumped.append(cp)), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
+             patch.object(harness, "_log"):
+            msub.run.return_value = _CP(returncode=compose_rc)
+            msub.TimeoutExpired = Exception
+            harness._run_deploy_sequence("skill")
+        return agent, emitted, bumped
+
+    @staticmethod
+    def _all_ok_router(clone_path, args, timeout=120):
+        return _CP(returncode=0)
+
+    def test_success_path_respawns_and_bumps_checksum(self):
+        agent, emitted, bumped = self._run(self._all_ok_router)
+        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)  # respawn
+        self.assertEqual(len(bumped), 1)                            # checksum advanced
+        self.assertEqual(emitted, [])                              # no deploy-error
+
+    def test_no_change_is_clean_success(self):
+        agent, emitted, bumped = self._run(self._all_ok_router, staged=False)
+        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
+        self.assertEqual(len(bumped), 1)
+        self.assertEqual(emitted, [])
+
+    def test_pull_failure_recovers_without_checksum_bump(self):
+        def router(clone_path, args, timeout=120):
+            if args[0] == "pull":
+                return _CP(returncode=1, stderr="non-fast-forward")
+            return _CP(returncode=0)
+        agent, emitted, bumped = self._run(router)
+        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)   # respawn on existing
+        self.assertEqual(bumped, [])                                # checksum NOT advanced
+        self.assertEqual(len(emitted), 1)                           # deploy-error to pm
+        args, kwargs = emitted[0]
+        self.assertEqual(args[0], "deploy-error")
+        self.assertEqual(args[1], "pm")
+        self.assertEqual(kwargs["payload"]["stage"], "pull")
+
+    def test_compose_failure_recovers(self):
+        agent, emitted, bumped = self._run(self._all_ok_router, compose_rc=1)
+        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
+        self.assertEqual(bumped, [])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][1]["payload"]["stage"], "compose")
+
+    def test_push_rejection_retries_then_recovers(self):
+        pushes = []
+
+        def router(clone_path, args, timeout=120):
+            if args[0] == "push":
+                pushes.append(1)
+                return _CP(returncode=1, stderr="rejected")
+            return _CP(returncode=0)
+        agent, emitted, bumped = self._run(router)
+        # 1 initial + _DEPLOY_PUSH_RETRIES retries.
+        import harness
+        self.assertEqual(len(pushes), harness._DEPLOY_PUSH_RETRIES + 1)
+        self.assertEqual(bumped, [])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][1]["payload"]["stage"], "push")
+
+
+class TestDeployLockSerializes(unittest.TestCase):
+    def test_deploy_lock_is_a_lock(self):
+        import harness
+        import threading as _t
+        self.assertIsInstance(harness._deploy_lock, type(_t.Lock()))
+
+    def test_ack_stop_spawns_deploy_thread(self):
+        src = inspect.getsource(receive_event)
+        idx = src.find('"deploy-halted"')
+        block = src[idx:idx + 1700]
+        self.assertIn("_run_deploy_sequence", block)
+        self.assertIn("Thread", block)
+
+
 if __name__ == "__main__":
     unittest.main()
