@@ -93,7 +93,7 @@ class TestRebootHistoryPersistence(unittest.TestCase):
 class TestSlowLoopBreakerInUpdateHealth(unittest.TestCase):
     """Drive update_health for a SLOW reboot loop (lifetime > fast-death window)."""
 
-    def _run(self, *, reboot_history, lifetime, fake_now=NOW):
+    def _run(self, *, reboot_history, lifetime, fake_now=NOW, boot_result=None):
         hs = HarnessState()
         agent = AgentState("skill", "/clone")
         agent.status = "running"
@@ -104,8 +104,9 @@ class TestSlowLoopBreakerInUpdateHealth(unittest.TestCase):
         hs.set_agent("skill", agent)
 
         boot = patch.object(harness.boot_remote, "boot_agent",
-                            return_value={"success": True, "terminal_pid": 9,
-                                          "action": "spawn"})
+                            return_value=boot_result or {
+                                "success": True, "terminal_pid": 9,
+                                "action": "spawn"})
         patches = [
             patch.object(harness.boot_remote, "_get_all_roles", return_value=["skill"]),
             patch.object(harness.boot_remote, "_get_clone_path", return_value="/clone"),
@@ -162,6 +163,20 @@ class TestSlowLoopBreakerInUpdateHealth(unittest.TestCase):
                                      lifetime=harness.FAST_DEATH_WINDOW_SECONDS + 120)
         boot_mock.assert_called_once_with("skill")
         self.assertEqual(agent.status, "starting")
+
+    def test_skip_result_does_not_record_reboot(self):
+        """DS-12409 F1: a success/action='skip' dispatch (agent came back alive
+        in a race) must NOT record a reboot or stamp last_spawn_at — no spawn
+        happened, so it must not inflate the slow-loop count."""
+        history = [NOW - 600]                          # 1 prior, below threshold
+        agent, boot_mock = self._run(
+            reboot_history=history,
+            lifetime=harness.FAST_DEATH_WINDOW_SECONDS + 120,
+            boot_result={"success": True, "action": "skip", "message": "alive"})
+        boot_mock.assert_called_once_with("skill")
+        # reboot_history unchanged (the prior entry is still in-window) — the
+        # skip did NOT append a new reboot timestamp.
+        self.assertEqual(agent.recent_reboot_count(NOW), 1)
 
 
 if __name__ == "__main__":

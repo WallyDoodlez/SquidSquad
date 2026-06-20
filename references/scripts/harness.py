@@ -1144,7 +1144,15 @@ class HarnessState:
             _log(f"Auto-rebooting {role} (was running, intent={self.agents[role].intent})")
             try:
                 result = boot_remote.boot_agent(role)
-                if result.get("success"):
+                # DS-12409 F1: gate on action=="spawn", not success alone. A
+                # success=True/action="skip" (agent came back alive in a race, or
+                # a concurrent boot holds the .booting sentinel) means NO process
+                # was spawned — stamping last_spawn_at / recording a reboot /
+                # clearing the SessionEnd signal would corrupt the fast-death
+                # lifetime and inflate the #12409 slow-loop count for a reboot
+                # that did not happen. Matches the other three spawn paths
+                # (start_team / start_all / deploy respawn).
+                if result.get("success") and result.get("action") == "spawn":
                     with self._lock:
                         agent = self.agents.get(role)
                         if agent:
@@ -1153,9 +1161,6 @@ class HarnessState:
                             # death's lifetime is measured from here; this is
                             # what makes the fast-death streak accumulate across
                             # auto-reboots (boot_time is not refreshed here).
-                            # Gated on success (not terminal_pid) to match the
-                            # other three spawn paths — a successful spawn always
-                            # stamps, even if terminal_pid is absent.
                             agent.last_spawn_at = time.time()
                             # #12409 — record this auto-reboot for the
                             # frequency-based slow-loop breaker (lifetime-agnostic,
