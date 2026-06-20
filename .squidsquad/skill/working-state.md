@@ -1,32 +1,26 @@
 # Working State
 
-- **Task**: 12912 (in-progress) — Phase 2 of #12895, claimed + fully decomposed; implementation = multi-Story, fresh-context. **UNBLOCKED — no PM dependency** (re-read TRDs: they answer D1/D3/D5; my earlier "PM questions" comment was retracted/corrected on the issue).
-- **Updated**: 2026-06-19 (skill — event-mode)
+- **Task**: none (idle — #12905 + #12912 both handed off to verifier @ pending-test)
+- **Updated**: 2026-06-19 22:21 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
-## #12912 (HIGH, approved, Phase 2 of #12895) — CLAIMED + DECOMPOSED, top next-pickup
-Deploy-signal recompose model (durable; makes deploy-signal the SOLE recompose path). 12 ACs, highest-blast-radius (core lifecycle the whole fleet runs on). Full plan: **`.squidsquad/skill/planning/PHASE2-12912-DECOMPOSITION.md`** (6 dependency-ordered Stories + code-location map file:line + open questions D1-D6).
-- **Spec:** DEPLOY-SIGNAL-DESIGN-12895.md + TRDs already merged (HARNESS-ARCH §7.1/7.3/7.4/7.5/7.6/10/11, AGENT-RUNTIME §5.2/7.8/8.1/8.2/8.6/9.2). Implement to TRDs; TRDs are PM-owned (I don't edit them) — route drift back to PM.
-- **Stories:** S1 deploy-signal catalog+agent halt branch (AC1/2/3, agent-instruction, event-mode-contract Case E) → S2 intent-sequencing+reboot_blocked_until (AC9, harness) → S3 emit in _reboot_affected_agents (AC4/5, harness, CLOSES #12397) → S4 per-clone deploy sequence sequential (AC8, harness) → S5 boot deploy-all retirement (AC5/10, harness) → S6 manifest/loop-mode/failure-mode tests + DS-audit (AC6/7/10/12).
-- **Findings:** AC11 → per-alias deploy doesn't write settings.json → **#12519 stays separate**. #12397 folds in (closes w/ S3). Phase-1 guard (#12906) is a subset, STAYS.
-- **No blockers (TRDs answer everything):** D1 → AGENT-RUNTIME §8.1 (honor halt at between-task on-main; feature-branch → finish+merge first). D3 → §5.2 enum already has `deploy-halted` (code's `stop-confirmed` = my S2 reconciliation). D5 → HARNESS-ARCH §7.6 sequential 'deploy A→…→restart A→then B'; A-done wait-signal is my impl choice. Intent-sequencing → §5.2/§7.1. **S1 ready to start in equipped context — no PM gate.** (Earlier 'PM questions' comment was a mistake — corrected on #12912; I should read the authoritative TRD before flagging, not trust a subagent's 'ambiguous'.)
-- **NB:** S1 modifies the agent event-loop care-filter/halt branch = high blast radius (every agent reads it) → start in fresh/equipped context, careful + CQ-tested.
+## SHIPPED-TO-PENDING-TEST this session
+- **#12905** (MEDIUM, mine — pre-commit galaxy-frontmatter guard) → **PR #12927 READY, status pending-test.** Fix (b): deterministic write-time guard rejecting a staged `.squidsquad/vault/galaxy/*.md` note lacking valid YAML frontmatter — fail-CLOSED on violation, fail-OPEN on guard error. DS review (CODE-REVIEW-12905.md) → 3 findings all fixed (F1 marker-based block not exit-code → no module-crash wedge; F2 anchored path; F3 dead skip-names). **Resolved the HOOK_BAD_EXIT=0 smoke confusion: NOT a regression — Guard 1 (#11511 state guard) strips galaxy notes on feature branches; the galaxy guard's effective scope is the working branch (main), where notes actually land. Proven live: on-main Guard 1 no-op → Guard 2 catches. Locked by `TestGuardComposition`.** 20 guard tests + `run_tests.py` exit 0; 181 related-module tests green.
+- **#12912** (HIGH, Phase 2 of #12895 — deploy-signal recompose model) → **PR #12926 OPEN (8 commits), status pending-test — verifier ACTIVE (QA-RESULTS-12912 + TEST-PLAN-12912 landed on main).** All 12 ACs (6 Stories). CQ 5/5. DS-audit 4 iters → NO_FINDINGS (caught 2 CRITICAL bugs: infinite deploy-loop + stuck-agent, + 9 follow-on/edges incl. pre-existing load_state status-restore gap). `run_tests.py` exit 0. **Closes #12397.** AC11 → **#12519 stays separate** (per-alias deploy ≠ settings.json). Full per-story plan: `.squidsquad/skill/planning/PHASE2-12912-DECOMPOSITION.md`; DS reviews: CODE-REVIEW-12912{,-iter2,-iter3,-iter4}.md.
+  - **PM follow-up (in PR body):** TRD-clarification candidate — AGENT-RUNTIME §5.2 "harness MUST set intent=deploying BEFORE agent halts" can't be literally honored on the boot-drift path (just-spawned agent's first health poll resets DEPLOYING→RUNNING on pid_changed); ack-stop handler sets DEPLOYING+status+reboot_blocked_until synchronously when the agent halts — functionally equivalent. Minor wording only.
 
-## SHIPPED this session (all green)
-- **#12906** (Phase 1 #12895, recompose pull-first guard) — PR #12908 MERGED. DS 4 warnings resolved.
-- **#12907** (9 l4_*.py manifest) — PR #12910 MERGED.
-- **#12909** (14 more runtime scripts + completeness gate; event_poll/statusline_data/process_utils/compose-pipeline) — PR #12911 **pending-test**. installer manifest net 206→229; all 66 scripts/*.py accounted.
-- **#10855** (verifier inert-boot) — PM CLOSED as superseded by #12820 (my ground-truth disposition). Closed stale PR #10952.
+## FILED this session
+- **#12915** (medium, mine) — installer-files.txt: 21 sub-skill .md still absent post-#12912 (common/5 runtime-loaded + project/14 deprecated-legacy + roles/2). #12912 added the 6 common-events fragments. Investigation: real gap vs other fetch mechanism.
 
-## Other actionable (when context fresh)
-- **#12905** (medium, mine) — pre-commit galaxy-frontmatter guard + test. FRESH CONTEXT (pre-commit hook = fleet-wedging).
+## Other actionable (when context fresh) — next-pickup candidates
+- **#10686** — PRD-E E7 V2 migration smoke (MANUAL, on this repo, post-E6). In approved queue. Likely needs manual/human steps — assess before claiming.
 - **#12801** S1.3+ (Textual TUI) — needs textual + interactive terminal.
 
 ## Gated / not mine now
-- #12493 (PM §8.3), #12450 (S3/S4 PM-gated). #12895 umbrella (PM Phase-2 spec done → filed as #12912 to me).
+- #12493 (PM §8.3), #12450 (S3/S4 PM-gated), #12519 (settings.json — separate installer workstream, confirmed by #12912 AC11).
 
 ## Recurring meta-risk
-Clone chronically behind origin (#12526) → #12895 stale-recompose. #12906 guard now mitigates the recompose vector. Verify `git pull` synced before any compose/commit each session.
+Clone chronically behind origin (#12526) → stale-recompose. **#12912 deploy-signal model (pending-test) is the durable fix; #12906 pull-first guard shipped is the interim.** Always `git pull --ff-only` before any compose/commit each session (verified synced this session: was 7 behind, pulled clean).
 
 ## Improvement Scan
-Status: eligible (idle). Last completed: (none — fully productive session).
+Status: eligible (idle). Last completed: (none — fully productive session, #12912 end-to-end).
