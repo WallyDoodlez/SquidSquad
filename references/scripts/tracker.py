@@ -14,6 +14,7 @@ Usage:
     python scripts/tracker.py get-labels <number>
     python scripts/tracker.py get-state <number>
     python scripts/tracker.py close <number>
+    python scripts/tracker.py repair-status-labels [--apply] [--include-unshipped]  # #12914: strip stale status:pending-ship from CLOSED issues (dry-run unless --apply; no-shipped/#9837 set skipped unless --include-unshipped)
     python scripts/tracker.py check-gh                   # Verify gh access
     python scripts/tracker.py --help
 
@@ -606,6 +607,138 @@ def list_by_labels(labels_str, state="open"):
     issues = json.loads(result.stdout) if result.stdout.strip() else []
     print(json.dumps(issues, indent=2))
     return issues
+
+
+_REPAIR_PAGE_LIMIT = 1000
+
+
+def repair_status_labels(apply=False, include_unshipped=False):
+    """#12914: enforce the single-status invariant on CLOSED issues carrying a
+    stale ``status:pending-ship`` orphan — the one-time/repeatable cleanup of
+    EXISTING pollution (the durable prevention is the single-status invariant in
+    ``transition()``).
+
+    A closed issue that still carries ``status:pending-ship`` pollutes DM's
+    delivery ``work_queue()``: the #9837 pending-ship query deliberately widens
+    to ``state=all`` (to catch the legitimate closed-but-undelivered case where a
+    PR's ``Closes #N`` closes the issue before DM ships it), so every stale
+    orphan surfaces as a false deliverable. These accumulate when a ship
+    transition leaves the prior label behind, or when a PR/manual close skips the
+    ship path.
+
+    **Two classes of closed pending-ship issue (the #9837 safety split):**
+
+    - **SAFE — carries ``status:shipped``**: unambiguously delivered. Strip every
+      non-shipped ``status:*`` label (incl. the ``pending-ship`` orphan), keeping
+      only ``status:shipped``. Repaired by default.
+    - **AMBIGUOUS — no ``status:shipped``**: could be a genuine closed-but-
+      undelivered issue (the #9837 case) OR a stale leak. Stripping its
+      ``pending-ship`` would silently drop a real deliverable from DM's queue, so
+      these are **skipped + warned** by default. Pass ``include_unshipped=True``
+      to repair them too — and then only the named ``pending-ship`` orphan is
+      removed (any other status label is kept, so a multi-label issue is never
+      blanked).
+
+    OPEN ``pending-ship`` issues are NEVER touched — those are the genuine
+    delivery queue (the query is scoped to ``state=closed``).
+
+    Dry-run by default (prints the plan, changes nothing). Pass ``apply=True`` to
+    execute. Idempotent: a second run after a clean pass finds nothing. Returns
+    the list of ``(number, removed_labels)`` planned/applied (excludes the
+    skipped ambiguous set unless ``include_unshipped``).
+    """
+    ship_label = STATUS_LABELS["pending-ship"]
+    shipped_label = STATUS_LABELS["shipped"]
+    adapter = _get_forge_adapter()
+
+    # Gather closed issues carrying the orphan label. Bounded at
+    # _REPAIR_PAGE_LIMIT (single page); the cleanup is idempotent and the
+    # transition() invariant stops new accumulation, so re-running drains any
+    # overflow — but we warn if the page is full so a truncated run is visible
+    # rather than silently partial (DS-12914 F2).
+    if adapter:
+        issues = adapter.list_issues(
+            labels=[ship_label], state="closed", limit=_REPAIR_PAGE_LIMIT
+        )
+    else:
+        result = _run_list(
+            ["gh", "issue", "list", "--label", ship_label, "--state", "closed",
+             "--json", "number,labels", "--limit", str(_REPAIR_PAGE_LIMIT)],
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"ERROR: gh list failed: {result.stderr}", file=sys.stderr)
+            return []
+        issues = json.loads(result.stdout) if result.stdout.strip() else []
+
+    planned = []           # (number, removed_labels) — to be repaired
+    skipped_ambiguous = []  # numbers skipped as possible #9837 deliverables
+    for issue in issues:
+        number = issue.get("number")
+        status_now = {
+            lbl.get("name", "")
+            for lbl in issue.get("labels", [])
+            if lbl.get("name", "").startswith("status:")
+        }
+        if ship_label not in status_now:
+            continue  # defensive — the query already filtered to pending-ship
+        if shipped_label in status_now:
+            # SAFE: delivered — collapse to the single terminal status.
+            remove = sorted(status_now - {shipped_label})
+        elif include_unshipped:
+            # AMBIGUOUS, explicitly opted in: remove ONLY the named orphan so a
+            # multi-label issue keeps its other status (never blanked) — F3.
+            remove = [ship_label]
+        else:
+            # AMBIGUOUS, default: could be a genuine closed-but-undelivered
+            # (#9837). Skip and warn rather than risk dropping a deliverable.
+            skipped_ambiguous.append(number)
+            continue
+        if remove:
+            planned.append((number, remove))
+
+    mode = "APPLYING" if apply else "DRY-RUN"
+    print(
+        f"#12914 status-label repair ({mode}): {len(planned)} closed issue(s) "
+        f"to repair, {len(skipped_ambiguous)} ambiguous (no status:shipped) "
+        f"{'INCLUDED' if include_unshipped else 'SKIPPED'}.",
+        file=sys.stderr,
+    )
+    if len(issues) >= _REPAIR_PAGE_LIMIT:
+        print(
+            f"  WARNING: result hit the {_REPAIR_PAGE_LIMIT}-issue page limit — "
+            f"the set may be truncated; re-run after applying to drain the rest.",
+            file=sys.stderr,
+        )
+    verb = "removing" if apply else "would remove"
+    for number, remove in planned:
+        print(f"  #{number}: {verb} {', '.join(remove)}", file=sys.stderr)
+        if apply:
+            if adapter:
+                adapter.edit_labels(number, add=[], remove=remove)
+            else:
+                cmd = ["gh", "issue", "edit", str(number)]
+                for lbl in remove:
+                    cmd += ["--remove-label", lbl]
+                _run_list(cmd, check=False)
+    if skipped_ambiguous and not include_unshipped:
+        preview = ", ".join(f"#{n}" for n in skipped_ambiguous[:20])
+        more = "" if len(skipped_ambiguous) <= 20 else f" (+{len(skipped_ambiguous) - 20} more)"
+        print(
+            f"  SKIPPED {len(skipped_ambiguous)} closed pending-ship issue(s) with "
+            f"NO status:shipped — each MAY be a legitimate closed-but-undelivered "
+            f"issue (#9837: PR auto-close before DM ships). Verify none are awaiting "
+            f"delivery, then re-run with --include-unshipped to strip them: "
+            f"{preview}{more}",
+            file=sys.stderr,
+        )
+    if not planned and not skipped_ambiguous:
+        print(
+            "  (nothing to repair — all closed pending-ship issues are already "
+            "single-status)",
+            file=sys.stderr,
+        )
+    return planned
 
 
 def list_all_open():
@@ -1294,20 +1427,31 @@ def transition(number, from_status, to_status, role=None, force=False):
                 )
                 sys.exit(1)
 
-    # Determine which status label(s) to remove. On the normal (non-forced)
-    # path the legality matrix guarantees `from_label` is the actual current
-    # status, so remove exactly that (no extra gh round-trip on the hot path).
-    # On the forced path (#12475) the caller-supplied `from_status` is NOT
-    # trusted: a wrong value would no-op the remove and leave the issue with
-    # two status:* labels. So query the live status labels and strip ALL of
-    # them (except the target) — a forced status change always lands exactly
-    # one status label. Falls back to `from_label` if the query fails.
-    remove_labels = [from_label]
-    if force:
-        live_status = _get_issue_status_labels(number)
-        stale = sorted(live_status - {to_label})
-        if stale:
-            remove_labels = stale
+    # Enforce the single-status invariant (#12914): an issue must NEVER carry
+    # 2+ `status:*` labels. Query the live status labels and strip ALL of them
+    # except the target, regardless of the caller-supplied `from_status`.
+    #
+    # The old normal (non-forced) path trusted the legality matrix and removed
+    # only `from_label`, skipping the live query to save a gh round-trip. That
+    # optimization is exactly what let stale labels accumulate: any divergence
+    # from the assumed-current label — an earlier leak, a concurrent transition
+    # race, or a slightly-wrong `from_status` — survived the swap. The result was
+    # 30 closed issues carrying an orphan `status:pending-ship` (polluting every
+    # DM `work_queue()` and risking ~30 spurious version bumps), with one issue
+    # carrying `approved`+`pending-ship`+`shipped` at once. Correctness wins over
+    # the saved round-trip here: transitions are low-frequency, and a stale status
+    # label is a fleet-wide, growing defect. Same strip-all logic the forced
+    # (#12475) path already used — now unconditional.
+    #
+    # Falls back to `[from_label]` only when the live query returns nothing (API
+    # failure or a genuinely label-less issue), so behavior is never worse than
+    # the old path. When the issue already carries exactly `to_label` (idempotent
+    # re-transition), the stale set is empty and nothing is removed.
+    live_status = _get_issue_status_labels(number)
+    if live_status:
+        remove_labels = sorted(live_status - {to_label})
+    else:
+        remove_labels = [from_label]
 
     adapter = _get_forge_adapter()
     if adapter:
@@ -1597,6 +1741,15 @@ def main():
             print("Usage: tracker.py add-labels <number> <labels>", file=sys.stderr)
             sys.exit(1)
         add_labels(int(pos[0]), pos[1])
+
+    elif cmd == "repair-status-labels":
+        # #12914: dry-run by default; --apply executes; --include-unshipped also
+        # repairs the ambiguous no-status:shipped set (#9837 closed-but-undelivered
+        # risk — default-skipped).
+        repair_status_labels(
+            apply=opts.get("apply", False),
+            include_unshipped=opts.get("include-unshipped", False),
+        )
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
