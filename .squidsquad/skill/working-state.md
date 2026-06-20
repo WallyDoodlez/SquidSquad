@@ -29,7 +29,10 @@
 ## #12748 — env-gated live tests skip not fail → PR #12999, pending-test
 Two clusters: comprehension (7 pipeline files → shared `tests/comprehension_helpers.py` gate: SKIP on no-results.json, cache-hit[exit0]/keyless[exit≠0] by exit code; 3 spec-integrity files untouched) + model_router_live (`_require_api_key` fail→skip). Verified: 2181 skips "cache hit"; forced-keyless model_router → 18 skipped. New test_12748 helper test (7). run_tests.py exit 0 (4705). NOTE pre-existing/out-of-scope: model_router_live 13 fail WITH key present (live-API/gpt-5.2 content, not #12748).
 
-## This session — 8 shipped + 1 RCA'd
+## #12915 + #12821 → PR #13005, pending-test
+installer-files.txt was missing 21 sub-skill fragments the wizard needs. Classified 27 absent: 21 ADDED (catalog runtime-loadable + worker-*/verifier-* wizard seeds; count 229→250); 6 orphaned project/{pm,dm}-* NOT added (wizard skips them, compose reads references/roles/<role>/, dead → cleanup candidate). #12821 resolved same PR: test_12821 completeness test (catalog+seed coverage, count-header, no-dupes). run_tests.py exit 0.
+
+## This session — 10 shipped + 1 RCA'd
 #12912 (deploy-signal model), #12905 (galaxy-fm guard ✅), #12818 (L2 PM no-action brevity ✅), #12837 (anchorless-eviction ✅), #12914 (tracker single-status invariant + repair tool; applied 6 safe, 198 ambiguous→DM ✅), #12823 (ship-counter split ✅), #12526 (launcher merge-not-rebase → PR #12993). #12854 RCA'd→#12451. PRs: #12926/27/53/59/70/82/93. (#12905/12818/12914/12823/12837 shipped+closed.)
 
 ## Gated / not mine now
