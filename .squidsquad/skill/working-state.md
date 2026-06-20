@@ -1,8 +1,17 @@
 # Working State
 
-- **Task**: #12451 (status-bar event model) IN-PROGRESS at unblocked limit. S1+S3 implemented on branch `squidsquad/task/12451` (draft PR #13024). Only S2 (#12854 part-1 write-on-transition; HIGH-BLAST event-mode-contract.md + cycle.py idle-marker; CQ-gated) remains — **deferred until the CQ-coverage AC lands** (routed to PM via **#13031** this session, since the prior 06:54Z bare comment cannot wake an event-mode PM). Resume S2 as one unit + transition whole task to pending-test when #13031 lands the AC.
-- **Updated**: 2026-06-20 11:31 (skill — event-mode, post-harness-restart boot)
+- **Task**: #12294 (.claude-pid authoritative across harness restart) IN-PROGRESS — RCA DONE, **dependency-free design LOCKED** (comment posted), implementation pending next session (fresh budget for high-blast harness ctypes). Branch `squidsquad/task/12294` created (no commits yet). SECONDARY in-progress: #12451 (status-bar) S1+S3 on branch (PR #13024), S2 PARKED on PM CQ-AC via **#13031**.
+- **Updated**: 2026-06-20 11:40 (skill — event-mode, post-harness-restart boot)
 - **Quiet Cycle Counter**: 0
+
+## #12294 — RCA + LOCKED DESIGN (resume target)
+RCA: harness learns claude.exe PID ONLY from `.claude-pid` (harness.py:595 in update_health; NO spawn-time registration). Single point of failure: thin_launcher writes resolved PID (thin_launcher.py:584, #10101) but unclean exit leaves it STALE; never-recorded live claude.exe (dm/qa observed) is invisible; load_state (harness.py:1381) restores possibly-stale PID on restart.
+**LOCKED design (dependency-free): C + A.**
+- (A) Read-side image-verify (toolhelp32, reuse thin_launcher `_win32_list_descendants` machinery): add image-name-by-PID; trust a PID only if alive AND image is claude.exe. Fixes AC3 (reclaim recycled-PID) + AC1. Also harden `thin_launcher._check_singleton` (currently trusts ANY live PID → recycled holder defeats singleton).
+- (C) Write-side: ensure resolved claude.exe PID reliably recorded so never lost.
+- **REJECTED (B) psutil cwd/cmdline discovery** — new dependency, codebase deliberately avoids psutil (raw Win32 only). Only needed to RE-ADOPT a never-recorded orphan vs respawn it; surfaced as a human-approval question in the comment, NOT silently added.
+- AC4 tests: mock toolhelp snapshot — (i) stale .claude-pid+live recorded→running not respawned; (ii) recycled non-claude PID→reclaimed; (iii) missing .claude-pid+live+image-verified singleton→no duplicate spawn.
+- Next: image-name-by-PID helper + test FIRST, then wire update_health/load_state + _check_singleton + DS review (high-blast).
 
 ## This session (2026-06-20, post-harness-restart boot)
 Harness restarted (uptime 23s at boot; sha 313d6e58). Drained 43 boot events — all historical (prior session through 02:40, working-state was 03:08+) → fast-forwarded cursor to `9f79fb253e9cac0b`, emitted bootup-complete. Pulled clean (FF only).
@@ -11,8 +20,8 @@ Harness restarted (uptime 23s at boot; sha 313d6e58). Drained 43 boot events —
 - **#11600 VERIFIED RESOLVED (facts) → routed to PM disposition.** Repro now correct: `_get_clone_path('qa')`→SquidSquad-qa; `.local-config` HAS qa key; unregistered/verifier roles FAIL-CLOSED with CloneResolutionError (#11640 removed the silent repo-root fallback — the exact #11600 root cause). Locked by `tests/test_feat_1496_shared_fs_fallback.py` + `tests/test_boot_remote.py`. /status confirms all agents isolated. No code change needed. Commented resolution verdict; recommend close.
 - **#12397 confirmed CLOSED** (stale assigned-to boot event; #12912 closed it — no action).
 
-## NEXT PICKUP (in progress this session)
-- **#12294** (.claude-pid authoritative across harness restart; medium, role:skill, open→picking up). CLEAN: deterministic harness code (no CQ gate), ACs + regression test already specified. Relevant — harness just restarted; /status showed agents with claude_pid:null. RCA direction in body: thin_launcher writes .claude-pid on spawn, clears on CLEAN exit; unclean exit leaves stale, nothing reconciles on harness boot. Fix: on restart reconcile liveness from actual claude.exe (#10101 descendant PID resolution), not stale/missing .claude-pid.
+## This session also
+- Picked up #12294 (open→in-progress), did full RCA, locked dependency-free design (above), posted design comment. Implementation deferred to next session (high-blast harness ctypes deserves fresh budget; design is the hard part, now settled).
 
 ## Gated / parked in-progress (unchanged — externally blocked)
 - **#12801** (Textual TUI action bar) — needs textual dep + interactive terminal (documented deferral).
