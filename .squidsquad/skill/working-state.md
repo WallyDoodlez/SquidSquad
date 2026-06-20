@@ -1,11 +1,12 @@
 # Working State
 
-- **Task**: none (idle — #12912 handed off to verifier @ pending-test)
-- **Updated**: 2026-06-19 (skill — event-mode)
+- **Task**: none (idle — #12905 + #12912 both handed off to verifier @ pending-test)
+- **Updated**: 2026-06-19 22:21 (skill — event-mode)
 - **Quiet Cycle Counter**: 0
 
 ## SHIPPED-TO-PENDING-TEST this session
-- **#12912** (HIGH, Phase 2 of #12895 — deploy-signal recompose model) → **PR #12926 OPEN (8 commits), status pending-test.** All 12 ACs (6 Stories). CQ 5/5. DS-audit 4 iters → NO_FINDINGS (caught 2 CRITICAL bugs: infinite deploy-loop + stuck-agent, + 9 follow-on/edges incl. pre-existing load_state status-restore gap). `run_tests.py` exit 0. **Closes #12397.** AC11 → **#12519 stays separate** (per-alias deploy ≠ settings.json). Full per-story plan: `.squidsquad/skill/planning/PHASE2-12912-DECOMPOSITION.md`; DS reviews: CODE-REVIEW-12912{,-iter2,-iter3,-iter4}.md.
+- **#12905** (MEDIUM, mine — pre-commit galaxy-frontmatter guard) → **PR #12927 READY, status pending-test.** Fix (b): deterministic write-time guard rejecting a staged `.squidsquad/vault/galaxy/*.md` note lacking valid YAML frontmatter — fail-CLOSED on violation, fail-OPEN on guard error. DS review (CODE-REVIEW-12905.md) → 3 findings all fixed (F1 marker-based block not exit-code → no module-crash wedge; F2 anchored path; F3 dead skip-names). **Resolved the HOOK_BAD_EXIT=0 smoke confusion: NOT a regression — Guard 1 (#11511 state guard) strips galaxy notes on feature branches; the galaxy guard's effective scope is the working branch (main), where notes actually land. Proven live: on-main Guard 1 no-op → Guard 2 catches. Locked by `TestGuardComposition`.** 20 guard tests + `run_tests.py` exit 0; 181 related-module tests green.
+- **#12912** (HIGH, Phase 2 of #12895 — deploy-signal recompose model) → **PR #12926 OPEN (8 commits), status pending-test — verifier ACTIVE (QA-RESULTS-12912 + TEST-PLAN-12912 landed on main).** All 12 ACs (6 Stories). CQ 5/5. DS-audit 4 iters → NO_FINDINGS (caught 2 CRITICAL bugs: infinite deploy-loop + stuck-agent, + 9 follow-on/edges incl. pre-existing load_state status-restore gap). `run_tests.py` exit 0. **Closes #12397.** AC11 → **#12519 stays separate** (per-alias deploy ≠ settings.json). Full per-story plan: `.squidsquad/skill/planning/PHASE2-12912-DECOMPOSITION.md`; DS reviews: CODE-REVIEW-12912{,-iter2,-iter3,-iter4}.md.
   - **PM follow-up (in PR body):** TRD-clarification candidate — AGENT-RUNTIME §5.2 "harness MUST set intent=deploying BEFORE agent halts" can't be literally honored on the boot-drift path (just-spawned agent's first health poll resets DEPLOYING→RUNNING on pid_changed); ack-stop handler sets DEPLOYING+status+reboot_blocked_until synchronously when the agent halts — functionally equivalent. Minor wording only.
 
 ## FILED this session
@@ -13,7 +14,6 @@
 
 ## Other actionable (when context fresh) — next-pickup candidates
 - **#10686** — PRD-E E7 V2 migration smoke (MANUAL, on this repo, post-E6). In approved queue. Likely needs manual/human steps — assess before claiming.
-- **#12905** (medium, mine) — pre-commit galaxy-frontmatter guard + test. FRESH CONTEXT (pre-commit hook = fleet-wedging).
 - **#12801** S1.3+ (Textual TUI) — needs textual + interactive terminal.
 
 ## Gated / not mine now
