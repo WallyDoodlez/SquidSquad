@@ -522,6 +522,14 @@ class TestImageNameForPid12294:
         )
         assert thin_launcher._image_name_for_pid(4242) is None
 
+    def test_win32_empty_image_name_is_none(self, monkeypatch):
+        """Empty image name → undetermined (None), not a non-match (DS-12294-c1)."""
+        monkeypatch.setattr(thin_launcher.sys, "platform", "win32")
+        monkeypatch.setattr(
+            thin_launcher, "_win32_all_procs", lambda: {4242: (10, "")},
+        )
+        assert thin_launcher._image_name_for_pid(4242) is None
+
     def test_posix_reads_proc_comm(self, monkeypatch):
         monkeypatch.setattr(thin_launcher.sys, "platform", "linux")
         fake = MagicMock(name="proc-comm")

@@ -187,7 +187,9 @@ def _image_name_for_pid(pid):
         return None
     if sys.platform == "win32":
         ppid_name = _win32_all_procs().get(pid)
-        return ppid_name[1].lower() if ppid_name else None
+        # `or None`: empty image name is "undetermined", not a non-match —
+        # parity with the POSIX path / process_utils (DS-12294-c1).
+        return (ppid_name[1].lower() or None) if ppid_name else None
     try:
         comm = Path(f"/proc/{pid}/comm").read_text(encoding="utf-8").strip()
     except OSError:

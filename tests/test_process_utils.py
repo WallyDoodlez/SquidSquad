@@ -257,6 +257,11 @@ class TestImageNameForPid:
         assert process_utils.image_name_for_pid(4242) is None
         fake.CloseHandle.assert_called_once_with(999)
 
+    def test_win32_empty_image_name_is_none(self, monkeypatch):
+        """Empty szExeFile → undetermined (None), not a non-match (DS-12294-c1)."""
+        self._fake_snapshot(monkeypatch, [(4242, "")])
+        assert process_utils.image_name_for_pid(4242) is None
+
 
 class TestIsClaudeProcessAlive:
     """#12294: image-verified liveness — alive AND image is claude."""

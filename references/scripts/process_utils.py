@@ -186,7 +186,11 @@ def _image_name_win32(pid):
             return None
         while True:
             if entry.th32ProcessID == pid:
-                return entry.szExeFile.decode("utf-8", errors="replace").lower()
+                # `or None`: an empty image name is "undetermined", not a
+                # non-match — keep parity with the POSIX path so AC2's
+                # fallback-to-liveness contract has no loophole (DS-12294-c1).
+                return entry.szExeFile.decode(
+                    "utf-8", errors="replace").lower() or None
             if not kernel32.Process32Next(snap, ctypes.byref(entry)):
                 break
     finally:
