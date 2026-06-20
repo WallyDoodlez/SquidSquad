@@ -125,7 +125,7 @@ class TestFullLaunchersUntouched:
     def test_start_sh_still_full(self):
         text = (REPO_ROOT / "start.sh").read_text(encoding="utf-8")
         assert "requirements.txt" in text  # still installs deps
-        assert "git pull --rebase" in text  # still syncs clones
+        assert "git pull --no-rebase" in text  # still syncs clones (#12526: merge, not rebase)
 
     def test_start_ps1_still_full(self):
         # start.bat delegates to start.ps1, so a stripped start.ps1 would regress
@@ -134,4 +134,4 @@ class TestFullLaunchersUntouched:
         assert ps1.is_file()
         text = ps1.read_text(encoding="utf-8")
         assert "requirements.txt" in text  # still installs deps
-        assert "git pull --rebase" in text  # still syncs clones
+        assert "git pull --no-rebase" in text  # still syncs clones (#12526: merge, not rebase)
