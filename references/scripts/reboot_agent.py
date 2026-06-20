@@ -103,6 +103,33 @@ def _read_claude_pid(clone_path, role):
         return None, False
 
 
+def write_claude_pid(clone_path, role, pid):
+    """Write ``pid`` to ``.claude-pid`` atomically (#12294 write-back).
+
+    The harness self-heals the file from its in-memory truth: when
+    ``update_health`` confirms an image-verified live claude PID but the
+    on-disk ``.claude-pid`` is missing or divergent, it writes the file
+    back so a *subsequent* harness restart isn't blind to that agent.
+    Symmetric with ``_read_claude_pid``. Best-effort: an OSError (disk
+    full, permission, antivirus lock on the .tmp) is swallowed with a
+    warning — the in-memory PID is still authoritative this session.
+    Returns True iff the file was written.
+    """
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return False
+    pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+    try:
+        pid_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = pid_file.with_suffix(".tmp")
+        tmp.write_text(str(pid), encoding="utf-8")
+        tmp.replace(pid_file)
+        return True
+    except OSError as e:
+        print(f"[reboot_agent] WARNING: could not write {pid_file}: {e}",
+              file=sys.stderr)
+        return False
+
+
 def main():
     """Deprecated CLI surface — kept for Phase 2 backward compat (#4792).
 

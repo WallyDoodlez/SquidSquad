@@ -195,6 +195,7 @@ _NO_FRESHNESS_CHECK = False
 
 import boot_remote
 import health_check
+import process_utils
 import reboot_agent
 
 try:
@@ -577,23 +578,45 @@ class HarnessState:
                 agent.last_health_check = time.time()
                 prev_status = agent.status
 
-                # Direct PID check (#4966) — primary health detection
+                # Direct PID check (#4966) — primary health detection.
+                # #12294: trust a PID only if it is alive AND its image is
+                # actually claude (image-verified liveness). A recycled PID now
+                # owned by an unrelated process must not read as "agent alive"
+                # (AC3), and a possibly-stale .claude-pid must be reconciled
+                # against the real process, not blindly trusted (AC1). Where the
+                # image can't be determined, is_claude_process_alive falls back
+                # to plain liveness so a live agent is never mis-reclaimed (AC2).
                 pid = agent.claude_pid
                 alive = False
                 pid_changed = False
                 if pid:
-                    alive = boot_remote._is_process_alive(pid)
+                    alive = process_utils.is_claude_process_alive(pid)
 
-                # If no stored PID or PID stale, try reading .claude-pid file
+                # If no stored PID or it didn't image-verify, reconcile from the
+                # .claude-pid file — image-verified, so a stale (dead) or
+                # recycled (live non-claude) holder is reclaimed rather than
+                # adopted.
                 if not alive:
-                    file_pid, file_alive = reboot_agent._read_claude_pid(clone_path, role)
-                    if file_pid and file_alive:
+                    file_pid, _ = reboot_agent._read_claude_pid(clone_path, role)
+                    if file_pid and process_utils.is_claude_process_alive(file_pid):
                         pid = file_pid
                         alive = True
                         if agent.claude_pid != pid:
                             pid_changed = True
                         agent.claude_pid = pid
                         state_changed = True
+
+                # #12294 (C) write-back: when we hold an image-verified live
+                # claude PID, keep .claude-pid in sync with the harness's
+                # in-memory truth so a *subsequent* restart isn't blind to this
+                # agent (the missing/stale-file observation that motivated this
+                # issue). Only writes when the file is missing or divergent;
+                # best-effort (a write failure leaves the in-memory PID
+                # authoritative for this session).
+                if alive and pid:
+                    file_pid, _ = reboot_agent._read_claude_pid(clone_path, role)
+                    if file_pid != pid:
+                        reboot_agent.write_claude_pid(clone_path, role, pid)
 
                 # Fallback: check .health file for legacy wrapper agents
                 if not alive and not pid:
