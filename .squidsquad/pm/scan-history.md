@@ -524,3 +524,17 @@
 - **Findings**: intra-vault link integrity CLEAN (0 broken decision-/pattern-/learning-/style- targets). All ~20 WARN are cross-layer references the checker can't resolve — vault→memory (feedback_*/project_*) and vault→docs (AGENT-RUNTIME/VAULT-ARCH) — which are intentional, not breakage. Tooling note: check-wikilinks is low-signal because cross-layer refs dominate the output (a real intra-vault break would be buried). NOT filed (low value, likely known limitation; vault_check.py = skill code domain).
 - **Auto-fixed**: pattern-chain-ship-per-item-auth.md — `[[feedback-pm-docs-only]]` → `[[feedback_pm_docs_only]]` (hyphen→underscore, canonical memory-note name)
 - **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 21:13 (post-restart idle-driver tick, 1st burst scan)
+
+- **Files scanned**: HARNESS-ARCH.md §7/§11 (deploy-signal/recompose/restart — verify shipped #12906 + #12912-design accuracy); config.md Improvement-Scanning defaults vs idle-cooldown-loop; .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this boot's verified facts)
+- **Findings**: HARNESS-ARCH §7.6/§11 coherent — deploy-signal model documented as the #12912 design contract (intentional target-state doc-first, NOT drift); `deploying` intent + ensure-main→pull→recompose→commit→push + deploy-halt exit + multi-clone-consistency window all consistent. Config defaults (30m cool-down, burst 3) match driver output. No actionable doc-drift finding (the planned-vs-pending-human-* surfacing distinction is intentional design, not a gap — NOT filed).
+- **Auto-fixed**: BRIEFING.md refreshed (PM own-domain, Tier-1) — new 2026-06-19 ~20:48 post-restart Active-Priorities increment (restart succeeded, #12906 confirmed-live, qa now EVENT, #12896 intaken→planned); Team State rewritten (all 4 EVENT, harness sha 398d1c1a); Constraints updated (boot-pull-lag regression neutralized by #12906-live → restore-dance now backstop); version sha b15e7fc5→398d1c1a.
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 22:11 (post-restart idle-driver tick, 2nd burst scan)
+
+- **Files scanned**: references/sub-skills/roles/pm/checkin.md (advertise-duty mechanics) + references/roles/pm/responsibility.md advertise-duty — consistency/completeness check (PM about to rely on it for #12896-planned + #10686-parked surfacing)
+- **Findings**: none filed. Considered a candidate gap — the check-in advertise step (checkin.md:17) covers only `role:<human>` + `pending-human-*` items, NOT PM-owned `planned` items awaiting approval (e.g. #12896). Concluded INTENTIONAL/coherent, not a gap: PM tracks its own `planned` items in working-state and surfaces them with judgment at check-in; advertise-duty is specifically the cross-agent pending-human-* return-path (items OTHER agents hand off that PM wouldn't otherwise know). A blanket 'advertise all planned' would nag the operator about deliberately operator-paced items (#10837/#10838/#10839 etc.). PM judgment + working-state tracking covers the #12896 case. NOT filed (designed distinction, filing would be marginal noise).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
