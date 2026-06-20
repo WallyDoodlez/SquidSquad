@@ -1,0 +1,32 @@
+{
+  "issue": 13032,
+  "title": "deploy-signal halt must END the session (/quit) so the process exits and the harness respawn isn't singleton-blocked",
+  "authored_by": "skill",
+  "authored_at": "2026-06-20 15:30",
+  "ac": "AC (contract gap): the deploy-signal Case E contract must instruct the agent to terminate its session, not merely pause work",
+  "method": "Fresh agent (model: sonnet) given ONLY the modified event-mode-contract.md (the event-mode wake contract, runtime-loaded at boot). The 'Case E — Special events' deploy-signal bullet — specifically the revised 'halt and end your session' step — is the surface under test. Answers must come from the supplied text alone.",
+  "target": "references/sub-skills/common-events/event-mode-contract.md -> 'Case E — Special events' deploy-signal bullet (the 'halt and end your session so your process exits' step)",
+  "files": [
+    "references/sub-skills/common-events/event-mode-contract.md"
+  ],
+  "questions": [
+    {
+      "id": "CQ1",
+      "question": "You are at the between-task on-main boundary and have just emitted ack-stop(result='deploy-halted') for a deploy-signal. Per the contract, what must you do with your session next — keep it running while idle, or something else? Be specific about the action.",
+      "expected": "You must end your session so your process exits — immediately invoke /quit to terminate the session, exactly as the exit-42 self-restart path does. 'Halt' here means end the session, not merely pause or idle. After ack-stop you stop all agent work AND exit the process via /quit.",
+      "anti": "Saying you keep the session alive and just idle/pause work, wait for the harness, or re-enter the Monitor/idle loop without exiting. Saying 'halt' means only stopping work while the process stays running."
+    },
+    {
+      "id": "CQ2",
+      "question": "Why is actually terminating your process (not just pausing work) load-bearing for the deploy to succeed? What does the harness do to respawn you, and what goes wrong if your old process is still alive when it tries?",
+      "expected": "The harness respawns you by spawning a FRESH claude process, and its singleton guard refuses to spawn while your old process is still alive. If you halt without exiting, the respawn no-ops (is skipped) and you keep running the stale, pre-recompose CLAUDE.md — defeating the entire point of the deploy. Your process exiting is what lets the fresh process (with the new CLAUDE.md) come up.",
+      "anti": "Saying it doesn't matter whether the process exits, that the harness recomposes inside the running session, or that the running session will somehow pick up the new CLAUDE.md without a fresh process."
+    },
+    {
+      "id": "CQ3",
+      "question": "After you exit, what sequence does the harness run, and where does reading the newly composed CLAUDE.md happen — in your halted session or a new one?",
+      "expected": "Off your now-exited session the harness runs: ensure-on-main -> git pull -> compose.py deploy <alias> -> commit -> push -> advance your cursor -> respawn a fresh process (possible only because you exited). The newly committed CLAUDE.md is read by the FRESH session at its boot, not by the halted session (the agent does not recompose at boot).",
+      "anti": "Saying the halted/original session reads the new CLAUDE.md, or that the agent recomposes its own CLAUDE.md in-session."
+    }
+  ]
+}

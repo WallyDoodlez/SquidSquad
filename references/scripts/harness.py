@@ -4177,6 +4177,38 @@ _DEPLOY_COMPOSED_FILES = ("CLAUDE.md", "SOUL.md", "CLAUDE.linked.md")
 # deploy sequence respawns explicitly and clears it well before this elapses.
 _DEPLOY_WINDOW_SECONDS = 300
 
+# #13032: how long the deploy respawn waits for a deploy-halted agent's OWN
+# claude process to exit (it `/quit`s itself per the event-mode Case E contract)
+# before booting its replacement. boot_agent's singleton guard refuses to spawn
+# over a live process, so booting too early no-ops the respawn and the agent
+# keeps running the stale pre-recompose CLAUDE.md. Kept SHORT because it is only
+# a tail-cover: the agent /quits the instant it emits ack-stop, and the deploy's
+# own cursor-advance + pull + compose (+ commit + push) already ran before we
+# get here, so the PID is normally already dead and the wait returns
+# immediately. A still-alive agent after this short window almost certainly did
+# not /quit at all (un-upgraded / wedged) → abort fast rather than block the
+# serialized _deploy_lock for long (DS-13032-B F3: a full fix moves the respawn
+# outside _deploy_lock so the wait never blocks other clones' deploys — tracked
+# follow-up).
+_DEPLOY_RESPAWN_PID_WAIT_S = 10
+
+
+def _await_pid_death(pid, timeout_s, poll_s=0.5):
+    """Poll until ``pid`` is no longer alive, up to ``timeout_s`` (#13032).
+
+    Returns True if the process died within the window, False if still alive at
+    the deadline. Runs in the deploy daemon thread (off the asyncio loop), so a
+    blocking sleep is fine. Uses plain liveness (``boot_remote._is_process_alive``):
+    we are observing a KNOWN PID disappear, which is safe regardless of PID
+    recycling — we never force-kill on this signal (an image-verified force-kill
+    auto-recovery is a #12294-dependent follow-up)."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if not boot_remote._is_process_alive(pid):
+            return True
+        time.sleep(poll_s)
+    return not boot_remote._is_process_alive(pid)
+
 
 def _respawn_agent_process(role):
     """Explicitly respawn a deploy-halted agent's claude process (DS-12912
@@ -4199,6 +4231,35 @@ def _respawn_agent_process(role):
     "error" (which IS in is_dead) with intent=RUNNING so it is honest and
     surfaced, and a success-without-spawn to "starting"."""
     agent = state.get_agent(role) or AgentState(role)
+
+    # #13032: wait for the deploy-halted agent's OWN claude process to exit
+    # before booting its replacement. The Case E contract now has the agent
+    # `/quit` itself on a deploy-halt, but the exit is asynchronous — if we boot
+    # while the old process is still alive, boot_agent's singleton guard returns
+    # action="skip" and the respawn no-ops, leaving the agent on the stale
+    # pre-recompose CLAUDE.md (the original #13032 bug). If the old PID does not
+    # die within the window the agent failed to exit (didn't /quit, or wedged):
+    # do NOT silently proceed to a no-op respawn — fail HONEST (status=error,
+    # which is in is_dead) and surface a deploy-error so the operator sees a real
+    # failure rather than a stale agent masquerading as healthy. (Image-verified
+    # force-kill auto-recovery is a #12294-dependent follow-up.)
+    old_pid = agent.claude_pid
+    if old_pid and not _await_pid_death(old_pid, _DEPLOY_RESPAWN_PID_WAIT_S):
+        agent.status = "error"
+        agent.intent = AgentState.INTENT_RUNNING
+        agent.intent_set_at = None
+        agent.reboot_blocked_until = None
+        agent.bootup_complete = False
+        state.set_agent(role, agent)
+        state.save_state()
+        _log(f"{role}: deploy respawn ABORTED — old claude PID {old_pid} still "
+             f"alive after {_DEPLOY_RESPAWN_PID_WAIT_S}s (agent did not exit on "
+             f"the deploy-halt /quit) — left status=error")
+        # The deploy-error emit is owned by the caller (DS-13032-B F1: avoids a
+        # double-emit when called from _deploy_recover_and_respawn, which emits
+        # its own stage failure).
+        return False
+
     agent.reboot_blocked_until = None
     agent.intent = AgentState.INTENT_RUNNING
     agent.intent_set_at = None
@@ -4221,19 +4282,26 @@ def _respawn_agent_process(role):
         agent.last_session_end = None
         agent.last_dispatch_at = None
         agent.terminal_pid = result.get("terminal_pid")
-    elif result.get("success"):
-        # Succeeded but did not spawn (e.g. action="skip" — already alive). The
-        # process exists; settle to "starting" so the next poll resolves it to
-        # "running" — never leave it at "deploying".
-        agent.status = "starting"
-    else:
-        agent.status = "error"
-        agent.claude_pid = None
+        state.set_agent(role, agent)
+        state.save_state()
+        _log(f"{role}: deploy respawn — spawn OK")
+        return True
+
+    # #13032: success-without-spawn (action="skip" — boot_agent found the agent
+    # STILL ALIVE) is unexpected here: we already waited for the old PID to die,
+    # so a skip means a stale .claude-pid or a race produced a live process we
+    # did NOT just spawn. Do NOT silently settle it to running on the old
+    # instructions (the original #13032 no-op) — fail honest + surface it.
+    agent.status = "error"
+    agent.claude_pid = None
     state.set_agent(role, agent)
     state.save_state()
-    ok = "OK" if result.get("success") else f"FAIL: {result.get('message')}"
-    _log(f"{role}: deploy respawn — {result.get('action')} {ok}")
-    return bool(result.get("success"))
+    detail = (f"boot_agent returned action={result.get('action')!r} "
+              f"success={result.get('success')!r} after PID-death wait: "
+              f"{result.get('message')}")
+    _log(f"{role}: deploy respawn FAILED — {detail}")
+    # deploy-error emit owned by the caller (DS-13032-B F1).
+    return False
 
 
 def _emit_boot_deploy_signals():
@@ -4295,9 +4363,25 @@ def _bump_compose_checksum(clone_path):
 def _respawn_after_deploy(role):
     """Successful deploy: respawn the halted agent against the freshly-committed
     CLAUDE.md. The PID is dead and status is "deploying" (not in is_dead), so the
-    health poller will not do it — respawn explicitly (DS-12912 Finding 2)."""
+    health poller will not do it — respawn explicitly (DS-12912 Finding 2).
+
+    #13032 (DS-13032-B F1/F2): this success path owns the deploy-error emit for a
+    respawn failure. Previously a respawn that no-op'd here was SILENT (the agent
+    kept running stale instructions); now any respawn failure — agent didn't exit,
+    boot_agent raised, or boot no-op'd — surfaces a single deploy-error to pm."""
     _log(f"{role}: deploy complete — respawning on fresh CLAUDE.md")
-    _respawn_agent_process(role)
+    if not _respawn_agent_process(role):
+        _emit_event("deploy-error", "pm", payload={
+            "target_alias": "pm",
+            "event_context": "deploy-error",
+            "failed_role": role,
+            "stage": "respawn",
+            "detail": (f"{role}: deploy succeeded but the respawn failed (agent "
+                       f"did not exit on the deploy-halt /quit, boot raised, or "
+                       f"boot no-op'd) — see harness log; the agent may still be "
+                       f"on the stale pre-recompose CLAUDE.md"),
+            "respawn_ok": False,
+        })
 
 
 def _deploy_recover_and_respawn(role, stage, detail):
