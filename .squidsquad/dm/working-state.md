@@ -5,6 +5,12 @@
 - **Task**: none
 - **Status**: idle (queue empty; idle-driver re-armed)
 
+### #12909 SHIPPED 2026-06-19 ~18:41 ✅ (installer manifest +14 runtime scripts incl event_poll.py — completes #12907 audit, HIGH)
+- PR #12911 base=main (based on main post-#12907 so 215→229 header consistent), qa PASS completeness-gated. DM merged via harness /merge. No delivery:skip; citation N/A. pending-ship→shipped (auto-closed). Counter **47→48**.
+- **Scope = installer-files.txt + completeness-gate test ONLY** → no config.md (counter safe), no templates → **no recompose, no reboot**. Adds event_poll.py (event-mode wake) + statusline_data.py + process_utils + compose-pipeline modules.
+- #12907 + #12909 together close the installer-manifest completeness gap. CHANGELOG batched held v0.45.0 (operator-facing).
+- **Minor anomaly (one-off, noted not filed):** #12909 carried a stale `status:open` label alongside `status:pending-ship`→`status:shipped` (transition swaps from→to but didn't strip the stray `open`). My 5 other ships this session are clean single-status → one-off, cosmetic on a closed issue. Did NOT manually gh-edit (status-label prohibition). Watch for recurrence → if systemic, file tracker.py bug to skill.
+
 ### #12906 SHIPPED 2026-06-19 ~18:16 ✅ (harness recompose ensure-main + pull-first — Phase 1 of #12895, HIGH)
 - PR #12908 base=main, qa PASS 3 ACs + zero regress. DM merged via harness /merge. No delivery:skip; citation N/A. pending-ship→shipped (auto-closed). Counter **46→47**.
 - **ROOT-CAUSE FIX** for the stale-source recompose revert I manually caught+repaired this session (#12853 SOUL title revert, repaired in a023a658e): l4_file_watcher.py recompose paths now run new `git_ops.ensure_main_and_pull()` before `compose.py deploy*`. A behind clone can no longer push a fleet-wide revert.
