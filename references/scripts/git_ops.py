@@ -737,6 +737,11 @@ def _role_owned_patterns(role):
         # gets written locally for whatever in-cycle scripts read it,
         # but it never enters the index again.
         ".squidsquad/.event-state.json",
+        # #12823 — the ship counter lives in its own file now (split out of
+        # config.md so config.md can merge 3-way). It's DM-written but listed in
+        # common so whatever role's cycle writes it (DM bump/reset, the #9772
+        # reconcile) can also stage it via the role-scoped commit path.
+        ".squidsquad/.ship-counter",
         ".squidsquad/vault/",
     ]
     role_specific = {
@@ -752,19 +757,13 @@ def _role_owned_patterns(role):
         # intentional: both roles legitimately mutate different fields
         # (PM: own-domain housekeeping; DM: ship counter + flags).
         #
-        # KNOWN LIMITATION (#9474 follow-up): config.md has
-        # `merge=ours` set in `.gitattributes`. Concurrent edits from
-        # PM and DM can silently overwrite each other's changes via
-        # the "ours" merge driver. The same hazard already existed
-        # under PM-only ownership (PM cycles in parallel clones, plus
-        # compose.py deploy contamination on feature branches —
-        # already guarded by `commit_code`'s checkout-from-working-
-        # branch step). The current single-clone, serial-cycle setup
-        # in `.local-config` makes the race unlikely. If parallel
-        # multi-clone execution is enabled later, split the DM-only
-        # fields (ship-counter + flags) into a separate file with
-        # exclusive ownership, OR convert config.md to a structured
-        # format that tolerates `merge=union`.
+        # RESOLVED (#12823): config.md previously had `merge=ours`, which
+        # silently dropped any other agent's concurrent edit (the all-or-nothing
+        # ours driver). The ship counter — the ONLY field that needed ours-wins
+        # protection — was split into its own `.squidsquad/.ship-counter` file
+        # (still merge=ours), so config.md now merges 3-way: real same-field
+        # conflicts surface, non-overlapping edits (PM flag + DM flag) merge
+        # cleanly. PM and DM co-ownership of config.md is now safe.
         "dm": [
             "README.md",
             "CHANGELOG.md",
