@@ -35,14 +35,17 @@ DIAG_LOG = REPO_ROOT / ".squidsquad" / "diagnostics" / "model-routing.log"
 
 from shared_fs import read_secret_or_env
 
-# [human-required] if no API key — human must fix the environment
-@pytest.fixture(autouse=True, scope="session")
+# Env-gated live tests: SKIP cleanly when the key is absent (#12748) rather than
+# FAIL. A missing API key is an environment condition (keyless CI / dev machine),
+# never a code regression — failing reds the honest `pytest tests/` run and trains
+# people to ignore the gate. A human who wants to run these sees the skip reason
+# and sets OPENAI_API_KEY.
+@pytest.fixture(autouse=True)
 def _require_api_key():
     if not read_secret_or_env("OPENAI_API_KEY"):
-        pytest.fail(
-            "HUMAN-REQUIRED: OPENAI_API_KEY not found in ~/.squidsquad/secrets "
-            "or environment. A human must configure it before these tests can run.",
-            pytrace=False,
+        pytest.skip(
+            "OPENAI_API_KEY not found in ~/.squidsquad/secrets or environment "
+            "— live model-router tests skipped (#12748). Set it to run them."
         )
 
 

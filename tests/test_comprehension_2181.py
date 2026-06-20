@@ -7,57 +7,21 @@ Requires claude CLI in PATH. Skipped if not available.
 """
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 SPEC = REPO / "tests" / "comprehension" / "2181_spec.json"
-RUNNER = REPO / "references" / "scripts" / "run_comprehension_test.py"
-
-
-def _claude_available():
-    """Check if claude CLI is available."""
-    import shutil
-    return shutil.which("claude") is not None
 
 
 @pytest.fixture(scope="module")
 def comprehension_results(tmp_path_factory):
-    """Run the comprehension pipeline once and return parsed results."""
-    if not _claude_available():
-        pytest.skip("claude CLI not available")
-
-    output_dir = tmp_path_factory.mktemp("comprehension-2181")
-    result = subprocess.run(
-        [sys.executable, str(RUNNER), str(SPEC), "--output-dir", str(output_dir)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        cwd=str(REPO),
-        timeout=600,
-    )
-
-    results_path = output_dir / "results.json"
-    if not results_path.exists():
-        pytest.fail(
-            f"Comprehension pipeline did not produce results.json.\n"
-            f"stdout: {result.stdout[:1000]}\n"
-            f"stderr: {result.stderr[:1000]}"
-        )
-
-    raw = results_path.read_text(encoding="utf-8").strip()
-    if raw.startswith("```"):
-        lines = raw.split("\n")
-        raw = "\n".join(l for l in lines if not l.startswith("```"))
-
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as e:
-        pytest.fail(f"Failed to parse results.json: {e}\nContent: {raw[:500]}")
+    """Run the comprehension pipeline once; SKIP (not FAIL) if the claude CLI is
+    absent/unusable or the run is cache-hit — shared gate, #12748."""
+    from comprehension_helpers import run_comprehension_or_skip
+    return run_comprehension_or_skip(
+        SPEC, tmp_path_factory.mktemp("comprehension"))
 
 
 def _get_result(results, question_id):
