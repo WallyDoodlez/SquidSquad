@@ -345,49 +345,89 @@ class TestRespawnAgentProcess(unittest.TestCase):
     """DS-12912 Finding 2: the deploy respawn boots the agent explicitly (the
     health poller never would — status='deploying' is not in is_dead)."""
 
-    def _respawn(self, boot_side_effect):
+    def _respawn(self, boot_side_effect, *, claude_pid=None, pid_dies=True):
         import harness
         agent = AgentState("skill", "")
         agent.intent = AgentState.INTENT_DEPLOYING
         agent.status = "deploying"
+        agent.claude_pid = claude_pid
+        emitted = []
         with patch.object(harness.boot_remote, "boot_agent", side_effect=boot_side_effect), \
+             patch.object(harness, "_await_pid_death", return_value=pid_dies), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
              patch.object(harness, "state", _DeployFakeState(agent)), \
              patch.object(harness, "_log"):
             ok = harness._respawn_agent_process("skill")
-        return agent, ok
+        return agent, ok, emitted
 
     def test_explicit_boot_and_running_intent(self):
-        agent, ok = self._respawn(
+        agent, ok, emitted = self._respawn(
             lambda r: {"success": True, "action": "spawn", "message": "ok"})
         self.assertTrue(ok)
         self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
         self.assertIsNone(agent.reboot_blocked_until)
         self.assertEqual(agent.status, "starting")
+        self.assertEqual(emitted, [])                  # clean spawn → no deploy-error
 
     def test_boot_agent_raises_leaves_recoverable_error_status(self):
         """DS iter-2 Finding 1: boot_agent raising must NOT leave the agent at
         'deploying' (a permanent wedge) — settle to is_dead 'error'."""
         def boom(r):
             raise RuntimeError("spawn failed")
-        agent, ok = self._respawn(boom)
+        agent, ok, _ = self._respawn(boom)
         self.assertFalse(ok)
         self.assertEqual(agent.status, "error")        # is_dead, not "deploying"
         self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
 
-    def test_success_non_spawn_does_not_leave_deploying(self):
-        """DS iter-2 Finding 2: success with action!='spawn' must still move the
-        status off 'deploying'."""
-        agent, ok = self._respawn(
+    def test_success_non_spawn_is_now_a_deploy_failure(self):
+        """#13032: success with action='skip' (agent STILL ALIVE at respawn,
+        after we waited for the PID to die) is the original no-op bug — it must
+        NOT be settled to running on stale instructions. Fail honest (is_dead
+        'error', returns False) and surface a deploy-error to pm."""
+        agent, ok, emitted = self._respawn(
             lambda r: {"success": True, "action": "skip", "message": "already alive"})
-        self.assertTrue(ok)
-        self.assertNotEqual(agent.status, "deploying")
-        self.assertEqual(agent.status, "starting")
+        self.assertFalse(ok)
+        self.assertEqual(agent.status, "error")        # is_dead, not silent "running"
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][0][0], "deploy-error")
+        self.assertEqual(emitted[0][1]["payload"]["stage"], "respawn-no-spawn")
+        self.assertFalse(emitted[0][1]["payload"]["respawn_ok"])
 
     def test_boot_failure_returns_false_and_errors(self):
-        agent, ok = self._respawn(
+        agent, ok, emitted = self._respawn(
             lambda r: {"success": False, "action": "spawn", "message": "boom"})
         self.assertFalse(ok)
         self.assertEqual(agent.status, "error")
+        self.assertEqual(len(emitted), 1)              # surfaced, not silent
+        self.assertEqual(emitted[0][0][0], "deploy-error")
+
+    def test_old_pid_still_alive_aborts_respawn_with_deploy_error(self):
+        """#13032: if the deploy-halted agent's process never exits (didn't
+        /quit, or wedged), do NOT boot over it (singleton would no-op) — abort,
+        leave is_dead 'error', and surface a deploy-error. boot_agent must NOT
+        even be called."""
+        called = []
+        agent, ok, emitted = self._respawn(
+            lambda r: called.append(r) or {"success": True, "action": "spawn"},
+            claude_pid=4242, pid_dies=False)
+        self.assertFalse(ok)
+        self.assertEqual(called, [])                    # never booted over a live process
+        self.assertEqual(agent.status, "error")
+        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][0][0], "deploy-error")
+        self.assertEqual(emitted[0][1]["payload"]["stage"], "respawn-pid-still-alive")
+
+    def test_old_pid_dies_then_boots_fresh(self):
+        """#13032: once the old PID dies within the wait, the respawn boots a
+        fresh process normally."""
+        agent, ok, emitted = self._respawn(
+            lambda r: {"success": True, "action": "spawn", "message": "ok"},
+            claude_pid=4242, pid_dies=True)
+        self.assertTrue(ok)
+        self.assertEqual(agent.status, "starting")
+        self.assertEqual(emitted, [])
 
     def test_deploy_error_reports_respawn_outcome(self):
         """DS iter-2 Finding 3: deploy-error payload carries the real respawn_ok."""
@@ -402,6 +442,37 @@ class TestRespawnAgentProcess(unittest.TestCase):
             harness._deploy_recover_and_respawn("skill", "pull", "conflict")
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0][1]["payload"]["respawn_ok"], False)
+
+
+class TestAwaitPidDeath(unittest.TestCase):
+    """#13032: the deploy respawn waits for the halted agent's own claude
+    process to exit before booting its replacement."""
+
+    def test_returns_true_when_already_dead(self):
+        import harness
+        with patch.object(harness.boot_remote, "_is_process_alive",
+                          return_value=False):
+            self.assertTrue(harness._await_pid_death(4242, 5))
+
+    def test_returns_false_when_alive_past_timeout(self):
+        import harness
+        with patch.object(harness.boot_remote, "_is_process_alive",
+                          return_value=True), \
+             patch.object(harness.time, "monotonic",
+                          side_effect=[0.0, 0.0, 10.0]), \
+             patch.object(harness.time, "sleep"):
+            self.assertFalse(harness._await_pid_death(4242, 5))
+
+    def test_returns_true_when_dies_mid_wait(self):
+        import harness
+        alive = [True, False]
+        with patch.object(harness.boot_remote, "_is_process_alive",
+                          side_effect=lambda p: alive.pop(0)), \
+             patch.object(harness.time, "monotonic",
+                          side_effect=[0.0, 1.0, 2.0]), \
+             patch.object(harness.time, "sleep") as slept:
+            self.assertTrue(harness._await_pid_death(4242, 30))
+            slept.assert_called()
 
 
 class TestLoadStateRestoresStatus(unittest.TestCase):
