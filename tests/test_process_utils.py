@@ -169,6 +169,129 @@ class TestWin32KernelBinding:
         assert not hasattr(process_utils, "subprocess")
 
 
+class TestImageNameForPid:
+    """#12294: image-name-by-PID lookup (toolhelp on win32, /proc on POSIX)."""
+
+    def test_none_and_nonpositive_return_none(self):
+        assert process_utils.image_name_for_pid(None) is None
+        assert process_utils.image_name_for_pid(0) is None
+        assert process_utils.image_name_for_pid(-5) is None
+
+    def test_posix_reads_proc_comm_lowercased(self, monkeypatch):
+        monkeypatch.setattr(process_utils.sys, "platform", "linux")
+        fake_path = MagicMock(name="Path")
+        fake_path.return_value.read_text.return_value = "Claude\n"
+        monkeypatch.setattr(process_utils, "Path", fake_path)
+        assert process_utils.image_name_for_pid(4321) == "claude"
+        fake_path.assert_called_once_with("/proc/4321/comm")
+
+    def test_posix_oserror_returns_none(self, monkeypatch):
+        """No /proc entry (process gone, or macOS has no /proc) → undetermined."""
+        monkeypatch.setattr(process_utils.sys, "platform", "linux")
+        fake_path = MagicMock(name="Path")
+        fake_path.return_value.read_text.side_effect = OSError("no /proc")
+        monkeypatch.setattr(process_utils, "Path", fake_path)
+        assert process_utils.image_name_for_pid(4321) is None
+
+    def test_posix_empty_comm_returns_none(self, monkeypatch):
+        monkeypatch.setattr(process_utils.sys, "platform", "linux")
+        fake_path = MagicMock(name="Path")
+        fake_path.return_value.read_text.return_value = "\n"
+        monkeypatch.setattr(process_utils, "Path", fake_path)
+        assert process_utils.image_name_for_pid(4321) is None
+
+    # ---- Win32 toolhelp32 snapshot iteration ----
+
+    def _fake_snapshot(self, monkeypatch, procs, handle=999):
+        """Simulate CreateToolhelp32Snapshot + Process32First/Next walking
+        `procs` (a list of (pid, name) tuples). The side_effects populate the
+        caller's PROCESSENTRY32 via the byref pointer's ``_obj`` (same trick
+        the is_process_alive win32 tests use for the exit-code pointer)."""
+        fake = MagicMock(name="kernel32")
+        monkeypatch.setattr(process_utils, "_win32_kernel32", lambda: fake)
+        monkeypatch.setattr(process_utils.sys, "platform", "win32")
+        fake.CreateToolhelp32Snapshot.return_value = handle
+        state = {"i": 0}
+
+        def _fill(ptr, idx):
+            entry = ptr._obj
+            pid, name = procs[idx]
+            entry.th32ProcessID = pid
+            entry.szExeFile = name.encode("utf-8")
+            return 1
+
+        def first(snap, ptr):
+            state["i"] = 0
+            return _fill(ptr, 0) if procs else 0
+
+        def nxt(snap, ptr):
+            state["i"] += 1
+            return _fill(ptr, state["i"]) if state["i"] < len(procs) else 0
+
+        fake.Process32First.side_effect = first
+        fake.Process32Next.side_effect = nxt
+        return fake
+
+    def test_win32_found_returns_lowercased_image(self, monkeypatch):
+        fake = self._fake_snapshot(
+            monkeypatch, [(10, "System"), (4242, "Claude.exe"), (99, "node.exe")]
+        )
+        assert process_utils.image_name_for_pid(4242) == "claude.exe"
+        fake.CloseHandle.assert_called_once_with(999)
+
+    def test_win32_not_found_returns_none(self, monkeypatch):
+        """A live but unfindable PID is undetermined — caller falls back to
+        liveness, never mis-reclaims (AC2)."""
+        fake = self._fake_snapshot(monkeypatch, [(10, "System"), (99, "node.exe")])
+        assert process_utils.image_name_for_pid(4242) is None
+        fake.CloseHandle.assert_called_once_with(999)
+
+    def test_win32_invalid_handle_returns_none(self, monkeypatch):
+        invalid = process_utils.ctypes.c_void_p(-1).value
+        fake = self._fake_snapshot(monkeypatch, [(4242, "claude.exe")], handle=invalid)
+        assert process_utils.image_name_for_pid(4242) is None
+        fake.CloseHandle.assert_not_called()
+
+    def test_win32_empty_snapshot_returns_none(self, monkeypatch):
+        fake = self._fake_snapshot(monkeypatch, [])
+        assert process_utils.image_name_for_pid(4242) is None
+        fake.CloseHandle.assert_called_once_with(999)
+
+
+class TestIsClaudeProcessAlive:
+    """#12294: image-verified liveness — alive AND image is claude."""
+
+    def test_dead_pid_is_false(self, monkeypatch):
+        monkeypatch.setattr(process_utils, "is_process_alive", lambda pid: False)
+        # image lookup must not even be consulted for a dead PID
+        monkeypatch.setattr(process_utils, "image_name_for_pid",
+                            lambda pid: (_ for _ in ()).throw(AssertionError("should not call")))
+        assert process_utils.is_claude_process_alive(123) is False
+
+    def test_alive_claude_exe_is_true(self, monkeypatch):
+        monkeypatch.setattr(process_utils, "is_process_alive", lambda pid: True)
+        monkeypatch.setattr(process_utils, "image_name_for_pid", lambda pid: "claude.exe")
+        assert process_utils.is_claude_process_alive(123) is True
+
+    def test_alive_claude_posix_is_true(self, monkeypatch):
+        monkeypatch.setattr(process_utils, "is_process_alive", lambda pid: True)
+        monkeypatch.setattr(process_utils, "image_name_for_pid", lambda pid: "claude")
+        assert process_utils.is_claude_process_alive(123) is True
+
+    def test_alive_recycled_nonclaude_is_false(self, monkeypatch):
+        """AC3: a live PID recycled by an unrelated process is reclaimed."""
+        monkeypatch.setattr(process_utils, "is_process_alive", lambda pid: True)
+        monkeypatch.setattr(process_utils, "image_name_for_pid", lambda pid: "explorer.exe")
+        assert process_utils.is_claude_process_alive(123) is False
+
+    def test_alive_undetermined_image_falls_back_to_liveness(self, monkeypatch):
+        """AC2: when the image can't be determined, trust liveness so a live
+        agent we couldn't inspect is never mis-reclaimed."""
+        monkeypatch.setattr(process_utils, "is_process_alive", lambda pid: True)
+        monkeypatch.setattr(process_utils, "image_name_for_pid", lambda pid: None)
+        assert process_utils.is_claude_process_alive(123) is True
+
+
 class TestModuleReexports:
     """Importers should be able to alias via `as _is_process_alive`."""
 

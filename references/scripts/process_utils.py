@@ -4,12 +4,15 @@ Cross-platform process liveness used by boot_remote, health_check, and
 reboot_agent. thin_launcher.py keeps its own copy of this logic to avoid
 importing this module (and indirectly any heavier deps) at boot — see
 the comment there. If you change the semantics here, mirror the change
-in thin_launcher.py:_is_process_alive.
+in thin_launcher.py:_is_process_alive (and, for the image-verification
+helpers below, thin_launcher.py:_image_name_for_pid /
+_is_claude_process_alive).
 """
 
 import ctypes
 import os
 import sys
+from pathlib import Path
 
 
 # Win32 constants for OpenProcess + GetExitCodeProcess (#9904)
@@ -104,5 +107,111 @@ def _win32_kernel32():
     k.CloseHandle.restype = wintypes.BOOL
     k.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
     k.GetExitCodeProcess.restype = wintypes.BOOL
+    # toolhelp32 (used by image_name_for_pid, #12294). Same #10440 ABI
+    # fix as thin_launcher: CreateToolhelp32Snapshot.restype MUST be
+    # HANDLE so INVALID_HANDLE_VALUE compares correctly at full pointer
+    # width on x64; Process32First/Next take (HANDLE, LPPROCESSENTRY32)
+    # passed as c_void_p so we don't import the struct layout here.
+    k.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+    k.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    k.Process32First.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
+    k.Process32First.restype = wintypes.BOOL
+    k.Process32Next.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
+    k.Process32Next.restype = wintypes.BOOL
     _CACHED_KERNEL32 = k
     return k
+
+
+# Executable image names that identify a SquidSquad agent's claude process.
+# npm/Windows installs run ``claude.exe``; a direct POSIX binary reports
+# ``claude``. Compared case-insensitively against the OS-reported image name.
+_CLAUDE_IMAGE_NAMES = ("claude.exe", "claude")
+
+
+def image_name_for_pid(pid):
+    """Return the lowercased executable image name for a live PID, or None.
+
+    ``None`` means *undetermined* — the PID was not found in the process
+    snapshot, the snapshot failed, or the platform offers no cheap image
+    lookup. Callers MUST treat ``None`` as "could not verify" and fall
+    back to plain liveness, never as "not our process" — mis-reading an
+    undetermined image as a non-match would reclaim a live agent we
+    simply couldn't inspect (#12294 AC2 safety).
+
+    Windows uses the same in-process CreateToolhelp32Snapshot path as
+    ``thin_launcher._win32_list_descendants`` (no ``tasklist`` shell-out —
+    #9904). POSIX reads ``/proc/<pid>/comm`` (Linux); platforms without
+    ``/proc`` (macOS) return ``None`` (undetermined).
+    """
+    if pid is None or pid <= 0:
+        return None
+    if sys.platform == "win32":
+        return _image_name_win32(pid)
+    try:
+        comm = Path(f"/proc/{pid}/comm").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return comm.lower() or None
+
+
+def _image_name_win32(pid):
+    """Win32 image-name lookup via toolhelp32. Returns lowercased name or None."""
+    from ctypes import wintypes
+
+    TH32CS_SNAPPROCESS = 0x00000002
+    INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+    class PROCESSENTRY32(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_void_p),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", ctypes.c_char * 260),
+        ]
+
+    kernel32 = _win32_kernel32()
+    snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    if snap is None or snap == INVALID_HANDLE_VALUE:
+        return None
+    try:
+        entry = PROCESSENTRY32()
+        entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
+        if not kernel32.Process32First(snap, ctypes.byref(entry)):
+            return None
+        while True:
+            if entry.th32ProcessID == pid:
+                return entry.szExeFile.decode("utf-8", errors="replace").lower()
+            if not kernel32.Process32Next(snap, ctypes.byref(entry)):
+                break
+    finally:
+        kernel32.CloseHandle(snap)
+    return None
+
+
+def is_claude_process_alive(pid):
+    """Return True iff ``pid`` is a live process whose image is claude (#12294).
+
+    Image-verified liveness. A bare ``is_process_alive`` can be fooled by
+    a recycled PID now owned by an unrelated process (the stale/recycled
+    ``.claude-pid`` failure mode), so we trust a PID as "our agent" only
+    when it is alive AND its image name is claude.
+
+    When the image cannot be determined (``image_name_for_pid`` returns
+    ``None`` — snapshot failure, or a platform without a cheap image
+    lookup), fall back to plain liveness so a live agent we merely
+    couldn't inspect is never mis-reclaimed (#12294 AC2). The recycled-PID
+    reclaim (AC3) therefore depends on a working image lookup, which is the
+    case on the Windows deployment target.
+    """
+    if not is_process_alive(pid):
+        return False
+    img = image_name_for_pid(pid)
+    if img is None:
+        return True
+    return img in _CLAUDE_IMAGE_NAMES
