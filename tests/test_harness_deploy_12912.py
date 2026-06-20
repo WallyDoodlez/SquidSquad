@@ -280,6 +280,89 @@ class TestRunDeploySequence(unittest.TestCase):
         self.assertEqual(emitted[0][1]["payload"]["stage"], "push")
 
 
+class TestDetectOnlyFreshness(unittest.TestCase):
+    """S5 (AC5 / §10 step 1b): boot freshness check is detect-only — it never
+    runs compose.py deploy-all locally."""
+
+    def test_detect_only_drift_does_not_run_compose(self):
+        import compose_freshness as cf
+        ran = []
+        res = cf.check_and_repair(
+            repo_root="/tmp/x",
+            stored_checksum="oldsum",
+            detect_only=True,
+            compute_checksum=lambda r: "newsum",
+            runner=lambda r: ran.append(r) or (0, "", ""),
+        )
+        self.assertEqual(res.status, "drift")
+        self.assertEqual(res.new_checksum, "newsum")
+        self.assertEqual(ran, [])  # compose runner NEVER invoked
+
+    def test_detect_only_absent_checksum_is_drift(self):
+        import compose_freshness as cf
+        ran = []
+        res = cf.check_and_repair(
+            repo_root="/tmp/x",
+            stored_checksum=None,
+            detect_only=True,
+            compute_checksum=lambda r: "sum",
+            runner=lambda r: ran.append(r) or (0, "", ""),
+        )
+        self.assertEqual(res.status, "drift")
+        self.assertEqual(ran, [])
+
+    def test_detect_only_clean_on_match(self):
+        import compose_freshness as cf
+        res = cf.check_and_repair(
+            repo_root="/tmp/x",
+            stored_checksum="same",
+            detect_only=True,
+            compute_checksum=lambda r: "same",
+            runner=lambda r: (_ for _ in ()).throw(AssertionError("runner ran")),
+        )
+        self.assertEqual(res.status, "clean")
+
+    def test_boot_path_is_detect_only(self):
+        src = (Path(__file__).resolve().parent.parent / "references" / "scripts"
+               / "harness.py").read_text(encoding="utf-8")
+        start = src.index("async def lifespan(")
+        end = src.index("app = FastAPI(", start)
+        block = src[start:end]
+        self.assertIn("detect_only=True", block)
+        self.assertNotIn('status == "failed"', block)
+
+
+class TestEmitBootDeploySignals(unittest.TestCase):
+    """S5: on boot drift, _emit_boot_deploy_signals emits a deploy-signal to each
+    running agent (no local compose)."""
+
+    def test_emits_to_running_agents(self):
+        import harness
+        agent = AgentState("skill", "")
+        agent.intent = AgentState.INTENT_RUNNING
+        emitted = []
+        with patch.object(harness, "_NO_AUTO_REBOOT", False), \
+             patch.object(harness.boot_remote, "_get_all_roles", return_value=["skill"]), \
+             patch.object(harness, "state", _DeployFakeState(agent)), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append((a, k))), \
+             patch.object(harness, "_log"):
+            harness._emit_boot_deploy_signals()
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][0][0], "deploy-signal")
+        self.assertEqual(emitted[0][1]["payload"]["target_alias"], "skill")
+
+    def test_no_auto_reboot_skips_boot_emit(self):
+        import harness
+        emitted = []
+        with patch.object(harness, "_NO_AUTO_REBOOT", True), \
+             patch.object(harness, "_emit_event",
+                          side_effect=lambda *a, **k: emitted.append(a)), \
+             patch.object(harness, "_log"):
+            harness._emit_boot_deploy_signals()
+        self.assertEqual(emitted, [])
+
+
 class TestDeployLockSerializes(unittest.TestCase):
     def test_deploy_lock_is_a_lock(self):
         import harness

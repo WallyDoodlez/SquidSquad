@@ -508,6 +508,12 @@ class HarnessState:
         # survives harness restart — a prior failure stays in effect
         # until the operator fixes the source set + restarts.
         self.compose_freshness_failed = False
+        # #12912 S5: set True by the boot freshness DETECT-only check when the
+        # compose source drifted (or no checksum is stored). _deferred_init reads
+        # it after auto-start and emits deploy-signals so each clone recomposes
+        # pull-first — the harness never runs compose.py deploy-all locally at
+        # boot (HARNESS-ARCH §10 step 1b retired). Boot-scoped: not persisted.
+        self._boot_deploy_drift = False
 
     def get_agent(self, role: str) -> AgentState | None:
         with self._lock:
@@ -1977,6 +1983,14 @@ async def lifespan(app: FastAPI):
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
+            # #12912 S5: if boot detected compose-source drift, emit deploy-signals
+            # to the freshly-spawned agents so each recomposes pull-first (§10 step
+            # 1b). Safe to emit now even though agents are still booting — the
+            # harness holds their events until status=ready and the deploy-signal is
+            # delivered in the agent's boot drain (§8.2).
+            if getattr(state, "_boot_deploy_drift", False):
+                _emit_boot_deploy_signals()
+                state._boot_deploy_drift = False
         except Exception as e:
             _log(f"Auto-start failed: {e}")
 
@@ -2020,9 +2034,15 @@ async def lifespan(app: FastAPI):
     else:
         try:
             import compose_freshness as _cf
+            # #12912 S5 (HARNESS-ARCH §10 step 1b retired): DETECT-ONLY. The boot
+            # path no longer runs compose.py deploy-all locally — local compose
+            # has no guarantee the source tree is current (the clone may be behind
+            # origin/main), the root cause of the stale-source revert. On drift we
+            # emit deploy-signals (after spawn) so each clone recomposes pull-first.
             _freshness = _cf.check_and_repair(
                 repo_root=REPO_ROOT,
                 stored_checksum=state.get_last_compose_checksum(),
+                detect_only=True,
             )
         except Exception as e:  # noqa: BLE001 — defensive against import bugs
             _log(
@@ -2031,29 +2051,17 @@ async def lifespan(app: FastAPI):
             )
             _freshness = None
     if _freshness is not None:
-        if _freshness.status == "failed":
-            state.compose_freshness_failed = True
-            # DS-10684 F2: persist the flag immediately so a harness
-            # crash between here and the next save_state-triggering
-            # event doesn't lose the failure signal. Matches the
-            # `repaired` branch's flush pattern below.
+        # Detect-only never composes, so it never returns "failed"/"repaired".
+        # The legacy boot-compose spawn-refusal gate is retired — compose failures
+        # now surface per-clone as deploy-error events (§11) — so clear any stale
+        # persisted flag that would otherwise block auto-start forever.
+        state.compose_freshness_failed = False
+        if _freshness.status == "drift":
+            state._boot_deploy_drift = True
             state.save_state()
             _log(
-                "ERROR: compose freshness check FAILED — harness will NOT "
-                "spawn agents. Operator: fix the source issue + restart "
-                "the harness."
-            )
-            _log(f"  diagnostic: {_freshness.diagnostic}")
-            if _freshness.compose_stderr:
-                _log(
-                    f"  compose stderr (truncated): {_freshness.compose_stderr}"
-                )
-        elif _freshness.status == "repaired":
-            state.set_last_compose_checksum(_freshness.new_checksum)
-            state.save_state()
-            _log(
-                f"compose freshness: {_freshness.diagnostic} — checksum "
-                f"now {_freshness.new_checksum[:12]}..."
+                f"compose freshness: {_freshness.diagnostic} — deploy-signals "
+                f"will be emitted after agent spawn (no local compose)"
             )
         else:  # clean
             _log(
@@ -3954,6 +3962,39 @@ _deploy_lock = threading.Lock()
 
 _DEPLOY_PUSH_RETRIES = 2          # §11 push-rejection recovery
 _DEPLOY_COMPOSED_FILES = ("CLAUDE.md", "SOUL.md", "CLAUDE.linked.md")
+
+
+def _emit_boot_deploy_signals():
+    """#12912 S5 (HARNESS-ARCH §10 step 1b): on boot drift, emit a deploy-signal
+    to each running agent so it recomposes pull-first — the harness never composes
+    deploy-all locally at boot.
+
+    Unlike the post-merge emitter (_reboot_affected_agents), intent is NOT pre-set
+    to DEPLOYING here: a just-spawned agent's first health poll resets a DEPLOYING
+    intent back to RUNNING on pid_changed, so pre-setting at boot is futile. The
+    ack-stop(result=deploy-halted) handler sets DEPLOYING when the agent actually
+    halts — before its PID dies — which is the intent-sequencing guarantee on the
+    boot path. A no-op deploy (committed output already current — the common case
+    at boot) is a clean success, so emitting to every alias on drift is safe; at
+    boot the affected set is unknown without composing, and composing is exactly
+    what we are retiring. Called once per harness boot (from _deferred_init), so
+    post-deploy respawns never re-trigger it."""
+    if _NO_AUTO_REBOOT:
+        _log("[no-auto-reboot] boot deploy-signal emit skipped")
+        return
+    signaled = []
+    for role in boot_remote._get_all_roles():
+        agent = state.get_agent(role)
+        if agent and agent.intent == AgentState.INTENT_RUNNING:
+            _emit_event("deploy-signal", "harness", payload={
+                "target_alias": role,
+                "event_type": "deploy-signal",
+                "event_context": "deploy-signal",
+            })
+            signaled.append(role)
+    if signaled:
+        _log(f"Boot drift: emitted deploy-signal to {', '.join(signaled)} "
+             f"(pull-first per-clone deploy; no local boot compose)")
 
 
 def _git_in_clone(clone_path, args, timeout=120):
