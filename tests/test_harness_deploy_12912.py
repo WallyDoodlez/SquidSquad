@@ -97,9 +97,11 @@ class TestAckStopDeployHalted(unittest.TestCase):
         src = inspect.getsource(receive_event)
         idx = src.find('"deploy-halted"')
         self.assertNotEqual(idx, -1)
-        block = src[idx:idx + 1400]
+        block = src[idx:idx + 2400]
         self.assertIn('agent.status = "deploying"', block)
         self.assertIn("INTENT_DEPLOYING", block)
+        # DS Finding 3: reboot_blocked_until armed in the ack-stop handler.
+        self.assertIn("reboot_blocked_until", block)
 
 
 class TestRebootAffectedAgentsEmitsDeploySignal(unittest.TestCase):
@@ -199,69 +201,88 @@ class _DeployFakeState:
 
 
 class TestRunDeploySequence(unittest.TestCase):
-    """S4 (AC8 / §11): the per-clone pull-first deploy sequence."""
+    """S4 (AC8 / §11) + DS-12912 Findings 1 & 2: the per-clone pull-first deploy
+    sequence advances the cursor past the deploy-signal (AC4 guard) and respawns
+    the agent explicitly."""
 
-    def _run(self, git_router, compose_rc=0, staged=True):
+    def _run(self, git_router, compose_rc=0, staged=True, event_id="evt-123"):
         import harness
         agent = AgentState("skill", "")
         agent.intent = AgentState.INTENT_DEPLOYING
         fake_state = _DeployFakeState(agent)
         emitted = []
         bumped = []
+        respawns = []
+        cursor = []
+
+        class _FakeLifecycle:
+            def advance_cursor(self, role, eid):
+                cursor.append((role, eid))
+                return "advanced"
 
         import config as _cfg
         with patch.object(harness.boot_remote, "_get_clone_path", return_value="/tmp/clone"), \
              patch.object(_cfg, "get_alias", return_value="skill"), \
              patch.object(harness, "state", fake_state), \
+             patch.object(harness, "event_lifecycle", _FakeLifecycle()), \
              patch.object(harness, "_git_in_clone", side_effect=git_router), \
              patch.object(harness, "subprocess") as msub, \
              patch.object(harness, "_stage_composed_outputs", return_value=staged), \
              patch.object(harness, "_bump_compose_checksum",
                           side_effect=lambda cp: bumped.append(cp)), \
+             patch.object(harness, "_respawn_agent_process",
+                          side_effect=lambda r: respawns.append(r)), \
              patch.object(harness, "_emit_event",
                           side_effect=lambda *a, **k: emitted.append((a, k))), \
              patch.object(harness, "_log"):
             msub.run.return_value = _CP(returncode=compose_rc)
             msub.TimeoutExpired = Exception
-            harness._run_deploy_sequence("skill")
-        return agent, emitted, bumped
+            harness._run_deploy_sequence("skill", event_id)
+        return dict(agent=agent, emitted=emitted, bumped=bumped,
+                    respawns=respawns, cursor=cursor)
 
     @staticmethod
     def _all_ok_router(clone_path, args, timeout=120):
         return _CP(returncode=0)
 
+    def test_advances_cursor_past_deploy_signal(self):
+        """DS Finding 1 / AC4: cursor advanced past the deploy-signal up front."""
+        r = self._run(self._all_ok_router)
+        self.assertEqual(r["cursor"], [("skill", "evt-123")])
+
     def test_success_path_respawns_and_bumps_checksum(self):
-        agent, emitted, bumped = self._run(self._all_ok_router)
-        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)  # respawn
-        self.assertEqual(len(bumped), 1)                            # checksum advanced
-        self.assertEqual(emitted, [])                              # no deploy-error
+        r = self._run(self._all_ok_router)
+        self.assertEqual(r["respawns"], ["skill"])   # explicit respawn (Finding 2)
+        self.assertEqual(len(r["bumped"]), 1)         # checksum advanced
+        self.assertEqual(r["emitted"], [])           # no deploy-error
 
     def test_no_change_is_clean_success(self):
-        agent, emitted, bumped = self._run(self._all_ok_router, staged=False)
-        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
-        self.assertEqual(len(bumped), 1)
-        self.assertEqual(emitted, [])
+        r = self._run(self._all_ok_router, staged=False)
+        self.assertEqual(r["respawns"], ["skill"])
+        self.assertEqual(len(r["bumped"]), 1)
+        self.assertEqual(r["emitted"], [])
 
     def test_pull_failure_recovers_without_checksum_bump(self):
         def router(clone_path, args, timeout=120):
             if args[0] == "pull":
                 return _CP(returncode=1, stderr="non-fast-forward")
             return _CP(returncode=0)
-        agent, emitted, bumped = self._run(router)
-        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)   # respawn on existing
-        self.assertEqual(bumped, [])                                # checksum NOT advanced
-        self.assertEqual(len(emitted), 1)                           # deploy-error to pm
-        args, kwargs = emitted[0]
+        r = self._run(router)
+        self.assertEqual(r["respawns"], ["skill"])    # respawn on existing
+        self.assertEqual(r["bumped"], [])             # checksum NOT advanced
+        self.assertEqual(r["cursor"], [("skill", "evt-123")])  # cursor still advanced
+        self.assertEqual(len(r["emitted"]), 1)        # deploy-error to pm
+        args, kwargs = r["emitted"][0]
         self.assertEqual(args[0], "deploy-error")
         self.assertEqual(args[1], "pm")
         self.assertEqual(kwargs["payload"]["stage"], "pull")
 
     def test_compose_failure_recovers(self):
-        agent, emitted, bumped = self._run(self._all_ok_router, compose_rc=1)
-        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
-        self.assertEqual(bumped, [])
-        self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0][1]["payload"]["stage"], "compose")
+        r = self._run(self._all_ok_router, compose_rc=1)
+        self.assertEqual(r["respawns"], ["skill"])
+        self.assertEqual(r["bumped"], [])
+        self.assertEqual(len(r["emitted"]), 1)
+        self.assertEqual(r["emitted"][0][1]["payload"]["stage"], "compose")
 
     def test_push_rejection_retries_then_recovers(self):
         pushes = []
@@ -271,13 +292,33 @@ class TestRunDeploySequence(unittest.TestCase):
                 pushes.append(1)
                 return _CP(returncode=1, stderr="rejected")
             return _CP(returncode=0)
-        agent, emitted, bumped = self._run(router)
-        # 1 initial + _DEPLOY_PUSH_RETRIES retries.
+        r = self._run(router)
         import harness
         self.assertEqual(len(pushes), harness._DEPLOY_PUSH_RETRIES + 1)
-        self.assertEqual(bumped, [])
-        self.assertEqual(len(emitted), 1)
-        self.assertEqual(emitted[0][1]["payload"]["stage"], "push")
+        self.assertEqual(r["bumped"], [])
+        self.assertEqual(len(r["emitted"]), 1)
+        self.assertEqual(r["emitted"][0][1]["payload"]["stage"], "push")
+
+
+class TestRespawnAgentProcess(unittest.TestCase):
+    """DS-12912 Finding 2: the deploy respawn boots the agent explicitly (the
+    health poller never would — status='deploying' is not in is_dead)."""
+
+    def test_explicit_boot_and_running_intent(self):
+        import harness
+        agent = AgentState("skill", "")
+        agent.intent = AgentState.INTENT_DEPLOYING
+        agent.status = "deploying"
+        boots = []
+        with patch.object(harness.boot_remote, "boot_agent",
+                          side_effect=lambda r: boots.append(r) or {"success": True, "action": "spawn", "message": "ok"}), \
+             patch.object(harness, "state", _DeployFakeState(agent)), \
+             patch.object(harness, "_log"):
+            harness._respawn_agent_process("skill")
+        self.assertEqual(boots, ["skill"])                       # explicit boot
+        self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
+        self.assertIsNone(agent.reboot_blocked_until)
+        self.assertEqual(agent.status, "starting")
 
 
 class TestDetectOnlyFreshness(unittest.TestCase):
@@ -363,6 +404,35 @@ class TestEmitBootDeploySignals(unittest.TestCase):
         self.assertEqual(emitted, [])
 
 
+class TestLoopModeDoesNotConsume(unittest.TestCase):
+    """AC7: a loop-mode (polling) agent does not consume a deploy-signal — the
+    event bus is event-mode only. It picks up the updated CLAUDE.md at its next
+    session start via cycle_pre.py's pull (AGENT-RUNTIME §7.8)."""
+
+    def _read(self, rel):
+        return (Path(__file__).resolve().parent.parent / rel).read_text(encoding="utf-8")
+
+    def test_event_contract_states_loop_mode_does_not_consume(self):
+        txt = self._read("references/sub-skills/common-events/event-mode-contract.md")
+        idx = txt.find("deploy-signal")
+        self.assertNotEqual(idx, -1)
+        # The Case E deploy-signal bullet must call out the loop-mode exemption.
+        block = txt[idx:idx + 4000]
+        self.assertIn("oop", block)  # loop/polling
+        self.assertTrue("never consume" in block or "does not apply" in block
+                        or "next session start" in block)
+
+    def test_polling_fragments_have_no_deploy_signal_handling(self):
+        # The runtime-loaded polling fragments must NOT carry deploy-signal
+        # handling — loop mode never touches the bus.
+        for role in ("worker", "pm", "verifier", "dm"):
+            rel = f"references/sub-skills/roles/{role}/ralph-loop-overview.md"
+            p = Path(__file__).resolve().parent.parent / rel
+            if p.exists():
+                self.assertNotIn("deploy-signal", p.read_text(encoding="utf-8"),
+                                 f"{rel} must not handle deploy-signal (loop mode)")
+
+
 class TestDeployLockSerializes(unittest.TestCase):
     def test_deploy_lock_is_a_lock(self):
         import harness
@@ -372,9 +442,12 @@ class TestDeployLockSerializes(unittest.TestCase):
     def test_ack_stop_spawns_deploy_thread(self):
         src = inspect.getsource(receive_event)
         idx = src.find('"deploy-halted"')
-        block = src[idx:idx + 1700]
+        block = src[idx:idx + 3000]
         self.assertIn("_run_deploy_sequence", block)
         self.assertIn("Thread", block)
+        # DS Finding 1: the deploy-signal's event_id (ack_event_id) is handed to
+        # the deploy sequence so it can advance the cursor past the signal.
+        self.assertIn("ack_event_id", block)
 
 
 if __name__ == "__main__":

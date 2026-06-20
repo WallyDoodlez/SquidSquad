@@ -3006,18 +3006,35 @@ async def receive_event(request: Request):
                         if agent.intent != AgentState.INTENT_DEPLOYING:
                             # Defensive: the emit side (S3) sets DEPLOYING; keep
                             # the invariant even if a deploy-halted ack races the
-                            # emit-side intent write.
+                            # emit-side intent write. On the boot-drift path the
+                            # emit side does NOT pre-set intent (pid_changed reset
+                            # race), so THIS is where DEPLOYING is established —
+                            # synchronously, before the agent's PID death is polled
+                            # (the agent exits only after emitting this ack-stop),
+                            # which is the intent-sequencing guarantee on the boot
+                            # path (DS-12912 Finding 4).
                             agent.intent = AgentState.INTENT_DEPLOYING
                             agent.intent_set_at = time.time()
                         agent.status = "deploying"
+                        # DS-12912 Finding 3 (HARNESS-ARCH §7.3): arm a respawn-
+                        # suppression window across the git/compose deploy as
+                        # defense-in-depth (status="deploying" already keeps it out
+                        # of is_dead; the deploy sequence respawns explicitly and
+                        # clears this).
+                        agent.reboot_blocked_until = time.time() + _DEPLOY_WINDOW_SECONDS
                 await asyncio.to_thread(state.save_state)
                 _log(f"{role}: deploy-halted — handing off to deploy sequence")
                 # #12912 S4: run the pull-first per-clone deploy sequence off the
                 # asyncio loop. The thread serializes on _deploy_lock so multiple
                 # affected clones deploy sequentially (AC8), avoiding push races.
+                # The deploy-signal's event_id (ack_event_id, set by the agent per
+                # event-mode-contract Case E) is passed so the harness can advance
+                # the agent's cursor past the deploy-signal before respawn —
+                # without which the respawned agent re-fetches and re-halts on it
+                # (DS-12912 Finding 1 / AC4 infinite-loop guard).
                 threading.Thread(
-                    target=_run_deploy_sequence, args=(role,), daemon=True,
-                    name=f"deploy-{role}",
+                    target=_run_deploy_sequence, args=(role, ack_event_id),
+                    daemon=True, name=f"deploy-{role}",
                 ).start()
 
     # Update AgentState from event.
@@ -3962,6 +3979,40 @@ _deploy_lock = threading.Lock()
 
 _DEPLOY_PUSH_RETRIES = 2          # §11 push-rejection recovery
 _DEPLOY_COMPOSED_FILES = ("CLAUDE.md", "SOUL.md", "CLAUDE.linked.md")
+# Respawn-suppression window armed when a deploy-halt ack arrives (HARNESS-ARCH
+# §7.3). Generous — covers ensure-main → pull → compose → commit → push. The
+# deploy sequence respawns explicitly and clears it well before this elapses.
+_DEPLOY_WINDOW_SECONDS = 300
+
+
+def _respawn_agent_process(role):
+    """Explicitly respawn a deploy-halted agent's claude process (DS-12912
+    Finding 2). The agent's PID is already dead (it halted on the deploy-signal),
+    and after a deploy its status is "deploying" — which is NOT in the health
+    poller's is_dead set, so the poller will NEVER auto-respawn it. We therefore
+    boot it directly and stamp fresh-spawn state, mirroring the auto-start path.
+    Clears reboot_blocked_until so the new session is not gated."""
+    try:
+        result = boot_remote.boot_agent(role)
+    except Exception as e:
+        _log(f"{role}: deploy respawn boot_agent raised {type(e).__name__}: {e}")
+        return
+    agent = state.get_agent(role) or AgentState(role)
+    agent.reboot_blocked_until = None
+    agent.intent = AgentState.INTENT_RUNNING
+    agent.intent_set_at = None
+    agent.bootup_complete = False
+    if result.get("success") and result.get("action") == "spawn":
+        agent.status = "starting"
+        agent.boot_time = time.time()
+        agent.last_spawn_at = time.time()
+        agent.last_session_end = None
+        agent.last_dispatch_at = None
+        agent.terminal_pid = result.get("terminal_pid")
+    state.set_agent(role, agent)
+    state.save_state()
+    ok = "OK" if result.get("success") else f"FAIL: {result.get('message')}"
+    _log(f"{role}: deploy respawn — {result.get('action')} {ok}")
 
 
 def _emit_boot_deploy_signals():
@@ -4021,34 +4072,21 @@ def _bump_compose_checksum(clone_path):
 
 
 def _respawn_after_deploy(role):
-    """Successful deploy: flip the halted agent back to RUNNING so the health
-    poller respawns its (already-dead) PID against the freshly-committed
-    CLAUDE.md. reboot_blocked_until cleared so the respawn is immediate."""
-    agent = state.get_agent(role)
-    if agent:
-        agent.reboot_blocked_until = None
-        agent.bootup_complete = False
-        agent.intent = AgentState.INTENT_RUNNING
-        agent.intent_set_at = None
-        state.set_agent(role, agent)
-        state.save_state()
+    """Successful deploy: respawn the halted agent against the freshly-committed
+    CLAUDE.md. The PID is dead and status is "deploying" (not in is_dead), so the
+    health poller will not do it — respawn explicitly (DS-12912 Finding 2)."""
     _log(f"{role}: deploy complete — respawning on fresh CLAUDE.md")
+    _respawn_agent_process(role)
 
 
 def _deploy_recover_and_respawn(role, stage, detail):
     """§11 failure recovery: respawn the agent on its EXISTING committed
     CLAUDE.md, file a deploy-error event to pm, and do NOT advance the compose
-    checksum (drift stays detectable and re-triggers a future deploy-signal)."""
+    checksum (drift stays detectable and re-triggers a future deploy-signal).
+    The respawn is explicit for the same reason as the success path (Finding 2)."""
     _log(f"{role}: deploy FAILED at {stage}: {detail} — respawning on existing "
          f"CLAUDE.md, filing deploy-error to pm (checksum NOT advanced)")
-    agent = state.get_agent(role)
-    if agent:
-        agent.reboot_blocked_until = None
-        agent.bootup_complete = False
-        agent.intent = AgentState.INTENT_RUNNING
-        agent.intent_set_at = None
-        state.set_agent(role, agent)
-        state.save_state()
+    _respawn_agent_process(role)
     _emit_event("deploy-error", "pm", payload={
         "target_alias": "pm",
         "event_context": "deploy-error",
@@ -4074,7 +4112,7 @@ def _stage_composed_outputs(clone_path, alias):
     return staged_any
 
 
-def _run_deploy_sequence(role):
+def _run_deploy_sequence(role, deploy_signal_event_id=None):
     """Pull-first per-clone deploy on a deploy-halted agent (HARNESS-ARCH §7.1).
 
     ensure-main → pull → compose.py deploy <alias> → commit → push → respawn,
@@ -4083,6 +4121,22 @@ def _run_deploy_sequence(role):
     unchanged). Runs in a daemon thread, off the asyncio loop.
     """
     with _deploy_lock:
+        # DS-12912 Finding 1 / AC4 (infinite-loop guard): the agent did NOT
+        # ack-cursor the deploy-signal — the harness owns advancing past it.
+        # Do it up front so the cursor moves past the signal regardless of
+        # whether the deploy succeeds or hits §11 recovery; otherwise the
+        # respawned agent's boot drain re-fetches the deploy-signal, re-halts,
+        # and loops (deploy → respawn → re-halt → deploy …). A future drift
+        # still re-triggers via a NEW deploy-signal (checksum is only advanced
+        # on success), so advancing the cursor here loses nothing.
+        if deploy_signal_event_id:
+            try:
+                outcome = event_lifecycle.advance_cursor(role, deploy_signal_event_id)
+                _log(f"{role}: advanced cursor past deploy-signal "
+                     f"{deploy_signal_event_id} ({outcome})")
+            except Exception as e:
+                _log(f"{role}: deploy-signal cursor advance raised "
+                     f"{type(e).__name__}: {e}")
         try:
             clone_path = Path(boot_remote._get_clone_path(role))
         except Exception as e:
