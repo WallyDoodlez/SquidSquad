@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 229 files
+# Total: 250 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -173,9 +173,14 @@ references/sub-skills/common/harness-restart.md
 references/sub-skills/common/improvement-scan-slim.md
 references/sub-skills/common/improvement-scan.md
 references/sub-skills/common/interval-sync.md
+references/sub-skills/common/l4-curation.md
 references/sub-skills/common/mention-protocol.md
+references/sub-skills/common/pickup-comment-fidelity.md
+references/sub-skills/common/pr-protocol.md
 references/sub-skills/common/resume-working-state.md
 references/sub-skills/common/self-restart.md
+references/sub-skills/common/task-pickup.md
+references/sub-skills/common/tracker-protocol.md
 references/sub-skills/common/vault-optimize.md
 references/sub-skills/common/vault-protocol.md
 references/sub-skills/common/vault-remember.md
@@ -190,8 +195,16 @@ references/sub-skills/roles/dm/issue-filing.md
 references/sub-skills/roles/dm/issue-triage.md
 references/sub-skills/roles/dm/task-pickup.md
 references/sub-skills/roles/dm/version-bumps.md
+references/sub-skills/project/setup-upgrade-gate.md
 references/sub-skills/project/shared-instructions.md
+references/sub-skills/project/shared-responsibility.md
 references/sub-skills/project/shared-soul-directives.md
+references/sub-skills/project/verifier-instructions.md
+references/sub-skills/project/verifier-responsibility.md
+references/sub-skills/project/verifier-soul-directives.md
+references/sub-skills/project/worker-instructions.md
+references/sub-skills/project/worker-responsibility.md
+references/sub-skills/project/worker-soul-directives.md
 references/sub-skills/roles/pm/checkin.md
 references/sub-skills/roles/pm/delivery.md
 references/sub-skills/roles/pm/discussion-protocol.md
@@ -238,6 +251,14 @@ references/sub-skills/roles/worker/ralph-loop-overview.md
 references/sub-skills/roles/verifier/ralph-loop-overview.md
 references/sub-skills/roles/pm/ralph-loop-overview.md
 references/sub-skills/roles/dm/ralph-loop-overview.md
+references/sub-skills/common-events/comment-handling.md
+references/sub-skills/common-events/cursor-management.md
+references/sub-skills/common-events/event-driven-workflow.md
+references/sub-skills/common-events/event-mode-contract.md
+references/sub-skills/common-events/forge-read-pattern.md
+references/sub-skills/common-events/idle-cooldown-loop.md
+references/sub-skills/roles/dm/events/pr-merge-wait.md
+references/sub-skills/roles/verifier/skill/finding-categories.md
 
 # Harness runtime dependency manifest (#11403) — seeded so the wizard's
 # Step 7.5b `pip install -r requirements.txt` provisioning step can run.
