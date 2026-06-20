@@ -8,8 +8,8 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/ Tier-2 org assessment",
-  "rotation_count": 75,
+  "last_scanned": "docs/INSTALLER-ARCH.md:6 (Runtime-shipped components)",
+  "rotation_count": 76,
   "scan_history": [
     {
       "file": "CHANGELOG.md",
@@ -432,6 +432,13 @@
       "findings": 1,
       "fixes": [],
       "note": "9 docs, no docs/README index -> filed #12913 (role:dm, low, pending). README table is partial index; flagged overlap for PM judgment"
+    },
+    {
+      "file": "docs/INSTALLER-ARCH.md:6",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Verified S6 Runtime-shipped-components note vs shipped #12907/#12909 manifest: event_poll.py (installer-files.txt:39) + harness.py (:44) + 9 l4_*.py now in install manifest. Heading Runtime-shipped (not installer-invoked) is ACCURATE: copied-to-install yet agent-armed/not-installer-run. No drift."
     }
   ],
   "doc_inventory": {
@@ -457,6 +464,10 @@
       "status": "current"
     },
     "CHANGELOG.md": {
+      "last_scanned": "2026-06-19",
+      "status": "current"
+    },
+    "docs/INSTALLER-ARCH.md": {
       "last_scanned": "2026-06-19",
       "status": "current"
     }
