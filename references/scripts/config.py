@@ -91,6 +91,7 @@ FIELD_MAP = {
     "improvement-scanning": ("Improvement Scanning", "Enabled"),
     "improvement-scan-cool-down": ("Improvement Scanning", "Improvement Scan Cool-Down"),  # #11091
     "idle-scan-burst": ("Improvement Scanning", "Idle Scan Burst"),  # #12506
+    "verbose-mode": ("Verbose Mode", "Enabled"),  # #13162 — boot-read narration toggle
     "ship-threshold": ("Auto Versioning", "Ship Threshold"),
     "shipped-since-bump": ("Auto Versioning", "Shipped Since Last Bump"),
     "alias-skill": ("Aliases", "skill"),
@@ -209,6 +210,9 @@ _FIELD_DEFAULTS = {
     # #12506 — max idle improvement-scans per sustained-idle burst before the
     # event-mode periodic driver cancels itself (graceful default per §8.6.1).
     "idle-scan-burst": "3",
+    # #13162 — Verbose Mode narration toggle. Shipped default OFF; graceful
+    # default `no` so a config.md without the section reads as quiet (no sys.exit).
+    "verbose-mode": "no",
 }
 
 
@@ -294,6 +298,20 @@ def get_field(field):
 _DUAL_AWARE_CONFIG_FIELDS_6274 = {
     "workers": "dev-agents",
 }
+
+
+def is_verbose():
+    """Return True iff Verbose Mode is enabled in config.md (#13162).
+
+    Boot-read narration toggle: the agent calls this once at session boot to
+    select its narration posture for the whole session (verbose firehose vs.
+    quiet default). Graceful — returns False (quiet, the shipped default) when
+    the ``## Verbose Mode`` section is absent, since ``verbose-mode`` carries a
+    ``no`` default in ``_FIELD_DEFAULTS`` (so ``get_field`` never sys.exits here).
+    Mirrors the string-bool convention used elsewhere (e.g. ``pr-flow`` →
+    ``== "yes"`` in harness.py).
+    """
+    return (get_field("verbose-mode") or "").strip().lower() == "yes"
 
 
 def _harness_wake_port():
