@@ -438,7 +438,7 @@ The existing `references/sub-skills/capabilities/` directory and `common/capabil
 
 ### 8.4 What if an agent needs a tool it doesn't know about yet?
 
-The agent surfaces the gap to the human via the normal `/work/assign` → PM routing with `event_context="process-concern"` (see [AGENT-RUNTIME.md §8.3](AGENT-RUNTIME.md)). PM either prompts the human for direction or surfaces it at the next check-in. The human's directive becomes an L4 write per §8.2. No installer involvement.
+The agent surfaces the gap to the human via the manual `/work/assign` → PM routing (the backup/escalation path) with `event_context="process-concern"` (see [AGENT-RUNTIME.md §8.3](AGENT-RUNTIME.md)). PM either prompts the human for direction or surfaces it at the next check-in. The human's directive becomes an L4 write per §8.2. No installer involvement.
 
 ---
 

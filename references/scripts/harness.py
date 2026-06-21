@@ -3319,6 +3319,112 @@ async def receive_event(request: Request):
     return {"status": "ok"}
 
 
+@app.post("/work/assign")
+async def work_assign(request: Request):
+    """Manual wake-injection primitive (#12495).
+
+    Emits an ``assigned-to`` event to ``target_alias`` **without** a status
+    transition — the distinguishing feature versus ``tracker.py transition``.
+    This is the sanctioned BACKUP / babysitting path for waking a stuck-but-
+    alive agent (PM duty) or surfacing a process concern to PM, for when the
+    PRIMARY wake paths (self-wake #12506, never-stop #12853, EAD on forge-state
+    change) don't fire. It is NOT the default routing mechanism: transition-
+    driven handoffs are routed by the ExternalActivityDetector off forge state
+    (AGENT-RUNTIME §8.3), not through this endpoint.
+
+    Deliberately does **not** rewrite the ``role:*`` label: a manual re-nudge
+    targets work the agent already owns (or pings PM), so ownership is
+    unchanged. (The aspirational "universal router that rewrites labels on every
+    call" §8.3 design is NOT what this implements — see the #12495 changelog.)
+
+    Response contract (matches HARNESS-ARCH §4.3):
+    - ``200`` ``{"status": "ok", "event_id": ...}`` — assigned-to emitted.
+    - ``404`` — ``target_alias`` not in the install's registered aliases.
+    - ``400`` — malformed body, missing ``target_alias``, or self-assign
+      (``target_alias == X-Squidsquad-Alias``; structural anti-loop invariant).
+
+    Check order: malformed-body → missing-target → self-assign (400) →
+    alias-existence (404). Self-assign is checked before existence so a
+    self-targeted call returns the terse 400 rather than a 404 that would
+    echo the full known-alias registry. If the config is unreadable the
+    existence check falls OPEN (same posture as POST /events' unknown-role
+    guard — a broken-config wedge is worse than letting one event through).
+
+    Authority: the harness enforces only alias-existence + the self-assign
+    invariant — NOT class-from-class permissions (decision-class-vs-alias-
+    routing-model, 2026-05-25). Who *should* call it (PM babysitting; any agent
+    escalating a process concern to PM) is process discipline documented in
+    §8.3, not a harness gate.
+    """
+    # Fail CLOSED on a malformed body, same guard as POST /events (#13156).
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed /work/assign body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+
+    target_alias = body.get("target_alias")
+    if not target_alias:
+        raise HTTPException(status_code=400, detail="target_alias is required")
+
+    # Self-assign invariant: an agent may not assign work to itself (structural
+    # anti-loop, not a permission check). The caller's identity is the
+    # X-Squidsquad-Alias request header; absent header → caller unidentified,
+    # invariant un-checkable, so it is skipped (the tracker.py CLI always sets
+    # it). EAD does not use this HTTP path, so no __ead__ sentinel is needed.
+    emitter_alias = request.headers.get("X-Squidsquad-Alias")
+    if emitter_alias and emitter_alias == target_alias:
+        raise HTTPException(
+            status_code=400,
+            detail=f"self-assign forbidden: target_alias == emitter ({target_alias})",
+        )
+
+    # Alias-existence validation (the harness's one routing check).
+    try:
+        allowed_roles = set(boot_remote._get_all_roles()) | {"pm"}
+    except (SystemExit, Exception):
+        # Config unreadable — fall open rather than reject (same posture as
+        # POST /events' unknown-role guard).
+        allowed_roles = None
+    if allowed_roles is not None and target_alias not in allowed_roles:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "unknown alias",
+                "target_alias": target_alias,
+                "known_aliases": sorted(allowed_roles),
+            },
+        )
+
+    # Build the assigned-to payload. issue_number / event_context / payload are
+    # all optional for a manual wake; event_context defaults to "work-assign".
+    issue_number = body.get("issue_number")
+    event_context = body.get("event_context") or "work-assign"
+    extra_payload = body.get("payload")
+    payload = {
+        "target_alias": target_alias,
+        "event_context": event_context,
+    }
+    if issue_number is not None:
+        payload["issue_number"] = str(issue_number)
+    if isinstance(extra_payload, dict):
+        # Caller-supplied payload fields ride through (e.g. title, concern).
+        # Reserved keys above win to keep the event shape coherent.
+        for k, v in extra_payload.items():
+            payload.setdefault(k, v)
+
+    event = _emit_event("assigned-to", "harness", payload=payload)
+    _log(
+        f"/work/assign → {target_alias}"
+        f"{f' (issue #{issue_number})' if issue_number is not None else ''}"
+        f" context={event_context!r} by={emitter_alias or '?'}"
+    )
+    return {"status": "ok", "event_id": event["id"]}
+
+
 @app.get("/events")
 async def get_events(
     limit: int = 100,
@@ -3969,6 +4075,9 @@ def _emit_event(event_type, role, payload=None, **extra):
     event.update(extra)
     event_lifecycle.append(event)
     _log_event(event)
+    # #12495: return the emitted event so HTTP callers (e.g. POST /work/assign)
+    # can report the generated event_id. Existing callers ignore the return.
+    return event
 
 
 def _get_pr_files(pr_number):
@@ -5068,8 +5177,9 @@ class ExternalActivityDetector:
                 # Worker statuses (approved/open) route to the issue's own
                 # role:* alias. In single-instance teams the value following
                 # `role:` is the alias; in multi-instance teams the `role:*`
-                # label always carries the routed alias per AGENT-RUNTIME.md
-                # §8.3 (the harness rewrites `role:*` on every `/work/assign`).
+                # label carries the routed alias (set by PM at planned→approved;
+                # the harness does NOT rewrite role:* — the "universal router"
+                # /work/assign label-rewrite design was never built, see #12495).
                 # Either way the extracted string IS the alias. NOTE (#12342 /
                 # DS Finding 3): a multi-role issue wakes only the alphabetically
                 # first role:* alias — single-worker-per-issue is the assumed

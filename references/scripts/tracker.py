@@ -11,6 +11,7 @@ Usage:
     python scripts/tracker.py create-task --title <t> --body <b> --role <r> --priority <p> [--reporter <name>]   (alias: create-feature)
     python scripts/tracker.py transition <number> <from-status> <to-status> --role <r> [--force]
     python scripts/tracker.py comment <number> --role <r> --message <m>
+    python scripts/tracker.py work-assign --target-alias <alias> [--caller <alias>] [--issue <n>] [--event-context <ctx>] [--payload <json>]  # #12495 manual wake (no transition)
     python scripts/tracker.py get-labels <number>
     python scripts/tracker.py get-state <number>
     python scripts/tracker.py close <number>
@@ -1651,6 +1652,87 @@ def close_issue(number):
     print(f"Closed #{number}")
 
 
+def work_assign(target_alias, caller, issue=None, event_context=None, payload=None):
+    """Manual wake-injection primitive (#12495).
+
+    POSTs ``/work/assign`` to the harness, which emits an ``assigned-to`` wake
+    to ``target_alias`` WITHOUT a status transition (the distinguishing feature
+    vs ``transition``). This is the sanctioned BACKUP / babysitting path —
+    PM waking a stuck-but-alive agent, or any agent surfacing a process concern
+    to PM — for when the primary wake paths (self-wake #12506, never-stop
+    #12853, EAD on forge-state change) don't fire. NOT the default routing
+    mechanism; transition handoffs route via EAD off forge state.
+
+    ``caller`` is the calling agent's alias; it is sent as the
+    ``X-Squidsquad-Alias`` header so the harness can enforce the self-assign
+    invariant. Returns the harness's emitted ``event_id`` on success.
+
+    Prints a diagnostic and returns ``None`` on any failure (harness
+    unreachable, 404 unknown alias, 400 self-assign/malformed) — the caller
+    sees a non-zero exit via ``main``.
+    """
+    import urllib.request
+    import urllib.error
+
+    # Reuse the event_bus port-discovery so we hit the same harness the
+    # mechanical event path uses.
+    try:
+        from event_bus import _discover_port
+    except ImportError:
+        print("ERROR: cannot import event_bus for port discovery", file=sys.stderr)
+        return None
+
+    port = _discover_port()
+    if port is None:
+        print("ERROR: harness port not discoverable (.harness-port absent) — "
+              "is the harness running?", file=sys.stderr)
+        return None
+
+    # Strip a decorated caller ("skill-lead (skill)") down to the bare alias so
+    # the self-assign header matches the registry namespace (same rule as the
+    # transition emit, #12342).
+    caller_alias = (caller or "").split(" ")[0].replace("-lead", "")
+
+    body = {"target_alias": target_alias}
+    if issue is not None:
+        body["issue_number"] = str(issue)
+    if event_context:
+        body["event_context"] = event_context
+    if payload:
+        try:
+            body["payload"] = json.loads(payload) if isinstance(payload, str) else payload
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"ERROR: --payload is not valid JSON: {e}", file=sys.stderr)
+            return None
+
+    data = json.dumps(body).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if caller_alias:
+        headers["X-Squidsquad-Alias"] = caller_alias
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/work/assign",
+        data=data, headers=headers, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8")
+        except Exception:
+            pass
+        print(f"ERROR: /work/assign returned HTTP {e.code}: {detail}", file=sys.stderr)
+        return None
+    except (urllib.error.URLError, OSError) as e:
+        print(f"ERROR: /work/assign request failed: {e}", file=sys.stderr)
+        return None
+
+    event_id = result.get("event_id")
+    print(f"work-assign → {target_alias} (event_id={event_id})")
+    return event_id
+
+
 def _parse_args():
     """Simple arg parser."""
     args = sys.argv[1:]
@@ -1735,6 +1817,26 @@ def main():
             print("Usage: tracker.py comment <number> --role <r> --message <m>", file=sys.stderr)
             sys.exit(1)
         comment(int(pos[0]), opts["role"], opts["message"])
+
+    elif cmd == "work-assign":
+        # #12495: manual wake-injection primitive — emit assigned-to without a
+        # transition. --target-alias required; --caller is the calling agent's
+        # alias (sent as X-Squidsquad-Alias for the self-assign guard).
+        if "target-alias" not in opts:
+            print(
+                "Usage: tracker.py work-assign --target-alias <alias> [--caller <alias>] "
+                "[--issue <n>] [--event-context <ctx>] [--payload <json>]",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        event_id = work_assign(
+            opts["target-alias"],
+            opts.get("caller"),
+            issue=opts.get("issue"),
+            event_context=opts.get("event-context"),
+            payload=opts.get("payload"),
+        )
+        sys.exit(0 if event_id else 1)
 
     elif cmd == "get-labels":
         if not pos:

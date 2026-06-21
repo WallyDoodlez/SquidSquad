@@ -47,7 +47,7 @@ The harness is **distinct from**:
 
 - **Agent processes** — the harness spawns the agent launcher chain (`thin_launcher.py → claude`); agents communicate over HTTP and live in their own clone directories. `event_poll.py` is **not** harness-spawned — the agent arms it via the Monitor tool, so it runs inside the agent's own process tree (see §7.2 step 6).
 - **EAD** — EAD is a component *inside* the harness (an asyncio task), not a sibling process.
-- **The forge (GitHub)** — the harness reads from GitHub via EAD. It performs **one specific forge write**: rewriting the `role:<target_alias>` label on the issue named in every `POST /work/assign` call (and on EAD-emitted `assigned-to` events). This is the routing-source-of-truth update; see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md). All other tracker writes (status transitions, comments, label changes other than `role:*`) go through agents calling `gh` directly via `tracker.py`.
+- **The forge (GitHub)** — the harness is a **read-only forge consumer**: it reads issue state via EAD and performs **no forge writes**. (The earlier §8.3 design had the harness rewriting the `role:<target_alias>` label on every `POST /work/assign`; that "universal router" design was never implemented and was superseded by the #12495 narrow primitive, which does no label write. `/work/assign` emits an `assigned-to` event only.) All tracker writes — status transitions, comments, and `role:*` label changes — go through agents (and PM) calling `gh` directly via `tracker.py`. `role:*` is set by PM at `planned → approved` and is otherwise stable; verification/delivery handoffs are routed by EAD off the **status** label (`_STATUS_ROUTING`: `pending-test → verifier`, `pending-ship → dm`), not by any `role:*` rewrite.
 
 ---
 
@@ -105,13 +105,13 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 
 ### 4.3 Work-assignment endpoint
 
-> **NOT IMPLEMENTED** — tracked in #12495. The spec below is the target design; zero `/work/assign` routes exist in harness.py today. The live work-routing mechanism is the ExternalActivityDetector (§6) emitting `assigned-to` events directly. Whether to implement `/work/assign` as specified or formally retire it in favour of EAD-only routing is an open architectural decision.
+> **IMPLEMENTED (#12495, 2026-06-21)** as the **manual wake-injection primitive** — NOT the universal router the earlier §8.3 prose described. Operator decision (2026-06-19): build the explicit same-status wake primitive (option a) rather than retire the endpoint. The route emits an `assigned-to` wake to a target alias **without** a status transition and **without** rewriting the `role:*` label. It is the sanctioned BACKUP / babysitting path (PM waking a stuck-but-alive agent; an agent escalating a process concern to PM) for when the primary wake paths — self-wake (#12506), never-stop (#12853), and the ExternalActivityDetector (§6) emitting `assigned-to` off forge-state — don't fire. Transition-driven routing is **not** rewired through this endpoint: it remains EAD-based (see [AGENT-RUNTIME.md §8.3](AGENT-RUNTIME.md)).
 
 | Method | Path | Purpose | Returns |
 |---|---|---|---|
-| POST | `/work/assign` | Route work to a target agent | `{ok}` on 200, 404 if alias unknown, 400 on malformed payload |
+| POST | `/work/assign` | Manual same-status wake-injection to a target agent (no transition) | `{status:"ok", event_id}` on 200, 404 if alias unknown, 400 on malformed body / missing `target_alias` / self-assign |
 
-Request body: `{issue_number: int, target_alias: str, event_context: str}`. The harness validates `target_alias` resolves to a registered agent (alias-existence check only, no role-class permission filtering — see §13.5). Forwards the assignment as an `assigned-to` event on the bus. Returns 200 on accepted, 404 if alias unknown, 400 on malformed payload.
+Request body: `{target_alias: str, issue_number?: int, event_context?: str, payload?: object}` (only `target_alias` is required for a bare wake; `event_context` defaults to `"work-assign"`). The caller's alias is supplied via the `X-Squidsquad-Alias` request header for the self-assign invariant. The harness performs exactly two checks: (1) `target_alias` resolves to a registered agent (alias-existence only, no role-class permission filtering — see §13.5; 404 otherwise), and (2) `target_alias != X-Squidsquad-Alias` (structural self-assign anti-loop; 400 otherwise). It then emits an `assigned-to` event on the bus — **no `role:*` label write** (a manual re-nudge targets work the agent already owns). Malformed JSON or a missing `target_alias` returns 400.
 
 ### 4.4 Work-queue endpoint
 
@@ -551,7 +551,7 @@ EAD's polling loop hard-codes the GitHub `gh api` shape. Non-GitHub backends (Fo
 
 **Target architecture** (locked 2026-05-25 per [`decision-class-vs-alias-routing-model`](../.squidsquad/vault/galaxy/decision-class-vs-alias-routing-model.md), and reflected in [AGENT-RUNTIME.md §8.3](AGENT-RUNTIME.md)): the harness performs **one** validation on `/work/assign` — does `target_alias` resolve to a registered agent? Class-from-class permissions are not enforced at the bus layer; process discipline lives in each agent's L2/L3/L4, not in a harness gate.
 
-**Current code**: the legacy `responsibility.md` boot-read and class-from-class permission-table construction have been removed from harness.py. The `target_role` field was unified to `target_alias` per #11331 (harness.py:3332). The remaining gap is that `POST /work/assign` is not yet implemented — see §4.3 and #12495.
+**Current code**: the legacy `responsibility.md` boot-read and class-from-class permission-table construction have been removed from harness.py. The `target_role` field was unified to `target_alias` per #11331 (harness.py:3332). `POST /work/assign` is now **implemented** (#12495, 2026-06-21) as the manual wake-injection primitive (§4.3) and enforces exactly the two checks above — alias-existence (404) + the self-assign invariant (400) — with no class-from-class gate. Note it is the *narrow* primitive (emit `assigned-to`, no transition, no label write), not the universal router the original §8.3 prose envisioned.
 
 ### 13.6 Work-queue endpoint is special-cased to human only
 

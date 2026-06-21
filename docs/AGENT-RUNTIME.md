@@ -150,7 +150,7 @@ Rationale: a human responds on human time, not agent time. An agent that blocks 
 
 **The return path (human-mediated).** A human answers through inline mode, and the answer is carried back to the originating agent by a person-in-the-loop — there is no automatic bus delivery (a human isn't on the event bus):
 
-- **Human → originating agent (inline):** the agent records the human's answer into the ticket and **re-assigns the ticket back to itself** (`/work/assign` to its own alias via a transition), which resumes the work.
+- **Human → originating agent (inline):** the agent records the human's answer into the ticket and **re-assigns the ticket back to itself** via a `tracker.py transition` back to an active status (the EAD then routes it; a self-targeted `/work/assign` is forbidden by the self-assign invariant), which resumes the work.
 - **Human → PM (inline):** PM records the answer into the ticket and **assigns it back to the originating agent on its behalf.**
 - **Human → the wrong agent** (neither the originator nor PM): that agent replies **"this isn't my territory — you've reached the wrong agent,"** and points the human to the right alias or to PM. (Same posture as §8.3 mis-route recovery, applied to a human who mis-addressed.)
 
@@ -470,10 +470,10 @@ EAD is the bridge from forge → bus. It runs inside the harness on a polling lo
    | PR state change (opened / merged / closed) | matches §8.3 routing-table value for the new linked-issue state | matches §8.3 |
 
    **Out of scope**: EAD does NOT auto-route brand-new issues created with no `status:*` label and no `role:*` label (e.g., a human filing an issue directly via the GitHub UI without applying SquidSquad labels). These issues sit in the forge untouched until a human acts on them — commenting fires the `human-comment` → PM rule, or applying a status label fires the status-change rule. PM is then responsible for labeling and initial transition. Design choice: agents don't speculate on un-labeled issues; humans hand off explicitly.
-4. Emits one `assigned-to` per (forge change, target_alias) pair into the deque (with the harness's `role:*` label write per §8.3).
+4. Emits one `assigned-to` per (forge change, target_alias) pair into the deque. No `role:*` label write occurs — `role:*` is set once by PM; the EAD routes off the **status** label (§8.3, #12495).
 5. Records the new last-seen timestamp so it doesn't re-emit on restart.
 
-EAD is the only emitter of `assigned-to` from forge state. Agents trigger `assigned-to` indirectly via `POST /work/assign` (typically called by `tracker.py`; see §8.3).
+EAD is the only emitter of `assigned-to` from forge state (transition-driven routing). Agents can also emit an `assigned-to` directly via the manual `POST /work/assign` primitive (`tracker.py work-assign`) — the BACKUP / babysitting path, not the default; see §8.3.
 
 **Why REST, not Search API** (locked):
 - Search API has a 5–30s indexing lag built in; EAD-driven latency would inherit that floor on every event.
@@ -599,7 +599,7 @@ Each agent typically runs in its own git clone. The harness writes its port to `
 | **No persistence** (deque) | In-memory; harness restart clears history |
 | **Self-isolation** | Agents don't react to their own events |
 | **At-least-once** | Cursor advances only after successful ack |
-| **Role authority** | Bus has no permissions knowledge; `tracker.py` enforces transitions; harness enforces `/work/assign` via L2 bus contract (§8.3) |
+| **Role authority** | Bus has no permissions knowledge; `tracker.py` enforces transitions; on `/work/assign` the harness enforces only alias-existence + the self-assign invariant — no class-from-class gate (§8.3) |
 | **Graceful degradation** | Harness unreachable in loop mode = empty events, zero behavior change to git-coordination layer. Harness unreachable in event mode = agent idles until recovery; loop mode is the manual operator fall-back (§9.2 / §9.4) |
 
 ---
@@ -965,7 +965,14 @@ Two fields, not one, so recovery semantics are explicit. After a host reboot, th
 
 > **Proposed redesign (not implemented — #12271):** the `ready → crashed` edge above is driven today by **PID death-detection** in the harness health poll, which cannot distinguish a *functioning* agent from an *inert* one — a process can be alive while the agent loop is wedged (see [HARNESS-ARCH.md §13.7](HARNESS-ARCH.md) / #10855, the ~22h zombie). A proposed redesign replaces PID-liveness with **progress signals emitted by the agent's real loop** — `SessionStart` / `Pre`+`PostToolUse` / `Stop` / `SessionEnd` claude-code hooks plus `cycle_post` heartbeats (with a pause-aware guard) — demoting PID to teardown-only. If it lands, the agent-side emitter wiring is documented in this section and the harness-side liveness/reboot decision in [HARNESS-ARCH.md §15](HARNESS-ARCH.md). Full model: HARNESS-ARCH §15.
 
-### 8.3 Work handoff: explicit `/work/assign`
+### 8.3 Work handoff: transition → EAD routing (+ the manual `/work/assign` primitive)
+
+> **Implementation status (#12495, 2026-06-21 — reconciled to as-built).** Earlier revisions of this section described `/work/assign` as a **universal router** that every `tracker.py transition` rode, with the harness rewriting `role:*` labels on each call (Q12) and a self-assign header (Q13). That universal-router design was **never built**. The operator (2026-06-19) chose to build `/work/assign` as a **narrow manual wake-injection primitive** (option a), not as the router. The two mechanisms that are actually live:
+>
+> 1. **Transition-driven handoffs are routed by the EAD off forge state** — NOT through `/work/assign`. `tracker.py transition` changes only the **status** label; the ExternalActivityDetector (§5.4) polls the forge, maps the new status to a target alias via `_STATUS_ROUTING` (`pending-test → verifier`, `pending-ship → dm`, worker statuses → the issue's own `role:*` alias), and emits the `assigned-to`. The harness writes **no** `role:*` labels (PM sets `role:*` once at `planned → approved`; it is otherwise stable).
+> 2. **`POST /work/assign` is the manual same-status wake primitive** — see the "non-transition routing" subsection below. It emits an `assigned-to` to a target alias *without* a transition and *without* a label write; it is the BACKUP / babysitting path (PM waking a stuck agent; an agent escalating a process concern to PM), not the default.
+
+The live transition-handoff flow (worker → verifier shown):
 
 ```mermaid
 sequenceDiagram
@@ -973,32 +980,26 @@ sequenceDiagram
     participant W as Worker (claude)
     participant TR as tracker.py
     participant F as Forge<br/>(GitHub)
-    participant H as Harness
+    participant EAD as EAD<br/>(in harness)
+    participant H as Harness deque
     participant VEP as Verifier event_poll
     participant VC as Verifier claude
 
     Note over W: Implementation complete<br/>locally
     W->>F: push branch, open PR #9943
-
     W->>TR: tracker.py transition 9926<br/>in-progress pending-test
-    TR->>F: gh issue edit (label change)
+    TR->>F: gh issue edit (status label only)
     F-->>TR: 200 OK
-    Note over F: Forge label updated<br/>(source of truth)
-    TR->>H: POST /work/assign<br/>X-Squidsquad-Alias: worker<br/>{issue_number:9926, target_alias:verifier,<br/>event_context:"verification-needed",<br/>payload:{pr_number:9943}}
-    H->>H: validate target_alias exists<br/>in .squidsquad/config.md registry<br/>+ check target_alias != X-Squidsquad-Alias (self-assign)
-    H->>F: gh issue edit 9926<br/>--remove-label role:* --add-label role:verifier
-    F-->>H: 200 OK
-    H->>H: emit assigned-to(target_alias=verifier,...)<br/>append to deque
-    H-->>TR: 200 OK + event_id
-    TR-->>W: transition successful<br/>(+ assignment event_id)
-
+    Note over F: status:pending-test<br/>(source of truth)
+    EAD->>F: poll: gh issue list (open, changed)
+    F-->>EAD: #9926 status:pending-test
+    EAD->>EAD: _STATUS_ROUTING[pending-test]<br/>→ verifier alias
+    EAD->>H: emit assigned-to(target_alias=verifier,...)<br/>append to deque
     Note over H,VEP: Verifier's event_poll<br/>polling loop continues
-
     VEP->>H: GET /events/for/verifier?since=cursor
     H-->>VEP: [assigned-to event]
     VEP->>VC: write nudge line to stdout
     Note over VC: Monitor sees stdin line<br/>wakes Claude session
-
     VC->>H: GET /events/for/verifier?since=cursor
     H-->>VC: [assigned-to event]
     VC->>VC: care filter:<br/>target_alias == my_alias? YES
@@ -1008,9 +1009,11 @@ sequenceDiagram
     H-->>VC: 200 OK
 ```
 
-In practice agents never call `/work/assign` directly for transition-driven handoffs — `tracker.py transition` does it automatically.
+Agents never call `/work/assign` for transition-driven handoffs — `tracker.py transition` flips the status and the EAD does the routing automatically.
 
-#### `tracker.py` auto-routing table (locked)
+#### EAD auto-routing table (locked)
+
+This is the status → target mapping the **EAD** applies when it detects a transition on the forge (it is not a `tracker.py`/`/work/assign` call — `tracker.py transition` only flips the status label; the EAD reads that label and routes):
 
 | Transition (from → to) | Implied `target_alias` | event_context |
 |---|---|---|
@@ -1030,11 +1033,11 @@ The issue's `role:*` label IS the target alias (aliases and label values use the
 
 **Label lifecycle**:
 
-- **Initial set** (issue creation through `planned → approved`): PM owns label management. During planning, PM sets the initial `role:<alias>` label on the issue at the `planned → approved` transition, naming the alias that should pick the work up. This is the only point in the pipeline where a non-harness writer touches `role:*`.
-- **All subsequent rewrites**: the harness writes `role:<target_alias>` as part of processing every `POST /work/assign` call (and every EAD-emitted `assigned-to`) — see the self-assign bullet under "Harness validation" below. Agents and `tracker.py transition` never write `role:*` directly after the initial PM set; they call `/work/assign` and the harness handles the label.
-- **Recovery for missing labels**: an issue arriving at a transition without a `role:*` label falls into the routing-table fallback (e.g., `unowned-rejection`, `unowned-approval`) which routes to PM for triage — PM then sets the label and re-runs the transition.
+- **Set once by PM**: during planning, PM sets the `role:<alias>` label on the issue at the `planned → approved` transition, naming the alias that should pick the work up. This is the only writer of `role:*` in the normal pipeline.
+- **Otherwise stable** (#12495 reconciliation): there is **no** automatic `role:*` rewrite on handoff. The earlier design had the harness rewriting `role:<target_alias>` on every `POST /work/assign`; that universal-router design was never built. Verification/delivery handoffs are routed by the EAD off the **status** label (`_STATUS_ROUTING`: `pending-test → verifier`, `pending-ship → dm`), so the `role:*` label can remain the builder's without breaking routing. A PM may re-point `role:*` manually (via `gh`/`tracker.py`) when reassigning ownership.
+- **Recovery for missing labels**: an issue arriving at a worker-status transition without a `role:*` label falls into the routing fallback (e.g., `unowned-rejection`, `unowned-approval`) which routes to PM for triage — PM then sets the label and re-runs the transition.
 
-Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forget to call `/work/assign` because `tracker.py` does it. Replaces the deprecated `status-transition` emit.
+Routing is driven by the status label the EAD reads, so a worker cannot strand a handoff by forgetting a manual step — flipping the status is the whole action. Replaces the deprecated `status-transition`-emit dispatch path.
 
 #### Routing — sender-side selection + harness alias-existence check + mis-route recovery
 
@@ -1046,14 +1049,14 @@ Mitigates an entire class of pickup-fidelity bugs (#9946) — agents can't forge
 
 The sender comments on the issue with a one-line routing rationale when the lane isn't obvious from the status transition alone.
 
-**Harness validation**. The harness performs **one** validation on `/work/assign`: does `target_alias` resolve to a registered agent in this install (per `.squidsquad/config.md` `## Aliases`)?
+**Harness validation** (on the manual `POST /work/assign` primitive). The harness performs exactly **two** checks; it does **not** gate by role-class:
 
-- **Unknown alias** → `HTTP 404 Not Found` with body `{"error": "unknown alias", "target_alias": "<value>", "known_aliases": [...]}`. Prevents typos and misconfigurations from reaching the deque.
-- **Self-assign** → forbidden by built-in invariant (the harness rejects any `assigned-to` where `target_alias == emitter_alias`). Structural anti-loop, not a permission table. The emitter alias is identified by the `X-Squidsquad-Alias` HTTP request header on every `POST /work/assign` call: `tracker.py transition` and any direct caller MUST set the header to the calling agent's alias. EAD-emitted `assigned-to` events bypass the HTTP path (they're produced inside the harness from forge state changes) and use the sentinel `emitter_alias = "__ead__"` which is exempt from the self-assign check.
-- **`role:*` label rewrite** → after validation passes, the harness writes `role:<target_alias>` to the forge issue (`gh issue edit --remove-label role:* --add-label role:<target_alias>`) BEFORE emitting the `assigned-to` event into the deque. This guarantees the routing table's reads are always against an up-to-date label — the label reflects the new owner at every transition without `tracker.py transition` having to know the next-owner mapping itself. The harness is the only writer of `role:*` labels; callers of `/work/assign` provide `target_alias` and the harness handles the label. EAD-emitted `assigned-to` writes the label the same way. (This is the one forge-write the harness performs; otherwise it remains a read-only forge consumer per HARNESS-ARCH §2.)
+- **Unknown alias** → `HTTP 404 Not Found` with body `{"error": "unknown alias", "target_alias": "<value>", "known_aliases": [...]}`. Validates `target_alias` resolves to a registered agent (per `.squidsquad/config.md` `## Aliases`); prevents typos and misconfigurations from reaching the deque.
+- **Self-assign** → forbidden by built-in invariant: the harness rejects (`HTTP 400`) when `target_alias == emitter_alias`. Structural anti-loop, not a permission table. The emitter alias is the `X-Squidsquad-Alias` HTTP request header (the `tracker.py work-assign` CLI sets it to the caller's bare alias). If the header is absent the caller is unidentified and the invariant is skipped. The EAD does **not** use this HTTP path (it emits `assigned-to` inside the harness from forge state), so no `__ead__` sentinel is needed.
+- **No `role:*` label write** → the primitive emits an `assigned-to` event only; it never edits the forge. (The earlier "harness rewrites `role:*` on every `/work/assign`" design was never built — #12495. The harness remains a read-only forge consumer per HARNESS-ARCH §2.)
 - **No class-from-class permissions**: any alias may assign-to any other alias. Process discipline lives in each agent's L2/L3/L4 — not in a harness gate. This aligns with §5.1's "harness is a transport bus, not an orchestrator" principle (adding a permission table would make the harness gate-keep work assignment, which it explicitly doesn't do).
 
-  > **Status**: the alias-existence-only validation rule above is the **target architecture** (decision locked 2026-05-25, per `decision-class-vs-alias-routing-model`). Current code still reads `responsibility.md` and enforces class-from-class permission checks; removal is tracked in #10182. See [HARNESS-ARCH.md §13.5](HARNESS-ARCH.md#135-alias-routing-migration) for migration status.
+  > **Status (#12495, 2026-06-21)**: `POST /work/assign` is **implemented** as the two-check manual primitive above (decision locked 2026-05-25, per `decision-class-vs-alias-routing-model`; the legacy `responsibility.md` class-from-class permission table was already removed). See [HARNESS-ARCH.md §13.5](HARNESS-ARCH.md#135-alias-routing-migration) for the code-side migration record.
 
 **Mis-route recovery** (the human-team analogy): when an agent receives `assigned-to` work that doesn't match its declared specialty:
 
@@ -1065,16 +1068,18 @@ The sender comments on the issue with a one-line routing rationale when the lane
 
 This is the **only** recovery mechanism. There is no harness-side "is this a good match?" check — agents are trusted to recognize and correct mis-assignments the same way a human team-member redirects a misfiled ticket.
 
-For non-transition routing (e.g., process concerns surfaced to PM without a state change), agents call `/work/assign` directly:
+For non-transition routing (e.g., process concerns surfaced to PM without a state change, or PM babysitting a stuck-but-alive agent), the manual `/work/assign` primitive is called directly (#12495). `--caller` is the calling agent's alias, sent as `X-Squidsquad-Alias` for the self-assign guard:
 
 ```bash
-python references/scripts/tracker.py work-assign --target-alias pm \
+python references/scripts/tracker.py work-assign --target-alias pm --caller skill \
     --event-context process-concern --payload '{"concern": "..."}'
 ```
 
+This is the sanctioned BACKUP path — the PRIMARY wake mechanisms are self-wake (#12506), never-stop (#12853), and EAD-on-forge-change. Use `/work/assign` when those don't fire (a stranded agent, or a concern that has no status transition to ride).
+
 #### EAD safety net
 
-If forge state changes through any path OTHER than `tracker.py transition` (human edit in the GitHub UI, third-party automation, or `tracker.py`'s `/work/assign` POST failed), EAD catches it on its next poll:
+If forge state changes through any path OTHER than `tracker.py transition` (human edit in the GitHub UI, third-party automation), or a transition lands but its observational event-emit is missed, EAD catches it on its next poll regardless — it routes off the forge status label, not off any emit:
 
 ```mermaid
 sequenceDiagram
@@ -1112,7 +1117,7 @@ This is an accepted residual failure mode of the thin-broadcast bus (§5.1 — t
 - **Unblock — event-effective, within role authority.** Re-fire the lost handoff with an action that *actually wakes* the target: change the forge state the EAD will pick up (an authorized `tracker.py transition`), or post the `assigned-to` directly to the harness deque for an immediate wake. A further bare comment is not a remedy — it would wake no one, repeating the original failure. PM's unblock set is bounded: authorized transition, direct `assigned-to` wake, convert draft PR→ready, boot a stalled agent (§7.5); never transition another role's task, merge/close PRs, or touch branches.
 - **Escalate** — when no in-authority unblock exists (the halt needs a process decision), surface to the human with findings + concrete options via a `* → pending-human-review` transition, not a bare comment.
 
-The sentinel is to *semantic* handoffs what the EAD is to *forge-state* changes: a polling backstop that recovers intent the primary path dropped. Implemented by the PM sub-skill `roles/pm/pipeline-sentinel` (see #12493). (The `/work/assign` mechanism named elsewhere in §8.3 is the locked-but-unimplemented target API — real routing today is the EAD `assigned-to` path described here; full reconciliation of those references tracked in #12495.)
+The sentinel is to *semantic* handoffs what the EAD is to *forge-state* changes: a polling backstop that recovers intent the primary path dropped. Implemented by the PM sub-skill `roles/pm/pipeline-sentinel` (see #12493). (Transition-driven routing is the EAD `assigned-to` path described here; the `/work/assign` mechanism named in §8.3 is now implemented as the narrow manual wake primitive — #12495, resolved 2026-06-21 — not as a transition router.)
 
 ### 8.4 Care filter
 
@@ -1324,8 +1329,8 @@ Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last P
 | # | Question | Status |
 |---|---|---|
 | Q11 | `ack-stop.result` enum values | **Closed (2026-05-30)** — `'checkpointed'` (working-state.md flushed; safe to SIGTERM), `'aborted'` (graceful stop failed; harness should escalate), `'drained'` (no in-flight work; exiting clean). Documented in §5.2 catalog row. |
-| Q12 | `role:*` label rewrite timing | **Closed (2026-05-30)** — the harness writes `role:<target_alias>` to the forge issue as part of processing every `POST /work/assign` (and equivalently when EAD emits `assigned-to`). The label rewrite happens AFTER validation passes and BEFORE the `assigned-to` event is appended to the deque. Callers of `/work/assign` provide `target_alias`; the harness handles the label edit. This is the one forge-write the harness performs (HARNESS-ARCH §2 relaxed accordingly). See §8.3 sequence diagram + harness validation bullet for the wire-level shape. |
-| Q13 | `emitter_alias` derivation for self-assign invariant | **Closed (2026-05-30)** — `X-Squidsquad-Alias` HTTP request header. `tracker.py transition` and any direct caller MUST set the header on `POST /work/assign`; the harness reads it and rejects when `target_alias == header_value`. EAD-emitted `assigned-to` events bypass the HTTP path entirely (produced inside the harness) and use the sentinel `emitter_alias = "__ead__"` exempt from the check. Implementation lives with group D (§9.5). |
+| Q12 | `role:*` label rewrite timing | **SUPERSEDED (#12495, 2026-06-21)** — the 2026-05-30 answer (harness rewrites `role:*` on every `/work/assign`) described the universal-router design that was **never built**. As-built: the harness performs **no** `role:*` write. `role:*` is set once by PM at `planned → approved`; verification/delivery handoffs route by the EAD off the **status** label (`_STATUS_ROUTING`), not by a label rewrite. The harness is a read-only forge consumer (HARNESS-ARCH §2). |
+| Q13 | `emitter_alias` derivation for self-assign invariant | **Closed (2026-05-30), narrowed (#12495)** — `X-Squidsquad-Alias` HTTP request header identifies the caller of the manual `POST /work/assign` primitive; the harness rejects (400) when `target_alias == header_value`. Set by the `tracker.py work-assign` CLI (`--caller`). Header absent → invariant skipped. `tracker.py transition` does **not** call `/work/assign` (transition routing is EAD-based), so it sets no header. The EAD never uses the HTTP path, so no `__ead__` sentinel exists in code. |
 
 
 ---
@@ -1404,7 +1409,7 @@ Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last P
   - **Q11 closed** — `ack-stop.result` enum locked to `'checkpointed' | 'aborted' | 'drained'` with semantics: checkpointed (working-state.md flushed; safe to SIGTERM), aborted (graceful stop failed; harness should escalate), drained (no in-flight work; exiting clean). §5.2 catalog row expanded; §10 Q11 moved Open → Closed.
   - **L4 granularity locked** — exactly one L4 file per L2 role-class (`pm.md` / `worker.md` / `verifier.md` / `dm.md`), maximum 4 per install. L3 specialization does NOT differentiate L4 files. Rationale: L4 is project-overlay policy; the project's expectations of a worker don't change across L3 domains. §1 Terminology rewritten; COMPOSE §4.3 + §8.3 rewritten with the 4-file ceiling and `pm + 2 fe-workers + 1 be-worker` example producing 4 L4 files (not 5); sub-skill-catalog L4-seeds table updated; INSTALLER §6 callout rewritten. Retires the multi-named-role-class framing (e.g., `fe-worker.md` and `be-worker.md` as separate L4 files).
   - **`## Aliases` schema locked** — three-column markdown table (`alias` / `role-class` / `L3 domain`) in `.squidsquad/config.md`. `role-class` column drives L4 file selection (L2 categorical only); `L3 domain` column drives L3 source-file selection. Authored at install time per INSTALLER §5.8 step 3; required for `compose.py deploy <alias>` resolution. COMPOSE §4.0 carries the canonical schema example.
-  - **Initial `role:*` label** — PM owns initial label management; sets `role:<alias>` at the `planned → approved` transition. All subsequent rewrites are harness-side via `/work/assign` (per rev 13). §8.3 expanded with explicit label-lifecycle bullets.
+  - **Initial `role:*` label** — PM owns initial label management; sets `role:<alias>` at the `planned → approved` transition. All subsequent rewrites are harness-side via `/work/assign` (per rev 13). §8.3 expanded with explicit label-lifecycle bullets. *(Superseded by rev 18 / #12495: the harness performs **no** `role:*` rewrite — `role:*` is set once by PM and is otherwise stable; handoffs route via the EAD off the status label.)*
   - **`event_poll` vs `booted` race resolved** — boot step 4 (the agent's `GET /events/for/<alias>?since=null` immediately after emitting `booted`) is the canonical initial-queue drain; the harness returns empty to `event_poll`'s polls while `status=booting` so no nudges fire prematurely; from `status=ready` onward `event_poll` handles wake-ups normally. §8.0 expanded to call this out.
   - **`last_cycle_timestamp` format locked** — ISO 8601 UTC with seconds precision (e.g. `2026-05-30T17:42:00Z`), written at the end of `cycle_post.py` into `working-state.md`'s YAML frontmatter as `last_cycle_timestamp:`. §7.3 expanded with format spec.
 - **2026-06-07 (rev 16) — #11328 D1-D4: cursor = work-completed indicator; eager per-event ack-cursor loop; mid-cycle nudge = no action; ack-cursor / ack-stop as separate state machines.** Operator-locked architectural shift ("the future is now") sharpening the cursor and nudge contracts:
@@ -1423,4 +1428,5 @@ Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last P
   - **`harness.py` (§8.3 EAD routing)** — `_STATUS_ROUTING` now maps `pending-human-review` / `pending-human-setup` → `("role_class", "human")`, resolved via the `## Aliases` registry. Non-agent role-classes are excluded from the #12442 handoff re-emit cadence (a human is not on the bus, so the `assigned-to <human>` event is emitted once for forge/audit and never re-nudged).
   - **Inline status bar (§3)** — the agent self-writes the current-event indicator to `inline` via `cycle.py status-bar-self inline ""` on a human turn and clears it on inline-session end; the stale-`current-state` `#9358` workaround text in L1 `instructions.md` and the four `ralph-loop-overview.md` polling fragments is replaced with the self-write behavior. §3 "Monitoring impact" reworded to mark #9358 superseded.
   - **`human-comment` → `pm`** unchanged (human-*provided* input still routes to an agent; not yet implemented in EAD code, spec-only). DS-audit + cross-pair audit per prose-drift discipline.
+- **2026-06-21 (rev 18) — #12495: `/work/assign` built as the narrow manual wake primitive; universal-router design (rev 12/13) superseded.** Operator decision (2026-06-19) was to BUILD `/work/assign` (option a), not retire it — but the operator spec ("emits an `assigned-to` *without* a status transition", "manual BACKUP/babysitting path, not the default", "rides #12824's hardened `assigned-to` POST") maps to the §8.3 *direct/non-transition* use, NOT the universal router that transitions ride. As-built: `POST /work/assign` validates alias-existence (404) + the self-assign invariant (400, via `X-Squidsquad-Alias`) and emits an `assigned-to` — **no `role:*` label write, no transition-riding**. Transition-driven routing remains EAD-based off the status label (`_STATUS_ROUTING`). **This supersedes the rev-12 (Q13 header) and rev-13 (Q12 harness-label-write) closed-decisions** — the harness writes no `role:*` labels and is a read-only forge consumer (HARNESS-ARCH §2 corrected); the `__ead__` sentinel never existed in code. §8.3 header/sequence-diagram/label-lifecycle/harness-validation reframed to as-built; §10 Q12 marked SUPERSEDED, Q13 narrowed. Companion: HARNESS-ARCH §2/§4.3/§13.5 (§4.3 flipped NOT-IMPLEMENTED→implemented). Code: `harness.py` `POST /work/assign`, `tracker.py work-assign` CLI, `tests/test_12495_work_assign.py` (13 cases). L1/L2 doc + code work for skill; DS-audit per high-blast-radius discipline. ⚠️ If the operator intended the FULL universal router (transitions ride `/work/assign` + harness label-writes), re-open — this rev assumes the narrow primitive per the literal spec.
 
