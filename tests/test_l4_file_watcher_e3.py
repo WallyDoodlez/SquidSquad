@@ -44,6 +44,17 @@ def _ok_compose(alias):
     return True, f"deployed {alias}\n", ""
 
 
+def _fresh_ok():
+    """No-op #12906 freshness guard for tests — never shells out to git.
+
+    Injected (same pattern as ``run_compose``) wherever a test drives a
+    batch-entry point (``recompose_path`` / ``make_change_callback``) so
+    the default guard's real ``git checkout main`` + ``git pull`` never
+    fire against the live repo during the unit suite.
+    """
+    return True, "test-stub"
+
+
 def _fail_compose(alias):
     return False, "", f"compose failed for {alias}: missing manifest"
 
@@ -234,6 +245,7 @@ class TestRecomposePath:
             registry=_REGISTRY,
             emit_event=sink,
             run_compose=_ok_compose,
+            ensure_fresh_source=_fresh_ok,
         )
         assert [r.alias for r in results] == ["pm", "pm-mobile"]
         assert {e["payload"]["target_alias"] for e in sink.events} == {
@@ -266,6 +278,7 @@ class TestRecomposePath:
             registry=_REGISTRY,
             emit_event=sink,
             run_compose=tracking,
+            ensure_fresh_source=_fresh_ok,
         )
         assert results == []
         assert calls == []
@@ -381,6 +394,7 @@ class TestChangeCallback:
             registry_provider=provider,
             emit_event=sink,
             run_compose=_ok_compose,
+            ensure_fresh_source=_fresh_ok,
         )
         cb("pm")  # registries[0]: 1 pm alias -> 1 event
         cb("pm")  # registries[1]: 2 pm aliases -> 2 events
@@ -408,6 +422,7 @@ class TestChangeCallback:
             registry_provider=boom,
             emit_event=sink,
             run_compose=_ok_compose,
+            ensure_fresh_source=_fresh_ok,
         )
         cb("pm")
         assert len(sink.events) == 1
@@ -554,6 +569,257 @@ class TestHarnessSupervisor:
         observers[0][0]._alive = False
         state._supervise_l4_once(starter)
         assert stale_debouncer.flush_calls == 1
+
+
+# ---------------------------------------------------------------------------
+# #12906 (Phase 1 of #12895) — freshness guard: every recompose batch
+# does ensure-main + pull BEFORE composing, and aborts if it can't.
+# ---------------------------------------------------------------------------
+
+
+class TestFreshnessGuard12906:
+    """AC1 — the recompose path freshens source before any compose, fires
+    the guard exactly once per batch, and aborts (no compose, no events)
+    when the clone can't be made fresh — so a behind-origin clone never
+    recomposes CLAUDE.md from stale source."""
+
+    def test_recompose_path_freshens_before_compose(self, tmp_path):
+        order = []
+
+        def guard():
+            order.append("fresh")
+            return True, "stub"
+
+        def compose(alias):
+            order.append(f"compose:{alias}")
+            return True, "", ""
+
+        target = tmp_path / ".squidsquad" / "project" / "pm.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("# pm\n")
+        results = lfw.recompose_path(
+            target, repo_root=tmp_path, registry=_REGISTRY,
+            emit_event=_EventSink(), run_compose=compose,
+            ensure_fresh_source=guard,
+        )
+        assert len(results) == 2
+        # Guard fires exactly ONCE per batch, and strictly before any
+        # compose — the "pull first" ordering AC1 demands.
+        assert order.count("fresh") == 1
+        assert order[0] == "fresh"
+        assert order[1:] == ["compose:pm", "compose:pm-mobile"]
+
+    def test_recompose_path_abort_skips_compose_and_events(self, tmp_path):
+        sink = _EventSink()
+        composed = []
+
+        def guard():
+            return False, "pull-failed"
+
+        def compose(alias):
+            composed.append(alias)
+            return True, "", ""
+
+        target = tmp_path / ".squidsquad" / "project" / "pm.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("# pm\n")
+        results = lfw.recompose_path(
+            target, repo_root=tmp_path, registry=_REGISTRY,
+            emit_event=sink, run_compose=compose,
+            ensure_fresh_source=guard,
+        )
+        assert results == []      # batch aborted
+        assert composed == []     # no compose against stale source
+        # No restart-required, but the abort surfaces one compose-failed
+        # to PM so the stale-source halt is observable (DS-12906 F1).
+        assert len(sink.events) == 1
+        e = sink.events[0]
+        assert e["payload"]["target_alias"] == "pm"
+        assert e["payload"]["event_context"] == "compose-failed"
+        assert e["payload"]["reason"] == "freshen-source-failed"
+        assert "pull-failed" in e["payload"]["stderr"]
+
+    def test_recompose_path_guard_raise_aborts(self, tmp_path):
+        sink = _EventSink()
+        composed = []
+
+        def guard():
+            raise RuntimeError("git exploded")
+
+        def compose(alias):
+            composed.append(alias)
+            return True, "", ""
+
+        target = tmp_path / ".squidsquad" / "project" / "pm.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("# pm\n")
+        results = lfw.recompose_path(
+            target, repo_root=tmp_path, registry=_REGISTRY,
+            emit_event=sink, run_compose=compose,
+            ensure_fresh_source=guard,
+        )
+        # A guard that raises is treated as a failed freshen → abort,
+        # and the abort still surfaces a compose-failed to PM.
+        assert results == []
+        assert composed == []
+        assert len(sink.events) == 1
+        assert sink.events[0]["payload"]["event_context"] == "compose-failed"
+        assert "git exploded" in sink.events[0]["payload"]["stderr"]
+
+    def test_on_change_freshens_before_registry_read(self, tmp_path):
+        # The production watch path reads the registry AFTER the pull, so
+        # a config.md ## Aliases change pulled in is reflected.
+        order = []
+
+        def guard():
+            order.append("fresh")
+            return True, "stub"
+
+        def provider():
+            order.append("registry")
+            return _REGISTRY
+
+        def compose(alias):
+            order.append(f"compose:{alias}")
+            return True, "", ""
+
+        cb = lfw.make_change_callback(
+            repo_root=tmp_path, registry_provider=provider,
+            emit_event=_EventSink(), run_compose=compose,
+            ensure_fresh_source=guard,
+        )
+        cb("dm")  # dm role-class -> one alias
+        assert order == ["fresh", "registry", "compose:dm-skill"]
+
+    def test_on_change_abort_skips_registry_and_compose(self, tmp_path):
+        sink = _EventSink()
+        reads = []
+
+        def guard():
+            return False, "checkout-main-failed"
+
+        def provider():
+            reads.append("registry")
+            return _REGISTRY
+
+        cb = lfw.make_change_callback(
+            repo_root=tmp_path, registry_provider=provider,
+            emit_event=sink, run_compose=_ok_compose,
+            ensure_fresh_source=guard,
+        )
+        cb("pm")
+        assert reads == []  # registry never read on abort
+        # The abort surfaces a single compose-failed to PM (not silence).
+        assert len(sink.events) == 1
+        e = sink.events[0]
+        assert e["payload"]["target_alias"] == "pm"
+        assert e["payload"]["event_context"] == "compose-failed"
+        assert e["payload"]["reason"] == "freshen-source-failed"
+
+    def test_default_guard_aborts_when_git_ops_unavailable(
+        self, tmp_path, monkeypatch
+    ):
+        # If git_ops can't be imported, the default guard must abort the
+        # batch (return ok=False) rather than crash the watch thread.
+        monkeypatch.setitem(sys.modules, "git_ops", None)
+        ok, detail = lfw._default_ensure_fresh_source(repo_root=tmp_path)
+        assert ok is False
+        assert "git_ops" in detail
+
+
+class TestEnsureMainAndPull12906:
+    """AC1 — the canonical git_ops guard: a behind / feature-branch clone
+    is put on main and pulled BEFORE the caller composes. Drives git_ops
+    with stubbed git so the live repo is never touched."""
+
+    class _R:
+        def __init__(self, rc, out="", err=""):
+            self.returncode = rc
+            self.stdout = out
+            self.stderr = err
+
+    def _patch(self, monkeypatch, *, branch, checkout_rc=0, pull_ok=True):
+        import git_ops
+        order = []
+        R = self._R
+
+        def fake_run(cmd, check=True):
+            if "branch --show-current" in cmd:
+                return R(0, branch + "\n")
+            return R(0)
+
+        def fake_run_list(cmd, check=True):
+            if cmd[:2] == ["git", "checkout"]:
+                order.append(f"checkout:{cmd[2]}")
+                return R(checkout_rc, err="cannot checkout: dirty tree")
+            return R(0)
+
+        def fake_pull(role=None):
+            order.append(f"pull:{role}")
+            return pull_ok
+
+        monkeypatch.setattr(git_ops, "_run", fake_run)
+        monkeypatch.setattr(git_ops, "_run_list", fake_run_list)
+        monkeypatch.setattr(git_ops, "pull", fake_pull)
+        return git_ops, order
+
+    def test_behind_feature_branch_switches_then_pulls(self, monkeypatch):
+        git_ops, order = self._patch(
+            monkeypatch, branch="squidsquad/task/12906")
+        ok, _detail = git_ops.ensure_main_and_pull("harness")
+        assert ok is True
+        # checkout main BEFORE pull — the AC1 "behind clone pulls first".
+        assert order == ["checkout:main", "pull:harness"]
+
+    def test_on_main_skips_checkout_still_pulls(self, monkeypatch):
+        git_ops, order = self._patch(monkeypatch, branch="main")
+        ok, _detail = git_ops.ensure_main_and_pull("harness")
+        assert ok is True
+        assert order == ["pull:harness"]  # no checkout when already on main
+
+    def test_pull_failure_returns_false(self, monkeypatch):
+        git_ops, _order = self._patch(
+            monkeypatch, branch="main", pull_ok=False)
+        ok, detail = git_ops.ensure_main_and_pull("harness")
+        assert ok is False
+        assert detail == "pull-failed"
+
+    def test_checkout_failure_aborts_before_pull(self, monkeypatch):
+        git_ops, order = self._patch(
+            monkeypatch, branch="feature", checkout_rc=1)
+        ok, detail = git_ops.ensure_main_and_pull("harness")
+        assert ok is False
+        assert "checkout-main-failed" in detail
+        assert "pull:harness" not in order  # never pulled on a failed switch
+
+    def test_never_raises_contract_on_unexpected_exception(self, monkeypatch):
+        # DS-12906 F3: the harness merge path calls this directly and
+        # trusts the "Never raises" contract. An OSError from _run (e.g.
+        # git binary deleted) must return (False, ...), not propagate.
+        import git_ops
+
+        def boom(*_a, **_k):
+            raise OSError("git binary missing")
+
+        monkeypatch.setattr(git_ops, "_run", boom)
+        ok, detail = git_ops.ensure_main_and_pull("harness")
+        assert ok is False
+        assert "unexpected" in detail
+
+
+class TestPostMergeDeployFreshness12906:
+    """AC1 — the OTHER harness-side recompose path (post-merge
+    deploy-all) must also ensure-main + pull before composing. Static
+    grep so the guard can't be silently dropped in a refactor."""
+
+    def test_deploy_all_preceded_by_ensure_main_and_pull(self):
+        src = (SCRIPTS / "harness.py").read_text(encoding="utf-8")
+        idx = src.index('"deploy-all"')
+        guard = src.rfind("ensure_main_and_pull", 0, idx)
+        assert guard != -1, (
+            "post-merge deploy-all must be preceded by "
+            "git_ops.ensure_main_and_pull (#12906 stale-source guard)"
+        )
 
 
 class TestHarnessLifespanWiring:

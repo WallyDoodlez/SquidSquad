@@ -5,7 +5,7 @@ Covers 5 areas: prune (auto-archive stale+orphan), consolidate candidates,
 reindex (links), confidence decay, relevance scoring.
 
 Usage:
-    python scripts/vault_optimize.py full-sweep [--dry-run]       # Full optimize pass
+    python scripts/vault_optimize.py run [--dry-run]              # Full optimize pass (alias: full-sweep)
     python scripts/vault_optimize.py prune-scan [--dry-run]       # Archive stale+orphan notes
     python scripts/vault_optimize.py consolidate-scan [--dry-run]  # Detect merge candidates
     python scripts/vault_optimize.py decay-apply [--dry-run]       # Confidence decay
@@ -94,17 +94,14 @@ def _count_notes():
 
 
 def _is_config_enabled():
-    """Check if vault optimize is enabled in config.md."""
-    if not CONFIG_PATH.exists():
-        return True  # Default enabled
-    try:
-        text = CONFIG_PATH.read_text(encoding="utf-8")
-        m = re.search(r"Vault Optimize.*?Enabled.*?:\s*(yes|no)", text, re.IGNORECASE | re.DOTALL)
-        if m:
-            return m.group(1).lower() == "yes"
-    except Exception:
-        pass
-    return True  # Default enabled
+    """Vault optimize is always-on — there is no enable/disable toggle (#13043).
+
+    Activation is controlled by the quiet-cycle gate + the 20-note threshold
+    + the cooldown, not by config. Retained as a function (rather than deleting
+    the call sites) so the activation contract stays in one named place; it now
+    unconditionally returns True.
+    """
+    return True
 
 
 def _acquire_lock():
@@ -382,18 +379,24 @@ def decay(dry_run=False):
                 decayed.append(f"[dry-run] {rel}: {confidence} -> {new_confidence}")
             else:
                 today = datetime.now().strftime("%Y-%m-%d")
-                # Scope rewrites to frontmatter only (#6514) — avoid corrupting body
+                # Scope rewrites to frontmatter only (#6514) — avoid corrupting body.
+                # Decay rewrites ONLY `confidence:`, never `updated:` (#13042):
+                # VAULT-ARCH §4.4 — "Decay steps do NOT modify `updated:`"; the
+                # decay clock keys off the last human/agent semantic edit, not the
+                # decay event. Bumping `updated:` here restarts the medium→low clock
+                # from the decay (so a note never reaches `low` on the 120-day-from-
+                # edit schedule) and hides just-decayed notes from the next
+                # decay-scan for ~60 days. The decay event is recorded by the
+                # changelog entry below, which is the correct audit trail.
                 fm_end = text.find("---", 3)
                 if fm_end != -1:
                     header = text[:fm_end + 3]
                     body = text[fm_end + 3:]
                     header = header.replace(f"confidence: {confidence}", f"confidence: {new_confidence}", 1)
-                    header = re.sub(r"updated: \S+", f"updated: {today}", header, count=1)
                     new_text = header + body
                 else:
                     # No frontmatter boundary — fall back to full-text (shouldn't happen)
                     new_text = text.replace(f"confidence: {confidence}", f"confidence: {new_confidence}", 1)
-                    new_text = re.sub(r"updated: \S+", f"updated: {today}", new_text, count=1)
 
                 # Append changelog entry
                 changelog_entry = f"- {today} — Confidence decayed by vault-optimize (staleness)."
@@ -571,7 +574,10 @@ def main():
     cmd = args[0]
     dry_run = "--dry-run" in args
 
-    if cmd == "full-sweep":
+    if cmd in ("full-sweep", "run"):
+        # `run` is the canonical name in VAULT-ARCH §7.3/§8.3 and the
+        # vault-optimize sub-skill (~7 references); `full-sweep` is kept as
+        # the historical alias (#13043).
         results = run_optimize(dry_run=dry_run)
         print(json.dumps(results, indent=2, default=str))
 

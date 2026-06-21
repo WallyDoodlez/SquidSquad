@@ -118,14 +118,23 @@ Concrete consequences for an inline turn:
 
 - `cycle_pre.py` does not run; `cycle-input.json` is not written for the turn.
 - `cycle_post.py` does not run; the iteration log is not appended; `working-state.md` is not mechanically updated.
-- **The status-bar current-event indicator IS set to `inline`** for the duration of the inline session. Because the cycle wrappers don't fire, the agent self-writes the `inline` value when it detects a human (inline) turn and clears it — back to its normal idle/working state — when the inline session ends (the human signals done, or the next autonomous wake fires). This makes "this agent is in a live human conversation" visible at a glance instead of leaving the bar stale.
+- **The status-bar current-event indicator IS set to `inline`** for the duration of the inline session. Because the cycle wrappers don't fire, the agent self-writes the `inline` value when it detects a human (inline) turn and clears it — back to its normal idle/working state — when the inline session ends (the human signals done, the next autonomous wake fires, or the 20-minute auto-timeout in §3.2 releases the agent). This makes "this agent is in a live human conversation" visible at a glance instead of leaving the bar stale.
 - Reactions to the human's request — tracker comments, transitions, PR work — still flow through the forge via `tracker.py`. Durability of side-effects is unchanged.
 
-**Monitoring impact.** PM's pipeline sentinel must treat absence of `cycle-input.json` updates and unchanged `working-state.md` during inline-mode periods as **expected** rather than as stall signals (#9358). The status bar itself is **not** ambiguous during inline mode — it reads `inline` (above), so the sentinel reads an explicit state rather than inferring intent from a stale `current-state` write.
+**Monitoring impact.** During inline-mode periods `cycle-input.json` is not refreshed and `working-state.md` is not mechanically updated; PM's pipeline sentinel treats their absence as **expected**, not a stall signal. The status bar itself is **not** stale during inline mode — the agent self-writes `inline` (above), so the sentinel reads an explicit state rather than inferring intent from a stale `current-state` write. This **supersedes** the original #9358 workaround, which told the sentinel to tolerate a stale `current-state` bar during inline turns: the bar is now explicit, so that tolerance is no longer the mechanism.
 
 **Override discipline.** Human instructions delivered inline take precedence over autonomous cycle work. They do NOT override safety gates: instructions that would cross a role boundary, violate a vault-recorded prohibition, or require destructive / hard-to-reverse action without confirmation must still be flagged before action.
 
-**Resuming autonomous mode after an inline session.** In **loop mode**, re-invoke `/loop` per the recovery directive in `references/sub-skills/common/boot-bootstrap.md` (POLLING block). In **event mode**, no action is required: the Monitor tool is invoked with `persistent: true` (per `references/sub-skills/common-events/event-mode-contract.md`) so it stays active across inline turns — the next nudge after the inline interaction wakes the agent automatically. **Do not re-invoke Monitor manually** — `event-mode-contract.md` explicitly forbids it (a Monitor exit is the signal that the harness owns recovery). The session's wake mode itself does NOT change — it stays whichever was selected at boot (§9.3 establishes mode-stickiness for the session).
+**Resuming autonomous mode after an inline session.** An inline session ends when the human signals they are done, **or** when the 20-minute auto-timeout (§3.2) fires on a silent human — whichever comes first. In **loop mode**, re-invoke `/loop` per the recovery directive in `references/sub-skills/common/boot-bootstrap.md` (POLLING block). In **event mode**, no action is required: the Monitor tool is invoked with `persistent: true` (per `references/sub-skills/common-events/event-mode-contract.md`) so it stays active across inline turns — the next nudge after the inline interaction wakes the agent automatically. **Do not re-invoke Monitor manually** — `event-mode-contract.md` explicitly forbids it (a Monitor exit is the signal that the harness owns recovery). The session's wake mode itself does NOT change — it stays whichever was selected at boot (§9.3 establishes mode-stickiness for the session).
+
+### 3.2 Inline auto-timeout — 20-minute hardcoded release (L1)
+
+Inline mode is the **only** sanctioned pause from autonomous work (§3.1: stops are forbidden, inline is the lone exception). To stop a silent human from stranding the agent's queue indefinitely, an inline session **auto-releases after 20 minutes of human silence** and the agent resumes autonomous work. Operator-locked behavior (#12896 / #12853 lineage); composed into all four agent `CLAUDE.md` via `references/roles/SOUL.md` ("Relentless autonomy — operator-locked precedence") and `references/roles/instructions.md` §8 (the mechanics).
+
+- **Hardcoded, non-configurable (20 min).** The window is a fixed 20 minutes by explicit operator directive — **no config key** is added to `config.md` / `config.py`. The duration is not tunable per-install; treat any future request to make it configurable as a spec change, not a defaulting gap.
+- **Agent-side timestamp tracking.** Inline turns fire no mechanical wrappers (§3 above), so there is no `cycle_post.py` to record the interaction. The agent therefore stamps the human's last-inline-message time **itself** — via `cycle.py timestamp` when a human turn arrives — and compares it against `cycle.py timestamp` again each time it next gets control. This is the same "facts over wrappers" pattern inline mode already uses for the status-bar self-write.
+- **Resume trigger = next detected event after ≥20 min.** The agent does not busy-wait. It resumes on the **next event it detects once ≥20 minutes have elapsed** since the human's last inline message: a forge nudge in event mode (or a `/loop` tick in loop mode). Resuming means exiting inline, clearing the `inline` status-bar indicator back to idle (`cycle.py status-bar-self idle ""`), and re-running `work_queue()`.
+- **Driver-tick backstop (Option A, operator-accepted 2026-06-20).** If the forge is dead silent — no nudge arrives at all — the resume would never trigger without a fallback. The fallback reuses the existing #12506 self-wake idle driver: its periodic **driver tick counts as the qualifying resume event**, so a fully-silent 20-minute window still resumes. Because the driver ticks on its cool-down cadence (~30 min), a silent window resumes in **≤~30 minutes**, not exactly 20 — bounded, never permanent. This **≤30-min lag is the accepted tradeoff** for reusing the driver (zero new machinery); it is expected behavior, not a bug. The intent of the whole rule is that pending work is always **attended to**, not necessarily completed in the same sitting.
 
 ### 3.1 Never stop while work is pending — async handoffs (L1)
 
@@ -287,10 +296,13 @@ In v2 the catalog collapses to **3 signal concepts / 4 catalog entries**:
 |---|---|---|---|
 | **`booted`** | agent → harness | First action after the agent's Claude session boots | `{role, pid, clone_path, version}` |
 | **`assigned-to`** | harness → agent (queue entry) | Harness detects work exists for the named agent | `{issue_number, target_alias, event_context, payload}` (EAD populates `payload.title` from the forge issue; `/work/assign` callers may pass it through the `payload` object) |
+| **`deploy-signal`** | harness → agent (queued as an event) | Harness has detected compose-source drift (HARNESS-ARCH §7.5 drift check) and is requesting a coordinated halt so the pull-first deploy sequence can run | `{target_alias, event_type: "deploy-signal", event_context: "deploy-signal"}`. The `event_type` field is set explicitly so the agent's care filter can branch on `event_type == "deploy-signal"` rather than inspecting only `target_alias`. A deploy signal is delivered through the normal event bus deque; it is NOT a direct process signal. |
 | **`ack-cursor`** | agent → harness | Agent has finished processing this event (cared or skipped); cursor advances | `{event_id, role}` |
-| **`ack-stop`** | agent → harness | Agent has accepted a stop intent and is checkpointing | `{event_id, result}` where `result` is one of `'checkpointed'` (working-state.md flushed; safe to SIGTERM), `'aborted'` (graceful stop failed; harness should escalate), `'drained'` (no in-flight work; exiting clean) |
+| **`ack-stop`** | agent → harness | Agent has accepted a stop intent and is checkpointing | `{event_id, result}` where `result` is one of `'checkpointed'` (working-state.md flushed; safe to SIGTERM), `'aborted'` (graceful stop failed; harness should escalate), `'drained'` (no in-flight work; exiting clean), `'deploy-halted'` (agent received a deploy signal, finished its current atomic unit, and is halting so the harness can run the pull-first deploy sequence — see §8.1) |
 
-`ack-cursor` and `ack-stop` are **operationally separate state machines** — delivery vs lifecycle — that share the `ack-` naming. `ack-cursor` advances the delivery cursor per event; `ack-stop` signals lifecycle progress on a stop intent. They were shipped together in `#9873-A` but should be reasoned about as distinct concerns. Three signal concepts, four catalog entries.
+`ack-cursor` and `ack-stop` are **operationally separate state machines** — delivery vs lifecycle — that share the `ack-` naming. `ack-cursor` advances the delivery cursor per event; `ack-stop` signals lifecycle progress on a stop intent. They were shipped together in `#9873-A` but should be reasoned about as distinct concerns. Four signal concepts, five catalog entries.
+
+> **Intent-sequencing rule (deploy-halt)**: the harness MUST set `intent=deploying` (HARNESS-ARCH §7.1) **before** the agent emits `ack-stop(result=deploy-halted)` and the PID dies. If `intent` is still `running` when the agent exits, the health poller misreads the death as a crash and auto-respawns — undoing the coordinated halt. The harness sets `intent=deploying` at the moment it emits the deploy-signal event, so the intent is committed before the agent can possibly respond.
 
 > **Naming note**: The `role` field in `booted` / `ack-cursor` payloads is the agent's **alias** value, preserved under the field-name `role` for code-compat with the wire format. Same pattern as `{role}` in HTTP path parameters (see §5.3). Field rename to `alias` is in the same family as #10358. `ack-stop.result` enum values are tracked as §10 Q11.
 
@@ -753,6 +765,15 @@ Agents may delegate work to subagents via the Agent tool. This subsection descri
 - Independent subagent calls go in a single tool-use batch (one message, multiple Agent calls) so they run concurrently.
 - Sequential dependencies are sequential — don't parallelize when output of A feeds B.
 
+### 7.8 Deploy behavior in loop mode
+
+Loop-mode agents (polling fallback — harness unreachable at boot) do **not** consume the event bus and therefore never receive a `deploy-signal` event (§5.2). Their deploy path is different by construction:
+
+- `cycle_pre.py` already performs a `git pull` at the start of every cycle, so a loop-mode agent's clone is current. The composed `CLAUDE.md` is read once at **session start** (§8.2) — mid-session composition is never re-run — so an updated composed output (committed by a prior event-mode pull-first deploy) takes effect for a loop-mode agent at its **next session start** (the next exit-42 respawn or operator/harness restart). Loop-mode agents simply lag by at most one session.
+- The bus-delivered deploy-signal is never consumed by a loop-mode agent, and no stale-signal handling is needed: a loop-mode session maintains no cursor, so any deploy-signals queued while it ran in loop mode are drained when the agent next boots in event mode (§8.2 → §8.1 initial drain).
+
+This preserves the invariant in both modes: a committed `CLAUDE.md` on `main` is always the product of a pull-first deploy; only the convergence timing differs (event mode: within one deploy cycle; loop mode: by the next session start). See §9.2 for the per-mode summary table.
+
 ---
 
 ## 8. Event-driven mode in detail
@@ -815,9 +836,18 @@ loop forever:
     event = next event past cursor   # GET /events/for/{role}?since=cursor → first item
     if event:
         if event passes my role's care filter:
-            run_pre_cycle()                                # mechanical: git pull, working-state read, etc.
-            do_work(event)                                 # the agent's creative work
-            run_post_cycle()                               # mechanical: commit, push, working-state write
+            if event.event_type == "deploy-signal":        # branch on event_type, not just target_alias
+                # finish current atomic unit (already done — deploy signals arrive between tasks)
+                # do NOT pick up new work, do NOT run the improvement subloop
+                POST /events  ack-stop {result: "deploy-halted", role}  # harness runs deploy sequence + respawns
+                # halt — do NOT POST ack-cursor; the harness advances the cursor past this
+                # deploy-signal as part of the deploy sequence (before respawn), so the
+                # respawned agent does NOT re-process it (else: re-halt → re-deploy loop)
+                return
+            else:
+                run_pre_cycle()                            # mechanical: git pull, working-state read, etc.
+                do_work(event)                             # the agent's creative work
+                run_post_cycle()                           # mechanical: commit, push, working-state write
         # if skipped, no cycle wrapper fires
         POST /events  ack-cursor {event_id: event.id, role}  # per-event ack — cursor advances NOW
         continue                                           # re-check for the next event immediately (drain to empty)
@@ -829,6 +859,8 @@ loop forever:
 
     idle_wait_for_next_nudge()                             # Monitor blocks here until event_poll writes another NUDGE
 ```
+
+> **Worker / feature-branch note**: workers typically operate on feature branches mid-task. A deploy signal is honored at a **between-task boundary where the agent is back on `main`** — not mid-feature-branch. If the agent receives a deploy signal while it is currently on a feature branch with uncommitted or unmerged work, it should finish and merge the current task to `main` first, then honor the deploy halt at the next between-task on-main boundary. "Finish current atomic unit" means: complete the current task, merge to `main`, and only then emit `ack-stop(result=deploy-halted)`. This is the stricter interpretation of "clean tree on main before handoff" (design §4) — the deploy-halt waits for a between-task on-main state, not just any ack-cursor seam.
 
 Three things to notice compared to the pre-D2 batched walk:
 
@@ -856,9 +888,15 @@ sequenceDiagram
             H-->>A: event e
             A->>A: care filter (target_alias == my_alias?)
             alt cared
-                A->>A: run pre-cycle (git pull, state read)
-                A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
-                A->>A: run post-cycle (commit, push, state write)
+                alt event_type == "deploy-signal"
+                    Note over A: finish current atomic unit<br/>(already between tasks — on main)
+                    A->>H: POST /events {type:ack-stop,<br/>result:"deploy-halted", role}
+                    Note over A: halt — harness runs deploy sequence<br/>and respawns; no ack-cursor posted
+                else normal work event
+                    A->>A: run pre-cycle (git pull, state read)
+                    A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
+                    A->>A: run post-cycle (commit, push, state write)
+                end
             else skipped
                 Note over A: no cycle wrapper fires
             end
@@ -892,10 +930,10 @@ These move independently. The operator sets `intent`; the harness updates `statu
 
 **Agent-side boot steps** (what the `claude` process does after it starts):
 
-1. Read the composed `CLAUDE.md` (already on disk in the agent's clone dir at boot — written by the compose pipeline).
+1. Read the composed `CLAUDE.md` (already on disk in the agent's clone dir at boot — written by the compose pipeline and committed to `main`). **The agent does NOT recompose at boot.** The committed `CLAUDE.md` is trusted as current; any drift from source is handled by the pull-first deploy path (§5.2 deploy-signal / §8.1 deploy-signal branch), never by a local recompose at boot. **Invariant**: a committed `CLAUDE.md` on `main` is always the product of a pull-first deploy.
 2. Read `.squidsquad/<alias>/working-state.md` for crash-recovery context (active task, key decisions).
 3. Emit `booted` event (`POST /events {type: booted, role, pid, clone_path, version}`) — this is the cursor-clean handshake. The harness transitions `status: booting → ready` on receipt.
-4. Enter §8.1 eager main loop. Its first iteration's `GET /events/for/{role}?since=cursor` performs the initial drain: if events are queued they're processed per-event with their acks; if the queue is empty the loop falls through to the improvement-subloop check and then to idle-wait. No separate boot-time GET or branch is needed — §8.1 handles both cases natively.
+4. Enter §8.1 eager main loop. Its first iteration's `GET /events/for/{role}?since=cursor` performs the initial drain: if events are queued they're processed per-event with their acks (including any deploy-signal that was queued before boot); if the queue is empty the loop falls through to the improvement-subloop check and then to idle-wait. No separate boot-time GET or branch is needed — §8.1 handles both cases natively.
 
 #### Agent state machine
 
@@ -1063,6 +1101,19 @@ sequenceDiagram
 
 Tracker.py path is sub-second; EAD path is 5–60s polling-cadence-bounded.
 
+#### Comment-only handoffs and the pipeline-sentinel backstop
+
+Both delivery paths above key on **forge state**: a status/label change (via `tracker.py transition` or any path) is what the EAD detects and turns into an `assigned-to`. Neither path delivers a handoff expressed only as an **issue comment** — comments are not events (per the comment-handling rule), and the EAD polls issue *state*, not comment bodies. So when an agent expresses a handoff or decision-request as a bare comment instead of a transition (e.g. "DM, please merge PR #X" without transitioning), it rides **no event and triggers no EAD catch** — the intent is silently dropped and the item halts in place with its owner idle. (Observed: #12460, where a "please merge the shadow" comment stalled the cutover for hours until a human noticed.)
+
+This is an accepted residual failure mode of the thin-broadcast bus (§5.1 — the bus deliberately carries no comment semantics). The backstop is the **pipeline sentinel**, a PM responsibility (not a harness mechanism):
+
+- **Detect** — *absence of forward progress* on a non-terminal item past threshold is a halt, **including** when the item has recent comments but has not advanced (the comment-only-handoff signature). Progress, not comment-recency, is the signal.
+- **Investigate** — classify the cause: failed/comment-only handoff, dead-or-stalled agent (§7.5 / health), blocked-on-human-decision, or genuine no-progress.
+- **Unblock — event-effective, within role authority.** Re-fire the lost handoff with an action that *actually wakes* the target: change the forge state the EAD will pick up (an authorized `tracker.py transition`), or post the `assigned-to` directly to the harness deque for an immediate wake. A further bare comment is not a remedy — it would wake no one, repeating the original failure. PM's unblock set is bounded: authorized transition, direct `assigned-to` wake, convert draft PR→ready, boot a stalled agent (§7.5); never transition another role's task, merge/close PRs, or touch branches.
+- **Escalate** — when no in-authority unblock exists (the halt needs a process decision), surface to the human with findings + concrete options via a `* → pending-human-review` transition, not a bare comment.
+
+The sentinel is to *semantic* handoffs what the EAD is to *forge-state* changes: a polling backstop that recovers intent the primary path dropped. Implemented by the PM sub-skill `roles/pm/pipeline-sentinel` (see #12493). (The `/work/assign` mechanism named elsewhere in §8.3 is the locked-but-unimplemented target API — real routing today is the EAD `assigned-to` path described here; full reconciliation of those references tracked in #12495.)
+
 ### 8.4 Care filter
 
 Each agent's care filter is "events with `target_alias == my_alias`." Future refinement could allow finer-grained filtering on `event_context` or `payload`, but v2 ships with alias-only filtering. There is no permission gate to traverse — the harness has already validated the alias exists; everything past the care filter is the agent's own routing decision.
@@ -1092,6 +1143,8 @@ Honors the locked principle: forge owns work state, harness owns delivery state 
 ### 8.6 Improvement subloop (cursor-at-head)
 
 The improvement subloop is the **drained-queue branch of the §8.1 main loop**. When the eager loop's `GET /events/for/{role}?since=cursor` returns `[]` (no events past cursor), the agent has finished tending everything assigned to its alias for now. Without this branch the agent would simply idle-wait until the next nudge; with it, the agent uses the otherwise-idle window to run one bounded improvement task before idling. Loop mode reaches the same outcome on quiet cycles via §7.4 — same role-class subloops, different trigger surface; this section is the event-mode side of that pair.
+
+**Deploy-signal preempts the subloop.** The subloop fires only when the queue is observably drained. Before starting a subloop task, the agent checks whether the `GET /events/for/{role}?since=cursor` response is still empty — if a deploy-signal has since arrived and been queued, the next eager-loop iteration's GET will return it. The subloop is bounded to **not** fire if a deploy-signal is detected as queued at the ack boundary (i.e., the GET response is non-empty). In practice, the §8.1 loop's drain-to-empty behavior ensures that any deploy-signal queued during or after the subloop task is picked up on the next eager-loop iteration before the subloop runs again.
 
 The branch fires only when the queue is observably drained — there is no harness endpoint for "am I at deque head?"; the agent infers drained-state from an empty GET response on the current eager-loop iteration. See §8.1 for the surrounding loop structure and how the subloop fits into it as a branch.
 
@@ -1166,6 +1219,15 @@ The composed CLAUDE.md's boot section probes the harness once and binds the wake
 A separate operator step to "flip modes" does not exist — mode is not a flag the operator sets. To force loop mode for an install, stop the harness before restarting the squad; the agents' boot probes will fail and bind to loop mode for those sessions. To return to event mode, start the harness and restart the agents.
 
 There is no `recompose + restart` ceremony tied to mode change; mode is decided per agent process at its own boot, not at the install level. Mixed-mode installs (one agent event, another loop) are possible — and harmless — during the brief window between starting the harness and an agent's next restart.
+
+**Deploy behavior by mode** (summary):
+
+| Mode | How deploy signal arrives | When updated CLAUDE.md takes effect |
+|---|---|---|
+| **Event mode** | `deploy-signal` event via bus; agent finishes current atomic unit (on main, between tasks), emits `deploy-halted`, harness runs pull-first deploy, respawns | Immediately after respawn — fresh session reads the newly committed `CLAUDE.md` |
+| **Loop mode** | Does not consume bus; cycle_pre.py pulls each cycle | At next session start — the session that loads `CLAUDE.md` from disk picks up the committed output |
+
+In both modes the invariant holds: a committed `CLAUDE.md` on `main` is always the product of a pull-first deploy. The only difference is timing — event-mode agents converge within one deploy cycle; loop-mode agents lag by at most one loop interval (30m default) before the next session start.
 
 ### 9.3 Boot decision tree
 
@@ -1355,4 +1417,10 @@ Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last P
   - **§4.1 cross-ref** — added one sentence after the system-overview diagram pointing readers to §5.3 for cursor semantics; §4.1's `.event-state.json` mention now anchors the cursor concept's source-of-truth pointer.
   - **Out of scope for #11328** (handled in separate tasks): sub-skill alignment (`cursor-management.md`, `event-mode-contract.md`, `event-driven-workflow.md`) tracked in **#11330**; runtime code migration (`event_poll.py` swap to per-event `ack-cursor`, `working-state.md` schema cleanup, regression tests, migration safety) tracked in **#11329**. All three tasks ride the `#11144` polish-session bundle into main.
   - **DS audit trail** — AC1.1 R1→R3 (3 passes), AC1.2 R1→R4 (4 passes, load-bearing), AC1.3 R1→R3 (3 passes — R2 used Claude subagent fallback per `feedback_model_router_auto_fallback` after model_router returned "output below minimum length"), AC1.4 R1→R? (this revision). Artifacts at `.squidsquad/pm/planning/DS-AUDIT-11328-ac1.*.md`. Phase 1 research at `RESEARCH-11328.md`; Phase 2 D-Locks at `CONTEXT-11328.md`.
+- **2026-06-19 (rev 17) — #12800 implementation landed: `human` non-agent role, compose-skip, §8.3 routing, inline status-bar self-write.** Implements the rev-16 design-lock (`.squidsquad/pm/planning/HUMAN-AS-ROLE-ASYNC-DESIGN.md`). The rev-16 doc body already carried the spec; this rev records the code/doc-reconcile changes:
+  - **`config.py`** — role-classes split into `AGENT_ROLE_CLASSES` (`pm`/`worker`/`verifier`/`dm`) + `NON_AGENT_ROLE_CLASSES` (`human`); `ALIASES_ROLE_CLASSES` is their union, so a `human` alias parses in both table and bullet `## Aliases` forms.
+  - **`compose.py`** — `deploy_alias_v2` + `check_alias_staged_l4` skip non-agent role-classes (no CLAUDE.md / no L4); `deploy` and `deploy-all` treat the `None` return as a clean no-op, not a failure.
+  - **`harness.py` (§8.3 EAD routing)** — `_STATUS_ROUTING` now maps `pending-human-review` / `pending-human-setup` → `("role_class", "human")`, resolved via the `## Aliases` registry. Non-agent role-classes are excluded from the #12442 handoff re-emit cadence (a human is not on the bus, so the `assigned-to <human>` event is emitted once for forge/audit and never re-nudged).
+  - **Inline status bar (§3)** — the agent self-writes the current-event indicator to `inline` via `cycle.py status-bar-self inline ""` on a human turn and clears it on inline-session end; the stale-`current-state` `#9358` workaround text in L1 `instructions.md` and the four `ralph-loop-overview.md` polling fragments is replaced with the self-write behavior. §3 "Monitoring impact" reworded to mark #9358 superseded.
+  - **`human-comment` → `pm`** unchanged (human-*provided* input still routes to an agent; not yet implemented in EAD code, spec-only). DS-audit + cross-pair audit per prose-drift discipline.
 

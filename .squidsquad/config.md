@@ -66,12 +66,10 @@
 
 ## Vault Optimize
 
-- **Enabled**: yes
 - **Threshold**: 20
 
 ## Vault Remember
 
-- **Enabled**: yes
 - **Writes Per Cycle**: 2
 - **BRIEFING Token Budget**: 2000
 - **Confidence Decay Days**: 60
@@ -114,7 +112,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 43
+- **Shipped Since Last Bump**: 50
 
 ## Agent Effort
 

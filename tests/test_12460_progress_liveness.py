@@ -289,6 +289,12 @@ class TestShadowDivergenceLogging:
             patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive", return_value=pid_alive),
+            # #12294: the PID-based `alive` verdict now comes from the
+            # image-verified helper — drive it to keep the shadow-divergence
+            # scenarios deterministic; pin write-back to a no-op (would touch
+            # /clone otherwise).
+            patch("harness.process_utils.is_claude_process_alive", return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid", return_value=(None, False)),
             patch("harness.boot_remote.boot_agent",
                   return_value={"success": True, "terminal_pid": 9, "action": "spawn"}),

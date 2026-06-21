@@ -8,44 +8,44 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CHANGELOG.md",
-  "rotation_count": 75,
+  "last_scanned": "docs/INSTALLER-ARCH.md:6 (Runtime-shipped components)",
+  "rotation_count": 76,
   "scan_history": [
     {
       "file": "CHANGELOG.md",
       "date": "2026-06-19",
       "findings": 0,
-      "note": "R74 scan-7 / FINAL R74 (event-mode driver tick). Unchanged since 7758a96be (2026-06-12 v0.44.0 release); 885 lines. Latest entry [0.44.0] 2026-06-12 (correct — v0.45.0 HELD per operator). Version headers descend cleanly 0.44→0.43→0.42→0.41. All this-session ships (#12824/#12825/#12511) + the full held batch correctly ABSENT from CHANGELOG by design (land at bump time). R74 ROTATION COMPLETE — 7 files (README fix, SKILL:1-3 fix, SKILL:4-6 fix, ARCHITECTURE clean, sub-skill-guide deferred-#11400, CONTRIBUTING clean, CHANGELOG clean). rotation_count -> 75. R74 net: 3 real fixes (SKILL vault-access, SKILL dead-capabilities-ref) + README/ARCHITECTURE/CONTRIBUTING verified clean. 0 fixes this scan."
+      "note": "R74 scan-7 / FINAL R74 (event-mode driver tick). Unchanged since 7758a96be (2026-06-12 v0.44.0 release); 885 lines. Latest entry [0.44.0] 2026-06-12 (correct \u2014 v0.45.0 HELD per operator). Version headers descend cleanly 0.44\u21920.43\u21920.42\u21920.41. All this-session ships (#12824/#12825/#12511) + the full held batch correctly ABSENT from CHANGELOG by design (land at bump time). R74 ROTATION COMPLETE \u2014 7 files (README fix, SKILL:1-3 fix, SKILL:4-6 fix, ARCHITECTURE clean, sub-skill-guide deferred-#11400, CONTRIBUTING clean, CHANGELOG clean). rotation_count -> 75. R74 net: 3 real fixes (SKILL vault-access, SKILL dead-capabilities-ref) + README/ARCHITECTURE/CONTRIBUTING verified clean. 0 fixes this scan."
     },
     {
       "file": "CONTRIBUTING.md",
       "date": "2026-06-19",
       "findings": 0,
-      "note": "R74 scan-6 (event-mode driver tick). Unchanged since 9dc19dee3 (2026-05-16); 53 lines. Full re-verify, all refs LIVE: issue templates issue-report.yml + task-request.yml exist; requirements-dev.txt exists; /squidsquad-issue is a real shipped command (SKILL.md + diagnostics.py + FEAT-SKILL-1389/442 dossiers); run_tests.py + `static` arg exist; commit pattern `role: description` accurate. Future-drift (NOT fixed): line 49 links docs/sub-skill-guide.md as the 'how to create/contribute sub-skills' guide — coupled to #11400 (retires that guide; authoring now internal-maintainer-only); update this line when #11400 ships. 0 fixes."
+      "note": "R74 scan-6 (event-mode driver tick). Unchanged since 9dc19dee3 (2026-05-16); 53 lines. Full re-verify, all refs LIVE: issue templates issue-report.yml + task-request.yml exist; requirements-dev.txt exists; /squidsquad-issue is a real shipped command (SKILL.md + diagnostics.py + FEAT-SKILL-1389/442 dossiers); run_tests.py + `static` arg exist; commit pattern `role: description` accurate. Future-drift (NOT fixed): line 49 links docs/sub-skill-guide.md as the 'how to create/contribute sub-skills' guide \u2014 coupled to #11400 (retires that guide; authoring now internal-maintainer-only); update this line when #11400 ships. 0 fixes."
     },
     {
       "file": "docs/sub-skill-guide.md",
       "date": "2026-06-19",
       "findings": 0,
-      "note": "R74 scan-5 (event-mode driver tick). Unchanged since 1050bfe00 (2026-06-04). Targeted re-verify: line 47 references removed capabilities/ dir (figma/google_stitch/etc — gone 2026-05-27); {{include:}} directive usage (lines 83/90/92/98/129/246) + {{runtime:}} (112); dev/-terminology drift (per prior R73 scan-5: line 145 roles/dev/, line 191 dev-agent). ALL staleness SUBSUMED by pending #11400 (OPEN/pending — retire this whole file; sub-skill authoring now internal-maintainer-only) + #10355 (OPEN/pending — dev terminology). Patching individual lines in a file slated for deletion = wasted effort. 0 fixes (deferred to #11400 retirement; not filing — would duplicate #11400/#10355)."
+      "note": "R74 scan-5 (event-mode driver tick). Unchanged since 1050bfe00 (2026-06-04). Targeted re-verify: line 47 references removed capabilities/ dir (figma/google_stitch/etc \u2014 gone 2026-05-27); {{include:}} directive usage (lines 83/90/92/98/129/246) + {{runtime:}} (112); dev/-terminology drift (per prior R73 scan-5: line 145 roles/dev/, line 191 dev-agent). ALL staleness SUBSUMED by pending #11400 (OPEN/pending \u2014 retire this whole file; sub-skill authoring now internal-maintainer-only) + #10355 (OPEN/pending \u2014 dev terminology). Patching individual lines in a file slated for deletion = wasted effort. 0 fixes (deferred to #11400 retirement; not filing \u2014 would duplicate #11400/#10355)."
     },
     {
       "file": "docs/ARCHITECTURE.md",
       "date": "2026-06-19",
       "findings": 0,
-      "note": "R74 scan-4 (event-mode driver tick). ARCHITECTURE.md freshly updated by #12749 (commit bf92f3a8c 2026-06-18) — Agent Roles table now Worker/Verifier + DM-ARCH L2/L3/L4 layering + DM-ARCH.md deep-dive link. 6-layer model (transport→memory) internally consistent. VERIFIED-accurate (not drift): includes.yml exists for all 4 roles (line 119/127); {{runtime:}} + {{include:}} directives still present in compose.py/catalog_parser.py (lines 128/140). event-bus→git-only-polling fallback (255/278) matches live behavior. .claude-pid/process-tree/#12271-PID detail still current (cutover #12492 pending). 0 fixes."
+      "note": "R74 scan-4 (event-mode driver tick). ARCHITECTURE.md freshly updated by #12749 (commit bf92f3a8c 2026-06-18) \u2014 Agent Roles table now Worker/Verifier + DM-ARCH L2/L3/L4 layering + DM-ARCH.md deep-dive link. 6-layer model (transport\u2192memory) internally consistent. VERIFIED-accurate (not drift): includes.yml exists for all 4 roles (line 119/127); {{runtime:}} + {{include:}} directives still present in compose.py/catalog_parser.py (lines 128/140). event-bus\u2192git-only-polling fallback (255/278) matches live behavior. .claude-pid/process-tree/#12271-PID detail still current (cutover #12492 pending). 0 fixes."
     },
     {
       "file": "SKILL.md:sections-4-6",
       "date": "2026-06-19",
       "findings": 1,
-      "note": "R74 scan-3 (event-mode driver tick). SKILL.md lines 185-345 (per-role Ralph Loops, Git Protocol, Branch/PR, Auto-Merge, Setup taxonomy). FIXED 1: removed dead `references/sub-skills/capabilities/<capability>/` installer-taxonomy bullet (dir removed 2026-05-27 per sub-skill-catalog; capability config superseded by per-agent post-install runtime concern, INSTALLER-ARCH §8) + dropped 'capability' from the follow-on 'Adding a new role/preset' sentence + added a one-line pointer to §8. Confirmed dir GONE on disk; remaining repo hits are pm/planning history (not user-facing). Considered-but-skipped: Ralph-Loop sections (185-266) frame loop-mode as THE model (event mode canonical now) — larger SKILL-vs-AGENT-RUNTIME framing question, not a clean scan fix, needs PM/arch alignment; line 242 QA current-state-mtime liveness (QA domain + #12271 is harness-side liveness, QA health-check method not clearly stale)."
+      "note": "R74 scan-3 (event-mode driver tick). SKILL.md lines 185-345 (per-role Ralph Loops, Git Protocol, Branch/PR, Auto-Merge, Setup taxonomy). FIXED 1: removed dead `references/sub-skills/capabilities/<capability>/` installer-taxonomy bullet (dir removed 2026-05-27 per sub-skill-catalog; capability config superseded by per-agent post-install runtime concern, INSTALLER-ARCH \u00a78) + dropped 'capability' from the follow-on 'Adding a new role/preset' sentence + added a one-line pointer to \u00a78. Confirmed dir GONE on disk; remaining repo hits are pm/planning history (not user-facing). Considered-but-skipped: Ralph-Loop sections (185-266) frame loop-mode as THE model (event mode canonical now) \u2014 larger SKILL-vs-AGENT-RUNTIME framing question, not a clean scan fix, needs PM/arch alignment; line 242 QA current-state-mtime liveness (QA domain + #12271 is harness-side liveness, QA health-check method not clearly stale)."
     },
     {
       "file": "SKILL.md:sections-1-3",
       "date": "2026-06-19",
       "findings": 1,
-      "note": "R74 scan-2 (event-mode driver tick). SKILL.md lines 1-185 (intro/architecture/roles/tracker/Ralph Loop). Frontmatter version 0.44.0 = config (correct; 0.45.0 bump held). FIXED 1: line 103 vault access 'PM and dev agents R/W, QA and DM read-only' -> 'all agents read/write per their own lane' (ground truth: vault-protocol.md L8 'All agents have read/write', L10 per-role write lanes incl verifier+DM). DEFERRED candidate: lines 100-102 L4 project/ diagram shows only legacy multi-file seeds w/ {dev,...,qa} names — disk has BOTH legacy worker-*/verifier-* AND v2 <role>.md seeds; entangled with deferred dev/qa->worker/verifier rename (#6274/#10839) + in-flight #10359 L4-model impl, NOT a clean unilateral fix — carry to next SKILL scan, revisit when rename/#10359 lands. Considered-but-skipped: line 177 PID-primary liveness (still accurate — #12271 cutover #12492 pending, shadow #12460 leaves reboot decision unchanged); line 179 auto-versioning (product feature, accurate at design level)."
+      "note": "R74 scan-2 (event-mode driver tick). SKILL.md lines 1-185 (intro/architecture/roles/tracker/Ralph Loop). Frontmatter version 0.44.0 = config (correct; 0.45.0 bump held). FIXED 1: line 103 vault access 'PM and dev agents R/W, QA and DM read-only' -> 'all agents read/write per their own lane' (ground truth: vault-protocol.md L8 'All agents have read/write', L10 per-role write lanes incl verifier+DM). DEFERRED candidate: lines 100-102 L4 project/ diagram shows only legacy multi-file seeds w/ {dev,...,qa} names \u2014 disk has BOTH legacy worker-*/verifier-* AND v2 <role>.md seeds; entangled with deferred dev/qa->worker/verifier rename (#6274/#10839) + in-flight #10359 L4-model impl, NOT a clean unilateral fix \u2014 carry to next SKILL scan, revisit when rename/#10359 lands. Considered-but-skipped: line 177 PID-primary liveness (still accurate \u2014 #12271 cutover #12492 pending, shadow #12460 leaves reboot decision unchanged); line 179 auto-versioning (product feature, accurate at design level)."
     },
     {
       "file": "README.md",
@@ -376,6 +376,69 @@
       "date": "2026-05-28",
       "findings": 0,
       "note": "R66 scan-3 (cycle 1541). SKILL.md unchanged since c1280. Re-verification only."
+    },
+    {
+      "file": "README.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "current; sub-skill-guide framing staleness already tracked by #11400 back-reference sweep"
+    },
+    {
+      "file": "SKILL.md:frontmatter+versioning",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "version 0.44.0 matches config; auto-bump text is design-accurate (PM-signal hold is runtime preference, not doc bug)"
+    },
+    {
+      "file": "docs/ARCHITECTURE.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "6-layer structure coherent; no version drift, no dead commands; links DM-ARCH/VAULT-ARCH valid"
+    },
+    {
+      "file": "CHANGELOG.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "latest [0.44.0] matches released version; v0.45.0 batch correctly deferred to held bump; well-framed. (sub-skill-guide pos.4 skipped \u2014 retiring per #11400; CONTRIBUTING pos.5 deferred)"
+    },
+    {
+      "file": "CONTRIBUTING.md",
+      "date": "2026-06-19",
+      "findings": 1,
+      "fixes": [],
+      "note": "line ~49 sub-skill-guide authoring invitation contradicts #11144 internal-only; covered by #11400 back-reference sweep (added concrete line refs to #11400, not fixed inline)"
+    },
+    {
+      "file": "docs/DM-ARCH.md",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "in-lane domain doc (out of fixed rotation; 5 rotation docs already covered this session). #12749 layered refactor documented as realized + counter ownership on DM; L4 batch-10 correct; current"
+    },
+    {
+      "file": "docs/AGENT-RUNTIME.md:\u00a73.1",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "post-ship verify of #12853+#12800 doc changes: live rule text uses 'Never Stop While Work Is Pending'; remaining async-no-pause refs are intentional rev-16 historical changelog; coherent"
+    },
+    {
+      "file": "docs/ (Tier-2 org)",
+      "date": "2026-06-19",
+      "findings": 1,
+      "fixes": [],
+      "note": "9 docs, no docs/README index -> filed #12913 (role:dm, low, pending). README table is partial index; flagged overlap for PM judgment"
+    },
+    {
+      "file": "docs/INSTALLER-ARCH.md:6",
+      "date": "2026-06-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Verified S6 Runtime-shipped-components note vs shipped #12907/#12909 manifest: event_poll.py (installer-files.txt:39) + harness.py (:44) + 9 l4_*.py now in install manifest. Heading Runtime-shipped (not installer-invoked) is ACCURATE: copied-to-install yet agent-armed/not-installer-run. No drift."
     }
   ],
   "doc_inventory": {
@@ -401,6 +464,10 @@
       "status": "current"
     },
     "CHANGELOG.md": {
+      "last_scanned": "2026-06-19",
+      "status": "current"
+    },
+    "docs/INSTALLER-ARCH.md": {
       "last_scanned": "2026-06-19",
       "status": "current"
     }

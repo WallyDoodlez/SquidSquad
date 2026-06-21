@@ -67,8 +67,12 @@ def _kill_process(pid):
         return
     if sys.platform == "win32":
         try:
+            # #12363: /T terminates the process TREE, not just the claude PID,
+            # so the Monitor-spawned event_poll.py sidecar (a descendant of
+            # claude) dies with it instead of orphaning. Without /T the host
+            # accumulated ~13 claude + ~12 event_poll across respawns.
             subprocess.run(
-                ["taskkill", "/F", "/PID", str(pid)],
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
                 check=False, capture_output=True,
             )
         except (OSError, FileNotFoundError):
@@ -76,14 +80,24 @@ def _kill_process(pid):
             # best-effort posture as the POSIX branch below.
             pass
     else:
+        # #12363: kill the process GROUP so the event_poll.py descendant dies
+        # with claude (a bare SIGKILL on the claude PID orphans it — the POSIX
+        # analogue of the Windows leak). SAFETY: never kill our OWN group — if a
+        # claude somehow shares the harness's group, killpg would take the
+        # harness down; fall back to a bare SIGKILL of the agent PID there (no
+        # regression vs the pre-#12363 behavior).
         try:
-            os.kill(pid, signal.SIGKILL)
-        except (ProcessLookupError, PermissionError, TypeError):
-            # Already dead (PLE), owned by a different UID (Permission),
-            # or a bad-type slipped past the guard (TypeError). All
-            # best-effort no-ops — the force-kill safety net in
-            # update_health will re-check on the next poll, and the
-            # operator can fall back to the harness API for diagnostics.
+            pgid = os.getpgid(pid)
+            if pgid != os.getpgid(0):
+                os.killpg(pgid, signal.SIGKILL)
+            else:
+                os.kill(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, TypeError, OSError):
+            # Already dead (PLE), owned by a different UID (Permission), a
+            # bad-type past the guard (TypeError), or a getpgid/killpg failure
+            # (OSError, e.g. the group vanished mid-call). All best-effort
+            # no-ops — the force-kill safety net in update_health re-checks on
+            # the next poll, and the operator can fall back to the harness API.
             pass
 
 
@@ -101,6 +115,33 @@ def _read_claude_pid(clone_path, role):
         return pid, _is_process_alive(pid)
     except (ValueError, OSError):
         return None, False
+
+
+def write_claude_pid(clone_path, role, pid):
+    """Write ``pid`` to ``.claude-pid`` atomically (#12294 write-back).
+
+    The harness self-heals the file from its in-memory truth: when
+    ``update_health`` confirms an image-verified live claude PID but the
+    on-disk ``.claude-pid`` is missing or divergent, it writes the file
+    back so a *subsequent* harness restart isn't blind to that agent.
+    Symmetric with ``_read_claude_pid``. Best-effort: an OSError (disk
+    full, permission, antivirus lock on the .tmp) is swallowed with a
+    warning — the in-memory PID is still authoritative this session.
+    Returns True iff the file was written.
+    """
+    if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 0:
+        return False
+    pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
+    try:
+        pid_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = pid_file.with_suffix(".tmp")
+        tmp.write_text(str(pid), encoding="utf-8")
+        tmp.replace(pid_file)
+        return True
+    except OSError as e:
+        print(f"[reboot_agent] WARNING: could not write {pid_file}: {e}",
+              file=sys.stderr)
+        return False
 
 
 def main():

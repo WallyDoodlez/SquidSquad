@@ -471,6 +471,12 @@ class TestForceKillSafetyNet(unittest.TestCase):
                   return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=pid_alive),
+            # #12294: update_health now resolves liveness via the image-verified
+            # helper, so control that instead of the bare liveness check; pin
+            # write-back to a no-op so the self-heal doesn't touch /clone.
+            patch("harness.process_utils.is_claude_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.time.time", return_value=fake_now),
             patch("harness._log"),
         ]
@@ -667,6 +673,10 @@ class TestCrashLoopBackoff(unittest.TestCase):
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=pid_alive),
+            # #12294: image-verified liveness is the path update_health uses now.
+            patch("harness.process_utils.is_claude_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid",
                   return_value=(None, False)),
             patch("harness.time.time", return_value=fake_now),
@@ -942,11 +952,29 @@ class TestRestartLifecycle(unittest.TestCase):
             (pid_changed=True).
         """
         kill = MagicMock()
+        # #12294: update_health resolves liveness via the image-verified helper
+        # for BOTH the stored PID and the .claude-pid file PID. Mirror the old
+        # two-source semantics with a per-PID side_effect: the stored PID's
+        # liveness is `stored_pid_alive`; the file PID's is `read_pid_return`'s
+        # alive flag. Write-back is pinned to a no-op (it would touch /clone).
+        stored_pid = hs.get_agent("skill").claude_pid
+        file_pid, file_alive = read_pid_return
+
+        def _claude_alive(pid):
+            if stored_pid is not None and pid == stored_pid:
+                return stored_pid_alive
+            if file_pid is not None and pid == file_pid:
+                return file_alive
+            return False
+
         patches = [
             patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=stored_pid_alive),
+            patch("harness.process_utils.is_claude_process_alive",
+                  side_effect=_claude_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid",
                   return_value=read_pid_return),
             patch("harness.reboot_agent._kill_process", kill),
@@ -1640,8 +1668,12 @@ class TestHarnessHealthPolling(unittest.TestCase):
             (role_dir / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
 
             hs = HarnessState()
+            # #12294: the test PID is this python process, not a claude.exe, so
+            # image verification would (correctly) reject it. Stub the
+            # image-verified check to True so the .claude-pid PID is adopted.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2259,6 +2291,7 @@ class TestIntentLifecycle(unittest.TestCase):
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
                  patch("harness.boot_remote.boot_agent", return_value=spawn_result), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2286,8 +2319,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = None  # PID cleared when agent died
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2313,8 +2349,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = None
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2339,8 +2378,12 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = os.getpid()  # Same PID — stop is in-flight
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True
+            # so the same-PID-alive case is exercised (intent stays STOPPING).
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -3354,29 +3397,43 @@ class TestReviewFixes(unittest.TestCase):
                     hs.load_state()
                 self.assertFalse(hs.get_agent("skill").bootup_complete)
 
-    def test_reboot_affected_agents_clears_bootup_complete(self):
-        """#8695 R2: compose-driven restart resets bootup_complete=False."""
+    def test_reboot_affected_agents_emits_deploy_signal(self):
+        """#12912 (supersedes #8695 R2): _reboot_affected_agents is now the
+        deploy-signal EMITTER. It sets intent=DEPLOYING and emits a deploy-signal
+        to the affected alias — and deliberately LEAVES bootup_complete=True so
+        the signal is actually delivered off the event bus (the cooperative
+        deploy-halt replaces the old slam-bootup_complete-False force restart;
+        the agent stops picking up work itself when it halts)."""
         from harness import HarnessState, AgentState
         hs = HarnessState()
         agent = AgentState("skill")
         agent.intent = AgentState.INTENT_RUNNING
+        agent.status = "running"  # #12912 iter-3 F1: only ALIVE agents are signaled
         agent.bootup_complete = True
         hs.set_agent("skill", agent)
         import harness
         prev_state = harness.state
         harness.state = hs
-        # Fake git-diff output so the function decides skill's CLAUDE.md changed
         fake_git_diff = MagicMock()
         fake_git_diff.returncode = 0
         fake_git_diff.stdout = ".squidsquad/skill/CLAUDE.md\n"
+        emitted = []
         try:
             with patch("harness._log"), \
                  patch("harness.subprocess.run", return_value=fake_git_diff), \
+                 patch("harness._emit_event",
+                       side_effect=lambda *a, **k: emitted.append((a, k))), \
                  patch.object(hs, "save_state"):
                 harness._reboot_affected_agents(123, ["references/sub-skills/common/x.md"])
         finally:
             harness.state = prev_state
-        self.assertFalse(hs.get_agent("skill").bootup_complete)
+        updated = hs.get_agent("skill")
+        self.assertEqual(updated.intent, AgentState.INTENT_DEPLOYING)
+        # bootup_complete is intentionally NOT cleared (signal must be delivered).
+        self.assertTrue(updated.bootup_complete)
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][0][0], "deploy-signal")
+        self.assertEqual(emitted[0][1]["payload"]["target_alias"], "skill")
 
     # ---- #8694 review fixes ------------------------------------------------
 
@@ -3440,6 +3497,7 @@ class TestEADStatusRouting12342(unittest.TestCase):
         "pm": ("pm", None),
         "verifier": ("verifier", None),
         "dm": ("dm", None),
+        "human": ("human", None),  # #12800: non-agent role-class
     }
 
     def _issue(self, num, status, role="skill", updated="2099-01-01T00:00:00Z"):
@@ -3482,6 +3540,37 @@ class TestEADStatusRouting12342(unittest.TestCase):
         _, emitted = self._run([self._issue(2, "pending-ship", role="skill")])
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0]["target_alias"], "dm")
+
+    def test_pending_human_review_routes_to_human(self):
+        """#12800 AC3: an agent-needs-human handoff routes to the install's
+        `human` alias (was pm), resolved via the role-class registry."""
+        _, emitted = self._run(
+            [self._issue(20, "pending-human-review", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "human",
+                         "pending-human-review must route to the human alias "
+                         "(#12800), NOT pm and NOT the issue's worker label")
+
+    def test_pending_human_setup_routes_to_human(self):
+        """#12800 AC3: worker-pause-for-setup also routes to the human alias."""
+        _, emitted = self._run(
+            [self._issue(21, "pending-human-setup", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "human")
+
+    def test_pending_human_does_not_enter_handoff_reemit_12800(self):
+        """#12800: a human is NOT on the event bus, so the assigned-to <human>
+        is emitted once for forge/audit but must NOT enter the #12442 handoff
+        re-emit cadence (re-nudging would pile up never-consumed events). A
+        real agent handoff (pending-test → verifier) DOES seed the re-emit."""
+        det, emitted = self._run(
+            [self._issue(22, "pending-human-review", role="skill")])
+        self.assertEqual(emitted[0]["target_alias"], "human")
+        self.assertNotIn(22, det._handoff_emit_at,
+                         "human routing must not seed the handoff re-emit timer")
+        det2, _ = self._run([self._issue(23, "pending-test", role="skill")])
+        self.assertIn(23, det2._handoff_emit_at,
+                      "agent handoff (pending-test) must seed the re-emit timer")
 
     def test_approved_routes_to_worker_label(self):
         _, emitted = self._run([self._issue(3, "approved", role="skill")])

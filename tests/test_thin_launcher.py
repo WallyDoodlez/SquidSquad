@@ -284,12 +284,23 @@ class TestCheckSingleton:
         with patch("thin_launcher._is_process_alive", return_value=False):
             assert thin_launcher._check_singleton(str(tmp_path), "skill") is None
 
-    def test_alive_pid_returns_pid(self, tmp_path):
+    def test_alive_claude_pid_returns_pid(self, tmp_path):
         d = tmp_path / ".squidsquad" / "skill"
         d.mkdir(parents=True)
         (d / ".claude-pid").write_text("12345", encoding="utf-8")
-        with patch("thin_launcher._is_process_alive", return_value=True):
+        # #12294: held only when the live PID is image-verified as claude.
+        with patch("thin_launcher._is_claude_process_alive", return_value=True):
             assert thin_launcher._check_singleton(str(tmp_path), "skill") == 12345
+
+    def test_recycled_nonclaude_pid_returns_none(self, tmp_path):
+        """#12294 AC3: a live PID recycled by a non-claude process is stale —
+        image verification stops it from defeating singleton enforcement."""
+        d = tmp_path / ".squidsquad" / "skill"
+        d.mkdir(parents=True)
+        (d / ".claude-pid").write_text("12345", encoding="utf-8")
+        with patch("thin_launcher._is_process_alive", return_value=True), \
+             patch("thin_launcher._image_name_for_pid", return_value="explorer.exe"):
+            assert thin_launcher._check_singleton(str(tmp_path), "skill") is None
 
     def test_own_pid_treated_as_stale(self, tmp_path):
         """Defensive: if our own PID is in the file (shouldn't happen) it's stale."""
@@ -308,7 +319,7 @@ class TestSingletonEnforcement:
         (d / ".claude-pid").write_text("12345", encoding="utf-8")
 
         with patch("thin_launcher.os.getcwd", return_value=str(tmp_path)), \
-             patch("thin_launcher._is_process_alive", return_value=True), \
+             patch("thin_launcher._is_claude_process_alive", return_value=True), \
              patch("thin_launcher.subprocess.Popen") as mock_popen, \
              patch("sys.argv", ["thin_launcher.py", "skill"]):
             rc = thin_launcher.main()
@@ -485,3 +496,95 @@ class TestStaleScheduledLockReclaim:
             rc = thin_launcher.main()
         assert rc == 0
         mock_reclaim.assert_called_once_with(str(tmp_path))
+
+
+class TestImageNameForPid12294:
+    """#12294: thin_launcher's local mirror of process_utils.image_name_for_pid."""
+
+    def test_none_and_nonpositive(self):
+        assert thin_launcher._image_name_for_pid(None) is None
+        assert thin_launcher._image_name_for_pid(0) is None
+        assert thin_launcher._image_name_for_pid(-2) is None
+
+    def test_win32_uses_all_procs_lowercased(self, monkeypatch):
+        monkeypatch.setattr(thin_launcher.sys, "platform", "win32")
+        monkeypatch.setattr(
+            thin_launcher, "_win32_all_procs",
+            lambda: {4242: (10, "Claude.exe"), 99: (10, "node.exe")},
+        )
+        assert thin_launcher._image_name_for_pid(4242) == "claude.exe"
+
+    def test_win32_not_found_is_none(self, monkeypatch):
+        """Undetermined image (PID absent from snapshot) — caller falls back."""
+        monkeypatch.setattr(thin_launcher.sys, "platform", "win32")
+        monkeypatch.setattr(
+            thin_launcher, "_win32_all_procs", lambda: {99: (10, "node.exe")},
+        )
+        assert thin_launcher._image_name_for_pid(4242) is None
+
+    def test_win32_empty_image_name_is_none(self, monkeypatch):
+        """Empty image name → undetermined (None), not a non-match (DS-12294-c1)."""
+        monkeypatch.setattr(thin_launcher.sys, "platform", "win32")
+        monkeypatch.setattr(
+            thin_launcher, "_win32_all_procs", lambda: {4242: (10, "")},
+        )
+        assert thin_launcher._image_name_for_pid(4242) is None
+
+    def test_posix_reads_proc_comm(self, monkeypatch):
+        monkeypatch.setattr(thin_launcher.sys, "platform", "linux")
+        fake = MagicMock(name="proc-comm")
+        fake.read_text.return_value = "Claude\n"
+        monkeypatch.setattr(thin_launcher, "Path", lambda *a, **k: fake)
+        assert thin_launcher._image_name_for_pid(4242) == "claude"
+
+    def test_posix_oserror_is_none(self, monkeypatch):
+        monkeypatch.setattr(thin_launcher.sys, "platform", "linux")
+        fake = MagicMock(name="proc-comm")
+        fake.read_text.side_effect = OSError("no /proc")
+        monkeypatch.setattr(thin_launcher, "Path", lambda *a, **k: fake)
+        assert thin_launcher._image_name_for_pid(4242) is None
+
+
+class TestIsClaudeProcessAlive12294:
+    """#12294: thin_launcher's local image-verified liveness mirror."""
+
+    def test_dead_is_false(self, monkeypatch):
+        monkeypatch.setattr(thin_launcher, "_is_process_alive", lambda pid: False)
+        assert thin_launcher._is_claude_process_alive(123) is False
+
+    def test_alive_claude_is_true(self, monkeypatch):
+        monkeypatch.setattr(thin_launcher, "_is_process_alive", lambda pid: True)
+        monkeypatch.setattr(thin_launcher, "_image_name_for_pid", lambda pid: "claude.exe")
+        assert thin_launcher._is_claude_process_alive(123) is True
+
+    def test_alive_nonclaude_is_false(self, monkeypatch):
+        monkeypatch.setattr(thin_launcher, "_is_process_alive", lambda pid: True)
+        monkeypatch.setattr(thin_launcher, "_image_name_for_pid", lambda pid: "explorer.exe")
+        assert thin_launcher._is_claude_process_alive(123) is False
+
+    def test_alive_undetermined_falls_back_to_liveness(self, monkeypatch):
+        monkeypatch.setattr(thin_launcher, "_is_process_alive", lambda pid: True)
+        monkeypatch.setattr(thin_launcher, "_image_name_for_pid", lambda pid: None)
+        assert thin_launcher._is_claude_process_alive(123) is True
+
+
+class TestWin32AllProcs12294:
+    """#12294: _win32_all_procs feeds both descendant walk and image lookup."""
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="toolhelp32 is Windows-only")
+    def test_returns_self_and_known_processes(self):
+        procs = thin_launcher._win32_all_procs()
+        assert isinstance(procs, dict)
+        assert procs, "snapshot should never be empty on a live Windows host"
+        # our own PID must be present, mapped to (ppid, image_name)
+        assert os.getpid() in procs
+        ppid, name = procs[os.getpid()]
+        assert isinstance(ppid, int)
+        assert name.lower().startswith("python")
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="toolhelp32 is Windows-only")
+    def test_descendants_still_work_after_refactor(self):
+        # _win32_list_descendants now delegates to _win32_all_procs; smoke-test
+        # it still returns a list without error for our own PID.
+        out = thin_launcher._win32_list_descendants(os.getpid())
+        assert isinstance(out, list)

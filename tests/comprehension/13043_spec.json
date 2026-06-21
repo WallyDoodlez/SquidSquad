@@ -1,0 +1,38 @@
+{
+  "issue": 13043,
+  "title": "Vault doc-alignment code fixes (#10838): always-on gates, run alias, STYLES category, source-required, galaxy size check",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 00:25",
+  "ac": "items 1+3+4 (LLM-consumed sub-skill changes)",
+  "method": "Fresh agent (model: sonnet), given ONLY the modified passages of references/sub-skills/common/vault-remember.md, vault-optimize.md, and vault-protocol.md, no other context and no access to issue #13043. Answers must come from the supplied text alone. Verifier-authored per #9184.",
+  "target": "vault-remember.md (always-on + STYLES 5th category + write-priority), vault-optimize.md (always-on activation), vault-protocol.md (Level-1 required frontmatter fields incl source)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Before running the vault-remember reflection step, do you need to query a config setting to check whether it is enabled, and skip if disabled?",
+      "expected": "No. Vault-remember is always-on — there is no enable/disable toggle. Activation is controlled by the quiet-cycle gate and the per-cycle write budget, not a config check.",
+      "must_not": "Running `config.py get vault-remember` / checking a Vault Remember Enabled config gate and skipping on 'no'."
+    },
+    {
+      "id": "CQ2",
+      "q": "How is vault-optimize activated — is it gated by a config Enabled setting?",
+      "expected": "Vault-optimize is always-on (no enable/disable toggle). It runs only when the vault has 20+ notes AND it is a quiet cycle with no other work — those gates are the activation control, not a config Enabled field.",
+      "must_not": "Checking a `Vault Optimize > Enabled` config field and skipping if 'no'."
+    },
+    {
+      "id": "CQ3",
+      "q": "This cycle you established/confirmed a coding or process style convention. Which reflection category covers it, and what kind of vault note do you create?",
+      "expected": "The STYLES category (the 5th reflection category). Create a galaxy/style-*.md note via vault-create.",
+      "must_not": "Saying there is no category for styles, or mapping it to decisions/learnings/patterns/project-context instead of STYLES."
+    },
+    {
+      "id": "CQ4",
+      "q": "When the Level-1 vault check validates a note's frontmatter, which required fields must be present (non-empty)? Is `source` among them?",
+      "expected": "type, tags, created, updated, owner, status, confidence, and source. Yes — source is now a required frontmatter field; the check warns if it is missing or empty.",
+      "must_not": "Omitting `source` from the required set / saying source is optional."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 00:25",
+  "evidence": "Fresh sonnet agent (id a850c37fba65c66e1) given ONLY the modified vault-remember/optimize/protocol passages, no issue context. 4/4 correct, zero must_not violations: CQ1 'No... always-on, no enable/disable toggle... quiet-cycle gate and per-cycle write budget'; CQ2 'not gated by a config Enabled setting... always-on... 20+ notes AND quiet cycle'; CQ3 'category 5, STYLES... galaxy/style-*.md via vault-create'; CQ4 'eight fields... type, tags, created, updated, owner, status, confidence, and source... source explicitly listed'."
+}

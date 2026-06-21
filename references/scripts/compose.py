@@ -1045,6 +1045,13 @@ def check_alias_staged_l4(alias, staged_l4_path, *, target_root=None,
         )
     role_class, l3_domain = registry[alias]
 
+    # #12800: non-agent role-classes (e.g. `human`) have no L1-L3 sources to
+    # validate a staged L4 against. A human alias should never stage an L4,
+    # but guard so this never crashes on the source walk — return the
+    # role_class as a clean no-op.
+    if role_class in _config_module.NON_AGENT_ROLE_CLASSES:
+        return role_class
+
     # Lazy imports — same pattern as deploy_alias_v2: keep v1 paths
     # from loading these modules.
     import v2_link_stage as _v2
@@ -1134,6 +1141,16 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
         )
         sys.exit(1)
     role, l3_domain = registry[alias]
+
+    # #12800: non-agent role-classes (e.g. `human`) are routable on the forge
+    # but are NOT agents — they have no composed CLAUDE.md, no L1-L4 sources,
+    # and no L4 file. Skip compose entirely and return None so callers
+    # (single `deploy` and `deploy-all`) treat it as a clean no-op instead of
+    # walking nonexistent role sources (which would otherwise sys.exit(1)).
+    if role in _config_module.NON_AGENT_ROLE_CLASSES:
+        print(f"  {alias}: non-agent role-class '{role}' — skipping compose "
+              f"(no CLAUDE.md, no L4)")
+        return None
 
     # Lazy imports — these modules live under references/scripts/ on the
     # same path compose.py inhabits; importing at module top would force
@@ -2165,6 +2182,10 @@ def main():
         # restore in a follow-up if cross-agent validation regresses.
         try:
             output = deploy_alias_v2(role_name)
+            if output is None:
+                # #12800: non-agent role-class (human) — deploy_alias_v2
+                # already printed the skip notice and wrote nothing.
+                return
             lines = output.read_text(encoding="utf-8").count("\n")
             # Use the returned path's actual basename; post-E6 cutover
             # (#10685) it is ``CLAUDE.md`` (assembled).
@@ -2209,6 +2230,10 @@ def main():
         for alias in sorted(registry):
             try:
                 output = deploy_alias_v2(alias, registry=registry)
+                if output is None:
+                    # #12800: non-agent alias (human) — deploy_alias_v2 already
+                    # printed the skip notice and wrote nothing. Not a failure.
+                    continue
                 lines = output.read_text(encoding="utf-8").count("\n")
                 print(f"  {alias}: {lines} lines -> {output.relative_to(REPO_ROOT)}")
             except SystemExit:
