@@ -1635,6 +1635,17 @@ def build_config_md(spec):
     lines.append("- **Idle Scan Burst**: 3")
     lines.append("")
 
+    # --- ## Verbose Mode ---
+    # #13162 — boot-read, session-sticky narration toggle. Shipped default OFF
+    # (quiet, jargon-free operator output). When ON, every agent narrates each
+    # cycle step + event with full internal detail (operator's accepted token
+    # tradeoff). Read once at boot via config.py is_verbose(); sticky for the
+    # session — toggling needs an edit + restart, no recompose.
+    lines.append("## Verbose Mode")
+    lines.append("")
+    lines.append("- **Enabled**: no")
+    lines.append("")
+
     # --- ## Git Branches ---
     lines.append("## Git Branches")
     lines.append("")
