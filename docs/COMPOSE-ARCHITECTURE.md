@@ -1483,14 +1483,14 @@ Three reinforcing mechanisms to prevent the drift class observed in #9970 (sub-s
 
 ### 8.1 Boot-time check + auto-compose (primary)
 
-On every harness boot — before spawning any agent — the harness verifies composed-output freshness:
+On every harness boot the harness verifies composed-output freshness — **detect-only**: it does NOT recompose locally at boot (a local boot compose has no guarantee the clone is current with `origin/main`, so it could revert shipped output — that path was retired, #12906):
 
 1. Checksum the source tree: `.squidsquad/config.md` + `.squidsquad/project/*.md` (L4) + `references/sub-skills/` + `references/roles/` + `references/sub-skills/manifest.md`.
 2. Compare the checksum against the one stored at last successful compose (kept in `.squidsquad/.harness-state.json` under `last_compose_checksum`).
-3. If drift is detected (or the checksum is missing — first boot, post-pull, etc.), the harness runs `compose.py deploy-all` BEFORE spawning agents. The new checksum is stored on success.
-4. Spawn agents per the normal [HARNESS-ARCH §7.2](HARNESS-ARCH.md) spawn sequence — agents always boot with up-to-date `CLAUDE.md`.
+3. If drift is detected (or the checksum is missing — first boot, post-pull, etc.), the harness **records** the drift and proceeds — it does **not** run `compose.py deploy-all` locally.
+4. Spawn agents per the normal [HARNESS-ARCH §7.2](HARNESS-ARCH.md) spawn sequence. **Then**, after spawn, if boot drift was recorded the harness emits a `deploy-signal` to each running agent → each clone recomposes **pull-first** per the deploy-signal sequence (§5.2 / HARNESS-ARCH §11). The checksum is stored when the per-clone deploys complete.
 
-Agents are not allowed to discover stale CLAUDE.md mid-session because the harness has already gated their boot on freshness.
+A briefly-stale `CLAUDE.md` at the very start of a drift-boot is reconciled by the post-spawn `deploy-signal` each clone honors at its first on-`main` boundary; in steady state agents run current composed output. (Contrast the **post-merge** path, §8.2: there the harness DOES run `compose.py deploy-all` on its own clone before emitting deploy-signals — boot is detect-only, post-merge is compose-then-signal.)
 
 ### 8.2 L4-write trigger (mid-session)
 
@@ -1514,8 +1514,8 @@ The three mechanisms are deliberately redundant. Layer 1 is the primary gate (ca
 flowchart TB
   Source([Source-tree change<br/>L1-L3 / L4 / config.md])
   Source --> Boot{"Layer 1: harness boot<br/>(every start)"}
-  Boot -->|"checksum mismatch"| L1Fix[/"harness runs<br/>compose.py deploy-all<br/>before spawning agents"/]
-  L1Fix --> Spawn([Agents boot with<br/>fresh CLAUDE.md])
+  Boot -->|"checksum mismatch"| L1Fix[/"harness records drift<br/>(detect-only, no local compose);<br/>spawns agents, then emits<br/>deploy-signal per clone"/]
+  L1Fix --> Spawn([Agents boot, then<br/>recompose pull-first<br/>via deploy-signal])
   Boot -->|"checksum match"| Spawn
 
   L4Write([Mid-session L4 write<br/>via l4-curation])
@@ -1550,7 +1550,7 @@ The checklist (suggested initial content):
 2. **DRY check** — Did I introduce content that already exists in another L1-L4 layer? Use `grep -r` to confirm.
 3. **Step-ID stability** — Did I rename or remove any step IDs? If yes, did I follow the §6.1 breaking-change protocol?
 4. **L4 resolution** — Did I delete or rename a step that L4 H3 blocks target? If yes, find them (grep `.squidsquad/project/*.md` for the step ID) and update them.
-5. **Composed-output regen** — Did I run `compose.py deploy-all` after my change? Is the resulting diff included in this PR?
+5. **Composed-output regen** — Do **NOT** run `compose.py deploy-all` or commit composed output in your PR. The harness owns recompose: it regenerates composed `CLAUDE.md` post-merge (deploy-signal, pull-first), and the state-guard (#11511) strips `.squidsquad/` composed files from feature branches. Your job is only that the *source* (`references/` / L4 / `config.md`) change is correct.
 6. **Visual check** — Did I open the regenerated `.squidsquad/<alias>/CLAUDE.md` (at least one alias per affected role-class) and read the changed section? Does it read coherently in context?
 
 The checklist is referenced from `step:cycle/code-review` (skill's existing code-review sub-procedure). Skill is required to confirm each item before transitioning a task to pending-test.
