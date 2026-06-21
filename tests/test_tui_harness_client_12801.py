@@ -231,6 +231,51 @@ class TestHumanQueueRows:
         assert hc.human_queue_rows({"count": 0, "items": []}, NOW) == []
 
 
+# --- agent_table_rows (display cells) --------------------------------------
+
+class TestAgentTableRows:
+    def test_cells_match_contract_shape(self):
+        status = {"agents": [
+            {"role": "skill", "status": "running", "intent": "running",
+             "current_cycle": "#12801", "last_activity_at": NOW - 120, "lag": 4},
+        ]}
+        rows = hc.agent_table_rows(status, NOW)
+        assert len(rows) == 1
+        role, state, task, age, lag = rows[0]
+        assert role == "skill"
+        assert state == "[green]● working[/]"
+        assert task == "#12801"
+        assert age == "2m"
+        assert lag.startswith("[") and "→" in lag
+
+    def test_idle_no_task_renders_dash(self):
+        status = {"agents": [
+            {"role": "dm", "status": "running", "intent": "running",
+             "current_cycle": None, "lag": 0},
+        ]}
+        role, state, task, age, lag = hc.agent_table_rows(status, NOW)[0]
+        assert state == "[yellow]● idle[/]"
+        assert task == "—"
+
+    def test_down_agent_red(self):
+        status = {"agents": [
+            {"role": "qa", "status": "running", "intent": "restarting",
+             "current_cycle": None, "lag": 0},
+        ]}
+        assert hc.agent_table_rows(status, NOW)[0][1] == "[red]● down[/]"
+
+    def test_far_behind_lag_cell_reddened(self):
+        status = {"agents": [
+            {"role": "pm", "status": "running", "intent": "running",
+             "current_cycle": None, "lag": 10},
+        ]}
+        assert hc.agent_table_rows(status, NOW)[0][4].startswith("[red]")
+
+    def test_none_status_empty(self):
+        assert hc.agent_table_rows(None, NOW) == []
+        assert hc.agent_table_rows({}, NOW) == []
+
+
 # --- fetch_json graceful failure ------------------------------------------
 
 class TestFetchJson:

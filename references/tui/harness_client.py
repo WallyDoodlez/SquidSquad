@@ -183,6 +183,42 @@ def human_queue_rows(human_queue_json, now):
     return rows
 
 
+# Work-state word shown in the Agents panel (operator-locked vocabulary).
+_STATE_WORD = {
+    WORK_STATE_WORKING: "working",
+    WORK_STATE_IDLE: "idle",
+    WORK_STATE_DOWN: "down",
+}
+
+
+def agent_table_rows(status_json, now):
+    """Display-ready cell tuples for the TUI Agents panel — Textual-free
+    (Rich markup is just strings, so this stays pure/testable).
+
+    Each tuple is ``(role, state_cell, task_cell, age_cell, lag_cell)`` matching
+    the contract mockup ``skill  ● working  #12801  2m  [----→-]``:
+    - ``state_cell`` — ``● <word>`` wrapped in the work-state colour
+      (working→green, idle→yellow, down→red).
+    - ``task_cell`` — the current cycle/task, or ``—`` when none.
+    - ``lag_cell`` — the cursor-lag bar, reddened when the agent is far behind
+      (``lag_alert``).
+    Tolerant of a missing/``None`` status payload (harness unreachable) → ``[]``.
+    """
+    if not status_json:
+        return []
+    out = []
+    for r in agent_rows(status_json, now):
+        word = _STATE_WORD.get(r["work_state"], r["work_state"])
+        state_cell = f"[{r['color']}]● {word}[/]"
+        task = r["current_cycle"]
+        task_cell = str(task) if task is not None else "—"
+        lag_cell = f"[red]{r['lag_bar']}[/]" if r["lag_alert"] else r["lag_bar"]
+        out.append(
+            (r["role"], state_cell, task_cell, r["last_activity_age"], lag_cell)
+        )
+    return out
+
+
 def fetch_json(base_url, path, *, timeout=2):
     """GET ``base_url + path`` and parse JSON. Returns the parsed object, or
     ``None`` on any transport/parse error (the TUI degrades gracefully to a
