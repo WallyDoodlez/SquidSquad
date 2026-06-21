@@ -1,8 +1,13 @@
 # Working State
 
-- **Task**: **9 SHIPPED this session** (#13035, #12861, #13042, #13043, #13077, #13045, #11140, #12493, #13101 — pending-test; #13043 now MERGED to main). Selecting next.
-- **Updated**: 2026-06-21 00:18 (skill — event-mode; #13101 manifest-completeness fix shipped)
+- **Task**: **10 SHIPPED this session** (#13035, #12861, #13042, #13043, #13077, #13045, #11140, #12493, #13101, #12854 — pending-test; #13043 MERGED; #12861/#12493 verified). Selecting next.
+- **Updated**: 2026-06-21 00:30 (skill — event-mode; #12854 current-state stale-flag shipped)
 - **Quiet Cycle Counter**: 0
+
+## #12854 DELIVERED (PR #13131, pending-test)
+current-state stale content misled PM (frozen "running full suite" → hung-suite theory). RCA: current-state gitignored (mtime reliable); cycle_post writes idle on CLEAN cycle end; gap = mid-cycle STOP (agent can't self-write). Fix (reader-side): health_check.check_agent_health exposes `current_state_stale` (mtime > threshold); format_table prefixes stale phase with `~`. 6-case test; health_check 41/41 no regression. Deterministic, no CQ/DS.
+- **Residual → #12271 dependency:** distinguishing "stopped mid-suite" from "running a suite" WITHIN the threshold window needs progress-liveness heartbeat (#12271, gated on #12492). This fix kills the past-window misread only.
+- **Sibling #13113** (harness in-memory telemetry frozen across respawn) = same meta-problem, harness-side surface. Recommend sequencing both with #12271.
 
 ## #13101 DELIVERED (PR #13125, pending-test)
 installer-files.txt omitted L1 slot-sources identity.md (slot: identity) + vault.md (slot: vault) → empty/degraded ## Identity/## Vault slots on fresh installs. Added both (Total 250→252) + tests/test_13101_... (every references/roles/*.md with slot: frontmatter must ship — L1-slot analogue of #12861's gate; + Total-header integrity check). Negative-verified. Static gate 4787/0; integration 53/53. Deterministic data+test, no CQ/DS. Merge note: #11140 also bumps Total (+responsibility.md → reconciles to 253; count test enforces).
