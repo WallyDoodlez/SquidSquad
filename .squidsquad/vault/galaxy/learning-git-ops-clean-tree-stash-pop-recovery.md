@@ -1,8 +1,12 @@
 ---
-name: learning-git-ops-clean-tree-stash-pop-recovery
-description: A burst of compose-failed events + tree-wide stash conflict markers (config.py SyntaxError) is the git_ops clean-tree-stash-pop bug; recover via reset --hard HEAD + git stash clear.
-metadata:
-  type: project
+type: learning
+tags: [git-ops, stash, compose, recovery, config, 13167]
+created: 2026-06-21
+updated: 2026-06-21
+owner: worker
+status: active
+confidence: medium
+source: observation
 ---
 
 **Symptom→diagnosis**: A burst of `compose-failed` events to pm (and/or compose failing with a `SyntaxError` in `references/scripts/config.py`) is the signature of the **git_ops clean-tree stash-pop bug** (#13167). `config.py` is imported by `compose.py` and the harness, so unresolved stash conflict markers there (`<<<<<<< Updated upstream` / `>>>>>>> Stashed changes`) break the entire compose pipeline.
