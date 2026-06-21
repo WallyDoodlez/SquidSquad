@@ -1,8 +1,17 @@
 # Working State
 
-- **Task**: **2 SHIPPED this session** (#13035, #12861 both pending-test). Selecting next item.
-- **Updated**: 2026-06-20 22:30 (skill — event-mode; #13035 + #12861 shipped)
+- **Task**: **#13043 IN-PROGRESS** (vault doc-alignment, 5 items). 3 SHIPPED this session (#13035, #12861, #13042 all pending-test).
+- **Updated**: 2026-06-20 22:40 (skill — event-mode; starting #13043)
 - **Quiet Cycle Counter**: 0
+
+## #13043 — IN PROGRESS (resume target if interrupted)
+Vault doc-alignment code fixes (#10838 audit; AUDIT-VAULT-ARCH-2026-06-20.md). 5 items:
+1. Remove vault config gates (always-on): vault-remember.md (~L12-17 Enabled-gate), vault-optimize.md (~L10 gate), config.md (remove `## Vault Remember > Enabled` + `## Vault Optimize > Enabled`). Quiet-cycle + note-count + cooldown gates remain. **CQ-check**: sub-skill instruction change → may need CQ; vault-remember/optimize are LLM-consumed.
+2. Add `run` CLI alias to vault_optimize.py (dispatch `run` → run_optimize(), same as `full-sweep`). Docs reference `vault_optimize.py run` ~7 places but only `full-sweep` exists.
+3. Add STYLES reflection category to vault-remember.md (5th after PROJECT CONTEXT) → enables galaxy/style-*.md notes.
+4. (med) Add `source` to REQUIRED_FM_FIELDS in vault_check.py:25 (§4.3 lists it required).
+5. (low) Implement galaxy 500-line size warning in vault_check.py (vault-protocol.md:98 documents it).
+Branch: `git switch -c squidsquad/task/13043` before edits. Item 1 + 3 touch LLM-consumed sub-skills → CQ gate likely (PM authors per #9184, or check skill-cq).
 
 ## DELIVERED this session
 1. **#13035 pending-test** (PR #13051) — relentless-autonomy reframe + inline 20-min auto-timeout (#12896 child). Docs/instructions: SOUL.md 4-level operator-locked precedence (AC1) + inline auto-timeout principle; instructions.md §8 mechanics (agent stamps last-inline-msg via `cycle.py timestamp`, resume on next detected event after ≥20min, #12506 driver-tick backstop ≤30min, clear indicator via `status-bar-self idle`); AGENT-RUNTIME §3.2 new + §3 reconcile. AC2 no-config-key (grep clean). AC6 DS DS-REVIEW-13035.md: 1 warning folded. AC7 deploy-all → 4 CLAUDE.md verified. Gate 53/0. AC8 CQ verifier-authored.
