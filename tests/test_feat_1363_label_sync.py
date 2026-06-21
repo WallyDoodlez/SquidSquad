@@ -32,10 +32,11 @@ class TestPrLabelSyncExists:
     def test_section_under_sentinel(self, sentinel_text):
         """#1363: PR Status Sync is section 3 of the pipeline sentinel."""
         # Verify ordering: section 3 appears after sections 1 and 2
+        # (#12493 renamed section 2 "Stall Detection" → "Halt Detection").
         conflict_pos = sentinel_text.index("PR Conflict Detection")
-        stall_pos = sentinel_text.index("Stall Detection")
+        halt_pos = sentinel_text.index("Halt Detection")
         sync_pos = sentinel_text.index("PR Status Sync")
-        assert conflict_pos < stall_pos < sync_pos
+        assert conflict_pos < halt_pos < sync_pos
 
 
 class TestMergedPrSync:

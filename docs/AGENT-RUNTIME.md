@@ -1101,6 +1101,19 @@ sequenceDiagram
 
 Tracker.py path is sub-second; EAD path is 5–60s polling-cadence-bounded.
 
+#### Comment-only handoffs and the pipeline-sentinel backstop
+
+Both delivery paths above key on **forge state**: a status/label change (via `tracker.py transition` or any path) is what the EAD detects and turns into an `assigned-to`. Neither path delivers a handoff expressed only as an **issue comment** — comments are not events (per the comment-handling rule), and the EAD polls issue *state*, not comment bodies. So when an agent expresses a handoff or decision-request as a bare comment instead of a transition (e.g. "DM, please merge PR #X" without transitioning), it rides **no event and triggers no EAD catch** — the intent is silently dropped and the item halts in place with its owner idle. (Observed: #12460, where a "please merge the shadow" comment stalled the cutover for hours until a human noticed.)
+
+This is an accepted residual failure mode of the thin-broadcast bus (§5.1 — the bus deliberately carries no comment semantics). The backstop is the **pipeline sentinel**, a PM responsibility (not a harness mechanism):
+
+- **Detect** — *absence of forward progress* on a non-terminal item past threshold is a halt, **including** when the item has recent comments but has not advanced (the comment-only-handoff signature). Progress, not comment-recency, is the signal.
+- **Investigate** — classify the cause: failed/comment-only handoff, dead-or-stalled agent (§7.5 / health), blocked-on-human-decision, or genuine no-progress.
+- **Unblock — event-effective, within role authority.** Re-fire the lost handoff with an action that *actually wakes* the target: change the forge state the EAD will pick up (an authorized `tracker.py transition`), or post the `assigned-to` directly to the harness deque for an immediate wake. A further bare comment is not a remedy — it would wake no one, repeating the original failure. PM's unblock set is bounded: authorized transition, direct `assigned-to` wake, convert draft PR→ready, boot a stalled agent (§7.5); never transition another role's task, merge/close PRs, or touch branches.
+- **Escalate** — when no in-authority unblock exists (the halt needs a process decision), surface to the human with findings + concrete options via a `* → pending-human-review` transition, not a bare comment.
+
+The sentinel is to *semantic* handoffs what the EAD is to *forge-state* changes: a polling backstop that recovers intent the primary path dropped. Implemented by the PM sub-skill `roles/pm/pipeline-sentinel` (see #12493). (The `/work/assign` mechanism named elsewhere in §8.3 is the locked-but-unimplemented target API — real routing today is the EAD `assigned-to` path described here; full reconciliation of those references tracked in #12495.)
+
 ### 8.4 Care filter
 
 Each agent's care filter is "events with `target_alias == my_alias`." Future refinement could allow finer-grained filtering on `event_context` or `payload`, but v2 ships with alias-only filtering. There is no permission gate to traverse — the harness has already validated the alias exists; everything past the care filter is the agent's own routing decision.

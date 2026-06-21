@@ -46,13 +46,22 @@ class TestStallDetection:
     """#1228: Sentinel must include stall detection."""
 
     def test_stall_detection_section(self, sentinel_text):
-        """#1228: Sentinel detects items stalled beyond threshold."""
-        assert "Stall Detection" in sentinel_text
+        """#1228: Sentinel detects items stalled beyond threshold.
+
+        #12493 renamed the section "Stall Detection" → "Halt Detection →
+        Investigate → Unblock-or-Escalate" (progress-based halt + failed-handoff).
+        """
+        assert "Halt Detection" in sentinel_text
         assert "90 minutes" in sentinel_text
 
     def test_stall_nudge_limits(self, sentinel_text):
-        """#1228: Sentinel limits nudges to avoid noise."""
-        assert "Max 2 nudges per cycle" in sentinel_text
+        """#1228: Sentinel limits nudges to avoid noise.
+
+        #12493 scoped the cap to advisory comment nudges (halt-driven actions
+        are explicitly NOT capped): "Max 2 nudges per cycle" → "Max 2 advisory
+        comment nudges per cycle".
+        """
+        assert "Max 2 advisory comment nudges per cycle" in sentinel_text
 
 
 class TestPrStatusSync:
