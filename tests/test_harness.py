@@ -397,27 +397,34 @@ class TestIntentSetAt(unittest.TestCase):
                 )
 
     def test_ack_stop_confirmed_guarded_by_stopping_intent(self):
-        """Iter-1 finding 4 + iter-2 findings 2/3: a stale stop-confirmed
-        ack must NOT overwrite intent when the agent has moved on to
-        RUNNING/RESTARTING/STOPPED, and must NOT reset intent_set_at when
-        intent is already STOPPING (which would extend the 60s force-kill
-        window indefinitely per CONTEXT-4792.md §3.3)."""
+        """Iter-1 finding 4 + iter-2 findings 2/3 (+ #13148): the stop-path
+        ack-stop handler recognizes the SETTLED result enum
+        ('checkpointed'/'aborted'/'drained' per AGENT-RUNTIME §10 Q11), not the
+        obsolete 'stop-confirmed'. A stale stop ack must NOT overwrite intent
+        when the agent has moved on to RUNNING/RESTARTING/STOPPED, and must NOT
+        reset intent_set_at when intent is already STOPPING (which would extend
+        the 60s force-kill window indefinitely per CONTEXT-4792.md §3.3)."""
         import inspect
         from harness import receive_event
         src = inspect.getsource(receive_event)
-        assert "stop-confirmed" in src
+        # #13148: settled enum recognized (replaces obsolete "stop-confirmed").
+        assert '"checkpointed"' in src and '"aborted"' in src and '"drained"' in src, (
+            "stop-path ack-stop handler must recognize the settled enum "
+            "(checkpointed/aborted/drained), not the obsolete 'stop-confirmed'"
+        )
         # The guard must be == STOPPING (the only state where ack is valid),
         # not the iter-1 weaker `!= RESTARTING`.
         assert "agent.intent == AgentState.INTENT_STOPPING" in src, (
-            "stop-confirmed handler must require intent == STOPPING"
+            "stop-path ack handler must require intent == STOPPING"
         )
         # And it must NOT contain a `intent_set_at = time.time()` inside the
         # ack branch — that would reset the force-kill clock on every ack.
-        # Locate the stop-confirmed block and assert no clock-reset inside.
-        idx = src.find("stop-confirmed")
-        block = src[idx:idx + 600]
+        # Locate the stop-enum block and assert no clock-reset inside.
+        idx = src.find("_stop_result in (")
+        assert idx != -1, "expected the settled-enum membership check"
+        block = src[idx:idx + 700]
         assert "intent_set_at = time.time()" not in block, (
-            "stop-confirmed ack must not reset intent_set_at — it is set "
+            "stop ack must not reset intent_set_at — it is set "
             "at stop-REQUEST time, not at ack time"
         )
 

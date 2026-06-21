@@ -189,12 +189,14 @@ def ack_cursor(event_id, role):
 def ack_stop(event_id, result, role=None):
     """Acknowledge a stop request from the harness (#9873-A D10 / AC-11).
 
-    Emits ``event_type="ack-stop"`` with payload ``{event_id, result}``. The
-    harness inline handler preserves the prior ``ack`` stop-confirmed
-    behavior at AC-12 — when ``result == "stop-confirmed"`` and the agent is
-    in ``INTENT_STOPPING``, the harness persists agent state without
-    resetting ``intent_set_at`` (which would extend the 60s force-kill
-    window per CONTEXT-4792 §3.3 Q7).
+    Emits ``event_type="ack-stop"`` with payload ``{event_id, result}``.
+    ``result`` is the settled stop-path enum — ``"checkpointed"`` /
+    ``"aborted"`` / ``"drained"`` (AGENT-RUNTIME §10 Q11, closed 2026-05-30) —
+    or ``"deploy-halted"`` for a deploy-signal halt. (The pre-#13148 value
+    ``"stop-confirmed"`` is obsolete and no longer recognized by the handler.)
+    When ``result`` is a stop-path value and the agent is in ``INTENT_STOPPING``,
+    the harness persists agent state without resetting ``intent_set_at`` (which
+    would extend the 60s force-kill window per CONTEXT-4792 §3.3 Q7).
 
     The agent's role is normally read from ``SQUIDSQUAD_ROLE`` (set by
     ``thin_launcher.py`` at spawn time). Callers may pass ``role`` explicitly

@@ -299,19 +299,19 @@ class TestAckStop:
         port, events = mock_server
         (patch_dirs / ".harness-port").write_text(str(port))
         monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
-        event_bus.ack_stop("evt-456", "stop-confirmed")
+        event_bus.ack_stop("evt-456", "checkpointed")
         time.sleep(0.05)
         assert len(events) == 1
         e = events[0]
         assert e["event_type"] == "ack-stop"
         assert e["role"] == "skill"
-        assert e["payload"] == {"event_id": "evt-456", "result": "stop-confirmed"}
+        assert e["payload"] == {"event_id": "evt-456", "result": "checkpointed"}
 
     def test_noop_on_empty_event_id(self, mock_server, patch_dirs, monkeypatch):
         port, events = mock_server
         (patch_dirs / ".harness-port").write_text(str(port))
         monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
-        event_bus.ack_stop("", "stop-confirmed")
+        event_bus.ack_stop("", "checkpointed")
         time.sleep(0.05)
         assert events == []
 
@@ -329,7 +329,7 @@ class TestAckStop:
         port, events = mock_server
         (patch_dirs / ".harness-port").write_text(str(port))
         monkeypatch.delenv("SQUIDSQUAD_ROLE", raising=False)
-        event_bus.ack_stop("evt-456", "stop-confirmed")
+        event_bus.ack_stop("evt-456", "checkpointed")
         time.sleep(0.05)
         assert events == []
 
@@ -340,11 +340,11 @@ class TestAckStop:
         port, events = mock_server
         (patch_dirs / ".harness-port").write_text(str(port))
         monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
-        event_bus.ack_stop("evt-789", "stop-confirmed", role="qa")
+        event_bus.ack_stop("evt-789", "checkpointed", role="qa")
         time.sleep(0.05)
         assert len(events) == 1
         assert events[0]["role"] == "qa"  # explicit kwarg wins
-        assert events[0]["payload"] == {"event_id": "evt-789", "result": "stop-confirmed"}
+        assert events[0]["payload"] == {"event_id": "evt-789", "result": "checkpointed"}
 
     def test_emits_when_env_unset_but_role_passed_9902(self, mock_server, patch_dirs, monkeypatch):
         """#9902 F3: env unset is no longer a silent no-op when the caller
@@ -353,7 +353,7 @@ class TestAckStop:
         port, events = mock_server
         (patch_dirs / ".harness-port").write_text(str(port))
         monkeypatch.delenv("SQUIDSQUAD_ROLE", raising=False)
-        event_bus.ack_stop("evt-101", "stop-confirmed", role="dm")
+        event_bus.ack_stop("evt-101", "checkpointed", role="dm")
         time.sleep(0.05)
         assert len(events) == 1
         assert events[0]["role"] == "dm"

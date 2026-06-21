@@ -3198,14 +3198,30 @@ async def receive_event(request: Request):
             # §3.3 Q7). Also only fires when the agent is still in STOPPING:
             # any subsequent operator action (RUNNING / RESTARTING / STOPPED)
             # supersedes this ack, which is now stale.
-            if ack_payload.get("result") == "stop-confirmed":
+            #
+            # #13148: the stop-path ack-stop result enum is SETTLED to
+            # 'checkpointed' | 'aborted' | 'drained' (AGENT-RUNTIME §10 Q11,
+            # closed 2026-05-30). This branch previously keyed on the obsolete
+            # 'stop-confirmed' (NOT in the enum) — so a correctly-emitted stop
+            # ack would have silently missed it. Recognize the settled values:
+            # 'checkpointed'/'drained' = clean stop; 'aborted' = graceful stop
+            # FAILED → the existing 60s force-kill net is the escalation (logged
+            # for visibility). No agent-side emitter exists yet (event_bus
+            # .ack_stop has no callers); wiring one is the follow-on — this
+            # aligns the handler so it works correctly when that lands.
+            _stop_result = ack_payload.get("result")
+            if _stop_result in ("checkpointed", "aborted", "drained"):
+                if _stop_result == "aborted":
+                    _log(f"{role}: ack-stop result=aborted (graceful stop FAILED)"
+                         f" — 60s force-kill net will escalate")
                 with state._lock:
                     agent = state.agents.get(role)
                     if agent and agent.intent == AgentState.INTENT_STOPPING:
                         # Intent already STOPPING and intent_set_at already
-                        # recorded at request time — nothing to update here.
-                        # The save_state below is a no-op for these fields
-                        # but kept for parity with other ack paths.
+                        # recorded at request time — do NOT reset it (would
+                        # extend the 60s window). The save_state below is a
+                        # no-op for these fields but kept for parity with
+                        # other ack paths.
                         pass
                 # #9242: disk write off the asyncio event loop.
                 await asyncio.to_thread(state.save_state)
