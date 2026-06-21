@@ -192,6 +192,45 @@ def _emit(event_type, payload=None, cycle_number=None, role=None):
         pass
 
 
+def _safe_stash_pop():
+    """Pop the most recent stash, leaving NO conflict markers behind (#13045).
+
+    A plain ``git stash pop`` that conflicts writes ``<<<<<<< / ======= /
+    >>>>>>>`` merge markers into the unmerged working-tree files and KEEPS the
+    stash. The old recovery only ran ``git stash drop`` — which removes the
+    stash entry but NOT the markers already written, so a state file like
+    ``config.md`` was left corrupt → ``compose.py`` failed on every recompose →
+    a fleet-wide compose-failed loop.
+
+    On conflict we instead restore every conflicted (unmerged) path to the
+    pulled ``HEAD`` version — the just-pulled/checked-out state is authoritative
+    for the state files clone-sync touches (e.g. config.md's ship counter, whose
+    live value lives on main) — then drop the now-applied stash. This discards
+    the stashed local version of the conflicting paths, which is exactly the
+    stale local change that caused the conflict.
+
+    Returns True if the pop applied cleanly, False if it conflicted and was
+    force-resolved to HEAD.
+    """
+    pop = _run("git stash pop", check=False)
+    if pop.returncode == 0:
+        return True
+    conflicted = _run("git diff --name-only --diff-filter=U", check=False)
+    unmerged = [p.strip() for p in conflicted.stdout.splitlines() if p.strip()]
+    if not unmerged:
+        # Pop failed for a NON-conflict reason (no stash entry, or an unrelated
+        # git error) — the stash, if any, was NOT applied. Do NOT drop it: that
+        # would discard un-applied stashed work. Leave it intact and report the
+        # pop did not succeed.
+        return False
+    for path in unmerged:
+        _run_list(["git", "checkout", "HEAD", "--", path], check=False)
+    # A real conflict: git applied the stash WITH markers and kept it. Now that
+    # the conflicted paths are restored to HEAD, drop the retained stash.
+    _run("git stash drop", check=False)
+    return False
+
+
 def pull(role=None):
     """Pull with merge (#5378, #5445).
 
@@ -224,17 +263,19 @@ def pull(role=None):
               file=sys.stderr)
         return False
 
-    pop_result = _run("git stash pop", check=False)
-    if pop_result.returncode != 0:
-        _log_diagnostic("warning", "stash pop failed during pull — possible merge conflict")
-        # Drop the failed stash to prevent leak accumulation (#4829)
-        _run("git stash drop", check=False)
-        print("WARNING: stash pop failed -- dropped stale stash entry.", file=sys.stderr)
-        print("Pulled (stash pop conflict -- stale stash dropped)")
-        _emit("git-pull", {"result": "stash"}, role=role)
-    else:
+    if _safe_stash_pop():
         print("Pulled (stashed and popped)")
-        _emit("git-pull", {"result": "stash"}, role=role)
+    else:
+        # #13045: a conflicted pop is resolved to the pulled HEAD (markers
+        # removed) and the stash dropped (#4829 leak-prevention preserved),
+        # so config.md is never left with `<<<<<<<` markers that break compose.
+        _log_diagnostic("warning",
+                        "stash pop conflict during pull — restored conflicted "
+                        "paths to pulled HEAD and dropped stash (#13045)")
+        print("WARNING: stash pop conflict -- conflicts resolved to pulled "
+              "state, stash dropped.", file=sys.stderr)
+        print("Pulled (stash pop conflict -- resolved to pulled state)")
+    _emit("git-pull", {"result": "stash"}, role=role)
     return True
 
 
@@ -616,12 +657,13 @@ def _safe_checkout(target_branch):
     _run("git stash -q", check=False)
     result = _run_list(["git", "checkout", target_branch], check=False)
     if result.returncode != 0:
-        # Checkout failed — pop stash to restore original branch state
-        _run("git stash pop -q", check=False)
+        # Checkout failed — restore original branch state. Use the conflict-safe
+        # pop so a conflict here never leaves `<<<<<<<` markers either (#13045).
+        _safe_stash_pop()
         print(f"ERROR: could not switch to {target_branch}: {result.stderr}", file=sys.stderr)
         return False
-    # Checkout succeeded — pop stash on the target branch
-    _run("git stash pop -q", check=False)
+    # Checkout succeeded — pop stash on the target branch (conflict-safe, #13045).
+    _safe_stash_pop()
     return True
 
 
