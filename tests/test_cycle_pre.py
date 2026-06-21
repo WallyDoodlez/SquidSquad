@@ -474,7 +474,8 @@ class TestReadConfigFlags:
         result = cycle_pre._read_config_flags()
         assert result["pr_flow"] is False
         assert result["improvement_scanning"] is True
-        assert result["vault_remember"] is False
+        # Vault remember/optimize are always-on (#13043) — independent of config.
+        assert result["vault_remember"] is True
         assert result["vault_optimize"] is True
 
     def test_accepts_true_and_1_as_truthy(self, monkeypatch):
@@ -489,8 +490,23 @@ class TestReadConfigFlags:
         result = cycle_pre._read_config_flags()
         assert result["pr_flow"] is True
         assert result["improvement_scanning"] is True
+        # Always-on regardless of config value (#13043).
         assert result["vault_remember"] is True
-        assert result["vault_optimize"] is False
+        assert result["vault_optimize"] is True
+
+    def test_vault_flags_always_on_regardless_of_config(self, monkeypatch):
+        """#13043: vault remember/optimize have no enable/disable toggle —
+        cycle-input reports them on even when config says 'no' (or the field
+        is absent entirely)."""
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "no")
+        result = cycle_pre._read_config_flags()
+        assert result["vault_remember"] is True
+        assert result["vault_optimize"] is True
+        # And with the field absent (empty) — the post-removal config.md state:
+        monkeypatch.setattr(cycle_pre, "_config_get", lambda f: "")
+        result = cycle_pre._read_config_flags()
+        assert result["vault_remember"] is True
+        assert result["vault_optimize"] is True
 
 
 # ---------------------------------------------------------------------------

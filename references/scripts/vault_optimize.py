@@ -94,17 +94,14 @@ def _count_notes():
 
 
 def _is_config_enabled():
-    """Check if vault optimize is enabled in config.md."""
-    if not CONFIG_PATH.exists():
-        return True  # Default enabled
-    try:
-        text = CONFIG_PATH.read_text(encoding="utf-8")
-        m = re.search(r"Vault Optimize.*?Enabled.*?:\s*(yes|no)", text, re.IGNORECASE | re.DOTALL)
-        if m:
-            return m.group(1).lower() == "yes"
-    except Exception:
-        pass
-    return True  # Default enabled
+    """Vault optimize is always-on — there is no enable/disable toggle (#13043).
+
+    Activation is controlled by the quiet-cycle gate + the 20-note threshold
+    + the cooldown, not by config. Retained as a function (rather than deleting
+    the call sites) so the activation contract stays in one named place; it now
+    unconditionally returns True.
+    """
+    return True
 
 
 def _acquire_lock():

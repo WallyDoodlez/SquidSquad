@@ -31,4 +31,4 @@ Questions use plain language — never expose vault internals (galaxy, frontmatt
 
 **Status bar**: The pending question count is shown in the status bar. PM mentions it in check-in. Human responds when ready.
 
-If the vault is too small (<20 notes) or optimize is disabled, the script exits cleanly with no output.
+If the vault is too small (<20 notes), the script exits cleanly with no output.

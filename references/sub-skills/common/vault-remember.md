@@ -80,6 +80,8 @@ python references/scripts/vault_remember.py inc-writes [ROLE]
 1. Decisions (architectural choices compound)
 2. Learnings (failure lessons prevent repeat mistakes)
 3. Patterns (useful but can wait a cycle)
+4. Styles (convention drift is costly, but a single style note rarely can't wait)
+5. Project context (usually a BRIEFING.md update, not a budget-consuming write)
 
 Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
 

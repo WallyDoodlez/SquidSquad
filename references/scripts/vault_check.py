@@ -7,6 +7,7 @@ Usage:
     python scripts/vault_check.py validate           # Full vault validation
     python scripts/vault_check.py check-frontmatter   # Validate frontmatter in galaxy notes
     python scripts/vault_check.py check-wikilinks     # Find broken wikilinks
+    python scripts/vault_check.py check-size           # Warn on galaxy notes >500 lines (advisory)
     python scripts/vault_check.py check-structure      # Validate PARAG directory structure
     python scripts/vault_check.py list-orphans         # Notes not linked from anywhere
     python scripts/vault_check.py --help
