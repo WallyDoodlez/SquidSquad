@@ -5,7 +5,7 @@ Covers 5 areas: prune (auto-archive stale+orphan), consolidate candidates,
 reindex (links), confidence decay, relevance scoring.
 
 Usage:
-    python scripts/vault_optimize.py full-sweep [--dry-run]       # Full optimize pass
+    python scripts/vault_optimize.py run [--dry-run]              # Full optimize pass (alias: full-sweep)
     python scripts/vault_optimize.py prune-scan [--dry-run]       # Archive stale+orphan notes
     python scripts/vault_optimize.py consolidate-scan [--dry-run]  # Detect merge candidates
     python scripts/vault_optimize.py decay-apply [--dry-run]       # Confidence decay
@@ -94,17 +94,14 @@ def _count_notes():
 
 
 def _is_config_enabled():
-    """Check if vault optimize is enabled in config.md."""
-    if not CONFIG_PATH.exists():
-        return True  # Default enabled
-    try:
-        text = CONFIG_PATH.read_text(encoding="utf-8")
-        m = re.search(r"Vault Optimize.*?Enabled.*?:\s*(yes|no)", text, re.IGNORECASE | re.DOTALL)
-        if m:
-            return m.group(1).lower() == "yes"
-    except Exception:
-        pass
-    return True  # Default enabled
+    """Vault optimize is always-on — there is no enable/disable toggle (#13043).
+
+    Activation is controlled by the quiet-cycle gate + the 20-note threshold
+    + the cooldown, not by config. Retained as a function (rather than deleting
+    the call sites) so the activation contract stays in one named place; it now
+    unconditionally returns True.
+    """
+    return True
 
 
 def _acquire_lock():
@@ -571,7 +568,10 @@ def main():
     cmd = args[0]
     dry_run = "--dry-run" in args
 
-    if cmd == "full-sweep":
+    if cmd in ("full-sweep", "run"):
+        # `run` is the canonical name in VAULT-ARCH §7.3/§8.3 and the
+        # vault-optimize sub-skill (~7 references); `full-sweep` is kept as
+        # the historical alias (#13043).
         results = run_optimize(dry_run=dry_run)
         print(json.dumps(results, indent=2, default=str))
 

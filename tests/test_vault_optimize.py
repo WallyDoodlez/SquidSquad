@@ -346,19 +346,43 @@ class TestPendingQuestions:
 
 
 # ---------------------------------------------------------------------------
+# CLI dispatch
+# ---------------------------------------------------------------------------
+
+class TestCliRunAlias:
+    def test_run_is_alias_for_full_sweep(self, patched_vault, monkeypatch, capsys):
+        """#13043 item 2: `vault_optimize.py run` must dispatch the same
+        full optimize pass as `full-sweep` (VAULT-ARCH §7.3/§8.3 and the
+        vault-optimize sub-skill reference `run`, which previously errored
+        with 'Unknown command: run')."""
+        monkeypatch.setattr(sys, "argv", ["vault_optimize.py", "run", "--dry-run"])
+        rc = vault_optimize.main()
+        out = capsys.readouterr().out
+        assert rc in (0, None)
+        # full-sweep/run print the run_optimize() result as JSON — not the
+        # "Unknown command" error path.
+        assert "Unknown command" not in out
+        assert json.loads(out)  # parses as JSON (the optimize result)
+
+
+# ---------------------------------------------------------------------------
 # Guards
 # ---------------------------------------------------------------------------
 
 class TestGuards:
-    def test_config_disabled(self, patched_vault):
+    def test_config_enabled_field_is_ignored_always_on(self, patched_vault):
+        """#13043: vault-optimize is always-on — there is no enable/disable
+        toggle. A stale `Enabled: no` in config.md must NOT block the guards
+        (activation is gated by note-count + quiet-cycle + cooldown, not config)."""
         config = patched_vault.parent / "config.md"
         config.write_text(
             "# SquidSquad Config\n\n## Vault Optimize\n\n- **Enabled**: no\n",
             encoding="utf-8",
         )
         ok, reason = vault_optimize._check_guards()
-        assert not ok
-        assert "disabled" in reason
+        # patched_vault has 25 notes (above threshold), so guards pass despite
+        # the stale Enabled: no.
+        assert ok, f"always-on guards should pass; blocked with: {reason}"
 
     def test_vault_too_small(self, tmp_path, monkeypatch):
         small_vault = tmp_path / ".squidsquad" / "vault" / "galaxy"
