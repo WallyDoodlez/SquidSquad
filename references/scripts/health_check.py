@@ -207,6 +207,9 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
             "clone_path": str,
             "current_state_phase": str,
             "current_state_desc": str,
+            "current_state_stale": bool,  # #12854: phase/desc is past the
+                                          # staleness window — treat as
+                                          # last-known, NOT current activity
             "task": str,
             "last_active_minutes_ago": int | None,
             "reason": str,
