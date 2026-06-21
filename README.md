@@ -50,6 +50,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Communication abstraction layer** — a platform-agnostic adapter interface for real-time agent communication. Agents can send messages, create threads, poll for responses, and share files through any supported platform (Telegram, Slack, Discord) without knowing the underlying service. Ships with a NullAdapter so agents work identically whether comms are configured or not. Add a `## Communication` section to `config.md` to enable a provider
 - **Harness** — a FastAPI-based lifecycle manager that owns the full agent lifecycle. The harness spawns agents via thin launchers into independent terminal windows, monitors health via PID tracking, and exposes a REST API for start/stop/restart/status/merge operations. `GET /status` reports a `code_version` block (squidsquad version + git SHA + branch + dirty flag, captured at boot) and `GET /` returns the same slim version triple — so you can verify which code a long-running harness is actually loaded with, without restarting. It also owns PR merging and template recomposition — when a merge touches agent templates, the harness automatically runs `compose.py deploy-all` and reboots only the affected agents, so templates are always current. Crash recovery via `.harness-state.json` — the harness remembers which agents were running. Ctrl+C graceful shutdown (single=finish cycle, double=warn, triple=force exit). Port discovery via `.squidsquad/.harness-port`. Use the CLI (`squidsquad_cli.py`) or call the API directly
 - **Real-time agent coordination** — agents react to each other's events without waiting for the next cycle. When QA verifies a fix, the skill agent knows immediately. When a PR is merged, PM transitions the issue within seconds. High-confidence patterns (like PR merge → ship) trigger automatically; lower-confidence events are surfaced to agents for intelligent decision-making. If the event bus is unreachable, agents fall back gracefully to standard 30-minute cycle polling — no breakage
+- **Verbose Mode** — a config-gated toggle for how much your agents narrate to their terminal. Off by default (concise, plain-language output); switch it on in `config.md` to watch every step of every cycle in full detail. Read once at startup — toggle by editing config and restarting. See [Verbose Mode](#verbose-mode) below
 
 ---
 
@@ -87,6 +88,24 @@ Most people should use `squidsquad_cli.py start` above, which boots the harness 
 ### 3. Work
 
 Talk to PM to file bugs, request features, and approve plans. Everything else happens automatically.
+
+---
+
+## Verbose Mode
+
+By default your agents keep their terminal output high-level: short, plain-language status lines that say what happened, not how. **Verbose Mode** flips that — when it's on, each agent narrates everything it does, step by step, so you can watch exactly how SquidSquad works under the hood.
+
+- **Off (default)** — agents report only what matters, in plain language (e.g. `🦑 Activity detected — nothing needs attention`). Best for everyday use and the least noise.
+- **On** — agents narrate every step of every cycle in full detail. Great for learning how the team operates, live demos, or understanding why an agent did something. Expect a lot more output, and higher token usage — it's an explicit trade you opt into.
+
+**To turn it on or off**, edit `.squidsquad/config.md`, set the `Verbose Mode` section's `Enabled` to `yes` or `no`, then restart the agents:
+
+```
+## Verbose Mode
+- **Enabled**: no
+```
+
+The flag is read **once when each agent starts**, so a restart is what makes a change take effect — the same way switching an agent's wake mode does. New installs default to `no`; this only affects the agents in your own install.
 
 ---
 
