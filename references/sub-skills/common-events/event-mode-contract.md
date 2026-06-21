@@ -74,9 +74,9 @@ Monitor tool invocation:
 ### Case C — After completing work
 
 1. You just transitioned a tracker item via `tracker.py transition`.
-2. Update `working-state.md` → `- **Task**: none`.
+2. Update `working-state.md` → `- **Task**: none`, **and write the `current-state` idle marker**: `python references/scripts/cycle.py status-bar-self idle ""`. This is load-bearing for health diagnosis: once a task is closed, handed off, or changed, `current-state` must **no longer name that task as your *current* activity** — leaving a just-closed task in `current-state` is the lingering-stale-content defect (#12854) that makes a closed issue's activity read as live and sends diagnosers down wrong root-cause paths. Write the marker **on the transition** — every task close, hand-off, or task change — **not** on a fixed file-age cadence. (The `idle` marker is distinct from the `inline` operator-session marker you self-write during a human turn; don't conflate them.)
 3. **Immediately run `work_queue()`** against the forge. Do NOT wait for your own transition event to come back through the stream.
-4. Pick up the next item, or — if `work_queue()` is empty — enter idle (improvement-scan cool-down).
+4. Pick up the next item — **writing the new task's marker as you start it** (`python references/scripts/cycle.py status-bar-self <phase> "<short description>"`) so `current-state` names the work actually in flight — or, if `work_queue()` is empty, enter idle (improvement-scan cool-down) with the `idle` marker from step 2 standing.
 
 ---
 
