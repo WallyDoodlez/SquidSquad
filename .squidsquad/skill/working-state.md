@@ -1,8 +1,11 @@
 # Working State
 
-- **Task**: **5 SHIPPED this session** (#13035, #12861, #13042, #13043, #13077 — all pending-test). Selecting next.
-- **Updated**: 2026-06-20 23:35 (skill — event-mode; #13077 active-killer shipped)
+- **Task**: **6 SHIPPED this session** (#13035, #12861, #13042, #13043, #13077, #13045 — all pending-test). Both HIGH bugs done. Selecting next.
+- **Updated**: 2026-06-20 23:55 (skill — event-mode; #13045 stash-conflict fix shipped)
 - **Quiet Cycle Counter**: 0
+
+## #13045 DELIVERED (PR #13095, pending-test)
+Conflict-safe stash pop — clone-sync stash-pop conflict left <<<<<<< markers in config.md → fleet compose-failed loop. New _safe_stash_pop(): on conflict, restore unmerged paths to pulled HEAD (git checkout HEAD -- <path>) then drop stash; wired into pull() + _safe_checkout. RCA: git_ops.py:227 only dropped the stash, not the markers. Verified mock 151/151 + REAL-git smoke. DS 4 warnings folded (Finding 1: gate drop on actual conflicts). gate 53/0.
 
 ## #13077 DELIVERED (PR #13084, pending-test)
 Harness actively force-kills the deploy-halted agent (the LLM CANNOT self-/quit — operator-confirmed; invalidated #13032's wait-for-self-exit premise). _respawn_agent_process now reboot_agent._kill_process(old_pid) → confirm death → boot. Deploy path uniquely lacked active-kill (60s force-kill net only fires on STOPPING/RESTARTING, not status=deploying). 2 DS passes. Suite 43/43; gate 53/0.
