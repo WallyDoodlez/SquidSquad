@@ -1847,3 +1847,10 @@
 - **Findings**: 1 filed — #10671 (low — dead `import os` in `l4_audit_gate.py:20` AND `assemble_pass.py`; copy-paste residue from sibling modules that do use `os`)
 - **Items rejected by human**: none yet
 - **Notes**: ZERO bare `except:` clauses repo-wide (clean). ZERO `TODO`/`FIXME`/`XXX` markers in `references/scripts/` (clean — the team handles deferrals via tracker tasks instead). The cycle-script `subprocess.run` calls in `cycle_pre.py` / `cycle_post.py` all use explicit timeouts via `_run` helper (confirmed during #10541 audit cycle 1500). `boot_remote.py:479` has one `subprocess.run` without timeout for `tmux kill-session` on Linux — not a concern since Linux spawn path isn't current production target (Windows-only host). PRD-C work shipped 6 new l4_*.py modules in the last 7 cycles; only 2 of them carry dead imports, suggesting the pattern was caught by reviewers on most modules.
+
+## Scan — 2026-06-21 15:06
+
+- **Files scanned**: references/scripts/harness.py (focused: all @app.post/get/delete request-body handlers, fail-open lens)
+- **Findings**: 1 filed — #13170 (low — POST /merge merge_pr missing JSON-parse try/except + non-dict isinstance guard; same fail-open 500 class that #13156 fixed for /events and #12495 guarded in /work/assign; /merge was missed by both)
+- **Items rejected by human**: none yet
+- **Notes**: Hook endpoints (/hooks/session-end, /hooks/activity, /hooks/pause) intentionally fail-open to {} (explicit always-200 contracts) — correctly excluded. receive_event (#13156) and /work/assign (#12495) already carry the parse+isinstance guard. Dead-code candidates (_execute_transition, _execute_comment) disqualified — grep confirmed test-suite callers. The fail-open-on-malformed-body pattern is now a known recurring class across harness routes; #13170 closes the last unguarded JSON-body POST handler. Criteria note: when a fail-closed fix lands on one route (#13156/#12495), sweep ALL sibling routes of the same shape in the same pass — partial coverage leaves latent siblings (this finding is exactly that residue).
