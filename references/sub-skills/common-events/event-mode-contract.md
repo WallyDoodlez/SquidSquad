@@ -74,9 +74,9 @@ Monitor tool invocation:
 ### Case C — After completing work
 
 1. You just transitioned a tracker item via `tracker.py transition`.
-2. Update `working-state.md` → `- **Task**: none`.
+2. Update `working-state.md` → `- **Task**: none`, **and write the `current-state` idle marker** (`python references/scripts/cycle.py status-bar-self idle ""`) per **Keep `current-state` honest** in Always-On Rules — the task you just closed must no longer read as your current activity (#12854).
 3. **Immediately run `work_queue()`** against the forge. Do NOT wait for your own transition event to come back through the stream.
-4. Pick up the next item, or — if `work_queue()` is empty — enter idle (improvement-scan cool-down).
+4. Pick up the next item — **writing its marker as you start it** (per **Keep `current-state` honest**) — or, if `work_queue()` is empty, enter idle (improvement-scan cool-down) with the `idle` marker from step 2 standing.
 
 ---
 
@@ -108,6 +108,7 @@ Monitor tool invocation:
 - **One event at a time.** Process atomically. Never start a second event before the first is complete.
 - **Cursor advance is per-event and agent-initiated.** You POST `ack-cursor {event_id, role}` after tending each event (cared or skipped); the harness writes `.event-state.json`. No client-side atomicity protocol applies — the harness owns the file and its durability. See [[cursor-management]].
 - **`working-state.md` is agent-owned for agent-authored fields.** You are the sole writer of `- **Task**: …`, the `## Improvement Scan` block, and any agent-private metadata. The cursor is NOT here: it lives in `.event-state.json` (harness-owned), and you read/advance it via the harness API exactly as described in [[cursor-management]]. `working-state.md` carries no cursor line.
+- **Keep `current-state` honest** (`python references/scripts/cycle.py status-bar-self <phase> "<short description>"`). It is a health-diagnosis signal read by the statusline, the health poller, and teammates — not a file-age cadence artifact. Write it **on the transition**, across **every** work-pickup and idle path (boot pickup, Case B, Case C, and the idle-cooldown-loop's absorb-work tick): write the task's marker when you **start** an item, and the `idle` marker (`status-bar-self idle ""`) when you go idle or when a task you held is closed, handed off, or reassigned away. `current-state` must **never name a task that is no longer your current activity** — that lingering-stale content is the #12854 defect that makes a closed issue read as live and sends diagnosers down wrong root-cause paths. (The `idle` marker is distinct from the `inline` operator-session marker — `status-bar-self inline ""` — you self-write during a human turn; don't conflate them.)
 - **Bare comments do not wake anyone.** Urgent agent-to-agent signaling must ride a status transition or label change. See [[comment-handling]].
 - **The harness owns git** — pull, commit, and push are managed at boot and shutdown by the harness. You do not run mechanical pre/post steps in event mode. Event IDs are the tracking unit; there is no per-iteration counter.
 - **Context pressure is managed by the harness.** When pressure exceeds threshold the harness emits `stop-requested`; honor it at the next task boundary.
