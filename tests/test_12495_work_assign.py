@@ -141,6 +141,38 @@ class TestWorkAssignRoute(unittest.TestCase):
             )
         self.assertEqual(resp.status_code, 200)
 
+    def test_config_unreadable_falls_open(self):
+        """If _get_all_roles() raises (config unreadable), the alias-existence
+        check falls OPEN (200), matching POST /events' unknown-role posture —
+        a broken-config wedge is worse than letting one event through. This
+        cements the deliberate fall-open contract."""
+        with patch("harness.boot_remote._get_all_roles",
+                   side_effect=RuntimeError("config unreadable")):
+            resp = self.client.post(
+                "/work/assign",
+                json={"target_alias": "whatever-alias"},
+                headers={"X-Squidsquad-Alias": "pm"},
+            )
+        self.assertEqual(resp.status_code, 200, resp.text)
+
+    def test_extra_payload_merges_reserved_keys_win(self):
+        """Caller-supplied payload fields ride through; reserved keys
+        (target_alias) cannot be overridden via the nested payload object."""
+        with patch("harness.boot_remote._get_all_roles", return_value=_ALIASES):
+            self.client.post(
+                "/work/assign",
+                json={"target_alias": "qa", "event_context": "merge-test",
+                      "payload": {"title": "hello", "target_alias": "HACKED"}},
+                headers={"X-Squidsquad-Alias": "pm"},
+            )
+            forq = self.client.get("/events/for/qa").json()
+        hits = [e for e in forq["events"]
+                if e.get("payload", {}).get("event_context") == "merge-test"]
+        self.assertTrue(hits)
+        p = hits[-1]["payload"]
+        self.assertEqual(p["title"], "hello")        # extra field rode through
+        self.assertEqual(p["target_alias"], "qa")    # reserved key NOT overridden
+
 
 class TestTrackerWorkAssignClient(unittest.TestCase):
     def _import_tracker(self):

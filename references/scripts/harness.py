@@ -3343,6 +3343,13 @@ async def work_assign(request: Request):
     - ``400`` — malformed body, missing ``target_alias``, or self-assign
       (``target_alias == X-Squidsquad-Alias``; structural anti-loop invariant).
 
+    Check order: malformed-body → missing-target → self-assign (400) →
+    alias-existence (404). Self-assign is checked before existence so a
+    self-targeted call returns the terse 400 rather than a 404 that would
+    echo the full known-alias registry. If the config is unreadable the
+    existence check falls OPEN (same posture as POST /events' unknown-role
+    guard — a broken-config wedge is worse than letting one event through).
+
     Authority: the harness enforces only alias-existence + the self-assign
     invariant — NOT class-from-class permissions (decision-class-vs-alias-
     routing-model, 2026-05-25). Who *should* call it (PM babysitting; any agent

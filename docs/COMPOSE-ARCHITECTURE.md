@@ -816,7 +816,7 @@ Events are **not** a communication channel — they carry no semantic payload. A
 **To send another agent a message:**
 
 1. **Write to forge** — append a tracker comment via the `discussion` sub-skill (durable, role-tagged, visible to humans and future agents).
-2. **Route to target** — call `POST /work/assign` with the target alias and update non-routing issue state (assignee, status labels) so the message lands in the target's normal pipeline queries. The agent does NOT write the `role:*` label directly — the harness rewrites `role:<target_alias>` as part of processing `/work/assign` (see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
+2. **Route to target** — for a transition-driven handoff, change the **status** label (`tracker.py transition`) and the EAD routes the `assigned-to` off that status (no manual call). For a non-transition wake (babysitting / process-concern), call the manual `POST /work/assign` primitive (`tracker.py work-assign`). Either way the harness does **not** rewrite `role:*` — that label is set once by PM at `planned → approved` and is otherwise stable (#12495; see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md)).
 3. **Nudge** — fire a nudge event with `target_alias=<alias>` so an idle target wakes early. Lost or missed nudges are harmless: the next natural polling cycle still picks up the forge change.
 
 ```mermaid
