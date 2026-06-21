@@ -114,6 +114,123 @@ class TestAgentRows:
         assert hc.agent_rows({}, NOW) == []
 
 
+# --- format_age ------------------------------------------------------------
+
+class TestFormatAge:
+    def test_none_is_dash(self):
+        assert hc.format_age(None, NOW) == "—"
+
+    def test_unparseable_is_dash(self):
+        assert hc.format_age("not-a-number", NOW) == "—"
+
+    def test_seconds(self):
+        assert hc.format_age(NOW - 3, NOW) == "3s"
+
+    def test_minutes_floor(self):
+        assert hc.format_age(NOW - 125, NOW) == "2m"  # 125s → 2m (floor)
+
+    def test_hours_floor(self):
+        assert hc.format_age(NOW - 3 * 3600 - 5, NOW) == "3h"
+
+    def test_days_floor(self):
+        assert hc.format_age(NOW - 4 * 86400 - 100, NOW) == "4d"
+
+    def test_boundary_60s_is_one_minute(self):
+        assert hc.format_age(NOW - 60, NOW) == "1m"
+
+    def test_future_clamps_to_zero(self):
+        assert hc.format_age(NOW + 500, NOW) == "0s"
+
+
+# --- _iso_to_epoch ---------------------------------------------------------
+
+class TestIsoToEpoch:
+    def test_z_suffix_utc(self):
+        # 2026-06-21T00:00:00Z → known epoch.
+        import datetime
+        expected = datetime.datetime(
+            2026, 6, 21, tzinfo=datetime.timezone.utc).timestamp()
+        assert hc._iso_to_epoch("2026-06-21T00:00:00Z") == expected
+
+    def test_offset_form(self):
+        assert hc._iso_to_epoch("2026-06-21T00:00:00+00:00") is not None
+
+    def test_empty_and_none(self):
+        assert hc._iso_to_epoch("") is None
+        assert hc._iso_to_epoch(None) is None
+
+    def test_garbage(self):
+        assert hc._iso_to_epoch("nonsense") is None
+
+    def test_roundtrips_into_format_age(self):
+        import datetime
+        iso = "2026-06-21T00:00:00Z"
+        epoch = hc._iso_to_epoch(iso)
+        # 90 seconds later → "1m".
+        assert hc.format_age(epoch, epoch + 90) == "1m"
+
+
+# --- agent_rows last_activity_age -----------------------------------------
+
+class TestAgentRowsActivityAge:
+    def test_age_field_present(self):
+        status = {"agents": [
+            {"role": "skill", "status": "running", "intent": "running",
+             "current_cycle": 5, "last_activity_at": NOW - 30, "lag": 0},
+        ]}
+        rows = hc.agent_rows(status, NOW)
+        assert rows[0]["last_activity_age"] == "30s"
+
+    def test_age_dash_when_missing(self):
+        status = {"agents": [
+            {"role": "dm", "status": "running", "intent": "running",
+             "current_cycle": None, "lag": 0},
+        ]}
+        rows = hc.agent_rows(status, NOW)
+        assert rows[0]["last_activity_age"] == "—"
+
+
+# --- human_queue_rows ------------------------------------------------------
+
+class TestHumanQueueRows:
+    def _q(self):
+        return {"count": 2, "items": [
+            {"number": 12527, "title": "Greenfield smoke",
+             "status": "pending-human-setup", "role": "skill",
+             "priority": "high", "updated_at": "2026-06-21T00:00:00Z",
+             "url": "https://x/12527"},
+            {"number": 13119, "title": "Couple sentinel",
+             "status": "pending-human-review", "role": "skill",
+             "priority": "medium", "updated_at": "2026-06-20T23:00:00Z",
+             "url": "https://x/13119"},
+        ]}
+
+    def test_shapes_rows_and_strips_prefix(self):
+        # now = 1h after the first item's updated_at.
+        now = hc._iso_to_epoch("2026-06-21T01:00:00Z")
+        rows = hc.human_queue_rows(self._q(), now)
+        assert rows[0]["number"] == 12527
+        assert rows[0]["status_short"] == "setup"
+        assert rows[0]["age"] == "1h"
+        assert rows[1]["status_short"] == "review"
+
+    def test_preserves_harness_order(self):
+        rows = hc.human_queue_rows(self._q(), NOW)
+        assert [r["number"] for r in rows] == [12527, 13119]
+
+    def test_unknown_status_passes_through(self):
+        q = {"items": [{"number": 1, "status": "weird", "updated_at": ""}]}
+        rows = hc.human_queue_rows(q, NOW)
+        assert rows[0]["status_short"] == "weird"
+        assert rows[0]["age"] == "—"  # empty updated_at → unparseable
+
+    def test_none_payload_graceful(self):
+        assert hc.human_queue_rows(None, NOW) == []
+
+    def test_empty_items(self):
+        assert hc.human_queue_rows({"count": 0, "items": []}, NOW) == []
+
+
 # --- fetch_json graceful failure ------------------------------------------
 
 class TestFetchJson:
