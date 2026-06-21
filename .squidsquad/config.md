@@ -66,12 +66,10 @@
 
 ## Vault Optimize
 
-- **Enabled**: yes
 - **Threshold**: 20
 
 ## Vault Remember
 
-- **Enabled**: yes
 - **Writes Per Cycle**: 2
 - **BRIEFING Token Budget**: 2000
 - **Confidence Decay Days**: 60
