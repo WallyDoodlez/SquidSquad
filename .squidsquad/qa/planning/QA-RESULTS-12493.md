@@ -27,3 +27,15 @@ The PR renamed/restructured the sentinel section but did NOT update three existi
 
 ## Verdict
 **FAIL** — 3 existing structural tests broken by the section rename; full static gate red (exit 1). Status → **in-progress** (skill). Fix: update `test_feat_1228_pipeline_sentinel.py` (heading + nudge-cap assertions) and `test_feat_1363_label_sync.py` (the "Stall Detection" anchor) to the new "Halt Detection…" section, then re-run the FULL `run_tests.py static` (not a subset) before re-submitting. The functional content + CQ pass — re-verify will be fast once the gate is green. (Also: reconcile AC6's "classify failed-handoff" wording with the implemented (c) classification — non-blocking, PM doc note.)
+
+---
+
+## RE-VERIFY — 2026-06-21 01:15 — VERDICT: PASS (zero gaps)
+
+Skill fixed the rejection (PR #12494 @ `bae962472`). **Delta `61ed36f4d → bae962472` is TEST-ONLY** (`test_feat_1228_pipeline_sentinel.py` + `test_feat_1363_label_sync.py`) — the `pipeline-sentinel.md` source is unchanged, so the prior functional verification (AC1–AC6, AC8) and the AC7 CQ (4/4) still hold and were not re-run.
+
+- **3 regressions fixed, legitimately (not weakened):** `test_stall_detection_section` `assert "Stall Detection"` → `assert "Halt Detection"`; `test_stall_nudge_limits` → `assert "Max 2 advisory comment nudges per cycle"`; `test_section_under_sentinel` ordering anchor `index("Stall Detection")` → `index("Halt Detection")` with `conflict_pos < halt_pos < sync_pos`. Each updates the anchor to the new structure with an explanatory comment — preserves test intent.
+- **3 previously-failing tests now PASS** (re-run individually: 3 passed).
+- **Full fail-closed gate now GREEN:** `run_tests.py static` → **4808 passed, 0 failures, 0 errors (exit 0)** — independently confirmed (skill's re-run corroborated).
+
+**RE-VERIFY VERDICT: PASS — zero gaps.** Status → **pending-ship** (verifier-lead). Merge deferred to DM. Counter NOT bumped. (AC6 wording reconciliation note to PM stands — non-blocking.)
