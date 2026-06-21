@@ -151,6 +151,7 @@ This project is developed by SquidSquad itself. The [CHANGELOG](./CHANGELOG.md) 
 | Document | Description |
 |----------|-------------|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How SquidSquad works under the hood |
+| [Configuration Reference](docs/CONFIGURATION.md) | Every `config.md` setting explained — what to set at install vs tune later |
 | [Agent Runtime](docs/AGENT-RUNTIME.md) | How agents coordinate in real-time (event bus, lifecycle, triggers) |
 | [DM Architecture](docs/DM-ARCH.md) | The Delivery Manager as a layered role: generic delivery spine (L2), domain mechanics (L3), project release policy (L4) |
 | [Sub-Skill Guide](docs/sub-skill-guide.md) | Creating and contributing sub-skills |
