@@ -34,6 +34,7 @@ import io
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # Ensure stdout/stderr can handle UTF-8 on Windows (cp1252 consoles choke on em dashes etc.)
@@ -489,12 +490,21 @@ def pr_ready(pr_number):
     return True
 
 
-def pr_merge(pr_number, strategy="squash"):
+def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
 
     Checks PR state first — if already merged, returns success.
     On merge conflict or unexpected failure, returns failure with details.
+
+    #10540: "Base branch was modified" is a TRANSIENT batch-ship race (not a
+    real conflict) — when DM drains a deep ship queue, each successful merge
+    moves main's SHA, so PRs dispatched against the old base are rejected until
+    GitHub recomputes mergeability; the same PR retried alone succeeds. The
+    gh-CLI path retries that specific error up to ``_max_base_retries`` times
+    (``_base_retry_delay`` seconds apart, to let GitHub settle), while a real
+    ``merge conflict`` stays terminal (routed back to in-progress for rebase,
+    never retried). The retry knobs are parameters for deterministic testing.
     """
     try:
         from forge_adapter import get_adapter, _read_forge_config
@@ -539,33 +549,49 @@ def pr_merge(pr_number, strategy="squash"):
         except (json.JSONDecodeError, AttributeError):
             pass
 
-    # Attempt merge
+    # Attempt merge, retrying ONLY the transient "Base branch was modified"
+    # batch-ship race (#10540). A real merge conflict is terminal.
     merge_args = ["gh", "pr", "merge", str(pr_number), f"--{strategy}", "--delete-branch"]
-    result = _run_list(merge_args, check=False)
-    if result.returncode == 0:
-        # pr-merge event removed (#6126) — harness emits pr-merged instead
-        print(f"PR #{pr_number} merged ({strategy})")
-        # Extract linked issue number from branch name
-        branch_result = _run_list(
-            ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
-            check=False,
-        )
-        if branch_result.returncode == 0:
-            try:
-                branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
-                # Branch format: squidsquad/role/NUMBER
-                parts = branch_name.split("/")
-                if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
-                    issue_num = parts[-1]
-                    print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
-            except (json.JSONDecodeError, AttributeError, IndexError):
-                pass
-        return True, "merged"
-    else:
+    for attempt in range(_max_base_retries + 1):
+        result = _run_list(merge_args, check=False)
+        if result.returncode == 0:
+            # pr-merge event removed (#6126) — harness emits pr-merged instead
+            print(f"PR #{pr_number} merged ({strategy})")
+            # Extract linked issue number from branch name
+            branch_result = _run_list(
+                ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
+                check=False,
+            )
+            if branch_result.returncode == 0:
+                try:
+                    branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
+                    # Branch format: squidsquad/role/NUMBER
+                    parts = branch_name.split("/")
+                    if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
+                        issue_num = parts[-1]
+                        print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
+                except (json.JSONDecodeError, AttributeError, IndexError):
+                    pass
+            return True, "merged"
+
         error = result.stderr.strip()
-        if "merge conflict" in error.lower() or "not mergeable" in error.lower():
+        error_lower = error.lower()
+        # Real conflict — terminal, never retried (routes back for rebase).
+        if "merge conflict" in error_lower or "not mergeable" in error_lower:
             print(f"PR #{pr_number} has merge conflicts", file=sys.stderr)
             return False, "merge conflict"
+        # Transient batch-ship race — an earlier merge moved main's SHA. Retry
+        # after a short settle so GitHub recomputes mergeability against the new
+        # base (#10540). Checked AFTER the conflict guard so a real conflict
+        # never masquerades as the race.
+        if "base branch was modified" in error_lower and attempt < _max_base_retries:
+            print(
+                f"PR #{pr_number}: base branch moved (batch-ship race) — "
+                f"retry {attempt + 1}/{_max_base_retries} after {_base_retry_delay}s",
+                file=sys.stderr,
+            )
+            time.sleep(_base_retry_delay)
+            continue
         print(f"ERROR: PR #{pr_number} merge failed: {error}", file=sys.stderr)
         return False, f"merge failed: {error}"
 
