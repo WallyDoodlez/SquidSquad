@@ -1280,15 +1280,15 @@ After all 6 land: v2 ships with event-mode as the unconditional wake-mode archit
 
 | Retired type | Replacement | When emitted |
 |---|---|---|
-| `compose-completed` | `assigned-to(target_alias=pm, event_context="compose-needed", payload={touched_files})` | After a merge touches `references/`. PM runs `compose.py deploy-all`, restarts affected agents. |
+| `compose-completed` | informational only — **no PM action** (the recompose is fully harness-automated) | After a merge touches `references/`, the **harness post-merge handler** runs `compose.py deploy-all` on its own clone and emits `deploy-signal` per affected agent alias → each agent clone recomposes **pull-first**. Neither PM nor agents run `compose.py deploy-all` manually. (Supersedes the pre-#12912 `compose-needed → PM recomposes` model — `compose-needed` is **retired**, #12912/#13030.) |
 | `agent-health` (stalled/down) | `assigned-to(target_alias=pm, event_context="agent-down", payload={role, last_seen})` | Harness health poller detects a watched agent dies or stalls past threshold. PM's pipeline-sentinel handles. |
 | `noop` (#9845) | `assigned-to(target_alias=A, event_context="probe", payload={ack_only:true})` | Latency probe / harness liveness check. Agent acks without doing work. `ack_only` is a `payload` extension, not a top-level `assigned-to` field — see §5.2 catalog entry. |
 
 PM's inbox is disambiguated by `event_context`. The full set in use:
 
 - From the `tracker.py` auto-routing table (§8.3): `"planning-needed"`, `"human-needed"` (for `* → pending-human-review|setup` transitions), `"unowned-rejection"` (fallback for rejected items with no `role:*` label), `"unowned-approval"` (fallback for approved items with no `role:*` label).
-- From the catalog-trim translators (§9.5): `"compose-needed"` (PM is asked to run `compose.py deploy-all` + restart agents — used for paths the harness file-watch does not cover, e.g. mid-session merges to `references/`), `"agent-down"` (health-poller observed an agent stall).
-- From the harness directly (COMPOSE-ARCHITECTURE §8.2): `"restart-required"` is emitted to affected *agents* (not PM) after the harness has already re-run compose for an L4 write — distinguish from `compose-needed`: `restart-required` says "compose is done, please restart"; `compose-needed` says "PM, please run compose and orchestrate restart". The two are NOT interchangeable.
+- From the catalog-trim translators (§9.5): `"agent-down"` (health-poller observed an agent stall). (`"compose-needed"` — the pre-#12912 "PM runs `compose.py deploy-all` on merge" translator — is **retired**: merges touching `references/`, **including mid-session merges** (verified — harness post-merge handler, harness.py ~L4080-4119), are fully handled by the harness, which recomposes on its own clone and emits `deploy-signal` per agent for pull-first recompose. #13030/#12912.)
+- From the harness directly (COMPOSE-ARCHITECTURE §8.2): `"restart-required"` is emitted to affected *agents* (not PM) after the harness has already re-run compose for an L4 write — "compose is done, please restart." (This formerly contrasted with the now-retired `compose-needed`; today the harness owns the recompose in **both** the L4-write path and the post-merge `references/` path, so there is no "PM, please run compose" event — the recompose is never a PM action.)
 - From EAD: `"human-comment"` (forge comment by a human author).
 - From agents calling `/work/assign` directly: `"process-concern"` for ad-hoc routing of cross-role-class process issues to PM; `"route-help"` for mis-route recovery (an agent received work it doesn't own and re-routed to PM for triage — see §8.3).
 
