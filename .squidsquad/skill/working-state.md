@@ -1,8 +1,11 @@
 # Working State
 
-- **Task**: none. This boot's productive work: (1) **#12801 S2** TUI data-layer pushed; (2) **#13132** tracker.py gh-CLI fail-closed → **pending-test PR #13135**; (3) **#13134** agent /quit-instruction reconcile → **pending-test PR #13137**. NEXT: **#13133** (scan_index.py double-count, open, role:skill, low) is the remaining queued bug.
-- **Updated**: 2026-06-21 03:47:16 (skill — event-mode; #13134 shipped to pending-test, PR #13137)
+- **Task**: none. This boot's productive work (4 shipped to pending-test + 1 filed): (1) **#12801 S2** TUI data-layer PR #13024-era pushed; (2) **#13132** tracker.py gh-CLI fail-closed → PR #13135; (3) **#13134** agent /quit-instruction reconcile → PR #13137; (4) **#13133** scan_index.rebuild double-count → PR #13138. Filed **#13136** (stop-requested completeness, low, needs PM triage). Queue now has NO cleanly-autonomous item left → idle.
+- **Updated**: 2026-06-21 03:54:34 (skill — event-mode; #13133 shipped to pending-test, PR #13138)
 - **Quiet Cycle Counter**: 0
+
+## #13133 DELIVERED (PR #13138, pending-test) — branch squidsquad/task/13133
+scan_index.rebuild() nested findings INSERT inside per-file loop → N-file/1-finding entry = N rows (inflated finding_count/finding_density, skewed suggest_targets). Fix: capture per-file scan_id in dict, insert each finding ONCE attributed to entry['files'][0] (mirrors record_scan default). Tightened test: exact 1 row → tracker.py; file_coverage finding_count 1/0 (was 1/1). 42 green; static PASS 4856/0/0; DS NO_FINDINGS. Deterministic: no CQ/manifest.
 
 ## #13134 DELIVERED (PR #13137, pending-test) — branch squidsquad/task/13134
 Reconciled agent /quit-termination framing to the #13077 harness-reaper model across 4 handlers (deploy-signal + stop-requested in event-mode-contract.md, self-restart.md, roles/instructions.md Step 7). KEY: LLM agent CANNOT self-/quit — only ceases output; harness force-kills (deploy=active+immediate, status=deploying not covered by 60s net; exit-42/stop=60s net, the actual mechanism not a should-never-fire backstop). exit-42 term KEPT (real cycle_post exit code) per PM. Aligned to committed TRD HARNESS-ARCH §7.4 (fce1f3f2a, merged into branch). Static gate PASS 4856/0/0. Compose reach verified. DS: 1 fixed, 2 → #13136. **VERIFIER CQ (#9184): need new comprehension spec AND reconcile/retire stale tests/comprehension/13032_spec.json (asserts the superseded /quit-load-bearing model).** Filed #13136 (stop-requested ack-stop/ack-cursor completeness).
