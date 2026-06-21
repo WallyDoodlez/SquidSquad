@@ -95,6 +95,24 @@ class TestFindReferences:
             "boot-bootstrap", "boot-bootstrap",
         ]
 
+    def test_finds_backtick_wrapped_name_13052(self):
+        # #13052: markers hand-authored INSIDE sub-skill bodies are styled
+        # with backticks (e.g. git-commit.md → `pr-protocol`). The name must
+        # be captured WITHOUT the surrounding backticks.
+        text = "→ run sub-skill: `pr-protocol`"
+        assert gate.find_references(text) == ["pr-protocol"]
+
+    def test_finds_backtick_wrapped_slash_name_13052(self):
+        text = "→ run sub-skill: `roles/dm/events/pr-merge-wait`"
+        assert gate.find_references(text) == ["roles/dm/events/pr-merge-wait"]
+
+    def test_bare_and_backtick_forms_both_captured_13052(self):
+        text = (
+            "→ run sub-skill: cycle-runner\n"
+            "→ run sub-skill: `pr-protocol`"
+        )
+        assert gate.find_references(text) == ["cycle-runner", "pr-protocol"]
+
 
 # ---------------------------------------------------------------------------
 # AC6(a) clean compose -> no issues
