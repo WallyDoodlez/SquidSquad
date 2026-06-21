@@ -197,6 +197,26 @@ class TestCLI:
         code = repo_scan.main()
         assert code == 2
 
+    def test_path_without_value_is_usage_error(self, capsys):
+        """#13145 F2: --path as the final token (no value) must exit 2, not
+        silently fall through to scanning REPO_ROOT and returning 0."""
+        sys.argv = ["repo_scan.py", "--path"]
+        code = repo_scan.main()
+        assert code == 2
+        assert "--path requires an argument" in capsys.readouterr().err
+
+    def test_save_oserror_returns_exit_2(self, tmp_path, capsys):
+        """#13145 F1: an unwritable --save target must exit 2 (docstring
+        contract), not raise an unhandled OSError. Here .squidsquad exists as a
+        FILE, so mkdir(parents=True, exist_ok=True) on it raises FileExistsError
+        (an OSError subclass) — exercising the guard deterministically."""
+        (tmp_path / ".squidsquad").write_text("i am a file, not a dir")
+        (tmp_path / "app.py").write_text("")
+        sys.argv = ["repo_scan.py", "--path", str(tmp_path), "--save"]
+        code = repo_scan.main()
+        assert code == 2
+        assert "Cannot save" in capsys.readouterr().err
+
 
 class TestScanCurrentRepo:
     def test_detects_python_in_squidsquad(self):
