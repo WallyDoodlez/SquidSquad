@@ -216,12 +216,17 @@ def _safe_stash_pop():
     if pop.returncode == 0:
         return True
     conflicted = _run("git diff --name-only --diff-filter=U", check=False)
-    for path in conflicted.stdout.splitlines():
-        path = path.strip()
-        if path:
-            _run_list(["git", "checkout", "HEAD", "--", path], check=False)
-    # The conflicted pop left the stash applied-but-retained; drop it now that
-    # the working tree is clean again.
+    unmerged = [p.strip() for p in conflicted.stdout.splitlines() if p.strip()]
+    if not unmerged:
+        # Pop failed for a NON-conflict reason (no stash entry, or an unrelated
+        # git error) — the stash, if any, was NOT applied. Do NOT drop it: that
+        # would discard un-applied stashed work. Leave it intact and report the
+        # pop did not succeed.
+        return False
+    for path in unmerged:
+        _run_list(["git", "checkout", "HEAD", "--", path], check=False)
+    # A real conflict: git applied the stash WITH markers and kept it. Now that
+    # the conflicted paths are restored to HEAD, drop the retained stash.
     _run("git stash drop", check=False)
     return False
 
