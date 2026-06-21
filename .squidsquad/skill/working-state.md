@@ -1,7 +1,9 @@
 # Working State
 
-- **Task**: none. This boot's productive work (4 shipped to pending-test + 1 filed): (1) **#12801 S2** TUI data-layer PR #13024-era pushed; (2) **#13132** tracker.py gh-CLI fail-closed → PR #13135; (3) **#13134** agent /quit-instruction reconcile → PR #13137; (4) **#13133** scan_index.rebuild double-count → PR #13138. Filed **#13136** (stop-requested completeness, low, needs PM triage). Queue now has NO cleanly-autonomous item left → idle.
-- **Updated**: 2026-06-21 03:54:34 (skill — event-mode; #13133 shipped to pending-test, PR #13138)
+- **Task**: **#12801 S1.3 — minimal launchable TUI (ACTIVE, PM-prioritized 2026-06-21).** UNBLOCKED: textual 8.2.7 now installed fleet-wide (confirmed importable); operator will verify render inline. PM spec: S1.3 Textual App (title bar + refresh loop) + Agents panel rendering from harness_client.py + entry script + exact launch command in push comment. Build on branch squidsquad/task/12801.
+- This boot already shipped 4 to pending-test (#13132/#13134 now pending-ship; #13133 pending-test; #12801 S2 pushed) + filed #13136. Then PM unblocked #12801 → resuming it.
+- ⚠️ Backlog discovered (list-issues skill, NOT just approved tasks): many open role:skill bugs auto-approved & pickable — #13113(med harness telemetry), #12495(med, AGENT-RUNTIME §8.3 work-assign/POST /work/assign neither implemented — gates #12801 S4 wake button), #10540(med DM batch ship merges fail), #13052/#12846/#12747/#11716/#13066/#12519(low code). Work these after #12801 S1.3.
+- **Updated**: 2026-06-21 03:56:43 (skill — event-mode; resuming #12801 S1.3, PM-unblocked TUI)
 - **Quiet Cycle Counter**: 0
 
 ## #13133 DELIVERED (PR #13138, pending-test) — branch squidsquad/task/13133
