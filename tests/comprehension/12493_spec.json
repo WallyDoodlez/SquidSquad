@@ -1,0 +1,38 @@
+{
+  "issue": 12493,
+  "title": "L2 pipeline-sentinel: halt detection (progress-based, incl failed-handoff) -> investigate/classify -> event-effective unblock-or-escalate",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 00:45",
+  "ac": "AC7",
+  "method": "Fresh agent (model: sonnet) acting as the PM pipeline-sentinel, given ONLY the modified section 2 of references/sub-skills/roles/pm/pipeline-sentinel.md, then handed a #12460-shaped scenario with NO access to issue #12493. Must produce detect -> investigate/classify -> event-mode-effective unblock OR escalate-with-options, and must NOT propose a bare-comment nudge as the remedy. Verifier-authored per #9184.",
+  "target": "references/sub-skills/roles/pm/pipeline-sentinel.md -> section '2. Halt Detection -> Investigate -> Unblock-or-Escalate'",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Scenario: an item is at status:in-progress, has not changed status/label and has had no PR push for 2.5 hours, but it DID receive a recent comment 20 min ago ('DM please merge PR #X'); the owning agent is idle. Is this a halt? Why, given the recent comment?",
+      "expected": "Yes, it is a halt. Halt is defined by lack of FORWARD PROGRESS (status/label change or PR push) past 90 min, NOT by absence of comments. A recent comment is not progress; the failed-handoff sub-rule explicitly counts an unactioned ask/handoff with an idle owner as a halt even when comments exist.",
+      "must_not": "Concluding it is not a halt because there is a recent comment / recent activity."
+    },
+    {
+      "id": "CQ2",
+      "q": "You must classify the cause before acting. The unactioned ask is 'DM please merge PR #X' and also implicitly needs a merge-now-vs-split process choice. Which class is it: (a) failed-handoff, (b) dead-agent, (c) blocked-on-decision, or (d) genuine-no-progress — and why is it NOT (a)?",
+      "expected": "Class (c) blocked-on-decision. Although it superficially looks like a failed-handoff bare-comment ask, the asked-for action (DM-merge) is OUTSIDE PM authority AND/OR needs a process choice (merge-now vs split) — the rule says when the ask is outside PM authority or needs a process choice, classify (c), not (a).",
+      "must_not": "Classifying it (a) failed-handoff and trying to fix it with a PM transition, or merging the PR yourself."
+    },
+    {
+      "id": "CQ3",
+      "q": "What is your remedy, concretely? May you resolve it by posting a comment telling DM to merge?",
+      "expected": "Escalate for a decision (section 2.4): transition the item to pending-human-review and post findings + concrete options (e.g. (A) ship shadow now + split cutover into a follow-up, (B) keep open, merge shadow, observe, then add cutover commits). A bare comment does NOT wake an event-mode agent and is never an unblock — so no, telling DM via a comment is not a valid remedy.",
+      "must_not": "Posting a bare comment 'DM: please merge' / a bare-comment nudge as the remedy, or claiming a comment will wake DM."
+    },
+    {
+      "id": "CQ4",
+      "q": "Suppose instead the halt were a simple failed-handoff that PM CAN fix in-authority (the next owner just needs to be woken into its pickup state). What action wakes that owner, and what does NOT?",
+      "expected": "An authorized tracker.py transition that moves the item into the next owner's pickup state — the harness EAD turns the resulting role/status change into an assigned-to wake. Re-posting the ask as another comment does NOT wake the owner.",
+      "must_not": "Saying a comment/nudge wakes the owner, or that re-posting the ask is the fix."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 00:45",
+  "evidence": "Fresh sonnet agent (id ad184a0ce3791e6b9) acting as PM pipeline-sentinel, given ONLY the modified section 2 + a #12460-shaped scenario, no issue context. 4/4 correct, zero must_not violations: CQ1 'Yes, this is a halt... forward progress means a status/label change or a PR push, not a new comment... the comment is explicitly excluded under the failed-handoff sub-rule'; CQ2 'Class (c) blocked-on-decision... NOT (a) because merging a PR is outside PM authority AND the merge-now-vs-split is a process choice'; CQ3 'escalate under 2.4... transition to pending-human-review and post findings plus concrete options... No, you may not resolve this by posting a comment telling DM to merge — a bare comment does not wake an event-mode agent'; CQ4 'an authorized tracker transition that moves the item into the next owner's pickup state... re-posting the ask as another comment does NOT wake the next owner'."
+}
