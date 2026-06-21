@@ -1,37 +1,38 @@
 # Working State
 
-_Condensed 2026-06-21 03:27 (PM EVENT mode, inline operator session). Prior incident narrative in iteration logs + forge._
+_Condensed 2026-06-21 12:00 (PM EVENT mode, deploy-error-divergence recovery boot). Prior incident narrative in iteration logs + forge._
 
-## Boot summary (this session — 2026-06-21 ~03:04, EVENT mode)
-- GH OK; harness :7373 reachable. Cursor `4053ca6293824a54` → drained 1 boot event (a 03:04 `deploy-error` stage=commit, **`respawn_ok:true`** = I am the successful respawn) → acked to `fc39df1b27d0f4bb`; bootup-complete emitted.
-- Tree clean, **0 behind origin** (`5b9308449`). Health verified from facts: commit-stage deploy-error recovered, nothing stranded, composed CLAUDE.md current.
+## Boot summary (this session — 2026-06-21 ~11:53, EVENT mode, RESPAWNED after deploy-error stage=pull)
+- GH OK; harness :7373 reachable (EVENT mode). Cursor `dbad80b905411954` → drained **4 events** (dm #13147 ship + 2 comments [skipped, not pm], + the deploy-error). Acked through `15d255aa30dc0cbd`; bootup-complete emitted, bootup=True confirmed on /status.
+- **Respawned by deploy-error** (event `15d255aa`, target pm, **stage=pull**, respawn_ok). Boot_time matches.
 
-## >>> DEFERRED HARNESS RESTART — RESOLVED THIS BOOT <<<
-- **The fleet restart LANDED.** Running harness sha is now **`5b930844`** (= current HEAD), up ~07:00Z; whole fleet respawned onto current code. **#13077 CLOSED and its reaper commit `b23a79c3c` is in HEAD** → harness now actively force-kills deploy-halted/exit-42 agents (agents genuinely cannot self-`/quit`). The standing "deferred restart" advisory is **closed — do not re-advertise.**
+## >>> DEPLOY-ERROR RECOVERY — DONE THIS BOOT (pm clone) <<<
+- **NEW root-cause variant this boot = DIVERGENCE (not dirty-tree).** Tree was CLEAN of modified tracked files (only untracked logs/driver-state/qa-artifacts/1 vault note). Local main was **3 ahead / 1 behind** origin: local = harness-committed pm doc work (d0ba91a2b #12971 + 2 merge commits), origin = dm `109802375` #13147 recompose. **Non-overlapping files.** Harness deploy-pull is FF-only → fatals 'can't be fast-forwarded' → deploy-error.
+- **Recovery (verified from facts)**: `git merge origin/main --no-edit` → CLEAN, 0 conflicts (only composed CLAUDE.md from dm side) → 4 ahead/0 behind → `git push` → **0/0 fully synced** (109802375..8256cc0ac). pm clone deploy-path unblocked.
+- **Distinct from last boot's dirty-tree variant** (which recovered by *discarding* identical composed artifacts). Symptom-based recovery: clean tree + diverged → MERGE; dirty tree + identical-to-origin composed → DISCARD. See [[learning-deploy-pull-block-divergence-recover-by-merge]] + [[learning-deploy-pull-block-recover-by-discarding-composed-artifacts]].
 
-## #13077 DOC-RECONCILE — TRD SIDE DONE (DS-CLEAN), skill-lane filed
-- **My lane (TRDs) — DONE this session:** reconciled `docs/HARNESS-ARCH.md` §7.1 deploy-flow + §7.4 (force-kill is the *actual* termination mechanism, not a rare backstop; deploy-halt = active force-kill outside the 60s net; stopping/restarting = 60s net, acceleration NOT in #13077) + §7 intro line 247; `docs/AGENT-RUNTIME.md` §5.2 intent-sequencing note + §7.5 context-pressure + `stopping` bullet. **DeepSeek audit pass-2 = CLEAN** (fidelity/internal/cross-pair/residual all PASS). Artifacts: `.squidsquad/pm/planning/DS-AUDIT-13077-2026-06-21*.md`.
-- Reasoned deviation from DS: did NOT mass-rename the established `exit-42` term (it's a real `cycle_post.py` exit code = the cooperative signal); fixed the *mechanism* framing at canonical sites instead — corrects meaning for all label uses.
-- **Skill lane → #13134 filed** (role:skill, sev medium): reconcile compose-consumed sub-skills (event-mode-contract Case E + self-restart.md) to the harness-reaper model + CQ coverage. Locked model in issue body. Skill picks up; I linked the commit.
+## NEW BUG FILED THIS BOOT → #13158 (role:skill, medium)
+- Harness deploy-signal `git pull` has **no merge strategy** → fatals on any diverged main (harness-committed-unpushed + teammate-pushed, non-overlapping). Recurring, fleet-wide, recurs every deploy-signal until manual reconcile. Behavior+impact+repro filed; RCA is skill's. Analogous to #12526 launcher fix but on the separate deploy-signal pull path. Distinct from #13030 (dirty-tree variant) and #13036 (F3/F4 respawn lock/pid).
+- Cross-linked on **#13030** (deploy-path now hit by TWO stage=pull variants: dirty-tree #13030 + divergence #13158).
 
-## Pipeline (forge-verified 03:04–03:27)
-- **pending-test: 0. pending-ship: 0. role:human / pending-human-*: 0 open.**
-- **PM-actionable approved work:** none (only #10690, gated on E6+E7).
-- **skill in-progress:** #12801 (Harness TUI bottom action bar) + #12450 (Installer auto-detect project root) — actively working.
-- **#13134** (skill, NEW this session) — sub-skill /quit reconcile (above).
-- **Health watch:** dm + skill showed `bootup_complete=False` ~13min into fleet boot but with live activity (not dead — likely telemetry-not-flipping, #12854/#13113 family). Re-check next cycle; treat as real stall only if either goes quiet with bootup still false.
+## ROOT CAUSE TRACKED → #13030 (gate OPEN) + #13158 (new)
+- **#13030** (role:skill, status:pending) — retire agent-manual `compose.py deploy-all`. Gate OPEN (deploy-signal model live + harming). Needs operator approval + low→medium reprioritize.
+- **ADVERTISE TO OPERATOR**: deploy/recompose path broken fleet-wide by 2 variants (#13030 dirty-tree, #13158 divergence). Pipeline still flows (agents on existing composed CLAUDE.md) but no recompose lands cleanly until fixes ship or per-clone trees reconciled.
 
-## #10837-9 TRD-Alignment Program (operator-paced)
-- #10838 VAULT-ARCH CLOSED. #10837 HARNESS-ARCH: doc-side DONE except /work/assign OPEN decision (PM lean: RETIRE-as-fiction) + minor /queue gen. (Note: this session's §7.1/§7.4 reaper reconcile is additive doc-correctness, DS-CLEAN.)
-- #10839 role→alias rename SCOPED; code Phases 2-4 = **#13044 (role:skill, PENDING operator approval — HIGH blast, SQUIDSQUAD_ROLE env coupling).** Resume doc renames WITH code phases (v1-coexistence), not ahead.
+## FLEET-HEALTH OBSERVATION (this boot)
+- dm/qa/skill all at **intent=deploying** (stale, sibling of #13113 telemetry gap) — BUT may correlate with their OWN deploys failing (same #13158/#13030 class in their clones) → they may be running on **stale composed CLAUDE.md** (e.g. missing #13147 'Treat Impossible as a Hypothesis' L1 trait). Cannot inspect their clones (separate dirs, not pm lane). Systemic fix = #13158 + #13030. All 4 bootup=True + active (skill 74s, dm 374s, qa 38min-idle [correct, no pending-test]).
+
+## Pipeline (forge-verified 11:58)
+- **pending-test: 0. pending-ship: 0.** (#13147 shipped this boot.) **role:human / pending-human-* : 0.** untriaged externals: 0. blocked:human-action: #10377 (gated on TRD impl, parked).
+- **PM-actionable approved work:** none (only #10690, gated on E7). Clean & flowing.
 
 ## PM standing backlog (operator-paced/gated, NOT autonomously actionable)
-- **approved (gated):** #10690 (E6+E7). **in-progress (parked coord-holds):** #11092, #11053, #9968.
-- **operator-paced/gated:** #10839/#10837 (TRD program), #13044 (pending approval), #10686 (PRD-E E7 smoke — re-scope to deploy-signal flow), #12913 (dm docs/ nav index).
-- **#13113** (skill) — qa telemetry froze pre-reap; health blind spot; sibling of #12854. WATCH post-restart: did qa telemetry refresh? (qa bootup=True this boot — partial signal.)
-- **#10540** (skill) — DM batch-ship "base branch modified" race. **#10098** (skill) — vault sub-skill drift (vault-protocol links/source fill-in; check-consistency unimpl).
-- **pending/deferred (operator-paced):** #12508, #12410, #12300, #11400, #11000, #10360, #10178, #10023, #10001, #9998, #9996, #9912, #9739, #8997, #20.
+- **approved (gated):** #10690 (E7). **in-progress (parked coord-holds):** #11092, #11053, #9968, #10837 (/work/assign RETIRE-as-fiction decision OPEN), #10839 (role→alias; code = #13044 pending operator approval).
+- **pending intake (operator-paced):** #13044 (pending approval, HIGH blast), #13036 (deploy respawn F3/F4), #13030 (deploy-all cutover — gate open), #13041, #13038, #12508, #12410, #12300, #11400, #10360, #10178, #10023, #10001, #9998, #9996, #9912, #9739, #8997, #20. Plus #10686 (E7 smoke), #12913.
+
+## #10837-9 TRD-Alignment Program (operator-paced)
+- #10838 VAULT-ARCH CLOSED. #10837 HARNESS-ARCH: doc-side mostly DONE; /work/assign OPEN decision (PM lean: RETIRE-as-fiction) + minor /queue gen remain. #10839 role→alias SCOPED; code Phases 2-4 = #13044 (pending operator approval).
 
 ## Improvement Scan
-Status: idle (driver already-armed; re-confirm live cron via CronList on next idle). Last completed: 2026-06-20 21:46 (driver last_run).
-(This boot: clean drain + operator inline session — verified pipeline, confirmed restart landed, completed #13077 TRD reconcile (DS-CLEAN), filed #13134. Inline turn active; resume autonomous flow on next event or 20-min silence.)
+Status: idle (queue drained this boot). Driver `.subloop-driver.json` armed, scan_count 1, last_run 2026-06-21T05:41Z. On entering idle: arm driver + confirm live cron via CronList.
+(This boot: deploy-error DIVERGENCE recovery [merge origin/main + push → unblock], #13158 filed [harness deploy-pull no merge strategy], #13030 cross-linked, fleet stale-intent/stale-composed observation, pipeline clean & flowing. Entering idle.)

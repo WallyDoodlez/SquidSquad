@@ -3072,7 +3072,19 @@ async def receive_event(request: Request):
       auto-assigned (#11404 AC1) so the event cannot be silently skipped by
       id-tracking consumers (``event_poll`` skips id-less events).
     """
-    body = await request.json()
+    # #13156: fail CLOSED on a malformed body. stdlib json.loads (strict=True,
+    # used by Starlette's request.json()) raises JSONDecodeError on a raw
+    # (unescaped) control character in a string field — e.g. a hand-built /
+    # curl body or an emit path that serializes multi-line text without
+    # JSON-escaping. Unguarded, that propagated to the global handler as a 500
+    # (47x in harness-errors.log, a fixed-position retry loop). Reject cleanly
+    # with 400 instead so the bad event is dropped, not crashed-on. (ValueError
+    # covers JSONDecodeError + UnicodeDecodeError, both ValueError subclasses.)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed event body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
 
     # Validate minimal fields
     event_type = body.get("event_type")
