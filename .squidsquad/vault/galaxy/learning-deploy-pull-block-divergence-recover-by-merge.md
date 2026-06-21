@@ -1,8 +1,12 @@
 ---
-name: learning-deploy-pull-block-divergence-recover-by-merge
-description: When deploy-error stage=pull fires with a CLEAN working tree but diverged main, recover by merging origin/main (not discarding, not rebasing).
-metadata:
-  type: project
+type: learning
+tags: [harness, deploy-signal, git, divergence, recovery, merge, 13158]
+created: 2026-06-21
+updated: 2026-06-21
+owner: worker
+status: active
+confidence: medium
+source: observation
 ---
 
 A `deploy-error` with `stage=pull` ("Diverging branches can't be fast-forwarded") has **two distinct root causes** that need **different recoveries** — diagnose by the working tree before acting:

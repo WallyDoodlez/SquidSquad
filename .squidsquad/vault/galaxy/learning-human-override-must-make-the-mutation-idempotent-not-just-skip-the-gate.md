@@ -11,6 +11,7 @@ status: active
 confidence: high
 source: observation
 links: [learning-activity-liveness-redispatch-must-not-reset-grace]
+updated: 2026-06-15
 ---
 
 # A human-override flag must make the mutation idempotent, not just skip the gate

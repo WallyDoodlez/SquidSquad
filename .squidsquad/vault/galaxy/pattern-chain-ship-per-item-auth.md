@@ -3,6 +3,12 @@ type: pattern
 title: Per-item chain-ship authorization (not blanket auto-auth)
 created: 2026-06-09
 roles: [pm, dm]
+tags: [delivery, ship, authorization, per-item, pm, dm]
+updated: 2026-06-19
+owner: shared
+status: active
+confidence: medium
+source: observation
 ---
 
 # Per-item chain-ship authorization (not blanket auto-auth)

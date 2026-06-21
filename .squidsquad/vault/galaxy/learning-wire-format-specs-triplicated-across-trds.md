@@ -1,8 +1,12 @@
 ---
-name: learning-wire-format-specs-triplicated-across-trds
-description: HTTP/wire-format contracts are duplicated across HARNESS-ARCH ↔ AGENT-RUNTIME ↔ event-mode sub-skills; a drift report against one almost always means the same drift in the siblings — fix all together.
-metadata:
-  type: project
+type: learning
+tags: [trd, wire-format, http-contract, drift, harness-arch, agent-runtime, documentation]
+created: 2026-06-21
+updated: 2026-06-21
+owner: pm
+status: active
+confidence: medium
+source: observation
 ---
 
 Event-bus wire-format contracts (HTTP status codes, response field names, recovery

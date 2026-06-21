@@ -1,8 +1,12 @@
 ---
-name: style-operator-comms-no-internal-mechanics
-description: Operator-facing output must never expose SquidSquad internal mechanics; use plain outcome language a non-technical operator understands.
-metadata:
-  type: reference
+type: style
+tags: [operator-comms, style, user-facing, plain-language, 13162]
+created: 2026-06-21
+updated: 2026-06-21
+owner: pm
+status: active
+confidence: high
+source: conversation
 ---
 
 **Operator-facing communication value** (operator, emphasized 2026-06-21 while specing #13162 verbose mode). In the default (non-verbose) posture, agents must expose **zero internal mechanics** — never a term that requires SquidSquad-internal knowledge to parse: `acknowledgment`/ack, cursor, event, drain, care-filter, nudge, transition, GET/POST, etc. "No operator knows what 'acknowledgment' means."

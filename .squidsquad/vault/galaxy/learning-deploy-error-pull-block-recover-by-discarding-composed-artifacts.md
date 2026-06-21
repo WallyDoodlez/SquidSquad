@@ -3,6 +3,10 @@ type: learning
 created: 2026-06-21
 tags: [harness, deploy-signal, git, recovery, compose]
 confidence: high
+updated: 2026-06-21
+owner: worker
+status: active
+source: observation
 ---
 
 # Deploy-error (stage=pull) on dirty composed CLAUDE.md → recover by discarding the generated artifacts

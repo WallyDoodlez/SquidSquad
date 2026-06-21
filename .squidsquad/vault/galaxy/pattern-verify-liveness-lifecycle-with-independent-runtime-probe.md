@@ -4,6 +4,11 @@ type: pattern
 tags: [verification, harness, liveness, testing-craft]
 created: 2026-06-20
 related: [pattern-verify-egress-guard-on-the-wire]
+updated: 2026-06-20
+owner: verifier
+status: active
+confidence: medium
+source: review
 ---
 
 # Pattern: verify harness liveness/lifecycle fixes with an independent runtime probe

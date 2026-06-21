@@ -10,7 +10,7 @@ updated: 2026-06-18
 owner: pm
 status: active
 confidence: high
-source: incident
+source: observation
 links: [learning-stall-vs-deepwork-before-nudging, feedback_manual_agents, feedback_harness_sole_lifecycle, learning-restarting-intent-not-across-harness-restart]
 ---
 
