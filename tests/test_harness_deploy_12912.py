@@ -707,7 +707,13 @@ class TestLoopModeDoesNotConsume(unittest.TestCase):
         idx = txt.find("deploy-signal")
         self.assertNotEqual(idx, -1)
         # The Case E deploy-signal bullet must call out the loop-mode exemption.
-        block = txt[idx:idx + 4000]
+        # Scope the block to the deploy-signal item itself — from its first
+        # mention to the start of the next Case E bullet (`bootup-complete from
+        # another agent`) — so the assertion stays valid as the item grows. A
+        # fixed char window broke when #13175 added the boot-drain liveness
+        # paragraph and pushed the loop-mode exemption past it.
+        end = txt.find("from another agent", idx)
+        block = txt[idx:end] if end != -1 else txt[idx:idx + 6000]
         self.assertIn("oop", block)  # loop/polling
         self.assertTrue("never consume" in block or "does not apply" in block
                         or "next session start" in block)
