@@ -1,0 +1,32 @@
+{
+  "issue": 13134,
+  "title": "Agent /quit instructions reconciled to harness-reaper model (#13077)",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 03:55",
+  "ac": "comprehension (a fresh agent must understand it halts=ceases output and the HARNESS terminates its process; must NOT believe self-/quit is load-bearing for respawn)",
+  "method": "Fresh agent (model: sonnet) given ONLY the reconciled passages (Case E stop-requested + deploy-signal bullets, self-restart.md Cooperative-Stop section, instructions.md self-restart lede), no other context. Confirms the fix's purpose: the agent's correct mental model on a cooperative exit is halt (cease output), harness force-kills; and that /quit is NOT what makes respawn work. Verifier-authored per #9184.",
+  "target": "references/sub-skills/common-events/event-mode-contract.md (Case E) + references/sub-skills/common/self-restart.md + references/roles/instructions.md (Step 7 self-restart lede)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "On a deploy-halt (you received a deploy-signal, finished your atomic unit, emitted ack-stop deploy-halted), what exactly do you do to your own process so the fresh recomposed agent can spawn, and what actually terminates your old process?",
+      "expected": "You do NOT terminate your own process — you cannot (an LLM agent can only stop emitting output, not execute a real /quit). You halt: cease output, end your turn, stop cleanly (don't pick up new work, don't ack-cursor the deploy-signal). The HARNESS actively force-kills your old claude process and confirms its death; it is that confirmed kill — not any self-exit — that satisfies boot_agent's singleton guard so the fresh process spawns.",
+      "must_not": "Claiming the agent must invoke /quit (or that /quit is what makes the deploy/respawn work / is load-bearing / lets the singleton guard pass)."
+    },
+    {
+      "id": "CQ2",
+      "q": "After cycle_post.py exits with code 42 for context pressure, or when intent flips to stopping/restarting, what terminates your process, and is /quit required?",
+      "expected": "The harness's 60-second force-kill net terminates your process (armed on the intent flip / exit-42 signal). /quit is NOT required and is not what restarts you — an LLM agent cannot self-/quit; a best-effort /quit is at most an end-of-turn marker. You just halt: cease output, start nothing new.",
+      "must_not": "Saying the agent terminates itself via /quit, or that the 60s net is a rare should-never-fire backstop rather than the actual termination mechanism."
+    },
+    {
+      "id": "CQ3",
+      "q": "Is the stopping/restarting termination as immediate as the deploy-halt termination?",
+      "expected": "No. Deploy-halt is an immediate active force-kill by the harness. stopping/restarting use the 60-second force-kill net (functional but slower — it fires after the cooperative window elapses). Accelerating stop/restart to an immediate active kill is a separate future decision, not done in #13077.",
+      "must_not": "Claiming stop/restart are force-killed instantly/immediately, or that they are documented as instant."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 03:56",
+  "evidence": "Fresh sonnet agent (id a55f6aceb353c2dd3) given ONLY the reconciled passages, no other context. 3/3 correct, zero must_not violations. CQ1: 'cease output and end your turn... cannot terminate yourself (#13077)... harness actively force-kills the old claude process... confirmed kill — not any self-exit — satisfies boot_agent's singleton guard.' CQ2: 'harness's 60-second force-kill net is what actually terminates... /quit not required and does not terminate... stop emitting output.' CQ3: 'No. deploy-halt immediate active force-kill; stopping/restarting 60s net is slower; accelerating is a separate future decision not yet made.' The reconciled text instills the correct mental model: halt=cease output, harness terminates; /quit is NOT load-bearing."
+}

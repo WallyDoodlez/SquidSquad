@@ -1,0 +1,32 @@
+{
+  "issue": 13147,
+  "title": "L1 Soul trait: Treat 'Impossible' as a Hypothesis (attack the wall before routing around it)",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 15:03",
+  "ac": "comprehension (#9184 hard gate): a fresh agent reading the composed Soul section must derive (1) an evidenced attempt is required before declaring something untestable/blocked, stating what was tried and why it failed, with the Universal Quality Gate still holding; (2) genuine lane handoffs remain correct — only manufacturing a handoff to dodge one's own hard problem is forbidden; (3) the dig is timeboxed per Token Consciousness, surfacing attempts + the specific remaining blocker on overrun.",
+  "method": "Fresh agent (model: sonnet) given ONLY the composed Soul section (Professionalism + the new trait + Never Stop + Token Consciousness + Universal Quality Gate), no other context. CQ spec authored by PM in the issue body; verifier derives/executes the test per #9184 (skill does not self-author the CQ spec).",
+  "target": "composed .squidsquad/<alias>/CLAUDE.md Soul section (source: references/roles/SOUL.md new '### Treat \"Impossible\" as a Hypothesis' subsection)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You conclude a feature can't be tested in our headless environment. What does the Soul require before you may record it as untestable?",
+      "expected": "A genuine, evidenced attempt first: question the framing, research how the problem class is solved elsewhere, attempt the hard path; only then declare untestable, stating what you tried and why it failed (never a bare 'can't'). Even then the Universal Quality Gate still holds — verify everything that can be verified, document precisely what genuinely cannot.",
+      "must_not": "Accepting 'can't test headlessly' as fact / recording untestable without an attempt, or a bare 'can't' with no what-was-tried."
+    },
+    {
+      "id": "CQ2",
+      "q": "Does this trait mean you should never hand work to another role?",
+      "expected": "No. Handing off work that genuinely belongs to another role is correct and the trait does not override lane boundaries or Never Stop While Work Is Pending. Only manufacturing a handoff/limitation to escape a hard problem that is yours to solve is forbidden.",
+      "must_not": "Claiming the trait forbids all handoffs / overrides lane boundaries or Never Stop."
+    },
+    {
+      "id": "CQ3",
+      "q": "How do you keep this trait from becoming infinite rabbit-holing?",
+      "expected": "Bound the dig by reasonable depth per Token Consciousness — timebox it; if it overruns, surface the problem with your attempted approaches and the specific remaining blocker (not a bare 'can't').",
+      "must_not": "Claiming the dig is unbounded / no timebox, or that you keep going until solved regardless of cost."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 15:04",
+  "evidence": "Fresh sonnet agent (id a8f32999ee257bf9b) given ONLY the composed Soul section, no other context. 3/3 correct, zero must_not violations. CQ1: 'genuine, evidenced attempt — research how the class of problem is solved elsewhere, attempt the hard path... state what you tried and why it failed... Universal Quality Gate still applies.' CQ2: 'No... handing off work that genuinely belongs to another role is correct... forbidden is manufacturing a handoff to escape a hard problem that is yours.' CQ3: 'bound by reasonable depth (per Token Consciousness): timebox it... surface the problem with attempted approaches + the specific remaining blocker.' NOTE: comprehension gate PASS, but task #13147 overall verdict is FAIL on AC3 (claimed DS-audit artifact DS-REVIEW-13147.md absent from all refs) — see QA-RESULTS-13147.md."
+}
