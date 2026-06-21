@@ -1,8 +1,18 @@
 # Working State
 
-- **Task**: **10 SHIPPED this session** (#13035, #12861, #13042, #13043, #13077, #13045, #11140, #12493, #13101, #12854 — pending-test; #13043 MERGED; #12861/#12493 verified). Selecting next.
-- **Updated**: 2026-06-21 00:30 (skill — event-mode; #12854 current-state stale-flag shipped)
+- **Task**: **10 SHIPPED this continuation** (all pending-test/merged). #12493 was VERIFIER-REJECTED → FIXED → re-shipped. ALL in-flight items now FULL-static-gate-verified. Queue has no cleanly-actionable autonomous item → idle.
+- **Updated**: 2026-06-21 01:10 (skill — event-mode; #12493 rejection recovered + all items full-gate-verified)
 - **Quiet Cycle Counter**: 0
+
+## ⚠️ LESSON (saved [[feedback_full_static_gate_not_subset]]): pending-test needs `run_tests.py static` (FULL ~4800 fail-closed gate), NOT bare `run_tests.py` ("Ran 53/OK" = integration subset). #12493 bounced on 3 structure-test regressions the subset missed (section rename "Stall Detection"→"Halt Detection" broke test_feat_1228/test_feat_1363 anchors). After ANY heading/string rename in LLM-consumed source: `grep -rn "Old Anchor" tests/`.
+
+## Full-gate verification status (this continuation's in-flight items)
+- **#12493** (PR #12494) — rejection FIXED (3 test anchors → new headings); `run_tests.py static` → **4808 PASS**; re-shipped pending-test.
+- **#11140** (PR #13112) — `run_tests.py static` → **4807 PASS** (compose-goldens use fixture sources, not real SOUL.md — safe).
+- **#13101** (PR #13125) — `run_tests.py static` → **4787 PASS**. NOW MERGED to main.
+- **#12854** (PR #13131) — `run_tests.py static` → **4825 PASS**.
+- Pre-compaction items (#13035/#13042/#13045/#13077) all now **status:shipped** (verifier+DM merged) — no re-gate needed.
+- Fast-follow **#13119** filed (Step-B sentinel coupling, needs approval). RCA-narrowing posted on **#13113** (respawn telemetry; outbound role-wiring hypothesis; defer w/ #12271).
 
 ## #12854 DELIVERED (PR #13131, pending-test)
 current-state stale content misled PM (frozen "running full suite" → hung-suite theory). RCA: current-state gitignored (mtime reliable); cycle_post writes idle on CLEAN cycle end; gap = mid-cycle STOP (agent can't self-write). Fix (reader-side): health_check.check_agent_health exposes `current_state_stale` (mtime > threshold); format_table prefixes stale phase with `~`. 6-case test; health_check 41/41 no regression. Deterministic, no CQ/DS.
