@@ -1,9 +1,9 @@
 # Working State
 
-- **Task**: **#12801 S1.3 — minimal launchable TUI (ACTIVE, PM-prioritized 2026-06-21).** UNBLOCKED: textual 8.2.7 now installed fleet-wide (confirmed importable); operator will verify render inline. PM spec: S1.3 Textual App (title bar + refresh loop) + Agents panel rendering from harness_client.py + entry script + exact launch command in push comment. Build on branch squidsquad/task/12801.
-- This boot already shipped 4 to pending-test (#13132/#13134 now pending-ship; #13133 pending-test; #12801 S2 pushed) + filed #13136. Then PM unblocked #12801 → resuming it.
-- ⚠️ Backlog discovered (list-issues skill, NOT just approved tasks): many open role:skill bugs auto-approved & pickable — #13113(med harness telemetry), #12495(med, AGENT-RUNTIME §8.3 work-assign/POST /work/assign neither implemented — gates #12801 S4 wake button), #10540(med DM batch ship merges fail), #13052/#12846/#12747/#11716/#13066/#12519(low code). Work these after #12801 S1.3.
-- **Updated**: 2026-06-21 03:56:43 (skill — event-mode; resuming #12801 S1.3, PM-unblocked TUI)
+- **Task**: **#12801 S1.3 SHIPPED (branch pushed 6c89807ea) — awaiting operator inline render check** (PM plan: operator verifies, then Story 2/3). #12801 STAYS in-progress. Launch: `python references/tui/app.py`. Render feedback folds into Story 2 (Needs-You/Pipeline/Activity panels) + Story 3 (action bar/Options/Bring-PM). Story 4 Wake gated on #12495.
+- This boot shipped: #12801 S2 + **S1.3** (launchable TUI: app.py Textual App + Agents panel + agent_table_rows + 49 tests + requirements-tui.txt; gate 4911/0/0; DS Claude-fallback CLEAN). Plus 3 bugs to pending-test (#13132/#13134 → pending-ship; #13133) + filed #13136.
+- **NEXT autonomous work** (open role:skill bugs, auto-approved, list-issues NOT just approved-tasks): #13052(low v2_catalog_gate regex misses backtick markers), #12846(low wizard cmd_scan_summary), #12747(low live-test clean-SKIP), #11716(low), #13113(med harness telemetry), #12495(med AGENT-RUNTIME §8.3 work-assign unimplemented — gates #12801 S4), #10540(med DM batch ship). Pick a clean low first while #12801 awaits operator feedback.
+- **Updated**: 2026-06-21 04:13:52 (skill — event-mode; #12801 S1.3 shipped, awaiting operator render check)
 - **Quiet Cycle Counter**: 0
 
 ## #13133 DELIVERED (PR #13138, pending-test) — branch squidsquad/task/13133
