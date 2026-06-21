@@ -7,6 +7,7 @@ Usage:
     python scripts/vault_check.py validate           # Full vault validation
     python scripts/vault_check.py check-frontmatter   # Validate frontmatter in galaxy notes
     python scripts/vault_check.py check-wikilinks     # Find broken wikilinks
+    python scripts/vault_check.py check-size           # Warn on galaxy notes >500 lines (advisory)
     python scripts/vault_check.py check-structure      # Validate PARAG directory structure
     python scripts/vault_check.py list-orphans         # Notes not linked from anywhere
     python scripts/vault_check.py --help
@@ -22,7 +23,11 @@ VAULT_DIR = REPO_ROOT / ".squidsquad" / "vault"
 
 PARAG_DIRS = ["projects", "areas", "resources", "archives", "galaxy"]
 VALID_GALAXY_PREFIXES = ("decision-", "pattern-", "learning-", "style-")
-REQUIRED_FM_FIELDS = {"type", "tags", "created", "updated", "owner", "status", "confidence"}
+REQUIRED_FM_FIELDS = {"type", "tags", "created", "updated", "owner", "status", "confidence", "source"}
+# Galaxy notes over this many lines are flagged for splitting (#13043 /
+# VAULT-ARCH §4.3 + vault-protocol Level-1 check 5). Galaxy only — areas/
+# projects/resources are exempt.
+GALAXY_MAX_LINES = 500
 VALID_CONFIDENCE = {"high", "medium", "low"}
 VALID_SOURCES = {"conversation", "code", "review", "observation", "research"}
 
@@ -129,6 +134,36 @@ def check_frontmatter():
     else:
         print("OK: All galaxy note frontmatter valid")
     return issues
+
+
+def check_galaxy_size():
+    """Warn on galaxy notes exceeding GALAXY_MAX_LINES — suggest splitting.
+
+    Level-1 check 5 (vault-protocol.md): galaxy notes only; areas/projects/
+    resources are exempt (those legitimately grow). Advisory — returns a
+    warning list but does NOT fail validation, since an oversized note is a
+    split-suggestion, not a structural error (#13043).
+    """
+    warnings = []
+    galaxy_dir = VAULT_DIR / "galaxy"
+    if not galaxy_dir.exists():
+        return warnings
+
+    for note in sorted(galaxy_dir.glob("*.md")):
+        if note.name == ".gitkeep":
+            continue
+        line_count = note.read_text(encoding="utf-8").count("\n") + 1
+        if line_count > GALAXY_MAX_LINES:
+            warnings.append(
+                f"{note.name}: {line_count} lines (> {GALAXY_MAX_LINES}) — "
+                "consider splitting into focused notes"
+            )
+
+    for w in warnings:
+        print(f"[vault-check] WARN: {w}")
+    if not warnings:
+        print(f"OK: All galaxy notes within {GALAXY_MAX_LINES} lines")
+    return warnings
 
 
 def check_wikilinks():
@@ -330,6 +365,9 @@ def validate():
     all_issues.extend(check_structure())
     all_issues.extend(check_frontmatter())
     all_issues.extend(check_wikilinks())
+    # Galaxy size is advisory (split-suggestion) — surfaced but not counted
+    # toward the pass/fail total (#13043).
+    check_galaxy_size()
     list_orphans()
 
     total = len(all_issues)
@@ -358,6 +396,10 @@ def main():
     elif cmd == "check-wikilinks":
         issues = check_wikilinks()
         sys.exit(1 if issues else 0)
+    elif cmd == "check-size":
+        # Advisory: always exits 0 (warnings, not failures).
+        check_galaxy_size()
+        sys.exit(0)
     elif cmd == "list-orphans":
         list_orphans()
     elif cmd == "dedup-check":

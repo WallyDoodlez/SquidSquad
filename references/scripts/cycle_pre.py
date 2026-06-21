@@ -638,8 +638,12 @@ def _read_config_flags():
     return {
         "pr_flow": _config_get("pr-flow").lower() in _YES,
         "improvement_scanning": _config_get("improvement-scanning").lower() in _YES,
-        "vault_remember": _config_get("vault-remember").lower() in _YES,
-        "vault_optimize": _config_get("vault-optimize").lower() in _YES,
+        # Vault remember/optimize are always-on — no enable/disable toggle
+        # (#13043). Activation is gated by quiet-cycle + note-count + cooldown,
+        # not config. Hardcoded True so cycle-input reflects always-on rather
+        # than reading a now-removed config field (which returns '' → False).
+        "vault_remember": True,
+        "vault_optimize": True,
     }
 
 

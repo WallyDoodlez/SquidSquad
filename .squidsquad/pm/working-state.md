@@ -1,41 +1,44 @@
 # Working State
 
-_Condensed 2026-06-19 20:48. Prior incident narrative (reboot saga, #12506 self-wake driver, #12853 SOUL/Never-Stop, #12895 stale-source recompose, harness restart saga) preserved in iteration logs + on the forge — not re-copied here. Working-state = current active state only._
+_Condensed 2026-06-21 00:34 (fresh PM boot, PID 38892). Prior incident narrative preserved in iteration logs + on the forge — not re-copied here. Working-state = current active state only._
 
-## Current — 2026-06-19 20:48 (PM EVENT-mode, fresh boot AFTER the full harness restart)
+## Boot summary (this session — 2026-06-21 ~00:30, EVENT mode)
+- GH OK; harness :7373 reachable. Cursor `f7fa85297e1c37b9` → drained 18 boot events → acked to `9759154e45d52c1e`; bootup-complete emitted.
+- HEAD == origin/main == **9155b643f** (clean; only own untracked `.subloop-driver.json` + benign qa planning artifacts).
+- **Boot drain actions taken:**
+  - **#12896 CLOSED** (umbrella) — trigger fired: child **#13035 SHIPPED** (relentless-autonomy reframe + inline 20-min hardcoded auto-timeout; PR #13051, dm 00:20).
+  - **#10838 (VAULT-ARCH TRD) CLOSED** — both code children SHIPPED (**#13042** decay-clock PR #13065; **#13043** gate-removal/`run`/STYLES/source-validation PR #13078). Ran Claude final-pass (settled, 4/4 targeted areas verified). Fixed 2 trivial doc gaps in docs/VAULT-ARCH.md this cycle: (a) added `check-size` to §8.1 table; (b) §7.1 `links:` auto-maintenance corrected to `vault_optimize.py reindex`. Remaining sub-skill drift tracked in #10098 (skill lane, not a TRD blocker).
 
-**>>> POST-RESTART VERIFICATION: FULL PASS. <<<** This boot IS the supervised relaunch the prior session triggered. Harness :7373 reachable, uptime fresh, **git_sha 398d1c1a** (newer than prior b15e7fc5 → relaunched under newer code, /restart now self-serviceable going forward). GH OK. Cursor `443f1f01641fbf89` → boot drain EMPTY. bootup-complete emitted. 0 untriaged externals.
+## >>> DEFERRED HARNESS RESTART — NOW EVIDENCE-BACKED (advertise to operator) <<<
+Running harness sha **c330947b** is **25 commits behind** main (9155b643f). Critically it **lacks #13077** (PR #13084, commit b23a79c3c — "harness actively force-kills deploy-halted agent; cannot self-/quit"). The boot drain showed a **compose-failed ×5 + deploy-error cluster at 00:11–00:12** (`respawn_ok:false`, "agent did not exit on the deploy-halt /quit") — this is **exactly the failure mode #13077 fixes**. Aborted recomposes (shared-instructions/verifier-*/pm-instructions/dm-soul-directives, "pull-failed") committed nothing → **no agent stranded on stale CLAUDE.md** (verified: HEAD clean & ahead; dm/skill/qa all shipping). Older deferred fixes (#13032/#12409/#12294) are ALREADY in c330947b. **Only #13077 awaits a restart.** A coordinated harness restart activates the reaper + refreshes agents onto current runtime fragments. **PM does NOT auto-restart** — operator-paced.
 
-Verification checklist (from facts, ≥2 sources):
-1. ✅ All 4 aliases `status:running` + `bootup_complete:true` (confirmed at ~3min) + EVENT mode. **qa came up EVENT-capable** (bootup=True) — resolves the qa-polling watch item; #12820 fix took on this clean reboot.
-2. ✅ "Never Stop While Work Is Pending" present in all 4 composed CLAUDE.md (grep) — new SOUL live in sessions.
-3. ✅ **Phase 1 #12906 (pull-first recompose guard) HELD on its first real boot** — NO composed-output regression. The load-bearing boot restore-dance was NOT needed; working tree clean except my own untracked `.subloop-driver.json`. Only action: clean 4-commit FF merge of teammate state files (dm #12913 doc-scan, qa quiet cycle). [[learning-stale-source-recompose-reverts-shipped-on-behind-clone]] (updated: #12906 CONFIRMED LIVE this boot).
-4. ✅ skill RESUMED #12912 (Phase 2 deploy-signal) + #12801 (TUI) from working-state — both in-progress on forge, no re-stop (new SOUL).
-5. Self-wake driver: pm `.subloop-driver.json` present; arming this cycle on idle.
-6. → **restart succeeded; new SOUL + Phase 1 both live.**
+## Pipeline (forge-verified 00:34)
+- **pending-test:** #12493 (skill task — pipeline-sentinel HALT detect/unblock/escalate; went pending-test 00:09), #13101 (skill issue; pending-test 00:23). Both qa's lane; **qa actively draining** (verified: dm shipped #13035/#13042/#13043 at 00:20-00:28 ⇒ qa upstream of those passed). Not stalled (fresh). Sentinel re-checks if either >90min in pending-test with no qa activity.
+- **pending-ship:** 0. **pending-human / role:human:** 0.
+- **#13119** — skill fast-follow on #12493 (couple pipeline-sentinel...); skill's lane.
+- **#10377** (skill, status:pending, `blocked:human-action`) — human-blocked; advertise.
+- **Phantom #87654** approved→in-progress on bus again — known test/debug emitter noise; harmless; not filed.
 
-**#12896 INTAKEN this boot → status:planned (awaiting operator approval).** The un-delivered "relentless autonomy" expansion of #12853 (filed by dm at the ship gate to preserve operator-directed scope). Streamlined intake (operator pre-locked behavior in #12853 comments = Phase-2 decisions). Posted full proposed decomposition + 8 ACs as a child skill-task spec (umbrella/child pattern, mirrors #12895→#12912). **Operator gate:** (a) confirm/decline the AC4 #12506-driver-tick backstop (my rec: YES — prevents inline limbo); (b) approve to file the approved child role:skill task. CANNOT file approved-task autonomously (features need explicit human approval). Advertise at next check-in.
+## #10837-9 TRD-Alignment Program (ACTIVE — operator greenlit 2026-06-20 ~18:00 "let's get these done")
+- **#10838 VAULT-ARCH — ✅ CLOSED this boot** (see boot summary). Program method satisfied (DS iteration-audit + Claude final-pass).
+- **#10837 HARNESS-ARCH — doc-side DONE.** Remaining: **/work/assign OPEN decision** (implement vs retire-as-fiction; tied to #12495 + AGENT-RUNTIME §8.3) + minor /queue gen. CLOSE after final-pass + /work/assign decision. PM-aligned lean: RETIRE as fiction (see #10839 note).
+- **#10839 role→alias rename — SCOPED.** Code Phases 2-4 = **#13044 (role:skill, PENDING operator approval — HIGH blast, SQUIDSQUAD_ROLE env coupling).** PM Phase 1 (doc): (a) /work/assign RETIRE-AS-FICTION → update HARNESS-ARCH §4.3 + AGENT-RUNTIME §8.3 + CLOSE #12495; (b) role→alias doc renames across 4 TRDs — **sequence WITH code phases per v1-coexistence, NOT ahead** (avoid fresh drift). Resume when operator approves #13044.
+- Audit artifacts: `.squidsquad/pm/planning/AUDIT-<DOC>-2026-06-20.md`.
+**Resume hook:** if restarted mid-program, re-read this section + latest AUDIT-*.md; continue from current doc's stage.
 
-**Pipeline (forge-verified this boot; updated 21:52):**
-- **#12912 → pending-test (21:52, PR #12926)** — Phase 2 deploy-signal (the active priority) impl COMPLETE; now in the verifier's (qa) lane. PM holds verifier accountable on stall (90-min); just landed, no stall. #12895 umbrella closes when #12912 ships.
-- **pending-ship: 0, pending-human-review: 0.** Only pending-test item is #12912 (qa lane).
-- **skill in-progress (4):** #12895 (umbrella), #12801 (TUI), #12493 (L2 pipeline-sentinel), #12450 (installer unit-test detect).
-- **#12895 (umbrella, in-progress):** Phase 1 #12906 SHIPPED + verified-working this boot. Phase 2 #12912 in-progress (skill).
-- **pm in-progress (parked coordination-holds, unchanged):** #11092, #11053, #9968.
-- **pm planned:** #12896 (awaiting operator approval, this boot).
+## PM DOC TODO — #13077 doc reconcile (my lane, doc-first; NOT started)
+Reconcile HARNESS-ARCH §7.1/§7.4 + AGENT-RUNTIME §5.2 + event-mode-contract.md Case E + self-restart.md to the **harness-as-reaper** model (harness actively terminates deploy-halted/exit-42/stop-requested process; drop agent-`/quit`-as-primary). #13077 code SHIPPED → docs should now align to the locked model. Carry as own-domain doc work or a role:pm doc task. Sequence after the deferred restart lands (so docs describe the now-active behavior).
 
-**Watch items (still live):**
-- **Boot-pull lag chronic on pm clone** (#12526) — 4-behind this boot (teammate concurrent pushes during boot window). Phase 1 #12906 now neutralizes the *regression* risk; the lag itself remains until #12526. The boot git-status + FF-merge stays routine but the restore-dance is no longer load-bearing (Phase 1 covers it).
-- **#10540 (OPEN, skill)** — DM batch-ship "base branch modified" race. Still open.
-- **#12913 (pending, dm)** — docs/ navigation index; dm doc-scan finding. Operator-paced backlog.
-
-**PM approved queue (operator-paced, NOT autonomously actionable):** #10839/#10838/#10837 umbrella PRDs need DS re-audit; #10690 gated.
-- **>>> TRIGGER: when #12912 SHIPS → re-scope #10686 (E7 V2 smoke) AC2/AC5 <<<** skill flagged (21:55) that #10686's AC2/AC5 test the boot-time `compose.py deploy-all` path that #12912 RETIRES (deploy-signal model, HARNESS-ARCH §7.6/§10). Plan locked on #10686 (21:56): re-scope AC2/AC5 to the deploy-signal flow ('change source → DM ships → harness emits deploy-signal → agents halt + pull-first deploy'), AFTER #12912 ships (not before — verification could refine). Then surface to operator for the manual run. #10686 stays parked/approved-but-gated meanwhile — intentional gate, do NOT nudge skill on it.
-
-**PM backlog (pending/deferred, operator-paced):** #12896-child (pending operator approve), #12508, #12410, #12300, #11400, #11000, #10360, #10178, #10023, #10001, #9998, #9996, #9912, #9739, #8997, #20.
+## PM standing backlog (operator-paced/gated, NOT autonomously actionable)
+- **approved (operator-paced/gated):** #10690 (gated E6+E7).
+- **in-progress (parked coordination-holds):** #11092, #11053, #9968.
+- **operator-paced/gated:** #10839/#10837 (TRD program above), #13044 (pending operator approval), #10686 (PRD-E E7 smoke — re-scope to deploy-signal flow now #12912 shipped; verify AC2/AC5 retargeting before surfacing), #12913 (dm docs/ nav index).
+- **#13113** (skill, medium, OPEN) — qa harness telemetry frozen (`bootup_complete`/`last_activity_at` stuck pre-reap ~22:06 across old+new qa PID); health-diagnosis blind spot; sibling of #12854. Behavior-only; skill RCAs. WATCH: does qa telemetry refresh after the deferred restart?
+- **#10540** (OPEN, skill) — DM batch-ship "base branch modified" race.
+- **#10098** (skill) — vault sub-skill drift (vault-protocol.md `links:`/`source: code` fill-in; check-consistency unimpl). Confirmed still-open by VAULT-ARCH final-pass.
+- **pending/deferred (operator-paced):** #12508, #12410, #12300, #11400, #11000, #10360, #10178, #10023, #10001, #9998, #9996, #9912, #9739, #8997, #20.
 
 ## Improvement Scan
-Status: idle
-Last completed: 2026-06-18 01:37
-Next scan after: (idle driver arming this boot)
-(This boot was a productive cycle — post-restart verification + #12896 intake + vault note. No improvement scan needed.)
+Status: idle (arming driver this boot — PM has no autonomously-actionable approved work; only #10690 approved and it is gated).
+Last completed: 2026-06-20 21:46 (driver last_run; scan_count reset 0 in .subloop-driver.json).
+(This boot was productive — #12896 close + #10838 final-pass/close + 2 VAULT-ARCH doc fixes. Going idle → re-arm subloop driver.)
