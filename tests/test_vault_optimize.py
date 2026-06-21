@@ -1,6 +1,7 @@
 """Tests for references/scripts/vault_optimize.py — fake vault corpus, no real git."""
 
 import json
+import re
 import sys
 import time
 from datetime import datetime, timedelta
@@ -230,6 +231,34 @@ class TestDecay:
         text = path.read_text(encoding="utf-8")
         assert "confidence: medium" in text
         assert "Confidence decayed by vault-optimize" in text
+
+    def test_decay_preserves_updated_field(self, patched_vault):
+        """#13042 / VAULT-ARCH §4.4: decay rewrites `confidence:` but must
+        NOT touch `updated:`. The decay clock keys off the last human/agent
+        semantic edit, not the decay event — bumping `updated:` to today
+        restarts the medium→low clock (so the note never reaches `low` on
+        the 120-day-from-edit schedule) and hides the just-decayed note from
+        the next decay-scan for ~60 days. The decay event is recorded by the
+        changelog entry instead.
+        """
+        path = patched_vault / "galaxy" / "decision-stale-high.md"
+        updated_before = re.search(
+            r"updated: (\S+)", path.read_text(encoding="utf-8")
+        ).group(1)
+
+        results = vault_optimize.decay(dry_run=False)
+        assert any("decision-stale-high" in r for r in results)
+
+        after = path.read_text(encoding="utf-8")
+        assert "confidence: medium" in after  # confidence did decay
+        updated_after = re.search(r"updated: (\S+)", after).group(1)
+        assert updated_after == updated_before, (
+            f"decay rewrote updated: {updated_before} -> {updated_after}; "
+            "VAULT-ARCH §4.4 requires it be preserved (the #13042 bug)"
+        )
+        assert updated_after != datetime.now().strftime("%Y-%m-%d"), (
+            "decay bumped updated: to today — the #13042 regression"
+        )
 
     def test_decay_does_not_corrupt_body_content(self, patched_vault):
         """#6514: Body containing 'confidence: high' must not be modified."""

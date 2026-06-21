@@ -379,18 +379,24 @@ def decay(dry_run=False):
                 decayed.append(f"[dry-run] {rel}: {confidence} -> {new_confidence}")
             else:
                 today = datetime.now().strftime("%Y-%m-%d")
-                # Scope rewrites to frontmatter only (#6514) — avoid corrupting body
+                # Scope rewrites to frontmatter only (#6514) — avoid corrupting body.
+                # Decay rewrites ONLY `confidence:`, never `updated:` (#13042):
+                # VAULT-ARCH §4.4 — "Decay steps do NOT modify `updated:`"; the
+                # decay clock keys off the last human/agent semantic edit, not the
+                # decay event. Bumping `updated:` here restarts the medium→low clock
+                # from the decay (so a note never reaches `low` on the 120-day-from-
+                # edit schedule) and hides just-decayed notes from the next
+                # decay-scan for ~60 days. The decay event is recorded by the
+                # changelog entry below, which is the correct audit trail.
                 fm_end = text.find("---", 3)
                 if fm_end != -1:
                     header = text[:fm_end + 3]
                     body = text[fm_end + 3:]
                     header = header.replace(f"confidence: {confidence}", f"confidence: {new_confidence}", 1)
-                    header = re.sub(r"updated: \S+", f"updated: {today}", header, count=1)
                     new_text = header + body
                 else:
                     # No frontmatter boundary — fall back to full-text (shouldn't happen)
                     new_text = text.replace(f"confidence: {confidence}", f"confidence: {new_confidence}", 1)
-                    new_text = re.sub(r"updated: \S+", f"updated: {today}", new_text, count=1)
 
                 # Append changelog entry
                 changelog_entry = f"- {today} — Confidence decayed by vault-optimize (staleness)."
