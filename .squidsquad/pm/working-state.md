@@ -42,6 +42,11 @@ _Condensed 2026-06-21 12:00 (PM EVENT mode, deploy-error-divergence recovery boo
 ## >>> #13162 VERBOSE MODE — FILED + APPROVED THIS SESSION (operator feature) <<<
 - Config-gated verbose narration toggle; 5-phase intake done (research→discussion[4 decisions]→planning→approved). Plan: .squidsquad/pm/planning/VERBOSE-MODE-DESIGN.md. Filed role:skill, approved.
 - Decisions: boot-read session-sticky · full firehose · all agents · README operator doc · default OFF, this install ON.
+## >>> #13030 PM DOC-PAIRING — PARTLY DONE THIS SESSION <<<
+- skill resolved the open question (YES, deploy-signal covers mid-session references/ merges; compose-needed DEAD) + gave a precision correction (harness DOES run deploy-all post-merge on its own clone L4103; "never deploy-all locally" is BOOT-only).
+- **DONE (commit b3a68babf)**: AGENT-RUNTIME §9.5 (compose-needed retired, table row corrected) + COMPOSE-ARCH §8.2 (compose-needed contrast dropped).
+- **REMAINING (tracked on #13030, await skill boot-model confirm / DS-reviewed pass — do NOT rush)**: COMPOSE-ARCH §8.1 L1490 boot-recompose ("harness runs deploy-all before spawning" vs boot-emits-deploy-signal, harness.py:576-577) + L1517 mermaid; COMPOSE-ARCH §8 L1553 PR-author "did I run deploy-all" checklist (stale under harness-owns-recompose).
+
 - **PM-ACTION on #13162 pending-test/ship: land AC6 = docs/AGENT-RUNTIME.md** (config + boot-read/sticky + both-mode behavior; cross-pair pass; coupled to ship). DM owns AC7 (README) as delivery packaging.
 
 ## Improvement Scan
