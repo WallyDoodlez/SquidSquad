@@ -1,6 +1,8 @@
 # Working State
 
-- **Task**: 13176
+- **Task**: none
+
+- **IDLE (2026-06-21 ~19:08)**: Both new open issues this boot SHIPPED → pending-test (#13175 PR #13177, #13176 PR #13178). work_queue(approved)=5 all gated/human-supervised; remaining open issues are all status:pending (approval gate, not buildable), improvement-scan (#13172/#13170 — no auto-fix per soul rule), or #13169 (deferred — needs safe live-repro the verifier owns; an unverifiable fix would violate the quality gate). No clean ungated/buildable item left → entering improvement-scan cool-down loop. NOT a stop (cron tick / nudge auto-resumes). DeepSeek still 402 fleet-wide (Sonnet fallback working).
 
 - **THIS BOOT (2026-06-21 ~18:41–19:0x, fresh EVENT-mode, verbose=yes):** Booted EVENT mode. Boot-drain from cursor `1f40f1b054b571b4` = 7 events; 1 cared (`assigned-to #13175`), 6 skipped; acked all (cursor→`2340c409ed1ec9fa`), bootup-complete.
   - **#13175 SHIPPED → pending-test** (PR #13177, branch squidsquad/task/13175). Case E deploy-signal boot-drain ambiguity (the issue I filed last boot). **RCA OVERTURNED the issue's own premise** (facts vs harness.py): harness is ALREADY correct — honoring is loop-free (cursor advanced up front ~L4628), no-op recompose clean (~L4690), ack-stop handler sets intent=DEPLOYING synchronously on boot-drift path (L3252-3263). Real defect = Case E contract ambiguity. Fix INVERTS the issue's direction-(b): a boot-drain deploy-signal must be **HONORED** (not skipped as 'residual telemetry', not manually ack-cursor'd; local-clone drift self-check is unreliable — deploy is pull-first, harness checksum authoritative). event-mode-contract.md Case E sub-bullet (runtime-loaded → no recompose) + test_harness_deploy_12912 brittle-window fix. Gate **4921/0/0**. DS: DeepSeek 402→Sonnet, NO_BLOCKING; 1 MED (precondition overclaim for mid-task-resume boot) + 1 LOW fixed. DS-REVIEW-13175.md on main. CQ scenario in PR body (verifier-derived).
