@@ -107,6 +107,7 @@ Reusable across multiple roles.
 | `resume-working-state` | Resume in-flight work from `.squidsquad/<alias>/working-state.md` on cycle entry | all roles |
 | `interval-sync` | Honor the configured cycle interval | all roles |
 | `self-restart` | Detect context-pressure exit and let the harness respawn | PM, verifier, DM, worker |
+| `harness-restart` | **Reactive** (not a cycle step): request a clean harness relaunch via `POST /restart` when the harness is degraded beyond what an agent-restart fixes — requesting agent's own session ends, whole team respawns fresh under the supervised launcher. The harness-layer mirror of `self-restart`. PM is the coordinator; other roles route the request to PM. Wired v2-style (`→ run sub-skill: harness-restart` in all four role L2 `instructions.md`, NOT via `includes.yml`). | PM, verifier, DM, worker (reactive) |
 | `agent-lifecycle` | Heartbeat, singleton enforcement, reboot signaling | PM, verifier, DM, worker |
 | `boot-remote-agents` | PM-only: spawn stalled agents via `boot_remote.py` when the harness can't | PM |
 
@@ -232,7 +233,7 @@ Role-specific event extras:
 | `roles/dm/task-pickup` | DM-specific task-pickup body (pending-ship items). Compose-time include via `dm/includes.yml` — NOT a runtime slash-bearing marker. At runtime DM uses bare `task-pickup` (catalog row above at #10743 line); the slash-bearing source path here lets compose inline the DM override before the bare `task-pickup` body. |
 | `issue-triage` | Triage DM-owned bug reports |
 | `delivery-packaging` | The packaging step: docs, CHANGELOG, release notes |
-| `version-bumps` | Bump rules (uses `shipped_since_bump` counter) |
+| `version-bumps` | Bump rules + `shipped_since_bump` counter mechanics. **Driven by L4 project policy, not the universal DM** (#12749 DM-ARCH) — the generic DM has no version concept; SquidSquad's `.squidsquad/project/dm.md` opts into batch-10 → minor semver. The DM owns the counter; the verifier no longer touches it. |
 | `doc-improvement-loop` | DM's scan: drift between source docs and shipped state |
 | `roles/dm/issue-filing` | DM's bug template — slash-bearing per #10743 |
 | `roles/dm/discussion-protocol` | DM's comment format (→ retires; common/`discussion` is the canonical) — slash-bearing per #10743 |

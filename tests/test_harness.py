@@ -11,7 +11,7 @@ import sys
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 # Add scripts to path
 SCRIPT_DIR = Path(__file__).resolve().parent.parent / "references" / "scripts"
@@ -471,6 +471,12 @@ class TestForceKillSafetyNet(unittest.TestCase):
                   return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=pid_alive),
+            # #12294: update_health now resolves liveness via the image-verified
+            # helper, so control that instead of the bare liveness check; pin
+            # write-back to a no-op so the self-heal doesn't touch /clone.
+            patch("harness.process_utils.is_claude_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.time.time", return_value=fake_now),
             patch("harness._log"),
         ]
@@ -667,6 +673,10 @@ class TestCrashLoopBackoff(unittest.TestCase):
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=pid_alive),
+            # #12294: image-verified liveness is the path update_health uses now.
+            patch("harness.process_utils.is_claude_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid",
                   return_value=(None, False)),
             patch("harness.time.time", return_value=fake_now),
@@ -942,11 +952,29 @@ class TestRestartLifecycle(unittest.TestCase):
             (pid_changed=True).
         """
         kill = MagicMock()
+        # #12294: update_health resolves liveness via the image-verified helper
+        # for BOTH the stored PID and the .claude-pid file PID. Mirror the old
+        # two-source semantics with a per-PID side_effect: the stored PID's
+        # liveness is `stored_pid_alive`; the file PID's is `read_pid_return`'s
+        # alive flag. Write-back is pinned to a no-op (it would touch /clone).
+        stored_pid = hs.get_agent("skill").claude_pid
+        file_pid, file_alive = read_pid_return
+
+        def _claude_alive(pid):
+            if stored_pid is not None and pid == stored_pid:
+                return stored_pid_alive
+            if file_pid is not None and pid == file_pid:
+                return file_alive
+            return False
+
         patches = [
             patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=stored_pid_alive),
+            patch("harness.process_utils.is_claude_process_alive",
+                  side_effect=_claude_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid",
                   return_value=read_pid_return),
             patch("harness.reboot_agent._kill_process", kill),
@@ -1222,6 +1250,97 @@ class TestPortManagement(unittest.TestCase):
         finally:
             s.close()
 
+    def test_find_free_port_zero_returns_real_port(self):
+        """#12820: find_free_port(0) returns the OS-assigned ephemeral port,
+        not the literal 0 — so a --port 0 caller can advertise the real port."""
+        from harness import find_free_port
+        port = find_free_port(0)
+        self.assertNotEqual(port, 0)
+        self.assertGreater(port, 0)
+
+
+class TestSingletonPortGuard(unittest.TestCase):
+    """#12820: production harness must acquire the canonical port or refuse —
+    never bind an ephemeral port (which would poison clone .harness-port files).
+    """
+
+    def _serve(self, body: bytes):
+        """Spin a throwaway HTTP server returning ``body`` for GET /status.
+        Returns (port, shutdown_callable). Lets HTTPServer bind an OS-assigned
+        ephemeral port itself (no probe-then-rebind gap) and reads the actual
+        port back from server_address — avoids a TOCTOU race on the port."""
+        import http.server
+        import threading
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):  # silence test noise
+                pass
+
+        httpd = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+        port = httpd.server_address[1]
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        return port, httpd.shutdown
+
+    def test_probe_no_server(self):
+        """No listener on the port → not a live harness."""
+        from harness import _probe_harness_status, find_free_port
+        dead_port = find_free_port(0)  # found free, nothing bound to it now
+        self.assertFalse(_probe_harness_status(dead_port, timeout=1.0))
+
+    def test_probe_live_harness(self):
+        """A server returning harness-shaped /status JSON → live harness."""
+        from harness import _probe_harness_status
+        port, shutdown = self._serve(b'{"harness": {"status": "running"}, "agents": []}')
+        try:
+            self.assertTrue(_probe_harness_status(port, timeout=2.0))
+        finally:
+            shutdown()
+
+    def test_probe_non_harness_200(self):
+        """A 200 from an unrelated server lacking the 'harness' key → not ours."""
+        from harness import _probe_harness_status
+        port, shutdown = self._serve(b'{"hello": "world"}')
+        try:
+            self.assertFalse(_probe_harness_status(port, timeout=2.0))
+        finally:
+            shutdown()
+
+    def test_resolve_explicit_port_zero_is_ephemeral(self):
+        """--port 0 takes the explicit path and yields a real ephemeral port."""
+        from harness import _resolve_listen_port
+        port = _resolve_listen_port(0)
+        self.assertGreater(port, 0)
+
+    def test_resolve_explicit_specific_free_port(self):
+        """An explicit free --port is returned unchanged (no probe, no refuse)."""
+        from harness import _resolve_listen_port, find_free_port
+        free = find_free_port(0)
+        self.assertEqual(_resolve_listen_port(free), free)
+
+    def test_resolve_production_free_claims_canonical(self):
+        """Production path (no --port): canonical port free → claim it."""
+        import harness
+        with patch.object(harness, "_read_config_port", return_value=59321), \
+             patch.object(harness, "_probe_harness_status", return_value=False):
+            self.assertEqual(harness._resolve_listen_port(None), 59321)
+
+    def test_resolve_production_live_harness_refuses(self):
+        """Production path: a live harness on the canonical port → refuse (exit 1),
+        never falls back to an ephemeral port that would poison clones."""
+        import harness
+        with patch.object(harness, "_read_config_port", return_value=59322), \
+             patch.object(harness, "_probe_harness_status", return_value=True):
+            with self.assertRaises(SystemExit) as ctx:
+                harness._resolve_listen_port(None)
+            self.assertEqual(ctx.exception.code, 1)
+
 
 class TestCLIPortDiscovery(unittest.TestCase):
     """Test CLI port discovery from .harness-port file."""
@@ -1493,8 +1612,12 @@ class TestHarnessHealthPolling(unittest.TestCase):
             (role_dir / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
 
             hs = HarnessState()
+            # #12294: the test PID is this python process, not a claude.exe, so
+            # image verification would (correctly) reject it. Stub the
+            # image-verified check to True so the .claude-pid PID is adopted.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -1541,6 +1664,13 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         cls.client = TestClient(app, raise_server_exceptions=False)
         cls.app = app
         cls.state = state
+
+    def setUp(self):
+        # #12825 DS-F2: /shutdown and /restart share a single-winner teardown
+        # guard whose flag the real process clears by exiting. Tests reuse the
+        # process (and the flag can leak in from other test files), so reset it.
+        import harness
+        harness._teardown_in_progress = False
 
     def test_get_status(self):
         """GET /status returns harness and agent info."""
@@ -1695,15 +1825,66 @@ class TestEndpointsViaTestClient(unittest.TestCase):
             self.assertEqual(agent.intent, AgentState.INTENT_RESTARTING)
 
     def test_post_shutdown_returns_202(self):
-        """POST /shutdown returns 202 Accepted (non-blocking)."""
+        """POST /shutdown returns 202 Accepted (non-blocking).
+
+        #12720: the handler spawns a `shutdown` DAEMON thread that sleeps
+        then calls ``os._exit(0)``. The ``patch("harness.os._exit")`` MUST
+        outlive that thread. The pre-#12720 version reverted the patch the
+        instant the POST returned 202 — but the daemon thread calls
+        os._exit ~1s LATER, so the REAL ``os._exit(0)`` fired from the
+        daemon thread, hard-killing the whole pytest process (exit 0, no
+        summary, ``pytest.main()`` never returns). In a full ``pytest
+        tests/`` run that surfaced as a false-green truncation at ~58%.
+
+        Fix: patch ``os._exit`` + ``time.sleep`` (drop the 1s wait) and
+        explicitly JOIN the `shutdown` thread inside the patch window so the
+        mock — not the real exit — is what fires, then assert it was called.
+        ``HARNESS_PORT_FILE`` is redirected to a non-existent tmp path so the
+        thread's port-file unlink can never touch the live discovery file.
+        """
+        import tempfile
+        import threading
         # #4792: removed `_has_stop_sentinel` patch — function deleted.
+        fake_port_file = Path(tempfile.gettempdir()) / "sq-12720-nonexistent.harness-port"
+        thread_found = False
+        thread_alive_after_join = None
+        # NOTE: time.sleep is deliberately NOT patched. The daemon thread does
+        # time.sleep(1) before os._exit, so leaving the real sleep in place
+        # guarantees the thread is still alive (sleeping) when we enumerate it
+        # right after the POST — eliminating the race where a no-op sleep lets
+        # the thread finish before we can find and join it (DS-c1 F4 follow-up).
         with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
              patch("harness.boot_remote._get_clone_path", return_value="/fake"), \
-             patch("harness.os._exit"):  # Prevent actual exit
+             patch("harness.HARNESS_PORT_FILE", fake_port_file), \
+             patch("harness.os._exit") as mock_exit:  # Prevent actual exit
             resp = self.client.post("/shutdown")
+            # The os._exit call happens in the `shutdown` daemon thread, not
+            # synchronously. Join it INSIDE the patch context so the mocked
+            # os._exit is what fires (else the real one kills the process).
+            # CAPTURE state here but assert OUTSIDE the block: a failing assert
+            # inside would revert the os._exit patch while the thread may still
+            # be alive, letting the REAL os._exit(0) hard-kill pytest — the very
+            # bug under test (DS-c1 F4).
+            for t in threading.enumerate():
+                if t.name == "shutdown":
+                    thread_found = True
+                    t.join(timeout=10)
+                    thread_alive_after_join = t.is_alive()
+                    break
+            exit_call_count = mock_exit.call_count
+            exit_call_args = mock_exit.call_args
         self.assertEqual(resp.status_code, 202)
         data = resp.json()
         self.assertEqual(data["status"], "shutting_down")
+        # Assertions OUTSIDE the patch context — by here os._exit is the real
+        # builtin again, but the daemon thread has already been joined dead.
+        self.assertTrue(thread_found, "shutdown daemon thread was never spawned")
+        self.assertFalse(
+            thread_alive_after_join,
+            "shutdown thread did not finish within join timeout — its os._exit "
+            "would fire after the patch context exits (#12720 regression)")
+        self.assertEqual(exit_call_count, 1, "os._exit not called exactly once")
+        self.assertEqual(exit_call_args, call(0), "os._exit not called with 0")
 
     def test_unknown_role_returns_404(self):
         """POST /agents/{unknown}/start returns 404."""
@@ -2054,6 +2235,7 @@ class TestIntentLifecycle(unittest.TestCase):
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
                  patch("harness.boot_remote.boot_agent", return_value=spawn_result), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2081,8 +2263,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = None  # PID cleared when agent died
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2108,8 +2293,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = None
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2134,8 +2322,12 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = os.getpid()  # Same PID — stop is in-flight
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True
+            # so the same-PID-alive case is exercised (intent stays STOPPING).
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -3149,29 +3341,43 @@ class TestReviewFixes(unittest.TestCase):
                     hs.load_state()
                 self.assertFalse(hs.get_agent("skill").bootup_complete)
 
-    def test_reboot_affected_agents_clears_bootup_complete(self):
-        """#8695 R2: compose-driven restart resets bootup_complete=False."""
+    def test_reboot_affected_agents_emits_deploy_signal(self):
+        """#12912 (supersedes #8695 R2): _reboot_affected_agents is now the
+        deploy-signal EMITTER. It sets intent=DEPLOYING and emits a deploy-signal
+        to the affected alias — and deliberately LEAVES bootup_complete=True so
+        the signal is actually delivered off the event bus (the cooperative
+        deploy-halt replaces the old slam-bootup_complete-False force restart;
+        the agent stops picking up work itself when it halts)."""
         from harness import HarnessState, AgentState
         hs = HarnessState()
         agent = AgentState("skill")
         agent.intent = AgentState.INTENT_RUNNING
+        agent.status = "running"  # #12912 iter-3 F1: only ALIVE agents are signaled
         agent.bootup_complete = True
         hs.set_agent("skill", agent)
         import harness
         prev_state = harness.state
         harness.state = hs
-        # Fake git-diff output so the function decides skill's CLAUDE.md changed
         fake_git_diff = MagicMock()
         fake_git_diff.returncode = 0
         fake_git_diff.stdout = ".squidsquad/skill/CLAUDE.md\n"
+        emitted = []
         try:
             with patch("harness._log"), \
                  patch("harness.subprocess.run", return_value=fake_git_diff), \
+                 patch("harness._emit_event",
+                       side_effect=lambda *a, **k: emitted.append((a, k))), \
                  patch.object(hs, "save_state"):
                 harness._reboot_affected_agents(123, ["references/sub-skills/common/x.md"])
         finally:
             harness.state = prev_state
-        self.assertFalse(hs.get_agent("skill").bootup_complete)
+        updated = hs.get_agent("skill")
+        self.assertEqual(updated.intent, AgentState.INTENT_DEPLOYING)
+        # bootup_complete is intentionally NOT cleared (signal must be delivered).
+        self.assertTrue(updated.bootup_complete)
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][0][0], "deploy-signal")
+        self.assertEqual(emitted[0][1]["payload"]["target_alias"], "skill")
 
     # ---- #8694 review fixes ------------------------------------------------
 
@@ -3235,6 +3441,7 @@ class TestEADStatusRouting12342(unittest.TestCase):
         "pm": ("pm", None),
         "verifier": ("verifier", None),
         "dm": ("dm", None),
+        "human": ("human", None),  # #12800: non-agent role-class
     }
 
     def _issue(self, num, status, role="skill", updated="2099-01-01T00:00:00Z"):
@@ -3277,6 +3484,37 @@ class TestEADStatusRouting12342(unittest.TestCase):
         _, emitted = self._run([self._issue(2, "pending-ship", role="skill")])
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0]["target_alias"], "dm")
+
+    def test_pending_human_review_routes_to_human(self):
+        """#12800 AC3: an agent-needs-human handoff routes to the install's
+        `human` alias (was pm), resolved via the role-class registry."""
+        _, emitted = self._run(
+            [self._issue(20, "pending-human-review", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "human",
+                         "pending-human-review must route to the human alias "
+                         "(#12800), NOT pm and NOT the issue's worker label")
+
+    def test_pending_human_setup_routes_to_human(self):
+        """#12800 AC3: worker-pause-for-setup also routes to the human alias."""
+        _, emitted = self._run(
+            [self._issue(21, "pending-human-setup", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "human")
+
+    def test_pending_human_does_not_enter_handoff_reemit_12800(self):
+        """#12800: a human is NOT on the event bus, so the assigned-to <human>
+        is emitted once for forge/audit but must NOT enter the #12442 handoff
+        re-emit cadence (re-nudging would pile up never-consumed events). A
+        real agent handoff (pending-test → verifier) DOES seed the re-emit."""
+        det, emitted = self._run(
+            [self._issue(22, "pending-human-review", role="skill")])
+        self.assertEqual(emitted[0]["target_alias"], "human")
+        self.assertNotIn(22, det._handoff_emit_at,
+                         "human routing must not seed the handoff re-emit timer")
+        det2, _ = self._run([self._issue(23, "pending-test", role="skill")])
+        self.assertIn(23, det2._handoff_emit_at,
+                      "agent handoff (pending-test) must seed the re-emit timer")
 
     def test_approved_routes_to_worker_label(self):
         _, emitted = self._run([self._issue(3, "approved", role="skill")])

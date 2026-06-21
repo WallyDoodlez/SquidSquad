@@ -168,12 +168,67 @@ def _win32_kernel32():
     return k
 
 
+# Mirror of process_utils.image_name_for_pid / is_claude_process_alive
+# (#12294). Kept local for the same reason as _is_process_alive — thin_launcher
+# avoids importing process_utils (and any heavier deps) at launch (#8891). If
+# you change the semantics in process_utils, mirror the change here.
+_CLAUDE_IMAGE_NAMES = ("claude.exe", "claude")
+
+
+def _image_name_for_pid(pid):
+    """Return the lowercased executable image name for a live PID, or None.
+
+    ``None`` == undetermined (PID not in the snapshot, snapshot failed, or no
+    cheap image lookup on this platform) — callers MUST treat it as "could not
+    verify" and fall back to plain liveness, never as a non-match (#12294 AC2).
+    Windows reuses ``_win32_all_procs``; POSIX reads ``/proc/<pid>/comm``.
+    """
+    if pid is None or pid <= 0:
+        return None
+    if sys.platform == "win32":
+        # Total: any toolhelp/ctypes fault degrades to "undetermined" (None)
+        # rather than propagating — _check_singleton runs at launch and the
+        # process_utils twin runs inside the harness health poll (DS-12294-c3
+        # Finding 1).
+        try:
+            ppid_name = _win32_all_procs().get(pid)
+        except Exception:
+            return None
+        # `or None`: empty image name is "undetermined", not a non-match —
+        # parity with the POSIX path / process_utils (DS-12294-c1).
+        return (ppid_name[1].lower() or None) if ppid_name else None
+    try:
+        comm = Path(f"/proc/{pid}/comm").read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return comm.lower() or None
+
+
+def _is_claude_process_alive(pid):
+    """True iff ``pid`` is a live process whose image is claude (#12294).
+
+    A PID recycled by an unrelated process must not be trusted as our agent.
+    Undetermined image (``_image_name_for_pid`` → None) falls back to plain
+    liveness so a live agent we couldn't inspect is never mis-reclaimed (AC2).
+    """
+    if not _is_process_alive(pid):
+        return False
+    img = _image_name_for_pid(pid)
+    if img is None:
+        return True
+    return img in _CLAUDE_IMAGE_NAMES
+
+
 def _check_singleton(clone_path, role):
     """Return a live PID if another agent of this role is already running here.
 
     Reads `.squidsquad/<role>/.claude-pid` and verifies the recorded process
-    is still alive. Stale pid files (process exited without cleanup) return
-    None — the new boot is allowed and will overwrite the file (#8692).
+    is still alive AND is actually a claude process (#12294). Stale pid files
+    (process exited without cleanup) — and recycled PIDs now owned by an
+    unrelated process — return None, so the new boot is allowed and will
+    overwrite the file (#8692). Image verification closes the recycled-PID
+    hole: a non-claude process squatting on the recorded PID no longer
+    defeats singleton enforcement and forces a duplicate-spawn refusal.
     """
     pid_file = Path(clone_path) / ".squidsquad" / role / ".claude-pid"
     if not pid_file.exists():
@@ -185,7 +240,7 @@ def _check_singleton(clone_path, role):
     if pid == os.getpid():
         # Defensive: our own PID shouldn't be there, but if it is, treat as stale.
         return None
-    return pid if _is_process_alive(pid) else None
+    return pid if _is_claude_process_alive(pid) else None
 
 
 def _reclaim_stale_scheduled_lock(clone_path):
@@ -329,16 +384,18 @@ def _resolve_claude_exe_pid(wrapper_pid, claude_exe_used,
     return wrapper_pid
 
 
-def _win32_list_descendants(parent_pid):
-    """Return all descendants of `parent_pid` on Windows via toolhelp32.
+def _win32_all_procs():
+    """Return a ``{pid: (parent_pid, image_name)}`` snapshot of all processes.
 
-    Implementation note: builds the full process snapshot then walks the
-    tree from `parent_pid`. CreateToolhelp32Snapshot is in-process and
+    Single source of the toolhelp32 walk used by both
+    ``_win32_list_descendants`` (tree walk) and ``_image_name_for_pid``
+    (image lookup, #12294). CreateToolhelp32Snapshot is in-process and
     avoids the WMI / tasklist hangs documented in #9903 / #9904.
 
     Uses the same ``_win32_kernel32()`` typed binding as
     ``_is_process_alive`` (#10440) so handle values aren't truncated to
     ``c_int`` and ``INVALID_HANDLE_VALUE`` compares correctly on x64.
+    Returns ``{}`` if the snapshot cannot be created.
     """
     import ctypes
     from ctypes import wintypes
@@ -367,15 +424,14 @@ def _win32_list_descendants(parent_pid):
     kernel32 = _win32_kernel32()
     snap = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
     if snap is None or snap == INVALID_HANDLE_VALUE:
-        return []
+        return {}
 
+    procs = {}
     try:
         entry = PROCESSENTRY32()
         entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
-        # Build {pid: (parent_pid, name)} map.
-        procs = {}
         if not kernel32.Process32First(snap, ctypes.byref(entry)):
-            return []
+            return {}
         while True:
             procs[entry.th32ProcessID] = (
                 entry.th32ParentProcessID,
@@ -385,6 +441,18 @@ def _win32_list_descendants(parent_pid):
                 break
     finally:
         kernel32.CloseHandle(snap)
+    return procs
+
+
+def _win32_list_descendants(parent_pid):
+    """Return all descendants of `parent_pid` on Windows via toolhelp32.
+
+    Implementation note: snapshots all processes via ``_win32_all_procs``
+    then walks the tree from `parent_pid`.
+    """
+    procs = _win32_all_procs()
+    if not procs:
+        return []
 
     # Walk descendants of parent_pid (BFS). claude.exe is typically a
     # direct child of the cmd.exe shim, sometimes one hop deeper through

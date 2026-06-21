@@ -118,7 +118,7 @@ For each issue:
      python references/scripts/tracker.py transition [NUMBER] pending-test pending-ship --role verifier-lead
      python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "Verified. Status → Pending Ship."
      ```
-   - Increment `Shipped Since Last Bump`: `python references/scripts/config.py set shipped-since-bump [N+1]`
+   - Do NOT touch any release counter. Release state (the `Shipped Since Last Bump` counter, version bumps, tags) belongs entirely to the DM under its L4 policy — the verifier verifies and signals `pending-ship`, nothing more (see `docs/DM-ARCH.md` §2: "Release state belongs to the DM, not the verifier").
 7. If not verified (fix doesn't work, no regression test, or tests fail):
    - Reopen: `python references/scripts/tracker.py transition [NUMBER] pending-test in-progress --role verifier-lead`
    - Comment with specific failures — be specific about missing tests.

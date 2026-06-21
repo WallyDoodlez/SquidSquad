@@ -1,0 +1,50 @@
+{
+  "issue": 12825,
+  "title": "Supervised harness launcher + agent-triggerable harness restart (harness-restart sub-skill)",
+  "authored_by": "verifier (qa)",
+  "authored_at": "2026-06-19 01:06",
+  "ac": "AC7",
+  "method": "Fresh agent (model: sonnet), given ONLY references/sub-skills/common/harness-restart.md in isolation, no other context. Answers must come from the sub-skill alone.",
+  "target": "references/sub-skills/common/harness-restart.md (new sub-skill added by PR #12860)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "The harness process is alive but its event dispatch stopped waking agents, and you have confirmed this from /status and the harness logs. Is requesting a harness restart appropriate here, and what makes it the right remedy rather than the wrong one?",
+      "expected": "Yes — appropriate. It is a harness-level fault an agent-restart can't fix, a fresh harness process is a plausible cure (process-state corruption / stuck subsystem), and the symptom was confirmed from facts. All three conditions hold.",
+      "must_not": "Treating it as something a single agent-restart fixes, or restarting without confirming from facts."
+    },
+    {
+      "id": "CQ2",
+      "q": "You determine the symptom is actually caused by a code bug (or an auth/port environment problem). Should you request a harness restart? Why or why not?",
+      "expected": "No. A code bug needs a fix + ship, and an environment problem (auth, port conflict) would just be reproduced by a fresh process — a restart cures neither. Restart is only for process-state corruption / a stuck subsystem.",
+      "must_not": "Restarting to fix a code bug or environment problem."
+    },
+    {
+      "id": "CQ3",
+      "q": "Mechanically, how does an agent request the harness restart, and how does it differ from /shutdown?",
+      "expected": "Resolve the harness port (read .squidsquad/.harness-port, default 7373 if absent/invalid), then POST to http://127.0.0.1:<port>/restart (success = 202 {status: restarting}). /restart exits the harness with code 42 and KEEPS the port file so the relaunched harness reuses it; /shutdown exits 0, deletes the port file, and is NOT relaunched.",
+      "must_not": "Using /shutdown to restart, or claiming /restart is permanent."
+    },
+    {
+      "id": "CQ4",
+      "q": "What happens to YOUR own session after a successful POST /restart, and what must you do before POSTing?",
+      "expected": "Your own session ends with the harness (the harness stops every agent including the requester) and respawns fresh under the relaunched harness. Before POSTing you must record the triggering condition and your intent on the forge (a tracked ticket) — the forge is the only durable record; anything uncommitted is lost.",
+      "must_not": "Claiming your session survives, or polling/re-POSTing after a 202."
+    },
+    {
+      "id": "CQ5",
+      "q": "You are the worker (not PM) and you notice harness-level degradation. Who should trigger the restart, and when would you ever self-serve the POST /restart yourself?",
+      "expected": "Route the recovery to PM via a tracked status transition (not a bare comment) and let PM trigger it — a restart respawns the whole team, so it is a team-level action. Self-serve POST /restart directly only when waiting on PM would prolong an active outage blocking the squad (and conditions confirmed), or when PM itself is the unreachable/degraded party.",
+      "must_not": "Self-serving the restart as the default, or using a bare comment to hand off to PM."
+    },
+    {
+      "id": "CQ6",
+      "q": "After the restart, in which session does verification happen and what three facts confirm the restart worked?",
+      "expected": "Verification happens in the RESPAWNED session (you cannot verify from the session that just ended), usually by the PM that owns the recovery ticket. The three facts: (1) all agents back — GET /status shows every alias running + bootup_complete true; (2) wake mode correct — each agent came up in event mode (not polling fallback); (3) the triggering symptom no longer reproduces. If the symptom persists, the restart was the wrong remedy.",
+      "must_not": "Verifying from the ended session, or closing the ticket without checking the symptom cleared."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-19 01:06",
+  "evidence": "Fresh sonnet agent (id a38695fe8701152a9), given ONLY the harness-restart.md sub-skill text in isolation (no repo/tool access), answered all 6 CQs correctly from the text alone: CQ1 all-three-conditions-hold yes; CQ2 'no — code bug needs fix+ship, env problem just reproduced'; CQ3 'POST /restart exit 42 keeps port file vs /shutdown exit 0 deletes'; CQ4 'own session ends, record on forge before POSTing'; CQ5 'route to PM via tracked transition, self-serve only when waiting prolongs an active outage'; CQ6 'verify in respawned session, 3 facts (all agents running+bootup_complete, event-mode, symptom cleared)'."
+}

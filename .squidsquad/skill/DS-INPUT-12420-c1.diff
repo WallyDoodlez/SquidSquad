@@ -1,0 +1,553 @@
+diff --git a/references/scripts/wizard.py b/references/scripts/wizard.py
+index 9141283e9..1e04bb13e 100644
+--- a/references/scripts/wizard.py
++++ b/references/scripts/wizard.py
+@@ -1065,6 +1065,167 @@ def migration_walk_plan(base_dir=None):
+     }
+ 
+ 
++# ---------------------------------------------------------------------------
++# Step 7.5c — post-commit harness restart (INSTALLER-ARCH §10.3, #12420)
++# ---------------------------------------------------------------------------
++#
++# After Phase 8's commit (WIZARD.md Step 7.5) the runbook calls `restart-agents`
++# so a *running* squad picks up the freshly-composed CLAUDE.md. The probe +
++# routing + per-alias HTTP are deterministic and belong here, not in runbook
++# prose. The HTTP touchpoint is isolated in `_http_request` so the unit tests
++# can monkeypatch it and never open a socket.
++
++HARNESS_DEFAULT_PORT = 7373       # harness.py default; mirrors cycle_post._HARNESS_DEFAULT_PORT
++HARNESS_PROBE_TIMEOUT = 5         # §10.3: 5-second /status probe
++
++
++def _read_harness_port(base_dir=None):
++    """Read `base_dir/.squidsquad/.harness-port` as an int.
++
++    Defaults to ``HARNESS_DEFAULT_PORT`` when the file is missing, empty, or not
++    a valid integer — same fail-safe the agent boot probe uses
++    (cycle_post._discover_harness_port / WIZARD step:cycle/boot).
++    """
++    if base_dir is None:
++        base_dir = REPO_ROOT
++    port_file = Path(base_dir) / ".squidsquad" / ".harness-port"
++    try:
++        return int(port_file.read_text(encoding="utf-8").strip())
++    except (OSError, UnicodeDecodeError, ValueError):
++        return HARNESS_DEFAULT_PORT
++
++
++def _http_request(method, url, timeout, data=None):
++    """The single network seam for the §10.3 restart. Returns ``(status, body)``.
++
++    Raises on any transport failure (``urllib.error.URLError``, ``OSError``,
++    ``socket.timeout`` …). This is the ONLY place the restart helpers touch the
++    network, so the unit tests monkeypatch ``wizard._http_request`` to exercise
++    both the reachable and unreachable branches without a live harness.
++    """
++    import urllib.request
++    if method == "POST" and data is None:
++        data = b""  # explicit Content-Length: 0 — some servers reject body-less POSTs
++    req = urllib.request.Request(url, data=data, method=method)
++    with urllib.request.urlopen(req, timeout=timeout) as resp:
++        status = getattr(resp, "status", None) or resp.getcode()
++        return status, resp.read().decode("utf-8", "replace")
++
++
++def _harness_reachable(port, timeout):
++    """True iff ``GET /status`` returns a 2xx within ``timeout`` seconds.
++
++    Any failure — connection refused, timeout, non-2xx, malformed response —
++    means "treat the harness as down and fall through to the cold-start path".
++    """
++    try:
++        status, _ = _http_request("GET", f"http://127.0.0.1:{port}/status", timeout)
++    except Exception:
++        return False
++    return 200 <= status < 300
++
++
++def _install_aliases(base_dir=None):
++    """Sorted alias list from `base_dir/.squidsquad/config.md` `## Aliases`.
++
++    Returns ``[]`` when the config is unreadable or the registry won't parse;
++    the caller surfaces that as an error (a reachable harness with no known
++    aliases cannot be restarted).
++    """
++    if base_dir is None:
++        base_dir = REPO_ROOT
++    config_path = Path(base_dir) / ".squidsquad" / "config.md"
++    try:
++        text = config_path.read_text(encoding="utf-8")
++    except (OSError, UnicodeDecodeError):
++        return []
++    import config as _cfg
++    try:
++        registry = _cfg.parse_aliases_registry(text=text)
++    except Exception:
++        return []
++    return sorted(registry.keys())
++
++
++def _restart_one_alias(base_url, alias, timeout):
++    """POST stop then start for one alias. Returns ``(ok, error_or_None)``."""
++    for action in ("stop", "start"):
++        try:
++            status, _ = _http_request("POST", f"{base_url}/{alias}/{action}", timeout)
++        except Exception as exc:
++            return False, f"{action}: {type(exc).__name__}: {exc}"
++        if not (200 <= status < 300):
++            return False, f"{action}: HTTP {status}"
++    return True, None
++
++
++def restart_agents(base_dir=None, timeout=HARNESS_PROBE_TIMEOUT):
++    """INSTALLER-ARCH §10.3 post-commit harness restart.
++
++    Probe ``GET /status`` (port from `.harness-port`, default 7373, ``timeout``s),
++    then branch:
++
++    - **Reachable** — for each install alias (config `## Aliases`),
++      ``POST /agents/<alias>/stop`` then ``POST /agents/<alias>/start`` (the
++      HARNESS-ARCH §4.1 lifecycle routes; ``{role}`` path-param carries the
++      alias). Best-effort: a per-alias failure is recorded, not fatal — the
++      other agents still restart. The agents respawn in their own process trees
++      and boot the refreshed CLAUDE.md (AC2: no stale-instruction agents).
++    - **Unreachable** — the wizard is ephemeral (Q-new21); it does NOT spawn a
++      detached harness. Report the user-driven cold-start command and let the
++      runbook surface ``./start.sh`` to the user (AC1 "falls through to
++      start.sh").
++
++    ``ok`` is False only when the harness was reachable AND a restart failed (or
++    no aliases were found); an unreachable harness is a normal branch, not an
++    error. Returns a JSON-able dict the runbook consumes.
++    """
++    port = _read_harness_port(base_dir)
++    if not _harness_reachable(port, timeout):
++        return {
++            "ok": True,
++            "reachable": False,
++            "port": port,
++            "cold_start_cmd": "./start.sh",
++            "detail": (
++                f"Harness not reachable on port {port} within {timeout}s — "
++                f"no running squad to refresh. Cold start is user-driven "
++                f"(run ./start.sh); the wizard is ephemeral and never spawns "
++                f"the harness itself (Q-new21)."
++            ),
++        }
++    aliases = _install_aliases(base_dir)
++    if not aliases:
++        return {
++            "ok": False,
++            "reachable": True,
++            "port": port,
++            "aliases": [],
++            "restarted": [],
++            "failures": [],
++            "detail": (
++                "Harness reachable but no aliases found in "
++                ".squidsquad/config.md `## Aliases` — cannot restart."
++            ),
++        }
++    base_url = f"http://127.0.0.1:{port}/agents"
++    restarted, failures = [], []
++    for alias in aliases:
++        ok_alias, err = _restart_one_alias(base_url, alias, timeout)
++        if ok_alias:
++            restarted.append(alias)
++        else:
++            failures.append({"alias": alias, "error": err})
++    return {
++        "ok": not failures,
++        "reachable": True,
++        "port": port,
++        "aliases": aliases,
++        "restarted": restarted,
++        "failures": failures,
++    }
++
++
+ # ---------------------------------------------------------------------------
+ # Step 1 — project details (auto-fill from gh repo view + git)
+ # ---------------------------------------------------------------------------
+@@ -3006,6 +3167,20 @@ def cmd_stamp_version(args):
+     return 0 if ok else 1
+ 
+ 
++def cmd_restart_agents(args):
++    """CLI: §10.3 post-commit harness restart (#12420).
++
++    Usage: wizard.py restart-agents [base_dir]
++    Exit 0 on a clean restart OR an unreachable harness (a normal branch — the
++    runbook surfaces ./start.sh); exit 1 when the harness was reachable but a
++    restart failed, so the runbook can show the operator which aliases failed.
++    """
++    base_dir = args[0] if args else None
++    result = restart_agents(base_dir)
++    _print_json(result, ok=result.get("ok", False))
++    return 0 if result.get("ok") else 1
++
++
+ def pr_flow_prompt():
+     """Return the PR Flow question text and options for the setup agent."""
+     return {
+@@ -3488,6 +3663,7 @@ def main():
+         "upgrade": cmd_upgrade,
+         "migration-plan": cmd_migration_plan,
+         "stamp-version": cmd_stamp_version,
++        "restart-agents": cmd_restart_agents,
+     }
+     if cmd not in dispatch:
+         print(f"Unknown command: {cmd}", file=sys.stderr)
+diff --git a/references/wizard/WIZARD.md b/references/wizard/WIZARD.md
+index be7f24676..4d56e2f94 100644
+--- a/references/wizard/WIZARD.md
++++ b/references/wizard/WIZARD.md
+@@ -234,9 +234,9 @@ modify this field themselves.)
+ standard installer exactly as in the fresh case. Step 7.3 scaffolds and
+ recomposes every `.squidsquad/<alias>/CLAUDE.md` inline from the
+ now-current source + migrated L4, writing only fresh-scaffold paths (it
+-never overwrites existing files); Step 7.5 commits and pushes. The
+-post-commit harness restart is tracked separately (#12420, §10.3) and is
+-not yet in this runbook. Existing vault / `working-state.md` /
++never overwrites existing files); Step 7.5 commits and pushes, and Step
++7.5c restarts a running squad so it picks up the refreshed CLAUDE.md
++(INSTALLER-ARCH §10.3). Existing vault / `working-state.md` /
+ `iterations/` are never touched.
+ 
+ > **Pre-1.0 / no migrations yet.** `references/migrations/` ships empty
+@@ -830,16 +830,56 @@ them plainly that the harness will not start until the deps are installed, and
+ show the exact command. (Without `watchdog` specifically, the harness still
+ boots but L4 auto-recompose is silently disabled — see #11403.)
+ 
++### 7.5c — Restart a running squad (INSTALLER-ARCH §10.3)
++
++The commit in 7.5 refreshed every `.squidsquad/<alias>/CLAUDE.md`, but a squad
++that is **already running** is still executing the *old* instructions in memory.
++Restart it so the new instructions take effect — otherwise the re-install
++silently leaves stale-instruction agents live. Run:
++
++```bash
++python references/scripts/wizard.py restart-agents
++```
++
++Parse the JSON envelope. This helper probes the harness (`GET /status` on the
++port in `.squidsquad/.harness-port`, 5s timeout) and branches on `reachable`:
++
++- **`reachable: true`** — a squad is live. The helper has already called
++  `stop` then `start` for each alias (the agents respawn in their own terminals
++  and boot the refreshed CLAUDE.md). Read the result:
++  - `failures` empty (`ok: true`): tell the user, in domain terms, that their
++    running team has been refreshed with the new setup — no action needed.
++  - `failures` non-empty (`ok: false`): list which agents failed to restart
++    (`failures[].alias` / `.error`) and tell the user they can re-run
++    `./start.sh` (Linux/macOS) or `.\start.ps1` (Windows) to bring the whole
++    team back up cleanly. Do NOT roll back — the on-disk install is valid.
++- **`reachable: false`** — no squad is running (nothing to refresh). This is the
++  normal fresh-install / stopped-squad case. The helper does NOT start anything
++  (you are ephemeral — see 7.6); fall through to the cold-start message in 7.6.
++
++**Never auto-spawn the harness yourself here.** On the unreachable path the
++helper deliberately reports the cold-start command instead of running it; the
++user boots the team in their own terminal (Q-new21).
++
+ ### 7.6 — Print the "ready" message and exit
+ 
+-Print exactly this (adjust the boot command per OS):
++Then print the closing message. **Adjust it to what 7.5c found** (and adjust
++the boot command per OS):
+ 
+-> SquidSquad ready. To start your team, run:
+->
+->     ./start.sh            (Linux / macOS)
+->     .\\start.ps1          (Windows)
+->
+-> The harness boots all agents (PM, Verifier, DM, workers) automatically.
++- **A running squad was refreshed** (7.5c `reachable: true`, `ok: true`):
++
++  > SquidSquad is set up and your running team has been refreshed with the new
++  > configuration — no need to restart anything.
++
++- **No squad was running** (7.5c `reachable: false`) — or some agents failed to
++  restart — show the cold-start instructions:
++
++  > SquidSquad ready. To start your team, run:
++  >
++  >     ./start.sh            (Linux / macOS)
++  >     .\\start.ps1          (Windows)
++  >
++  > The harness boots all agents (PM, Verifier, DM, workers) automatically.
+ 
+ Then **exit the conversation**. You are ephemeral (Q-new21) — do NOT
+ start the loop yourself, do NOT transition into PM, do NOT keep the
+diff --git a/tests/test_wizard_12420_post_commit_restart.py b/tests/test_wizard_12420_post_commit_restart.py
+new file mode 100644
+index 000000000..837ec5211
+--- /dev/null
++++ b/tests/test_wizard_12420_post_commit_restart.py
+@@ -0,0 +1,265 @@
++"""Unit tests for the INSTALLER-ARCH §10.3 post-commit harness restart (#12420).
++
++Covers the wizard.py code half — port discovery, alias enumeration, and the
++`restart_agents` routing (reachable → per-alias stop+start; unreachable →
++user-driven cold-start). The single network touchpoint is `wizard._http_request`,
++monkeypatched here so the tests exercise both branches without a live harness.
++The LLM-driven runbook step (WIZARD.md Step 7.5c) is not unit-tested — these
++tests pin the deterministic *what happens*, not the prose.
++"""
++
++import sys
++from pathlib import Path
++
++import pytest
++
++REPO_ROOT = Path(__file__).resolve().parent.parent
++sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
++
++import wizard  # noqa: E402
++
++
++# ---------------------------------------------------------------------------
++# Fixtures
++# ---------------------------------------------------------------------------
++
++
++def _write_aliases_config(base, aliases):
++    """Write base/.squidsquad/config.md with a legacy bullet-form `## Aliases`
++    block (the shape real installs ship — see this repo's config.md)."""
++    squid = base / ".squidsquad"
++    squid.mkdir(parents=True, exist_ok=True)
++    lines = ["# SquidSquad Config", "", "## Aliases", ""]
++    lines += [f"- **{alias}**: {role_class}" for alias, role_class in aliases]
++    lines += ["", "## Project", "", "- **Name**: demo", ""]
++    (squid / "config.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
++    return squid / "config.md"
++
++
++def _write_port(base, value):
++    squid = base / ".squidsquad"
++    squid.mkdir(parents=True, exist_ok=True)
++    (squid / ".harness-port").write_text(str(value), encoding="utf-8")
++
++
++class _FakeHTTP:
++    """Records (method, url) calls; returns programmed (status, body) responses.
++
++    `status_map`: url-substring → (status, body). `raise_on`: url-substring →
++    exception instance to raise (transport failure). First match wins; otherwise
++    `default`.
++    """
++
++    def __init__(self, default=(200, "{}"), status_map=None, raise_on=None):
++        self.calls = []
++        self.default = default
++        self.status_map = status_map or {}
++        self.raise_on = raise_on or {}
++
++    def __call__(self, method, url, timeout, data=None):
++        self.calls.append((method, url))
++        for sub, exc in self.raise_on.items():
++            if sub in url:
++                raise exc
++        for sub, resp in self.status_map.items():
++            if sub in url:
++                return resp
++        return self.default
++
++    def posts(self):
++        return [url for (m, url) in self.calls if m == "POST"]
++
++
++_ALIASES = [("skill", "skill"), ("pm", "pm"), ("dm", "dm"), ("qa", "qa")]
++_SORTED = ["dm", "pm", "qa", "skill"]
++
++
++# ---------------------------------------------------------------------------
++# _read_harness_port
++# ---------------------------------------------------------------------------
++
++
++class TestReadHarnessPort:
++    def test_missing_file_defaults(self, tmp_path):
++        assert wizard._read_harness_port(tmp_path) == wizard.HARNESS_DEFAULT_PORT
++
++    def test_reads_file(self, tmp_path):
++        _write_port(tmp_path, 8989)
++        assert wizard._read_harness_port(tmp_path) == 8989
++
++    def test_whitespace_tolerated(self, tmp_path):
++        _write_port(tmp_path, "  7400\n")
++        assert wizard._read_harness_port(tmp_path) == 7400
++
++    @pytest.mark.parametrize("junk", ["", "abc", "12.5", "port"])
++    def test_invalid_defaults(self, tmp_path, junk):
++        _write_port(tmp_path, junk)
++        assert wizard._read_harness_port(tmp_path) == wizard.HARNESS_DEFAULT_PORT
++
++
++# ---------------------------------------------------------------------------
++# _install_aliases
++# ---------------------------------------------------------------------------
++
++
++class TestInstallAliases:
++    def test_reads_sorted_aliases(self, tmp_path):
++        _write_aliases_config(tmp_path, _ALIASES)
++        assert wizard._install_aliases(tmp_path) == _SORTED
++
++    def test_missing_config_empty(self, tmp_path):
++        assert wizard._install_aliases(tmp_path) == []
++
++    def test_malformed_aliases_empty(self, tmp_path):
++        squid = tmp_path / ".squidsquad"
++        squid.mkdir(parents=True)
++        # No `## Aliases` section at all → registry raises → []
++        (squid / "config.md").write_text("# SquidSquad Config\n", encoding="utf-8")
++        assert wizard._install_aliases(tmp_path) == []
++
++
++# ---------------------------------------------------------------------------
++# restart_agents — UNREACHABLE branch (AC1 "falls through to start.sh", AC5)
++# ---------------------------------------------------------------------------
++
++
++class TestUnreachable:
++    def test_probe_transport_error_is_cold_start(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, _ALIASES)
++        fake = _FakeHTTP(raise_on={"/status": ConnectionRefusedError("refused")})
++        monkeypatch.setattr(wizard, "_http_request", fake)
++        result = wizard.restart_agents(tmp_path)
++        assert result["reachable"] is False
++        assert result["ok"] is True  # unreachable is a normal branch, not an error
++        assert result["cold_start_cmd"] == "./start.sh"
++        # No lifecycle calls were made — the wizard never spawns the harness.
++        assert fake.posts() == []
++
++    def test_probe_non_2xx_is_unreachable(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, _ALIASES)
++        fake = _FakeHTTP(status_map={"/status": (503, "down")})
++        monkeypatch.setattr(wizard, "_http_request", fake)
++        result = wizard.restart_agents(tmp_path)
++        assert result["reachable"] is False
++        assert fake.posts() == []
++
++    def test_unreachable_reports_resolved_port(self, tmp_path, monkeypatch):
++        _write_port(tmp_path, 8123)
++        fake = _FakeHTTP(raise_on={"/status": OSError("nope")})
++        monkeypatch.setattr(wizard, "_http_request", fake)
++        result = wizard.restart_agents(tmp_path)
++        assert result["port"] == 8123
++
++
++# ---------------------------------------------------------------------------
++# restart_agents — REACHABLE branch (AC1 stop+start per alias, AC2, AC5)
++# ---------------------------------------------------------------------------
++
++
++class TestReachable:
++    def test_restarts_each_alias_stop_then_start(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, _ALIASES)
++        fake = _FakeHTTP(default=(200, "{}"))
++        monkeypatch.setattr(wizard, "_http_request", fake)
++        result = wizard.restart_agents(tmp_path)
++
++        assert result["reachable"] is True
++        assert result["ok"] is True
++        assert result["restarted"] == _SORTED
++        assert result["failures"] == []
++
++        # Exactly: GET /status, then stop+start per alias in sorted order.
++        expected = []
++        for alias in _SORTED:
++            expected.append(f"/agents/{alias}/stop")
++            expected.append(f"/agents/{alias}/start")
++        assert [url.split(":7373")[-1] for url in fake.posts()] == expected
++        # First call was the /status probe (GET).
++        assert fake.calls[0][0] == "GET" and fake.calls[0][1].endswith("/status")
++
++    def test_uses_resolved_port_in_urls(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, [("skill", "skill")])
++        _write_port(tmp_path, 9001)
++        fake = _FakeHTTP(default=(200, "{}"))
++        monkeypatch.setattr(wizard, "_http_request", fake)
++        wizard.restart_agents(tmp_path)
++        assert all(":9001/" in url for (_m, url) in fake.calls)
++
++    def test_reachable_but_no_aliases_is_error(self, tmp_path, monkeypatch):
++        # config.md without an `## Aliases` section → reachable, but nothing to restart.
++        squid = tmp_path / ".squidsquad"
++        squid.mkdir(parents=True)
++        (squid / "config.md").write_text("# SquidSquad Config\n", encoding="utf-8")
++        fake = _FakeHTTP(default=(200, "{}"))
++        monkeypatch.setattr(wizard, "_http_request", fake)
++        result = wizard.restart_agents(tmp_path)
++        assert result["reachable"] is True
++        assert result["ok"] is False
++        assert result["aliases"] == []
++        assert fake.posts() == []  # never attempted a restart
++
++
++# ---------------------------------------------------------------------------
++# Per-alias failure handling — best-effort, recorded not fatal
++# ---------------------------------------------------------------------------
++
++
++class TestPartialFailure:
++    def test_one_alias_stop_http_error_recorded(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, [("skill", "skill"), ("pm", "pm")])
++        # pm's stop returns 500; everything else 200.
++        fake = _FakeHTTP(
++            default=(200, "{}"),
++            status_map={"/agents/pm/stop": (500, "boom")},
++        )
++        monkeypatch.setattr(wizard, "_http_request", fake)
++        result = wizard.restart_agents(tmp_path)
++
++        assert result["ok"] is False
++        assert result["restarted"] == ["skill"]
++        assert len(result["failures"]) == 1
++        assert result["failures"][0]["alias"] == "pm"
++        assert "stop: HTTP 500" in result["failures"][0]["error"]
++        # pm's start was NOT attempted after its stop failed.
++        assert "/agents/pm/start" not in fake.posts()
++
++    def test_start_transport_error_recorded(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, [("skill", "skill")])
++        fake = _FakeHTTP(
++            default=(200, "{}"),
++            raise_on={"/agents/skill/start": TimeoutError("slow")},
++        )
++        monkeypatch.setattr(wizard, "_http_request", fake)
++        result = wizard.restart_agents(tmp_path)
++        assert result["ok"] is False
++        assert result["restarted"] == []
++        assert result["failures"][0]["alias"] == "skill"
++        assert "start: TimeoutError" in result["failures"][0]["error"]
++
++
++# ---------------------------------------------------------------------------
++# CLI exit codes
++# ---------------------------------------------------------------------------
++
++
++class TestCmdExitCodes:
++    def test_unreachable_exits_0(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, _ALIASES)
++        monkeypatch.setattr(
++            wizard, "_http_request",
++            _FakeHTTP(raise_on={"/status": ConnectionRefusedError()}),
++        )
++        assert wizard.cmd_restart_agents([str(tmp_path)]) == 0
++
++    def test_clean_restart_exits_0(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, _ALIASES)
++        monkeypatch.setattr(wizard, "_http_request", _FakeHTTP(default=(200, "{}")))
++        assert wizard.cmd_restart_agents([str(tmp_path)]) == 0
++
++    def test_reachable_with_failure_exits_1(self, tmp_path, monkeypatch):
++        _write_aliases_config(tmp_path, [("skill", "skill")])
++        monkeypatch.setattr(
++            wizard, "_http_request",
++            _FakeHTTP(default=(200, "{}"), status_map={"/agents/skill/stop": (500, "x")}),
++        )
++        assert wizard.cmd_restart_agents([str(tmp_path)]) == 1

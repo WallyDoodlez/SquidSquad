@@ -80,6 +80,10 @@ python references/scripts/squidsquad_cli.py shutdown   # Stop agents + exit harn
 
 Requires the Python packages in `requirements.txt` (`pip install -r requirements.txt`) — the setup wizard offers to install these for you. The harness owns the full agent lifecycle — starting, stopping, restarting, health monitoring, and crash recovery are all managed through a single process. Each agent runs in its own terminal window; if the harness crashes, your agents keep running. Press Ctrl+C once for graceful shutdown (agents finish their current cycle), twice for a warning, three times for immediate exit.
 
+Most people should use `squidsquad_cli.py start` above, which boots the harness *and* all your agents — and it now runs the harness under the **supervised launcher** so the harness can restart itself in place (an agent or operator calls `POST /restart`; the harness exits and is automatically relaunched, with all agents respawned).
+
+**Just the harness?** For a hands-on, self-healing launch, `restart-harness.sh` (macOS/Linux) and `restart-harness.bat` (Windows — opens a visible window you can watch) run the harness in an auto-relaunch loop: a restart signal (`POST /restart` → exit 42) relaunches it, a clean stop (`POST /shutdown` / Ctrl+C → exit 0) does not, and a crash-loop guard stops endless respawns. This is the documented default for running the harness directly on an install. The older `start-harness.sh` / `start-harness.bat` are **one-shot** (no relaunch) — keep them for quick debugging or the greenfield smoke test, but prefer the supervised launcher for anything that needs self-healing restart. Both skip clone-sync and dependency install.
+
 ### 3. Work
 
 Talk to PM to file bugs, request features, and approve plans. Everything else happens automatically.
@@ -148,6 +152,7 @@ This project is developed by SquidSquad itself. The [CHANGELOG](./CHANGELOG.md) 
 |----------|-------------|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How SquidSquad works under the hood |
 | [Agent Runtime](docs/AGENT-RUNTIME.md) | How agents coordinate in real-time (event bus, lifecycle, triggers) |
+| [DM Architecture](docs/DM-ARCH.md) | The Delivery Manager as a layered role: generic delivery spine (L2), domain mechanics (L3), project release policy (L4) |
 | [Sub-Skill Guide](docs/sub-skill-guide.md) | Creating and contributing sub-skills |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to report bugs, propose features, submit PRs |
 | [CHANGELOG.md](CHANGELOG.md) | Version history (maintained by agents) |

@@ -4,9 +4,9 @@ description: harness port discovery falls back to default 7373 when no .harness-
 metadata:
   type: learning
 type: learning
-tags: [learning, testing, isolation, harness, restart, port-discovery, 12282, self-hosting]
+tags: [learning, testing, isolation, harness, restart, port-discovery, event-bus, 12282, 12511, self-hosting]
 created: 2026-06-14
-updated: 2026-06-14
+updated: 2026-06-19
 owner: skill
 status: active
 confidence: high
@@ -22,5 +22,5 @@ links: [learning-tests-must-not-mutate-shared-live-state, pattern-verify-unmocke
 
 **How to apply:**
 - Any test that exercises real `cycle_post` / `squidsquad_cli` / harness-HTTP code must mock the **side-effect** (`_post_harness_restart`, `_api_call`) or the port (`_discover_harness_port`→None/stub). A missing `.harness-port` does NOT make it safe — it makes it resolve `7373`.
-- Belt-and-braces (mirrors conftest `_snapshot_restore_live_config_md`): an autouse fixture that wraps `urllib.request.urlopen` and raises if any request targets the default harness port — turns a silent live POST into a loud test failure. Shipped as `_block_live_harness_egress` in test_cycle_post.py.
+- Belt-and-braces (mirrors conftest `_snapshot_restore_live_config_md`): an autouse fixture that wraps `urllib.request.urlopen` and intercepts any request targeting the live harness port. **#12511 lifted this suite-wide**: `_block_live_harness_egress` now lives in `tests/conftest.py` (not just test_cycle_post.py) and **suppresses** (no-ops) the live POST for *every* pytest unit test — because the leak class is broader than restart: any test calling `tracker.transition(...)`/`add_comment(...)` triggers `event_bus.emit` → `POST /events` to 7373 (24 such tests measured, leaking illegal `status-transition` events for fixture issue #999, spuriously waking the whole team). Suppress (not raise) was chosen there because those 24 tests don't *assert* the emit — it's incidental — so a no-op is invisible and recurrence-proof without churning 24 files. Integration tests run under unittest via run_tests.py (not pytest), so the conftest guard never touches their intentional real-harness emits.
 - When auditing a "test reaches live state" class, check BOTH facets: file mutation (the sibling note) AND default-port network egress (this note). Same root instinct as [[pattern-verify-unmocked-paths-stubbed-by-units]] — every real-code path a unit touches must be stubbed at its egress.

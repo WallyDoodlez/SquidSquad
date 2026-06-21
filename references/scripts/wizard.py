@@ -808,6 +808,425 @@ def validate_rerun_action(action):
 
 
 # ---------------------------------------------------------------------------
+# Step 0b — migration walk (existing-install upgrade, INSTALLER-ARCH §10) — #12419
+#
+# These are the DETERMINISTIC helpers the migration walk rests on: read the
+# installed + installer versions, select the ordered chain of per-version
+# migration markdowns to apply, and stamp the version after a successful walk.
+# They do NOT apply migration prose — that is the LLM's job under the §10
+# three-gate model (DeepSeek audit → mini-CQ → compose dry-run), driven by the
+# WIZARD.md Step 0b runbook. These helpers only compute *what* to apply; the
+# runbook drives *how*, gated. Keeping the seam here is the point: version math
+# and chain selection are testable code; prose application is probabilistic.
+# ---------------------------------------------------------------------------
+
+MIGRATIONS_DIRNAME = "migrations"
+# Matches a per-version migration markdown: v<A>-to-v<B>.md, e.g. v1.4-to-v1.5.md
+# (the "v" prefix is optional on each side to tolerate authoring variance).
+_MIGRATION_FILE_RE = re.compile(
+    r"^v?(?P<frm>\d+(?:\.\d+)*)-to-v?(?P<to>\d+(?:\.\d+)*)\.md$",
+    re.IGNORECASE,
+)
+# Matches the config.md version-stamp line for BOTH reading and writing, so a
+# pre-existing line with minor formatting variance (`*` bullet, space before the
+# colon) is recognised + replaced rather than duplicated (DS-c1 F6). The value
+# is captured loosely and post-cleaned by the caller (DS-c1 F5).
+_VERSION_STAMP_RE = re.compile(
+    r"^\s*[-*]\s+\*\*SquidSquad Version\*\*\s*:\s*(?P<val>.*)$"
+)
+# Absent-stamp sentinel: an existing install with no version stamp predates the
+# convention. §10 step 2 treats it as pre-1.0 and walks all available migrations.
+# It is a deliberately NON-version string so it can never collide with a real
+# stamp (DS-c1 F1) — note `build_config_md` itself defaults `squidsquad_version`
+# to "0.0.0", so "0.0.0" is a legitimate value the sentinel must not shadow.
+# `_version_key` maps it to the lowest possible key (junk → (-1,)), so a
+# pre-stamp install walks every migration exactly as §10 step 2 requires.
+PRE_VERSION_STAMP = "pre-stamp"
+
+
+def _parse_version(value):
+    """Parse a dotted version string into a comparable tuple of ints.
+
+    "1.4" -> (1, 4); "0.44.0" -> (0, 44, 0). Tolerates a leading 'v'. Returns
+    None for unparseable input (caller decides how to treat it). Never raises.
+    """
+    if not value:
+        return None
+    raw = str(value).strip().lstrip("vV")
+    if not raw:
+        return None
+    parts = raw.split(".")
+    try:
+        return tuple(int(p) for p in parts)
+    except (ValueError, TypeError):
+        return None
+
+
+def _version_key(value):
+    """Sort/compare key for a version string: parsed tuple, or (-1,) if junk.
+
+    Pads nothing — Python compares (1, 4) < (1, 4, 1) correctly because a
+    shorter tuple is a prefix. Unparseable versions sort lowest (treated as
+    pre-everything) so a malformed stamp never masks real migrations.
+    """
+    parsed = _parse_version(value)
+    return parsed if parsed is not None else (-1,)
+
+
+def installed_version(base_dir=None):
+    """Read the installed `SquidSquad Version` from `base_dir/.squidsquad/config.md`.
+
+    Returns the version string, or ``PRE_VERSION_STAMP`` ("0.0.0") when the
+    install exists but carries no stamp (§10 step 2 pre-1.0 fallback), or
+    ``None`` when there is no install at all (fresh — the walk is skipped).
+    Mirrors harness._read_squidsquad_version's field-read but is install-rooted
+    and adds the fresh-vs-pre-stamp distinction the walk needs.
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    config_path = Path(base_dir) / ".squidsquad" / "config.md"
+    if not config_path.exists():
+        return None  # fresh install — no walk
+    try:
+        for line in config_path.read_text(encoding="utf-8").splitlines():
+            m = _VERSION_STAMP_RE.match(line)
+            if m:
+                # First whitespace-delimited token only, so a human annotation
+                # like `0.44.0  # was 0.43.0` doesn't break the parse and cause
+                # an all-migrations re-walk (DS-c1 F5).
+                raw = m.group("val").strip()
+                val = raw.split()[0] if raw else ""
+                return val or PRE_VERSION_STAMP
+    except (OSError, UnicodeDecodeError):
+        # Config unreadable but dir exists — treat as pre-stamp, not fresh, so
+        # the walk runs rather than silently skipping a real existing install.
+        return PRE_VERSION_STAMP
+    return PRE_VERSION_STAMP  # install exists, no stamp line
+
+
+def installer_version(base_dir=None):
+    """Read the installer's target version from `references/VERSION`.
+
+    This is the version the operator is moving *to* (read after the §10 step-1
+    source pull). Returns the string, or ``None`` if the file is absent/empty.
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    version_file = Path(base_dir) / "references" / "VERSION"
+    try:
+        val = version_file.read_text(encoding="utf-8").strip()
+        return val or None
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def list_migration_files(base_dir=None):
+    """Return all parseable migration files under `references/migrations/`.
+
+    Each entry: ``{"file": <name>, "path": <abs>, "from": <str>, "to": <str>}``.
+    Files that don't match the ``v<A>-to-v<B>.md`` pattern are ignored (e.g. a
+    README). Returns ``[]`` when the directory is absent (the pre-1.0 state —
+    no migrations have shipped yet, so the walk is a no-op).
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    mig_dir = Path(base_dir) / "references" / MIGRATIONS_DIRNAME
+    if not mig_dir.is_dir():
+        return []
+    out = []
+    try:
+        entries = list(mig_dir.iterdir())
+    except OSError:
+        # Dir exists but is unreadable — degrade to "no migrations" rather than
+        # crash the walk/CLI (DS-c1 F2; matches the docstring's never-raise promise).
+        return []
+    for p in entries:
+        if not p.is_file():
+            continue
+        m = _MIGRATION_FILE_RE.match(p.name)
+        if not m:
+            continue
+        out.append({
+            "file": p.name,
+            "path": str(p),
+            "from": m.group("frm"),
+            "to": m.group("to"),
+        })
+    return out
+
+
+def select_migration_chain(installed, target, base_dir=None):
+    """Return the ordered list of migration files to apply for installed→target.
+
+    A migration ``v<A>-to-v<B>`` is included when ``installed < B <= target``
+    (its target version is newer than what's installed and no newer than where
+    we're going). The result is sorted by target version ascending — the order
+    the walk applies them (§10 step 3). A version step with no migration file is
+    simply absent (skipped silently per §10.4). Returns ``[]`` when target <=
+    installed (no-op walk) or no files qualify.
+    """
+    inst_k = _version_key(installed)
+    tgt_k = _version_key(target)
+    chain = [
+        mig for mig in list_migration_files(base_dir)
+        if inst_k < _version_key(mig["to"]) <= tgt_k
+    ]
+    chain.sort(key=lambda m: _version_key(m["to"]))
+    return chain
+
+
+def stamp_version(version, base_dir=None):
+    """Write ``version`` to config.md's ``- **SquidSquad Version**:`` line.
+
+    The only field the installer writes outside the three-gate model during the
+    walk (§10 step 4). Rewrites the existing stamp line in place if present, or
+    inserts one into the header block if absent (pre-stamp install). Returns
+    True on success, False if config.md is missing/unwritable. Atomic write
+    (.tmp then replace) so a concurrent reader never sees a half-written file.
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    config_path = Path(base_dir) / ".squidsquad" / "config.md"
+    if not config_path.exists():
+        return False
+    try:
+        text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    new_line = f"- **SquidSquad Version**: {version}"
+    lines = text.splitlines(keepends=True)
+    # Dominant newline from the whole text, not just the first line (DS-c1 F3).
+    nl = "\r\n" if "\r\n" in text else "\n"
+    replaced = False
+    for i, line in enumerate(lines):
+        # Same regex used to READ the stamp, so a minor-variant existing line is
+        # replaced (not duplicated) and the reader will find exactly one (F6).
+        if _VERSION_STAMP_RE.match(line):
+            lines[i] = new_line + nl
+            replaced = True
+            break
+    if not replaced:
+        # Insert after the first '# SquidSquad Config' header line, else at top.
+        insert_at = 0
+        for i, line in enumerate(lines):
+            if line.strip().startswith("# "):
+                insert_at = i + 1
+                break
+        lines.insert(insert_at, new_line + nl)
+    tmp = config_path.with_suffix(config_path.suffix + ".tmp")
+    try:
+        tmp.write_text("".join(lines), encoding="utf-8")
+        os.replace(str(tmp), str(config_path))
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return False
+    return True
+
+
+def migration_walk_plan(base_dir=None):
+    """Aggregate the deterministic walk inputs into one JSON-able plan.
+
+    This is what the WIZARD.md Step 0b runbook consumes to decide whether to
+    walk and which files to apply (it then drives the §10 three-gate model per
+    file). Pure read — computes nothing on disk. Shape:
+
+        {
+          "is_fresh": bool,            # no .squidsquad/ — skip the walk entirely
+          "installed_version": str|None,
+          "installer_version": str|None,
+          "is_pre_stamp": bool,        # existing install, no version stamp
+          "is_noop": bool,             # nothing to apply (fresh, or target<=installed,
+                                       #                   or no qualifying files)
+          "chain": [ {file, path, from, to}, ... ],  # ordered apply list
+        }
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    inst = installed_version(base_dir)
+    instlr = installer_version(base_dir)
+    is_fresh = inst is None
+    is_pre_stamp = inst == PRE_VERSION_STAMP
+    # installer_version absent ≠ "up to date" — it means the target is unknown
+    # (no references/VERSION after the pull), which the runbook must surface to
+    # the operator, NOT silently treat as a no-op walk (DS-c1 F4).
+    installer_version_unknown = (not is_fresh) and (instlr is None)
+    chain = [] if is_fresh else select_migration_chain(inst, instlr, base_dir)
+    return {
+        "is_fresh": is_fresh,
+        "installed_version": inst,
+        "installer_version": instlr,
+        "is_pre_stamp": is_pre_stamp,
+        "installer_version_unknown": installer_version_unknown,
+        "is_noop": is_fresh or (not chain and not installer_version_unknown),
+        "chain": chain,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Step 7.5c — post-commit harness restart (INSTALLER-ARCH §10.3, #12420)
+# ---------------------------------------------------------------------------
+#
+# After Phase 8's commit (WIZARD.md Step 7.5) the runbook calls `restart-agents`
+# so a *running* squad picks up the freshly-composed CLAUDE.md. The probe +
+# routing + per-alias HTTP are deterministic and belong here, not in runbook
+# prose. The HTTP touchpoint is isolated in `_http_request` so the unit tests
+# can monkeypatch it and never open a socket.
+
+HARNESS_DEFAULT_PORT = 7373       # harness.py default; mirrors cycle_post._HARNESS_DEFAULT_PORT
+HARNESS_PROBE_TIMEOUT = 5         # §10.3: 5-second /status probe
+
+
+def _read_harness_port(base_dir=None):
+    """Read `base_dir/.squidsquad/.harness-port` as an int.
+
+    Defaults to ``HARNESS_DEFAULT_PORT`` when the file is missing, empty, or not
+    a valid integer — same fail-safe the agent boot probe uses
+    (cycle_post._discover_harness_port / WIZARD step:cycle/boot).
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    port_file = Path(base_dir) / ".squidsquad" / ".harness-port"
+    try:
+        return int(port_file.read_text(encoding="utf-8").strip())
+    except (OSError, UnicodeDecodeError, ValueError):
+        return HARNESS_DEFAULT_PORT
+
+
+def _http_request(method, url, timeout, data=None):
+    """The single network seam for the §10.3 restart. Returns ``(status, body)``.
+
+    Raises on any transport failure (``urllib.error.URLError``, ``OSError``,
+    ``socket.timeout`` …). This is the ONLY place the restart helpers touch the
+    network, so the unit tests monkeypatch ``wizard._http_request`` to exercise
+    both the reachable and unreachable branches without a live harness.
+    """
+    import urllib.request
+    if method == "POST" and data is None:
+        data = b""  # explicit Content-Length: 0 — some servers reject body-less POSTs
+    req = urllib.request.Request(url, data=data, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        status = getattr(resp, "status", None) or resp.getcode()
+        return status, resp.read().decode("utf-8", "replace")
+
+
+def _harness_reachable(port, timeout):
+    """True iff ``GET /status`` returns a 2xx within ``timeout`` seconds.
+
+    Any failure — connection refused, timeout, non-2xx, malformed response —
+    means "treat the harness as down and fall through to the cold-start path".
+    """
+    try:
+        status, _ = _http_request("GET", f"http://127.0.0.1:{port}/status", timeout)
+    except Exception:
+        return False
+    return 200 <= status < 300
+
+
+def _install_aliases(base_dir=None):
+    """Sorted alias list from `base_dir/.squidsquad/config.md` `## Aliases`.
+
+    Returns ``[]`` when the config is unreadable or the registry won't parse;
+    the caller surfaces that as an error (a reachable harness with no known
+    aliases cannot be restarted).
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    config_path = Path(base_dir) / ".squidsquad" / "config.md"
+    try:
+        text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    import config as _cfg
+    try:
+        registry = _cfg.parse_aliases_registry(text=text)
+    except Exception:
+        return []
+    return sorted(registry.keys())
+
+
+def _restart_one_alias(base_url, alias, timeout):
+    """POST stop then start for one alias. Returns ``(ok, error_or_None)``."""
+    for action in ("stop", "start"):
+        try:
+            status, _ = _http_request("POST", f"{base_url}/{alias}/{action}", timeout)
+        except Exception as exc:
+            return False, f"{action}: {type(exc).__name__}: {exc}"
+        if not (200 <= status < 300):
+            return False, f"{action}: HTTP {status}"
+    return True, None
+
+
+def restart_agents(base_dir=None, timeout=HARNESS_PROBE_TIMEOUT):
+    """INSTALLER-ARCH §10.3 post-commit harness restart.
+
+    Probe ``GET /status`` (port from `.harness-port`, default 7373, ``timeout``s),
+    then branch:
+
+    - **Reachable** — for each install alias (config `## Aliases`),
+      ``POST /agents/<alias>/stop`` then ``POST /agents/<alias>/start`` (the
+      HARNESS-ARCH §4.1 lifecycle routes; ``{role}`` path-param carries the
+      alias). Best-effort: a per-alias failure is recorded, not fatal — the
+      other agents still restart. The agents respawn in their own process trees
+      and boot the refreshed CLAUDE.md (AC2: no stale-instruction agents).
+    - **Unreachable** — the wizard is ephemeral (Q-new21); it does NOT spawn a
+      detached harness. Report the user-driven cold-start command and let the
+      runbook surface ``./start.sh`` to the user (AC1 "falls through to
+      start.sh").
+
+    ``ok`` is False only when the harness was reachable AND a restart failed (or
+    no aliases were found); an unreachable harness is a normal branch, not an
+    error. Returns a JSON-able dict the runbook consumes.
+    """
+    port = _read_harness_port(base_dir)
+    if not _harness_reachable(port, timeout):
+        return {
+            "ok": True,
+            "reachable": False,
+            "port": port,
+            "cold_start_cmd": "./start.sh",
+            "detail": (
+                f"Harness not reachable on port {port} within {timeout}s — "
+                f"no running squad to refresh. Cold start is user-driven "
+                f"(run ./start.sh); the wizard is ephemeral and never spawns "
+                f"the harness itself (Q-new21)."
+            ),
+        }
+    aliases = _install_aliases(base_dir)
+    if not aliases:
+        return {
+            "ok": False,
+            "reachable": True,
+            "port": port,
+            "aliases": [],
+            "restarted": [],
+            "failures": [],
+            "detail": (
+                "Harness reachable but no aliases found in "
+                ".squidsquad/config.md `## Aliases` — cannot restart."
+            ),
+        }
+    base_url = f"http://127.0.0.1:{port}/agents"
+    restarted, failures = [], []
+    for alias in aliases:
+        ok_alias, err = _restart_one_alias(base_url, alias, timeout)
+        if ok_alias:
+            restarted.append(alias)
+        else:
+            failures.append({"alias": alias, "error": err})
+    return {
+        "ok": not failures,
+        "reachable": True,
+        "port": port,
+        "aliases": aliases,
+        "restarted": restarted,
+        "failures": failures,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Step 1 — project details (auto-fill from gh repo view + git)
 # ---------------------------------------------------------------------------
 
@@ -1204,12 +1623,16 @@ def build_config_md(spec):
     lines.append("")
 
     # --- ## Improvement Scanning ---
-    # #11091 — cool-down field for event-mode idle scan loop. Default 30 min
+    # #11091 — cool-down field for event-mode idle scan loop. Default 30m
     # matches Iteration Interval > Minutes so cool-down semantically equals
     # "at most one improvement scan per iteration cycle" even in event mode.
+    # #12506 — Idle Scan Burst bounds the event-mode periodic driver: at most
+    # N idle scans per sustained-idle stretch before the driver self-cancels
+    # (re-arms on the next activity→idle transition). See AGENT-RUNTIME §8.6.1.
     lines.append("## Improvement Scanning")
     lines.append("")
-    lines.append("- **Improvement Scan Cool-Down**: 30")
+    lines.append("- **Improvement Scan Cool-Down**: 30m")
+    lines.append("- **Idle Scan Burst**: 3")
     lines.append("")
 
     # --- ## Git Branches ---
@@ -2720,6 +3143,48 @@ def cmd_validate_rerun_action(args):
     return 0 if action is not None else 1
 
 
+def cmd_migration_plan(args):
+    """CLI: emit the migration-walk plan JSON the Step 0b runbook consumes (#12419).
+
+    Optional positional arg overrides the base dir (defaults to REPO_ROOT) for
+    fixture/testing. Exit 0 always (a no-op/fresh plan is not an error — the
+    runbook branches on `is_fresh`/`is_noop`).
+    """
+    base_dir = args[0] if args else None
+    plan = migration_walk_plan(base_dir)
+    _print_json(plan, ok=True)
+    return 0
+
+
+def cmd_stamp_version(args):
+    """CLI: stamp config.md's SquidSquad Version after a successful walk (#12419).
+
+    Usage: wizard.py stamp-version <version> [base_dir]
+    """
+    if not args:
+        print("Usage: wizard.py stamp-version <version> [base_dir]", file=sys.stderr)
+        return 2
+    version = args[0]
+    base_dir = args[1] if len(args) > 1 else None
+    ok = stamp_version(version, base_dir)
+    _print_json({"version": version, "stamped": ok}, ok=ok)
+    return 0 if ok else 1
+
+
+def cmd_restart_agents(args):
+    """CLI: §10.3 post-commit harness restart (#12420).
+
+    Usage: wizard.py restart-agents [base_dir]
+    Exit 0 on a clean restart OR an unreachable harness (a normal branch — the
+    runbook surfaces ./start.sh); exit 1 when the harness was reachable but a
+    restart failed, so the runbook can show the operator which aliases failed.
+    """
+    base_dir = args[0] if args else None
+    result = restart_agents(base_dir)
+    _print_json(result, ok=result.get("ok", False))
+    return 0 if result.get("ok") else 1
+
+
 def pr_flow_prompt():
     """Return the PR Flow question text and options for the setup agent."""
     return {
@@ -3200,6 +3665,9 @@ def main():
         "gather-deps": cmd_gather_deps,
         "provision-deps": cmd_provision_deps,
         "upgrade": cmd_upgrade,
+        "migration-plan": cmd_migration_plan,
+        "stamp-version": cmd_stamp_version,
+        "restart-agents": cmd_restart_agents,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

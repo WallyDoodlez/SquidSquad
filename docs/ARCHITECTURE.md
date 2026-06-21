@@ -212,7 +212,9 @@ Each role is a different configuration of the behavior and soul layers, assemble
 | **Worker** | Bug triage, feature implementation, tests | Pragmatic engineer, correctness-first | Autonomous |
 | **PM** | Human check-in, feature intake, backlog, pipeline health | Process guardian, user-centric | Interactive |
 | **Verifier** | E2E tests, verification, regression testing | Skeptical tester, zero-tolerance for gaps | Autonomous |
-| **DM** | Delivery packaging, docs, CHANGELOG, version bumps | User-first communicator, last-mile owner | Autonomous |
+| **DM** | Generic delivery spine: package, confirm, report, publish + knowledge capture (version/CHANGELOG are **L4 project policy**, not universal — see [DM-ARCH](DM-ARCH.md)) | Deliverer + historian + end-to-end knowledge vantage | Autonomous |
+
+> **Deep-dive**: [`DM-ARCH.md`](DM-ARCH.md) — the Delivery Manager as a layered role. The universal L2 spine is version-agnostic (ship-on-ready by default); package/publish mechanics are L3 (SquidSquad: merge-to-main + compose); release policy — versioning, CHANGELOG, the ship counter, batching cadence — is L4 project policy. Release state belongs to the DM, never the verifier.
 
 ---
 
@@ -224,8 +226,8 @@ Features flow through the behavior layer with human approval gates at key transi
 Pending → Planning → Planned → Approved → In Progress → Pending Test → Pending Ship → Shipped
    │         │          │          │           │    │           │              │            │
    │     PM runs     Human      Human     Worker HITL loop  Verifier checks DM delivers   Done
-   │     research    reviews    approves    builds  ↓↑          it            docs+changelog
-   │     + planning   plan     execution     it  Pending
+   │     research    reviews    approves    builds  ↓↑          it          report + knowledge
+   │     + planning   plan     execution     it  Pending                    (version/CHANGELOG = L4)
    │                                             Human Review
   You or PM                                    / Human Setup
   files it

@@ -5,6 +5,7 @@ Single source of truth for git operations used by agents.
 
 Usage:
     python scripts/git_ops.py pull                      # git pull (merge)
+    python scripts/git_ops.py ensure-main-and-pull [role]  # on-main + pull before a recompose (#12906)
     python scripts/git_ops.py add-all                   # git add -A
     python scripts/git_ops.py commit <role> <message>    # git commit with role prefix
     python scripts/git_ops.py push                      # git push
@@ -24,6 +25,7 @@ Usage:
     python scripts/git_ops.py last-hash                 # print last commit hash (short)
     python scripts/git_ops.py check-real-conflict <base> <head>  # real conflict? exit 0=clean/1=conflict/2=err
     python scripts/git_ops.py guard-staged-state         # pre-commit hook: unstage state files on a feature branch (fail-open)
+    python scripts/git_ops.py guard-galaxy-frontmatter   # pre-commit hook: block a staged galaxy note missing YAML frontmatter (fail-closed on violation, fail-open on error)
     python scripts/git_ops.py install-hooks              # activate the pre-commit state guard (core.hooksPath)
     python scripts/git_ops.py --help
 """
@@ -234,6 +236,48 @@ def pull(role=None):
         print("Pulled (stashed and popped)")
         _emit("git-pull", {"result": "stash"}, role=role)
     return True
+
+
+def ensure_main_and_pull(role=None):
+    """Put the clone on ``main`` and pull origin before a recompose/deploy.
+
+    #12906 (Phase 1 of #12895): every harness-side recompose path
+    (`compose.py deploy*` driven by the L4 file-watcher and the
+    post-merge deploy-all) MUST run against *current* source. A clone
+    that is on a feature branch or behind origin would otherwise
+    regenerate composed ``CLAUDE.md`` from stale source and push that
+    revert fleet-wide. This guard closes the root condition: ensure
+    main, then merge-pull origin.
+
+    Returns ``(ok: bool, detail: str)``. Never raises — the contract is
+    enforced here (a blanket ``try/except``) so every caller, including
+    the harness merge path that calls this directly, can trust ``ok`` and
+    abort the recompose on ``ok=False`` rather than wrap defensively. On
+    ``ok=False`` the agents keep their last-known-good composed output
+    until a later recompose succeeds.
+    """
+    try:
+        result = _run("git branch --show-current", check=False)
+        branch = result.stdout.strip() if result.returncode == 0 else ""
+        if branch != "main":
+            sw = _run_list(["git", "checkout", "main"], check=False)
+            if sw.returncode != 0:
+                detail = (sw.stderr or sw.stdout or "").strip()[:200]
+                print(
+                    f"WARNING: ensure_main_and_pull could not switch to main "
+                    f"from {branch!r}: {detail}",
+                    file=sys.stderr,
+                )
+                return False, f"checkout-main-failed (on {branch!r})"
+        if not pull(role=role):
+            return False, "pull-failed"
+        return True, "on-main-synced"
+    except Exception as exc:  # noqa: BLE001 — "Never raises" is the contract
+        print(
+            f"WARNING: ensure_main_and_pull raised unexpectedly: {exc!r}",
+            file=sys.stderr,
+        )
+        return False, f"unexpected: {exc!r}"
 
 
 def add_all():
@@ -491,6 +535,33 @@ def _is_state_file(path):
     return any(path.startswith(p) for p in STATE_PREFIXES)
 
 
+def _is_plan_body(path):
+    """Plan-in-PR (#12750): task plan bodies belong ON the task branch, not stripped to main.
+
+    A plan body lives at ``.squidsquad/<role>/planning/<n>-body.md`` where ``<n>``
+    is the issue number. PM commits it as commit 1 of the task branch (which opens
+    the draft PR); on merge it lands on the working branch co-located with the code
+    that fulfilled it (#12750). These are versioned deliverables, not transient
+    state, so the pre-commit state guard must NOT strip them from a feature branch.
+
+    Kept deliberately narrow — only the ``<n>-body.md`` plan, never
+    ``working-state.md`` / ``iterations/`` / vault notes — so it cannot reintroduce
+    the #11511 merge-spiral (those siblings are rewritten every cycle and overlap
+    across branches; a one-shot per-issue plan body does not). git always reports
+    forward-slash paths in ``diff --cached``, so a plain ``/`` split is sufficient.
+    """
+    parts = path.split("/")
+    if len(parts) != 4:
+        return False
+    if parts[0] != ".squidsquad" or parts[2] != "planning":
+        return False
+    name = parts[3]
+    if not name.endswith("-body.md"):
+        return False
+    stem = name[: -len("-body.md")]
+    return stem.isdigit()
+
+
 def _auto_resolve_state_conflicts():
     """Auto-resolve unmerged state files (#8653).
 
@@ -666,6 +737,11 @@ def _role_owned_patterns(role):
         # gets written locally for whatever in-cycle scripts read it,
         # but it never enters the index again.
         ".squidsquad/.event-state.json",
+        # #12823 — the ship counter lives in its own file now (split out of
+        # config.md so config.md can merge 3-way). It's DM-written but listed in
+        # common so whatever role's cycle writes it (DM bump/reset, the #9772
+        # reconcile) can also stage it via the role-scoped commit path.
+        ".squidsquad/.ship-counter",
         ".squidsquad/vault/",
     ]
     role_specific = {
@@ -681,19 +757,13 @@ def _role_owned_patterns(role):
         # intentional: both roles legitimately mutate different fields
         # (PM: own-domain housekeeping; DM: ship counter + flags).
         #
-        # KNOWN LIMITATION (#9474 follow-up): config.md has
-        # `merge=ours` set in `.gitattributes`. Concurrent edits from
-        # PM and DM can silently overwrite each other's changes via
-        # the "ours" merge driver. The same hazard already existed
-        # under PM-only ownership (PM cycles in parallel clones, plus
-        # compose.py deploy contamination on feature branches —
-        # already guarded by `commit_code`'s checkout-from-working-
-        # branch step). The current single-clone, serial-cycle setup
-        # in `.local-config` makes the race unlikely. If parallel
-        # multi-clone execution is enabled later, split the DM-only
-        # fields (ship-counter + flags) into a separate file with
-        # exclusive ownership, OR convert config.md to a structured
-        # format that tolerates `merge=union`.
+        # RESOLVED (#12823): config.md previously had `merge=ours`, which
+        # silently dropped any other agent's concurrent edit (the all-or-nothing
+        # ours driver). The ship counter — the ONLY field that needed ours-wins
+        # protection — was split into its own `.squidsquad/.ship-counter` file
+        # (still merge=ours), so config.md now merges 3-way: real same-field
+        # conflicts surface, non-overlapping edits (PM flag + DM flag) merge
+        # cleanly. PM and DM co-ownership of config.md is now safe.
         "dm": [
             "README.md",
             "CHANGELOG.md",
@@ -1057,11 +1127,16 @@ def guard_staged_state():
 
     - On the configured working branch (or a detached/unknown HEAD): no-op.
     - On any other (feature) branch: unstage every staged file classified as
-      state/ephemeral by ``_is_state_file`` (the SAME classifier ``commit_code``
-      uses, so routing stays single-source). The files stay in the working
-      tree for the next working-branch cycle to commit: ``.squidsquad/`` files
-      via ``commit_state``; ``.claude/`` files via the working branch's normal
-      state-commit path (``commit_state`` stages only ``.squidsquad/``).
+      state/ephemeral by ``_is_state_file`` (the same classifier ``commit_code``
+      uses), **except plan bodies** — ``_is_plan_body`` paths
+      (``.squidsquad/<role>/planning/<n>-body.md``) are exempted so a task's
+      committed plan rides the feature branch into the PR (plan-in-PR, #12750).
+      That carve-out is guard-local: ``commit_code`` / ``commit_state`` /
+      ``_auto_resolve_state_conflicts`` still treat plan bodies as state. The
+      stripped files stay in the working tree for the next working-branch cycle
+      to commit: ``.squidsquad/`` files via ``commit_state``; ``.claude/`` files
+      via the working branch's normal state-commit path (``commit_state`` stages
+      only ``.squidsquad/``).
 
     FAIL-OPEN: always returns normally (exit 0 at the call site). A pre-commit
     hook that aborts could wedge every agent's cycle, so this guard only ever
@@ -1081,8 +1156,16 @@ def guard_staged_state():
     staged = _run_list(["git", "diff", "--cached", "--name-only"], check=False)
     if staged.returncode != 0:
         return []
-    state_staged = [p.strip().strip('"') for p in staged.stdout.splitlines()
-                    if p.strip() and _is_state_file(p.strip().strip('"'))]
+    # Plan bodies (#12750) are versioned deliverables that ride the task branch
+    # into the PR — exempt them from the strip even though they live under
+    # .squidsquad/. Everything else under .squidsquad/ / .claude/ is still state.
+    state_staged = []
+    for raw in staged.stdout.splitlines():
+        p = raw.strip().strip('"')
+        if not p:
+            continue
+        if _is_state_file(p) and not _is_plan_body(p):
+            state_staged.append(p)
     if not state_staged:
         return []
 
@@ -1102,6 +1185,97 @@ def guard_staged_state():
     if len(state_staged) > 20:
         print(f"  ... and {len(state_staged) - 20} more", file=sys.stderr)
     return state_staged
+
+
+def _galaxy_frontmatter_violation(content):
+    """Return a one-line reason string if CONTENT fails the galaxy-frontmatter
+    contract, else None. Mirrors ``tests/test_vault.py::TestGalaxyNotes::
+    test_galaxy_notes_have_frontmatter`` EXACTLY so the guard never rejects a
+    note the static gate would accept (no false positives)."""
+    if not content.startswith("---"):
+        return "missing YAML frontmatter (must start with '---')"
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return "malformed frontmatter ('---' block not closed)"
+    fm_keys = set()
+    for line in parts[1].strip().splitlines():
+        if ":" in line:
+            fm_keys.add(line.split(":", 1)[0].strip())
+    if not fm_keys:
+        return "empty frontmatter (no keys)"
+    if "type" not in fm_keys:
+        return "missing required 'type' key in frontmatter"
+    return None
+
+
+def guard_galaxy_frontmatter():
+    """Pre-commit guard: reject staged ``vault/galaxy/*.md`` notes that lack a
+    valid YAML frontmatter block (#12905).
+
+    Galaxy notes committed without frontmatter red the shared
+    ``tests/test_vault.py::TestGalaxyNotes`` static gate for the WHOLE fleet
+    (every agent's static run hits it) until someone notices and hand-fixes the
+    note — a recurring, cross-role hygiene drain with a stash/merge-race risk.
+    The root gap is no write-time enforcement; this is the deterministic
+    backstop, independent of which agent/sub-skill wrote the note.
+
+    Validates the STAGED blob (``git show :<path>``) — exactly what the commit
+    will record — against the test contract via ``_galaxy_frontmatter_violation``.
+    Returns the list of ``(path, reason)`` violations (empty = OK).
+
+    FAIL-CLOSED on a real violation: the CLI wrapper exits 1 so the commit is
+    blocked, stopping the bad note at the source. FAIL-OPEN on any guard-internal
+    error (the CLI wrapper catches and exits 0), so a guard bug can NEVER wedge
+    the fleet's commits — the static gate remains the safety net in that case.
+    """
+    staged = _run_list(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        check=False,
+    )
+    if staged.returncode != 0:
+        return []
+    violations = []
+    for raw in staged.stdout.splitlines():
+        p = raw.strip().strip('"')
+        if not p:
+            continue
+        norm = p.replace("\\", "/")
+        # Only galaxy notes under the ACTUAL vault location, *.md. Anchored to
+        # .squidsquad/vault/galaxy/ so an unrelated path that merely contains
+        # 'vault/galaxy' elsewhere (e.g. docs/vault/galaxy/architecture.md) is
+        # never wrongly blocked — the static gate only ever checks
+        # .squidsquad/vault/galaxy/ (DS-12905 Finding 2).
+        if ".squidsquad/vault/galaxy/" not in norm or not norm.endswith(".md"):
+            continue
+        name = norm.rsplit("/", 1)[-1]
+        # Exclude templates (scaffolding). .gitkeep is already filtered by the
+        # .md check above, so no separate name-list is needed (DS-12905 F3).
+        if name.endswith("-template.md"):
+            continue
+        blob = _run_list(["git", "show", f":{p}"], check=False)
+        if blob.returncode != 0:
+            # Unreadable staged blob — fail-open for this path; the static gate
+            # still catches a malformed note.
+            continue
+        reason = _galaxy_frontmatter_violation(blob.stdout)
+        if reason:
+            violations.append((p, reason))
+    if violations:
+        print(
+            f"ERROR: pre-commit guard BLOCKED commit — {len(violations)} galaxy "
+            f"note(s) lack valid YAML frontmatter (#12905; a frontmatter-less "
+            f"note reds tests/test_vault.py for the whole fleet):",
+            file=sys.stderr,
+        )
+        for p, reason in violations:
+            print(f"  {p}: {reason}", file=sys.stderr)
+        print(
+            "  Fix: prepend a '---' frontmatter block with at least a 'type:' "
+            "key (see references/vault-templates/galaxy-template.md), then "
+            "re-stage and commit.",
+            file=sys.stderr,
+        )
+    return violations
 
 
 def install_hooks():
@@ -1214,11 +1388,15 @@ def main():
     # install_hooks() explicitly in dispatch -- self-healing first would emit a
     # duplicate foreign-hooksPath WARNING). Keeps the commit path lean and
     # avoids re-checking what's already active (#11511).
-    if cmd not in ("guard-staged-state", "install-hooks"):
+    if cmd not in ("guard-staged-state", "guard-galaxy-frontmatter", "install-hooks"):
         _ensure_hooks_installed()
 
     if cmd == "pull":
         pull(role=rest[0] if rest else None)
+    elif cmd == "ensure-main-and-pull":
+        ok, detail = ensure_main_and_pull(role=rest[0] if rest else None)
+        print(detail)
+        sys.exit(0 if ok else 1)
     elif cmd == "add-all":
         add_all()
     elif cmd == "commit":
@@ -1318,6 +1496,29 @@ def main():
     elif cmd == "guard-staged-state":
         guard_staged_state()
         sys.exit(0)            # FAIL-OPEN: the guard never blocks a commit
+    elif cmd == "guard-galaxy-frontmatter":
+        # FAIL-CLOSED on a confirmed violation; FAIL-OPEN on any guard-internal
+        # error (a guard bug never wedges the fleet's commits; the static gate
+        # stays the safety net).
+        try:
+            violations = guard_galaxy_frontmatter()
+        except Exception as e:  # noqa: BLE001 — defensive fail-open
+            print(
+                f"WARNING: galaxy-frontmatter guard errored (fail-open, commit "
+                f"allowed): {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(0)
+        if violations:
+            # The pre-commit shim decides to BLOCK on THIS explicit marker, NOT
+            # on the exit code — a module-level python crash (bad import/syntax)
+            # also exits 1, and keying the block on the exit code would let such
+            # a crash wedge every commit fleet-wide (DS-12905 Finding 1). The
+            # marker is only ever emitted here, after the guard ran and confirmed
+            # a real violation.
+            print("__SQUIDSQUAD_GALAXY_FM_BLOCK__", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
     elif cmd == "install-hooks":
         ok = install_hooks()
         sys.exit(0 if ok else 1)

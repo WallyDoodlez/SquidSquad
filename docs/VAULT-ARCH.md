@@ -317,7 +317,7 @@ Each sub-skill's **Cycle integration** line below names its lane.
 
 1. **Prune** — auto-archive galaxy notes that are both stale (60+ days since `updated:`) and orphaned (no inbound wikilinks). Notes created today are never pruned.
 2. **Confidence decay** — apply the §4.4 decay rules (high → medium at 60 days, medium → low at 120 days, terminal at `low`). Notes tagged `evergreen` are exempt.
-3. **Reindex** — walk all notes, rebuild the wikilink graph (inbound/outbound adjacency) used by prune-orphan-detection and relevance scoring.
+3. **Reindex** — walk all notes and rebuild each note's `links:` frontmatter to match its body `[[wikilinks]]`; this link data is what prune-orphan-detection and relevance scoring read.
 4. **Relevance scoring** — compute link-count + recency + confidence scores, write to `.squidsquad/vault/.relevance-index.json` (gitignored).
 
 The sub-skill also exposes a pending-questions queue: optimization-surfaced questions that need human input (e.g., "should these similar notes be merged?") are added via `vault_optimize.py add-question`, surfaced in the status bar, and mentioned in the next agent check-in.
@@ -366,6 +366,9 @@ Validates vault integrity. Subcommands:
 | `check-frontmatter` | Validate frontmatter fields in galaxy notes |
 | `check-wikilinks` | Find broken `[[name]]` references |
 | `dedup-check --title <t> --tags <t>` | Used by `vault-remember` Gate 2 |
+| `check-structure` | Validate the folder ↔ prefix ↔ type consistency rules (§4.2a) |
+| `list-orphans` | List galaxy notes with no inbound wikilinks |
+| `suggest-connections` | Suggest candidate wikilinks between topically-related notes |
 
 Runs **automatically after every vault-create or vault-update** (Level 1 — single note + 2-hop neighborhood). Level 2 (full-vault sweep with orphan + staleness detection) is on-demand only.
 
@@ -389,7 +392,10 @@ On-demand maintenance. Subcommands:
 | `consolidate-scan [--dry-run]` | Detect merge candidates (similar topics) |
 | `decay-apply [--dry-run]` | Confidence decay (high→medium after 60d, medium→low after 120d) |
 | `add-question --agent <r> --note <p> --question "<q>"` | Queue pending question for human |
-| `run` | Convenience: invokes the full pipeline (see `vault-optimize.md`) |
+| `reindex` | Rebuild `links:` frontmatter across all notes from their body wikilinks |
+| `relevance-report` | Print the relevance-score ranking (from `.relevance-index.json`) |
+| `pending-count` | Count queued pending-questions |
+| `run` | Convenience alias for the full pipeline (see `vault-optimize.md`) |
 
 Notes never created today are protected — prune never targets them.
 
@@ -404,6 +410,9 @@ Deterministic gates for vault-remember reflection. Subcommands:
 | `inc-writes <role>` | Increment write counter after a successful write |
 | `reset-writes <role>` | Reset counter at start of reflection |
 | `briefing-budget` | Remaining token budget for BRIEFING.md additions |
+| `effective-confidence <note>` | A note's current confidence after time-decay is applied |
+| `note-count` | Total vault note count (backs the 20+/10+ activation gates) |
+| `decay-scan` | List galaxy notes currently due for confidence decay |
 
 ---
 
@@ -482,6 +491,8 @@ For completeness, behaviors that some readers might expect but that are not impl
 ---
 
 ## 10. Current state inventory (snapshot 2026-05-24)
+
+> **Freshness note (2026-06-20):** the counts in this section are the 2026-05-24 snapshot and are now materially stale — the live `galaxy/` holds **~93 notes** (decision 19 / learning 56 / pattern 18; still 0 `style-*`, 0 `pattern-posture-*`) vs the 28 below, `archives/` has **1** note (not 0), and `BRIEFING.md` is **~102 lines**. The section *structure* (what is counted, the buckets, the distributions tracked) still holds; only the numbers are dated. Re-snapshot on the next VAULT-ARCH revision.
 
 What is actually in `.squidsquad/vault/` right now in this repo:
 

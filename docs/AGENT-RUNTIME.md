@@ -19,7 +19,9 @@ SquidSquad has a small fixed set of **role classes** and a per-install set of **
 | **`pm`** | Coordinates the team and the human; manages workflow and process |
 | **`verifier`** | Verifies the product being delivered; does not do technical implementation |
 | **`worker`** | Implements technical work to acceptance criteria |
-| **`dm`** | Delivers (CHANGELOG, version bumps, releases) |
+| **`dm`** | Delivers verified work, generates the delivery report, captures end-to-end knowledge (CHANGELOG / version bumps / releases are L4 project policy, not universal — see DM-ARCH) |
+
+**The `human` role (non-agent).** In addition to the four agent classes, `human` is a first-class **routable role** — agents assign work to a human the same way they assign to any alias (decisions, approvals, setup, reboot green-lights). It is a *non-agent* role: a human has no composed `CLAUDE.md`, no L1–L4, no `SOUL.md`, and is not spawned, supervised, health-checked, or restarted by the harness — "humans have their own L1–L4." Human aliases are registered in `## Aliases` like agent aliases, and **multiple humans are supported** (multi-instance, exactly like multi-instance workers: `human`, or `wallace`/`alice`). `compose.py` / `deploy-all` **skip human aliases** (they produce no `CLAUDE.md` and have no L4 file; the role-class resolver must not map a human alias to an agent class). A human is **not on the event bus**: an `assigned-to <human>` event is appended for forge/audit correctness but is never consumed via the bus — the human reads it on the forge (GitHub assignee/notification) or hears it inline (§3). The rule governing *when* and *how* agents assign to a human — never block, always async — is the L1 **Never Stop While Work Is Pending** rule in §3.1 (human handoff is one instance of it).
 
 **Agent aliases** (1..N per class, install-defined in `.squidsquad/config.md` `## Aliases`):
 
@@ -115,14 +117,37 @@ flowchart LR
 Concrete consequences for an inline turn:
 
 - `cycle_pre.py` does not run; `cycle-input.json` is not written for the turn.
-- `cycle_post.py` does not run; the iteration log is not appended; `working-state.md` is not mechanically updated; the status-bar `current-state` file is not touched.
+- `cycle_post.py` does not run; the iteration log is not appended; `working-state.md` is not mechanically updated.
+- **The status-bar current-event indicator IS set to `inline`** for the duration of the inline session. Because the cycle wrappers don't fire, the agent self-writes the `inline` value when it detects a human (inline) turn and clears it — back to its normal idle/working state — when the inline session ends (the human signals done, or the next autonomous wake fires). This makes "this agent is in a live human conversation" visible at a glance instead of leaving the bar stale.
 - Reactions to the human's request — tracker comments, transitions, PR work — still flow through the forge via `tracker.py`. Durability of side-effects is unchanged.
 
-**Monitoring impact.** PM's pipeline sentinel must treat absence of `cycle-input.json` updates, stale `current-state` writes, and unchanged `working-state.md` during inline-mode periods as **expected** rather than as stall signals (#9358).
+**Monitoring impact.** During inline-mode periods `cycle-input.json` is not refreshed and `working-state.md` is not mechanically updated; PM's pipeline sentinel treats their absence as **expected**, not a stall signal. The status bar itself is **not** stale during inline mode — the agent self-writes `inline` (above), so the sentinel reads an explicit state rather than inferring intent from a stale `current-state` write. This **supersedes** the original #9358 workaround, which told the sentinel to tolerate a stale `current-state` bar during inline turns: the bar is now explicit, so that tolerance is no longer the mechanism.
 
 **Override discipline.** Human instructions delivered inline take precedence over autonomous cycle work. They do NOT override safety gates: instructions that would cross a role boundary, violate a vault-recorded prohibition, or require destructive / hard-to-reverse action without confirmation must still be flagged before action.
 
 **Resuming autonomous mode after an inline session.** In **loop mode**, re-invoke `/loop` per the recovery directive in `references/sub-skills/common/boot-bootstrap.md` (POLLING block). In **event mode**, no action is required: the Monitor tool is invoked with `persistent: true` (per `references/sub-skills/common-events/event-mode-contract.md`) so it stays active across inline turns — the next nudge after the inline interaction wakes the agent automatically. **Do not re-invoke Monitor manually** — `event-mode-contract.md` explicitly forbids it (a Monitor exit is the signal that the harness owns recovery). The session's wake mode itself does NOT change — it stays whichever was selected at boot (§9.3 establishes mode-stickiness for the session).
+
+### 3.1 Never stop while work is pending — async handoffs (L1)
+
+The L1 rule is general (#12853): **in any autonomous mode (loop or event) an agent never voluntarily ends its turn while work is pending** — it always moves to its next queue item. Pausing to wait for *any* other party to act — a teammate agent (verifier / DM / another worker) **or** a human — is a *stop*, and stops are forbidden. A handoff is never a stop: when work leaves an agent's lane it hands off **by a status transition** (which wakes the new owner) and **immediately continues** to its own next item. This is an **L1 rule — all roles** (`references/roles/SOUL.md` → "Never Stop While Work Is Pending").
+
+**Stop ≠ idle.** Going idle — the event-bus wait between nudges, the improvement-scan cool-down loop — **auto-resumes** on a nudge or cool-down tick and is fine; only *ending the turn to wait for another party* is the forbidden stop, because nothing wakes the agent back up. The only legitimate session-ends are harness-managed lifecycle events: a context-pressure exit-42 (§7.5), a `stop-requested`, or Monitor death. This is consistent with **Case C** in `references/sub-skills/common-events/event-mode-contract.md` (which the §8.1 drain loop implements): after completing work an agent immediately re-runs `work_queue()` rather than waiting for its own transition event to echo back.
+
+**The human handoff is the canonical example.** A human is one instance of "another party," not a separate rule category — inline mode is the **only** synchronous human channel, and a human answers on human time, so an agent must never pause and wait for a human in an autonomous mode; it applies the same transition-and-continue rule, async.
+
+> **When you need a human's attention or decision, assign a tracked ticket to a `human` alias and immediately continue.** Set `role:<human>` + the appropriate `pending-human-*` status (the assignment is a *transition*, never a bare comment — bare comments wake no one and leave no ownership), then release to your normal flow: pick up your next queue item, or go idle. Do not sit and wait. The human answers asynchronously; the work resumes later via the return path below.
+
+Rationale: a human responds on human time, not agent time. An agent that blocks on a human stalls its whole queue for minutes-to-hours of dead clock. Assign-and-continue keeps the pipeline flowing and turns "waiting on a human" into one tracked, owned, auditable ticket instead of a wedged session.
+
+**The return path (human-mediated).** A human answers through inline mode, and the answer is carried back to the originating agent by a person-in-the-loop — there is no automatic bus delivery (a human isn't on the event bus):
+
+- **Human → originating agent (inline):** the agent records the human's answer into the ticket and **re-assigns the ticket back to itself** (`/work/assign` to its own alias via a transition), which resumes the work.
+- **Human → PM (inline):** PM records the answer into the ticket and **assigns it back to the originating agent on its behalf.**
+- **Human → the wrong agent** (neither the originator nor PM): that agent replies **"this isn't my territory — you've reached the wrong agent,"** and points the human to the right alias or to PM. (Same posture as §8.3 mis-route recovery, applied to a human who mis-addressed.)
+
+No special metadata is needed to find the originator: the ticket's prior `role:*` label records who owned it before it went to the human, so whoever helps re-assign knows where to send it back.
+
+**Routing consequence (see §8.3):** "an agent needs a human" handoffs (`* → pending-human-review`, `* → pending-human-setup`) target a **`human` alias** — not PM. PM is no longer the mandatory funnel for human-attention work; agents assign to the human directly (PM still curates/surfaces, but does not gate). The inverse direction — "a human gave input an agent must act on," e.g. a human-authored forge comment — still routes to an **agent** (`pm`).
 
 ---
 
@@ -146,7 +171,7 @@ flowchart TB
 
     Forge[("Forge<br/>GitHub Issues")]
 
-    subgraph agents_row["Agents (one box per running alias; multi-instance installs add boxes here)"]
+    subgraph agents_row["Agents (one box per running alias — multi-instance installs add boxes here)"]
         direction LR
         subgraph pm_box["PM agent"]
             PMTree["cmd → thin_launcher → claude<br/>+ event_poll (Monitor child, in tree)"]
@@ -203,7 +228,7 @@ flowchart TB
 
     HarnessAPI[("Harness HTTP API")]
     Poll -- "GET /events/for/alias ?since=cursor (event mode only)" --> HarnessAPI
-    Claude -- "POST /events (booted, ack-cursor); POST /work/assign" --> HarnessAPI
+    Claude -- "POST /events (booted, ack-cursor) + POST /work/assign" --> HarnessAPI
     Poll -- "NUDGE on stdout" --> Monitor
 ```
 
@@ -262,10 +287,13 @@ In v2 the catalog collapses to **3 signal concepts / 4 catalog entries**:
 |---|---|---|---|
 | **`booted`** | agent → harness | First action after the agent's Claude session boots | `{role, pid, clone_path, version}` |
 | **`assigned-to`** | harness → agent (queue entry) | Harness detects work exists for the named agent | `{issue_number, target_alias, event_context, payload}` (EAD populates `payload.title` from the forge issue; `/work/assign` callers may pass it through the `payload` object) |
+| **`deploy-signal`** | harness → agent (queued as an event) | Harness has detected compose-source drift (HARNESS-ARCH §7.5 drift check) and is requesting a coordinated halt so the pull-first deploy sequence can run | `{target_alias, event_type: "deploy-signal", event_context: "deploy-signal"}`. The `event_type` field is set explicitly so the agent's care filter can branch on `event_type == "deploy-signal"` rather than inspecting only `target_alias`. A deploy signal is delivered through the normal event bus deque; it is NOT a direct process signal. |
 | **`ack-cursor`** | agent → harness | Agent has finished processing this event (cared or skipped); cursor advances | `{event_id, role}` |
-| **`ack-stop`** | agent → harness | Agent has accepted a stop intent and is checkpointing | `{event_id, result}` where `result` is one of `'checkpointed'` (working-state.md flushed; safe to SIGTERM), `'aborted'` (graceful stop failed; harness should escalate), `'drained'` (no in-flight work; exiting clean) |
+| **`ack-stop`** | agent → harness | Agent has accepted a stop intent and is checkpointing | `{event_id, result}` where `result` is one of `'checkpointed'` (working-state.md flushed; safe to SIGTERM), `'aborted'` (graceful stop failed; harness should escalate), `'drained'` (no in-flight work; exiting clean), `'deploy-halted'` (agent received a deploy signal, finished its current atomic unit, and is halting so the harness can run the pull-first deploy sequence — see §8.1) |
 
-`ack-cursor` and `ack-stop` are **operationally separate state machines** — delivery vs lifecycle — that share the `ack-` naming. `ack-cursor` advances the delivery cursor per event; `ack-stop` signals lifecycle progress on a stop intent. They were shipped together in `#9873-A` but should be reasoned about as distinct concerns. Three signal concepts, four catalog entries.
+`ack-cursor` and `ack-stop` are **operationally separate state machines** — delivery vs lifecycle — that share the `ack-` naming. `ack-cursor` advances the delivery cursor per event; `ack-stop` signals lifecycle progress on a stop intent. They were shipped together in `#9873-A` but should be reasoned about as distinct concerns. Four signal concepts, five catalog entries.
+
+> **Intent-sequencing rule (deploy-halt)**: the harness MUST set `intent=deploying` (HARNESS-ARCH §7.1) **before** the agent emits `ack-stop(result=deploy-halted)` and the PID dies. If `intent` is still `running` when the agent exits, the health poller misreads the death as a crash and auto-respawns — undoing the coordinated halt. The harness sets `intent=deploying` at the moment it emits the deploy-signal event, so the intent is committed before the agent can possibly respond.
 
 > **Naming note**: The `role` field in `booted` / `ack-cursor` payloads is the agent's **alias** value, preserved under the field-name `role` for code-compat with the wire format. Same pattern as `{role}` in HTTP path parameters (see §5.3). Field rename to `alias` is in the same family as #10358. `ack-stop.result` enum values are tracked as §10 Q11.
 
@@ -728,6 +756,15 @@ Agents may delegate work to subagents via the Agent tool. This subsection descri
 - Independent subagent calls go in a single tool-use batch (one message, multiple Agent calls) so they run concurrently.
 - Sequential dependencies are sequential — don't parallelize when output of A feeds B.
 
+### 7.8 Deploy behavior in loop mode
+
+Loop-mode agents (polling fallback — harness unreachable at boot) do **not** consume the event bus and therefore never receive a `deploy-signal` event (§5.2). Their deploy path is different by construction:
+
+- `cycle_pre.py` already performs a `git pull` at the start of every cycle, so a loop-mode agent's clone is current. The composed `CLAUDE.md` is read once at **session start** (§8.2) — mid-session composition is never re-run — so an updated composed output (committed by a prior event-mode pull-first deploy) takes effect for a loop-mode agent at its **next session start** (the next exit-42 respawn or operator/harness restart). Loop-mode agents simply lag by at most one session.
+- The bus-delivered deploy-signal is never consumed by a loop-mode agent, and no stale-signal handling is needed: a loop-mode session maintains no cursor, so any deploy-signals queued while it ran in loop mode are drained when the agent next boots in event mode (§8.2 → §8.1 initial drain).
+
+This preserves the invariant in both modes: a committed `CLAUDE.md` on `main` is always the product of a pull-first deploy; only the convergence timing differs (event mode: within one deploy cycle; loop mode: by the next session start). See §9.2 for the per-mode summary table.
+
 ---
 
 ## 8. Event-driven mode in detail
@@ -790,9 +827,18 @@ loop forever:
     event = next event past cursor   # GET /events/for/{role}?since=cursor → first item
     if event:
         if event passes my role's care filter:
-            run_pre_cycle()                                # mechanical: git pull, working-state read, etc.
-            do_work(event)                                 # the agent's creative work
-            run_post_cycle()                               # mechanical: commit, push, working-state write
+            if event.event_type == "deploy-signal":        # branch on event_type, not just target_alias
+                # finish current atomic unit (already done — deploy signals arrive between tasks)
+                # do NOT pick up new work, do NOT run the improvement subloop
+                POST /events  ack-stop {result: "deploy-halted", role}  # harness runs deploy sequence + respawns
+                # halt — do NOT POST ack-cursor; the harness advances the cursor past this
+                # deploy-signal as part of the deploy sequence (before respawn), so the
+                # respawned agent does NOT re-process it (else: re-halt → re-deploy loop)
+                return
+            else:
+                run_pre_cycle()                            # mechanical: git pull, working-state read, etc.
+                do_work(event)                             # the agent's creative work
+                run_post_cycle()                           # mechanical: commit, push, working-state write
         # if skipped, no cycle wrapper fires
         POST /events  ack-cursor {event_id: event.id, role}  # per-event ack — cursor advances NOW
         continue                                           # re-check for the next event immediately (drain to empty)
@@ -804,6 +850,8 @@ loop forever:
 
     idle_wait_for_next_nudge()                             # Monitor blocks here until event_poll writes another NUDGE
 ```
+
+> **Worker / feature-branch note**: workers typically operate on feature branches mid-task. A deploy signal is honored at a **between-task boundary where the agent is back on `main`** — not mid-feature-branch. If the agent receives a deploy signal while it is currently on a feature branch with uncommitted or unmerged work, it should finish and merge the current task to `main` first, then honor the deploy halt at the next between-task on-main boundary. "Finish current atomic unit" means: complete the current task, merge to `main`, and only then emit `ack-stop(result=deploy-halted)`. This is the stricter interpretation of "clean tree on main before handoff" (design §4) — the deploy-halt waits for a between-task on-main state, not just any ack-cursor seam.
 
 Three things to notice compared to the pre-D2 batched walk:
 
@@ -831,9 +879,15 @@ sequenceDiagram
             H-->>A: event e
             A->>A: care filter (target_alias == my_alias?)
             alt cared
-                A->>A: run pre-cycle (git pull, state read)
-                A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
-                A->>A: run post-cycle (commit, push, state write)
+                alt event_type == "deploy-signal"
+                    Note over A: finish current atomic unit<br/>(already between tasks — on main)
+                    A->>H: POST /events {type:ack-stop,<br/>result:"deploy-halted", role}
+                    Note over A: halt — harness runs deploy sequence<br/>and respawns; no ack-cursor posted
+                else normal work event
+                    A->>A: run pre-cycle (git pull, state read)
+                    A->>F: do work (status transitions, comments,<br/>commits, PRs as needed)
+                    A->>A: run post-cycle (commit, push, state write)
+                end
             else skipped
                 Note over A: no cycle wrapper fires
             end
@@ -845,7 +899,7 @@ sequenceDiagram
             H-->>A: []
             alt improvement cooldown elapsed
                 Note over A: §8.6 — run one bounded<br/>improvement subloop task
-                Note over A: loop continues — re-check (other agents may have<br/>assigned work during subloop; subloop forge writes<br/>can trigger EAD-emitted assigned-to for this alias)
+                Note over A: loop continues — re-check (other agents may have<br/>assigned work during subloop — subloop forge writes<br/>can trigger EAD-emitted assigned-to for this alias)
             else cooldown not elapsed
                 Note over A: idle wait<br/>(Monitor blocks until next NUDGE)
                 EP->>M: next NUDGE
@@ -867,15 +921,16 @@ These move independently. The operator sets `intent`; the harness updates `statu
 
 **Agent-side boot steps** (what the `claude` process does after it starts):
 
-1. Read the composed `CLAUDE.md` (already on disk in the agent's clone dir at boot — written by the compose pipeline).
+1. Read the composed `CLAUDE.md` (already on disk in the agent's clone dir at boot — written by the compose pipeline and committed to `main`). **The agent does NOT recompose at boot.** The committed `CLAUDE.md` is trusted as current; any drift from source is handled by the pull-first deploy path (§5.2 deploy-signal / §8.1 deploy-signal branch), never by a local recompose at boot. **Invariant**: a committed `CLAUDE.md` on `main` is always the product of a pull-first deploy.
 2. Read `.squidsquad/<alias>/working-state.md` for crash-recovery context (active task, key decisions).
 3. Emit `booted` event (`POST /events {type: booted, role, pid, clone_path, version}`) — this is the cursor-clean handshake. The harness transitions `status: booting → ready` on receipt.
-4. Enter §8.1 eager main loop. Its first iteration's `GET /events/for/{role}?since=cursor` performs the initial drain: if events are queued they're processed per-event with their acks; if the queue is empty the loop falls through to the improvement-subloop check and then to idle-wait. No separate boot-time GET or branch is needed — §8.1 handles both cases natively.
+4. Enter §8.1 eager main loop. Its first iteration's `GET /events/for/{role}?since=cursor` performs the initial drain: if events are queued they're processed per-event with their acks (including any deploy-signal that was queued before boot); if the queue is empty the loop falls through to the improvement-subloop check and then to idle-wait. No separate boot-time GET or branch is needed — §8.1 handles both cases natively.
 
 #### Agent state machine
 
 ```mermaid
 stateDiagram-v2
+    state "crash-looping" as crashLooping
     [*] --> stopped
     stopped --> booting: operator start
     booting --> ready: booted received
@@ -884,8 +939,8 @@ stateDiagram-v2
     stopping --> stopped: ack-stop or timeout
     ready --> crashed: process death detected
     crashed --> booting: harness auto-respawn
-    crashed --> crash-looping: 3+ fast deaths (<60s each)
-    crash-looping --> booting: backoff window elapsed
+    crashed --> crashLooping: 3+ fast deaths (under 60s each)
+    crashLooping --> booting: backoff window elapsed
     crashed --> stopped: operator gives up
 ```
 
@@ -899,7 +954,7 @@ State semantics:
 
 Two fields, not one, so recovery semantics are explicit. After a host reboot, the harness reads `.squidsquad/.harness-state.json`, sees `intent=running` but no live PID → respawn. If collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed."
 
-> **Proposed redesign (not implemented — #12271):** the `ready → crashed` edge above is driven today by **PID death-detection** in the harness health poll, which cannot distinguish a *functioning* agent from an *inert* one — a process can be alive while the agent loop is wedged (see [HARNESS-ARCH.md §13.7](HARNESS-ARCH.md) / #10855, the ~22h zombie). A proposed redesign replaces PID-liveness with **progress signals emitted by the agent's real loop** — `SessionStart` / `Pre`+`PostToolUse` / `Stop` / `SessionEnd` claude-code hooks plus `event_poll` idle-ticks and acks — demoting PID to teardown-only. If it lands, the agent-side emitter wiring is documented in this section and the harness-side liveness/reboot decision in [HARNESS-ARCH.md §15](HARNESS-ARCH.md). Full model: HARNESS-ARCH §15.
+> **Proposed redesign (not implemented — #12271):** the `ready → crashed` edge above is driven today by **PID death-detection** in the harness health poll, which cannot distinguish a *functioning* agent from an *inert* one — a process can be alive while the agent loop is wedged (see [HARNESS-ARCH.md §13.7](HARNESS-ARCH.md) / #10855, the ~22h zombie). A proposed redesign replaces PID-liveness with **progress signals emitted by the agent's real loop** — `SessionStart` / `Pre`+`PostToolUse` / `Stop` / `SessionEnd` claude-code hooks plus `cycle_post` heartbeats (with a pause-aware guard) — demoting PID to teardown-only. If it lands, the agent-side emitter wiring is documented in this section and the harness-side liveness/reboot decision in [HARNESS-ARCH.md §15](HARNESS-ARCH.md). Full model: HARNESS-ARCH §15.
 
 ### 8.3 Work handoff: explicit `/work/assign`
 
@@ -959,8 +1014,8 @@ In practice agents never call `/work/assign` directly for transition-driven hand
 | `planned → approved` | alias from issue's `role:*` label; if none, route to `pm` with `event_context="unowned-approval"` | `"ready-for-pickup"` |
 | `approved → in-progress` | (no assign — self-pickup) | — |
 | `pending-ship → shipped` | (no assign — terminal) | — |
-| `* → pending-human-review` | `pm` | `"human-needed"` |
-| `* → pending-human-setup` | `pm` | `"human-needed"` |
+| `* → pending-human-review` | a `human`-role alias (single-instance default `human`); see §3.1 | `"human-needed"` |
+| `* → pending-human-setup` | a `human`-role alias (single-instance default `human`); see §3.1 | `"human-needed"` |
 
 The issue's `role:*` label IS the target alias (aliases and label values use the same namespace). The label *key* is `role:` for legacy code-compat reasons, but the label *value* is always alias-typed — in a single-instance install, alias = class name; in a multi-instance install, the label is the specific agent's alias (e.g., `role:frontend-1`, not `role:worker`). A rename of the label key from `role:` to `alias:` is in the same family as #10358 (`role` → `alias` identifier rename) but is currently out of scope on that task to limit blast radius — every existing issue label would need editing in lockstep with `tracker.py`, every care-filter caller, and every composed agent file that mentions `role:<name>`. Revisit once #10358 has phased through code-side first.
 
@@ -1067,36 +1122,65 @@ Honors the locked principle: forge owns work state, harness owns delivery state 
 
 The improvement subloop is the **drained-queue branch of the §8.1 main loop**. When the eager loop's `GET /events/for/{role}?since=cursor` returns `[]` (no events past cursor), the agent has finished tending everything assigned to its alias for now. Without this branch the agent would simply idle-wait until the next nudge; with it, the agent uses the otherwise-idle window to run one bounded improvement task before idling. Loop mode reaches the same outcome on quiet cycles via §7.4 — same role-class subloops, different trigger surface; this section is the event-mode side of that pair.
 
+**Deploy-signal preempts the subloop.** The subloop fires only when the queue is observably drained. Before starting a subloop task, the agent checks whether the `GET /events/for/{role}?since=cursor` response is still empty — if a deploy-signal has since arrived and been queued, the next eager-loop iteration's GET will return it. The subloop is bounded to **not** fire if a deploy-signal is detected as queued at the ack boundary (i.e., the GET response is non-empty). In practice, the §8.1 loop's drain-to-empty behavior ensures that any deploy-signal queued during or after the subloop task is picked up on the next eager-loop iteration before the subloop runs again.
+
 The branch fires only when the queue is observably drained — there is no harness endpoint for "am I at deque head?"; the agent infers drained-state from an empty GET response on the current eager-loop iteration. See §8.1 for the surrounding loop structure and how the subloop fits into it as a branch.
 
 ```mermaid
 flowchart TD
-    Start(["per-event ack just emitted;<br/>top of §8.1 eager loop"])
+    Start(["per-event ack just emitted —<br/>top of §8.1 eager loop"])
     QEmpty{"GET returns empty?<br/>no events past cursor"}
+    Arm["arm periodic driver if not armed<br/>(lazy first idle, resets scan_count on re-arm) §8.6.1"]
     Throttle{"cooldown elapsed?<br/>time-based throttle"}
-    Subloop["run improvement subloop:<br/>one bounded task"]
-    Idle["idle wait for next nudge"]
+    Subloop["run improvement subloop:<br/>one bounded task, scan_count++"]
+    Cap{"scan_count ≥<br/>Idle Scan Burst?"}
+    Cancel["cancel periodic driver<br/>(re-arms on next idle period)"]
+    Idle["idle wait"]
     Process["process next event<br/>(§8.1 inner loop body)"]
 
     Start --> QEmpty
     QEmpty -->|"no — more events past cursor"| Process
     Process --> Start
-    QEmpty -->|"yes — drained"| Throttle
+    QEmpty -->|"yes — drained"| Arm
+    Arm --> Throttle
     Throttle -->|"recent subloop ran<br/>within throttle window"| Idle
     Throttle -->|"cooldown elapsed"| Subloop
-    Subloop --> Start
+    Subloop --> Cap
+    Cap -->|"no"| Start
+    Cap -->|"yes"| Cancel
+    Cancel --> Idle
     Idle -->|"NUDGE wakes agent"| Start
+    Idle -->|"periodic-driver tick (§8.6.1)"| Start
 ```
 
-**Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
+**Throttle** (time-based, NOT token-counting): at most one subloop per agent per N minutes (default 30m, matching the old `/loop` cadence — so observable improvement-scan frequency stays the same as loop mode). `.squidsquad/<alias>/.subloop-last-run` records the last-fire timestamp; the agent checks this file's age before triggering.
 
 **What the subloop does** (role-class-specific, one bounded task per fire):
 - **pm**: pipeline sentinel + improvement scan (process gaps, stalled items, doc drift)
 - **verifier**: TEST-PLAN backlog catch-up
 - **worker**: doc-scan or test-coverage scan on owned modules
-- **dm**: doc realignment + CHANGELOG hygiene + version-bump readiness
+- **dm**: doc realignment + delivery-report/record hygiene (CHANGELOG + version-bump readiness only where L4 policy defines them)
 
 Subloop output may emit a new `assigned-to` (e.g., pm-subloop files a bug and routes it). That nudges the owning alias into work — via the same `/work/assign` path everything else uses.
+
+#### 8.6.1 The event-mode periodic driver (idle-work scheduler)
+
+§8.6's "idle → wake → re-check" loop has an implicit dependency the rest of §8 doesn't satisfy: **something must re-enter the loop on a timer when no forge events arrive.** Loop mode gets this for free — `/loop 30m` *is* a periodic driver, and the subloop fires at `step:cycle/cleanup`. Event mode arms the Monitor but schedules **nothing periodic**; `event_poll` emits a NUDGE only on *forge events* (it is silent on an empty poll). So a genuinely idle event-mode agent (zero forge events) never re-enters the loop, never re-checks the throttle, and **the subloop never fires** — the dormancy observed in #12506 (no improvement scan across event-mode agents for weeks).
+
+**The driver.** It is **not scheduled at boot.** The **first time the agent reaches the idle/drained state** (§8.6's empty-GET branch), it **schedules a dedicated low-frequency self-wake** using the same cron/`/loop` scheduling primitive loop mode uses, at the throttle cadence (≈ the cool-down, default 30m) — so an agent that stays busy on forge events never creates one. Event mode therefore has **two independent, orthogonal wake sources**:
+
+- **Monitor / `event_poll`** → forge-event NUDGEs → *productive* work (§8.1).
+- **Periodic driver (cron)** → timer tick → *idle-work* check: re-enter one §8.1 drained-queue evaluation.
+
+**On a driver tick** the agent (1) forge-reads `work_queue()` first — absorbing any work that arrived (so the driver doubles as a safety-net against a missed nudge); then (2) if the queue is drained **and** the throttle window has elapsed, runs one bounded subloop task (existing §8.6 logic). The driver runs only this **narrow drained-check — not a full loop-mode cycle**; event mode stays event-driven for productive work, and the driver covers *only* the idle window.
+
+**Integration with the Monitor.** The cron tick and the persistent Monitor coexist in one session — a tick arriving mid-task or mid-stream is handled exactly like a mid-task NUDGE (noted, then absorbed by the next forge-read; atomicity preserved per §8.5). The cron fires as a Claude Code scheduled tool-invocation, **not** on Monitor's stdin, so it does not race with NUDGE delivery — both wake sources feed the same §8.1 loop entry. **No harness change is required**: the scheduling primitive is runtime-side, scheduled by the agent when it first goes idle.
+
+**Driver lifecycle (lazy + bounded — not a permanent loop).** *Enable* on the first idle/drained state, **not** after a scan has run: gating on a scan having fired would strand an agent whose first idle check finds the throttle not-yet-elapsed — it would never scan, so the driver would never be created, and the agent would never scan again (the exact #12506 dormancy). So the trigger is *reaching idle*; the driver's ticks then handle throttle eligibility. *Bound:* the driver carries a **scan counter**, and when the count reaches the configured threshold (`Idle Scan Burst` — a new `config.md` key under `## Improvement Scanning`, default 3, added by the #12506 impl), the agent **cancels the cron** — a bounded burst, not a perpetual loop. *Re-arm:* the counter and driver reset when the agent re-enters the idle/drained state after processing forge work (a fresh idle period). Net per sustained-idle stretch: up to `threshold` improvement scans, then quiesce until new activity — versus *zero* (pre-fix) and versus an unbounded forever-cron.
+
+**Reconciliations.** The §8.6 diagram's `Idle` state now has a second exit, `periodic-driver tick → Start`. The `idle-cooldown-loop` sub-skill's step-5 assumption ("the persistent Monitor delivers wakes at a short fixed cadence") is corrected to name this driver as the cadence source. **That sub-skill edit — plus adding the `Idle Scan Burst` key (default 3) and the `m` unit on `Improvement Scan Cool-Down` in `config.md` — are part of the #12506 implementation and MUST land with it; until they do, the arch doc, the `idle-cooldown-loop` sub-skill, and `config.md` are knowingly inconsistent.**
+
+*Scope:* covers the event-mode driver (pm/skill/dm). dm's #10540 gate (separate, PM routing) and qa's loop-mode staleness (separate path) are out of scope per the #12506 RCA.
 
 ---
 
@@ -1113,6 +1197,15 @@ The composed CLAUDE.md's boot section probes the harness once and binds the wake
 A separate operator step to "flip modes" does not exist — mode is not a flag the operator sets. To force loop mode for an install, stop the harness before restarting the squad; the agents' boot probes will fail and bind to loop mode for those sessions. To return to event mode, start the harness and restart the agents.
 
 There is no `recompose + restart` ceremony tied to mode change; mode is decided per agent process at its own boot, not at the install level. Mixed-mode installs (one agent event, another loop) are possible — and harmless — during the brief window between starting the harness and an agent's next restart.
+
+**Deploy behavior by mode** (summary):
+
+| Mode | How deploy signal arrives | When updated CLAUDE.md takes effect |
+|---|---|---|
+| **Event mode** | `deploy-signal` event via bus; agent finishes current atomic unit (on main, between tasks), emits `deploy-halted`, harness runs pull-first deploy, respawns | Immediately after respawn — fresh session reads the newly committed `CLAUDE.md` |
+| **Loop mode** | Does not consume bus; cycle_pre.py pulls each cycle | At next session start — the session that loads `CLAUDE.md` from disk picks up the committed output |
+
+In both modes the invariant holds: a committed `CLAUDE.md` on `main` is always the product of a pull-first deploy. The only difference is timing — event-mode agents converge within one deploy cycle; loop-mode agents lag by at most one loop interval (30m default) before the next session start.
 
 ### 9.3 Boot decision tree
 
@@ -1275,9 +1368,16 @@ Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last P
   - **event_poll port discovery ordering**: harness writes `.squidsquad/.harness-port` and flushes to disk BEFORE spawning `event_poll`. HARNESS-ARCH §7.2 step 4 expanded with the ordering guarantee.
   - **event_poll vs EAD floor rationale**: `event_poll`'s 2s floor is safe because it polls the LOCAL harness HTTP API, not an external service; EAD's 5s floor is GitHub REST rate-limit safety. §8.0 cadence block annotated.
   - **§8.0 initial-queue ordering invariant** (rev 14 finalized) — already added; this rev confirms the placement decision matches it.
+- **2026-06-18 (rev 16) — `human` as a non-agent role + L1 async-no-pause + explicit inline status bar.** Operator-locked in a polish-mode session (design record: `.squidsquad/pm/planning/HUMAN-AS-ROLE-ASYNC-DESIGN.md`). Three coordinated additions:
+  - **`human` is a first-class routable role** (Terminology §): agents assign work to a human like any alias; aliases allowed; multiple humans supported (multi-instance). Non-agent — no composed `CLAUDE.md`, no L1–L4, no SOUL; not spawned/supervised/health-checked/restarted by the harness; not on the event bus (an `assigned-to <human>` is appended for forge/audit but never bus-consumed). `compose.py`/`deploy-all` must skip human aliases.
+  - **L1 async-no-pause** (§3.1, new): in any autonomous mode an agent must never block waiting on a human — it assigns a tracked ticket to a `human` alias (`role:<human>` + `pending-human-*` via a transition, never a bare comment) and immediately continues. Inline mode is the only synchronous human channel. Motivated by the observed skill-agent pausing-for-prompt-human-reply bug. Return path is human-mediated (originator self-reassigns, or PM reassigns on its behalf; wrong-agent → "not my territory"). This is L1 source work for skill.
+  - **Inline = explicit status bar** (§3): the status-bar current-event indicator reads `inline` for the duration of an inline session (agent self-writes/clears it, since cycle wrappers don't fire). Reverses the prior "current-state untouched in inline mode" text and supersedes the #9358 "treat staleness as expected" workaround.
+  - **Routing** (§8.3): `* → pending-human-review|setup` target a `human` alias (was `pm`); human-*provided* `human-comment` still routes to `pm`. PM is no longer the mandatory human funnel.
+  - **Implementation** is filed to skill (config.md human aliases, compose skip-human, tracker `role:human`, L1 async-no-pause rule, inline status-bar self-write, §8.3 routing). DS-audit + cross-pair audit pending per prose-drift discipline before settled.
   - **Linked-body write timing (COMPOSE §5.6)**: linked composite held in memory through assemble; `CLAUDE.linked.md` written to disk only on assemble success as part of the atomic triple. Assemble pass is unconditional — no `Assemble: no` opt-out exists.
   - **config.md path phrasing (COMPOSE §4.0)**: replaced "sibling of `.squidsquad/project/`" with "directly inside `.squidsquad/` alongside `project/` and `<alias>/`" — clearer.
   - **INSTALLER migration walk version-read clarification**: the `squidsquad_version:` field read at Phase 0b step 2 was written by **the prior** installer run's Phase 5 — `.squidsquad/config.md` is on disk before the current re-run starts. Fresh-install case skips the walk entirely (`.squidsquad/` doesn't exist). §11 step 2 expanded.
+- **2026-06-19 (rev 17) — L1 async-no-pause generalized → "Never Stop While Work Is Pending" (#12853).** The rev-16 L1 rule (then scoped to *human* handoffs as "async-no-pause") is generalized: in any autonomous mode an agent never voluntarily ends its turn while work is pending, and pausing to wait for **any** other party — a teammate agent (verifier/DM/another worker) OR a human — is a forbidden *stop*; every handoff is a status transition + immediate continue. The human handoff is now one **instance/example** of the rule, not a separate category. **Stop ≠ idle** disambiguated: idle (event-bus wait, cool-down loop) auto-resumes and is fine; only ending the turn to wait is the stop; the sole legitimate session-ends are harness lifecycle events (exit-42 §7.5, `stop-requested`, Monitor death). §3.1 heading + framing reconciled; the old "async-no-pause" rule name is retired (the rev-16 entry above retains it as historical record). PM gains an L2 duty (responsibility + `checkin` sub-skill): **PM advertises open `role:<human>`/`pending-human-*` tickets to the operator** each check-in — the PM half of the return path. CQ hard gate `tests/comprehension/12853_spec.json` (PASS, 2 fresh sonnet agents). Closes the rev-16 "DS-audit + cross-pair audit pending" loop via DeepSeek prose-drift audit against SOUL, AGENT-RUNTIME §3.1/§8.1, and event-mode-contract Case C. L1/L2 source work for skill.
 - **2026-05-30 (rev 14) — gap-closure sweep: Q11 + L4 granularity + ## Aliases schema + initial role:* + event_poll/booted race + last_cycle_timestamp format.** Six related closures:
   - **Q11 closed** — `ack-stop.result` enum locked to `'checkpointed' | 'aborted' | 'drained'` with semantics: checkpointed (working-state.md flushed; safe to SIGTERM), aborted (graceful stop failed; harness should escalate), drained (no in-flight work; exiting clean). §5.2 catalog row expanded; §10 Q11 moved Open → Closed.
   - **L4 granularity locked** — exactly one L4 file per L2 role-class (`pm.md` / `worker.md` / `verifier.md` / `dm.md`), maximum 4 per install. L3 specialization does NOT differentiate L4 files. Rationale: L4 is project-overlay policy; the project's expectations of a worker don't change across L3 domains. §1 Terminology rewritten; COMPOSE §4.3 + §8.3 rewritten with the 4-file ceiling and `pm + 2 fe-workers + 1 be-worker` example producing 4 L4 files (not 5); sub-skill-catalog L4-seeds table updated; INSTALLER §6 callout rewritten. Retires the multi-named-role-class framing (e.g., `fe-worker.md` and `be-worker.md` as separate L4 files).
@@ -1295,4 +1395,10 @@ Pre-#11329 installs (model A) stored the per-agent event cursor as a `- **Last P
   - **§4.1 cross-ref** — added one sentence after the system-overview diagram pointing readers to §5.3 for cursor semantics; §4.1's `.event-state.json` mention now anchors the cursor concept's source-of-truth pointer.
   - **Out of scope for #11328** (handled in separate tasks): sub-skill alignment (`cursor-management.md`, `event-mode-contract.md`, `event-driven-workflow.md`) tracked in **#11330**; runtime code migration (`event_poll.py` swap to per-event `ack-cursor`, `working-state.md` schema cleanup, regression tests, migration safety) tracked in **#11329**. All three tasks ride the `#11144` polish-session bundle into main.
   - **DS audit trail** — AC1.1 R1→R3 (3 passes), AC1.2 R1→R4 (4 passes, load-bearing), AC1.3 R1→R3 (3 passes — R2 used Claude subagent fallback per `feedback_model_router_auto_fallback` after model_router returned "output below minimum length"), AC1.4 R1→R? (this revision). Artifacts at `.squidsquad/pm/planning/DS-AUDIT-11328-ac1.*.md`. Phase 1 research at `RESEARCH-11328.md`; Phase 2 D-Locks at `CONTEXT-11328.md`.
+- **2026-06-19 (rev 17) — #12800 implementation landed: `human` non-agent role, compose-skip, §8.3 routing, inline status-bar self-write.** Implements the rev-16 design-lock (`.squidsquad/pm/planning/HUMAN-AS-ROLE-ASYNC-DESIGN.md`). The rev-16 doc body already carried the spec; this rev records the code/doc-reconcile changes:
+  - **`config.py`** — role-classes split into `AGENT_ROLE_CLASSES` (`pm`/`worker`/`verifier`/`dm`) + `NON_AGENT_ROLE_CLASSES` (`human`); `ALIASES_ROLE_CLASSES` is their union, so a `human` alias parses in both table and bullet `## Aliases` forms.
+  - **`compose.py`** — `deploy_alias_v2` + `check_alias_staged_l4` skip non-agent role-classes (no CLAUDE.md / no L4); `deploy` and `deploy-all` treat the `None` return as a clean no-op, not a failure.
+  - **`harness.py` (§8.3 EAD routing)** — `_STATUS_ROUTING` now maps `pending-human-review` / `pending-human-setup` → `("role_class", "human")`, resolved via the `## Aliases` registry. Non-agent role-classes are excluded from the #12442 handoff re-emit cadence (a human is not on the bus, so the `assigned-to <human>` event is emitted once for forge/audit and never re-nudged).
+  - **Inline status bar (§3)** — the agent self-writes the current-event indicator to `inline` via `cycle.py status-bar-self inline ""` on a human turn and clears it on inline-session end; the stale-`current-state` `#9358` workaround text in L1 `instructions.md` and the four `ralph-loop-overview.md` polling fragments is replaced with the self-write behavior. §3 "Monitoring impact" reworded to mark #9358 superseded.
+  - **`human-comment` → `pm`** unchanged (human-*provided* input still routes to an agent; not yet implemented in EAD code, spec-only). DS-audit + cross-pair audit per prose-drift discipline.
 

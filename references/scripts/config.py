@@ -39,6 +39,19 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 CONFIG_PATH = REPO_ROOT / ".squidsquad" / "config.md"
 
+# #12823: the ship counter lives in its OWN file with `merge=ours`, separate from
+# config.md. config.md previously carried `merge=ours` solely to protect this one
+# DM-owned counter from regression when a stale sibling clone pushed an old value
+# — but `merge=ours` is all-or-nothing, so it silently dropped every OTHER agent's
+# concurrent config.md edit (a feature flag, a new key). Splitting the counter out
+# lets config.md merge 3-way normally (real conflicts surface; non-overlapping
+# edits merge cleanly), while the transient machine-regenerated counter keeps its
+# ours-wins protection in `.ship-counter`. This is the same separate-file +
+# `merge=ours` pattern already used for working-state / current-state / cycle-io.
+SHIP_COUNTER_PATH = REPO_ROOT / ".squidsquad" / ".ship-counter"
+# The single config field whose storage is redirected to SHIP_COUNTER_PATH.
+_SHIP_COUNTER_FIELD = "shipped-since-bump"
+
 # Harness wake-mode probe (#11401). Per AGENT-RUNTIME §2 the wake mechanism
 # is selected solely by the boot-time harness probe — there is no
 # `event-driven:` config field. These mirror the agent boot probe target.
@@ -77,6 +90,7 @@ FIELD_MAP = {
     "pr-flow": ("PR Flow", "Enabled"),
     "improvement-scanning": ("Improvement Scanning", "Enabled"),
     "improvement-scan-cool-down": ("Improvement Scanning", "Improvement Scan Cool-Down"),  # #11091
+    "idle-scan-burst": ("Improvement Scanning", "Idle Scan Burst"),  # #12506
     "ship-threshold": ("Auto Versioning", "Ship Threshold"),
     "shipped-since-bump": ("Auto Versioning", "Shipped Since Last Bump"),
     "alias-skill": ("Aliases", "skill"),
@@ -173,15 +187,57 @@ def _parse_all(text):
         val = _parse_field(text, section, field_name)
         if val is not None:
             result[short_name] = val
+    # #12823: the ship counter is stored in .ship-counter, not config.md. Overlay
+    # the authoritative value so `dump`/`_parse_all` agree with `get_field` (else
+    # dump would report the stale/absent config.md field after migration).
+    sc = _read_ship_counter()
+    result[_SHIP_COUNTER_FIELD] = (
+        sc if sc is not None
+        else _FIELD_DEFAULTS.get(_SHIP_COUNTER_FIELD, "0")
+    )
     return result
 
 
 # Fields that default to a value when absent from config.md (rather than exiting)
 _FIELD_DEFAULTS = {
     "event-driven": "no",
+    # #12823 — a fresh install with neither .ship-counter nor a legacy config.md
+    # counter field starts the counter at 0.
+    "shipped-since-bump": "0",
     # #11091 — minutes between idle improvement-scans (event-mode cool-down loop)
     "improvement-scan-cool-down": "30",
+    # #12506 — max idle improvement-scans per sustained-idle burst before the
+    # event-mode periodic driver cancels itself (graceful default per §8.6.1).
+    "idle-scan-burst": "3",
 }
+
+
+def _read_ship_counter():
+    """Return the ship counter (#12823) as a string, or None if unavailable.
+
+    Source of truth is ``SHIP_COUNTER_PATH``. For backward compatibility with
+    installs that still carry the counter in config.md (pre-#12823), fall back to
+    the config.md ``Auto Versioning > Shipped Since Last Bump`` field when the
+    counter file is absent — so an in-place upgrade keeps reading the right value
+    until the next write migrates it. Never raises.
+    """
+    try:
+        if SHIP_COUNTER_PATH.exists():
+            raw = SHIP_COUNTER_PATH.read_text(encoding="utf-8").strip()
+            if raw:
+                return raw
+    except OSError:
+        pass
+    # Migration fallback: read the legacy in-config.md value.
+    section, field_name = FIELD_MAP[_SHIP_COUNTER_FIELD]
+    return _parse_field(_read_config(), section, field_name)
+
+
+def _write_ship_counter(value):
+    """Atomically write the ship counter (#12823) to ``SHIP_COUNTER_PATH``."""
+    SHIP_COUNTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_text(SHIP_COUNTER_PATH, f"{value}\n")
+    return value
 
 
 def get_field(field):
@@ -190,6 +246,14 @@ def get_field(field):
     #6274 D2: for fields in `_DUAL_AWARE_CONFIG_FIELDS_6274`, read the new
     field first and fall back to the deprecated one with a stderr warning.
     """
+    # #12823: the ship counter is stored in its own file (.ship-counter), not
+    # config.md — redirect the read (with a config.md migration fallback).
+    if field == _SHIP_COUNTER_FIELD:
+        val = _read_ship_counter()
+        if val is None:
+            return _FIELD_DEFAULTS.get(_SHIP_COUNTER_FIELD, "0")
+        return val
+
     text = _read_config()
     entry = FIELD_MAP.get(field)
     if entry:
@@ -290,6 +354,13 @@ def get_wake_mode(role=None):
 
 def set_field(field, value):
     """Set a config field value."""
+    # #12823: the ship counter is stored in its own file (.ship-counter), not
+    # config.md — redirect the write there. This is also the migration write:
+    # once it runs, .ship-counter is authoritative and the (now-ignored) legacy
+    # config.md field, if any, is left for config.md's normal 3-way merge.
+    if field == _SHIP_COUNTER_FIELD:
+        return _write_ship_counter(value)
+
     text = _read_config()
     entry = FIELD_MAP.get(field)
     if entry:
@@ -326,7 +397,17 @@ def set_field(field, value):
 # Greenfield: legacy bullet-form `- **alias**: value` still read by
 # `_parse_field_in_text` for `get_alias` etc., untouched by this function.
 
-ALIASES_ROLE_CLASSES = frozenset({"pm", "worker", "verifier", "dm"})
+# Agent role-classes — map to composed CLAUDE.md / L1-L4 sources and are
+# spawned + supervised by the harness.
+AGENT_ROLE_CLASSES = frozenset({"pm", "worker", "verifier", "dm"})
+# Non-agent role-classes (#12800) — routable on the forge but NOT agents: no
+# composed CLAUDE.md, no L1-L4, no SOUL, not spawned/supervised, not on the
+# event bus. `human` is the first: agents assign work to a human alias and a
+# person acts on it asynchronously. compose.py MUST skip these (no CLAUDE.md /
+# L4), and the harness must not poll them for liveness.
+NON_AGENT_ROLE_CLASSES = frozenset({"human"})
+# Every role-class accepted in the `## Aliases` registry (agent + non-agent).
+ALIASES_ROLE_CLASSES = AGENT_ROLE_CLASSES | NON_AGENT_ROLE_CLASSES
 
 # #6274 dual-aware shim mirror — bullet-form fallback and table-form
 # normalization both pre-map legacy aliases (`qa` → `verifier`,
@@ -413,6 +494,33 @@ def _parse_aliases_bullet_form(section_text):
             l3_domain = None
         elif value in _BULLET_LEGACY_WORKER_L3_DOMAINS:
             role_class, l3_domain = "worker", value
+        elif "/" in value:
+            # Explicit `<role_class>/<l3_domain>` form (e.g. `dm/skill`).
+            # Generalizes domain attachment beyond the worker shorthand
+            # above to any role-class, so a non-worker role (e.g. a
+            # skill-domain DM) can carry an L3 variant in the bullet form
+            # without migrating the whole section to the table form. The
+            # legacy role-class shim still applies to the class half
+            # (`qa/<d>` → verifier, `dev/<d>` → worker).
+            class_part, _, domain_part = value.partition("/")
+            class_part, domain_part = class_part.strip(), domain_part.strip()
+            class_part = _BULLET_LEGACY_ROLE_CLASS_SHIM.get(class_part, class_part)
+            # The L3 domain becomes a filesystem subdirectory name in the
+            # compose walk (`references/roles/<class>/<domain>/`), so a
+            # domain containing `/` would be (mis)read as a nested path.
+            # Reject it here rather than let the walk silently miss the dir.
+            if (class_part not in ALIASES_ROLE_CLASSES
+                    or not domain_part
+                    or "/" in domain_part):
+                raise AliasesRegistryError(
+                    f"`## Aliases` bullet form has unrecognized "
+                    f"`<role-class>/<l3-domain>` value `{value}` for alias "
+                    f"`{alias}`. The class half must be a role-class "
+                    f"({sorted(ALIASES_ROLE_CLASSES)}) or legacy shim "
+                    f"({sorted(_BULLET_LEGACY_ROLE_CLASS_SHIM)}); the "
+                    f"domain half must be non-empty and contain no `/`."
+                )
+            role_class, l3_domain = class_part, domain_part
         else:
             # Unrecognized value — raise so a typo can't slip past
             # the operator. Names the bullet that failed AND the
@@ -580,7 +688,14 @@ def get_alias(role):
         section, field_name = entry
         val = _parse_field(text, section, field_name)
         if val:
-            return val
+            # #12749: the `## Aliases` cell may carry the
+            # `<role_class>/<l3_domain>` compose syntax (e.g. `dm/skill`).
+            # The L3 domain is a compose-only concern (see
+            # parse_aliases_registry) — the agent's *display alias* is the
+            # class part only. Strip any `/<domain>` so callers embedding
+            # `config.py alias <role>` in tracker signatures get `dm`, not
+            # `dm/skill`. No-op for plain values.
+            return val.split("/", 1)[0]
     # Fallback: bare role name
     return role
 

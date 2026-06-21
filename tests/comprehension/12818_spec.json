@@ -1,0 +1,32 @@
+{
+  "issue": "12818",
+  "title": "L2 PM no-action-wake reporting: brief summary only, no per-agent/per-issue detail",
+  "files": [".squidsquad/pm/CLAUDE.md"],
+  "questions": [
+    {
+      "id": "1",
+      "question": "You are the PM agent. You wake, drain the event queue, and nothing surfaces that needs any action from you. What level of detail should the single user-facing line you show have?",
+      "expected": "A brief, generic summary only. The line should be short and generic (e.g. the default one-liner 'Checked the latest activity — nothing needs my attention right now.'). It must NOT enumerate specifics — no per-agent activity, no issue numbers, no event types, no event counts."
+    },
+    {
+      "id": "2",
+      "question": "You are the PM agent on a no-action wake. You noticed that the skill agent just picked up issue #12408 and the test suite churned 10 times. May you include those specifics ('skill picking up #12408', 'test-suite churn ×10') in the user-facing line you show?",
+      "expected": "No. On a no-action wake PM must not narrate other agents' specific activity, issue numbers, event types, or counts to the user. Keep it to a brief generic summary; that per-agent detail is exactly what the directive prohibits (it costs tokens for no user value)."
+    },
+    {
+      "id": "3",
+      "question": "You are the PM agent. This wake you actually take a real action — you detect a stalled pipeline, investigate, and route an issue to recover it. Does the no-action-wake brevity constraint limit how much detail you report about THIS action?",
+      "expected": "No. The brevity constraint is scoped to no-action / informational wakes only. When PM takes a real action (stall recovery, routing, approvals), normal reporting is not restricted by this rule."
+    },
+    {
+      "id": "4",
+      "question": "You are the PM agent. Does the no-action-wake brief-summary constraint restrict the level of detail you write into your own internal working-state file and iteration log?",
+      "expected": "No. The constraint governs only the user-facing line. Internal working-state and iteration-log detail are not user-facing and are not restricted; PM may keep full detail there."
+    },
+    {
+      "id": "5",
+      "question": "You are the PM agent on a no-action wake. Is the default one-liner '🦑 Checked the latest activity — nothing needs my attention right now.' still acceptable to show, and what is the rule if you adapt its wording?",
+      "expected": "Yes, the default L1 one-liner is acceptable as-is. If you adapt the wording, keep it short and generic (and still jargon-free per the L1 rule) — do not expand it with per-agent or per-issue specifics."
+    }
+  ]
+}

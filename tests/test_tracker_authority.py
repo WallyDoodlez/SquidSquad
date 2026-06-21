@@ -36,6 +36,9 @@ class TestCanonicalizeRole:
         ("pm (pm)", "pm"),
         ("qa-lead (tester)", "qa"),
         ("skill-lead (wally)", "skill"),
+        ("human", "human"),  # #12800: non-agent role passes through unchanged
+        ("human-lead", "human"),
+        ("human (wallace)", "human"),
     ])
     def test_canonicalization(self, inp, expected):
         assert tracker._canonicalize_role(inp) == expected

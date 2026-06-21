@@ -1,5 +1,6 @@
 """Shared fixtures for SquidSquad static analysis tests."""
 
+import threading
 import pytest
 from pathlib import Path
 
@@ -40,6 +41,153 @@ def _snapshot_restore_live_config_md():
             current = config_path.read_text(encoding="utf-8") if config_path.exists() else None
             if current != original:
                 config_path.write_text(original, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# #12720: thread-leak guard — fail LOUDLY when a test leaves a live thread.
+#
+# Root cause of #12720: tests/test_harness.py::test_post_shutdown_returns_202
+# POSTed /shutdown to the in-process app. The handler spawns a `shutdown`
+# DAEMON thread that sleeps 1s then calls os._exit(0). The test's os._exit
+# patch reverted the instant the POST returned 202 — so ~1s later the REAL
+# os._exit(0) fired from the daemon thread and hard-killed the entire pytest
+# process (exit 0, NO summary, pytest.main() never returns). In a full
+# `pytest tests/` run this masked ~40% of the suite as a false green at ~58%.
+#
+# This guard would have caught it: a test that leaves the `shutdown` thread
+# (or any non-daemon thread / live server) alive after teardown fails loudly
+# instead of silently arming a delayed process kill. Sibling to the #11394 /
+# #12408 false-green-gate work.
+# ---------------------------------------------------------------------------
+
+# Threads that legitimately outlive an individual test — spawned by a class/
+# session fixture and torn down by THAT fixture, not by the test body.
+_GUARD_ALLOWED_THREAD_NAMES = frozenset({
+    # Per-CLASS HTTP stub in tests/integration/test_event_mode_e2e.py:
+    # started in setUpClass, joined in tearDownClass.
+    "test-event-stream-http",
+})
+
+# Thread names that are ALWAYS a leak if alive after a test, even as a daemon:
+# the harness `shutdown` thread calls os._exit(0) and WILL kill the process.
+_GUARD_DANGEROUS_THREAD_NAMES = frozenset({"shutdown"})
+
+
+def _guard_leaked_threads(baseline_idents):
+    """Live threads that appeared during this test and should not survive it.
+
+    A thread is a leak if it is alive, was not present before the test, is not
+    on the fixture allowlist, AND is either non-daemon (a live server/observer
+    — the #12720 AC class) or a known-dangerous harness thread (the daemon
+    os._exit caller). Benign library daemon threads are tolerated."""
+    leaked = []
+    current = threading.current_thread()
+    for t in threading.enumerate():
+        if t is current or not t.is_alive():
+            continue
+        if t.ident in baseline_idents or t.name in _GUARD_ALLOWED_THREAD_NAMES:
+            continue
+        if (not t.daemon) or (t.name in _GUARD_DANGEROUS_THREAD_NAMES):
+            leaked.append(t)
+    return leaked
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_protocol(item, nextitem):
+    # Baseline captured before setup, so class/session-fixture threads born in
+    # setUpClass are attributed correctly (and filtered by the allowlist).
+    item._sq_thread_baseline = {t.ident for t in threading.enumerate()}
+    return (yield)
+
+
+def _assert_no_leaked_threads(item):
+    baseline = getattr(item, "_sq_thread_baseline", None)
+    if baseline is None:
+        return
+    leaked = _guard_leaked_threads(baseline)
+    if leaked:
+        desc = ", ".join(f"{t.name!r}(daemon={t.daemon})" for t in leaked)
+        pytest.fail(
+            f"#12720 thread-leak guard: {item.nodeid} left live thread(s) "
+            f"alive after teardown: {desc}. A leaked thread — especially the "
+            f"harness `shutdown` thread, which calls os._exit(0) — can hard-"
+            f"kill the pytest process mid-run (silent false-green truncation). "
+            f"Tear the thread down in the test/fixture; if it calls os._exit, "
+            f"join it INSIDE the os._exit patch context.",
+            pytrace=False,
+        )
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_teardown(item, nextitem):
+    # The leak check MUST run even when the real teardown raises — a test that
+    # fails teardown AND leaks a `shutdown` thread must not escape the guard
+    # (DS-c1 F5). On the exception path the original teardown error is re-raised
+    # only if there is no leak; a leak supersedes it (it is the safety-critical
+    # signal — it would otherwise hard-kill the process).
+    try:
+        res = yield
+    except BaseException:
+        _assert_no_leaked_threads(item)
+        raise
+    _assert_no_leaked_threads(item)
+    return res
+
+
+# ---------------------------------------------------------------------------
+# #12511: live-harness egress guard — unit tests must NOT POST to the live bus.
+#
+# Root cause of #12511: tests that call `tracker.transition(...)` /
+# `tracker.add_comment(...)` in-process trigger `event_bus.emit(...)`, which
+# discovers the running dev harness's `.harness-port` (default 7373) and fires a
+# real `POST /events`. On a self-hosting box (a live harness running) this leaks
+# illegal `status-transition` events for fixture issues (#999 etc.) onto the
+# PRODUCTION bus, spuriously waking every event-mode agent (wasted wake/token
+# cost + noise that obscures real events). Same family as #12282 (cycle_post
+# /restart leak) and #12342.
+#
+# This autouse guard intercepts `urllib.request.urlopen` for every pytest unit
+# test and suppresses any request targeting the LIVE harness port — turning the
+# leak into a no-op so the production bus stays clean, regardless of which test
+# emits. It is scoped to the live port only, so tests that mock urlopen or run
+# an isolated harness on another port (and event_bus's own tests) are unaffected.
+# Integration tests run under unittest via run_tests.py (not pytest), so this
+# pytest fixture does not touch their intentional real-harness emits.
+# ---------------------------------------------------------------------------
+def _live_harness_port():
+    """The port of the dev box's running harness (the one a leak would hit)."""
+    pf = SQUIDSQUAD_DIR / ".harness-port"
+    if pf.exists():
+        try:
+            return int(pf.read_text(encoding="utf-8").strip())
+        except (ValueError, OSError):
+            pass
+    return 7373  # harness default (#12282: the 7373 fallback IS the live-egress trap)
+
+
+# nodeid -> list of suppressed URLs. Exposed for the #12511 regression test and
+# for debugging which test attempted a live POST.
+_SUPPRESSED_LIVE_EGRESS = {}
+
+
+@pytest.fixture(autouse=True)
+def _block_live_harness_egress(request):
+    import urllib.request as _ur
+    import unittest.mock as _m
+    needle = f"127.0.0.1:{_live_harness_port()}"
+    real_urlopen = _ur.urlopen
+
+    def guarded_urlopen(req, *a, **k):
+        url = req.full_url if hasattr(req, "full_url") else str(req)
+        if needle in url:
+            # Suppress the live POST. event_bus.emit is fire-and-forget and
+            # ignores the return value, so a no-op is invisible to callers.
+            _SUPPRESSED_LIVE_EGRESS.setdefault(request.node.nodeid, []).append(url)
+            return None
+        return real_urlopen(req, *a, **k)
+
+    with _m.patch.object(_ur, "urlopen", guarded_urlopen):
+        yield
 
 
 @pytest.fixture

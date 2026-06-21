@@ -455,6 +455,22 @@ class TestWorkQueue:
         result = tracker.work_queue("skill")
         assert result == []
 
+    def test_return_path_reassigned_ticket_surfaces_to_originator_12800(self, monkeypatch):
+        """#12800 AC5: the human-handoff return path is async — a human is not
+        on the event bus. The ticket keeps its `role:<originator>` label while
+        parked at pending-human-* (EAD routes those by role-class, not label),
+        so once it is re-assigned back (status → in-progress, role unchanged)
+        it surfaces in the originator's work_queue and resumes on the next
+        wake. No assigned-to is needed for the originator — the forge queue is
+        the resume mechanism."""
+        items = [_make_gh_item(77, "Resumed after human answer", "in-progress",
+                               "task", priority="high")]
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout=json.dumps(items)))
+        result = tracker.work_queue("skill")
+        assert [r["number"] for r in result] == [77]
+        assert result[0]["status"] == "in-progress"
+
 
 # ---------------------------------------------------------------------------
 # #2693 regression: pending-review label consistency

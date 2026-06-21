@@ -117,6 +117,36 @@ class TestValidTable:
         result = config.parse_aliases_registry(_wrap_with_aliases(body))
         assert {v[0] for v in result.values()} == {"pm", "worker", "verifier", "dm"}
 
+    def test_human_alias_accepted_table_form(self):
+        """#12800: a `human` non-agent alias parses in table form."""
+        body = (
+            "| alias | role-class | L3 domain |\n"
+            "|---|---|---|\n"
+            "| pm | pm | — |\n"
+            "| wallace | human | — |\n"
+        )
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result["wallace"] == ("human", None)
+
+    def test_multiple_human_aliases_accepted_table_form(self):
+        """#12800: multiple humans supported, like multi-instance workers."""
+        body = (
+            "| alias | role-class | L3 domain |\n"
+            "|---|---|---|\n"
+            "| pm | pm | — |\n"
+            "| wallace | human | — |\n"
+            "| alice | human | — |\n"
+        )
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result["wallace"][0] == "human"
+        assert result["alice"][0] == "human"
+
+    def test_human_alias_accepted_bullet_form(self):
+        """#12800: a `human` non-agent alias parses in legacy bullet form."""
+        body = "- **pm**: pm\n- **human**: human\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result["human"] == ("human", None)
+
 
 # ---------------------------------------------------------------------------
 # Diagnostic-on-malformed cases (one per AC error bullet + boundary cases)
@@ -231,10 +261,29 @@ class TestMalformedInputs:
 class TestExportedConstants:
 
     def test_role_classes_frozenset_matches_spec(self):
-        """COMPOSE-ARCHITECTURE §3.0 enumerates the 4 L2 classes."""
+        """COMPOSE-ARCHITECTURE §3.0: 4 agent classes + non-agent `human` (#12800)."""
         assert config.ALIASES_ROLE_CLASSES == frozenset(
+            {"pm", "worker", "verifier", "dm", "human"}
+        )
+
+    def test_agent_role_classes_are_the_four_spawned_classes(self):
+        """#12800: only these four are spawned/supervised agents."""
+        assert config.AGENT_ROLE_CLASSES == frozenset(
             {"pm", "worker", "verifier", "dm"}
         )
+
+    def test_human_is_non_agent_role_class(self):
+        """#12800: `human` is routable but not an agent."""
+        assert config.NON_AGENT_ROLE_CLASSES == frozenset({"human"})
+        assert "human" not in config.AGENT_ROLE_CLASSES
+        assert "human" in config.ALIASES_ROLE_CLASSES
+
+    def test_aliases_role_classes_is_agent_plus_non_agent_union(self):
+        """#12800: the accepted set is exactly the union (no overlap)."""
+        assert config.ALIASES_ROLE_CLASSES == (
+            config.AGENT_ROLE_CLASSES | config.NON_AGENT_ROLE_CLASSES
+        )
+        assert not (config.AGENT_ROLE_CLASSES & config.NON_AGENT_ROLE_CLASSES)
 
     def test_l3_none_sentinel_is_em_dash(self):
         assert config.ALIASES_L3_NONE_SENTINEL == "—"
@@ -285,20 +334,64 @@ class TestBulletFormFallback:
         assert result == {"skill": ("worker", "skill")}
 
     def test_full_live_repo_install_bullets(self):
-        # Matches the live config.md on this repo exactly.
+        # Matches the live config.md on this repo exactly. The DM is a
+        # skill-domain delivery manager (#12749 DM-ARCH) — `dm/skill`
+        # gives the `dm` alias the skill L3 variant so package/publish
+        # mechanics (merge-to-main + compose) compose into it.
         body = (
             "- **skill**: skill\n"
             "- **pm**: pm\n"
-            "- **dm**: dm\n"
+            "- **dm**: dm/skill\n"
             "- **qa**: qa\n"
         )
         result = config.parse_aliases_registry(_wrap_with_aliases(body))
         assert result == {
             "skill": ("worker", "skill"),
             "pm": ("pm", None),
-            "dm": ("dm", None),
+            "dm": ("dm", "skill"),
             "qa": ("verifier", None),
         }
+
+    def test_explicit_class_slash_domain_form(self):
+        # #12749: `<role_class>/<l3_domain>` bullet value attaches an L3
+        # domain to any role-class (not just the worker shorthand), so a
+        # skill-domain DM can be declared in the legacy bullet form.
+        body = "- **dm**: dm/skill\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {"dm": ("dm", "skill")}
+
+    def test_class_slash_domain_applies_role_class_shim(self):
+        # The class half still honors the legacy role-class shim
+        # (`qa` → verifier, `dev` → worker) before validation.
+        body = "- **qa**: qa/skill\n- **dev1**: dev/web\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result == {
+            "qa": ("verifier", "skill"),
+            "dev1": ("worker", "web"),
+        }
+
+    def test_class_slash_domain_bad_class_raises(self):
+        # An unknown class half in the slash form raises rather than
+        # silently producing a bogus (class, domain) pair.
+        body = "- **x**: bogus/skill\n"
+        with pytest.raises(
+            config.AliasesRegistryError,
+            match="role-class",
+        ):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
+
+    def test_class_slash_domain_empty_domain_raises(self):
+        # A trailing-slash value with no domain half is malformed.
+        body = "- **dm**: dm/\n"
+        with pytest.raises(config.AliasesRegistryError):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
+
+    def test_class_slash_domain_multi_slash_raises(self):
+        # The domain half must be a single path segment — a value like
+        # `dm/skill/extra` would be (mis)read as a nested compose dir.
+        body = "- **dm**: dm/skill/extra\n"
+        with pytest.raises(config.AliasesRegistryError):
+            config.parse_aliases_registry(_wrap_with_aliases(body))
 
     def test_unrecognized_value_raises_with_diagnostic(self):
         # Per DS-10751 review: an unrecognized bullet value raises so

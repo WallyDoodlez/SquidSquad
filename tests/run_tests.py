@@ -12,9 +12,12 @@ Teardown runs automatically after integration tests, even on failure.
 Static analysis tests do not require cleanup (no side effects).
 """
 
+import os
 import subprocess
 import sys
+import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 # Windows consoles default to cp1252, which cannot encode the em-dash / arrow
@@ -32,7 +35,7 @@ INTEGRATION_DIR = TESTS_DIR / "integration"
 sys.path.insert(0, str(TESTS_DIR))
 sys.path.insert(0, str(INTEGRATION_DIR))
 
-from integration.harness import cleanup_all, verify_clean
+from integration.integration_harness import cleanup_all, verify_clean
 
 # ---------------------------------------------------------------------------
 # Static-gate test discovery (#11394)
@@ -115,8 +118,75 @@ def run_cleanup_only():
         print("  All clean.")
 
 
+def _static_gate_verdict(returncode, junit_path):
+    """Decide PASS/FAIL for a static-gate pytest run WITHOUT trusting the
+    process returncode alone (#12408).
+
+    A test that hard-exits the pytest process mid-run (``os._exit(0)``,
+    ``sys.exit(0)``, ``pytest.exit(..., returncode=0)``) forces returncode 0
+    while skipping pytest's session teardown — so NO junit report is written
+    (pytest emits it from ``pytest_sessionfinish``, which the hard-exit
+    bypasses), the failure aggregation never runs, and the truncated run
+    reports false-green. That is the #12408 bug: a real failure reached
+    pending-test because ``run_static_tests()`` returned ``returncode == 0``.
+
+    The durable defense is cause-agnostic: require positive proof the session
+    finished — a parseable junit recording >0 tests with 0 failures/errors —
+    and fail closed on anything else. A missing junit is the canonical
+    mid-run-hard-exit signature (the session-finish hook never fired).
+
+    Returns ``(passed: bool, reason: str)``.
+    """
+    if not junit_path.exists():
+        return False, (
+            "INCOMPLETE RUN — pytest never wrote its junit report, so the "
+            "session did not reach session-finish (a gated test likely "
+            "hard-exited the process mid-run via os._exit/sys.exit, forcing a "
+            "false-green returncode 0). Failing the gate closed (#12408)."
+        )
+    try:
+        root = ET.parse(junit_path).getroot()
+    except ET.ParseError as exc:
+        return False, (
+            f"INCOMPLETE RUN — junit report is malformed ({exc}); the session "
+            f"did not finish writing it. Failing the gate closed (#12408)."
+        )
+    # pytest's xunit2 wraps suites in <testsuites>; older/--junit-family=xunit1
+    # uses a bare <testsuite> root. Handle both.
+    if root.tag == "testsuites":
+        suites = root.findall("testsuite")
+    elif root.tag == "testsuite":
+        suites = [root]
+    else:
+        suites = root.findall(".//testsuite")
+    total = sum(int(s.get("tests", "0")) for s in suites)
+    failures = sum(int(s.get("failures", "0")) for s in suites)
+    errors = sum(int(s.get("errors", "0")) for s in suites)
+    if total == 0:
+        return False, (
+            "INCOMPLETE RUN — junit recorded 0 tests; nothing executed "
+            "(collection error or empty session). Failing the gate closed."
+        )
+    if failures or errors:
+        return False, (
+            f"{failures} failure(s) + {errors} error(s) across {total} gated "
+            f"test(s)."
+        )
+    if returncode != 0:
+        return False, (
+            f"pytest returned non-zero ({returncode}) despite a clean junit — "
+            f"failing the gate closed."
+        )
+    return True, f"{total} gated test(s) passed (0 failures, 0 errors)."
+
+
 def run_static_tests():
-    """Run static analysis tests via pytest (auto-discovered — #11394)."""
+    """Run static analysis tests via pytest (auto-discovered — #11394).
+
+    The gate is fail-closed (#12408): it does not trust pytest's returncode
+    alone but requires a complete junit report proving the session reached
+    session-finish. See _static_gate_verdict for the rationale.
+    """
     print("\n=== Static Analysis Tests (pytest) ===\n")
     modules = discover_static_modules()
     # Guard: an empty module list would make pytest fall back to recursive
@@ -143,55 +213,65 @@ def run_static_tests():
         for name, kind, reason in excluded:
             print(f"  - {name} [{kind}]: {reason}")
         print()
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-v", "--tb=short"]
-        + [str(TESTS_DIR / f"{mod}.py") for mod in modules],
-        cwd=str(TESTS_DIR.parent),
-    )
-    return result.returncode == 0
+    # Always emit a junit report to a unique temp path. Its later EXISTENCE is
+    # our positive proof pytest reached session-finish; a mid-run hard-exit
+    # leaves it absent (#12408). Unlink the empty mkstemp placeholder first so
+    # only pytest itself can (re)create the file.
+    junit_fd, junit_name = tempfile.mkstemp(prefix="sq_static_gate_", suffix=".xml")
+    os.close(junit_fd)
+    junit_path = Path(junit_name)
+    junit_path.unlink()
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pytest", "-v", "--tb=short",
+             "--junit-xml", str(junit_path)]
+            + [str(TESTS_DIR / f"{mod}.py") for mod in modules],
+            cwd=str(TESTS_DIR.parent),
+        )
+        passed, reason = _static_gate_verdict(result.returncode, junit_path)
+        print(f"\n[static-gate] {'PASS' if passed else 'FAIL'} — {reason}")
+        return passed
+    finally:
+        if junit_path.exists():
+            junit_path.unlink()
+
+
+# #12903: single source of truth for integration target names + their
+# modules. Both run_integration_tests() (dispatch) AND main()'s
+# `integration_only` guard derive from this tuple, so the two can never
+# drift again. (The bug: #9398 added the last two targets to the dispatch
+# but not to the guard, so `run_tests.py real_agent_subprocess` fell through
+# to run the full static gate first.)
+_INTEGRATION_MODULES = (
+    ("harness", "test_harness"),
+    ("status_flow", "test_status_flow"),
+    ("event_mode_e2e", "test_event_mode_e2e"),
+    ("agent_subprocess", "test_event_mode_agent_subprocess"),
+    # #9398 Phase A real-subprocess scenarios — heavy (spawns real harness +
+    # agent subprocesses; ~10-15s per test on Windows).
+    ("real_agent_subprocess", "test_9398_real_agent_subprocess"),
+    # #9398 Phase A — gh PATH-shim <-> tracker.py handshake (subprocess-spawns
+    # tracker.py with the shim on PATH; fast).
+    ("gh_shim_tracker", "test_9398_gh_shim_tracker_integration"),
+)
+# Canonical integration target names — the only names both the guard and the
+# dispatch recognize.
+INTEGRATION_TARGET_NAMES = tuple(name for name, _ in _INTEGRATION_MODULES)
 
 
 def run_integration_tests(targets):
     """Run integration tests via unittest."""
     print("\n=== Integration Tests (unittest) ===\n")
+    import importlib
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
 
-    if not targets or "harness" in targets:
-        from integration import test_harness
-        suite.addTests(loader.loadTestsFromModule(test_harness))
-
-    if not targets or "status_flow" in targets:
-        from integration import test_status_flow
-        suite.addTests(loader.loadTestsFromModule(test_status_flow))
-
-    if not targets or "event_mode_e2e" in targets:
-        from integration import test_event_mode_e2e
-        suite.addTests(loader.loadTestsFromModule(test_event_mode_e2e))
-
-    if not targets or "agent_subprocess" in targets:
-        from integration import test_event_mode_agent_subprocess
-        suite.addTests(
-            loader.loadTestsFromModule(test_event_mode_agent_subprocess)
-        )
-
-    if not targets or "real_agent_subprocess" in targets:
-        # #9398 Phase A real-subprocess scenarios. Heavy — spawns real
-        # harness + agent subprocesses; ~10-15s per test on Windows.
-        from integration import test_9398_real_agent_subprocess
-        suite.addTests(
-            loader.loadTestsFromModule(test_9398_real_agent_subprocess)
-        )
-
-    if not targets or "gh_shim_tracker" in targets:
-        # #9398 Phase A — gh PATH-shim ↔ tracker.py handshake.
-        # Subprocess-spawns tracker.py with shim on PATH; fast.
-        from integration import test_9398_gh_shim_tracker_integration
-        suite.addTests(
-            loader.loadTestsFromModule(
-                test_9398_gh_shim_tracker_integration
-            )
-        )
+    # Lazy per-target import preserved (modules import only when their target
+    # runs) — now driven by the shared _INTEGRATION_MODULES registry.
+    for name, module_name in _INTEGRATION_MODULES:
+        if not targets or name in targets:
+            module = importlib.import_module(f"integration.{module_name}")
+            suite.addTests(loader.loadTestsFromModule(module))
 
     runner = unittest.TextTestRunner(verbosity=2)
     try:
@@ -216,9 +296,9 @@ def main():
 
     targets = [a for a in sys.argv[1:] if not a.startswith("-")]
     static_only = targets == ["static"]
-    integration_only = any(
-        t in targets for t in ("harness", "status_flow", "event_mode_e2e", "agent_subprocess")
-    )
+    # #12903: derive from the shared registry so the guard always matches the
+    # set of targets run_integration_tests() actually dispatches.
+    integration_only = any(t in targets for t in INTEGRATION_TARGET_NAMES)
 
     all_passed = True
 

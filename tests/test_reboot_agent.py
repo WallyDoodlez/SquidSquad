@@ -67,7 +67,7 @@ class TestReadClaudePid:
 class TestKillProcess:
     @pytest.mark.skipif(sys.platform != "win32",
                         reason="Windows-only — taskkill /F path")
-    def test_kill_windows_uses_taskkill_force(self):
+    def test_kill_windows_uses_taskkill_force_tree(self):
         with patch("reboot_agent.subprocess.run") as run:
             reboot_agent._kill_process(12345)
         run.assert_called_once()
@@ -75,36 +75,56 @@ class TestKillProcess:
         assert cmd[:2] == ["taskkill", "/F"], (
             "Windows kill must use taskkill /F for uninterruptible termination"
         )
+        # #12363: /T kills the process TREE so the event_poll.py sidecar dies too
+        assert "/T" in cmd, "Windows kill must pass /T to reap the child tree"
         assert "12345" in cmd
 
     @pytest.mark.skipif(sys.platform == "win32",
-                        reason="POSIX-only — SIGKILL path")
-    def test_kill_posix_uses_sigkill(self):
-        """SIGKILL is the only signal POSIX guarantees cannot be caught or
-        ignored — required to match Windows taskkill /F semantics in force
-        contexts (CONTEXT-4792.md §3.3 Q7)."""
+                        reason="POSIX-only — killpg path")
+    def test_kill_posix_kills_process_group(self):
+        """#12363: kill the process GROUP (SIGKILL) so the event_poll.py
+        descendant dies with claude instead of orphaning."""
         import signal
-        with patch("reboot_agent.os.kill") as kill:
+        with patch("reboot_agent.os.getpgid",
+                   side_effect=lambda p: 111 if p == 12345 else 222), \
+             patch("reboot_agent.os.killpg") as killpg, \
+             patch("reboot_agent.os.kill") as kill:
             reboot_agent._kill_process(12345)
+        killpg.assert_called_once_with(111, signal.SIGKILL)
+        kill.assert_not_called()
+
+    @pytest.mark.skipif(sys.platform == "win32",
+                        reason="POSIX-only — own-group fallback")
+    def test_kill_posix_falls_back_to_sigkill_for_own_group(self):
+        """#12363 SAFETY: if the target shares the harness's OWN group, killpg
+        would take the harness down — fall back to a bare SIGKILL of the PID."""
+        import signal
+        with patch("reboot_agent.os.getpgid", return_value=555), \
+             patch("reboot_agent.os.killpg") as killpg, \
+             patch("reboot_agent.os.kill") as kill:
+            reboot_agent._kill_process(12345)  # getpgid(pid)==getpgid(0)==555
+        killpg.assert_not_called()
         kill.assert_called_once_with(12345, signal.SIGKILL)
 
     @pytest.mark.skipif(sys.platform == "win32",
                         reason="POSIX-only — ProcessLookupError path")
     def test_kill_already_dead_pid_swallows_process_lookup_error(self):
-        """POSIX: killing a non-existent PID raises ProcessLookupError; the
-        helper must swallow it so callers don't crash on already-dead PIDs."""
-        with patch("reboot_agent.os.kill", side_effect=ProcessLookupError()):
-            # Must not raise
-            reboot_agent._kill_process(12345)
+        """POSIX: killing a non-existent PID raises ProcessLookupError (here from
+        getpgid); the helper must swallow it so callers don't crash on
+        already-dead PIDs."""
+        with patch("reboot_agent.os.getpgid", side_effect=ProcessLookupError()):
+            reboot_agent._kill_process(12345)  # must not raise
 
     @pytest.mark.skipif(sys.platform == "win32",
                         reason="POSIX-only — PermissionError path")
     def test_kill_permission_error_swallowed(self):
         """POSIX: a process owned by another UID raises PermissionError on
-        SIGKILL. The force-kill safety net runs inside update_health, which
+        killpg. The force-kill safety net runs inside update_health, which
         must NOT crash the harness on a permission denial — the next poll
         will re-evaluate."""
-        with patch("reboot_agent.os.kill", side_effect=PermissionError()):
+        with patch("reboot_agent.os.getpgid",
+                   side_effect=lambda p: 111 if p == 12345 else 222), \
+             patch("reboot_agent.os.killpg", side_effect=PermissionError()):
             reboot_agent._kill_process(12345)  # must not raise
 
 
@@ -143,9 +163,11 @@ class TestKillProcessPidValidation10530:
         """If a bad-type PID slips past the guard (e.g. a Mock object),
         os.kill raises TypeError. Mirror the ProcessLookupError /
         PermissionError swallow behavior so the harness doesn't crash."""
-        with patch("reboot_agent.os.kill", side_effect=TypeError("bad pid")):
-            # Pass a valid-shape int so the guard doesn't catch it before
-            # the stub gets to raise.
+        with patch("reboot_agent.os.getpgid", return_value=555), \
+             patch("reboot_agent.os.kill", side_effect=TypeError("bad pid")):
+            # getpgid(pid)==getpgid(0)==555 → own-group fallback reaches
+            # os.kill, whose TypeError must be swallowed. Pass a valid-shape int
+            # so the guard doesn't catch it before the stub raises.
             reboot_agent._kill_process(12345)  # must not raise
 
     @pytest.mark.skipif(sys.platform != "win32",

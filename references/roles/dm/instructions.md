@@ -2,7 +2,7 @@
 slot: instructions
 ordinal: 20
 roles: [dm]
-step-ids: [step:cycle/issue-triage, step:cycle/delivery-packaging, step:cycle/version-bump, step:cycle/doc-improvement]
+step-ids: [step:cycle/detect-ready, step:cycle/pre-flight, step:cycle/package, step:cycle/confirm-landing, step:cycle/generate-report, step:cycle/contribute-knowledge, step:cycle/publish, step:cycle/handle-failure]
 ---
 
 → run sub-skill: capability-check
@@ -60,33 +60,47 @@ step-ids: [step:cycle/issue-triage, step:cycle/delivery-packaging, step:cycle/ve
 
 ---
 
-### insert-after step:cycle/resume
+### insert-after step:cycle/work
 
-#### step:cycle/issue-triage
+The seven universal steps above are the harness wake-cycle every agent runs. The block below is the **DM delivery spine** — what "do the unit of work" (`step:cycle/work`) means for a Delivery Manager. It is a **generic, version-agnostic** lifecycle: **L3 overrides the *how* of the package/publish steps; L4 overrides project policy** (cadence, version scheme, record format, targets). With **no L4 policy the default is: ship each verified item as it's ready — no batching, no version concept.** See `docs/DM-ARCH.md` for the architecture. Each step below is an addressable `### step:cycle/<id>` anchor so L3/L4 ops can override its *how*.
+
+### step:cycle/detect-ready
 
 → run sub-skill: task-pickup
 
-Scan for pending-ship items. Check the issue's Discussion comments for a `delivery: skip` marker (the canonical signal — `cycle_pre.py` reads the marker from comment bodies, not from labels). Internal-only tasks carry this marker and skip delivery packaging entirely. For each pending-ship item without the marker: proceed to delivery-packaging.
+Detect work cleared for delivery: scan for `pending-ship` items. Check the issue's Discussion for a `delivery: skip` marker (the canonical signal — `cycle_pre.py` reads it from comment bodies, not from labels); internal-only tasks carry it and skip packaging entirely. For each `pending-ship` item without the marker, carry it through the spine below.
 
-### append
+### step:cycle/pre-flight
 
-#### step:cycle/delivery-packaging
+Confirm the deliverable is coherent and complete before packaging: nothing half-merged, dependencies satisfied, the verifier's verdict is PASS with no open AC gaps. If pre-flight fails, route to `step:cycle/handle-failure`.
 
-→ run sub-skill: delivery-packaging
+### step:cycle/package
 
-For each pending-ship item: merge feature branch into main, write CHANGELOG entry (user-benefit framing, not implementation details), update any user-facing docs affected by the change. Transition to shipped.
+Produce a **complete, well-rounded product** at its destination — *not just the raw technical artifact*. The technical workers produce the technical work; the DM **completes the product** by adding what they don't: **product documentation** (user guide / README / API reference), polish, and completeness, so a *consumer* receives a finished product. These product docs are part of the deliverable — distinct from the delivery report (`step:cycle/generate-report`), which is a record *about* the delivery. *The package mechanic — how the artifact is built and where it lands — is L3/L4.*
 
-#### step:cycle/version-bump
+### step:cycle/confirm-landing
 
-→ run sub-skill: version-bumps
+Confirm the deliverable reached its destination intact / is available. The probe is universal in intent ("did it arrive / is it available?"); its concrete form may be L3-specific.
 
-Monitor `Shipped Since Last Bump` counter. When threshold is reached, run version bump commit and create release.
+### step:cycle/generate-report
 
-#### step:cycle/doc-improvement
+Generate the delivery report from **two sources**: the **facts in the system of record** (for code: the forge issue Discussion, PR, commits, verification) and a **traversal of the vault knowledge graph** for provenance (*what knowledge informed the delivery*). *What* the report contains — format, audience, destination (internal audit trail, external release notes, or both) — is L3/L4. **Versioning, changelog format, and release tags are L4 facets of this step**; a version-less project still produces a report.
 
-→ run sub-skill: doc-improvement-loop
+### step:cycle/contribute-knowledge
 
-On quiet cycles: scan user-facing docs (README, CHANGELOG, getting-started guides) for staleness against current behavior. File findings as tracker tasks.
+→ run sub-skill: vault-remember
+
+Contribute knowledge gained to the **vault** at **two granularities**: like every role, the **part-level** detail of your own slice (delivery-process learnings, so you improve over time); and — your *signature contribution* — the **broad, task/job-level** knowledge (the whole wrapped-up job as a unit, tied to its issue, including cross-connections to other jobs) that only your end-to-end vantage can see. You own both writes. Capture fires at task completion (end-of-task = end-of-cycle).
+
+### step:cycle/publish
+
+**The last step. Make the delivery *known*** to its audience — announce / advertise that it is available. (Package made it *exist*; Publish makes it *known*.) Publish only once the deliverable is deployed, confirmed, recorded, and its learnings captured. *The mechanism and audience are L3/L4.* Transition the item to `shipped`.
+
+### step:cycle/handle-failure
+
+*(cross-cutting)* On a failed delivery at any step, roll back and/or route the work back to its owner — e.g. a failed package or a non-PASS verdict routes the item `pending-ship → in-progress`. The route-back is universal; rollback mechanics may be L3-specific.
+
+**Quiet cycles (no delivery pending):** → run sub-skill: doc-improvement-loop — scan user-facing docs (README, CHANGELOG, getting-started guides) for staleness against shipped behavior and file findings as tracker tasks. This is the DM's improvement-subloop, not a delivery step.
 
 
 ## Reactive sub-skills
@@ -98,3 +112,9 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 → run sub-skill: l4-curation
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the safety-gate pipeline, and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+
+### Harness recovery (when the harness itself is degraded)
+
+→ run sub-skill: harness-restart
+
+When the harness process is alive but degraded in a way an agent-restart can't fix — event dispatch stopped waking agents, the L4 file-watch died, `/status` reports stale state a single reboot won't clear — a clean harness relaunch via `POST /restart` may be the remedy. The sub-skill covers when a restart is the right remedy (vs an operator-relaunch or code-fix situation), how to POST it, what to expect (the requesting agent's own session ends and the whole team respawns fresh under the supervised launcher), and post-restart verification from facts. A harness restart respawns the whole team, so prefer routing the recovery to PM (via a tracked status transition, not a bare comment) and let PM trigger it; self-serve the `POST /restart` directly only when waiting on PM would prolong an active outage, or when PM itself is the unreachable/degraded party, and you have confirmed the symptom from facts.

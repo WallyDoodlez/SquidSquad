@@ -194,6 +194,23 @@ class TestStatusBarSelf:
             cycle.status_bar_self("phase")
         assert exc.value.code == 1
 
+    def test_inline_status_bar_write_and_clear_12800(self, tmp_path, monkeypatch):
+        """#12800 AC4: in inline mode the agent self-writes the current-event
+        indicator to `inline` on the human turn and clears it (back to its
+        idle/working state) when the inline session ends. Cycle wrappers don't
+        fire in inline mode, so this is agent-side via status-bar-self."""
+        role_dir = tmp_path / "skill"
+        role_dir.mkdir()
+        monkeypatch.setenv("SQUIDSQUAD_ROLE", "skill")
+        state_file = role_dir / "current-state"
+        with patch.object(cycle, "SQUIDSQUAD_DIR", tmp_path):
+            # Enter inline mode: indicator reads `inline`.
+            cycle.status_bar_self("inline", "")
+            assert state_file.read_text(encoding="utf-8") == "inline|"
+            # Inline session ends: cleared back to the normal idle state.
+            cycle.status_bar_self("idle", "")
+            assert state_file.read_text(encoding="utf-8") == "idle|"
+
 
 class TestCounters:
     def _setup_working_state(self, tmp_path, role, counter=0):

@@ -33,18 +33,29 @@ class TestPMVerificationBlockedCheck:
 
 
 class TestShipCounterOwnership:
-    """Regression test for #7793 — only the verifier increments the ship counter."""
+    """Regression for #7793 + #12749 (DM-ARCH) — release-counter ownership.
+
+    #7793 established a single incrementer to prevent double-counting.
+    #12749 moves release state off the verifier ENTIRELY: the verifier
+    owns no release state; the DM owns the `Shipped Since Last Bump`
+    counter under its L4 project policy. This test locks the new model —
+    neither the verifier nor PM carries a counter-increment command."""
 
     def test_qa_owns_ship_counter(self):
-        """Verifier verification.md is the authoritative owner of ship counter increment.
-        Method name retained for pytest -k compatibility (#10156)."""
+        """Verifier verification.md must NOT increment the ship counter —
+        release state is the DM's under its L4 policy (#12749). Method name
+        retained for pytest -k compatibility (#10156)."""
         content = QA_VERIFICATION.read_text(encoding="utf-8")
-        assert "Shipped Since Last Bump" in content
+        # No increment command may survive on the verifier (the prior
+        # `config.py set shipped-since-bump` line was removed).
+        assert "set shipped-since-bump" not in content
+        # And the verifier explicitly disclaims release state.
+        assert "belongs entirely to the DM" in content
 
     def test_pm_does_not_own_ship_counter(self):
-        """PM must never increment the ship counter (verifier owns it)."""
+        """PM must never increment the ship counter — it is DM-owned."""
         content = PM_VERIFICATION.read_text(encoding="utf-8")
-        assert "Shipped Since Last Bump" not in content
+        assert "set shipped-since-bump" not in content
 
 
 class TestQAVerificationBlockedCheck:

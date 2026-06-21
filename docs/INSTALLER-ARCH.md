@@ -194,7 +194,7 @@ Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
 
 ### 4.3 Phase 0b — Re-run detection + migration walk
 
-> **Status: target — the migration walk is not yet in the runbook (#12419; see §10).** Today `WIZARD.md` Step 0b handles the existing-install case with a flat abort / regenerate / rebuild prompt. The flow below is the agreed target.
+> **Status: IMPLEMENTED (#12419, shipped 2026-06-17; see §10).** `WIZARD.md` Step 0b now presents Upgrade (default) / Full-rebuild / Abort, where Upgrade runs the §10 three-gate migration walk (reads `squidsquad_version`, applies `references/migrations/` per-version files in order). The flow below matches the runbook.
 
 The installer checks for `.squidsquad/` in the target repo.
 
@@ -289,7 +289,7 @@ python references/scripts/compose.py deploy <alias>
 
 `compose` reads the L1-L3 sub-skill sources + L4 project-local files and emits `.squidsquad/<alias>/CLAUDE.md` per the [compose pipeline](COMPOSE-ARCHITECTURE.md). The output path is **alias-keyed**: `compose.py deploy <alias>` writes to `.squidsquad/<alias>/CLAUDE.md`, regardless of role-class. The composed output is a thin orchestration layer that references sub-skills — see [COMPOSE-ARCHITECTURE.md §4.5](COMPOSE-ARCHITECTURE.md). (The CLI's positional parameter is shown as `<role>` for code-compat — its value is always the alias; the rename to `<alias>` is tracked in [#10358](https://github.com/WallyDoodlez/SquidSquad/issues/10358).) The compose helper takes the alias as its positional argument and internally resolves the role-class (from the alias→class mapping in `.squidsquad/config.md`'s `## Aliases` registry) to pick the correct L4 file. Two aliases of the same role-class share an L4 file by design — see COMPOSE-ARCHITECTURE §3.3.
 
-**Current-state caveat**: as of today, the project-scoped Claude-skills installer that materializes sub-skill references into invokable Skill tool entries is **not yet shipped** (COMPOSE-ARCHITECTURE §4.5.1, tracked in #10362). The composed CLAUDE.md emits sub-skill references either way; until the Skills installer ships, agents resolve `→ run sub-skill: <name>` by looking up `<name>` in [`sub-skill-catalog.md`](sub-skill-catalog.md) to find the source-file path (under `references/sub-skills/`) and executing that file's instructions in-context. The composition output format is stable; only the *invocation mechanism* differs between today and target state.
+**Sub-skill resolution**: the composed CLAUDE.md emits `→ run sub-skill: <name>` references; agents resolve each by looking up `<name>` in [`sub-skill-catalog.md`](sub-skill-catalog.md) to find the source-file path (under `references/sub-skills/`) and executing that file's instructions in-context. This catalog-lookup is the **settled model** (COMPOSE-ARCHITECTURE §4.5.1) — materializing sub-skills as invokable Claude Skills was **decided against** ([[project_subskills_not_skills]], 2026-06-05; #10362 closed as superseded 2026-06-16).
 
 Two aliases of the same role-class produce byte-identical composed output by design — same L1-L4 sources, same compose pipeline. The output path differs by alias (`.squidsquad/<alias>/CLAUDE.md`); the content is shared per class. See COMPOSE-ARCHITECTURE §3.3.
 
@@ -457,7 +457,7 @@ The choice is recorded in `.squidsquad/config.md` under `Tracker Backend`. Agent
 
 ## 10. Migration walk (existing-install step)
 
-> **Status: target — not yet implemented in the runbook (#12419).** This section specifies the migration-walk architecture (agreed 2026-05-30). `WIZARD.md` Step 0b currently presents a flat abort / regenerate-templates / full-rebuild prompt on an existing `.squidsquad/`; it does **not** read `squidsquad_version:` or apply `references/migrations/` files. The design below is the agreed target.
+> **Status: IMPLEMENTED (#12419, shipped 2026-06-17).** This section's migration-walk architecture (agreed 2026-05-30) is now live in the runbook: `WIZARD.md` Step 0b's Upgrade branch reads `squidsquad_version:` and applies `references/migrations/` per-version files in order, with `references/VERSION` as the version source. Verified PASS (verifier cy271, all ACs + comprehension spec `tests/comprehension/12419_spec.json`).
 
 This section details the migration walk introduced at §4.3. **There is no distinct "upgrade flow"** — the migration walk is one step of the standard installer flow, invoked when `.squidsquad/` already exists at Phase 0b. Every other phase (1 through 9) runs identically regardless of whether this is the first installer run on this repo or the hundredth.
 
@@ -542,7 +542,7 @@ The previous "preserved during upgrade" framing is retired — there is no separ
 
 ### 10.3 Post-installer harness restart
 
-> **Status: target — not yet implemented in the runbook (#12420).** `WIZARD.md` Step 7.6 currently prints the "run ./start.sh" message and exits without probing the harness or restarting agents. The behavior below is the agreed target.
+> **Status: implemented (#12420, shipped 2026-06-17).** `WIZARD.md` Step 7.5c probes the harness and restarts agents (stop+start per alias when reachable; user-driven `./start.sh` cold-start when not), via `wizard.py restart-agents`. The behavior below is live.
 
 After Phase 8 commits the new tree, the installer triggers a per-agent restart so running agents pick up the new composed CLAUDE.md. This is **separate from Phase 8** (which is just commit+push per §4.11) and **separate from the migration walk** (which completes before Phase 1). Restart happens after Phase 8's atomic commit and before Phase 9's exit message.
 
@@ -554,7 +554,7 @@ Detection: the installer issues `GET http://localhost:<port>/status` (port read 
   POST /agents/<alias>/start   # boot with new composed CLAUDE.md
   ```
   For each agent in the install's `## Aliases` registry. The URL-template token is named `{role}` in the source code for legacy compatibility; the value is always the alias (rename to `{alias}` tracked in HARNESS-ARCH §9 (Vocabulary note) + #10358).
-- **Harness unreachable** (port file missing / port unreachable / timeout) — the installer invokes `start.sh` from the repo root as the cold-start path. `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots all configured agents. If each restarted agent's boot probe succeeds, the agent arms its own `event_poll.py` via its Monitor tool per HARNESS-ARCH §7.2 step 6.
+- **Harness unreachable** (port file missing / port unreachable / timeout) — the installer does **not** self-spawn the harness (the wizard is ephemeral; per Q-new21 it never boots long-running processes). Instead it reports the **user-driven cold-start**: the user runs `./start.sh` from the repo root. `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots all configured agents. If each restarted agent's boot probe succeeds, the agent arms its own `event_poll.py` via its Monitor tool per HARNESS-ARCH §7.2 step 6.
 
 **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent recovers from `working-state.md` (see AGENT-RUNTIME §6 + §7.5).
 

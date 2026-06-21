@@ -52,12 +52,13 @@ TEST_ROLE = "test-event-mode-e2e"
 
 HARNESS_AVAILABLE = False
 EventStream = None
-# Load harness.py under a unique module name. A direct `from harness import
-# EventStream` collides in the full test-suite run with
-# `tests/integration/harness.py` (a test-cleanup utility), which gets imported
-# first and binds `harness` in sys.modules — so the next `import harness`
-# returns the cleanup module, hiding EventStream and skipping every test in
-# this file. Loading via importlib under a unique name sidesteps the cache.
+# Load harness.py under a unique module name via importlib. The basename
+# collision that originally forced this — the integration cleanup helper used to
+# be `tests/integration/harness.py`, shadowing `references/scripts/harness.py` in
+# sys.modules — was resolved in #12509 by renaming the helper to
+# `integration_harness.py`. The importlib load is retained as belt-and-suspenders:
+# it binds a private module name and can never be shadowed regardless of
+# collection order.
 try:
     import importlib.util as _ilu
     _spec = _ilu.spec_from_file_location(

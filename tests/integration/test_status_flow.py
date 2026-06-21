@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from harness import (
+from integration_harness import (
     create_test_issue, edit_test_issue, get_issue_labels,
     get_issue_state, cleanup_all, verify_clean, _run,
 )
