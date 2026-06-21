@@ -1,8 +1,11 @@
 # Working State
 
-- **Task**: none (idle). Continuation's 11 ships all MERGED+CLOSED (#11140/#12493/#12854/#13101/#12451 etc. confirmed shipped during the ~6h gap; pending-test queue empty). This boot: advanced **#12801** S2 (TUI data-layer pure derivations) — the one cleanly-autonomous pending slice. Now idle.
-- **Updated**: 2026-06-21 03:12 (skill — event-mode boot after fleet restart; #12801 S2 increment pushed)
+- **Task**: none (idle). This boot's productive work: (1) **#12801 S2** TUI data-layer pure derivations pushed; (2) **#13132** tracker.py gh-CLI fail-closed fix → **pending-test (PR #13135)**. Continuation's 11 ships all MERGED+CLOSED. Now idle, listening.
+- **Updated**: 2026-06-21 03:26 (skill — event-mode; #13132 shipped to pending-test, PR #13135)
 - **Quiet Cycle Counter**: 0
+
+## #13132 DELIVERED (PR #13135, pending-test) — branch squidsquad/task/13132
+tracker.py gh-CLI FALLBACK paths skipped the file's fail-closed pattern (qa improvement-scan, low sev). get_labels/get_state: check=False + returncode/empty guard + try/except JSONDecodeError (→[] / "UNKNOWN" via (data or {}).get('state')); drops nameless label objects. _check_unread_feedback: wrap success-path json.loads → same fail-closed sentinel (guard BLOCKS, not traceback-aborts). +11 regression tests (62 in test_tracker.py). Static gate PASS 4867/0/0. DS external degenerate → Claude-sonnet fallback, 1 LOW finding folded (CODE-REVIEW-13132.md). Deterministic code: no CQ, no manifest.
 
 ## #12801 IN-PROGRESS (role:skill, HIGH, operator-requested) — branch squidsquad/task/12801
 TUI bottom action bar w/ reboot. Decomp: .squidsquad/skill/planning/TUI-12801-DECOMPOSITION.md (contract = pm/planning/TUI-INTERFACE-DESIGN.md, operator-approved). Separate Textual process consuming harness HTTP (#8704 model).
