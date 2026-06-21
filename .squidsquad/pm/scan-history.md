@@ -607,3 +607,11 @@
 - **Auto-fixed**: none (can't pre-edit to unshipped behavior; would describe code that isn't merged). Routed as advisory ON #13158 (couple doc edit to code ship, zero drift window) + tracked in working-state for action on #13158 shipped event. NOT a separate orphan task (dedup/quality — same pattern as #13119).
 - **Items rejected by human**: (none)
 - **Burst note**: 1st scan of burst (scan_count→2/3 after record), driver stays armed.
+
+## Scan — 2026-06-21 13:27 (idle-driver tick, 3rd/burst-cap scan — BRIEFING freshness)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this session's forge-verified ships)
+- **Findings**: BRIEFING 12:00 increment said #13158 'filed' — it SHIPPED this session (~15min cycle); #13148/#13147 also shipped; #13030 approved + arch-doc-scoped this session. Recently-Shipped had no 2026-06-21 entry.
+- **Auto-fixed**: BRIEFING refreshed (PM own-domain, Tier-1) — 12:00 increment updated (#13158 filed→SHIPPED + HARNESS-ARCH §11 doc-pairing e74fd590a + #13030 approved/scoped/open-question-to-skill); added 2026-06-21 Recently-Shipped entry (#13158/#13148/#13147 + #13030 approval).
+- **Items rejected by human**: (none)
+- **Burst note**: 3rd scan of idle period → at_cap expected; driver cancels + CronDelete after record-scan.
