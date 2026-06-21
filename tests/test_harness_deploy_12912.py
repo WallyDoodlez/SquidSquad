@@ -345,14 +345,19 @@ class TestRespawnAgentProcess(unittest.TestCase):
     """DS-12912 Finding 2: the deploy respawn boots the agent explicitly (the
     health poller never would — status='deploying' is not in is_dead)."""
 
-    def _respawn(self, boot_side_effect, *, claude_pid=None, pid_dies=True):
+    def _respawn(self, boot_side_effect, *, claude_pid=None, pid_dies=True,
+                 pid_alive=True):
         import harness
         agent = AgentState("skill", "")
         agent.intent = AgentState.INTENT_DEPLOYING
         agent.status = "deploying"
         agent.claude_pid = claude_pid
         emitted = []
+        self.killed = []  # PIDs the harness force-killed (#13077)
         with patch.object(harness.boot_remote, "boot_agent", side_effect=boot_side_effect), \
+             patch.object(harness.boot_remote, "_is_process_alive", return_value=pid_alive), \
+             patch.object(harness.reboot_agent, "_kill_process",
+                          side_effect=lambda p: self.killed.append(p)), \
              patch.object(harness, "_await_pid_death", return_value=pid_dies), \
              patch.object(harness, "_emit_event",
                           side_effect=lambda *a, **k: emitted.append((a, k))), \
@@ -400,28 +405,43 @@ class TestRespawnAgentProcess(unittest.TestCase):
         self.assertEqual(agent.status, "error")
         self.assertEqual(emitted, [])                  # caller owns the emit
 
-    def test_old_pid_still_alive_aborts_respawn(self):
-        """#13032: if the deploy-halted agent's process never exits (didn't
-        /quit, or wedged), do NOT boot over it (singleton would no-op) — abort
-        and leave is_dead 'error'. boot_agent must NOT even be called; the
-        deploy-error is the caller's to emit (DS-13032-B F1)."""
+    def test_force_kills_old_pid_since_agent_cannot_self_quit(self):
+        """#13077: the agent CANNOT self-/quit, so the harness actively
+        force-kills the deploy-halted process before booting. With the old PID
+        alive, _kill_process MUST be called with it; once it dies the respawn
+        boots fresh."""
+        agent, ok, emitted = self._respawn(
+            lambda r: {"success": True, "action": "spawn", "message": "ok"},
+            claude_pid=4242, pid_alive=True, pid_dies=True)
+        self.assertTrue(ok)
+        self.assertEqual(self.killed, [4242])           # harness actively killed it
+        self.assertEqual(agent.status, "starting")
+        self.assertEqual(emitted, [])
+
+    def test_old_pid_survives_force_kill_aborts_respawn(self):
+        """#13077: if the force-kill itself fails (PID still alive after it),
+        do NOT boot over the live process (singleton would no-op) — abort and
+        leave is_dead 'error'. boot_agent must NOT be called; the deploy-error
+        is the caller's to emit (DS-13032-B F1)."""
         called = []
         agent, ok, emitted = self._respawn(
             lambda r: called.append(r) or {"success": True, "action": "spawn"},
-            claude_pid=4242, pid_dies=False)
+            claude_pid=4242, pid_alive=True, pid_dies=False)
         self.assertFalse(ok)
+        self.assertEqual(self.killed, [4242])           # we DID try to kill it
         self.assertEqual(called, [])                    # never booted over a live process
         self.assertEqual(agent.status, "error")
         self.assertEqual(agent.intent, AgentState.INTENT_RUNNING)
         self.assertEqual(emitted, [])                  # caller owns the emit
 
-    def test_old_pid_dies_then_boots_fresh(self):
-        """#13032: once the old PID dies within the wait, the respawn boots a
-        fresh process normally."""
+    def test_old_pid_already_dead_skips_kill_and_boots(self):
+        """#13077: if the old PID is already gone (rare — the deploy's own
+        steps ran first), no force-kill is needed and the respawn boots fresh."""
         agent, ok, emitted = self._respawn(
             lambda r: {"success": True, "action": "spawn", "message": "ok"},
-            claude_pid=4242, pid_dies=True)
+            claude_pid=4242, pid_alive=False, pid_dies=True)
         self.assertTrue(ok)
+        self.assertEqual(self.killed, [])               # nothing to kill
         self.assertEqual(agent.status, "starting")
         self.assertEqual(emitted, [])
 
