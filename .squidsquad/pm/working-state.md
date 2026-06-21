@@ -50,6 +50,12 @@ _Condensed 2026-06-21 12:00 (PM EVENT mode, deploy-error-divergence recovery boo
 
 - **PM-ACTION on #13162 pending-test/ship: land AC6 = docs/AGENT-RUNTIME.md** (config + boot-read/sticky + both-mode behavior; cross-pair pass; coupled to ship). DM owns AC7 (README) as delivery packaging.
 
+## >>> P0 INCIDENT RESOLVED THIS SESSION — compose pipeline down (pm clone) <<<
+- **Symptom**: burst of **16 compose-failed events** + 1 restart-required to pm (~14:27Z). RCA from facts: pm clone's working tree was in a tree-wide STASH-POP conflict (~20 files UU/DU/UD incl. config.py:891 `<<<<<<< Updated upstream`). config.py SyntaxError → compose.py import fails → compose down.
+- **Root cause**: `git_ops.py:253-280` stash+pull+pop ran `git stash` on a CLEAN tree (no-op, no stash created) then popped a PRE-EXISTING ancient stash (newest 2026-05-09 'cycle 36', pre-#6274 dev/qa code) → conflicts everywhere. #13045 `_safe_stash_pop` marker-cleanup didn't cover config.py. 26 ancient stashes had piled up = latent landmine.
+- **Recovery (pm clone, verified)**: HEAD==origin/main (0/0) → `git reset --hard HEAD` (restored ~20 files clean, zero loss — stash side obsolete) + `git stash clear` (dropped all 26). config.py+compose.py import OK; tree clean; compose unblocked.
+- **Filed #13167 (role:skill, HIGH/P0)** — git_ops pops pre-existing stash on clean tree; FLEET hazard (every clone runs this + may have its own stash pile). Suggested: guard pop on actual-stash-created / `git pull --autostash`; robust marker-strip; don't accumulate stashes. See [[learning-git-ops-clean-tree-stash-pop-recovery]].
+
 ## Improvement Scan
 Status: idle (queue drained this boot). Driver `.subloop-driver.json` armed, scan_count 1, last_run 2026-06-21T05:41Z. On entering idle: arm driver + confirm live cron via CronList.
 (This boot: deploy-error DIVERGENCE recovery [merge origin/main + push → unblock], #13158 filed [harness deploy-pull no merge strategy], #13030 cross-linked, fleet stale-intent/stale-composed observation, pipeline clean & flowing. Entering idle.)
