@@ -408,7 +408,7 @@ The endpoints throughout this section use `{role}` in path parameters (e.g., `GE
 
 - `collections.deque(maxlen=1000)` — in-memory, capped at 1000 events.
 - Harness restart drops history. At-least-once across restarts requires persistence (separate work, out of scope for v2).
-- Eviction: when a new event pushes past 1000, the oldest is dropped. Agents whose cursor was at that evicted event get a `HTTP 410 Gone` response from `GET /events/for/{role}?since=<old_cursor>` with body `{"cursor_evicted": true, "current_head": "<event_id>"}`. Recovery: agent reads forge for current state, emits `ack-cursor(current_head)`, re-enters idle.
+- Eviction: when a new event pushes past 1000, the oldest is dropped. Agents whose cursor predates the oldest retained event get a normal **`HTTP 200`** response from `GET /events/for/{role}?since=<old_cursor>` whose body carries an eviction marker — `{"events": [...], "total": <int>, "evicted": true, "oldest_id": "<event_id>", "evicted_count_hint": <int>}` (not a 410). Recovery: agent reads forge for current state, emits `ack-cursor(oldest_id)` to fast-forward past the evicted range, re-enters idle. The marker is set only when the deque is non-empty (so `oldest_id` is always a real anchor); the empty-deque + stale-cursor case returns `([], None)` with no marker (#12837).
 
 #### Cursor model
 
@@ -1270,7 +1270,7 @@ The v2 build ships as 6 grouped PRs. The **letters** (A–F) are logical-groupin
 | 1 | **A — Lifecycle plumbing** | `boot_agent` spawns thin_launcher (→ claude); the agent then arms event_poll via Monitor; health poller watches the `claude` PID; cold start order. The boot-time harness probe + wake-mode bind (§9.3) runs **inside the claude (agent) process** as part of its own boot sequence — after reading composed `CLAUDE.md` and before the first cycle — NOT inside `thin_launcher`. | medium |
 | 2 | **C — EAD + restart safety** | Last-seen-id recovery, in-flight cleanup, harness restart catch-up | low |
 | 3 | **D — alias-existence validation** | Harness validates `target_alias` against the install's registered aliases (per `.squidsquad/config.md` `## Aliases`); 404 on unknown. No class-from-class permissions. | low |
-| 4 | **B — Cursor + delivery wire** | Nudge format = literal `NUDGE\n`; forward-only ack; `HTTP 410 Gone` for cursor-evicted | low |
+| 4 | **B — Cursor + delivery wire** | Nudge format = literal `NUDGE\n`; forward-only ack; HTTP 200 + `evicted`/`oldest_id` marker for cursor-evicted | low |
 | 5 | **F — Observability** | TUI polls `/status`, `/agents`, `/events/recent`; lifecycle/git logs stay in iter-NNNN.md | very low |
 | 6 | **E — Migration** (3 sub-phases) | E1: stop emitting deprecated types · E2: collapse `Event Reactions` to `assigned-to` only · E3: trim catalog + rewrite event_poll | highest |
 

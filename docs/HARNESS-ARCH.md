@@ -93,7 +93,7 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 |---|---|---|---|
 | POST | `/events` | Emit an event (booted, ack-cursor, assigned-to, etc.) — see [AGENT-RUNTIME.md §5.2](AGENT-RUNTIME.md) for payload shapes per event type | `{ok, event_id}` or 4xx |
 | GET | `/events` | List recent events (**debug-only**; not part of agent-facing contract) | `[event, ...]` |
-| GET | `/events/for/{role}` | Read events past the role's cursor | `[event, ...]` or HTTP 410 Gone if cursor evicted |
+| GET | `/events/for/{role}` | Read events past the role's cursor | `{events, total}`; when the cursor predates the retained window the body additionally carries `evicted: true, oldest_id, evicted_count_hint` (still **HTTP 200**, not 410) — see §5.1 |
 | GET | `/events/cursor/{role}` | Current cursor position for a role | `{cursor, role}` (cursor may be `null` on first boot); **HTTP 200 always** (no 404 if cursor null) |
 | GET | `/events/lifecycle` | Recent lifecycle events for TUI display | `[event, ...]` |
 
@@ -165,7 +165,7 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
 - `collections.deque(maxlen=1000)` — in-memory, capped at 1000 events.
 - Eviction is automatic when a new event pushes past 1000: oldest dropped.
 - **Restart drops history**: the deque is in-memory only. On harness restart, the deque is empty. Cursors persist (see §5.2), but events older than the new harness session are not recoverable from disk.
-- **Cursor-evicted recovery**: an agent whose cursor was at an evicted event gets `HTTP 410 Gone` on `GET /events/for/{role}?since=<old_cursor>` with body `{"cursor_evicted": true, "current_head": "<event_id>"}`. Recovery protocol: agent reads forge for current state, emits `ack-cursor(current_head)`, re-enters idle.
+- **Cursor-evicted recovery**: an agent whose cursor predates the oldest retained event gets a normal **`HTTP 200`** response on `GET /events/for/{role}?since=<old_cursor>` whose body carries an eviction marker — `{"events": [...], "total": <int>, "evicted": true, "oldest_id": "<event_id>", "evicted_count_hint": <int>}` (`harness.py` `get_since_with_eviction` → `get_events_for_role`). Recovery protocol: agent reads forge for current state, emits `ack-cursor(oldest_id)` to fast-forward past the evicted range, re-enters idle. The marker is set **only when the deque is non-empty**, so `oldest_id` is always a real anchor; the empty-deque + stale-cursor case returns `([], None)` (no marker — #12837) and the agent re-anchors normally with no events lost. (Note: 410 Gone is used elsewhere as a deliberate *tombstone* for the removed `POST /events/{event_id}/complete` endpoint — that is unrelated to eviction recovery.)
 
 ### 5.2 Cursor model
 
@@ -499,7 +499,7 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 |---|---|
 | **Harness unreachable** (port-file missing or HTTP probe fails) | Agents silently no-op event-bus operations; fall through to loop-mode behavior per AGENT-RUNTIME §7 + §9.4. No cascade failure. |
 | **EAD task crashes** | Harness logs the exception and restarts the task. While EAD is down, forge changes don't reach the bus; agents continue consuming the in-memory deque. |
-| **Deque overflow** | Oldest events evicted; agents at evicted cursors get HTTP 410 Gone and follow the §5.1 recovery protocol. |
+| **Deque overflow** | Oldest events evicted; agents at evicted cursors get an HTTP 200 response carrying the `evicted`/`oldest_id`/`evicted_count_hint` marker and follow the §5.1 recovery protocol (`ack-cursor(oldest_id)`). |
 | **`.squidsquad/.harness-state.json` corrupt** | Harness logs the error, treats the file as missing, starts fresh state. Operator may need to re-issue `start` commands. |
 | **`.squidsquad/.event-state.json` corrupt** | Cursors reset to `null`; agents re-consume from deque head on next read. No crash. |
 | **`.squidsquad/.harness-port` file missing** | Operator's start command writes a new file; if not run, agents treat harness as unreachable (silent no-op). |
@@ -533,7 +533,7 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 
 ### 13.1 No persistence for the deque (event store)
 
-`collections.deque(maxlen=1000)` is in-memory only. Harness restart drops history. At-least-once across restarts requires persistence; this is currently not implemented and out of scope for the present architecture. Agents recover via the §5.1 cursor-evicted protocol (read forge for current state, ack to head, re-enter idle) — which works but is a degraded path compared to true durable delivery.
+`collections.deque(maxlen=1000)` is in-memory only. Harness restart drops history. At-least-once across restarts requires persistence; this is currently not implemented and out of scope for the present architecture. Agents recover via the §5.1 cursor-evicted protocol (read forge for current state, `ack-cursor(oldest_id)`, re-enter idle) — which works but is a degraded path compared to true durable delivery.
 
 ### 13.2 No authentication on the HTTP API
 
