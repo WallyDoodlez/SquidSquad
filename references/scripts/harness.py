@@ -345,6 +345,30 @@ class AgentState:
         # judged dead. None until the first dispatch.
         self.last_dispatch_at = None
 
+    def reset_session_telemetry(self):
+        """Clear per-session activity + pause telemetry on a fresh (re)spawn.
+
+        #13113: the spawn paths already reset claude_pid / bootup_complete /
+        last_session_end / last_dispatch_at, but left these per-session fields
+        carrying the OLD session's values across the PID boundary. A respawned
+        record then showed the dead session's last_activity_at (frozen at the
+        pre-kill timestamp) until the new session landed its first heartbeat —
+        making a healthy fresh agent read as wedged, and (via a stale
+        in_flight_until) holding off death-detection in active_pause(). Reset
+        them to their fresh-AgentState defaults so a respawned record is
+        indistinguishable from a first boot.
+
+        Scope: only the per-session activity/pause telemetry. Crash-loop and
+        backoff bookkeeping (last_spawn_at, consecutive_fast_deaths,
+        reboot_history, reboot_blocked_until, last_stop_failure) is meant to
+        PERSIST across respawns by design and is deliberately not touched here.
+        """
+        self.last_activity_at = None
+        self.last_activity = None
+        self.in_flight_until = None
+        self.waiting_since = None
+        self.compacting_since = None
+
     def active_pause(self, now):
         """#12458 — return a short reason string if a hook currently explains
         this agent's silence/death (so the reboot decision should HOLD OFF), or
@@ -1175,6 +1199,11 @@ class HarnessState:
                             # baseline (a stale last_dispatch_at from before the
                             # death must not make the fresh agent read wedged).
                             agent.last_dispatch_at = None
+                            # #13113 — same rationale for the per-session activity
+                            # + pause telemetry: a stale last_activity_at / pause
+                            # flag from the dead session must not survive into the
+                            # fresh record (frozen-telemetry masquerade).
+                            agent.reset_session_telemetry()
                 elif result.get("action") == "error":
                     # #11640: boot_agent refused (e.g. unregistered/missing
                     # clone). Never spawned in REPO_ROOT — surface the refusal
@@ -2166,6 +2195,7 @@ async def lifespan(app: FastAPI):
                         agent_state.last_spawn_at = time.time()  # #12244 P2
                         agent_state.last_session_end = None  # #12418 F3
                         agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+                        agent_state.reset_session_telemetry()  # #13113
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
@@ -2496,6 +2526,7 @@ async def start_all():
                 agent_state.last_spawn_at = time.time()  # #12244 P2
                 agent_state.last_session_end = None  # #12418 F3
                 agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+                agent_state.reset_session_telemetry()  # #13113
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
@@ -2610,6 +2641,7 @@ async def start_agent(role: str):
             agent_state.last_spawn_at = time.time()  # #12244 P2
             agent_state.last_session_end = None  # #12418 F3
             agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+            agent_state.reset_session_telemetry()  # #13113
             agent_state.terminal_pid = result.get("terminal_pid")
             # #8695: spawning a fresh agent → bootup-complete must be re-asserted
             # by the new process before we'll dispatch any events to it.
@@ -4296,6 +4328,7 @@ def _respawn_agent_process(role):
         agent.last_spawn_at = time.time()
         agent.last_session_end = None
         agent.last_dispatch_at = None
+        agent.reset_session_telemetry()  # #13113
         agent.terminal_pid = result.get("terminal_pid")
         state.set_agent(role, agent)
         state.save_state()
