@@ -81,6 +81,10 @@ EXPECTED_CALLERS = {
     # PostCompact / StopFailure): POSTed only by Claude Code's native type:http
     # hooks in settings.json (no in-repo Python caller).
     ("POST", "/hooks/pause"):                   _EXTERNAL,
+    # #12495 — manual wake-injection primitive: POSTed by tracker.py's
+    # work-assign CLI (the X-Squidsquad-Alias-bearing client). Operators may
+    # also curl it for babysitting, but the canonical in-repo caller is tracker.
+    ("POST", "/work/assign"):                   ["tracker"],
 }
 
 
