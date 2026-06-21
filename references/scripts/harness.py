@@ -5161,8 +5161,9 @@ class ExternalActivityDetector:
                 # Worker statuses (approved/open) route to the issue's own
                 # role:* alias. In single-instance teams the value following
                 # `role:` is the alias; in multi-instance teams the `role:*`
-                # label always carries the routed alias per AGENT-RUNTIME.md
-                # §8.3 (the harness rewrites `role:*` on every `/work/assign`).
+                # label carries the routed alias (set by PM at planned→approved;
+                # the harness does NOT rewrite role:* — the "universal router"
+                # /work/assign label-rewrite design was never built, see #12495).
                 # Either way the extracted string IS the alias. NOTE (#12342 /
                 # DS Finding 3): a multi-role issue wakes only the alphabetically
                 # first role:* alias — single-worker-per-issue is the assumed
