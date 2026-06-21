@@ -91,7 +91,7 @@ Runs **automatically after every vault-create or vault-update**. Checks the writ
 
 For each note checked:
 
-1. **Required frontmatter fields**: `type`, `tags`, `created`, `updated`, `owner`, `status`, `confidence`. Warn if any are missing or empty.
+1. **Required frontmatter fields**: `type`, `tags`, `created`, `updated`, `owner`, `status`, `confidence`, `source`. Warn if any are missing or empty.
 2. **Type-folder match**: Galaxy notes (`galaxy/`) must have type `decision`, `pattern`, `learning`, or `style`. Area notes (`areas/`) must have type `area`. Project notes (`projects/`) must have type `project`. Warn on mismatch.
 3. **Wikilink resolution**: Parse all `[[note-name]]` in the body. For each, verify a file named `note-name.md` exists somewhere in `.squidsquad/vault/`. Warn for each unresolved wikilink.
 4. **Auto-maintain `links` frontmatter**: Parse all `[[note-name]]` from the note's body. Update the `links` field in frontmatter to match (bare names, YAML list). This is automatic — agents do not manually curate the `links` field.

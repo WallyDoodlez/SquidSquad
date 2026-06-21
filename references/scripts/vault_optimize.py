@@ -5,7 +5,7 @@ Covers 5 areas: prune (auto-archive stale+orphan), consolidate candidates,
 reindex (links), confidence decay, relevance scoring.
 
 Usage:
-    python scripts/vault_optimize.py full-sweep [--dry-run]       # Full optimize pass
+    python scripts/vault_optimize.py run [--dry-run]              # Full optimize pass (alias: full-sweep)
     python scripts/vault_optimize.py prune-scan [--dry-run]       # Archive stale+orphan notes
     python scripts/vault_optimize.py consolidate-scan [--dry-run]  # Detect merge candidates
     python scripts/vault_optimize.py decay-apply [--dry-run]       # Confidence decay
@@ -571,7 +571,10 @@ def main():
     cmd = args[0]
     dry_run = "--dry-run" in args
 
-    if cmd == "full-sweep":
+    if cmd in ("full-sweep", "run"):
+        # `run` is the canonical name in VAULT-ARCH §7.3/§8.3 and the
+        # vault-optimize sub-skill (~7 references); `full-sweep` is kept as
+        # the historical alias (#13043).
         results = run_optimize(dry_run=dry_run)
         print(json.dumps(results, indent=2, default=str))
 

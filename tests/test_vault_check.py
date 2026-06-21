@@ -167,6 +167,59 @@ class TestCheckFrontmatter:
             issues = vault_check.check_frontmatter()
         assert issues == []
 
+    def test_missing_source_flagged(self, tmp_path):
+        """#13043 item 4: `source` is a REQUIRED field (VAULT-ARCH §4.3).
+        A note with every other field but no `source` must be flagged.
+        """
+        vault = self._setup_galaxy(tmp_path, {
+            "decision-no-source.md": (
+                "---\ntype: decision\ntags: [test]\ncreated: 2026-01-01\n"
+                "updated: 2026-01-01\nowner: skill\nstatus: active\n"
+                "confidence: high\nlinks: []\n---\n\n## Content"
+            ),
+        })
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            issues = vault_check.check_frontmatter()
+        assert any("missing fields" in i and "source" in i for i in issues), (
+            f"expected a missing-source flag, got: {issues}"
+        )
+
+
+class TestCheckGalaxySize:
+    """#13043 item 5 / vault-protocol Level-1 check 5: galaxy notes over
+    GALAXY_MAX_LINES are warned (advisory); areas/projects/resources exempt."""
+
+    def _vault_with_galaxy_note(self, tmp_path, line_count):
+        vault = tmp_path / "vault"
+        galaxy = vault / "galaxy"
+        galaxy.mkdir(parents=True)
+        body = "\n".join(f"line {i}" for i in range(line_count))
+        (galaxy / "decision-big.md").write_text(body, encoding="utf-8")
+        return vault
+
+    def test_oversized_galaxy_note_warns(self, tmp_path):
+        vault = self._vault_with_galaxy_note(tmp_path, vault_check.GALAXY_MAX_LINES + 50)
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            warnings = vault_check.check_galaxy_size()
+        assert any("decision-big.md" in w for w in warnings)
+
+    def test_small_galaxy_note_ok(self, tmp_path):
+        vault = self._vault_with_galaxy_note(tmp_path, 10)
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            warnings = vault_check.check_galaxy_size()
+        assert warnings == []
+
+    def test_oversized_area_note_exempt(self, tmp_path):
+        """Areas legitimately grow — never warned."""
+        vault = tmp_path / "vault"
+        areas = vault / "areas"
+        areas.mkdir(parents=True)
+        body = "\n".join(f"line {i}" for i in range(vault_check.GALAXY_MAX_LINES + 50))
+        (areas / "human-profile.md").write_text(body, encoding="utf-8")
+        with patch.object(vault_check, "VAULT_DIR", vault):
+            warnings = vault_check.check_galaxy_size()
+        assert warnings == []
+
 
 class TestCheckWikilinks:
     def test_valid_links(self, tmp_path):

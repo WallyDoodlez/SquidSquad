@@ -346,6 +346,26 @@ class TestPendingQuestions:
 
 
 # ---------------------------------------------------------------------------
+# CLI dispatch
+# ---------------------------------------------------------------------------
+
+class TestCliRunAlias:
+    def test_run_is_alias_for_full_sweep(self, patched_vault, monkeypatch, capsys):
+        """#13043 item 2: `vault_optimize.py run` must dispatch the same
+        full optimize pass as `full-sweep` (VAULT-ARCH §7.3/§8.3 and the
+        vault-optimize sub-skill reference `run`, which previously errored
+        with 'Unknown command: run')."""
+        monkeypatch.setattr(sys, "argv", ["vault_optimize.py", "run", "--dry-run"])
+        rc = vault_optimize.main()
+        out = capsys.readouterr().out
+        assert rc in (0, None)
+        # full-sweep/run print the run_optimize() result as JSON — not the
+        # "Unknown command" error path.
+        assert "Unknown command" not in out
+        assert json.loads(out)  # parses as JSON (the optimize result)
+
+
+# ---------------------------------------------------------------------------
 # Guards
 # ---------------------------------------------------------------------------
 

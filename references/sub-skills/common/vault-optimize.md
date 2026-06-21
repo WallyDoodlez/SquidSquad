@@ -7,9 +7,7 @@ ordinal: 10
 
 During quiet cycles, check if vault optimization is needed. This step runs AFTER the improvement scan check — if the scan ran this cycle, skip optimization.
 
-**Config gate**: Check `Vault Optimize > Enabled` in `config.md`. If `no`, skip entirely.
-
-**Activation**: Only run when the vault has 20+ notes AND this is a quiet cycle with no other work.
+**Activation**: Vault-optimize is **always-on** — there is no enable/disable toggle. Only run when the vault has 20+ notes AND this is a quiet cycle with no other work (these gates are the activation control, #13043).
 
 Run the optimizer:
 
