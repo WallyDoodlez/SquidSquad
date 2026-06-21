@@ -225,6 +225,7 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
         "clone_path": str(clone_root),
         "current_state_phase": "",
         "current_state_desc": "",
+        "current_state_stale": False,
         "task": "unknown",
         "last_active_minutes_ago": None,
         "reason": "",
@@ -257,6 +258,21 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
         result["last_active_minutes_ago"] = int((now - state_mtime) / 60)
 
     stale_threshold = interval_minutes * 2
+
+    # #12854: flag whether the current-state CONTENT can still be trusted as
+    # *current* activity. A still-alive agent that stopped/stalled mid-cycle
+    # never reaches cycle_post's "idle" write, so its current-state freezes on
+    # the last in-flight phase/desc (e.g. "implementing — #X running suite").
+    # Past the staleness window that frozen content is no longer "what the
+    # agent is doing" — but it reads as authoritative and seeds wrong root-cause
+    # theories (the #12854 incident: a frozen "running full suite" sent PM down
+    # a hung-suite theory). The agent cannot self-correct it (it's stopped), so
+    # this reader-side flag is the reliable signal; consumers (PM health checks,
+    # operator, pipeline-sentinel) must treat phase/desc as last-known-stale,
+    # not current, when it is set. (current-state is gitignored, so its mtime is
+    # never spuriously refreshed by git — the staleness measure is sound.)
+    if state_mtime is not None:
+        result["current_state_stale"] = (now - state_mtime) / 60 > stale_threshold
 
     # --- Primary: PID-liveness via .claude-pid ---
     pid = _read_claude_pid_file(squid)
@@ -371,7 +387,13 @@ def format_table(report):
             if a["last_active_minutes_ago"] is not None
             else "n/a"
         )
-        phase = a["current_state_phase"][:15] if a["current_state_phase"] else "-"
+        phase = a["current_state_phase"] if a["current_state_phase"] else "-"
+        # #12854: a leading "~" marks the phase as last-known-stale, not current,
+        # so the table never presents frozen content as live activity. The
+        # authoritative signal is the `current_state_stale` JSON field.
+        if a.get("current_state_stale") and a["current_state_phase"]:
+            phase = "~" + phase
+        phase = phase[:15]
         task = a["task"][:20] if a["task"] else "-"
         lines.append(
             f"{a['role']:<{w_role}}  {emoji:<7} {source:<8} {last:<8} {phase:<16} {task}"
