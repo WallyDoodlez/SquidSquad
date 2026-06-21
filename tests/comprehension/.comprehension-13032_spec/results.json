@@ -1,0 +1,17 @@
+[
+  {
+    "id": "Q-CQ1",
+    "pass": true,
+    "reason": "Correctly states the agent must end its session via /quit so the process exits, exactly like exit-42, and that 'halt' means end the session not idle, after stopping all agent work post ack-stop."
+  },
+  {
+    "id": "Q-CQ2",
+    "pass": true,
+    "reason": "Correctly explains the harness respawns via a fresh claude process and the singleton guard refuses to spawn while the old process is alive, so halting without exiting no-ops the respawn and leaves the stale pre-recompose CLAUDE.md running."
+  },
+  {
+    "id": "Q-CQ3",
+    "pass": true,
+    "reason": "Correctly describes the post-exit deploy sequence (ensure-on-main, git pull, compose.py deploy, commit, push, advance cursor, respawn) and that the new CLAUDE.md is read by the fresh session at boot, not by the halted session, with no recompose at boot."
+  }
+]
