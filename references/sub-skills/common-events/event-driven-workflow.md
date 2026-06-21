@@ -32,4 +32,4 @@ If the harness becomes unreachable mid-session, the agent does NOT pivot to forg
 
 ### Context pressure
 
-The harness manages restarts through its **intent API**, not a bus event: when a restart is needed it flips `intent` to `stopping`/`restarting` and `cycle_post.py` detects that (there is no `stop-requested` event — it is reserved/never-emitted, AGENT-RUNTIME §5.2). Honor the stop at the next task boundary (see Case E in [[event-mode-contract]]); the harness's 60s force-kill net terminates your process and handles the respawn.
+Restarts are intent-driven, not a bus event — the harness initiates a restart via the `stopping`/`restarting` intent when it detects excess context pressure (or on an operator stop); there is no `stop-requested` event (reserved/never-emitted, AGENT-RUNTIME §5.2). Honor the stop at the next task boundary (see Case E in [[event-mode-contract]]): checkpoint and **halt — cease output and end your turn**; the harness's 60s force-kill net terminates your process and handles the respawn.
