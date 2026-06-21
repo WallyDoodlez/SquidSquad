@@ -49,32 +49,61 @@ class TestPull:
         assert git_ops.pull() is True
         assert mock_run.call_count == 4
 
+    @patch("git_ops._run_list")
     @patch("git_ops._run")
-    def test_pull_stash_pop_conflict(self, mock_run):
-        """Stash pop fails → stash dropped, still returns True (#4829)."""
+    def test_pull_stash_pop_conflict(self, mock_run, mock_run_list):
+        """Stash pop conflict → conflicted paths restored to HEAD + stash
+        dropped, still returns True (#4829 + #13045)."""
         mock_run.side_effect = [
-            _mock_result(returncode=1),  # pull fails
-            _mock_result(),              # stash
-            _mock_result(),              # pull (retry)
-            _mock_result(returncode=1),  # stash pop fails
-            _mock_result(),              # stash drop (#4829)
+            _mock_result(returncode=1),                       # pull fails
+            _mock_result(),                                   # stash
+            _mock_result(),                                   # pull (retry)
+            _mock_result(returncode=1),                       # stash pop conflict
+            _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
+            _mock_result(),                                   # stash drop
         ]
+        mock_run_list.return_value = _mock_result()           # checkout HEAD -- path
         assert git_ops.pull() is True
-        assert mock_run.call_count == 5
 
+    @patch("git_ops._run_list")
     @patch("git_ops._run")
-    def test_pull_stash_pop_conflict_drops_stash(self, mock_run):
-        """Regression #4829: failed stash pop must call git stash drop."""
+    def test_pull_stash_pop_conflict_drops_stash(self, mock_run, mock_run_list):
+        """Regression #4829: a conflicted stash pop must still call git stash
+        drop (no stash-entry leak)."""
         mock_run.side_effect = [
-            _mock_result(returncode=1),  # pull fails
-            _mock_result(),              # stash
-            _mock_result(),              # pull (retry)
-            _mock_result(returncode=1),  # stash pop fails
-            _mock_result(),              # stash drop
+            _mock_result(returncode=1),                       # pull fails
+            _mock_result(),                                   # stash
+            _mock_result(),                                   # pull (retry)
+            _mock_result(returncode=1),                       # stash pop conflict
+            _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
+            _mock_result(),                                   # stash drop
         ]
+        mock_run_list.return_value = _mock_result()
         git_ops.pull()
-        drop_call = mock_run.call_args_list[4]
-        assert drop_call[0][0] == "git stash drop"
+        assert any(c[0][0] == "git stash drop" for c in mock_run.call_args_list), \
+            "conflicted pop must drop the retained stash"
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_pull_stash_pop_conflict_restores_conflicted_paths_to_head(
+            self, mock_run, mock_run_list):
+        """#13045: a conflicted stash pop must restore every unmerged path to
+        the pulled HEAD (removing the `<<<<<<<` markers git wrote) — NOT just
+        drop the stash. Asserts `git checkout HEAD -- <path>` is issued for the
+        conflicted config.md so compose never sees a corrupt file."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),                       # pull fails
+            _mock_result(),                                   # stash
+            _mock_result(),                                   # pull (retry)
+            _mock_result(returncode=1),                       # stash pop conflict
+            _mock_result(stdout=".squidsquad/config.md\nreferences/x.py\n"),  # diff -U
+            _mock_result(),                                   # stash drop
+        ]
+        mock_run_list.return_value = _mock_result()
+        git_ops.pull()
+        checkouts = [c[0][0] for c in mock_run_list.call_args_list]
+        assert ["git", "checkout", "HEAD", "--", ".squidsquad/config.md"] in checkouts
+        assert ["git", "checkout", "HEAD", "--", "references/x.py"] in checkouts
 
 
 # ---------------------------------------------------------------------------
