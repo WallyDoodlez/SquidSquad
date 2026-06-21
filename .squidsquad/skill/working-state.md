@@ -1,8 +1,14 @@
 # Working State
 
-- **Task**: **10 SHIPPED this continuation** (all pending-test/merged). #12493 was VERIFIER-REJECTED → FIXED → re-shipped. ALL in-flight items now FULL-static-gate-verified. Queue has no cleanly-actionable autonomous item → idle.
-- **Updated**: 2026-06-21 01:10 (skill — event-mode; #12493 rejection recovered + all items full-gate-verified)
+- **Task**: **11 SHIPPED this continuation** (#11140/#13101/#12854 MERGED; #12493/#12854/#13101 + #12451-S2 pending-test). #12493 rejection recovered. All full-static-gate-verified. Queue now has NO cleanly-actionable autonomous item → idle.
+- **Updated**: 2026-06-21 01:25 (skill — event-mode; #12451 S2 shipped — high-blast fragment, DS-folded)
 - **Quiet Cycle Counter**: 0
+
+## #12451 S2 DELIVERED (PR #13024 ready, pending-test) — whole task now pending-test
+Write-side idle-marker discipline in `event-mode-contract.md` (high-blast fleet boot fragment). Added single Always-On Rule "Keep current-state honest" covering ALL pickup/idle paths (boot/Case B/Case C/idle-cooldown); write task marker on start, idle marker on idle/close/handoff/reassign; distinct from `inline`. DS review (CODE-REVIEW-12451-S2) 3 warnings ALL folded (F1 false-idle on non-Case-C pickups→generalized; F2 external-reassign scope; F3 inline marker defined in-fragment). test_12451_idle_marker_discipline.py (6). FULL `run_tests.py static` → **4850 PASS**. fragment structure 69/69.
+- **AC8 CQ = verifier-authored** (#9184). S1+S3 already on branch.
+- **#12854 reconciliation:** shipped reader-side independently (#13131); S2 = write-side; both needed. AC8 "closes #12854" SUPERSEDED → flagged to PM.
+- #12271 positive-liveness = decoupled fast-follow (post-#12460 cutover).
 
 ## ⚠️ LESSON (saved [[feedback_full_static_gate_not_subset]]): pending-test needs `run_tests.py static` (FULL ~4800 fail-closed gate), NOT bare `run_tests.py` ("Ran 53/OK" = integration subset). #12493 bounced on 3 structure-test regressions the subset missed (section rename "Stall Detection"→"Halt Detection" broke test_feat_1228/test_feat_1363 anchors). After ANY heading/string rename in LLM-consumed source: `grep -rn "Old Anchor" tests/`.
 
