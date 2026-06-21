@@ -302,7 +302,7 @@ In v2 the catalog collapses to **3 signal concepts / 4 catalog entries**:
 
 `ack-cursor` and `ack-stop` are **operationally separate state machines** — delivery vs lifecycle — that share the `ack-` naming. `ack-cursor` advances the delivery cursor per event; `ack-stop` signals lifecycle progress on a stop intent. They were shipped together in `#9873-A` but should be reasoned about as distinct concerns. Four signal concepts, five catalog entries.
 
-> **Intent-sequencing rule (deploy-halt)**: the harness MUST set `intent=deploying` (HARNESS-ARCH §7.1) **before** the agent emits `ack-stop(result=deploy-halted)` and the PID dies. If `intent` is still `running` when the agent exits, the health poller misreads the death as a crash and auto-respawns — undoing the coordinated halt. The harness sets `intent=deploying` at the moment it emits the deploy-signal event, so the intent is committed before the agent can possibly respond.
+> **Intent-sequencing rule (deploy-halt)**: the harness MUST set `intent=deploying` (HARNESS-ARCH §7.1) **before** the agent emits `ack-stop(result=deploy-halted)` and the PID dies. Note the PID death is **harness-driven**: the agent halts by ceasing output but **cannot self-`/quit`**, so the harness force-kills the halted process as part of the deploy respawn (HARNESS-ARCH §7.4 / #13077). If `intent` is still `running` when that process dies, the health poller misreads the death as a crash and auto-respawns — undoing the coordinated halt. The harness sets `intent=deploying` at the moment it emits the deploy-signal event, so the intent is committed before the agent can possibly respond.
 
 > **Naming note**: The `role` field in `booted` / `ack-cursor` payloads is the agent's **alias** value, preserved under the field-name `role` for code-compat with the wire format. Same pattern as `{role}` in HTTP path parameters (see §5.3). Field rename to `alias` is in the same family as #10358. `ack-stop.result` enum values are tracked as §10 Q11.
 
@@ -702,9 +702,9 @@ See §8.6 for the substantive scan rules; this section's purpose is to anchor th
 
 ### 7.5 Context-pressure exit-42 and respawn
 
-When the cycle's context usage exceeds the configured threshold (default 70%), the agent checkpoints `.squidsquad/<alias>/working-state.md`, commits and pushes, and `cycle_post.py` exits with code 42. What respawns the agent depends on whether the harness is up:
+When the cycle's context usage exceeds the configured threshold (default 70%), the agent checkpoints `.squidsquad/<alias>/working-state.md`, commits and pushes, and `cycle_post.py` exits with code 42 — the cooperative-termination signal. The `claude` session itself does not exit in response; it halts (an LLM agent cannot self-`/quit`, #13077). What terminates and respawns the agent depends on whether the harness is up:
 
-- **With harness running** (#4966): the harness watches the agent's `.claude-pid`, sees the non-zero exit, and re-runs the boot flow (which in loop mode immediately re-schedules `/loop`).
+- **With harness running** (#4966): the harness sees the exit-42 signal, **force-kills the halted `claude` process** (the 60s force-kill — HARNESS-ARCH §7.4), and re-runs the boot flow (which in loop mode immediately re-schedules `/loop`).
 - **Harness-less loop mode**: `thin_launcher` is the parent process and exits when `claude.exe` exits — there is no automatic respawn. The agent stops after exit-42 until an operator restarts it. Context pressure is therefore a soft terminal state in harness-less mode; operators are expected to use a process supervisor (systemd, launchd, NSSM) or to restart agents periodically.
 
 This is loop mode's primary form of session lifecycle — agents don't shut down cleanly between cycles; they respawn (with harness) or stop (without) on context pressure.
@@ -956,7 +956,7 @@ stateDiagram-v2
 State semantics:
 - **`booting`** — `intent=running`, subprocess spawned, `booted` event NOT yet received. Health poller does NOT count agent as alive yet (boot-grace window applies). Any `assigned-to` events for the alias queue but are NOT delivered until status flips to `ready`.
 - **`ready`** — `intent=running`, `booted` received, agent listening for nudges. Steady-state "alive". Both idle and actively-working agents are `ready`.
-- **`stopping`** — `intent=stopping`; harness emits `assigned-to(role, event_context="stop-intent")` so the agent finishes current work and emits `ack-stop`. Timeout: the harness's **60s force-kill safety net** (HARNESS-ARCH §7.4) — if the process hasn't exited 60s after the intent was set, the harness force-kills it (`FORCE_KILL_TIMEOUT_SECONDS = 60`).
+- **`stopping`** — `intent=stopping`; harness emits `assigned-to(role, event_context="stop-intent")` so the agent finishes current work and emits `ack-stop`, then halts. Termination: the harness's **60s force-kill** (HARNESS-ARCH §7.4) — 60s after the intent was set, the harness force-kills the process (`FORCE_KILL_TIMEOUT_SECONDS = 60`). Because an LLM agent cannot self-`/quit` (#13077), this is the de-facto termination path for `stopping`/`restarting` today, not a rarely-firing backstop.
 - **`stopped`** — process is dead AND `intent=stopped`. Terminal until operator restarts.
 - **`crashed`** — process death detected by health poller but `intent=running`. Harness auto-respawns; status flips back to `booting`.
 - **`crash-looping`** — ≥3 consecutive fast deaths (each <60s lifetime) detected; the harness pauses respawn under exponential backoff (30s→30min cap) instead of tight-looping. Not terminal — resumes (→`booting`) when the backoff window elapses. Harness-side detail; see HARNESS-ARCH §7.3 / §7.1.1. (Note: `restarting` is a harness-internal *intent* — a graceful restart that auto-respawns — not a distinct agent-visible status; the agent simply exits at its cycle boundary and re-boots.)
