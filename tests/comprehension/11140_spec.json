@@ -1,0 +1,26 @@
+{
+  "issue": 11140,
+  "title": "Composed CLAUDE.md major H2 sections get orientation ledes (Soul, Responsibility)",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 01:05",
+  "ac": "comprehension (orientation prose must actually orient a fresh reader)",
+  "method": "Fresh agent (model: sonnet) given ONLY the two new H2 orientation ledes (Soul, Responsibility), no other context. The fix's purpose is that a section is self-orienting from its lede; the test confirms a fresh reader derives each section's purpose + when-to-consult from the lede alone. Verifier-authored per #9184.",
+  "target": "references/roles/SOUL.md (Soul lede) + references/roles/responsibility.md (Responsibility lede)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Given only this paragraph that opens a section of your operating instructions: 'This section is how you think and carry yourself — the durable temperament, values, and judgment defaults that shape every decision, as distinct from the what of Responsibility and the how-to of Agent Functions. When a situation isn't covered by an explicit instruction, this is what you fall back on.' — What is this section for, and when should you consult it?",
+      "expected": "It is the Soul section: your durable temperament/values/judgment defaults (how you think and carry yourself). Consult/fall back on it when a situation is not covered by an explicit instruction. It is distinct from Responsibility (the what) and Agent Functions (the how-to).",
+      "must_not": "Describing it as a list of tasks/responsibilities or procedural steps."
+    },
+    {
+      "id": "CQ2",
+      "q": "Given only this paragraph that opens another section: 'This section defines what you own and where your lane ends — the work that is yours to do, the work that belongs to a teammate, and the boundaries that separate them. Consult it whenever you're unsure whether a task is yours to pick up or should be routed to another role.' — What is this section for, and when should you consult it?",
+      "expected": "It is the Responsibility section: what you own and where your lane ends (your work vs a teammate's, and the boundaries). Consult it whenever unsure whether a task is yours to pick up or should be routed to another role.",
+      "must_not": "Describing it as temperament/values/how-you-think, or as procedural how-to steps."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 01:05",
+  "evidence": "Fresh sonnet agent (id aa7174e4340a2e862) given ONLY the two ledes, no context. 2/2 correct, zero must_not violations: CQ1 'durable temperament, values, and judgment defaults... consult whenever a situation is not covered by an explicit instruction... fallback foundation'; CQ2 'what work you own, what belongs to teammates, where your lane ends... consult whenever unsure whether a task is yours to pick up or should be routed'. The ledes self-orient a fresh reader = the fix's purpose met."
+}
