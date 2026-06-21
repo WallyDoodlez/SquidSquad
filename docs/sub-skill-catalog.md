@@ -203,7 +203,7 @@ Role-specific event extras:
 | `task-approval` | Feature-approval gate; planned → approved transition |
 | `testing-and-verification` | Steps 3–6 — delegate to verifier; PM doesn't verify |
 | `delivery` | Delegate to DM; PM doesn't package |
-| `pipeline-sentinel` | Step 6f — stall, conflict, PR-status, and stuck-state sweep |
+| `pipeline-sentinel` | Step 6f — halt detection (progress-based, incl. failed-handoff) → investigate/classify → event-effective unblock-or-escalate; plus conflict, PR-status, and stuck-state sweep |
 | `own-domain-autofix` | Fix PM-owned mechanical drift inline; don't file bugs for self |
 | `health-check` | Step 7 — agent health sweep + log to `qa-log.md` |
 | `github-issues` | Step 7b — triage externally-filed issues; route to a role |
