@@ -410,6 +410,70 @@ class TestPrMerge:
         merge_call = mock_run.call_args_list[1]
         assert "--rebase" in merge_call[0][0]
 
+    # --- #10540: "Base branch was modified" batch-ship race retry ---
+
+    @patch("git_ops._run_list")
+    def test_base_modified_retries_then_succeeds(self, mock_run):
+        """The transient batch-ship race is retried and succeeds once the base
+        settles — distinct from a terminal failure."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),                       # state check
+            _mock_result(stderr="GraphQL: Base branch was modified. Review and try the merge again.", returncode=1),  # attempt 1
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1),  # attempt 2
+            _mock_result(stdout=""),                                        # attempt 3 — success
+            _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),  # branch lookup
+        ]
+        success, msg = git_ops.pr_merge(42, _base_retry_delay=0)
+        assert success is True
+        assert msg == "merged"
+        # 1 state check + 3 merge attempts + 1 branch lookup = 5 calls
+        assert mock_run.call_count == 5
+
+    @patch("git_ops._run_list")
+    def test_base_modified_exhausts_retries(self, mock_run):
+        """If the race never clears within the retry budget, it fails as a
+        merge-failed (not silently, not as a conflict)."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+        ] + [
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1)
+            for _ in range(4)  # _max_base_retries=3 → 4 attempts (initial + 3 retries)
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert "merge failed" in msg
+        assert "Base branch was modified" in msg
+        # 1 state check + 4 merge attempts = 5 calls (no branch lookup on failure)
+        assert mock_run.call_count == 5
+
+    @patch("git_ops._run_list")
+    def test_real_conflict_is_terminal_not_retried(self, mock_run):
+        """A real merge conflict must NOT be retried (it routes back for rebase)
+        — only ONE merge attempt, even though retries are available."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stderr="failed to merge: merge conflict between base and head", returncode=1),
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert msg == "merge conflict"
+        # 1 state check + exactly 1 merge attempt (no retry)
+        assert mock_run.call_count == 2
+
+    @patch("git_ops._run_list")
+    def test_base_modified_then_real_conflict(self, mock_run):
+        """A retry can surface a real conflict (base moved into a true conflict)
+        — once it does, it's terminal, not retried further."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1),  # race
+            _mock_result(stderr="not mergeable: merge conflict", returncode=1),        # now a real conflict
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert msg == "merge conflict"
+        assert mock_run.call_count == 3  # state + race attempt + conflict attempt
+
     @patch("git_ops._run_list")
     def test_state_check_fails_still_attempts_merge(self, mock_run):
         # State check fails (non-zero), merge succeeds, branch lookup
