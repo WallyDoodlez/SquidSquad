@@ -4657,12 +4657,21 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
         scripts = clone_path / "references" / "scripts"
 
         try:
-            # 1. ensure-main + fast-forward-only pull. Non-ff / conflict → §11.
+            # 1. ensure-main + MERGE pull (never rebase). A prior deploy whose
+            #    push was rejected leaves this clone with an unpushed compose
+            #    commit; if origin/main has since advanced, the branch is
+            #    DIVERGED — `git pull --ff-only` would FATAL on every such deploy
+            #    (#13158, recurring `deploy-error stage=pull`). `--no-rebase`
+            #    merges the divergence instead (consistent with the team's
+            #    always-merge-never-rebase rule + the #12526 launcher fix);
+            #    `--no-edit` keeps it non-interactive. A genuine merge CONFLICT
+            #    still fails the pull → §11 recovery (the rare case the old
+            #    --ff-only conflated with benign divergence).
             co = _git_in_clone(clone_path, ["checkout", "main"])
             if co.returncode != 0:
                 _deploy_recover_and_respawn(role, "checkout-main", co.stderr.strip()[:300])
                 return
-            pull = _git_in_clone(clone_path, ["pull", "--ff-only", "origin", "main"])
+            pull = _git_in_clone(clone_path, ["pull", "--no-rebase", "--no-edit", "origin", "main"])
             if pull.returncode != 0:
                 _deploy_recover_and_respawn(role, "pull", pull.stderr.strip()[:300])
                 return
@@ -4695,13 +4704,13 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
             push = _git_in_clone(clone_path, ["push", "origin", "main"])
             if push.returncode != 0:
                 # DS-12912 iter-3 Finding 3: no retry loop. A rejected push means
-                # origin/main advanced (a concurrent clone pushed) — but this clone
-                # now holds a local compose commit, so `git pull --ff-only` cannot
-                # fast-forward the diverged branch, making a retry futile. The
-                # sequential _deploy_lock makes genuine concurrent pushes rare
-                # anyway. Go straight to §11 recovery: respawn on the existing
-                # CLAUDE.md + file deploy-error; the unadvanced checksum re-triggers
-                # a fresh deploy-signal on the next drift-check.
+                # origin/main advanced (a concurrent clone pushed) and this clone
+                # now holds an unpushed local compose commit (diverged). We do NOT
+                # retry-in-place; the sequential _deploy_lock makes genuine
+                # concurrent pushes rare, and §11 recovery handles it cleanly:
+                # respawn on the existing CLAUDE.md + file deploy-error; the
+                # unadvanced checksum re-triggers a fresh deploy-signal whose
+                # merge-pull (#13158, step 1) reconciles the divergence next pass.
                 _deploy_recover_and_respawn(role, "push", push.stderr.strip()[:300])
                 return
 
