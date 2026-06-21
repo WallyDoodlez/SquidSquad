@@ -4595,17 +4595,35 @@ def _deploy_recover_and_respawn(role, stage, detail):
 def _stage_composed_outputs(clone_path, alias):
     """Stage ONLY the alias's composed outputs (CLAUDE.md / SOUL.md /
     CLAUDE.linked.md) — never the whole .squidsquad/<alias>/ dir, which also
-    holds working-state and other per-cycle churn. Returns True if anything was
-    staged. NB: per-alias `compose.py deploy` does NOT write .claude/settings.json
-    (AC11 / #12519) — that stays an installer-managed artifact, out of scope."""
-    staged_any = False
+    holds working-state and other per-cycle churn. Returns True only if a real
+    staged DIFF resulted. NB: per-alias `compose.py deploy` does NOT write
+    .claude/settings.json (AC11 / #12519) — that stays an installer-managed
+    artifact, out of scope.
+
+    #13176: keying on `add.returncode == 0` was wrong — `git add` of an
+    UNCHANGED file exits 0 while staging nothing, so this returned True whenever
+    the composed output already matched HEAD (the common no-net-change deploy).
+    The caller then ran `git commit`, which failed benignly with 'nothing to
+    commit, working tree clean' (written to STDOUT, exit non-zero, empty stderr)
+    → an undiagnosable deploy-error with empty detail AND §11 recovery that left
+    the checksum unadvanced, re-firing the deploy on the next pass. Keying on the
+    actual staged diff (`git diff --cached --quiet`) routes the no-net-change case
+    to the caller's clean no-op success path (checksum advanced, no deploy-error)."""
+    staged_paths = []
     for fn in _DEPLOY_COMPOSED_FILES:
         rel = f".squidsquad/{alias}/{fn}"
         if (clone_path / rel).exists():
             add = _git_in_clone(clone_path, ["add", "--", rel])
             if add.returncode == 0:
-                staged_any = True
-    return staged_any
+                staged_paths.append(rel)
+    if not staged_paths:
+        return False
+    # `git diff --cached --quiet` exits 0 when there is NO staged diff, non-zero
+    # when there IS one. Scope to the paths we staged so unrelated index state
+    # (there should be none after a clean pull) can't mask the result.
+    diff = _git_in_clone(
+        clone_path, ["diff", "--cached", "--quiet", "--", *staged_paths])
+    return diff.returncode != 0
 
 
 def _run_deploy_sequence(role, deploy_signal_event_id=None):
@@ -4699,7 +4717,16 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
                  f"deploy: recompose {alias} CLAUDE.md (#12912 deploy-signal)"],
             )
             if commit.returncode != 0:
-                _deploy_recover_and_respawn(role, "commit", commit.stderr.strip()[:300])
+                # #13176: `git commit` writes some failures to STDOUT (e.g.
+                # 'nothing to commit, working tree clean'), so stderr alone can be
+                # empty — combine both streams (stderr first) so the deploy-error
+                # detail is never empty/undiagnosable. With the staged-diff guard
+                # in _stage_composed_outputs above, the benign 'nothing to commit'
+                # case no longer reaches here, so this branch now means a GENUINE
+                # commit failure whose detail the operator needs.
+                detail = (commit.stderr.strip() or commit.stdout.strip()
+                          or "git commit failed with no stdout/stderr")
+                _deploy_recover_and_respawn(role, "commit", detail[:300])
                 return
             push = _git_in_clone(clone_path, ["push", "origin", "main"])
             if push.returncode != 0:

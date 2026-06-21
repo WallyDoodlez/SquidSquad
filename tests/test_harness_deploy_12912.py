@@ -360,6 +360,84 @@ class TestRunDeploySequence(unittest.TestCase):
         self.assertEqual(len(r["emitted"]), 1)
         self.assertEqual(r["emitted"][0][1]["payload"]["stage"], "push")
 
+    def test_commit_failure_detail_combines_stdout_13176(self):
+        """#13176: a non-zero `git commit` whose failure text is on STDOUT (empty
+        stderr — e.g. 'nothing to commit, working tree clean') must still produce
+        a non-empty, diagnosable deploy-error detail. The old code sourced
+        commit.stderr only → empty detail."""
+        def router(clone_path, args, timeout=120):
+            if args[0] == "commit":
+                return _CP(returncode=1,
+                           stdout="nothing to commit, working tree clean",
+                           stderr="")
+            return _CP(returncode=0)
+        r = self._run(router)  # staged=True default → reaches the commit step
+        self.assertEqual(len(r["emitted"]), 1)
+        payload = r["emitted"][0][1]["payload"]
+        self.assertEqual(payload["stage"], "commit")
+        self.assertTrue(payload["detail"].strip(),
+                        "deploy-error detail must not be empty (#13176)")
+        self.assertIn("nothing to commit", payload["detail"])
+
+
+class TestStageComposedOutputs(unittest.TestCase):
+    """#13176: _stage_composed_outputs must return True only on an ACTUAL staged
+    diff, not merely on `git add` exit 0 — `git add` of an unchanged file exits 0
+    while staging nothing, so the old behavior surfaced a benign 'nothing to
+    commit' as a deploy-error (empty detail) + left the checksum unadvanced
+    (re-trigger risk)."""
+
+    def _make_clone(self, tmpdir, alias="skill"):
+        import harness
+        d = Path(tmpdir)
+        for fn in harness._DEPLOY_COMPOSED_FILES:
+            p = d / ".squidsquad" / alias / fn
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text("x", encoding="utf-8")
+        return d
+
+    def test_returns_false_when_add_ok_but_no_staged_diff(self):
+        """The regression: add exits 0 but `git diff --cached --quiet` shows no
+        staged diff → False (routes to the caller's clean no-op success path)."""
+        import tempfile, harness
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = self._make_clone(tmp)
+
+            def router(clone_path, args, timeout=120):
+                # add → 0; diff --cached --quiet → 0 (no staged diff)
+                return _CP(returncode=0)
+            with patch.object(harness, "_git_in_clone", side_effect=router), \
+                 patch.object(harness, "_log"):
+                self.assertFalse(harness._stage_composed_outputs(clone, "skill"))
+
+    def test_returns_true_when_real_staged_diff(self):
+        import tempfile, harness
+        with tempfile.TemporaryDirectory() as tmp:
+            clone = self._make_clone(tmp)
+
+            def router(clone_path, args, timeout=120):
+                if args and args[0] == "diff":
+                    return _CP(returncode=1)  # staged diff present
+                return _CP(returncode=0)
+            with patch.object(harness, "_git_in_clone", side_effect=router), \
+                 patch.object(harness, "_log"):
+                self.assertTrue(harness._stage_composed_outputs(clone, "skill"))
+
+    def test_returns_false_when_no_composed_files_exist(self):
+        import tempfile, harness
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+
+            def router(clone_path, args, timeout=120):
+                calls.append(list(args))
+                return _CP(returncode=0)
+            with patch.object(harness, "_git_in_clone", side_effect=router), \
+                 patch.object(harness, "_log"):
+                # no composed files created → nothing staged → False, and we never
+                # reach the diff probe.
+                self.assertFalse(harness._stage_composed_outputs(Path(tmp), "skill"))
+            self.assertFalse(any(a and a[0] == "diff" for a in calls))
+
 
 class TestRespawnAgentProcess(unittest.TestCase):
     """DS-12912 Finding 2: the deploy respawn boots the agent explicitly (the
