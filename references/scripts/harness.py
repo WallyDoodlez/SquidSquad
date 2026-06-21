@@ -4210,10 +4210,12 @@ def _await_pid_death(pid, timeout_s, poll_s=0.5):
 
 def _respawn_agent_process(role):
     """Explicitly respawn a deploy-halted agent's claude process (DS-12912
-    Finding 2). The agent's PID is already dead (it halted on the deploy-signal),
-    and after a deploy its status is "deploying" — which is NOT in the health
-    poller's is_dead set, so the poller will NEVER auto-respawn it. We therefore
-    boot it directly and stamp fresh-spawn state, mirroring the auto-start path.
+    Finding 2). The agent's old claude PID is typically still ALIVE — it halted
+    on the deploy-signal but an LLM cannot self-/quit (#13077) — so we force-kill
+    it and confirm death before booting. After a deploy its status is "deploying"
+    — which is NOT in the health poller's is_dead set, so the poller will NEVER
+    auto-respawn it. We therefore boot it directly and stamp fresh-spawn state,
+    mirroring the auto-start path.
 
     Returns True iff the respawn succeeded — a fresh process was spawned OR the
     agent was already alive (boot_agent action="skip"); i.e. the agent is now
@@ -4375,8 +4377,11 @@ def _bump_compose_checksum(clone_path):
 
 def _respawn_after_deploy(role):
     """Successful deploy: respawn the halted agent against the freshly-committed
-    CLAUDE.md. The PID is dead and status is "deploying" (not in is_dead), so the
-    health poller will not do it — respawn explicitly (DS-12912 Finding 2).
+    CLAUDE.md. The old PID is typically still alive (halted but not exited — an
+    LLM cannot self-/quit, #13077) and status is "deploying" (not in is_dead), so
+    the health poller will not do it — respawn explicitly via
+    _respawn_agent_process, which force-kills the old process and boots the
+    replacement (DS-12912 Finding 2).
 
     #13032 (DS-13032-B F1/F2): this success path owns the deploy-error emit for a
     respawn failure. Previously a respawn that no-op'd here was SILENT (the agent

@@ -491,9 +491,15 @@ class TestRespawnAgentProcess(unittest.TestCase):
         respawn failure during recovery does not double-emit."""
         import harness
         agent = AgentState("skill", "")
-        agent.claude_pid = 4242  # still-alive → respawn aborts inside the call
+        # Old PID alive AND survives the force-kill (pid_dies=False) → respawn
+        # aborts inside the call. Mock _is_process_alive/_kill_process so the
+        # #13077 force-kill block actually executes (not the real OS — #13077
+        # DS Finding 1) rather than falling through to the boot_agent path.
+        agent.claude_pid = 4242
         emitted = []
         with patch.object(harness, "state", _DeployFakeState(agent)), \
+             patch.object(harness.boot_remote, "_is_process_alive", return_value=True), \
+             patch.object(harness.reboot_agent, "_kill_process", side_effect=lambda p: None), \
              patch.object(harness, "_await_pid_death", return_value=False), \
              patch.object(harness.boot_remote, "boot_agent",
                           side_effect=AssertionError("must not boot over live PID")), \
