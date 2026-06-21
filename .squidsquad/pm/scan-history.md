@@ -599,3 +599,11 @@
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
 - **Context note**: operator signalled imminent harness restart (deferred #13077-reaper activation) once agents idle; pipeline fully drained (0 pending-test/ship/human). Scan kept bounded; chose advisory-on-#13119 over a new orphan task per quality-over-noise + dedup rules.
+
+## Scan — 2026-06-21 12:22 (idle-driver tick, 1st scan of burst — #13158 doc-pairing drift)
+
+- **Files scanned**: docs/HARNESS-ARCH.md §11 Failure Modes table (deploy-pull / deploy-push rows), grep deploy-pull/ff-only/git-pull across docs/*ARCH*.md — drift created by the in-flight #13158 deploy-pull merge fix
+- **Findings**: 1 — HARNESS-ARCH §11 rows L510 ('Deploy: git pull non-fast-forward or conflict') AND L512 ('Deploy: git push rejection') document the CURRENT --ff-only behavior (divergence → futile re-pull → deploy-error+respawn, 0 retries). #13158 (pending-test) changes harness deploy-pull to 'git pull --no-rebase' (merge) → benign divergence now MERGES through; both rows become inaccurate on ship. In-lane TRD drift (PM owns HARNESS-ARCH).
+- **Auto-fixed**: none (can't pre-edit to unshipped behavior; would describe code that isn't merged). Routed as advisory ON #13158 (couple doc edit to code ship, zero drift window) + tracked in working-state for action on #13158 shipped event. NOT a separate orphan task (dedup/quality — same pattern as #13119).
+- **Items rejected by human**: (none)
+- **Burst note**: 1st scan of burst (scan_count→2/3 after record), driver stays armed.
