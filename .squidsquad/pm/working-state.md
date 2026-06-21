@@ -37,7 +37,10 @@ _Condensed 2026-06-19 20:48. Prior incident narrative preserved in iteration log
 
 ## #10837-9 TRD-Alignment Program (ACTIVE — operator greenlit 2026-06-20 ~18:00)
 Operator: "let's get these done." Method per doc: (1) FRESH drift re-audit vs current main (2026-06-03 audits are ~2.5wk stale — do NOT execute blind); (2) reconcile → per-doc fix-list, pick canonical side on doc↔code conflict; (3) split: PM does doc edits, file code-fixes to skill; (4) DS/Claude final-pass before closing PRD.
-Sequence (low-risk→high-blast): **#10838 VAULT-ARCH (IN PROGRESS — fresh audit spawned 18:00)** → #10837 HARNESS-ARCH (HIGH; audit after harness settles) → #10839 role→alias rename (biggest blast; doc-first, v1-coexistence care).
+Sequence (low-risk→high-blast):
+- **#10838 VAULT-ARCH — doc-side DONE** (committed 4d4ae67c). Audit AUDIT-VAULT-ARCH-2026-06-20.md (26 findings; 19 prior still-valid, 0 fixed; +1 new HIGH bug). Code filed: #13042 (decay bug) + #13043 (approved: gate-removal per operator 'a' / run alias / STYLES / source-validation). CLOSE after #13042+#13043 ship + final-pass.
+- **#10837 HARNESS-ARCH — doc-side DONE** (committing). Audit AUDIT-HARNESS-ARCH-2026-06-20.md (22 CONF/6 DRIFT/3 GAP/5 STALE). Doc badly lagged shipped code; 13 doc edits applied (banner, +/restart +/merge +/hooks, removed in-flight, reframed /complete tombstone, /work-assign NOT-IMPL caveat). **Code: nearly empty** — /work/assign = OPEN decision (implement vs retire as fiction; tied to #12495 + AGENT-RUNTIME §8.3); progress_liveness promotion = #12271; /queue gen = minor. CLOSE after final-pass + /work/assign decision.
+- **#10839 role→alias rename — NEXT** (biggest blast; doc-first, v1-coexistence care). NOTE: the /work/assign implement-vs-retire decision + AGENT-RUNTIME §8.3 alias drift overlap #10839's scope.
 Audit artifacts: `.squidsquad/pm/planning/AUDIT-<DOC>-2026-06-20.md`. Restart staged (operator chose "start" not "restart" — start without restart; restart still available on operator word).
 **Resume hook:** if restarted mid-program, re-read this section + the latest AUDIT-*.md; continue from the current doc's stage.
 
