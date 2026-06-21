@@ -174,6 +174,15 @@ STOP_FAILURE_RECENT_SECONDS = 180    # a StopFailure older than this is stale
 #     PreToolUse fires) or model latency never false-positives; tunable from the
 #     shadow-mode divergence data this slice gathers.
 ACTIVITY_GRACE_SECONDS = 600         # 10m
+#   #13179 (#12271 Slice A) — boot-completion grace. A not-yet-booted agent
+#     (bootup_complete=False) is legitimately mid-boot only for so long; past
+#     this window with no bootup-complete it is a wedged boot, not a slow one
+#     (the #12271 qa incident sat bootup_complete=False ~54m at intent=deploying).
+#     Bounds the otherwise-unbounded "booting" escape in progress_liveness so a
+#     never-completing boot reads wedged in the SHADOW verdict (does NOT drive
+#     reboot until the #12492 cutover). Generous so a slow first boot never
+#     false-positives; tunable from the same shadow-mode divergence data.
+BOOT_GRACE_SECONDS = 600             # 10m
 
 # #9242: Diagnostic escape hatch. When True (set by `main()` from
 # `--no-auto-start` or `SQUIDSQUAD_HARNESS_NO_AUTO_START=1`), the
@@ -452,9 +461,21 @@ class AgentState:
         (``update_health``) already holds it when it reads agent state for the
         PID check, so wiring this in there satisfies the contract for free.
         """
-        # A not-yet-booted agent has no heartbeat baseline — never judge it dead
-        # by activity silence (it may be mid-boot). Treat as alive.
+        # A not-yet-booted agent has no heartbeat baseline — within a generous
+        # boot-grace it may legitimately be mid-boot, so treat it as alive. But
+        # the escape is BOUNDED (#13179 / #12271 Slice A): a boot that never
+        # completes is a wedge, not a slow boot (the qa incident sat
+        # bootup_complete=False ~54m). Age it from the most recent spawn
+        # (last_spawn_at; fall back to boot_time) — past BOOT_GRACE_SECONDS with
+        # no bootup-complete it reads wedged. If we have no spawn reference we
+        # cannot age it, so stay conservative and report booting (never
+        # false-positive a death we cannot time). Shadow-only: this changes the
+        # logged verdict, not the reboot decision (cutover is #12492).
         if not self.bootup_complete:
+            boot_ref = (self.last_spawn_at
+                        if self.last_spawn_at is not None else self.boot_time)
+            if boot_ref is not None and now - boot_ref > BOOT_GRACE_SECONDS:
+                return False, "wedged-boot-timeout"
             return True, "booting"
         # An explained pause (in-flight tool call / compacting / waiting) means
         # the silence is accounted for — alive. Reuses the slice-c guard so the
