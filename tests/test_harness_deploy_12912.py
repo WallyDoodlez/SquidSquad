@@ -713,7 +713,12 @@ class TestLoopModeDoesNotConsume(unittest.TestCase):
         # fixed char window broke when #13175 added the boot-drain liveness
         # paragraph and pushed the loop-mode exemption past it.
         end = txt.find("from another agent", idx)
-        block = txt[idx:end] if end != -1 else txt[idx:idx + 6000]
+        self.assertNotEqual(
+            end, -1,
+            "boundary 'from another agent' (the bootup-complete bullet) not "
+            "found after the deploy-signal bullet — test anchor may be stale",
+        )
+        block = txt[idx:end]
         self.assertIn("oop", block)  # loop/polling
         self.assertTrue("never consume" in block or "does not apply" in block
                         or "next session start" in block)
