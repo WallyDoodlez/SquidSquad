@@ -174,6 +174,15 @@ STOP_FAILURE_RECENT_SECONDS = 180    # a StopFailure older than this is stale
 #     PreToolUse fires) or model latency never false-positives; tunable from the
 #     shadow-mode divergence data this slice gathers.
 ACTIVITY_GRACE_SECONDS = 600         # 10m
+#   #13179 (#12271 Slice A) — boot-completion grace. A not-yet-booted agent
+#     (bootup_complete=False) is legitimately mid-boot only for so long; past
+#     this window with no bootup-complete it is a wedged boot, not a slow one
+#     (the #12271 qa incident sat bootup_complete=False ~54m at intent=deploying).
+#     Bounds the otherwise-unbounded "booting" escape in progress_liveness so a
+#     never-completing boot reads wedged in the SHADOW verdict (does NOT drive
+#     reboot until the #12492 cutover). Generous so a slow first boot never
+#     false-positives; tunable from the same shadow-mode divergence data.
+BOOT_GRACE_SECONDS = 600             # 10m
 
 # #9242: Diagnostic escape hatch. When True (set by `main()` from
 # `--no-auto-start` or `SQUIDSQUAD_HARNESS_NO_AUTO_START=1`), the
@@ -452,9 +461,21 @@ class AgentState:
         (``update_health``) already holds it when it reads agent state for the
         PID check, so wiring this in there satisfies the contract for free.
         """
-        # A not-yet-booted agent has no heartbeat baseline — never judge it dead
-        # by activity silence (it may be mid-boot). Treat as alive.
+        # A not-yet-booted agent has no heartbeat baseline — within a generous
+        # boot-grace it may legitimately be mid-boot, so treat it as alive. But
+        # the escape is BOUNDED (#13179 / #12271 Slice A): a boot that never
+        # completes is a wedge, not a slow boot (the qa incident sat
+        # bootup_complete=False ~54m). Age it from the most recent spawn
+        # (last_spawn_at; fall back to boot_time) — past BOOT_GRACE_SECONDS with
+        # no bootup-complete it reads wedged. If we have no spawn reference we
+        # cannot age it, so stay conservative and report booting (never
+        # false-positive a death we cannot time). Shadow-only: this changes the
+        # logged verdict, not the reboot decision (cutover is #12492).
         if not self.bootup_complete:
+            boot_ref = (self.last_spawn_at
+                        if self.last_spawn_at is not None else self.boot_time)
+            if boot_ref is not None and now - boot_ref > BOOT_GRACE_SECONDS:
+                return False, "wedged-boot-timeout"
             return True, "booting"
         # An explained pause (in-flight tool call / compacting / waiting) means
         # the silence is accounted for — alive. Reuses the slice-c guard so the
@@ -4595,17 +4616,35 @@ def _deploy_recover_and_respawn(role, stage, detail):
 def _stage_composed_outputs(clone_path, alias):
     """Stage ONLY the alias's composed outputs (CLAUDE.md / SOUL.md /
     CLAUDE.linked.md) — never the whole .squidsquad/<alias>/ dir, which also
-    holds working-state and other per-cycle churn. Returns True if anything was
-    staged. NB: per-alias `compose.py deploy` does NOT write .claude/settings.json
-    (AC11 / #12519) — that stays an installer-managed artifact, out of scope."""
-    staged_any = False
+    holds working-state and other per-cycle churn. Returns True only if a real
+    staged DIFF resulted. NB: per-alias `compose.py deploy` does NOT write
+    .claude/settings.json (AC11 / #12519) — that stays an installer-managed
+    artifact, out of scope.
+
+    #13176: keying on `add.returncode == 0` was wrong — `git add` of an
+    UNCHANGED file exits 0 while staging nothing, so this returned True whenever
+    the composed output already matched HEAD (the common no-net-change deploy).
+    The caller then ran `git commit`, which failed benignly with 'nothing to
+    commit, working tree clean' (written to STDOUT, exit non-zero, empty stderr)
+    → an undiagnosable deploy-error with empty detail AND §11 recovery that left
+    the checksum unadvanced, re-firing the deploy on the next pass. Keying on the
+    actual staged diff (`git diff --cached --quiet`) routes the no-net-change case
+    to the caller's clean no-op success path (checksum advanced, no deploy-error)."""
+    staged_paths = []
     for fn in _DEPLOY_COMPOSED_FILES:
         rel = f".squidsquad/{alias}/{fn}"
         if (clone_path / rel).exists():
             add = _git_in_clone(clone_path, ["add", "--", rel])
             if add.returncode == 0:
-                staged_any = True
-    return staged_any
+                staged_paths.append(rel)
+    if not staged_paths:
+        return False
+    # `git diff --cached --quiet` exits 0 when there is NO staged diff, non-zero
+    # when there IS one. Scope to the paths we staged so unrelated index state
+    # (there should be none after a clean pull) can't mask the result.
+    diff = _git_in_clone(
+        clone_path, ["diff", "--cached", "--quiet", "--", *staged_paths])
+    return diff.returncode != 0
 
 
 def _run_deploy_sequence(role, deploy_signal_event_id=None):
@@ -4699,7 +4738,16 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
                  f"deploy: recompose {alias} CLAUDE.md (#12912 deploy-signal)"],
             )
             if commit.returncode != 0:
-                _deploy_recover_and_respawn(role, "commit", commit.stderr.strip()[:300])
+                # #13176: `git commit` writes some failures to STDOUT (e.g.
+                # 'nothing to commit, working tree clean'), so stderr alone can be
+                # empty — combine both streams (stderr first) so the deploy-error
+                # detail is never empty/undiagnosable. With the staged-diff guard
+                # in _stage_composed_outputs above, the benign 'nothing to commit'
+                # case no longer reaches here, so this branch now means a GENUINE
+                # commit failure whose detail the operator needs.
+                detail = (commit.stderr.strip() or commit.stdout.strip()
+                          or "git commit failed with no stdout/stderr")
+                _deploy_recover_and_respawn(role, "commit", detail[:300])
                 return
             push = _git_in_clone(clone_path, ["push", "origin", "main"])
             if push.returncode != 0:

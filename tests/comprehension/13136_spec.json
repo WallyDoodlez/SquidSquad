@@ -1,0 +1,32 @@
+{
+  "issue": 13136,
+  "title": "stop-requested handler — explicit ack-stop (none) + ack-cursor (nothing) guidance, intent-driven not a bus event",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 14:55",
+  "ac": "comprehension (a fresh agent must derive: on a stop/restart it emits NO ack-stop and has NOTHING to ack-cursor; must NOT confuse the stopping path with the deploy-halt path which DOES emit ack-stop(deploy-halted))",
+  "method": "Fresh agent (model: sonnet) given ONLY the modified Case E stop-requested + deploy-signal bullets and the event-driven-workflow Context pressure section, no other context. Confirms the fix closes both gaps (#13136 gap1 ack-stop emission, gap2 ack-cursor guidance) and that the stopping path is correctly discriminated from the deploy-halt path. Verifier-authored per #9184.",
+  "target": "references/sub-skills/common-events/event-mode-contract.md (Case E stop-requested + deploy-signal bullets) + references/sub-skills/common-events/event-driven-workflow.md (Context pressure)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Your harness flips your intent to `stopping`. At your next task boundary you checkpoint and halt. Do you emit an `ack-stop` event to confirm the stop? Why or why not?",
+      "expected": "No — do NOT emit ack-stop on the stopping path. No agent-side code emits a stop ack-stop today; the 60s force-kill net is the actual termination mechanism. (The ack-stop.result enum checkpointed/aborted/drained is settled, but emitting nothing is correct unless/until such an emission is implemented.) Emit nothing.",
+      "must_not": "Saying the agent should emit ack-stop (e.g. result=checkpointed/stop-confirmed) on the stopping path, or that ack-stop is what confirms/triggers the stop."
+    },
+    {
+      "id": "CQ2",
+      "q": "Before you halt for the stop, should you `ack-cursor` the stop trigger? What is there to ack?",
+      "expected": "Nothing to ack-cursor. The trigger is the intent flip (stopping/restarting), not a deque event, so there is no event id to ack. The cursor is harness-owned in .event-state.json and preserved automatically across exit; on a later restart you re-evaluate intent rather than replaying a stop event.",
+      "must_not": "Claiming the agent should ack-cursor a stop-requested event, or that there is a stop event id to advance the cursor past."
+    },
+    {
+      "id": "CQ3",
+      "q": "Contrast a stop/restart with a deploy-signal: in which case do you emit `ack-stop`, and why is the stopping case different?",
+      "expected": "Deploy-signal: you DO emit ack-stop(result=deploy-halted) so the harness runs the deploy sequence instead of reading the exit as a crash. Stop/restart: you emit NOTHING — it is intent-driven (not a bus event/deque event at all), no agent-side stop ack-stop exists, and the 60s force-kill net terminates you. The deploy-signal is a real cared deque event with an id; the stop is just an intent flip.",
+      "must_not": "Claiming both paths emit ack-stop, or that the stopping path is a deque event you react to / ack like the deploy-signal."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 14:58",
+  "evidence": "Fresh sonnet agent (id a4661196ded53fde0) given ONLY the modified Case E stop-requested + deploy-signal bullets and the event-driven-workflow Context pressure section, no other context. 3/3 correct, zero must_not violations. CQ1: 'No... no agent-side code emits a stop ack-stop — the 60-second force-kill net is the termination mechanism... Emit nothing unless/until such an emission is implemented.' CQ2: 'No... there is nothing to ack. The trigger is the intent flip, not a deque event, so there is no event id to ack.' CQ3: 'You emit ack-stop only for a deploy-signal, not for a stop/restart... the harness already knows the reason (it initiated it via the intent flip), so no cooperative confirmation is needed.' The modified text instills the correct mental model and correctly discriminates the stopping path from the deploy-halt path."
+}
