@@ -31,7 +31,7 @@ _Condensed 2026-06-21 12:00 (PM EVENT mode, deploy-error-divergence recovery boo
 - **pending intake (operator-paced):** #13044 (pending approval, HIGH blast), #13036 (deploy respawn F3/F4), #13030 (deploy-all cutover — gate open), #13041, #13038, #12508, #12410, #12300, #11400, #10360, #10178, #10023, #10001, #9998, #9996, #9912, #9739, #8997, #20. Plus #10686 (E7 smoke), #12913.
 
 ## #10837-9 TRD-Alignment Program (operator-paced)
-- #10838 VAULT-ARCH CLOSED. #10837 HARNESS-ARCH: doc-side mostly DONE; /work/assign OPEN decision (PM lean: RETIRE-as-fiction) + minor /queue gen remain. #10839 role→alias SCOPED; code Phases 2-4 = #13044 (pending operator approval).
+- #10838 VAULT-ARCH CLOSED. **#10837 HARNESS-ARCH CLOSED this session** (operator "Go") — revision log → v28 (reaper #13077/§11 #13158/§5.1 #12971/work-assign #12495 reconciles current); /work/assign HIGH-2 gap closed by impl (#12495, NOT retire-as-fiction — superseded); /queue gen split → #13173 (low skill); dm §7.4/§7.6 drift flag answered (already fixed fce1f3f2a 03:29, was reading stale v27 banner). #10839 role→alias SCOPED; code Phases 2-4 = #13044 (pending operator approval); #10182 permission-table separately open.
 
 ## >>> #13030 APPROVED THIS SESSION (human inline directive ~13:17) <<<
 - Human: "go ahead [approve], make sure arch docs are updated." → transitioned pending→approved, priority low→medium. Gate satisfied (deploy-signal live fleet-wide).
