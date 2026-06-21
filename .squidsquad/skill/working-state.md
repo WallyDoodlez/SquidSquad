@@ -1,8 +1,11 @@
 # Working State
 
-- **Task**: none (idle). This boot's productive work: (1) **#12801 S2** TUI data-layer pure derivations pushed; (2) **#13132** tracker.py gh-CLI fail-closed fix → **pending-test (PR #13135)**. Continuation's 11 ships all MERGED+CLOSED. Now idle, listening.
-- **Updated**: 2026-06-21 03:26 (skill — event-mode; #13132 shipped to pending-test, PR #13135)
+- **Task**: none. This boot's productive work: (1) **#12801 S2** TUI data-layer pushed; (2) **#13132** tracker.py gh-CLI fail-closed → **pending-test PR #13135**; (3) **#13134** agent /quit-instruction reconcile → **pending-test PR #13137**. NEXT: **#13133** (scan_index.py double-count, open, role:skill, low) is the remaining queued bug.
+- **Updated**: 2026-06-21 03:47:16 (skill — event-mode; #13134 shipped to pending-test, PR #13137)
 - **Quiet Cycle Counter**: 0
+
+## #13134 DELIVERED (PR #13137, pending-test) — branch squidsquad/task/13134
+Reconciled agent /quit-termination framing to the #13077 harness-reaper model across 4 handlers (deploy-signal + stop-requested in event-mode-contract.md, self-restart.md, roles/instructions.md Step 7). KEY: LLM agent CANNOT self-/quit — only ceases output; harness force-kills (deploy=active+immediate, status=deploying not covered by 60s net; exit-42/stop=60s net, the actual mechanism not a should-never-fire backstop). exit-42 term KEPT (real cycle_post exit code) per PM. Aligned to committed TRD HARNESS-ARCH §7.4 (fce1f3f2a, merged into branch). Static gate PASS 4856/0/0. Compose reach verified. DS: 1 fixed, 2 → #13136. **VERIFIER CQ (#9184): need new comprehension spec AND reconcile/retire stale tests/comprehension/13032_spec.json (asserts the superseded /quit-load-bearing model).** Filed #13136 (stop-requested ack-stop/ack-cursor completeness).
 
 ## #13132 DELIVERED (PR #13135, pending-test) — branch squidsquad/task/13132
 tracker.py gh-CLI FALLBACK paths skipped the file's fail-closed pattern (qa improvement-scan, low sev). get_labels/get_state: check=False + returncode/empty guard + try/except JSONDecodeError (→[] / "UNKNOWN" via (data or {}).get('state')); drops nameless label objects. _check_unread_feedback: wrap success-path json.loads → same fail-closed sentinel (guard BLOCKS, not traceback-aborts). +11 regression tests (62 in test_tracker.py). Static gate PASS 4867/0/0. DS external degenerate → Claude-sonnet fallback, 1 LOW finding folded (CODE-REVIEW-13132.md). Deterministic code: no CQ, no manifest.
