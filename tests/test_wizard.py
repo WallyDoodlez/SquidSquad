@@ -601,6 +601,7 @@ class TestBuildConfigMdStructure:
             "## Loop",
             "## Flags",
             "## Improvement Scanning",  # #11091
+            "## Verbose Mode",  # #13162
             "## Git Branches",
             "## Forge Backend",
             "## Model Routing",
@@ -611,6 +612,12 @@ class TestBuildConfigMdStructure:
         text = wizard.build_config_md(_minimal_spec())
         assert "## Improvement Scanning" in text
         assert "- **Improvement Scan Cool-Down**: 30" in text
+
+    def test_verbose_mode_section_defaults_off(self):
+        """#13162 — wizard emits Verbose Mode section, shipped default off."""
+        text = wizard.build_config_md(_minimal_spec())
+        assert "## Verbose Mode" in text
+        assert "- **Enabled**: no" in text
 
     def test_header_includes_version_and_architecture(self):
         text = wizard.build_config_md(_minimal_spec())
