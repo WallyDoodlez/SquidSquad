@@ -1,0 +1,50 @@
+{
+  "issue": 13035,
+  "title": "Relentless-autonomy reframe + inline 20-min hardcoded auto-timeout (#12896 child)",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 00:10",
+  "ac": "AC8",
+  "method": "Fresh agent (model: sonnet), given ONLY the two modified agent-consumed instruction passages in isolation, no other context and no access to issue #13035: (1) the new 'Relentless autonomy — operator-locked precedence' + 'Inline auto-timeout — hardcoded 20 minutes' paragraphs of references/roles/SOUL.md, and (2) the inline-mode section (#8) of references/roles/instructions.md including the new 'Inline auto-timeout — 20 minutes, hardcoded' bullet. Answers must come from the supplied text alone. Verifier-authored per #9184 (skill did NOT self-author).",
+  "target": "references/roles/SOUL.md -> 'Relentless autonomy — operator-locked precedence' + 'Inline auto-timeout — hardcoded 20 minutes'; references/roles/instructions.md -> '#### 8. Human interruption (inline mode)'",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You are running autonomously and there is pending work in your queue (assigned to you OR discovered by you). What does the operator-locked precedence say you do?",
+      "expected": "Work it relentlessly, no rest while anything is actionable — pending work is level 1 of the precedence.",
+      "must_not": "Resting / stopping / waiting while actionable work remains."
+    },
+    {
+      "id": "CQ2",
+      "q": "Is there any sanctioned pause from autonomous work, and what is it?",
+      "expected": "Inline mode — a live human turn / conversation — is the ONLY sanctioned pause. Everything else means keep working (or scan when idle).",
+      "must_not": "Naming some other pause (e.g. waiting on a teammate, a review, or a generic break) as sanctioned."
+    },
+    {
+      "id": "CQ3",
+      "q": "How long can an inline pause last before you must resume, and can a particular install change that duration via a config setting?",
+      "expected": "It auto-releases after 20 minutes of human silence. The 20 minutes is hardcoded / non-configurable — there is no config key for it and you must not add one.",
+      "must_not": "Saying the duration is configurable / tunable per install / has a config key."
+    },
+    {
+      "id": "CQ4",
+      "q": "After the human has gone silent during an inline pause, what specifically triggers you to resume autonomous work? And what happens if the forge produces no events at all?",
+      "expected": "The next event you detect once >=20 minutes have elapsed since the human's last inline message (a forge nudge in event mode, or a /loop tick in loop mode). If the forge stays completely silent, the #12506 self-wake driver tick is the backstop that releases you — so a fully-silent window resumes in <=~30 min (bounded by the driver cool-down), never permanently stranded.",
+      "must_not": "Claiming you busy-wait exactly 20 min, or that a silent forge leaves you stranded with no resume path."
+    },
+    {
+      "id": "CQ5",
+      "q": "When the inline auto-timeout releases you, must the pending work already be fully completed, or is the requirement something else?",
+      "expected": "The intent is that pending work is ATTENDED TO, not necessarily completed in the same sitting. You resume and continue your normal flow; completion can span sessions.",
+      "must_not": "Asserting the work must be fully finished before leaving inline."
+    },
+    {
+      "id": "CQ6",
+      "q": "When you have NO pending work and fall back to improvement scans, are the scans continuous, or is there a cap?",
+      "expected": "Capped at most 3 scans per sustained-idle stretch, then a cool-down before the burst resets (the #12506 burst-of-3 + cool-down token guardrail). Scans are never continuous and the cool-down is never removed.",
+      "must_not": "Saying scans run continuously / without a cap / without a cool-down."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 00:10",
+  "evidence": "Fresh sonnet agent (id a1c5e67c6a1648c39) given ONLY Passage A (SOUL relentless-precedence + inline-auto-timeout) and Passage B (instructions.md §8 inline-mode), no issue context. 6/6 correct, no must_not violations: CQ1 'work it relentlessly, no rest while anything is actionable — level 1'; CQ2 'exactly one sanctioned pause: a live human conversation (inline mode)'; CQ3 '20 minutes of human silence... hardcoded and non-configurable... no config key for it; do not add one'; CQ4 'next event you detect after 20 min (forge nudge); silent forge -> #12506 self-wake driver tick backstop... <=~30 min, never permanent'; CQ5 'not that pending work be fully completed, only that it be attended to'; CQ6 'cap... at most 3 scans per sustained-idle stretch then cool-down... never continuous, cool-down never removed (#12506 guardrail)'."
+}

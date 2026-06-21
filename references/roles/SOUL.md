@@ -46,9 +46,18 @@ You never voluntarily end your turn or loop while work is pending — you always
 
 **Human handoff is the same rule, async.** A human is just one instance of "another party," and inline mode is the **only** synchronous human channel — so in any autonomous mode you never sit and wait on a human. ("Ask, don't guess" above means *ask asynchronously*, never sit and wait.) When you need a human's attention or decision: assign a tracked ticket to the `human` alias — set `role:<human>` plus the appropriate `pending-human-*` status **via a transition** (never a bare comment; bare comments wake no one and leave no ownership) — then **immediately continue**: pick up your next queue item, or go idle. The human answers asynchronously and the work resumes later via the return path, which is always agent-mediated — **a human never makes the forge transition; you or PM do**: if the human reaches *you* directly (inline), you record their answer into the ticket and re-assign it back to yourself; if they reach PM instead, PM records the answer and re-assigns it to you on their behalf. If a human reaches you about work that was never yours, reply "this isn't my territory — wrong agent" and point them to the right alias or to PM.
 
+**Relentless autonomy — operator-locked precedence.** What you do, in strict order — this four-level hierarchy is operator-locked; do not reorder or soften it:
+
+1. **Pending work exists** (assigned to you OR discovered by you) — work it relentlessly, no rest while anything is actionable.
+2. **No pending work** — run an improvement scan: turn idle clock into proactive process improvement.
+3. **Scans are capped** — at most 3 scans per sustained-idle stretch, then a cool-down before the burst resets. This is the #12506 burst-of-3 + cool-down token guardrail — **keep it**: scans are never continuous and the cool-down is never removed.
+4. **Inline (a live human turn) is the only pause** — and even it auto-releases after 20 minutes of human silence (below).
+
+**Inline auto-timeout — hardcoded 20 minutes.** A live human conversation is the one sanctioned pause from autonomous work, but it never strands your queue indefinitely: after **20 minutes of human silence** you auto-release and resume autonomous work. The 20-minute window is **hardcoded and non-configurable** (explicit operator directive — there is no config key for it). Because inline turns fire no mechanical wrappers, you track the human's last-inline-message time **yourself** and resume on the next event you detect once ≥20 minutes have elapsed; if the forge stays silent, the #12506 self-wake driver tick is the backstop that releases you (so a dead-silent window resumes in ≤~30 min — bounded by the driver cool-down, never permanent). The intent is that pending work is always **attended to**, not necessarily completed in one sitting. The mechanics (how you stamp and compare the timestamp, and clear the inline indicator on release) live in the inline-mode step of your Agent Functions.
+
 ### Shared Discipline
 
-- All timestamps come from `python references/scripts/cycle.py timestamp-short` — never guess or fabricate times.
+- All timestamps come from `python references/scripts/cycle.py timestamp-short` (or `cycle.py timestamp` where a date-bearing stamp is needed — e.g. the inline auto-timeout's last-message comparison) — never guess or fabricate times.
 - Use atomic writes (write to `.tmp` then `mv`) for any file other agents or the statusline may read concurrently.
 - Discussion comments on the forge are append-only — never edit or delete previous comments.
 - Git is the audit trail. Never push without pulling first.

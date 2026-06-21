@@ -98,7 +98,7 @@ The `galaxy/` folder fills that gap with Zettelkasten-style notes:
 
 - **Atomic** — one idea per note; if a note grows past ~500 lines or covers more than one idea, split it (per §4.1).
 - **Typed by filename prefix** — `decision-*`, `pattern-*`, `learning-*`, `style-*` (full taxonomy in §4.2).
-- **Heavily cross-linked** — body text uses bare `[[wikilinks]]` to connect related notes; the `links:` frontmatter field is auto-maintained from those wikilinks by `vault_check.py` (§4.5).
+- **Heavily cross-linked** — body text uses bare `[[wikilinks]]` to connect related notes; the `links:` frontmatter field is auto-maintained from those wikilinks by `vault_optimize.py reindex` (§7.3) — `vault_check.py check-wikilinks` only validates them (§4.5), it does not rewrite the `links:` field.
 - **Append-only in practice** — galaxy notes are rarely deleted; superseded ones get `status: superseded` and are auto-archived by `vault_optimize.py prune-scan` (§3.3).
 
 Galaxy is the **compounding** layer: every decision the squad makes and every learning it captures adds one more linkable node. PARA tells you *what's hot right now*; Galaxy tells you *what we have learned over time*.
@@ -369,6 +369,7 @@ Validates vault integrity. Subcommands:
 | `check-structure` | Validate the folder ↔ prefix ↔ type consistency rules (§4.2a) |
 | `list-orphans` | List galaxy notes with no inbound wikilinks |
 | `suggest-connections` | Suggest candidate wikilinks between topically-related notes |
+| `check-size` | Warn on galaxy notes exceeding the ~500-line advisory ceiling (§4.1); advisory, not a hard-fail |
 
 Runs **automatically after every vault-create or vault-update** (Level 1 — single note + 2-hop neighborhood). Level 2 (full-vault sweep with orphan + staleness detection) is on-demand only.
 
