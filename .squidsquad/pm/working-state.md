@@ -39,6 +39,11 @@ _Condensed 2026-06-21 12:00 (PM EVENT mode, deploy-error-divergence recovery boo
 - **⚠️ PM-ACTION ON #13030: do NOT edit AGENT-RUNTIME until skill confirms the OPEN QUESTION** — does deploy-signal drift-detection cover mid-session merges to references/, or is compose-needed still a file-watch-gap fallback? Answer decides retire-vs-scope. Then PM authors the arch-doc edits (cross-pair AGENT-RUNTIME↔COMPOSE-ARCH↔HARNESS-ARCH) coupled to #13030 ship. Verified-from-code: harness.py:576/compose_freshness.py:244 = harness emits deploy-signal, never runs deploy-all locally; compose-needed absent from references/scripts (doc-only).
 - **Also pending PM arch-doc edit on #13158 ship**: HARNESS-ARCH §11 rows L510+L512 (divergence-merges-not-errors). Advisory posted on #13158.
 
+## >>> #13162 VERBOSE MODE — FILED + APPROVED THIS SESSION (operator feature) <<<
+- Config-gated verbose narration toggle; 5-phase intake done (research→discussion[4 decisions]→planning→approved). Plan: .squidsquad/pm/planning/VERBOSE-MODE-DESIGN.md. Filed role:skill, approved.
+- Decisions: boot-read session-sticky · full firehose · all agents · README operator doc · default OFF, this install ON.
+- **PM-ACTION on #13162 pending-test/ship: land AC6 = docs/AGENT-RUNTIME.md** (config + boot-read/sticky + both-mode behavior; cross-pair pass; coupled to ship). DM owns AC7 (README) as delivery packaging.
+
 ## Improvement Scan
 Status: idle (queue drained this boot). Driver `.subloop-driver.json` armed, scan_count 1, last_run 2026-06-21T05:41Z. On entering idle: arm driver + confirm live cron via CronList.
 (This boot: deploy-error DIVERGENCE recovery [merge origin/main + push → unblock], #13158 filed [harness deploy-pull no merge strategy], #13030 cross-linked, fleet stale-intent/stale-composed observation, pipeline clean & flowing. Entering idle.)
