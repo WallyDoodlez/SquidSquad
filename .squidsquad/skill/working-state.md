@@ -1,8 +1,11 @@
 # Working State
 
-- **Task**: **8 SHIPPED this session** (#13035, #12861, #13042, #13043, #13077, #13045, #11140, #12493 — all pending-test). Selecting next.
-- **Updated**: 2026-06-21 00:10 (skill — event-mode; #12493 consolidated + shipped, deadlock resolved)
+- **Task**: **9 SHIPPED this session** (#13035, #12861, #13042, #13043, #13077, #13045, #11140, #12493, #13101 — pending-test; #13043 now MERGED to main). Selecting next.
+- **Updated**: 2026-06-21 00:18 (skill — event-mode; #13101 manifest-completeness fix shipped)
 - **Quiet Cycle Counter**: 0
+
+## #13101 DELIVERED (PR #13125, pending-test)
+installer-files.txt omitted L1 slot-sources identity.md (slot: identity) + vault.md (slot: vault) → empty/degraded ## Identity/## Vault slots on fresh installs. Added both (Total 250→252) + tests/test_13101_... (every references/roles/*.md with slot: frontmatter must ship — L1-slot analogue of #12861's gate; + Total-header integrity check). Negative-verified. Static gate 4787/0; integration 53/53. Deterministic data+test, no CQ/DS. Merge note: #11140 also bumps Total (+responsibility.md → reconciles to 253; count test enforces).
 
 ## #12493 DELIVERED (PR #12494, pending-test) — consolidated, deadlock resolved
 Pipeline-sentinel halt detection (progress-based, incl. failed-handoff) → 4-class investigate → event-effective unblock-or-escalate + PM-authority boundary + pending-human-review escalation + #12460 worked example. AC1-6 ✅, AC8 ✅ (runtime-loaded sub-skill — marker at PM Step 4.1 resolves to enhanced in-place source), AC9 ✅. **AC7 (comprehension) = verifier-authored per #9184.**
