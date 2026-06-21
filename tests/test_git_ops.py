@@ -39,15 +39,52 @@ class TestPull:
 
     @patch("git_ops._run")
     def test_pull_stash_pop(self, mock_run):
-        """Dirty tree → stash, pull, pop succeeds."""
+        """Dirty tree → stash CREATES an entry (refs/stash changes), pull, pop."""
         mock_run.side_effect = [
-            _mock_result(returncode=1),  # pull fails
-            _mock_result(),              # stash
-            _mock_result(),              # pull (retry)
-            _mock_result(),              # stash pop
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(returncode=1),          # _stash_top_ref pre: no refs/stash → ""
+            _mock_result(),                      # git stash
+            _mock_result(stdout="newsha"),       # _stash_top_ref post: new stash → "newsha"
+            _mock_result(),                      # pull (retry)
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
         ]
         assert git_ops.pull() is True
-        assert mock_run.call_count == 4
+        assert mock_run.call_count == 6
+        assert any(c[0][0] == "git stash pop" for c in mock_run.call_args_list)
+
+    @patch("git_ops._run")
+    def test_pull_clean_tree_does_not_pop_preexisting_stash(self, mock_run):
+        """#13167 ROOT-CAUSE: on a clean tree `git stash` is a no-op (refs/stash
+        UNCHANGED). The pop MUST be skipped — otherwise a PRE-EXISTING ancient
+        stash is applied, writing conflict markers tree-wide and breaking
+        compose. Asserts NO `git stash pop` (and no `_safe_stash_pop` machinery)
+        runs when the stash created nothing."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(stdout="oldsha"),       # _stash_top_ref pre: pre-existing stash
+            _mock_result(),                      # git stash (no-op on clean tree)
+            _mock_result(stdout="oldsha"),       # _stash_top_ref post: UNCHANGED → stashed=False
+            _mock_result(),                      # pull (retry) succeeds
+        ]
+        assert git_ops.pull() is True
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git stash pop" not in calls, "must NOT pop a pre-existing stash on a clean tree"
+        assert mock_run.call_count == 5  # no pop call
+
+    @patch("git_ops._run")
+    def test_pull_clean_tree_pull_fail_does_not_pop_preexisting(self, mock_run):
+        """#13167: even on the pull-fail branch, a no-op stash must not pop a
+        pre-existing stash (the raw-pop-on-failure path was a culprit too)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(stdout="oldsha"),       # pre
+            _mock_result(),                      # git stash (no-op)
+            _mock_result(stdout="oldsha"),       # post: unchanged → stashed=False
+            _mock_result(returncode=1),          # pull retry ALSO fails
+        ]
+        assert git_ops.pull() is False
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git stash pop" not in calls
 
     @patch("git_ops._run_list")
     @patch("git_ops._run")
@@ -56,7 +93,9 @@ class TestPull:
         dropped, still returns True (#4829 + #13045)."""
         mock_run.side_effect = [
             _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre → ""
             _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post → stashed
             _mock_result(),                                   # pull (retry)
             _mock_result(returncode=1),                       # stash pop conflict
             _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
@@ -72,7 +111,9 @@ class TestPull:
         drop (no stash-entry leak)."""
         mock_run.side_effect = [
             _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre
             _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post
             _mock_result(),                                   # pull (retry)
             _mock_result(returncode=1),                       # stash pop conflict
             _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
@@ -93,7 +134,9 @@ class TestPull:
         conflicted config.md so compose never sees a corrupt file."""
         mock_run.side_effect = [
             _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre
             _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post
             _mock_result(),                                   # pull (retry)
             _mock_result(returncode=1),                       # stash pop conflict
             _mock_result(stdout=".squidsquad/config.md\nreferences/x.py\n"),  # diff -U
@@ -104,6 +147,20 @@ class TestPull:
         checkouts = [c[0][0] for c in mock_run_list.call_args_list]
         assert ["git", "checkout", "HEAD", "--", ".squidsquad/config.md"] in checkouts
         assert ["git", "checkout", "HEAD", "--", "references/x.py"] in checkouts
+
+
+class TestStashTopRef:
+    @patch("git_ops._run")
+    def test_returns_sha_when_stash_exists(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="abc123\n", returncode=0)
+        assert git_ops._stash_top_ref() == "abc123"
+
+    @patch("git_ops._run")
+    def test_returns_empty_when_no_stash(self, mock_run):
+        # `git rev-parse --quiet --verify refs/stash` exits non-zero when there
+        # is no stash ref — must map to "" (not a spurious ref).
+        mock_run.return_value = _mock_result(stdout="", returncode=1)
+        assert git_ops._stash_top_ref() == ""
 
 
 # ---------------------------------------------------------------------------
@@ -1256,7 +1313,9 @@ class TestSafeCheckout:
         """On checkout failure after stash, pop restores original branch (#4362)."""
         mock_run.side_effect = [
             _mock_result(stdout="main\n"),      # git branch --show-current
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
             _mock_result(),                      # git stash -q
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
             _mock_result(),                      # git stash pop -q (restore)
         ]
         # First checkout fails, second (after stash) also fails
@@ -1274,11 +1333,34 @@ class TestSafeCheckout:
 
     @patch("git_ops._run_list")
     @patch("git_ops._run")
+    def test_clean_checkout_failure_does_not_pop_preexisting(self, mock_run, mock_run_list):
+        """#13167: if checkout fails for a NON-dirty reason, `git stash -q` is a
+        no-op (refs/stash unchanged) and the recovery pop MUST be skipped — never
+        pop a pre-existing ancient stash."""
+        mock_run.side_effect = [
+            _mock_result(stdout="main\n"),      # branch --show-current
+            _mock_result(stdout="oldsha"),       # _stash_top_ref pre: pre-existing stash
+            _mock_result(),                      # git stash -q (no-op)
+            _mock_result(stdout="oldsha"),       # _stash_top_ref post: UNCHANGED → stashed=False
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1, stderr="no such branch"),  # direct checkout fails
+            _mock_result(returncode=1, stderr="no such branch"),  # stash+checkout fails
+        ]
+        result = git_ops._safe_checkout("feature-branch")
+        assert result is False
+        pop_calls = [c for c in mock_run.call_args_list if "stash pop" in str(c)]
+        assert not pop_calls, "must NOT pop a pre-existing stash when our stash was a no-op"
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
     def test_stash_pop_on_success_applies_to_target(self, mock_run, mock_run_list):
         """On checkout success after stash, pop applies on target branch."""
         mock_run.side_effect = [
             _mock_result(stdout="main\n"),      # git branch --show-current
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
             _mock_result(),                      # git stash -q
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
             _mock_result(),                      # git stash pop -q
         ]
         mock_run_list.side_effect = [
@@ -1298,7 +1380,9 @@ class TestSafeCheckout:
         HEAD and the stash dropped (via _safe_stash_pop)."""
         mock_run.side_effect = [
             _mock_result(stdout="main\n"),                    # branch --show-current
+            _mock_result(returncode=1),                       # _stash_top_ref pre → ""
             _mock_result(),                                   # git stash -q
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post → stashed=True
             _mock_result(returncode=1),                       # stash pop conflict
             _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
             _mock_result(),                                   # stash drop
