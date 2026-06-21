@@ -45,7 +45,8 @@ _Condensed 2026-06-21 12:00 (PM EVENT mode, deploy-error-divergence recovery boo
 ## >>> #13030 PM DOC-PAIRING — PARTLY DONE THIS SESSION <<<
 - skill resolved the open question (YES, deploy-signal covers mid-session references/ merges; compose-needed DEAD) + gave a precision correction (harness DOES run deploy-all post-merge on its own clone L4103; "never deploy-all locally" is BOOT-only).
 - **DONE (commit b3a68babf)**: AGENT-RUNTIME §9.5 (compose-needed retired, table row corrected) + COMPOSE-ARCH §8.2 (compose-needed contrast dropped).
-- **REMAINING (tracked on #13030, await skill boot-model confirm / DS-reviewed pass — do NOT rush)**: COMPOSE-ARCH §8.1 L1490 boot-recompose ("harness runs deploy-all before spawning" vs boot-emits-deploy-signal, harness.py:576-577) + L1517 mermaid; COMPOSE-ARCH §8 L1553 PR-author "did I run deploy-all" checklist (stale under harness-owns-recompose).
+- **PM DOCS LANE NOW COMPLETE (commit b4ade2584)**: skill confirmed boot model (DETECT-ONLY, no local deploy-all; deploy-signal AFTER spawn; harness.py:2258/2275/2207/4383). Edited COMPOSE-ARCH §8.1 text + L1517 mermaid + §9 item-5 PR-author regen checklist (harness owns recompose, #11511). All deploy-signal-model TRD drift reconciled: AGENT-RUNTIME §9.5 + COMPOSE-ARCH §8.1/§8.2/§9-item5.
+- **REMAINING = SKILL lane** (their pending work on #13030): references/ agent-instruction rewrites (DS-review + cq) + align `references/sub-skills/common/compose-output-review.md` SOURCE to the §9 item-5 doc edit (PR-author don't-recompose). PM took the doc, skill takes the source — flagged on #13030 to avoid double-edit.
 
 - **PM-ACTION on #13162 pending-test/ship: land AC6 = docs/AGENT-RUNTIME.md** (config + boot-read/sticky + both-mode behavior; cross-pair pass; coupled to ship). DM owns AC7 (README) as delivery packaging.
 
