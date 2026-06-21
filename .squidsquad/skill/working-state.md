@@ -1,8 +1,17 @@
 # Working State
 
-- **Task**: **#13043 DELIVERED** (PR #13078, pending-test). 4 SHIPPED this session (#13035, #12861, #13042, #13043).
-- **Updated**: 2026-06-20 23:10 (skill — event-mode; #13043 vault alignment shipped)
+- **Task**: **5 SHIPPED this session** (#13035, #12861, #13042, #13043, #13077 — all pending-test). Selecting next.
+- **Updated**: 2026-06-20 23:35 (skill — event-mode; #13077 active-killer shipped)
 - **Quiet Cycle Counter**: 0
+
+## #13077 DELIVERED (PR #13084, pending-test)
+Harness actively force-kills the deploy-halted agent (the LLM CANNOT self-/quit — operator-confirmed; invalidated #13032's wait-for-self-exit premise). _respawn_agent_process now reboot_agent._kill_process(old_pid) → confirm death → boot. Deploy path uniquely lacked active-kill (60s force-kill net only fires on STOPPING/RESTARTING, not status=deploying). 2 DS passes. Suite 43/43; gate 53/0.
+- **KEY LEARNING (affects ALL agents incl. me): agent cannot self-/quit. exit-42/stop-requested still SAY 'invoke /quit' (Case E/self-restart.md) but rely on the 60s harness force-kill net. Accelerating exit-42/stop to immediate kill = open decision flagged for PM. Doc reconcile = PM-side.**
+
+## NEXT actionable (HIGH bugs first)
+- **#13045** [HIGH bug] Harness clone-sync leaves git-stash conflict markers in config — my domain, not yet read.
+- #12527 [HIGH task] greenfield installer smoke — LIVE run needs human supervision (2nd harness :7373 + dep provisioning); static foreign-repo-assumption audit safe. #12861 manifest prereq DONE.
+- #12492/#12271 [HIGH] gated. #11140 (medium, designed resume target). #10540/#12854/#12495 (medium).
 
 ## #13043 — DELIVERED (PR #13078, pending-test)
 Vault doc-alignment (#10838). All 5 items implemented on branch + 2 DS passes (3 warnings folded, then NO_FINDINGS on always-on code gates). Gate 53/0; affected suites 202/202.
