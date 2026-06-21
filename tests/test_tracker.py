@@ -320,6 +320,81 @@ class TestGetState:
         assert state == "UNKNOWN"
 
 
+class TestGetLabelsStateCliFallbackFailClosed13132:
+    """#13132: get_labels / get_state CLI-fallback paths must fail closed
+    (no raw traceback) on gh non-zero exit, empty stdout, or malformed exit-0
+    JSON — mirroring the adapter paths and _get_issue_role_labels."""
+
+    def _cli(self, monkeypatch, result):
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", lambda cmd, **kw: result)
+
+    def test_get_labels_nonzero_returns_empty(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(returncode=1, stderr="boom"))
+        assert tracker.get_labels(42) == []
+
+    def test_get_labels_empty_stdout_returns_empty(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(stdout="", returncode=0))
+        assert tracker.get_labels(42) == []
+
+    def test_get_labels_malformed_json_returns_empty(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(stdout="not json{", returncode=0))
+        assert tracker.get_labels(42) == []
+
+    def test_get_labels_drops_nameless_label_objects(self, monkeypatch):
+        # DS-review fold: a label dict missing "name" must be dropped, not
+        # injected as "" (matches _get_issue_*_labels filtering).
+        data = {"labels": [{"name": "role:skill"}, {}, {"name": "squidsquad"}]}
+        self._cli(monkeypatch, _mock_result(stdout=json.dumps(data), returncode=0))
+        assert tracker.get_labels(42) == ["role:skill", "squidsquad"]
+
+    def test_get_state_nonzero_returns_unknown(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(returncode=1, stderr="boom"))
+        assert tracker.get_state(42) == "UNKNOWN"
+
+    def test_get_state_empty_stdout_returns_unknown(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(stdout="", returncode=0))
+        assert tracker.get_state(42) == "UNKNOWN"
+
+    def test_get_state_malformed_json_returns_unknown(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(stdout="<html>500</html>", returncode=0))
+        assert tracker.get_state(42) == "UNKNOWN"
+
+    def test_get_state_missing_state_key_returns_unknown(self, monkeypatch):
+        # exit-0 JSON without a "state" field previously raised KeyError.
+        self._cli(monkeypatch, _mock_result(stdout='{"title": "x"}', returncode=0))
+        assert tracker.get_state(42) == "UNKNOWN"
+
+
+class TestCheckUnreadFeedbackFailClosed13132:
+    """#13132 Finding 2: _check_unread_feedback must return the fail-closed
+    sentinel on a malformed exit-0 response, not raise JSONDecodeError."""
+
+    _SENTINEL = [("unknown (API error)", "unknown")]
+
+    def test_malformed_exit0_returns_sentinel(self, monkeypatch):
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(stdout="not json{", returncode=0),
+        )
+        assert tracker._check_unread_feedback(42, "skill") == self._SENTINEL
+
+    def test_nonzero_still_returns_sentinel(self, monkeypatch):
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(returncode=1),
+        )
+        assert tracker._check_unread_feedback(42, "skill") == self._SENTINEL
+
+    def test_valid_no_comments_returns_empty(self, monkeypatch):
+        # Happy path still works: valid JSON, no comments → no unread feedback.
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(stdout='{"comments": []}', returncode=0),
+        )
+        assert tracker._check_unread_feedback(42, "skill") == []
+
+
 class TestCloseIssue:
     def test_calls_close(self, monkeypatch):
         calls = []

@@ -1212,7 +1212,12 @@ def _check_unread_feedback(number, caller_role):
         # Fail closed — if we can't read comments, block the transition
         return [("unknown (API error)", "unknown")]
 
-    data = json.loads(result.stdout)
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        # Malformed exit-0 response — fail closed (same sentinel) so the guard
+        # blocks rather than aborting transition() with an uncaught traceback.
+        return [("unknown (API error)", "unknown")]
     comments = data.get("comments", [])
     if not comments:
         return []
@@ -1592,9 +1597,21 @@ def get_labels(number):
         labels = [l["name"] for l in data.get("labels", [])] if data else []
         print(json.dumps(labels))
         return labels
-    result = _run_list(["gh", "issue", "view", str(number), "--json", "labels"])
-    data = json.loads(result.stdout)
-    labels = [l["name"] for l in data.get("labels", [])]
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "labels"],
+        check=False,
+    )
+    # Fail closed: a gh blip or malformed exit-0 JSON yields [] (no labels)
+    # rather than a raw traceback — mirrors _get_issue_role_labels.
+    labels = []
+    if result.returncode == 0 and result.stdout.strip():
+        try:
+            data = json.loads(result.stdout)
+            # Drop label objects missing a "name" (would otherwise inject "");
+            # mirrors the startswith-filtering in _get_issue_*_labels.
+            labels = [n for n in (l.get("name", "") for l in data.get("labels", [])) if n]
+        except json.JSONDecodeError:
+            labels = []
     print(json.dumps(labels))
     return labels
 
@@ -1607,9 +1624,19 @@ def get_state(number):
         state = (data or {}).get("state") or "UNKNOWN"
         print(state)
         return state
-    result = _run_list(["gh", "issue", "view", str(number), "--json", "state"])
-    data = json.loads(result.stdout)
-    state = data["state"]
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "state"],
+        check=False,
+    )
+    # Fail closed to "UNKNOWN" on gh failure / malformed exit-0 JSON / missing
+    # field — mirrors the adapter path's `(data or {}).get("state") or "UNKNOWN"`.
+    data = {}
+    if result.returncode == 0 and result.stdout.strip():
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            data = {}
+    state = (data or {}).get("state") or "UNKNOWN"
     print(state)
     return state
 
