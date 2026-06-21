@@ -302,6 +302,26 @@ class TestRunDeploySequence(unittest.TestCase):
         self.assertEqual(len(r["bumped"]), 1)
         self.assertEqual(r["emitted"], [])
 
+    def test_deploy_pull_merges_not_ff_only_13158(self):
+        """#13158: the deploy-pull must MERGE (--no-rebase), not --ff-only — else
+        a diverged main (an unpushed compose commit from a prior push-rejected
+        deploy + an advanced origin) FATALS every deploy with deploy-error
+        stage=pull. Merge reconciles benign divergence; a real conflict still
+        fails the pull → §11 recovery."""
+        calls = []
+
+        def _capturing_router(clone_path, args, timeout=120):
+            calls.append(list(args))
+            return _CP(returncode=0)
+
+        self._run(_capturing_router)
+        pull_calls = [a for a in calls if a and a[0] == "pull"]
+        self.assertEqual(len(pull_calls), 1, f"expected exactly one pull: {calls}")
+        pull = pull_calls[0]
+        self.assertIn("--no-rebase", pull, f"deploy-pull must merge (#13158): {pull}")
+        self.assertNotIn("--ff-only", pull,
+                         f"deploy-pull must not be --ff-only (#13158): {pull}")
+
     def test_pull_failure_recovers_without_checksum_bump(self):
         def router(clone_path, args, timeout=120):
             if args[0] == "pull":
