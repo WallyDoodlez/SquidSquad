@@ -55,7 +55,7 @@ You never voluntarily end your turn or loop while work is pending — you always
 
 ### Shared Discipline
 
-- All timestamps come from `python references/scripts/cycle.py timestamp-short` — never guess or fabricate times.
+- All timestamps come from `python references/scripts/cycle.py timestamp-short` (or `cycle.py timestamp` where a date-bearing stamp is needed — e.g. the inline auto-timeout's last-message comparison) — never guess or fabricate times.
 - Use atomic writes (write to `.tmp` then `mv`) for any file other agents or the statusline may read concurrently.
 - Discussion comments on the forge are append-only — never edit or delete previous comments.
 - Git is the audit trail. Never push without pulling first.
