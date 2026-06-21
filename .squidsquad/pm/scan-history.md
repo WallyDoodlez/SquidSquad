@@ -591,3 +591,11 @@
 - **Auto-fixed**: BRIEFING.md refreshed (PM own-domain, Tier-1) — new 2026-06-20 ~17:20 top increment (2nd-restart + ship burst + #12896-approved/#13035 + #12451-S2 + deferred-restart + installer review + 4 pending operator decisions); Team-State version line → sha 253179a2 boot 14:35; Constraints auto-versioning → 50 (batched v0.45.0, operator-paced).
 - **Items rejected by human**: (none)
 - **Burst note**: 3rd scan of idle period → at_cap, driver cancelled + cron 707769b1 deleted (re-arms on next forge-work re-idle).
+
+## Scan — 2026-06-21 01:37 (idle-driver tick, 1st/burst scan — freshly-shipped PM sub-skill drift check)
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md (just shipped via #12493/#12494), references/sub-skills/roles/pm/improvement-scan.md (cross-ref)
+- **Findings**: 1 — residual loop-mode cadence FRAMING in pipeline-sentinel.md header (`### Step 6f` anchor [event-hydrated cycle puts it at Step 4.1], "runs **every cycle**" [event mode = per-cared-event; doesn't run during pure idle — the exact gap #13119 closes], "90 minutes (**3 cycles**)" cadence reasoning). The #12493 rewrite made the halt-detect/investigate/unblock/escalate BODY fully event-aware (EAD, [[comment-handling]], failed-handoff class) — excellent — but left the header framing loop-mode. 90-min WALL-CLOCK threshold itself is correct; only the cadence framing is stale. NOTE: the 2026-06-20 00:02 scan predicted #12493 would sweep this up; it did not — so I did NOT re-defer silently. **NOT separately filed (dedup): routed as an advisory scope-note onto #13119** (skill, open — couples pipeline-sentinel to the idle driver tick → it edits this file's cadence/idle model anyway → natural home for the framing fix). Cannot Tier-1 auto-fix (references/sub-skills/ = skill domain, PM-docs-only boundary).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+- **Context note**: operator signalled imminent harness restart (deferred #13077-reaper activation) once agents idle; pipeline fully drained (0 pending-test/ship/human). Scan kept bounded; chose advisory-on-#13119 over a new orphan task per quality-over-noise + dedup rules.
