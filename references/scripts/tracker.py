@@ -1760,22 +1760,16 @@ def _parse_args():
 
 
 def _harden_stdio():
-    """#13185: make CLI stdout/stderr crash-proof on consoles whose encoding
-    cannot represent every character we print. A Windows cp1252 console has no
-    glyph for e.g. U+2192 ('->'), so a success line containing one raised
-    UnicodeEncodeError AFTER the side effect had already landed (work-assign had
-    already emitted the wake) — a false-failure exit 1 + traceback that invites
-    a double-emit retry. `errors="backslashreplace"` keeps the console's own
-    encoding (so ordinary ASCII output is untouched) but escapes an unencodable
-    char instead of raising. Best-effort + CLI-only (never at import — tracker.py
-    is also imported as a library; reconfiguring a library consumer's global
-    stdio would be wrong): a non-reconfigurable stream (already detached/
-    replaced/captured) is left as-is. Python 3.7+ (project is 3.10+)."""
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(errors="backslashreplace")
-        except (AttributeError, ValueError, OSError):
-            pass
+    """#13185 / #13198: crash-proof CLI stdout/stderr on a cp1252 console.
+
+    The canonical implementation now lives in the shared ``cli_stdio`` module
+    (#13198 consolidated it for fleet-wide reuse — every agent-facing CLI script
+    calls it). This is kept as a thin delegate so existing callers/tests resolve
+    unchanged. See ``cli_stdio.harden_stdio`` for the rationale (a non-ASCII
+    char in a SUCCESS print on cp1252 raised UnicodeEncodeError AFTER the side
+    effect landed → false-failure exit + double-emit risk)."""
+    from cli_stdio import harden_stdio
+    harden_stdio()
 
 
 def main():

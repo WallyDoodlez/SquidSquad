@@ -411,6 +411,8 @@ def list_clones():
 
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     args = sys.argv[1:]
     if not args or args[0] in ("--help", "-h"):
         print(__doc__)

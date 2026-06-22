@@ -1012,6 +1012,8 @@ def _load_adapter(manifest):
 # ---------------------------------------------------------------------------
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     parser = argparse.ArgumentParser(
         description="SquidSquad model router — route subagent work to external models.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

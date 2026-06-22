@@ -662,6 +662,8 @@ def boot_all(dry_run=False):
 # ---------------------------------------------------------------------------
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     args = sys.argv[1:]
     if "--help" in args or "-h" in args:
         print(__doc__)

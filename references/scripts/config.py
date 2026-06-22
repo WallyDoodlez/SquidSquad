@@ -1042,6 +1042,8 @@ def dump_all():
 
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     if len(sys.argv) < 2 or sys.argv[1] == "--help":
         print(__doc__)
         print("Fields:", ", ".join(sorted(FIELD_MAP.keys())))

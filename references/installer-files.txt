@@ -25,6 +25,7 @@ references/scripts/boot_remote.py
 references/scripts/capability_check.py
 references/scripts/catalog_drift.py
 references/scripts/catalog_parser.py
+references/scripts/cli_stdio.py
 references/scripts/comms_adapter.py
 references/scripts/compose.py
 references/scripts/compose_freshness.py
