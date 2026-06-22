@@ -292,7 +292,7 @@ def add_role(role, target=None, boot=False, force=False, dry_run=False):
             print(f"  Setting origin to upstream: {upstream_url}")
             _fix_clone_remote(target, upstream_url)
         else:
-            print("  WARNING: Could not determine upstream URL — clone origin may be wrong", file=sys.stderr)
+            print("  WARNING: Could not determine upstream URL -- clone origin may be wrong", file=sys.stderr)
 
         # Write .active-role in the clone FIRST (before deploy/boot)
         clone_squid = target / ".squidsquad"
@@ -381,7 +381,7 @@ def register_existing(role, clone_path):
         )
         clone_url = clone_origin.stdout.strip() if clone_origin.returncode == 0 else ""
         if clone_url != upstream_url:
-            print(f"  Fixing origin: {clone_url} → {upstream_url}")
+            print(f"  Fixing origin: {clone_url} -> {upstream_url}")
             _fix_clone_remote(clone_path, upstream_url)
 
     agents_map = _parse_local_config()

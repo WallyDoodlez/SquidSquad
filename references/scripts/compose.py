@@ -342,7 +342,7 @@ def _read_role_manifest(role_id: str) -> dict | None:
         data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     except Exception as e:
         print(
-            f"WARNING: #9925 — failed to parse {manifest_path}: {e}",
+            f"WARNING: #9925 -- failed to parse {manifest_path}: {e}",
             file=sys.stderr,
         )
         _ROLE_MANIFEST_CACHE[role_id] = None
@@ -391,7 +391,7 @@ def _render_role_roster() -> str:
     if not active:
         # D8 degraded mode: no active roles discoverable — skip roster.
         print(
-            "WARNING: #9925 — no active roles found for role-roster injection; "
+            "WARNING: #9925 -- no active roles found for role-roster injection; "
             "leaving {{role-roster}} marker in composed output",
             file=sys.stderr,
         )
@@ -413,7 +413,7 @@ def _render_role_roster() -> str:
                 manifest = _read_role_manifest("dev")
         if manifest is None:
             print(
-                f"WARNING: #9925 — no manifest for active role {role_id!r}; "
+                f"WARNING: #9925 -- no manifest for active role {role_id!r}; "
                 "skipping in roster (D8 degraded mode)",
                 file=sys.stderr,
             )
@@ -423,7 +423,7 @@ def _render_role_roster() -> str:
         if not display:
             # D8: missing display_name is a BUILD ERROR (per AC11).
             print(
-                f"ERROR: #9925 — role {role_id!r} manifest is missing required "
+                f"ERROR: #9925 -- role {role_id!r} manifest is missing required "
                 "`display_name` field; cannot render roster",
                 file=sys.stderr,
             )
@@ -433,13 +433,13 @@ def _render_role_roster() -> str:
         description = manifest.get("description", "")
         if not tagline:
             print(
-                f"WARNING: #9925 — role {role_id!r} manifest has no `tagline`; "
+                f"WARNING: #9925 -- role {role_id!r} manifest has no `tagline`; "
                 "rendering with empty tagline",
                 file=sys.stderr,
             )
         if not description:
             print(
-                f"WARNING: #9925 — role {role_id!r} manifest has no "
+                f"WARNING: #9925 -- role {role_id!r} manifest has no "
                 "`description`; rendering with empty description",
                 file=sys.stderr,
             )
@@ -972,7 +972,7 @@ def agent_compose(deterministic_output: str, role_name: str,
 
         if len(polished_code_blocks) < len(original_code_blocks):
             print(f"  WARNING: Agent compose lost code blocks "
-                  f"({len(original_code_blocks)} → {len(polished_code_blocks)}), "
+                  f"({len(original_code_blocks)} -> {len(polished_code_blocks)}), "
                   f"using deterministic", file=sys.stderr)
             return deterministic_output
 
@@ -984,7 +984,7 @@ def agent_compose(deterministic_output: str, role_name: str,
                 sample = cqs[:5]
                 for cq in sample:
                     if cq["source_heading"].lower() not in polished.lower():
-                        print(f"  WARNING: CQ fail — '{cq['source_heading']}' "
+                        print(f"  WARNING: CQ fail -- '{cq['source_heading']}' "
                               f"missing from polished output", file=sys.stderr)
                         # Don't fail on CQ — just warn. Full CQ runs at deploy time.
 
@@ -1148,7 +1148,7 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
     # (single `deploy` and `deploy-all`) treat it as a clean no-op instead of
     # walking nonexistent role sources (which would otherwise sys.exit(1)).
     if role in _config_module.NON_AGENT_ROLE_CLASSES:
-        print(f"  {alias}: non-agent role-class '{role}' — skipping compose "
+        print(f"  {alias}: non-agent role-class '{role}' -- skipping compose "
               f"(no CLAUDE.md, no L4)")
         return None
 
@@ -1892,7 +1892,7 @@ def _ensure_hook_entries(settings_path, entries: dict) -> bool:
     if not isinstance(hooks, dict):
         if hooks:
             print(f"WARNING: .claude/settings.json `hooks` was "
-                  f"{type(hooks).__name__}, not an object — replacing "
+                  f"{type(hooks).__name__}, not an object -- replacing "
                   f"(prior hooks dropped): {settings_path}", file=sys.stderr)
         hooks = data["hooks"] = {}
     for name, group in entries.items():
@@ -2121,7 +2121,7 @@ def main():
         print(
             "ERROR: `compose.py all` was retired in E6 (#10685). The "
             "bundled `references/agent-instructions.md` is no longer "
-            "generated — each agent has its own composed CLAUDE.md "
+            "generated -- each agent has its own composed CLAUDE.md "
             "under `.squidsquad/<role>/CLAUDE.md`. Use "
             "`python compose.py deploy <role>` for a single role, or "
             "`python compose.py deploy-all` for every alias in the "
@@ -2167,7 +2167,7 @@ def main():
             except LinkStageValidationError as e:
                 # AC: stderr names the rule that failed (R1-R7).
                 print(
-                    f"  {role_name} (staged): VALIDATION FAIL — {e}",
+                    f"  {role_name} (staged): VALIDATION FAIL -- {e}",
                     file=sys.stderr,
                 )
                 sys.exit(CHECK_EXIT_DRIFT)
@@ -2241,7 +2241,7 @@ def main():
             except SystemExit:
                 failed.append(alias)
             except Exception as e:
-                print(f"  {alias}: FAILED — {e}", file=sys.stderr)
+                print(f"  {alias}: FAILED -- {e}", file=sys.stderr)
                 failed.append(alias)
         if failed:
             print(f"ERROR: {len(failed)} alias(es) failed: {', '.join(failed)}", file=sys.stderr)

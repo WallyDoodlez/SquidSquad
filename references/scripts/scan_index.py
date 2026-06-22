@@ -441,7 +441,7 @@ def record_decision(issue_number, accepted, db_path=None):
 
     conn.commit()
     conn.close()
-    print(f"Recorded decision: issue #{issue_number} → {decision}")
+    print(f"Recorded decision: issue #{issue_number} -> {decision}")
     return True
 
 

@@ -700,7 +700,7 @@ def main():
     else:
         for r in results:
             status = "OK" if r["success"] else "FAIL"
-            print(f"[{r['role']}] {r['action']} — {status}: {r['message']}")
+            print(f"[{r['role']}] {r['action']} -- {status}: {r['message']}")
 
     # Exit code: 1 if any spawn failed
     any_failed = any(

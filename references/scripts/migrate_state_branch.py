@@ -113,7 +113,7 @@ def migrate(dry_run=False):
         print(f"  {f}")
 
     if dry_run:
-        print("\n(dry run — no files moved)")
+        print("\n(dry run -- no files moved)")
         return 0
 
     # Copy files to state worktree
@@ -143,7 +143,7 @@ def migrate(dry_run=False):
         if not pushed:
             print(
                 f"\nMigrated {migrated}/{len(state_files)} files LOCALLY, "
-                "but commit_and_push failed — migration is NOT durable.",
+                "but commit_and_push failed -- migration is NOT durable.",
                 file=sys.stderr,
             )
             print(

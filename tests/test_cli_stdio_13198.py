@@ -6,6 +6,7 @@ scripts. #13198 consolidates the logic into `cli_stdio.harden_stdio` and wires i
 into every CLI `main()`.
 """
 
+import ast
 import io
 import sys
 from pathlib import Path
@@ -87,3 +88,50 @@ class TestFleetWiring13198:
 
     def test_shared_helper_module_exists(self):
         assert (SCRIPTS / "cli_stdio.py").exists()
+
+
+def _print_string_literals(src):
+    """Yield (lineno, text) for every str literal passed to a `print(...)` call.
+
+    AST-based so it inspects ONLY print arguments — comments and docstrings
+    (which legitimately contain decorative em-dashes throughout these scripts)
+    are not examined. f-string literal parts are covered: the JoinedStr's
+    Constant children are walked, the {expr} interpolations are not (those are
+    runtime values, not source decoration).
+    """
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "print"):
+            args = list(node.args) + [kw.value for kw in node.keywords]
+            for arg in args:
+                for sub in ast.walk(arg):
+                    if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                        yield sub.lineno, sub.value
+
+
+class TestNoDecorativeNonAsciiInPrints13198:
+    """AC-4 sweep guard: the swept agent-facing CLIs must emit only ASCII from
+    their `print()` calls so stdout/stderr renders cleanly on a cp1252 console
+    (the helper crash-proofs it; this keeps it from rendering as escaped
+    `\\u2014`). Locks the #13198 ASCII sweep against regression — a decorative
+    char re-introduced into any print literal fails here. Comments/docstrings
+    are out of scope and untouched (they carry many legitimate em-dashes)."""
+
+    # The swept scripts (mirrors TestFleetWiring13198.WIRED). cycle.py is
+    # excluded for the same reason it is excluded from the wiring guard.
+    SWEPT = TestFleetWiring13198.WIRED
+
+    @pytest.mark.parametrize("mod", SWEPT)
+    def test_print_literals_are_ascii(self, mod):
+        src = (SCRIPTS / f"{mod}.py").read_text(encoding="utf-8")
+        offenders = [
+            (ln, txt) for ln, txt in _print_string_literals(src)
+            if any(ord(c) > 127 for c in txt)
+        ]
+        assert not offenders, (
+            f"{mod}.py has non-ASCII chars in print() string literals "
+            f"(#13198 ASCII sweep) — replace decorative chars (e.g. U+2192 '->', "
+            f"U+2014 '--') so cp1252 stdout renders cleanly: "
+            + "; ".join(f"L{ln}: {txt!r}" for ln, txt in offenders)
+        )

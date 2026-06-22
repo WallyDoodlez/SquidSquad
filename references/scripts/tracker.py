@@ -707,7 +707,7 @@ def repair_status_labels(apply=False, include_unshipped=False):
     )
     if len(issues) >= _REPAIR_PAGE_LIMIT:
         print(
-            f"  WARNING: result hit the {_REPAIR_PAGE_LIMIT}-issue page limit — "
+            f"  WARNING: result hit the {_REPAIR_PAGE_LIMIT}-issue page limit -- "
             f"the set may be truncated; re-run after applying to drain the rest.",
             file=sys.stderr,
         )
@@ -727,7 +727,7 @@ def repair_status_labels(apply=False, include_unshipped=False):
         more = "" if len(skipped_ambiguous) <= 20 else f" (+{len(skipped_ambiguous) - 20} more)"
         print(
             f"  SKIPPED {len(skipped_ambiguous)} closed pending-ship issue(s) with "
-            f"NO status:shipped — each MAY be a legitimate closed-but-undelivered "
+            f"NO status:shipped -- each MAY be a legitimate closed-but-undelivered "
             f"issue (#9837: PR auto-close before DM ships). Verify none are awaiting "
             f"delivery, then re-run with --include-unshipped to strip them: "
             f"{preview}{more}",
@@ -735,7 +735,7 @@ def repair_status_labels(apply=False, include_unshipped=False):
         )
     if not planned and not skipped_ambiguous:
         print(
-            "  (nothing to repair — all closed pending-ship issues are already "
+            "  (nothing to repair -- all closed pending-ship issues are already "
             "single-status)",
             file=sys.stderr,
         )
@@ -1376,7 +1376,7 @@ def transition(number, from_status, to_status, role=None, force=False):
         except ImportError:
             # tc_coverage.py not available — graceful degradation
             print(
-                "WARNING: tc_coverage.py not found — TC coverage gate skipped.",
+                "WARNING: tc_coverage.py not found -- TC coverage gate skipped.",
                 file=sys.stderr,
             )
 
@@ -1391,7 +1391,7 @@ def transition(number, from_status, to_status, role=None, force=False):
                 f"Blocked shipped transition on #{number}: unmerged PR #{pr_num}",
             )
             print(
-                f"BLOCKED: Cannot ship #{number} — PR #{pr_num} is open and unmerged. "
+                f"BLOCKED: Cannot ship #{number} -- PR #{pr_num} is open and unmerged. "
                 f"Merge the PR first: {pr_url}",
                 file=sys.stderr,
             )
@@ -1426,7 +1426,7 @@ def transition(number, from_status, to_status, role=None, force=False):
                     f"has {commit_count} unmerged commit(s)",
                 )
                 print(
-                    f"BLOCKED: Cannot ship #{number} — branch '{branch_name}' has "
+                    f"BLOCKED: Cannot ship #{number} -- branch '{branch_name}' has "
                     f"{commit_count} commit(s) not merged to the working branch. "
                     f"Merge the branch or create a PR first.",
                     file=sys.stderr,

@@ -279,7 +279,7 @@ def get_field(field):
             if val is not None:
                 print(
                     f"WARNING: config.md uses deprecated field "
-                    f"`{dfield}:` — rename to `{entry[1] if entry else field}:` "
+                    f"`{dfield}:` -- rename to `{entry[1] if entry else field}:` "
                     f"before #6274.3 cutover.",
                     file=sys.stderr,
                 )
