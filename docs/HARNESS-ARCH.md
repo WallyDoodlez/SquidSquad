@@ -138,7 +138,7 @@ Request body: `{pr_number: int, branch: str, role: str}`. The harness merges the
 | Method | Path | harness.py | Purpose |
 |---|---|---|---|
 | POST | `/hooks/session-end` | 2777 | Receives `SessionEnd` hook payloads from agents; persists `last_session_end` on `AgentState` |
-| POST | `/hooks/activity` | 2847 | Receives `PreToolUse`/`PostToolUse` hook payloads; persists `last_activity_at` on `AgentState` |
+| POST | `/hooks/activity` | 2847 | Receives `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `PostToolUseFailure` hook payloads; persists `last_activity_at` on `AgentState`. The `UserPromptSubmit` source (#13213) adds a heartbeat at **prompt-receipt** — before the agent's first tool call — closing the freeze-after-prompt-before-first-tool-call window (§15.1) |
 | POST | `/hooks/pause` | 2944 | Receives pause-guard payloads (e.g. rate-limit, permission wait); persists `in_flight_until` / `waiting_since` / `compacting_since` on `AgentState` |
 
 **Header contract**: every hook POST must include `X-Agent-Role: <alias>` identifying the sending agent. The harness uses this header to route the payload to the correct `AgentState` entry.
@@ -599,7 +599,9 @@ The harness determines whether an agent is alive from the **activity the agent a
 
 Liveness rests on two mechanisms, both **by-products of normal agent operation** — there is no dedicated heartbeat channel:
 
-1. **Activity heartbeat.** Every tool call (`PostToolUse` / `PostToolUseFailure`) and every completed cycle (`cycle_post`) is a heartbeat. A working agent emits them continuously; a **wedged** loop stops making tool calls and completing cycles, so the heartbeat stops and the agent is detected. Because they fire from the agent's real loop, the heartbeat proves the loop is *progressing*, not merely that the process exists. Liveness is evaluated **relative to dispatched work**: when the harness nudges or assigns an agent, it expects heartbeat activity within a window. An idle agent with no dispatched work is not actively monitored; a dead idle agent surfaces the moment work is dispatched and it produces no activity.
+1. **Activity heartbeat.** Three agent-loop events are heartbeats: **prompt-receipt** (`UserPromptSubmit` — a nudge, cycle/driver tick, or inline turn reaches the agent), every **tool call** (`PreToolUse` / `PostToolUse` / `PostToolUseFailure`), and every **completed cycle** (`cycle_post`). A working agent emits them continuously; a **wedged** loop stops, so the heartbeat stops and the agent is detected. Because they fire from the agent's real loop, the heartbeat proves the loop is *progressing*, not merely that the process exists. Liveness is evaluated **relative to dispatched work**: when the harness nudges or assigns an agent, it expects heartbeat activity within a window. An idle agent with no dispatched work is not actively monitored; a dead idle agent surfaces the moment work is dispatched and it produces no activity.
+
+   The `UserPromptSubmit` source (#13213) closes a specific gap: tool-call heartbeats only fire once the agent *starts acting*, so an agent that **receives a prompt and then wedges before its first tool call** would leave `last_activity_at` frozen at the prior cycle's last tool call — indistinguishable from a legitimately idle agent. Stamping a heartbeat at prompt-receipt makes "input arrived, loop should now be progressing" an explicit anchor: after a `UserPromptSubmit` heartbeat the harness expects a following tool-call (or pause-explaining) hook within the activity window, and its absence is a wedge (the qa-wedge class behind #12271 — input received, then frozen). It is routed through the same async command hook (`activity_hook.py`) and `/hooks/activity` endpoint as the tool-call heartbeats (§16.1, §4.6).
 
 2. **Pause-aware guard.** Silence is *only* a death signal when nothing explains it. An agent is legitimately silent in several states — and in every case a **hook tells the harness which state it is in**, so these never lose life:
    - **Mid-tool-call** — `PreToolUse` with no matching `PostToolUse` (a long `Bash`, slow build, or **subagent call**). Treat as working; bounded only by a generous `tool_call_max` (to catch a genuinely hung tool).
@@ -625,6 +627,7 @@ sequenceDiagram
 
     H->>A: nudge or assign work
     Note over H,A: heartbeat is the agent's own activity
+    A->>H: UserPromptSubmit - prompt received, heartbeat (before first tool call, #13213)
     loop each tool call while working
         A->>H: PreToolUse - tool, task, phase - sets in-flight, heartbeat
         A->>H: PostToolUse or PostToolUseFailure - clears in-flight, heartbeat
@@ -632,6 +635,7 @@ sequenceDiagram
     A->>H: cycle_post - heartbeat
     A->>H: SessionEnd - reason recorded
     Note over H: after dispatch, dead only if silent AND no hook explains it - see 15.1 for the pause states
+    Note over H: a UserPromptSubmit with no following tool-call/pause hook in the window = wedged-after-prompt
 ```
 
 ### 15.4 `SessionEnd` reason
@@ -668,7 +672,7 @@ The migration from the PID-based health poll (§7.3) to this model — landing o
 
 ## 16. Agent observability via hooks
 
-> **Status:** target architecture; implementation tracked by **#12271** (the liveness consumer) and **#12410** (display). Hooks are configured in each agent's `settings.json` — deployed per-clone by compose/installer — as native **HTTP hooks that POST the hook payload directly to the harness** (no shell wrapper).
+> **Status:** target architecture; implementation tracked by **#12271** (the liveness consumer) and **#12410** (display). Hooks are configured in each agent's `settings.json` — deployed per-clone by compose/installer — in **two transports**: high-frequency activity-heartbeat hooks as async `type: command` hooks via `activity_hook.py`, and lower-frequency hooks as native `type: http` hooks (see §16.3 for why, and which is which).
 
 The harness instruments each agent with a curated set of Claude Code hooks, giving it a live, per-agent telemetry stream: current activity, turn boundaries, subagent lifecycle, stalls, API errors, context pressure, and exit reasons. **Liveness (§15) is one consumer** of this stream; the operator display (#12410) is another. Every hook is wired **observational / fail-open** — it reports, it never blocks or fails the agent's work.
 
@@ -677,12 +681,12 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 | Hook | Fires | Telemetry → harness use |
 |---|---|---|
 | `SessionStart` (`source`) | session start / resume / post-compact | boot confirmation; fresh vs resume vs post-compact |
-| `UserPromptSubmit` (`prompt`) | a nudge / cycle trigger reaches the agent | "cycle starting" + the trigger |
+| `UserPromptSubmit` (`prompt`) | a nudge / cycle-or-driver tick / inline turn reaches the agent | "cycle starting" + the trigger **and an activity heartbeat at prompt-receipt** (§15.1) — routed through `activity_hook.py` → `/hooks/activity`, so it feeds the liveness verdict, not just display (#13213) |
 | `PreToolUse` (`tool_name`, `tool_input`, + injected task/issue/phase) | before each tool call | **activity** ("about to run X for #N") + sets the **in-flight** flag (§15) |
 | `PostToolUse` (`tool_name`, `tool_output`) | after a tool succeeds | activity result + **heartbeat** + clears in-flight |
 | `PostToolUseFailure` (`tool_name`, error) | after a tool fails | **tool-error visibility** + heartbeat |
 | `SubagentStart` / `SubagentStop` (`agent_type`) | subagent spawned / finished | live **subagent tree** + progress |
-| `Stop` (`stop_hook_active`) | agent finishes a turn | turn-complete heartbeat |
+| `Stop` (`stop_hook_active`) | agent finishes a turn | turn-boundary signal → `/hooks/pause` (not an activity-heartbeat source — the heartbeat sources are §15.1's `UserPromptSubmit` / `Pre`/`PostToolUse` / `cycle_post`) |
 | `StopFailure` (matcher: `rate_limit`/`overloaded`/`billing_error`/`authentication_failed`/…) | a turn ends on an API error | **names the failure** — usage/rate-limit, billing, auth → cause-aware reboot/backoff |
 | `Notification` (`notification_type`: `permission_prompt`/`idle_prompt`/…) | agent needs attention | **stuck-on-permission** + idle detection |
 | `PreCompact` / `PostCompact` (`manual`/`auto`) | around context compaction | **compaction telemetry** — agent summarising context in place and continuing (self-managed, not a restart) |
@@ -698,12 +702,12 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 ### 16.3 Constraints
 
 - **Observational / fail-open.** Several of these hooks *can* block the agent (exit 2 / `decision`); wired for telemetry they must not — bounded timeout, backgrounded, always succeed.
-- **HTTP transport.** Native `type: http` hooks POST the payload to the harness; no shell wrapper. Deployed per-clone via `settings.json`.
+- **Transport (two kinds).** High-frequency **activity-heartbeat** hooks — `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `PostToolUseFailure` — are async `type: command` hooks that shell out to `references/scripts/activity_hook.py` (which POSTs to `/hooks/activity`). They MUST be `command` + `async: true`, because native `type: http` hooks are **synchronous** (they block the tool call, default 600s timeout), and these fire on every tool call; `async` command hooks are fire-and-forget so they can never stall/fail the agent (§15.5 constraint 1, exit 0 always). Lower-frequency hooks — `SessionEnd`, and the pause-guard hooks (`Notification` / `Stop` / `PreCompact` etc. → `/hooks/pause`) — fire at most once per event and are wired as native `type: http` hooks. Both kinds are deployed per-clone via `settings.json` (compose / installer integration).
 - **No "context-% full" field** exists in any hook payload; `PreCompact(auto)` is the proxy for context pressure.
 
 ### 16.4 Consumers
 
-- **Liveness (§15)** — heartbeat + in-flight from `Pre`/`PostToolUse` + `cycle_post`; reboot reason from `SessionEnd` / `StopFailure`.
+- **Liveness (§15)** — heartbeat from `UserPromptSubmit` (prompt-receipt) + `PreToolUse` / `PostToolUse` / `PostToolUseFailure` + `cycle_post`, in-flight from the `Pre`/`PostToolUse` pair; reboot reason from `SessionEnd` / `StopFailure`.
 - **Reboot decision (§13.8)** — backoff that is cause-aware from `StopFailure` (names the API error) and graceful-vs-crash (presence/absence) from `SessionEnd`.
 - **Display (#12410)** — status line, dashboard, event highlights.
 
@@ -711,6 +715,7 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 
 ## 17. Revision log
 
+- **2026-06-21 (v29)** — **§15/§16 `UserPromptSubmit` promoted to a third activity-heartbeat source** (#13213, operator-directed; doc-first). Adds **prompt-receipt** as a heartbeat alongside the tool-call hooks + `cycle_post`, closing the **freeze-after-prompt-before-first-tool-call** wedge window (the qa-wedge class behind #12271 — input received, then frozen before any tool call, leaving `last_activity_at` stale). Edits: §15.1 model (third heartbeat + the gap rationale), the **§15.3 sequence diagram** (UserPromptSubmit beat after dispatch + a "no following tool-call/pause hook in the window = wedged-after-prompt" note), §4.6 `/hooks/activity` row, §16.1 catalog row, §16.2 liveness-consumer summary. **Transport reconcile** the change exposed: the activity-heartbeat hooks (`UserPromptSubmit`/`Pre`/`PostToolUse`/`PostToolUseFailure`) are async `type: command` hooks via `activity_hook.py` (native `type: http` hooks are synchronous and would block the tool call) — §16 banner + §16.3 corrected from the blanket "native http, no shell wrapper"; §16.1 `Stop` row reconciled to a turn-boundary signal → `/hooks/pause` (not a heartbeat). Paired with code task **#13213** (compose-template hook wiring). **DS-audited** — `.squidsquad/pm/planning/REVIEW-13213-DEEPSEEK.md`, verdict PASS; 2 minor findings (the `Stop`-label contradiction and a `PostToolUseFailure` omission in the §16.2 summary) applied.
 - **2026-06-21 (v28)** — **#10837 HARNESS-ARCH alignment PRD closed** — reconciled the doc to shipped code across a 2026-06-20 re-audit (`AUDIT-HARNESS-ARCH-2026-06-20.md`: 22 CONFIRMED / 6 DRIFT / 3 GAP / 5 STALE) plus three same-day reconciles the v27 banner predated. Doc-side (PM): §4 REST matrix corrected — added `POST /restart`, `POST /merge`, and the `/hooks/{session-end,activity,pause}` ingestion endpoints (§4.5/§4.6); removed dead `/events/in-flight`; reframed `/events/{id}/complete` as a **410 Gone tombstone** (#11165) rather than "no such endpoint"; corrected the §15/§16 "target architecture — not implemented" banner (3 of 5 hook routes shipped under #12418/#12443/#12458); fixed §13.5 legacy-permission-table description (3d8f53c74). Same-day reconciles folded in: **§7.4/§7.6 harness-as-reaper model** (#13077, fce1f3f2a — agent halts = cease output, cannot self-`/quit`; harness force-kills the deploy-halted process + tree-reaps the `event_poll` sidecar #12363 + confirms death; the 60s net is the de-facto terminator for stopping/restarting); **§11 deploy-pull/push rows** to the `--no-rebase` merge-pull model (#13158, e74fd590a); **§5.1 cursor-eviction wire contract** (#12971, d0ba91a2b); and the **`POST /work/assign`** §4.3/§13.5 update — the prior HIGH-2 "documented but absent" gap is **closed by implementation** (#12495, 6592ba6fd: narrow manual wake-injection primitive — emit `assigned-to`, no transition, no label write; not the universal router the original §8.3 prose envisioned). Residual code item split out: `/human/queue` → `/queue/{alias}` generalization (§13.6) tracked in **#13173** (low). Cross-TRD `role`→`alias` rename remains under #10839 (#10358); #10182 permission-table architectural task remains separately open.
 - **2026-06-15 (v27)** — **§15.4/§16 `SessionEnd` doc-sync to the real hook API** (skill verified it while implementing #12418). The doc assumed a richer signal than the `SessionEnd` hook provides: (1) `stop_reason` is UI-level (`clear`/`resume`/`logout`/`prompt_input_exit`/`bypass_permissions_disabled`/`other`), NOT exit-42/crash/usage-limit categories; (2) a hard crash can't run a hook, so SessionEnd fires only on graceful exit — the load-bearing signal is **presence/absence** (SessionEnd since `last_spawn_at` = graceful; dead PID + none = crash); (3) no `exit_code` in the payload. Rewrote §15.4 to the presence/absence model + the graceful-doesn't-count-toward-crash-streak / crash-counts reboot refinement; fixed §16.1 catalog row + §16.4 consumer note. (`type:http` hook transport in §16.3 was already correct — confirmed.)
 - **2026-06-15 (v26)** — **DS re-audit (step 4) residual sweep** — the verification pass caught that v24/v25 left four spots still carrying the old harness-spawned-event_poll / wrapper-PID model: §3 "Subprocess spawning" bullet (claimed `boot_agent` spawns event_poll), the §7.3 "PID-source disambiguation" note (listed `.claude-pid`=wrapper PID + a `(d) event_poll_pid` + health-poll tracking event_poll), the §7.3 Linux/macOS note (same `event_poll_pid` claim), and §7.4 "event_poll lifetime across respawn" (wrongly said event_poll *survives* a claude respawn). All four corrected: event_poll is agent-Monitor-spawned (dies with claude, fresh claude arms a new one), `.claude-pid` = resolved `claude.exe` PID, no `event_poll_pid`. (Cross-ref audit (step 5) flagged AGENT-RUNTIME §4.2/§4.3/§6/§8.0 carry the same stale model — reconciled in the same PR.)
