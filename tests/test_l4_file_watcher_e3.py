@@ -825,12 +825,26 @@ class TestFreshenSerialized13197:
         import git_ops
         state = {"now": 0, "max": 0}
         guard = threading.Lock()
+        N = 11
+        # All threads rendezvous INSIDE fake_ensure before the concurrency
+        # measurement, so a missing _FRESHEN_LOCK is exposed deterministically
+        # (not dependent on a sleep window): without the lock all N reach the
+        # barrier together → max==N; with it, only one can be inside at a time
+        # so the (N-1)th never arrives and the barrier would deadlock — hence a
+        # short timeout that, when it trips, PROVES serialization.
+        barrier = threading.Barrier(N)
 
         def fake_ensure(role=None):
+            try:
+                barrier.wait(timeout=0.5)
+            except threading.BrokenBarrierError:
+                # Expected WITH the lock: serialized → barrier never fills →
+                # times out. That is the serialization signal, not a failure.
+                pass
             with guard:
                 state["now"] += 1
                 state["max"] = max(state["max"], state["now"])
-            time.sleep(0.02)  # widen the race window so a missing lock shows
+            time.sleep(0.02)
             with guard:
                 state["now"] -= 1
             return True, "on-main-synced"
