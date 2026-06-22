@@ -1,6 +1,8 @@
 # Working State
 
-- **Task**: none
+- **Task**: 13198
+
+- **#13198 IN-PROGRESS (2026-06-21 ~20:0x)**: fleet-wide cp1252 stdio hardening (follow-up to #13185). Plan: new shared `references/scripts/cli_stdio.py` `harden_stdio()` (reconfigure stdout/stderr errors=backslashreplace, CLI-only/best-effort) + wire into all 9 agent-facing CLI mains (cycle/config/subloop_driver/model_router/scan_index/compose/boot_remote/add_role/migrate_state_branch) + refactor tracker.py to the shared helper + ASCII-sweep decorative non-ASCII in their stdout + tests. Incremental commits (clean partial branch if cut off). branch squidsquad/task/13198.
 
 - **#13197 SHIPPED → pending-test (PR #13205, branch squidsquad/task/13197)**: l4_file_watcher freshen index.lock collision. RCA (facts + PM's 19:55 corroboration): per-role-class debounce callbacks fire on independent Timer threads → N concurrent ensure_main_and_pull on same clone → .git/index.lock collision → 11x pull-failed/compose-failed storm. (PM's 19:50 single non-concurrent freshen SUCCEEDED while dirty → disconfirms dirty-tree, pins concurrency.) Fix: module-level `_FRESHEN_LOCK` serializes the freshen in _default_ensure_fresh_source. +2 tests (Barrier-based 11-thread concurrency). Gate 4936/0/0. Sonnet review (DeepSeek 402) NO_BLOCKING (MED watcher-vs-deploy residual + test-flakiness LOW addressed). DS-REVIEW-13197.md on main. **Known residual documented**: post-merge deploy calls ensure_main_and_pull outside _FRESHEN_LOCK (comprehensive fix = move lock to git_ops; separate slice). Addressed PM unread-feedback before transition.
 
