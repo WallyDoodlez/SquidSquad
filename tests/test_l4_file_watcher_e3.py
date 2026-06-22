@@ -807,6 +807,55 @@ class TestEnsureMainAndPull12906:
         assert "unexpected" in detail
 
 
+class TestFreshenSerialized13197:
+    """#13197: each per-role-class debounce callback fires
+    _default_ensure_fresh_source on its OWN Timer thread, all against the SAME
+    harness clone. Without serialization, concurrent `git pull` collided on
+    `.git/index.lock` → an N-way pull-failed/compose-failed storm. _FRESHEN_LOCK
+    must single-flight the git freshen."""
+
+    def test_freshen_lock_exists(self):
+        assert isinstance(lfw._FRESHEN_LOCK, type(threading.Lock()))
+
+    def test_concurrent_freshens_are_serialized(self, monkeypatch, tmp_path):
+        """11 threads (the observed burst size) calling the freshen must never
+        run the underlying git op concurrently — the lock keeps max in-flight
+        at 1. Without _FRESHEN_LOCK this would observe up to 11-way concurrency
+        (the index.lock-collision regression)."""
+        import git_ops
+        state = {"now": 0, "max": 0}
+        guard = threading.Lock()
+
+        def fake_ensure(role=None):
+            with guard:
+                state["now"] += 1
+                state["max"] = max(state["max"], state["now"])
+            time.sleep(0.02)  # widen the race window so a missing lock shows
+            with guard:
+                state["now"] -= 1
+            return True, "on-main-synced"
+
+        monkeypatch.setattr(git_ops, "ensure_main_and_pull", fake_ensure)
+
+        results = []
+
+        def worker():
+            results.append(lfw._default_ensure_fresh_source(repo_root=tmp_path))
+
+        threads = [threading.Thread(target=worker) for _ in range(11)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 11
+        assert all(ok for ok, _ in results)  # all succeed (serialized no-ops)
+        assert state["max"] == 1, (
+            f"git freshen ran {state['max']}-way concurrent — _FRESHEN_LOCK is "
+            f"not serializing (the #13197 .git/index.lock-collision regression)"
+        )
+
+
 class TestPostMergeDeployFreshness12906:
     """AC1 — the OTHER harness-side recompose path (post-merge
     deploy-all) must also ensure-main + pull before composing. Static
