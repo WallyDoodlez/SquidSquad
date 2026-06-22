@@ -766,3 +766,57 @@ class TestTransitionShipGateSquashMerge:
         captured = capsys.readouterr()
         assert "BLOCKED" in captured.err
         assert "not merged to the working branch" in captured.err
+
+
+class TestHardenStdio13185:
+    """#13185: tracker.py CLI stdout/stderr must be crash-proof on a console
+    whose encoding can't represent a printed char (Windows cp1252 has no glyph
+    for U+2192). The crash hit a SUCCESS print after the side effect (the wake
+    emit) had landed → false-failure exit 1 + double-emit risk."""
+
+    def _cp1252_stream(self):
+        # A TextIOWrapper over bytes using strict cp1252 — mimics the Windows
+        # console that triggered the crash.
+        import io
+        return io.TextIOWrapper(io.BytesIO(), encoding="cp1252", newline="")
+
+    def test_regression_cp1252_arrow_crashes_without_hardening(self):
+        """Baseline repro: the original U+2192 success line raises on a strict
+        cp1252 stream — the exact UnicodeEncodeError #13185 reported."""
+        s = self._cp1252_stream()
+        with pytest.raises(UnicodeEncodeError):
+            s.write("work-assign → skill")  # the pre-fix decorative char
+
+    def test_hardening_makes_cp1252_unencodable_char_not_raise(self):
+        """After the _harden_stdio reconfigure, the SAME unencodable char no
+        longer crashes — it is backslash-escaped instead."""
+        s = self._cp1252_stream()
+        s.reconfigure(errors="backslashreplace")
+        s.write("work-assign → skill")  # must NOT raise
+        s.flush()
+        assert s.errors == "backslashreplace"
+
+    def test_harden_stdio_sets_backslashreplace(self):
+        s = self._cp1252_stream()
+        with patch.object(tracker.sys, "stdout", s), \
+             patch.object(tracker.sys, "stderr", self._cp1252_stream()):
+            tracker._harden_stdio()
+            assert tracker.sys.stdout.errors == "backslashreplace"
+            assert tracker.sys.stderr.errors == "backslashreplace"
+
+    def test_harden_stdio_safe_when_stream_not_reconfigurable(self):
+        """Best-effort: a stream without reconfigure() (e.g. a captured/replaced
+        stream) is left as-is, no raise."""
+        class _NoReconfigure:
+            pass
+        with patch.object(tracker.sys, "stdout", _NoReconfigure()), \
+             patch.object(tracker.sys, "stderr", _NoReconfigure()):
+            tracker._harden_stdio()  # must not raise
+
+    def test_work_assign_success_line_is_ascii(self):
+        """Guard against reintroducing a decorative non-ASCII char in the
+        work-assign success print (the reported crash site)."""
+        import inspect
+        src = inspect.getsource(tracker.work_assign)
+        assert "→" not in src, "work-assign success print must stay ASCII (#13185)"
+        assert "work-assign ->" in src

@@ -1684,7 +1684,7 @@ def work_assign(target_alias, caller, issue=None, event_context=None, payload=No
 
     port = _discover_port()
     if port is None:
-        print("ERROR: harness port not discoverable (.harness-port absent) — "
+        print("ERROR: harness port not discoverable (.harness-port absent) -- "
               "is the harness running?", file=sys.stderr)
         return None
 
@@ -1729,7 +1729,7 @@ def work_assign(target_alias, caller, issue=None, event_context=None, payload=No
         return None
 
     event_id = result.get("event_id")
-    print(f"work-assign → {target_alias} (event_id={event_id})")
+    print(f"work-assign -> {target_alias} (event_id={event_id})")
     return event_id
 
 
@@ -1759,7 +1759,27 @@ def _parse_args():
     return cmd, positional, opts
 
 
+def _harden_stdio():
+    """#13185: make CLI stdout/stderr crash-proof on consoles whose encoding
+    cannot represent every character we print. A Windows cp1252 console has no
+    glyph for e.g. U+2192 ('->'), so a success line containing one raised
+    UnicodeEncodeError AFTER the side effect had already landed (work-assign had
+    already emitted the wake) — a false-failure exit 1 + traceback that invites
+    a double-emit retry. `errors="backslashreplace"` keeps the console's own
+    encoding (so ordinary ASCII output is untouched) but escapes an unencodable
+    char instead of raising. Best-effort + CLI-only (never at import — tracker.py
+    is also imported as a library; reconfiguring a library consumer's global
+    stdio would be wrong): a non-reconfigurable stream (already detached/
+    replaced/captured) is left as-is. Python 3.7+ (project is 3.10+)."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass
+
+
 def main():
+    _harden_stdio()
     cmd, pos, opts = _parse_args()
 
     if cmd == "check-gh":
