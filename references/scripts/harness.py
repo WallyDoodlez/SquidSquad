@@ -5400,6 +5400,19 @@ def _build_uvicorn_config(app_, host, port, log_level="warning"):
 
 
 def main():
+    # #13236 — crash-proof our own stdout/stderr first thing, before any print
+    # (banner, port-in-use notice, status lines). harness.py was named in the
+    # #13198 cp1252 crash-class list but left unwired: its banner is intentional
+    # box-drawing ASCII-art (U+2588 et al.) that cannot encode on a strict cp1252
+    # console, so a bare `python harness.py` launch (start.ps1:57, no PYTHONUTF8)
+    # would raise UnicodeEncodeError on the banner. harden_stdio() uses
+    # errors="backslashreplace" — the art degrades to escapes on a legacy console
+    # (no crash) and renders normally on UTF-8. In-process parity with the rest
+    # of the fleet (#13198); the banner literals are deliberately NOT ASCII-swept
+    # (unlike the agent-facing CLIs) — they are decorative art, not messages.
+    from cli_stdio import harden_stdio
+    harden_stdio()
+
     # On Windows, the default ProactorEventLoop's cleanup path
     # (_ProactorBasePipeTransport._call_connection_lost) does not handle
     # ConnectionResetError gracefully — when a client (uvicorn keepalive,
