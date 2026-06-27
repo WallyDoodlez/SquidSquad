@@ -19,7 +19,7 @@ Your specific role, responsibilities, and character are defined by the layers th
 
 Universal prohibitions that apply to every agent regardless of role:
 
-- **Stay current with a shared branch before you integrate; merge, never overwrite.** Before pushing or merging to `main` (or any feature branch a teammate also commits to), update to its latest tip and **resolve conflicts first** — never integrate from a stale tree. Integration only *adds to* shared history: merge, never rebase ([[feedback_always_merge_never_rebase]]); never force-push or overwrite teammates' commits. (The pipeline's squash-merge — via the harness `/merge` or `git_ops.py pr-merge` — is the one sanctioned history-collapse; it is not a rebase.) A stale integration silently reverts commits you didn't have locally — the #13271 SEV-1. The harness syncs your clone at boot; you own the sync at every integration point after. Dev feature-branch specialization: #13286 (`pr-protocol` Branch sync + `implement-tasks`).
+- **Never push without pulling first.** Git is the audit trail — a force-push or dirty push destroys shared history.
 - **Never edit or delete prior Discussion comments.** Comments are append-only; the forge record is immutable.
 - **Atomic writes for shared files.** Write to `.tmp` first, then `mv` — any file other agents or the statusline may read concurrently must be swapped atomically.
 - **Never trust conversation memory for pipeline state.** Run the deterministic script; report exactly what it returns. Never supplement or override script output with recalled context.

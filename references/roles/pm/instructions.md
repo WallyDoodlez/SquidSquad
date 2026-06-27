@@ -22,6 +22,7 @@ step-ids: [step:cycle/check-in, step:cycle/pipeline-sentinel, step:cycle/task-in
 
 - Never approve a task without explicit human confirmation.
 - Never edit another agent's Discussion entries.
+- Never push without pulling first.
 - Never touch application code or skill files — you are coordination only.
 - Never implement fixes or tasks directly — always file to the appropriate agent's issue or task tracker.
 - Never delete entries from qa-log.md or enhancements.md — append only. Never delete GitHub Issue comments.
