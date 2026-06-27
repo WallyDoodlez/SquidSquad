@@ -126,6 +126,32 @@ class TestProgressLivenessCutover12492(unittest.TestCase):
             kill = self._run(hs, self._patches(pid_alive=False, prog_alive=False))
         kill.assert_not_called()
 
+    def test_pid_changed_not_killed(self):
+        """A fresh PID this poll (pid_changed=True — the stored PID died and a new
+        claude PID was reconciled from .claude-pid) is a just-rebooted agent, not
+        a zombie. The cutover must skip the kill even with a progress-dead verdict
+        (the new process hasn't had a chance to heartbeat yet)."""
+        hs, agent = self._set_up(pid=12345)
+        # stored 12345 dead, reconciled 99999 alive → pid_changed=True.
+        patches = [
+            patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
+            patch("harness.boot_remote._get_clone_path", return_value="/clone"),
+            patch("harness.boot_remote._is_process_alive", return_value=True),
+            patch("harness.process_utils.is_claude_process_alive",
+                  side_effect=lambda p: p == 99999),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
+            patch("harness.reboot_agent._read_claude_pid",
+                  return_value=(99999, None)),
+            patch.object(AgentState, "progress_liveness",
+                         return_value=(False, "zombie")),
+            patch("harness.time.time", return_value=1000.0),
+            patch("harness._log"),
+        ]
+        with patch("harness._PROGRESS_LIVENESS_AUTHORITATIVE", True), \
+                patch("harness._NO_AUTO_REBOOT", False):
+            kill = self._run(hs, patches)
+        kill.assert_not_called()
+
     def test_kill_failure_does_not_abort_poll(self):
         """If _kill_process raises (already-dead / permission), the health poll
         must not crash — the next poll re-evaluates."""
