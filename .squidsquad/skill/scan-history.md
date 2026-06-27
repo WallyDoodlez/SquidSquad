@@ -1861,3 +1861,10 @@
 - **Findings**: 1 filed — #13172 (low — `_load_manifest_v2_from_file` silently resets a wrong-TYPE `additional_includes` to [] with no warning/error, while every adjacent path fail-closes via sys.exit/return None → silently-incomplete composed CLAUDE.md). 1 dispositioned not-filed — test_agent_boundaries `test_ac11` stale-assertion (asserts WARNING that compose.py eb037d612 deliberately removed) is ALREADY tracked: it's part of the #10360-blocked test_agent_boundaries known-failure (gate note: "ac4/ac6/ac11 superseded by agent-boundaries sub-skill retirement; rewrite the file together once #10360 unblocks it") — filing would duplicate.
 - **Items rejected by human**: none yet
 - **Notes**: compose pipeline fail-closes correctly on base_role-missing (sys.exit), missing additional sub-skill (sys.exit), and wrong-type base `includes` (return None) — the wrong-type `additional_includes` is the sole silent-swallow. Criteria note (reinforces last scan's): the fail-open-vs-fail-closed *consistency* lens is productive across this codebase — when a function has N sibling validation branches and one is silent, that one is usually the bug. Recursive-awareness payoff: knowing the #10360 known-failure baseline let me disposition Finding 1 as already-tracked rather than file a duplicate.
+
+## Scan — 2026-06-27 01:31
+
+- **Files scanned**: references/scripts/git_ops.py (navigation-derived from this session's #13215/#13211 deep work + DS-reviews)
+- **Findings**: #13261 (git_ops.pull MERGING-state-after-failed-retry drops stash + leaves MERGE_HEAD — same gap #13215 fixed in the deploy path's _safe_pull_in_clone, on the every-agent path), #13262 (_run/_run_list no subprocess timeout= — a hung git wedges callers; scope widened by #13211 lock unification)
+- **Criteria note**: DS-review of a fix often surfaces the SAME defect class in a sibling code path (here: the every-agent git_ops.pull mirrored the deploy-path bug). Capture those reviewer "the identical gap exists in X" asides as filed findings, not just PR comments.
+- **Items rejected by human**: none
