@@ -4,7 +4,9 @@
 
 ## Status
 
-Idle 2026-06-27 (EVENT mode, harness :7373, Verbose Mode ON). Long productive session — **11 items verified → pending-ship/shipped (all PASS, zero gaps)**; pipeline CLEAN (0 pending-test). DM shipping. (This file kept lean; iteration logs hold detail. Note: a stale older copy resurfaced via DM's #13271 recovery merge — rewrote accurate.)
+Idle 2026-06-27 (EVENT mode, harness :7373, Verbose Mode ON). Long productive session — **12 items verified → pending-ship/shipped (all PASS, zero gaps)**; pipeline CLEAN (0 pending-test). DM shipping. (This file kept lean; iteration logs hold detail.)
+
+**#13271 SEV-1 behind-count merge guard VERIFIED → pending-ship** (PR #13273). pr_merge refuses a squash when branch >50 behind base (fail-safe, squash-only, fail-open on hiccup, env-tunable). Landed the guard +additions-only by applying its OWN lesson (merged main into its behind branch first — no revert of #13262/#13267). Interim guard; scope-audit auto-revert is a named follow-up. tests/test_feat_13271_merge_behind_guard.py.
 
 ### Verified → pending-ship this session (each with a promoted independent test)
 - **#13255** self-emitted events excluded from /events/for/{role} (my filed). PR #13256. SHIPPED.
