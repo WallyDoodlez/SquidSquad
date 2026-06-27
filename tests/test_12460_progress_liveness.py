@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
 
 import harness  # noqa: E402
-from harness import AgentState, ACTIVITY_GRACE_SECONDS  # noqa: E402
+from harness import AgentState, ACTIVITY_GRACE_SECONDS, BOOT_GRACE_SECONDS  # noqa: E402
 
 
 NOW = 1_000_000.0  # fixed epoch for deterministic math
@@ -42,6 +42,47 @@ class TestProgressLiveness:
     def test_not_booted_is_alive(self):
         a = AgentState("skill")  # bootup_complete = False
         a.last_dispatch_at = NOW - 10 * ACTIVITY_GRACE_SECONDS  # stale dispatch
+        # No spawn reference (boot_time/last_spawn_at both None) → cannot age the
+        # boot → conservatively "booting" (#13179: never false-positive a death
+        # we cannot time).
+        alive, reason = a.progress_liveness(NOW)
+        assert alive is True
+        assert reason == "booting"
+
+    # -- #13179 (#12271 Slice A): bound the unbounded "booting" escape ---------
+
+    def test_not_booted_within_boot_grace_is_alive(self):
+        """A fresh boot still within BOOT_GRACE_SECONDS reads booting (alive)."""
+        a = AgentState("skill")  # bootup_complete = False
+        a.last_spawn_at = NOW - (BOOT_GRACE_SECONDS - 1)  # just inside grace
+        alive, reason = a.progress_liveness(NOW)
+        assert alive is True
+        assert reason == "booting"
+
+    def test_not_booted_past_boot_grace_is_wedged(self):
+        """THE qa-wedge catch (#13179 AC1/AC3): bootup_complete=False past the
+        boot-grace → wedged, not booting. The unbounded escape returned alive
+        forever here (qa sat bootup_complete=False ~54m)."""
+        a = AgentState("skill")  # bootup_complete = False
+        a.last_spawn_at = NOW - (BOOT_GRACE_SECONDS + 100)  # grace elapsed
+        alive, reason = a.progress_liveness(NOW)
+        assert alive is False
+        assert reason == "wedged-boot-timeout"
+
+    def test_not_booted_boot_time_fallback_when_no_spawn(self):
+        """When last_spawn_at is absent, age the boot from boot_time."""
+        a = AgentState("skill")  # bootup_complete = False
+        a.last_spawn_at = None
+        a.boot_time = NOW - (BOOT_GRACE_SECONDS + 100)
+        alive, reason = a.progress_liveness(NOW)
+        assert alive is False
+        assert reason == "wedged-boot-timeout"
+
+    def test_not_booted_at_grace_boundary_is_alive(self):
+        """Exactly at the boundary (== grace, not >) is still booting — the
+        wedge verdict requires STRICTLY exceeding the grace."""
+        a = AgentState("skill")
+        a.last_spawn_at = NOW - BOOT_GRACE_SECONDS  # exactly at the ceiling
         alive, reason = a.progress_liveness(NOW)
         assert alive is True
         assert reason == "booting"

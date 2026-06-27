@@ -34,7 +34,21 @@ import io
 import json
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
+
+# #13211 — serialize ensure_main_and_pull across ALL in-process callers (the
+# L4 watcher's per-role-class freshen bursts AND the post-merge deploy-all path,
+# both in the harness process). Concurrent main-checkout + pull on the SAME
+# clone collide on .git/index.lock (#13197 fixed this for the watcher-only case
+# via a watcher-local lock; the deploy path called ensure_main_and_pull outside
+# it). Hoisting the lock here covers every caller from one place. ensure_main_
+# and_pull never re-enters itself (it calls _run/pull only), so a plain
+# non-reentrant Lock cannot self-deadlock. Threading-scoped (not cross-process):
+# the racing callers are threads in the one harness process; the CLI caller is a
+# separate process not part of that race.
+_ENSURE_MAIN_LOCK = threading.Lock()
 
 # Ensure stdout/stderr can handle UTF-8 on Windows (cp1252 consoles choke on em dashes etc.)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -192,6 +206,20 @@ def _emit(event_type, payload=None, cycle_number=None, role=None):
         pass
 
 
+def _stash_top_ref():
+    """SHA of the top stash entry (``refs/stash``), or ``""`` if no stash exists.
+
+    Used to detect whether a ``git stash`` actually created a NEW entry: on a
+    CLEAN working tree ``git stash`` is a no-op that still exits 0, so a
+    subsequent pop would apply a PRE-EXISTING (possibly ancient) stash —
+    splattering ``<<<<<<<`` conflict markers tree-wide and breaking compose
+    (#13167). Callers compare this before/after their stash and only pop when
+    the ref changed (i.e. they created the stash they are about to pop).
+    """
+    r = _run("git rev-parse --quiet --verify refs/stash", check=False)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
 def _safe_stash_pop():
     """Pop the most recent stash, leaving NO conflict markers behind (#13045).
 
@@ -249,21 +277,32 @@ def pull(role=None):
         _emit("git-pull", {"result": "ok"}, role=role)
         return True
 
-    # Try stash + pull + pop
+    # Try stash + pull + pop. #13167: guard against `git stash` being a no-op
+    # on a clean tree (exits 0 but creates nothing) — popping then would apply a
+    # PRE-EXISTING ancient stash and write conflict markers tree-wide, breaking
+    # compose. Only pop when our stash actually created a new entry.
+    pre_stash_ref = _stash_top_ref()
     stash_result = _run("git stash", check=False)
     if stash_result.returncode != 0:
         print("WARNING: git stash failed -- skipping pull", file=sys.stderr)
         return False
+    stashed = _stash_top_ref() != pre_stash_ref
 
     retry = _run("git pull", check=False)
     if retry.returncode != 0:
-        # Restore stashed changes and report failure
-        _run("git stash pop", check=False)
+        # Restore OUR stashed changes (only if we actually created one) and
+        # report failure. Use the marker-safe pop (#13045), never a raw pop.
+        if stashed:
+            _safe_stash_pop()
         print(f"WARNING: git pull failed after stash -- {retry.stderr.strip()}",
               file=sys.stderr)
         return False
 
-    if _safe_stash_pop():
+    if not stashed:
+        # Clean tree — `git stash` stashed nothing, so there is nothing of ours
+        # to pop. Do NOT pop a pre-existing stash (#13167).
+        print("Pulled (no local changes to stash)")
+    elif _safe_stash_pop():
         print("Pulled (stashed and popped)")
     else:
         # #13045: a conflicted pop is resolved to the pulled HEAD (markers
@@ -298,21 +337,28 @@ def ensure_main_and_pull(role=None):
     until a later recompose succeeds.
     """
     try:
-        result = _run("git branch --show-current", check=False)
-        branch = result.stdout.strip() if result.returncode == 0 else ""
-        if branch != "main":
-            sw = _run_list(["git", "checkout", "main"], check=False)
-            if sw.returncode != 0:
-                detail = (sw.stderr or sw.stdout or "").strip()[:200]
-                print(
-                    f"WARNING: ensure_main_and_pull could not switch to main "
-                    f"from {branch!r}: {detail}",
-                    file=sys.stderr,
-                )
-                return False, f"checkout-main-failed (on {branch!r})"
-        if not pull(role=role):
-            return False, "pull-failed"
-        return True, "on-main-synced"
+        # #13211 — single-flight the checkout+pull across every in-process
+        # caller (watcher freshen bursts + post-merge deploy-all) so concurrent
+        # git on the shared clone can't collide on .git/index.lock. Held across
+        # the subprocess git calls below — exactly the serialization #13197
+        # established (it just lived in the watcher before, missing the deploy
+        # path). Inside the try so the "Never raises" contract still holds.
+        with _ENSURE_MAIN_LOCK:
+            result = _run("git branch --show-current", check=False)
+            branch = result.stdout.strip() if result.returncode == 0 else ""
+            if branch != "main":
+                sw = _run_list(["git", "checkout", "main"], check=False)
+                if sw.returncode != 0:
+                    detail = (sw.stderr or sw.stdout or "").strip()[:200]
+                    print(
+                        f"WARNING: ensure_main_and_pull could not switch to main "
+                        f"from {branch!r}: {detail}",
+                        file=sys.stderr,
+                    )
+                    return False, f"checkout-main-failed (on {branch!r})"
+            if not pull(role=role):
+                return False, "pull-failed"
+            return True, "on-main-synced"
     except Exception as exc:  # noqa: BLE001 — "Never raises" is the contract
         print(
             f"WARNING: ensure_main_and_pull raised unexpectedly: {exc!r}",
@@ -489,12 +535,21 @@ def pr_ready(pr_number):
     return True
 
 
-def pr_merge(pr_number, strategy="squash"):
+def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
 
     Checks PR state first — if already merged, returns success.
     On merge conflict or unexpected failure, returns failure with details.
+
+    #10540: "Base branch was modified" is a TRANSIENT batch-ship race (not a
+    real conflict) — when DM drains a deep ship queue, each successful merge
+    moves main's SHA, so PRs dispatched against the old base are rejected until
+    GitHub recomputes mergeability; the same PR retried alone succeeds. The
+    gh-CLI path retries that specific error up to ``_max_base_retries`` times
+    (``_base_retry_delay`` seconds apart, to let GitHub settle), while a real
+    ``merge conflict`` stays terminal (routed back to in-progress for rebase,
+    never retried). The retry knobs are parameters for deterministic testing.
     """
     try:
         from forge_adapter import get_adapter, _read_forge_config
@@ -539,33 +594,49 @@ def pr_merge(pr_number, strategy="squash"):
         except (json.JSONDecodeError, AttributeError):
             pass
 
-    # Attempt merge
+    # Attempt merge, retrying ONLY the transient "Base branch was modified"
+    # batch-ship race (#10540). A real merge conflict is terminal.
     merge_args = ["gh", "pr", "merge", str(pr_number), f"--{strategy}", "--delete-branch"]
-    result = _run_list(merge_args, check=False)
-    if result.returncode == 0:
-        # pr-merge event removed (#6126) — harness emits pr-merged instead
-        print(f"PR #{pr_number} merged ({strategy})")
-        # Extract linked issue number from branch name
-        branch_result = _run_list(
-            ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
-            check=False,
-        )
-        if branch_result.returncode == 0:
-            try:
-                branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
-                # Branch format: squidsquad/role/NUMBER
-                parts = branch_name.split("/")
-                if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
-                    issue_num = parts[-1]
-                    print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
-            except (json.JSONDecodeError, AttributeError, IndexError):
-                pass
-        return True, "merged"
-    else:
+    for attempt in range(_max_base_retries + 1):
+        result = _run_list(merge_args, check=False)
+        if result.returncode == 0:
+            # pr-merge event removed (#6126) — harness emits pr-merged instead
+            print(f"PR #{pr_number} merged ({strategy})")
+            # Extract linked issue number from branch name
+            branch_result = _run_list(
+                ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
+                check=False,
+            )
+            if branch_result.returncode == 0:
+                try:
+                    branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
+                    # Branch format: squidsquad/role/NUMBER
+                    parts = branch_name.split("/")
+                    if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
+                        issue_num = parts[-1]
+                        print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
+                except (json.JSONDecodeError, AttributeError, IndexError):
+                    pass
+            return True, "merged"
+
         error = result.stderr.strip()
-        if "merge conflict" in error.lower() or "not mergeable" in error.lower():
+        error_lower = error.lower()
+        # Real conflict — terminal, never retried (routes back for rebase).
+        if "merge conflict" in error_lower or "not mergeable" in error_lower:
             print(f"PR #{pr_number} has merge conflicts", file=sys.stderr)
             return False, "merge conflict"
+        # Transient batch-ship race — an earlier merge moved main's SHA. Retry
+        # after a short settle so GitHub recomputes mergeability against the new
+        # base (#10540). Checked AFTER the conflict guard so a real conflict
+        # never masquerades as the race.
+        if "base branch was modified" in error_lower and attempt < _max_base_retries:
+            print(
+                f"PR #{pr_number}: base branch moved (batch-ship race) — "
+                f"retry {attempt + 1}/{_max_base_retries} after {_base_retry_delay}s",
+                file=sys.stderr,
+            )
+            time.sleep(_base_retry_delay)
+            continue
         print(f"ERROR: PR #{pr_number} merge failed: {error}", file=sys.stderr)
         return False, f"merge failed: {error}"
 
@@ -653,17 +724,25 @@ def _safe_checkout(target_branch):
     result = _run_list(["git", "checkout", target_branch], check=False)
     if result.returncode == 0:
         return True
-    # Unstaged changes blocking checkout — stash and retry
+    # Checkout failed (commonly unstaged changes, but possibly a non-dirty
+    # reason e.g. branch-not-found) — stash anything present and retry. #13167:
+    # guard the stash so a no-op stash (clean tree / non-dirty failure) never
+    # leads to popping a PRE-EXISTING ancient stash. Only pop what we stashed.
+    pre_stash_ref = _stash_top_ref()
     _run("git stash -q", check=False)
+    stashed = _stash_top_ref() != pre_stash_ref
     result = _run_list(["git", "checkout", target_branch], check=False)
     if result.returncode != 0:
         # Checkout failed — restore original branch state. Use the conflict-safe
         # pop so a conflict here never leaves `<<<<<<<` markers either (#13045).
-        _safe_stash_pop()
+        if stashed:
+            _safe_stash_pop()
         print(f"ERROR: could not switch to {target_branch}: {result.stderr}", file=sys.stderr)
         return False
-    # Checkout succeeded — pop stash on the target branch (conflict-safe, #13045).
-    _safe_stash_pop()
+    # Checkout succeeded — pop OUR stash on the target branch (conflict-safe,
+    # #13045) only if we created one (#13167).
+    if stashed:
+        _safe_stash_pop()
     return True
 
 
@@ -813,7 +892,15 @@ def _role_owned_patterns(role):
             "SKILL.md",
             ".squidsquad/config.md",
         ],
-        # qa: nothing beyond common
+        # qa (verifier) authors comprehension specs under tests/comprehension/
+        # (#9184 — the verifier derives CQ specs; skill never self-authors them).
+        # These are permanent regression assets that MUST land in the repo, but
+        # tests/comprehension/ is outside .squidsquad/ so it matched no pattern
+        # and commit_role_scoped classified every new spec as "foreign" — leaving
+        # it untracked until a manual "recover N-behind" rescue commit (#13212).
+        # Adding it here lets the verifier's normal post-cycle commit stage its
+        # own specs. Scoped to qa only: no other role authors comprehension specs.
+        "qa": ["tests/comprehension/"],
     }
     return common + role_specific.get(role, [])
 

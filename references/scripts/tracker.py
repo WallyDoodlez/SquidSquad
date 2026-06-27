@@ -11,6 +11,7 @@ Usage:
     python scripts/tracker.py create-task --title <t> --body <b> --role <r> --priority <p> [--reporter <name>]   (alias: create-feature)
     python scripts/tracker.py transition <number> <from-status> <to-status> --role <r> [--force]
     python scripts/tracker.py comment <number> --role <r> --message <m>
+    python scripts/tracker.py work-assign --target-alias <alias> [--caller <alias>] [--issue <n>] [--event-context <ctx>] [--payload <json>]  # #12495 manual wake (no transition)
     python scripts/tracker.py get-labels <number>
     python scripts/tracker.py get-state <number>
     python scripts/tracker.py close <number>
@@ -706,7 +707,7 @@ def repair_status_labels(apply=False, include_unshipped=False):
     )
     if len(issues) >= _REPAIR_PAGE_LIMIT:
         print(
-            f"  WARNING: result hit the {_REPAIR_PAGE_LIMIT}-issue page limit — "
+            f"  WARNING: result hit the {_REPAIR_PAGE_LIMIT}-issue page limit -- "
             f"the set may be truncated; re-run after applying to drain the rest.",
             file=sys.stderr,
         )
@@ -726,7 +727,7 @@ def repair_status_labels(apply=False, include_unshipped=False):
         more = "" if len(skipped_ambiguous) <= 20 else f" (+{len(skipped_ambiguous) - 20} more)"
         print(
             f"  SKIPPED {len(skipped_ambiguous)} closed pending-ship issue(s) with "
-            f"NO status:shipped — each MAY be a legitimate closed-but-undelivered "
+            f"NO status:shipped -- each MAY be a legitimate closed-but-undelivered "
             f"issue (#9837: PR auto-close before DM ships). Verify none are awaiting "
             f"delivery, then re-run with --include-unshipped to strip them: "
             f"{preview}{more}",
@@ -734,7 +735,7 @@ def repair_status_labels(apply=False, include_unshipped=False):
         )
     if not planned and not skipped_ambiguous:
         print(
-            "  (nothing to repair — all closed pending-ship issues are already "
+            "  (nothing to repair -- all closed pending-ship issues are already "
             "single-status)",
             file=sys.stderr,
         )
@@ -1212,7 +1213,12 @@ def _check_unread_feedback(number, caller_role):
         # Fail closed — if we can't read comments, block the transition
         return [("unknown (API error)", "unknown")]
 
-    data = json.loads(result.stdout)
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        # Malformed exit-0 response — fail closed (same sentinel) so the guard
+        # blocks rather than aborting transition() with an uncaught traceback.
+        return [("unknown (API error)", "unknown")]
     comments = data.get("comments", [])
     if not comments:
         return []
@@ -1370,7 +1376,7 @@ def transition(number, from_status, to_status, role=None, force=False):
         except ImportError:
             # tc_coverage.py not available — graceful degradation
             print(
-                "WARNING: tc_coverage.py not found — TC coverage gate skipped.",
+                "WARNING: tc_coverage.py not found -- TC coverage gate skipped.",
                 file=sys.stderr,
             )
 
@@ -1385,7 +1391,7 @@ def transition(number, from_status, to_status, role=None, force=False):
                 f"Blocked shipped transition on #{number}: unmerged PR #{pr_num}",
             )
             print(
-                f"BLOCKED: Cannot ship #{number} — PR #{pr_num} is open and unmerged. "
+                f"BLOCKED: Cannot ship #{number} -- PR #{pr_num} is open and unmerged. "
                 f"Merge the PR first: {pr_url}",
                 file=sys.stderr,
             )
@@ -1420,7 +1426,7 @@ def transition(number, from_status, to_status, role=None, force=False):
                     f"has {commit_count} unmerged commit(s)",
                 )
                 print(
-                    f"BLOCKED: Cannot ship #{number} — branch '{branch_name}' has "
+                    f"BLOCKED: Cannot ship #{number} -- branch '{branch_name}' has "
                     f"{commit_count} commit(s) not merged to the working branch. "
                     f"Merge the branch or create a PR first.",
                     file=sys.stderr,
@@ -1592,9 +1598,21 @@ def get_labels(number):
         labels = [l["name"] for l in data.get("labels", [])] if data else []
         print(json.dumps(labels))
         return labels
-    result = _run_list(["gh", "issue", "view", str(number), "--json", "labels"])
-    data = json.loads(result.stdout)
-    labels = [l["name"] for l in data.get("labels", [])]
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "labels"],
+        check=False,
+    )
+    # Fail closed: a gh blip or malformed exit-0 JSON yields [] (no labels)
+    # rather than a raw traceback — mirrors _get_issue_role_labels.
+    labels = []
+    if result.returncode == 0 and result.stdout.strip():
+        try:
+            data = json.loads(result.stdout)
+            # Drop label objects missing a "name" (would otherwise inject "");
+            # mirrors the startswith-filtering in _get_issue_*_labels.
+            labels = [n for n in (l.get("name", "") for l in data.get("labels", [])) if n]
+        except json.JSONDecodeError:
+            labels = []
     print(json.dumps(labels))
     return labels
 
@@ -1607,9 +1625,19 @@ def get_state(number):
         state = (data or {}).get("state") or "UNKNOWN"
         print(state)
         return state
-    result = _run_list(["gh", "issue", "view", str(number), "--json", "state"])
-    data = json.loads(result.stdout)
-    state = data["state"]
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "state"],
+        check=False,
+    )
+    # Fail closed to "UNKNOWN" on gh failure / malformed exit-0 JSON / missing
+    # field — mirrors the adapter path's `(data or {}).get("state") or "UNKNOWN"`.
+    data = {}
+    if result.returncode == 0 and result.stdout.strip():
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            data = {}
+    state = (data or {}).get("state") or "UNKNOWN"
     print(state)
     return state
 
@@ -1622,6 +1650,87 @@ def close_issue(number):
     else:
         _run_list(["gh", "issue", "close", str(number)])
     print(f"Closed #{number}")
+
+
+def work_assign(target_alias, caller, issue=None, event_context=None, payload=None):
+    """Manual wake-injection primitive (#12495).
+
+    POSTs ``/work/assign`` to the harness, which emits an ``assigned-to`` wake
+    to ``target_alias`` WITHOUT a status transition (the distinguishing feature
+    vs ``transition``). This is the sanctioned BACKUP / babysitting path —
+    PM waking a stuck-but-alive agent, or any agent surfacing a process concern
+    to PM — for when the primary wake paths (self-wake #12506, never-stop
+    #12853, EAD on forge-state change) don't fire. NOT the default routing
+    mechanism; transition handoffs route via EAD off forge state.
+
+    ``caller`` is the calling agent's alias; it is sent as the
+    ``X-Squidsquad-Alias`` header so the harness can enforce the self-assign
+    invariant. Returns the harness's emitted ``event_id`` on success.
+
+    Prints a diagnostic and returns ``None`` on any failure (harness
+    unreachable, 404 unknown alias, 400 self-assign/malformed) — the caller
+    sees a non-zero exit via ``main``.
+    """
+    import urllib.request
+    import urllib.error
+
+    # Reuse the event_bus port-discovery so we hit the same harness the
+    # mechanical event path uses.
+    try:
+        from event_bus import _discover_port
+    except ImportError:
+        print("ERROR: cannot import event_bus for port discovery", file=sys.stderr)
+        return None
+
+    port = _discover_port()
+    if port is None:
+        print("ERROR: harness port not discoverable (.harness-port absent) -- "
+              "is the harness running?", file=sys.stderr)
+        return None
+
+    # Strip a decorated caller ("skill-lead (skill)") down to the bare alias so
+    # the self-assign header matches the registry namespace (same rule as the
+    # transition emit, #12342).
+    caller_alias = (caller or "").split(" ")[0].replace("-lead", "")
+
+    body = {"target_alias": target_alias}
+    if issue is not None:
+        body["issue_number"] = str(issue)
+    if event_context:
+        body["event_context"] = event_context
+    if payload:
+        try:
+            body["payload"] = json.loads(payload) if isinstance(payload, str) else payload
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"ERROR: --payload is not valid JSON: {e}", file=sys.stderr)
+            return None
+
+    data = json.dumps(body).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if caller_alias:
+        headers["X-Squidsquad-Alias"] = caller_alias
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/work/assign",
+        data=data, headers=headers, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8")
+        except Exception:
+            pass
+        print(f"ERROR: /work/assign returned HTTP {e.code}: {detail}", file=sys.stderr)
+        return None
+    except (urllib.error.URLError, OSError) as e:
+        print(f"ERROR: /work/assign request failed: {e}", file=sys.stderr)
+        return None
+
+    event_id = result.get("event_id")
+    print(f"work-assign -> {target_alias} (event_id={event_id})")
+    return event_id
 
 
 def _parse_args():
@@ -1650,7 +1759,21 @@ def _parse_args():
     return cmd, positional, opts
 
 
+def _harden_stdio():
+    """#13185 / #13198: crash-proof CLI stdout/stderr on a cp1252 console.
+
+    The canonical implementation now lives in the shared ``cli_stdio`` module
+    (#13198 consolidated it for fleet-wide reuse — every agent-facing CLI script
+    calls it). This is kept as a thin delegate so existing callers/tests resolve
+    unchanged. See ``cli_stdio.harden_stdio`` for the rationale (a non-ASCII
+    char in a SUCCESS print on cp1252 raised UnicodeEncodeError AFTER the side
+    effect landed → false-failure exit + double-emit risk)."""
+    from cli_stdio import harden_stdio
+    harden_stdio()
+
+
 def main():
+    _harden_stdio()
     cmd, pos, opts = _parse_args()
 
     if cmd == "check-gh":
@@ -1708,6 +1831,26 @@ def main():
             print("Usage: tracker.py comment <number> --role <r> --message <m>", file=sys.stderr)
             sys.exit(1)
         comment(int(pos[0]), opts["role"], opts["message"])
+
+    elif cmd == "work-assign":
+        # #12495: manual wake-injection primitive — emit assigned-to without a
+        # transition. --target-alias required; --caller is the calling agent's
+        # alias (sent as X-Squidsquad-Alias for the self-assign guard).
+        if "target-alias" not in opts:
+            print(
+                "Usage: tracker.py work-assign --target-alias <alias> [--caller <alias>] "
+                "[--issue <n>] [--event-context <ctx>] [--payload <json>]",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        event_id = work_assign(
+            opts["target-alias"],
+            opts.get("caller"),
+            issue=opts.get("issue"),
+            event_context=opts.get("event-context"),
+            payload=opts.get("payload"),
+        )
+        sys.exit(0 if event_id else 1)
 
     elif cmd == "get-labels":
         if not pos:

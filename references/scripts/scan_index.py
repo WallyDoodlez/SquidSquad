@@ -441,7 +441,7 @@ def record_decision(issue_number, accepted, db_path=None):
 
     conn.commit()
     conn.close()
-    print(f"Recorded decision: issue #{issue_number} → {decision}")
+    print(f"Recorded decision: issue #{issue_number} -> {decision}")
     return True
 
 
@@ -685,6 +685,9 @@ def rebuild(db_path=None):
             entries = _parse_scan_history(history_file)
 
             for entry in entries:
+                # Insert one scan row per file; remember each file's scan id so
+                # findings can be attributed without re-querying.
+                file_scan_ids = {}
                 for f in entry["files"]:
                     f = _normalize_path(f)
                     try:
@@ -701,17 +704,26 @@ def rebuild(db_path=None):
                         ).fetchone()
                         scan_id = row["id"] if row else None
 
-                    if scan_id is None:
-                        continue
+                    if scan_id is not None:
+                        file_scan_ids[f] = scan_id
 
-                    # Insert findings for this file
+                # #13133: insert each finding ONCE, attributed to the entry's
+                # first file — the scan-history format carries no per-finding
+                # file attribution, so this mirrors record_scan's `files[0]`
+                # default. The pre-fix code nested this INSERT inside the
+                # per-file loop, over-counting a single finding once per file.
+                if entry["findings"] and file_scan_ids:
+                    first_file = _normalize_path(entry["files"][0])
+                    first_sid = file_scan_ids.get(
+                        first_file, next(iter(file_scan_ids.values()))
+                    )
                     for finding in entry["findings"]:
                         conn.execute(
                             """INSERT INTO findings (scan_id, file_path, finding_type,
                                description, github_issue_number) VALUES (?, ?, ?, ?, ?)""",
                             (
-                                scan_id,
-                                f,
+                                first_sid,
+                                first_file,
                                 "issue",  # default from scan-history format
                                 finding.get("description", ""),
                                 finding.get("issue_number"),
@@ -787,6 +799,8 @@ def _parse_args():
 
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     args = _parse_args()
 
     if args.command == "suggest-targets":

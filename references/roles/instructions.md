@@ -101,7 +101,7 @@ sequenceDiagram
 
 A nudge wakes you. You then run the canonical eager loop documented in `docs/AGENT-RUNTIME.md` §8.1: fetch the next event past your cursor, apply the care filter, fire the cycle wrapper if cared (skip the wrapper if not), then POST `ack-cursor` for the event you just tended — and immediately re-check for the next event. The cursor advances **per event, not per batch**. When the queue drains, you optionally fire one improvement-subloop task (§4) if the cooldown is elapsed, then re-enter idle wait until the next nudge. Lost or missed nudges are harmless — your next nudge picks up the forge change. **If a new NUDGE arrives while you're mid-drain**, take no special action: note it in conversation context only — no file write, no queue, no flag. The next iteration's GET absorbs the new events naturally (see `docs/AGENT-RUNTIME.md` §8.5).
 
-> **Telling the user about a no-action wake.** When a whole wake resolves to nothing for you — the drain finds no events, every event in it is skipped by the care filter, or every cared event turns out to need no work — surface that to the user as a single short plain-language line per the **User-Facing Communication** rule in your Soul. One line **per wake, not per event**: a drain that skips three events still produces one line, emitted once the drain is complete. Emit it after any improvement-subloop task for this wake has finished or been skipped (§4); the line covers only the forge-event drain. Use plain language only — the prohibited internal terms and the template live in that Soul rule, and the mechanics still run unchanged underneath.
+> **Telling the user about a no-action wake.** When a whole wake resolves to nothing for you — the drain finds no events, every event in it is skipped by the care filter, or every cared event turns out to need no work — surface that to the user as a single short line per the **User-Facing Communication** rule in your Soul, in **whichever narration posture is live this session** (set by the Verbose Mode boot-read). One line **per wake, not per event**: a drain that skips three events still produces one line, emitted once the drain is complete. Emit it after any improvement-subloop task for this wake has finished or been skipped (§4); the line covers only the forge-event drain. **In quiet mode** (Verbose Mode OFF, the default) use plain language only — the prohibited internal terms and the one-liner template live in that Soul rule. **In verbose mode** (Verbose Mode ON) narrate the wake in full internal detail per the verbose posture instead. Either way the mechanics still run unchanged underneath.
 
 > **Care filter — what counts as "cared" vs "skipped"?** Per `docs/AGENT-RUNTIME.md` §8.4 the rule is simply: **does this event's `payload.target_alias` field equal my own alias?** If yes, you process it (pre-cycle → work → post-cycle) and POST `ack-cursor` to commit the tend. If no, you skip the cycle wrapper but still POST `ack-cursor` — finishing the event by deciding not to act on it IS the cursor commit (D1; finishing the event in either way advances the cursor). In normal operation the harness emits one `assigned-to` per target alias and the `/events/for/{role}` endpoint pre-filters before delivery, so your queue is already pre-filtered and almost every event is cared. The `else skipped` branch is the defensive escape hatch for race conditions (re-emit after EAD restart, cursor catch-up after eviction, future multi-instance scenarios) where a misrouted event lands in your queue — you ack past it without firing the cycle wrapper.
 
@@ -231,6 +231,21 @@ When you encounter one of these inside a runtime-loaded fragment, substitute it 
 
 Once the EVENT or POLLING block above completes, your wake-mode contract is fixed for this session. Do **not** re-check mode mid-session — operator-initiated mode flips take effect on the next agent restart, not mid-cycle.
 
+#### Verbose Mode — boot-read, session-sticky (#13162)
+
+Right after mode selection, read your **narration posture** for this session — once, at boot. Run:
+
+```bash
+python references/scripts/config.py get verbose-mode
+```
+
+- Output `yes` → adopt the **verbose** posture for the whole session.
+- Output `no` (the shipped default, and what an absent `## Verbose Mode` section returns) → adopt the **quiet** posture.
+
+The two postures are defined in your Soul's **User-Facing Communication** rule — quiet (default) bans all internal jargon and substitutes plain outcome language; verbose lifts that ban and narrates every cycle step and every event in full internal detail. Both contracts are carried in this one composed `CLAUDE.md`; this boot-read is the selector that picks which one is live.
+
+**Sticky — exactly like wake mode.** Read the flag **once** at boot and hold the posture for the entire session. Do **not** re-check `verbose-mode` mid-session; an operator's toggle (edit `config.md` + restart) takes effect on the next agent restart, never mid-cycle. (No recompose is needed to toggle — both postures already live in the composed instructions.)
+
 <!-- /sub-skill: boot-bootstrap -->
 
 ### Step 2 — step:cycle/resume
@@ -257,7 +272,7 @@ Do the unit of work for the cared event. The shape of this work depends on your 
 
 → run sub-skill: `agent-lifecycle`. This is **not an exit at all** — after the post-cycle wrapper finishes for this event, you POST `ack-cursor` (per event — `ack-cursor` IS per-event, not per-nudge; see §8.1 of `docs/AGENT-RUNTIME.md` and the diagram above) and the eager loop immediately checks for the next event past the cursor. Re-entry to Monitor idle-wait fires only when the drain to empty completes (so in practice "once per nudge" because one nudge corresponds to one drain, but the trigger is queue-empty, not per-nudge-counter). The only per-event lifecycle concern is the stop signal: if `intent=stopping` was observed, finish the current event cleanly so `ack-stop` can emit a coherent `checkpointed` / `drained` result at the end of your drain.
 
-→ run sub-skill: `self-restart`. The cooperative exit-42 protocol — when the post-cycle wrapper (`cycle_post.py`) detects your own context pressure exceeded the configured threshold OR observes a `stopping`/`restarting` intent flip on the harness, it commits/pushes and exits with code 42. Your job is to immediately invoke `/quit` so the harness can respawn you (or mark you stopped) per the intent state machine. Universal across all roles; see `docs/HARNESS-ARCH.md` §7.4 for the full state machine.
+→ run sub-skill: `self-restart`. The cooperative exit-42 protocol — when the post-cycle wrapper (`cycle_post.py`) detects your own context pressure exceeded the configured threshold OR observes a `stopping`/`restarting` intent flip on the harness, it commits/pushes and exits with code 42. Your job is then to **halt — cease output and end your turn**; you cannot terminate your own process (an LLM agent can only stop emitting output, not execute a real `/quit` — #13077), so the harness's 60-second force-kill net terminates you and respawns you (or marks you stopped) per the intent state machine. Universal across all roles; see `docs/HARNESS-ARCH.md` §7.4 for the full state machine.
 
 **Working-state expectation under exit-42**: the wrapper commits whatever `working-state.md` contains at the moment of exit. To ensure a respawn loses nothing, keep working-state fresh at every Step 5 checkpoint — task ID, current step, key in-flight decisions. Nothing else is required of you mid-cycle; pressure detection is wrapper-side, not agent-side.
 

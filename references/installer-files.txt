@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 257 files
+# Total: 258 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -25,6 +25,7 @@ references/scripts/boot_remote.py
 references/scripts/capability_check.py
 references/scripts/catalog_drift.py
 references/scripts/catalog_parser.py
+references/scripts/cli_stdio.py
 references/scripts/comms_adapter.py
 references/scripts/compose.py
 references/scripts/compose_freshness.py

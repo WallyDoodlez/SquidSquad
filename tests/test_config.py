@@ -230,6 +230,57 @@ class TestImprovementScanCoolDownDefault:
 
 
 # ---------------------------------------------------------------------------
+# Verbose Mode boot-read toggle (#13162)
+# ---------------------------------------------------------------------------
+
+class TestVerboseMode:
+    """#13162 — is_verbose() boot-read narration toggle; graceful default off."""
+
+    def test_enabled_yes_returns_true(self, tmp_path):
+        text = "## Verbose Mode\n\n- **Enabled**: yes\n"
+        f = tmp_path / "config.md"
+        f.write_text(text, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", f):
+            assert config.is_verbose() is True
+
+    def test_enabled_no_returns_false(self, tmp_path):
+        text = "## Verbose Mode\n\n- **Enabled**: no\n"
+        f = tmp_path / "config.md"
+        f.write_text(text, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", f):
+            assert config.is_verbose() is False
+
+    def test_section_absent_returns_false(self, tmp_path):
+        # Truly minimal install with no ## Verbose Mode section — graceful off.
+        f = tmp_path / "config.md"
+        f.write_text("# Config\n\n- **SquidSquad Version**: 0.0.0\n", encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", f):
+            assert config.is_verbose() is False
+
+    def test_get_field_default_off_when_absent(self, tmp_path):
+        # get_field must not sys.exit when the section is absent — default 'no'.
+        f = tmp_path / "config.md"
+        f.write_text("# Config\n\n- **SquidSquad Version**: 0.0.0\n", encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", f):
+            assert config.get_field("verbose-mode") == "no"
+
+    def test_case_and_whitespace_tolerant(self, tmp_path):
+        # Operator-typed 'YES' / stray spaces still read as enabled.
+        text = "## Verbose Mode\n\n- **Enabled**:   YES  \n"
+        f = tmp_path / "config.md"
+        f.write_text(text, encoding="utf-8")
+        with patch.object(config, "CONFIG_PATH", f):
+            assert config.is_verbose() is True
+
+    def test_field_in_defaults_registry(self):
+        # Lock the contract — _FIELD_DEFAULTS carries the verbose-mode key, off.
+        assert config._FIELD_DEFAULTS["verbose-mode"] == "no"
+
+    def test_field_map_registered(self):
+        assert config.FIELD_MAP["verbose-mode"] == ("Verbose Mode", "Enabled")
+
+
+# ---------------------------------------------------------------------------
 # set_field — happy path (#4879)
 # ---------------------------------------------------------------------------
 

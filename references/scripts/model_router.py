@@ -682,7 +682,7 @@ def route(task_type, task_id, input_files, output_file, context):
             os.environ[auth_env] = api_key
     if auth_env and not os.environ.get(auth_env):
         print(
-            f"[model_router] {auth_env} not set (checked ~/.squidsquad/secrets and env) — "
+            f"[model_router] {auth_env} not set (checked ~/.squidsquad/secrets and env) -- "
             f"skipping {provider_name}, falling back to Claude for {task_type}.",
             file=sys.stderr,
         )
@@ -906,7 +906,7 @@ def setup_provider(provider_name):
         print(f"\nTo configure, either:")
         print(f"  1. Set env var: export {env_var}=your-api-key-here")
         print(f"  2. Write to secrets: python references/scripts/shared_fs.py write-secret {env_var} your-api-key-here")
-        print(f"\nThe secrets file ({secrets_path}) is recommended — it persists across sessions")
+        print(f"\nThe secrets file ({secrets_path}) is recommended -- it persists across sessions")
         print(f"and is shared by all agents.")
 
     # Open manifest in editor
@@ -985,7 +985,7 @@ def validate_provider(provider_name):
 
         # Fallback: try a minimal API call via the adapter's run function
         print(f"OK: API key is set ({len(api_key)} chars). "
-              f"No validation endpoint available — key format looks valid.")
+              f"No validation endpoint available -- key format looks valid.")
         return 0
     except Exception as e:
         print(f"FAIL: {e}", file=sys.stderr)
@@ -1012,6 +1012,8 @@ def _load_adapter(manifest):
 # ---------------------------------------------------------------------------
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     parser = argparse.ArgumentParser(
         description="SquidSquad model router — route subagent work to external models.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

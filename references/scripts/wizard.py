@@ -1635,6 +1635,17 @@ def build_config_md(spec):
     lines.append("- **Idle Scan Burst**: 3")
     lines.append("")
 
+    # --- ## Verbose Mode ---
+    # #13162 — boot-read, session-sticky narration toggle. Shipped default OFF
+    # (quiet, jargon-free operator output). When ON, every agent narrates each
+    # cycle step + event with full internal detail (operator's accepted token
+    # tradeoff). Read once at boot via config.py is_verbose(); sticky for the
+    # session — toggling needs an edit + restart, no recompose.
+    lines.append("## Verbose Mode")
+    lines.append("")
+    lines.append("- **Enabled**: no")
+    lines.append("")
+
     # --- ## Git Branches ---
     lines.append("## Git Branches")
     lines.append("")
@@ -3432,10 +3443,17 @@ def cmd_scan_summary(args):
     """
     target = args[0] if args else "."
     scan_path = Path(target) / ".squidsquad" / ".repo-scan.json"
+    scan_data = None
     if scan_path.exists():
-        scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
-    else:
-        # Run scan on the fly
+        # #12846: a malformed/unreadable cache must NOT crash the command —
+        # fall back to a fresh scan below (matches the guarded reads in
+        # cmd_generate_defaults / scaffold_install).
+        try:
+            scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            scan_data = None
+    if scan_data is None:
+        # No usable cached scan (absent, malformed, or unreadable) — run on the fly.
         try:
             sys.path.insert(0, str(SCRIPT_DIR))
             from repo_scan import scan

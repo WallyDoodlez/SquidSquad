@@ -386,7 +386,13 @@ def main():
     save = "--save" in args
 
     for i, a in enumerate(args):
-        if a == "--path" and i + 1 < len(args):
+        if a == "--path":
+            # #13145 F2: --path as the final token (no value) must be a usage
+            # error (exit 2 per the module docstring), not a silent fall-through
+            # that scans REPO_ROOT and returns 0.
+            if i + 1 >= len(args):
+                print("ERROR: --path requires an argument", file=sys.stderr)
+                return 2
             root = Path(args[i + 1])
             if not root.exists():
                 print(f"ERROR: Path does not exist: {root}", file=sys.stderr)
@@ -398,8 +404,15 @@ def main():
 
     if save:
         save_path = Path(root) / ".squidsquad" / ".repo-scan.json"
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        save_path.write_text(output + "\n", encoding="utf-8")
+        # #13145 F1: a read-only FS / permission error must exit 2 (docstring
+        # contract), not raise an unhandled OSError traceback — mirrors the
+        # try/except OSError guards on the sibling reads in this file.
+        try:
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            save_path.write_text(output + "\n", encoding="utf-8")
+        except OSError as e:
+            print(f"ERROR: Cannot save to {save_path}: {e}", file=sys.stderr)
+            return 2
         print(f"Saved to {save_path}", file=sys.stderr)
 
     return 0

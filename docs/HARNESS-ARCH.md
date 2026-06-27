@@ -47,7 +47,7 @@ The harness is **distinct from**:
 
 - **Agent processes** — the harness spawns the agent launcher chain (`thin_launcher.py → claude`); agents communicate over HTTP and live in their own clone directories. `event_poll.py` is **not** harness-spawned — the agent arms it via the Monitor tool, so it runs inside the agent's own process tree (see §7.2 step 6).
 - **EAD** — EAD is a component *inside* the harness (an asyncio task), not a sibling process.
-- **The forge (GitHub)** — the harness reads from GitHub via EAD. It performs **one specific forge write**: rewriting the `role:<target_alias>` label on the issue named in every `POST /work/assign` call (and on EAD-emitted `assigned-to` events). This is the routing-source-of-truth update; see [AGENT-RUNTIME §8.3](AGENT-RUNTIME.md). All other tracker writes (status transitions, comments, label changes other than `role:*`) go through agents calling `gh` directly via `tracker.py`.
+- **The forge (GitHub)** — the harness is a **read-only forge consumer**: it reads issue state via EAD and performs **no forge writes**. (The earlier §8.3 design had the harness rewriting the `role:<target_alias>` label on every `POST /work/assign`; that "universal router" design was never implemented and was superseded by the #12495 narrow primitive, which does no label write. `/work/assign` emits an `assigned-to` event only.) All tracker writes — status transitions, comments, and `role:*` label changes — go through agents (and PM) calling `gh` directly via `tracker.py`. `role:*` is set by PM at `planned → approved` and is otherwise stable; verification/delivery handoffs are routed by EAD off the **status** label (`_STATUS_ROUTING`: `pending-test → verifier`, `pending-ship → dm`), not by any `role:*` rewrite.
 
 ---
 
@@ -93,7 +93,7 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 |---|---|---|---|
 | POST | `/events` | Emit an event (booted, ack-cursor, assigned-to, etc.) — see [AGENT-RUNTIME.md §5.2](AGENT-RUNTIME.md) for payload shapes per event type | `{ok, event_id}` or 4xx |
 | GET | `/events` | List recent events (**debug-only**; not part of agent-facing contract) | `[event, ...]` |
-| GET | `/events/for/{role}` | Read events past the role's cursor | `[event, ...]` or HTTP 410 Gone if cursor evicted |
+| GET | `/events/for/{role}` | Read events past the role's cursor | `{events, total}`; when the cursor predates the retained window the body additionally carries `evicted: true, oldest_id, evicted_count_hint` (still **HTTP 200**, not 410) — see §5.1 |
 | GET | `/events/cursor/{role}` | Current cursor position for a role | `{cursor, role}` (cursor may be `null` on first boot); **HTTP 200 always** (no 404 if cursor null) |
 | GET | `/events/lifecycle` | Recent lifecycle events for TUI display | `[event, ...]` |
 
@@ -105,13 +105,13 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 
 ### 4.3 Work-assignment endpoint
 
-> **NOT IMPLEMENTED** — tracked in #12495. The spec below is the target design; zero `/work/assign` routes exist in harness.py today. The live work-routing mechanism is the ExternalActivityDetector (§6) emitting `assigned-to` events directly. Whether to implement `/work/assign` as specified or formally retire it in favour of EAD-only routing is an open architectural decision.
+> **IMPLEMENTED (#12495, 2026-06-21)** as the **manual wake-injection primitive** — NOT the universal router the earlier §8.3 prose described. Operator decision (2026-06-19): build the explicit same-status wake primitive (option a) rather than retire the endpoint. The route emits an `assigned-to` wake to a target alias **without** a status transition and **without** rewriting the `role:*` label. It is the sanctioned BACKUP / babysitting path (PM waking a stuck-but-alive agent; an agent escalating a process concern to PM) for when the primary wake paths — self-wake (#12506), never-stop (#12853), and the ExternalActivityDetector (§6) emitting `assigned-to` off forge-state — don't fire. Transition-driven routing is **not** rewired through this endpoint: it remains EAD-based (see [AGENT-RUNTIME.md §8.3](AGENT-RUNTIME.md)).
 
 | Method | Path | Purpose | Returns |
 |---|---|---|---|
-| POST | `/work/assign` | Route work to a target agent | `{ok}` on 200, 404 if alias unknown, 400 on malformed payload |
+| POST | `/work/assign` | Manual same-status wake-injection to a target agent (no transition) | `{status:"ok", event_id}` on 200, 404 if alias unknown, 400 on malformed body / missing `target_alias` / self-assign |
 
-Request body: `{issue_number: int, target_alias: str, event_context: str}`. The harness validates `target_alias` resolves to a registered agent (alias-existence check only, no role-class permission filtering — see §13.5). Forwards the assignment as an `assigned-to` event on the bus. Returns 200 on accepted, 404 if alias unknown, 400 on malformed payload.
+Request body: `{target_alias: str, issue_number?: int, event_context?: str, payload?: object}` (only `target_alias` is required for a bare wake; `event_context` defaults to `"work-assign"`). The caller's alias is supplied via the `X-Squidsquad-Alias` request header for the self-assign invariant. The harness performs exactly two checks: (1) `target_alias` resolves to a registered agent (alias-existence only, no role-class permission filtering — see §13.5; 404 otherwise), and (2) `target_alias != X-Squidsquad-Alias` (structural self-assign anti-loop; 400 otherwise). It then emits an `assigned-to` event on the bus — **no `role:*` label write** (a manual re-nudge targets work the agent already owns). Malformed JSON or a missing `target_alias` returns 400.
 
 ### 4.4 Work-queue endpoint
 
@@ -138,7 +138,7 @@ Request body: `{pr_number: int, branch: str, role: str}`. The harness merges the
 | Method | Path | harness.py | Purpose |
 |---|---|---|---|
 | POST | `/hooks/session-end` | 2777 | Receives `SessionEnd` hook payloads from agents; persists `last_session_end` on `AgentState` |
-| POST | `/hooks/activity` | 2847 | Receives `PreToolUse`/`PostToolUse` hook payloads; persists `last_activity_at` on `AgentState` |
+| POST | `/hooks/activity` | 2847 | Receives `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `PostToolUseFailure` hook payloads; persists `last_activity_at` on `AgentState`. The `UserPromptSubmit` source (#13213) adds a heartbeat at **prompt-receipt** — before the agent's first tool call — closing the freeze-after-prompt-before-first-tool-call window (§15.1) |
 | POST | `/hooks/pause` | 2944 | Receives pause-guard payloads (e.g. rate-limit, permission wait); persists `in_flight_until` / `waiting_since` / `compacting_since` on `AgentState` |
 
 **Header contract**: every hook POST must include `X-Agent-Role: <alias>` identifying the sending agent. The harness uses this header to route the payload to the correct `AgentState` entry.
@@ -165,7 +165,7 @@ ELM owns the event bus. Located at `references/scripts/harness.py` (`class Event
 - `collections.deque(maxlen=1000)` — in-memory, capped at 1000 events.
 - Eviction is automatic when a new event pushes past 1000: oldest dropped.
 - **Restart drops history**: the deque is in-memory only. On harness restart, the deque is empty. Cursors persist (see §5.2), but events older than the new harness session are not recoverable from disk.
-- **Cursor-evicted recovery**: an agent whose cursor was at an evicted event gets `HTTP 410 Gone` on `GET /events/for/{role}?since=<old_cursor>` with body `{"cursor_evicted": true, "current_head": "<event_id>"}`. Recovery protocol: agent reads forge for current state, emits `ack-cursor(current_head)`, re-enters idle.
+- **Cursor-evicted recovery**: an agent whose cursor predates the oldest retained event gets a normal **`HTTP 200`** response on `GET /events/for/{role}?since=<old_cursor>` whose body carries an eviction marker — `{"events": [...], "total": <int>, "evicted": true, "oldest_id": "<event_id>", "evicted_count_hint": <int>}` (`harness.py` `get_since_with_eviction` → `get_events_for_role`). Recovery protocol: agent reads forge for current state, emits `ack-cursor(oldest_id)` to fast-forward past the evicted range, re-enters idle. The marker is set **only when the deque is non-empty**, so `oldest_id` is always a real anchor; the empty-deque + stale-cursor case returns `([], None)` (no marker — #12837) and the agent re-anchors normally with no events lost. (Note: 410 Gone is used elsewhere as a deliberate *tombstone* for the removed `POST /events/{event_id}/complete` endpoint — that is unrelated to eviction recovery.)
 
 ### 5.2 Cursor model
 
@@ -499,7 +499,7 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 |---|---|
 | **Harness unreachable** (port-file missing or HTTP probe fails) | Agents silently no-op event-bus operations; fall through to loop-mode behavior per AGENT-RUNTIME §7 + §9.4. No cascade failure. |
 | **EAD task crashes** | Harness logs the exception and restarts the task. While EAD is down, forge changes don't reach the bus; agents continue consuming the in-memory deque. |
-| **Deque overflow** | Oldest events evicted; agents at evicted cursors get HTTP 410 Gone and follow the §5.1 recovery protocol. |
+| **Deque overflow** | Oldest events evicted; agents at evicted cursors get an HTTP 200 response carrying the `evicted`/`oldest_id`/`evicted_count_hint` marker and follow the §5.1 recovery protocol (`ack-cursor(oldest_id)`). |
 | **`.squidsquad/.harness-state.json` corrupt** | Harness logs the error, treats the file as missing, starts fresh state. Operator may need to re-issue `start` commands. |
 | **`.squidsquad/.event-state.json` corrupt** | Cursors reset to `null`; agents re-consume from deque head on next read. No crash. |
 | **`.squidsquad/.harness-port` file missing** | Operator's start command writes a new file; if not run, agents treat harness as unreachable (silent no-op). |
@@ -507,9 +507,9 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 | **Agent process alive but inert (zombie)** | NOT detected today — PID-liveness reports it healthy indefinitely (§13.7, #10855). Recovery is operator-triggered restart. Proposed fix: progress-based liveness (§15). |
 | **Port collision at startup** | Harness logs warning, picks next free port (probes upward from 7373). Updates `.squidsquad/.harness-port`. |
 | **uvicorn / FastAPI exception** | Logged; the affected endpoint returns 500; other endpoints continue to serve. |
-| **Deploy: `git pull` non-fast-forward or conflict** | The affected clone's working tree is dirty or its `main` has diverged. Recovery: harness logs the error, clears `reboot_blocked_until`, and respawns the agent on its existing (pre-deploy) `CLAUDE.md`. A tracker comment is filed to the `pm` alias with `event_context="deploy-error"` so the conflict is investigated and re-triggered. The `last_compose_checksum` is NOT updated (drift remains detectable). |
+| **Deploy: `git pull` merge conflict (or dirty tree)** | The clone's `git pull --no-rebase --no-edit origin main` (#13158 — merge, never `--ff-only`) hits a genuine merge conflict, or the working tree is dirty and blocks the merge. (Benign divergence — an unpushed local compose commit vs. an advanced `origin/main` with non-overlapping files — now **merges cleanly and the deploy proceeds**; it no longer fatals, #13158.) Recovery on a real conflict: harness logs the error, clears `reboot_blocked_until`, and respawns the agent on its existing (pre-deploy) `CLAUDE.md`. A `deploy-error` event is filed to the `pm` alias so the conflict is investigated and re-triggered. The `last_compose_checksum` is NOT updated (drift remains detectable). |
 | **Deploy: `compose.py` error (bad source)** | Compose exits non-zero (template parse error, missing slot, etc.). Recovery: harness logs the error, clears `reboot_blocked_until`, and respawns the agent on its existing committed `CLAUDE.md` (the corrupt output is never committed). Files a `deploy-error` event to `pm`. No state corruption — the committed output on `main` is unchanged. |
-| **Deploy: `git push` rejection (non-fast-forward to `main`)** | Another clone pushed while this clone's deploy was in flight. Recovery: the harness does **not** retry the deploy sequence — the local deploy already committed the recomposed output, so a `--ff-only` re-pull of the now-diverged branch is futile (it cannot fast-forward past the local commit) and re-running `pull → recompose → commit → push` would loop on the same rejection. Instead the harness recovers **immediately** (0 retries): clears `reboot_blocked_until`, respawns the agent on its existing `CLAUDE.md`, and files a `deploy-error` event to `pm` so the deploy is investigated and cleanly re-triggered. Sequential per-clone deploy (§7.6) makes this rare but possible if two clones' deploy windows overlap. |
+| **Deploy: `git push` rejection (non-fast-forward to `main`)** | Another clone pushed while this clone's deploy was in flight, so this clone holds an unpushed local compose commit (diverged). Recovery: the harness does **not** retry in place (no retry loop — the sequential `_deploy_lock`, §7.6, makes genuine concurrent pushes rare). It recovers **immediately** (0 retries): clears `reboot_blocked_until`, respawns the agent on its existing `CLAUDE.md`, and files a `deploy-error` event to `pm`. Because `last_compose_checksum` is NOT advanced, the residual drift re-triggers a fresh `deploy-signal` whose **`--no-rebase` merge-pull (#13158) reconciles the divergence on the next pass** — the re-pull is no longer a futile `--ff-only` that fataled on the local commit. |
 | **Deploy: multi-clone consistency window** | Between sequential per-clone pushes, `origin/main` has some agents' updated output and others' stale output. This window is bounded (closes when each clone's deploy sequence completes) and rare. Accepted by design — each clone is internally consistent at its own deploy boundary, and the next pull-first deploy overwrites any residual stale output on `main`. |
 
 ---
@@ -533,7 +533,7 @@ Cursors that point to evicted (now-empty-deque) events resolve via the §5.1 cur
 
 ### 13.1 No persistence for the deque (event store)
 
-`collections.deque(maxlen=1000)` is in-memory only. Harness restart drops history. At-least-once across restarts requires persistence; this is currently not implemented and out of scope for the present architecture. Agents recover via the §5.1 cursor-evicted protocol (read forge for current state, ack to head, re-enter idle) — which works but is a degraded path compared to true durable delivery.
+`collections.deque(maxlen=1000)` is in-memory only. Harness restart drops history. At-least-once across restarts requires persistence; this is currently not implemented and out of scope for the present architecture. Agents recover via the §5.1 cursor-evicted protocol (read forge for current state, `ack-cursor(oldest_id)`, re-enter idle) — which works but is a degraded path compared to true durable delivery.
 
 ### 13.2 No authentication on the HTTP API
 
@@ -551,11 +551,11 @@ EAD's polling loop hard-codes the GitHub `gh api` shape. Non-GitHub backends (Fo
 
 **Target architecture** (locked 2026-05-25 per [`decision-class-vs-alias-routing-model`](../.squidsquad/vault/galaxy/decision-class-vs-alias-routing-model.md), and reflected in [AGENT-RUNTIME.md §8.3](AGENT-RUNTIME.md)): the harness performs **one** validation on `/work/assign` — does `target_alias` resolve to a registered agent? Class-from-class permissions are not enforced at the bus layer; process discipline lives in each agent's L2/L3/L4, not in a harness gate.
 
-**Current code**: the legacy `responsibility.md` boot-read and class-from-class permission-table construction have been removed from harness.py. The `target_role` field was unified to `target_alias` per #11331 (harness.py:3332). The remaining gap is that `POST /work/assign` is not yet implemented — see §4.3 and #12495.
+**Current code**: the legacy `responsibility.md` boot-read and class-from-class permission-table construction have been removed from harness.py. The `target_role` field was unified to `target_alias` per #11331 (harness.py:3332). `POST /work/assign` is now **implemented** (#12495, 2026-06-21) as the manual wake-injection primitive (§4.3) and enforces exactly the two checks above — alias-existence (404) + the self-assign invariant (400) — with no class-from-class gate. Note it is the *narrow* primitive (emit `assigned-to`, no transition, no label write), not the universal router the original §8.3 prose envisioned.
 
 ### 13.6 Work-queue endpoint is special-cased to human only
 
-§4.3 documents the principled `/queue/{alias}` shape. Current code only implements `/human/queue` (`harness.py:2046`, ticket #8704). The work-queue logic itself (priority sort, status filter) already lives in `tracker.py work-queue` and is alias-parameterized; the harness route just needs to be renamed and the status-label filter generalized so it derives from the alias's responsibility set rather than hard-coding `status:pending-human-*`. Land-time work: rename the route, parameterize the filter, update any TUI clients polling the old path. Migration plan keeps the legacy `/human/queue` path as a **301 redirect** to `/queue/human` for one release cycle so TUI clients can update without coordinated downtime.
+§4.3 documents the principled `/queue/{alias}` shape. Current code only implements `/human/queue` (`harness.py:2046`, ticket #8704); the generalization is tracked in **#13173**. The work-queue logic itself (priority sort, status filter) already lives in `tracker.py work-queue` and is alias-parameterized; the harness route just needs to be renamed and the status-label filter generalized so it derives from the alias's responsibility set rather than hard-coding `status:pending-human-*`. Land-time work: rename the route, parameterize the filter, update any TUI clients polling the old path. Migration plan keeps the legacy `/human/queue` path as a **301 redirect** to `/queue/human` for one release cycle so TUI clients can update without coordinated downtime.
 
 ### 13.7 PID-based liveness cannot detect inert agents (zombies)
 
@@ -599,7 +599,9 @@ The harness determines whether an agent is alive from the **activity the agent a
 
 Liveness rests on two mechanisms, both **by-products of normal agent operation** — there is no dedicated heartbeat channel:
 
-1. **Activity heartbeat.** Every tool call (`PostToolUse` / `PostToolUseFailure`) and every completed cycle (`cycle_post`) is a heartbeat. A working agent emits them continuously; a **wedged** loop stops making tool calls and completing cycles, so the heartbeat stops and the agent is detected. Because they fire from the agent's real loop, the heartbeat proves the loop is *progressing*, not merely that the process exists. Liveness is evaluated **relative to dispatched work**: when the harness nudges or assigns an agent, it expects heartbeat activity within a window. An idle agent with no dispatched work is not actively monitored; a dead idle agent surfaces the moment work is dispatched and it produces no activity.
+1. **Activity heartbeat.** Three agent-loop events are heartbeats: **prompt-receipt** (`UserPromptSubmit` — a nudge, cycle/driver tick, or inline turn reaches the agent), every **tool call** (`PreToolUse` / `PostToolUse` / `PostToolUseFailure`), and every **completed cycle** (`cycle_post`). A working agent emits them continuously; a **wedged** loop stops, so the heartbeat stops and the agent is detected. Because they fire from the agent's real loop, the heartbeat proves the loop is *progressing*, not merely that the process exists. Liveness is evaluated **relative to dispatched work**: when the harness nudges or assigns an agent, it expects heartbeat activity within a window. An idle agent with no dispatched work is not actively monitored; a dead idle agent surfaces the moment work is dispatched and it produces no activity.
+
+   The `UserPromptSubmit` source (#13213) closes a specific gap: tool-call heartbeats only fire once the agent *starts acting*, so an agent that **receives a prompt and then wedges before its first tool call** would leave `last_activity_at` frozen at the prior cycle's last tool call — indistinguishable from a legitimately idle agent. Stamping a heartbeat at prompt-receipt makes "input arrived, loop should now be progressing" an explicit anchor: after a `UserPromptSubmit` heartbeat the harness expects a following tool-call (or pause-explaining) hook within the activity window, and its absence is a wedge (the qa-wedge class behind #12271 — input received, then frozen). It is routed through the same async command hook (`activity_hook.py`) and `/hooks/activity` endpoint as the tool-call heartbeats (§16.1, §4.6).
 
 2. **Pause-aware guard.** Silence is *only* a death signal when nothing explains it. An agent is legitimately silent in several states — and in every case a **hook tells the harness which state it is in**, so these never lose life:
    - **Mid-tool-call** — `PreToolUse` with no matching `PostToolUse` (a long `Bash`, slow build, or **subagent call**). Treat as working; bounded only by a generous `tool_call_max` (to catch a genuinely hung tool).
@@ -625,6 +627,7 @@ sequenceDiagram
 
     H->>A: nudge or assign work
     Note over H,A: heartbeat is the agent's own activity
+    A->>H: UserPromptSubmit - prompt received, heartbeat (before first tool call, #13213)
     loop each tool call while working
         A->>H: PreToolUse - tool, task, phase - sets in-flight, heartbeat
         A->>H: PostToolUse or PostToolUseFailure - clears in-flight, heartbeat
@@ -632,6 +635,7 @@ sequenceDiagram
     A->>H: cycle_post - heartbeat
     A->>H: SessionEnd - reason recorded
     Note over H: after dispatch, dead only if silent AND no hook explains it - see 15.1 for the pause states
+    Note over H: a UserPromptSubmit with no following tool-call/pause hook in the window = wedged-after-prompt
 ```
 
 ### 15.4 `SessionEnd` reason
@@ -668,7 +672,7 @@ The migration from the PID-based health poll (§7.3) to this model — landing o
 
 ## 16. Agent observability via hooks
 
-> **Status:** target architecture; implementation tracked by **#12271** (the liveness consumer) and **#12410** (display). Hooks are configured in each agent's `settings.json` — deployed per-clone by compose/installer — as native **HTTP hooks that POST the hook payload directly to the harness** (no shell wrapper).
+> **Status:** target architecture; implementation tracked by **#12271** (the liveness consumer) and **#12410** (display). Hooks are configured in each agent's `settings.json` — deployed per-clone by compose/installer — in **two transports**: high-frequency activity-heartbeat hooks as async `type: command` hooks via `activity_hook.py`, and lower-frequency hooks as native `type: http` hooks (see §16.3 for why, and which is which).
 
 The harness instruments each agent with a curated set of Claude Code hooks, giving it a live, per-agent telemetry stream: current activity, turn boundaries, subagent lifecycle, stalls, API errors, context pressure, and exit reasons. **Liveness (§15) is one consumer** of this stream; the operator display (#12410) is another. Every hook is wired **observational / fail-open** — it reports, it never blocks or fails the agent's work.
 
@@ -677,12 +681,12 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 | Hook | Fires | Telemetry → harness use |
 |---|---|---|
 | `SessionStart` (`source`) | session start / resume / post-compact | boot confirmation; fresh vs resume vs post-compact |
-| `UserPromptSubmit` (`prompt`) | a nudge / cycle trigger reaches the agent | "cycle starting" + the trigger |
+| `UserPromptSubmit` (`prompt`) | a nudge / cycle-or-driver tick / inline turn reaches the agent | "cycle starting" + the trigger **and an activity heartbeat at prompt-receipt** (§15.1) — routed through `activity_hook.py` → `/hooks/activity`, so it feeds the liveness verdict, not just display (#13213) |
 | `PreToolUse` (`tool_name`, `tool_input`, + injected task/issue/phase) | before each tool call | **activity** ("about to run X for #N") + sets the **in-flight** flag (§15) |
 | `PostToolUse` (`tool_name`, `tool_output`) | after a tool succeeds | activity result + **heartbeat** + clears in-flight |
 | `PostToolUseFailure` (`tool_name`, error) | after a tool fails | **tool-error visibility** + heartbeat |
 | `SubagentStart` / `SubagentStop` (`agent_type`) | subagent spawned / finished | live **subagent tree** + progress |
-| `Stop` (`stop_hook_active`) | agent finishes a turn | turn-complete heartbeat |
+| `Stop` (`stop_hook_active`) | agent finishes a turn | turn-boundary signal → `/hooks/pause` (not an activity-heartbeat source — the heartbeat sources are §15.1's `UserPromptSubmit` / `Pre`/`PostToolUse` / `cycle_post`) |
 | `StopFailure` (matcher: `rate_limit`/`overloaded`/`billing_error`/`authentication_failed`/…) | a turn ends on an API error | **names the failure** — usage/rate-limit, billing, auth → cause-aware reboot/backoff |
 | `Notification` (`notification_type`: `permission_prompt`/`idle_prompt`/…) | agent needs attention | **stuck-on-permission** + idle detection |
 | `PreCompact` / `PostCompact` (`manual`/`auto`) | around context compaction | **compaction telemetry** — agent summarising context in place and continuing (self-managed, not a restart) |
@@ -698,12 +702,12 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 ### 16.3 Constraints
 
 - **Observational / fail-open.** Several of these hooks *can* block the agent (exit 2 / `decision`); wired for telemetry they must not — bounded timeout, backgrounded, always succeed.
-- **HTTP transport.** Native `type: http` hooks POST the payload to the harness; no shell wrapper. Deployed per-clone via `settings.json`.
+- **Transport (two kinds).** High-frequency **activity-heartbeat** hooks — `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `PostToolUseFailure` — are async `type: command` hooks that shell out to `references/scripts/activity_hook.py` (which POSTs to `/hooks/activity`). They MUST be `command` + `async: true`, because native `type: http` hooks are **synchronous** (they block the tool call, default 600s timeout), and these fire on every tool call; `async` command hooks are fire-and-forget so they can never stall/fail the agent (§15.5 constraint 1, exit 0 always). Lower-frequency hooks — `SessionEnd`, and the pause-guard hooks (`Notification` / `Stop` / `PreCompact` etc. → `/hooks/pause`) — fire at most once per event and are wired as native `type: http` hooks. Both kinds are deployed per-clone via `settings.json` (compose / installer integration).
 - **No "context-% full" field** exists in any hook payload; `PreCompact(auto)` is the proxy for context pressure.
 
 ### 16.4 Consumers
 
-- **Liveness (§15)** — heartbeat + in-flight from `Pre`/`PostToolUse` + `cycle_post`; reboot reason from `SessionEnd` / `StopFailure`.
+- **Liveness (§15)** — heartbeat from `UserPromptSubmit` (prompt-receipt) + `PreToolUse` / `PostToolUse` / `PostToolUseFailure` + `cycle_post`, in-flight from the `Pre`/`PostToolUse` pair; reboot reason from `SessionEnd` / `StopFailure`.
 - **Reboot decision (§13.8)** — backoff that is cause-aware from `StopFailure` (names the API error) and graceful-vs-crash (presence/absence) from `SessionEnd`.
 - **Display (#12410)** — status line, dashboard, event highlights.
 
@@ -711,6 +715,8 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 
 ## 17. Revision log
 
+- **2026-06-21 (v29)** — **§15/§16 `UserPromptSubmit` promoted to a third activity-heartbeat source** (#13213, operator-directed; doc-first). Adds **prompt-receipt** as a heartbeat alongside the tool-call hooks + `cycle_post`, closing the **freeze-after-prompt-before-first-tool-call** wedge window (the qa-wedge class behind #12271 — input received, then frozen before any tool call, leaving `last_activity_at` stale). Edits: §15.1 model (third heartbeat + the gap rationale), the **§15.3 sequence diagram** (UserPromptSubmit beat after dispatch + a "no following tool-call/pause hook in the window = wedged-after-prompt" note), §4.6 `/hooks/activity` row, §16.1 catalog row, §16.2 liveness-consumer summary. **Transport reconcile** the change exposed: the activity-heartbeat hooks (`UserPromptSubmit`/`Pre`/`PostToolUse`/`PostToolUseFailure`) are async `type: command` hooks via `activity_hook.py` (native `type: http` hooks are synchronous and would block the tool call) — §16 banner + §16.3 corrected from the blanket "native http, no shell wrapper"; §16.1 `Stop` row reconciled to a turn-boundary signal → `/hooks/pause` (not a heartbeat). Paired with code task **#13213** (compose-template hook wiring). **DS-audited** — `.squidsquad/pm/planning/REVIEW-13213-DEEPSEEK.md`, verdict PASS; 2 minor findings (the `Stop`-label contradiction and a `PostToolUseFailure` omission in the §16.2 summary) applied.
+- **2026-06-21 (v28)** — **#10837 HARNESS-ARCH alignment PRD closed** — reconciled the doc to shipped code across a 2026-06-20 re-audit (`AUDIT-HARNESS-ARCH-2026-06-20.md`: 22 CONFIRMED / 6 DRIFT / 3 GAP / 5 STALE) plus three same-day reconciles the v27 banner predated. Doc-side (PM): §4 REST matrix corrected — added `POST /restart`, `POST /merge`, and the `/hooks/{session-end,activity,pause}` ingestion endpoints (§4.5/§4.6); removed dead `/events/in-flight`; reframed `/events/{id}/complete` as a **410 Gone tombstone** (#11165) rather than "no such endpoint"; corrected the §15/§16 "target architecture — not implemented" banner (3 of 5 hook routes shipped under #12418/#12443/#12458); fixed §13.5 legacy-permission-table description (3d8f53c74). Same-day reconciles folded in: **§7.4/§7.6 harness-as-reaper model** (#13077, fce1f3f2a — agent halts = cease output, cannot self-`/quit`; harness force-kills the deploy-halted process + tree-reaps the `event_poll` sidecar #12363 + confirms death; the 60s net is the de-facto terminator for stopping/restarting); **§11 deploy-pull/push rows** to the `--no-rebase` merge-pull model (#13158, e74fd590a); **§5.1 cursor-eviction wire contract** (#12971, d0ba91a2b); and the **`POST /work/assign`** §4.3/§13.5 update — the prior HIGH-2 "documented but absent" gap is **closed by implementation** (#12495, 6592ba6fd: narrow manual wake-injection primitive — emit `assigned-to`, no transition, no label write; not the universal router the original §8.3 prose envisioned). Residual code item split out: `/human/queue` → `/queue/{alias}` generalization (§13.6) tracked in **#13173** (low). Cross-TRD `role`→`alias` rename remains under #10839 (#10358); #10182 permission-table architectural task remains separately open.
 - **2026-06-15 (v27)** — **§15.4/§16 `SessionEnd` doc-sync to the real hook API** (skill verified it while implementing #12418). The doc assumed a richer signal than the `SessionEnd` hook provides: (1) `stop_reason` is UI-level (`clear`/`resume`/`logout`/`prompt_input_exit`/`bypass_permissions_disabled`/`other`), NOT exit-42/crash/usage-limit categories; (2) a hard crash can't run a hook, so SessionEnd fires only on graceful exit — the load-bearing signal is **presence/absence** (SessionEnd since `last_spawn_at` = graceful; dead PID + none = crash); (3) no `exit_code` in the payload. Rewrote §15.4 to the presence/absence model + the graceful-doesn't-count-toward-crash-streak / crash-counts reboot refinement; fixed §16.1 catalog row + §16.4 consumer note. (`type:http` hook transport in §16.3 was already correct — confirmed.)
 - **2026-06-15 (v26)** — **DS re-audit (step 4) residual sweep** — the verification pass caught that v24/v25 left four spots still carrying the old harness-spawned-event_poll / wrapper-PID model: §3 "Subprocess spawning" bullet (claimed `boot_agent` spawns event_poll), the §7.3 "PID-source disambiguation" note (listed `.claude-pid`=wrapper PID + a `(d) event_poll_pid` + health-poll tracking event_poll), the §7.3 Linux/macOS note (same `event_poll_pid` claim), and §7.4 "event_poll lifetime across respawn" (wrongly said event_poll *survives* a claude respawn). All four corrected: event_poll is agent-Monitor-spawned (dies with claude, fresh claude arms a new one), `.claude-pid` = resolved `claude.exe` PID, no `event_poll_pid`. (Cross-ref audit (step 5) flagged AGENT-RUNTIME §4.2/§4.3/§6/§8.0 carry the same stale model — reconciled in the same PR.)
 - **2026-06-15 (v25)** — **`.claude-pid` content corrected** (same draft PR #12417; found while verifying the PID model against the live process tree). The doc said `.claude-pid` holds `thin_launcher`'s own `cmd.exe`/shell PID (§7.2 step 3, §7.3, §9, §14) — including the v23 §7.3 edit. Code + live processes prove otherwise: `thin_launcher` spawns `claude`, then **resolves the actual `claude.exe` PID via a descendant walk through the npm shim** (#10101, thin_launcher.py:576) and writes *that* (verified: skill `.claude-pid`=3704=claude.exe, dm=12292, qa=52188). So `claude_pid` is accurate, not a misnomer. Fixed §7.2 step 3 (spawn-then-resolve-then-write order; was backwards) + its sequence diagram, §7.3 (`contents = resolved claude.exe PID`), §9 (state-file row), §14 (cross-ref → §7.2 step 3). NB: separately confirmed the `_kill_process` teardown does `taskkill /F` *without* `/T`, orphaning the `event_poll` subtree under each killed `claude.exe` — the #12363 mechanism (routed to skill; fix is independent of this doc PR).
