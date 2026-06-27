@@ -1,0 +1,29 @@
+{
+  "issue": 13291,
+  "title": "L1 universal norm: every agent (not just devs) stays current with a shared branch before integrating and integrates by merge — never overwrites/reverts teammates' work; comprehension that the norm is universal, why it exists (#13271), and how it reconciles with the harness boot-sync and the dev specialization (#13286)",
+  "files": [
+    "references/roles/identity.md"
+  ],
+  "questions": [
+    {
+      "id": "norm-is-universal-not-dev-only",
+      "question": "Read the Boundaries section of references/roles/identity.md. A VERIFIER agent (not a worker/dev) is about to push a planning artifact to `main` from a clone it hasn't updated in a while. Does the stay-current-before-integrate norm apply to it, and why does the placement of this rule (which layer/section it lives in) tell you the answer?",
+      "expected": "Yes — the norm applies to the verifier (and PM, DM, every role). It lives in the '### Boundaries — Universal prohibitions that apply to every agent regardless of role' section of references/roles/identity.md, which is the L1 shared base composed into EVERY role-class, so it binds all agents, not only devs. The integration target it names is `main` (and any feature branch a teammate also commits to) — so a verifier pushing a planning artifact to main must first update to the latest tip and resolve conflicts before pushing. The dev feature-branch mechanics are only the specialization; the principle is universal."
+    },
+    {
+      "id": "integration-adds-never-reverts-and-why",
+      "question": "Read the stay-current Boundary in identity.md. State the rule about what an integration is allowed to do to shared history, the two git operations that are forbidden, and the concrete incident the rule cites as the reason. What exactly goes wrong if an agent integrates from a stale tree?",
+      "expected": "An integration only ever ADDS to shared history — it must never delete or revert work. The forbidden operations are `git rebase` (merge, never rebase) and a force-push / overwrite (never force-push or overwrite). The cited incident is the #13271 SEV-1: a push/squash from a ~154-commit-behind clone reverted ~155 commits of fleet work. What goes wrong with a stale integration: it silently reverts teammates' commits that the integrating agent simply did not have locally — because its stale tree lacks those commits, writing that tree as 'truth' deletes them from the shared branch. The fix is to update to the latest tip and resolve conflicts FIRST (never integrate from a stale tree)."
+    },
+    {
+      "id": "harness-sync-vs-agent-responsibility",
+      "question": "Read the stay-current Boundary in identity.md. The harness already syncs the clone at one point in the lifecycle. According to the norm, what does the harness handle, and where does the agent's own responsibility begin — i.e. why isn't the harness boot-sync sufficient on its own? (This is the DRY reconciliation: the norm does not re-implement what the harness does.)",
+      "expected": "The harness syncs the agent's clone at boot / session start. That covers the START of a session, but it is NOT sufficient on its own because new commits land on shared branches continuously during a session. The agent's own responsibility begins at EVERY integration point AFTER boot — each time it pushes or merges to a shared branch, it must re-update to the latest tip and resolve conflicts itself. The norm reconciles with (does not duplicate) the harness mechanic: harness = boot-time sync; agent = sync at each later integration point."
+    },
+    {
+      "id": "l1-norm-vs-dev-specialization",
+      "question": "Read identity.md's stay-current Boundary, which references #13286. Explain the relationship between this L1 norm and the dev workflow's Branch sync rule (pr-protocol / implement-tasks). Which is the general principle and which is the specialization, and what does that imply about where the feature-branch-specific mechanics (sync-before-start, sync-before-merge) should be authored vs. where the universal principle is authored?",
+      "expected": "The identity.md Boundary is the UNIVERSAL (L1) principle — every agent stays current before integrating and merges-never-overwrites. The dev workflow's Branch sync rule (pr-protocol's Branch sync section + implement-tasks steps 1b-sync / 8d, #13286) is the SPECIALIZATION — it applies the universal principle to the worker's feature-branch lifecycle with the concrete sync-before-start and sync-before-merge moments. DRY implication: the universal principle is authored ONCE at L1 (identity.md); the feature-branch-specific mechanics live in the dev sub-skills (#13286) and inherit/reference the L1 norm rather than restating it. A non-dev role gets the universal norm from L1 without needing the dev feature-branch steps."
+    }
+  ]
+}
