@@ -3542,14 +3542,24 @@ async def get_events_for_role(
     else:
         events = event_stream.get_recent(limit * 3)
 
-    # Filter: events targeted at this role OR matching the role's reaction types
+    # Filter: events targeted at this role OR matching the role's reaction types.
+    # #13255: a reacts-to match must EXCLUDE events the requesting role emitted
+    # itself — otherwise an agent's own git-commit / status-transition events
+    # come back through its own event_poll, wake it via Monitor, and drain to a
+    # guaranteed no-op (the care filter skips them: no target_alias). Explicit
+    # target_alias targeting still wins unconditionally (so a hypothetical
+    # self-assign via target_alias is preserved); only the broadcast reacts-to
+    # branch suppresses self-emitted events. Cross-agent awareness is unaffected:
+    # a verifier reject is qa-emitted, so the worker (different emitter) still
+    # sees it; assigned-to / deploy-signal are harness-emitted, never suppressed.
     filtered = []
     for e in events:
         target = e.get("payload", {}).get("target_alias", "")
         etype = e.get("event_type", "")
+        emitter = e.get("role", "")
         if target == role:
             filtered.append(e)
-        elif relevant_types and etype in relevant_types:
+        elif relevant_types and etype in relevant_types and emitter != role:
             filtered.append(e)
 
     # Same skim-then-advance rule as GET /events: oldest-first when the
