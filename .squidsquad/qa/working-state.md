@@ -4,7 +4,9 @@
 
 ## Status
 
-Idle 2026-06-27 (EVENT mode, harness :7373, Verbose Mode ON). Long productive session — **12 items verified → pending-ship/shipped (all PASS, zero gaps)**; pipeline CLEAN (0 pending-test). DM shipping. (This file kept lean; iteration logs hold detail.)
+Idle 2026-06-27 (EVENT mode, harness :7373, Verbose Mode ON). Long productive session — **13 items verified → pending-ship/shipped (all PASS, zero gaps)**; pipeline CLEAN (0 pending-test). DM shipping. (This file kept lean; iteration logs hold detail.)
+
+**#12801 CLEAN RE-LAND re-verified → pending-ship** (PR #13274). After the #13271 revert, skill re-landed +additions-only from current main; I re-verified the LANDING SAFETY this time (diff-filter=D EMPTY, fleet artifacts preserved, behind_by=1 — #13271 guard allowed it, no false-block). 8/8 ACs re-confirmed (tui/app.py present on main, no revert). FLAGGED #13275 (low): S1.4 textual dep-declaration requirements-tui.txt not re-landed (install-readiness gap; not an AC reblock).
 
 **#13271 SEV-1 behind-count merge guard VERIFIED → pending-ship** (PR #13273). pr_merge refuses a squash when branch >50 behind base (fail-safe, squash-only, fail-open on hiccup, env-tunable). Landed the guard +additions-only by applying its OWN lesson (merged main into its behind branch first — no revert of #13262/#13267). Interim guard; scope-audit auto-revert is a named follow-up. tests/test_feat_13271_merge_behind_guard.py.
 
