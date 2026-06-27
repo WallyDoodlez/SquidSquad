@@ -11,6 +11,7 @@ status: active
 confidence: high
 source: observation
 links: [learning-audit-scope-and-source-of-truth]
+updated: 2026-06-18
 ---
 
 # A targetable step anchor must be bare H3 `### step:cycle/<id>`

@@ -64,6 +64,10 @@
 - **Improvement Scan Cool-Down**: 30m
 - **Idle Scan Burst**: 3
 
+## Verbose Mode
+
+- **Enabled**: yes
+
 ## Vault Optimize
 
 - **Threshold**: 20

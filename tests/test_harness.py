@@ -1471,62 +1471,6 @@ class TestCodeVersionProbe(unittest.TestCase):
             self.assertIsNone(_read_squidsquad_version())
 
 
-class TestCursorLag12801(unittest.TestCase):
-    """#12801: per-agent cursor `lag` (events-behind-head) for the TUI
-    cursor-lag bar — EventLifecycleManager.lag_for + GET /status injection."""
-
-    def _mgr_with_events(self, ids):
-        from harness import EventStream, EventLifecycleManager
-        stream = EventStream()
-        mgr = EventLifecycleManager(stream)
-        for i in ids:
-            stream.append({"id": i, "event_type": "x"})
-        return mgr
-
-    def test_empty_deque_lag_zero(self):
-        from harness import EventStream, EventLifecycleManager
-        mgr = EventLifecycleManager(EventStream())
-        self.assertEqual(mgr.lag_for("skill"), 0)
-
-    def test_cursor_at_head_lag_zero(self):
-        mgr = self._mgr_with_events(["e1", "e2", "e3"])
-        mgr._cursors["skill"] = "e3"  # head = caught up
-        self.assertEqual(mgr.lag_for("skill"), 0)
-
-    def test_cursor_n_behind(self):
-        mgr = self._mgr_with_events(["e1", "e2", "e3", "e4"])
-        mgr._cursors["skill"] = "e2"  # 2 events newer (e3, e4)
-        self.assertEqual(mgr.lag_for("skill"), 2)
-
-    def test_no_cursor_reads_full_depth(self):
-        """A role that has never acked reads as fully behind."""
-        mgr = self._mgr_with_events(["e1", "e2", "e3"])
-        self.assertEqual(mgr.lag_for("skill"), 3)
-
-    def test_evicted_cursor_reads_full_depth(self):
-        """A cursor that predates the retained deque reads as fully behind."""
-        mgr = self._mgr_with_events(["e1", "e2", "e3"])
-        mgr._cursors["skill"] = "GONE"  # not in deque
-        self.assertEqual(mgr.lag_for("skill"), 3)
-
-    def test_status_endpoint_injects_lag_per_agent(self):
-        from fastapi.testclient import TestClient
-        from harness import app, state, event_lifecycle
-        state.start_time = time.time()
-        state.port = 7373
-        with patch.object(state, "all_agents",
-                          return_value=[{"role": "skill"}, {"role": "pm"}]), \
-             patch.object(state, "update_health"), \
-             patch.object(event_lifecycle, "lag_for",
-                          side_effect=lambda r: {"skill": 4, "pm": 0}[r]):
-            client = TestClient(app, raise_server_exceptions=False)
-            resp = client.get("/status")
-        self.assertEqual(resp.status_code, 200)
-        agents = {a["role"]: a for a in resp.json()["agents"]}
-        self.assertEqual(agents["skill"]["lag"], 4)
-        self.assertEqual(agents["pm"]["lag"], 0)
-
-
 class TestStatusEndpointCodeVersion(unittest.TestCase):
     """#9243 — GET /status exposes code_version block; GET / returns slim."""
 

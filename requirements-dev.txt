@@ -1,3 +1,2 @@
 pytest>=7.0
-pytest-asyncio>=0.23   # async test support for the TUI (textual run_test — #12801)
 # pyyaml moved to requirements.txt (#11613) — it's a RUNTIME dep, not dev-only.

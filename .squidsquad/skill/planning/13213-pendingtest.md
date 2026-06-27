@@ -1,0 +1,5 @@
+[23:20:43] SHIPPED -> pending-test (PR #13237). UserPromptSubmit activity heartbeat wired into the compose-emitted hooks block.
+
+- AC1: compose._ensure_activity_hooks emits UserPromptSubmit (async command hook -> activity_hook.py), same group as Pre/Post*. AC2: harness records last_activity event=UserPromptSubmit, last_activity_at advances. AC3: existing Pre/Post*/SessionEnd hooks unaffected (9-hook coexist regression). AC4: fail-open async preserved. AC5: harness integration tests (heartbeat-no-in-flight + mid-flight-no-disturb). AC6: lands before #12492 cutover, plain heartbeat -> shadow progress_liveness includes it with no verdict-semantics change (noted on #12271).
+- Wiring-only: activity_hook.py already event-generic, /hooks/activity already ingests, in_flight_until set only on PreToolUse -> no harness/script change.
+- Full static gate (post origin/main merge): 4963 passed / 0 fail / 0 error. DS-review NO_FINDINGS (DS-REVIEW-13213.md on main). No CQ (deterministic config/code, not LLM-consumed). No manifest (no new tracked files).

@@ -7,6 +7,7 @@ status: active
 confidence: high
 source: observation
 links: [pattern-verify-composed-output-with-main-landing-state-applied, pattern-verify-new-shipped-file-in-installer-manifest]
+updated: 2026-06-18
 ---
 
 ## Context

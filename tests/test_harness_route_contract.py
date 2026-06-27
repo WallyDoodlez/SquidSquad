@@ -53,10 +53,6 @@ EXPECTED_CALLERS = {
     ("GET",  "/agents/{role}/config"):          _EXTERNAL,
     ("POST", "/agents/all/start"):              ["squidsquad_cli"],
     ("POST", "/agents/all/stop"):               ["squidsquad_cli"],
-    # #12801 — "reboot all" from the TUI action bar. The caller is the TUI
-    # (references/tui/harness_client.py), NOT a references/scripts/ module, so it
-    # has no in-scope Python caller to grep → _EXTERNAL (operator/TUI-triggered).
-    ("POST", "/agents/all/restart"):            _EXTERNAL,
     ("POST", "/agents/{role}/start"):           ["squidsquad_cli"],
     ("POST", "/agents/{role}/stop"):            ["squidsquad_cli"],
     ("POST", "/agents/{role}/restart"):         ["cycle_post", "squidsquad_cli"],

@@ -3,6 +3,11 @@ type: learning
 role: dm
 created: 2026-06-14
 tags: [delivery, tracker, queue-scan, gotcha]
+updated: 2026-06-19
+owner: dm
+status: active
+confidence: medium
+source: observation
 ---
 
 # `list-tasks --status pending-ship` includes CLOSED issues
