@@ -535,5 +535,103 @@ class TestFindClaudeWindowsPreference(unittest.TestCase):
         self.assertTrue(got.lower().endswith(".cmd"))
 
 
+class TestResultIdNormalization13169(unittest.TestCase):
+    """#13169: the eval prompt presents questions as ``### Q-<id>`` headers, so
+    the judge LLM echoes ``"Q-1"`` as the result id while the spec questions and
+    every ``test_comprehension_*`` file key on the bare id ``"1"``. The
+    ``_get_result`` lookup and ``test_all_questions_answered`` then fail even
+    when the answer PASSED. The runner must canonicalize result ids to the bare
+    form before writing results.json so file-order / judge-echo cannot turn a
+    correct answer into a spurious red."""
+
+    def setUp(self):
+        self.runner = _load_runner()
+        self.tmpdir = Path(tempfile.mkdtemp(prefix="cq13169-"))
+        self.spec_path = self.tmpdir / "fake_spec.json"
+        self.spec_path.write_text(
+            json.dumps({
+                "issue": 13169,
+                "title": "fake spec for id-normalization test",
+                "files": ["README.md"],
+                "questions": [
+                    {"id": "1", "question": "q1?", "expected": "a"},
+                    {"id": "2", "question": "q2?", "expected": "b"},
+                ],
+            }),
+            encoding="utf-8",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_normalize_strips_q_prefix(self):
+        n = self.runner._normalize_result_id
+        self.assertEqual(n("Q-1"), "1")
+        self.assertEqual(n("q-2"), "2")
+        self.assertEqual(n(" Q-3 "), "3")
+
+    def test_normalize_leaves_bare_id_unchanged(self):
+        n = self.runner._normalize_result_id
+        self.assertEqual(n("1"), "1")
+        self.assertEqual(n("q1"), "q1")        # no hyphen → not a Q- label
+        self.assertEqual(n(7), "7")            # non-string id coerced
+        self.assertEqual(n("Question-1"), "Question-1")  # only a single Q- prefix
+
+    def test_normalize_strips_only_one_prefix(self):
+        # A pathological double label keeps everything after the first ``Q-``.
+        self.assertEqual(self.runner._normalize_result_id("Q-Q-1"), "Q-1")
+
+    def test_runner_normalizes_judge_echoed_ids_end_to_end(self):
+        """The decisive regression: the eval agent returns ``Q-1``/``Q-2`` ids
+        (the #13169 echo); results.json on disk and the returned list must carry
+        the bare ``1``/``2`` so the per-question asserts match."""
+        output_dir = self.tmpdir / ".out"
+        answers_md = "### Q-1\nfoo\n### Q-2\nbar\n"
+        results_json = (
+            '[{"id":"Q-1","pass":true,"reason":"ok"},'
+            '{"id":"Q-2","pass":true,"reason":"ok"}]'
+        )
+        call_outputs = iter([
+            (answers_md, _make_proc(returncode=0)),
+            (results_json, _make_proc(returncode=0)),
+        ])
+        with mock.patch.object(
+            self.runner, "_run_agent",
+            side_effect=lambda *a, **kw: next(call_outputs),
+        ), mock.patch.object(
+            self.runner, "_find_claude", return_value="/fake/claude",
+        ), mock.patch.dict(os.environ, {"FORCE_CQ": "1"}):
+            results, _ = self.runner.run_test(
+                self.spec_path, output_dir=output_dir
+            )
+
+        ids = {r["id"] for r in results}
+        self.assertEqual(
+            ids, {"1", "2"},
+            msg="runner must canonicalize judge-echoed Q-<id> to the bare id",
+        )
+        on_disk = json.loads((output_dir / "results.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {r["id"] for r in on_disk}, {"1", "2"},
+            msg="results.json on disk must carry the normalized ids",
+        )
+
+    def test_eval_prompt_instructs_bare_id(self):
+        """Belt-and-suspenders: the eval prompt BODY (not a docstring/comment)
+        must tell the judge to emit the bare id, reducing the echo at source.
+        Scoped to the extracted ``eval_prompt`` f-string so it cannot pass
+        vacuously against ``_normalize_result_id``'s docstring (DS-review MED)."""
+        source = RUNNER_PATH.read_text(encoding="utf-8")
+        m = re.search(r'\beval_prompt\s*=\s*f?"""(.*?)"""', source, re.DOTALL)
+        self.assertIsNotNone(
+            m, msg="eval_prompt assignment not found — if renamed, update test."
+        )
+        body = m.group(1).lower()
+        self.assertIn(
+            "bare", body,
+            msg="eval_prompt must instruct the judge to emit the BARE id (#13169)",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

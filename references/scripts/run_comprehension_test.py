@@ -31,6 +31,29 @@ CACHE_DIR = REPO_ROOT / "tests" / "comprehension" / ".cache"
 
 
 # ---------------------------------------------------------------------------
+# Result-id canonicalization (#13169)
+# ---------------------------------------------------------------------------
+
+def _normalize_result_id(raw_id):
+    """Canonicalize a judge-emitted question id to the spec's bare id.
+
+    The eval prompt presents questions as ``### Q-<id>`` headers, so the judge
+    LLM frequently echoes the visible label (e.g. ``"Q-1"``) as the result id
+    instead of the bare spec id (``"1"``). The spec questions and every
+    ``test_comprehension_*`` file key on the bare id, so a ``Q-`` echo makes
+    ``_get_result`` and ``test_all_questions_answered`` fail even when the
+    answer PASSED — the #13169 spurious-failure-when-run-live symptom. Strip a
+    single leading ``Q-``/``q-`` (and surrounding whitespace) so the stored id
+    matches the spec regardless of which form the judge emitted. A bare id that
+    has no ``Q-`` prefix is returned unchanged.
+    """
+    s = str(raw_id).strip()
+    if len(s) >= 2 and s[0] in ("Q", "q") and s[1] == "-":
+        return s[2:].strip()
+    return s
+
+
+# ---------------------------------------------------------------------------
 # Content-hash caching
 # ---------------------------------------------------------------------------
 
@@ -349,11 +372,11 @@ If you cannot find a question's answer in the listed files, write `NOT FOUND IN 
 - FAIL = the answer contradicts the expected behavior, is missing, or says `NOT FOUND IN FILES`.
 
 ## Required output (your final assistant message — nothing else)
-Respond with a raw JSON array. No code fences, no preamble, no closing remarks. One object per question id in this shape:
+Respond with a raw JSON array. No code fences, no preamble, no closing remarks. One object per question id in this shape — use the BARE question id (the part after `Q-`, e.g. `1` for a `### Q-1` heading), not the `Q-` label:
 
 [
-  {{"id": "<question-id>", "pass": true, "reason": "<brief explanation>"}},
-  {{"id": "<question-id>", "pass": false, "reason": "<brief explanation>"}}
+  {{"id": "1", "pass": true, "reason": "<brief explanation>"}},
+  {{"id": "2", "pass": false, "reason": "<brief explanation>"}}
 ]
 
 The runner parses your reply directly as JSON.
@@ -392,6 +415,14 @@ The runner parses your reply directly as JSON.
         print(f"  Content: {raw[:500]}", file=sys.stderr)
         sys.exit(1)
 
+    # #13169: the judge often echoes the prompt's ``Q-<id>`` label as the result
+    # id; canonicalize to the bare spec id so the per-question asserts and
+    # test_all_questions_answered match regardless of which form it emitted.
+    if isinstance(results, list):
+        for r in results:
+            if isinstance(r, dict) and "id" in r:
+                r["id"] = _normalize_result_id(r["id"])
+
     results_path.write_text(json.dumps(results, indent=2), encoding="utf-8")
 
     if not results:
@@ -406,7 +437,9 @@ The runner parses your reply directly as JSON.
     print(f"\nResults: {passed}/{total} passed")
     for r in results:
         status = "PASS" if r.get("pass") else "FAIL"
-        print(f"  Q-{r['id']}: {status} — {r.get('reason', '')}")
+        # #13169: ids are already canonicalized (bare spec id, e.g. "1"/"CQ1");
+        # print as-is rather than re-prefixing "Q-" (which produced "Q-CQ1").
+        print(f"  Q[{r['id']}]: {status} — {r.get('reason', '')}")
 
     # Write cache only on PASS — failed runs must not update cache
     if all_pass:
