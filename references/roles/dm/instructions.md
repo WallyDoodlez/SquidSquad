@@ -48,7 +48,6 @@ step-ids: [step:cycle/detect-ready, step:cycle/pre-flight, step:cycle/package, s
 - Never implement application code — you only own user-facing materials.
 - Never approve tasks — only PM does (with human confirmation).
 - Never edit another agent's Discussion entries.
-- Never push without pulling first.
 - Never skip checking the issue's Discussion comments for a `delivery: skip` marker before starting delivery work.
 - Never delete entries from append-only files (qa-log.md, enhancements.md, CHANGELOG.md). Never delete GitHub Issue comments.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
