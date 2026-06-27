@@ -71,22 +71,78 @@ def _get_working_branch():
         return "main"
 
 
-def _run(cmd, check=True):
+# #13262 — every git_ops subprocess gets a timeout so a hung `git` (network
+# stall, stuck index.lock, a credential-helper wedge — cf. the documented
+# `credential.helper=manager` silent hang) fails fast into the callers' existing
+# failure paths instead of blocking the thread (and, since #13211, the whole
+# in-process recompose surface behind `_ENSURE_MAIN_LOCK`) indefinitely. The
+# default is generous (git ops are normally sub-second; a slow network fetch/push
+# of a large pack is the worst legitimate case) so it fail-fasts a true hang
+# without false-tripping. Overridable per-call and fleet-wide via the
+# `SQUIDSQUAD_GIT_TIMEOUT` env var (no config-schema change → existing installs
+# keep the default).
+DEFAULT_GIT_TIMEOUT = 300
+
+
+def _git_timeout():
+    """Resolve the git subprocess timeout (seconds): ``SQUIDSQUAD_GIT_TIMEOUT``
+    env override if a positive int, else ``DEFAULT_GIT_TIMEOUT``.
+
+    Installs on very high-latency links or with very large packs (a `git pull`/
+    `git fetch` that legitimately runs minutes) can raise the cap via
+    ``SQUIDSQUAD_GIT_TIMEOUT=600`` without a code or config-schema change."""
+    import os
+    raw = os.environ.get("SQUIDSQUAD_GIT_TIMEOUT")
+    if raw:
+        try:
+            val = int(raw)
+            if val > 0:
+                return val
+        except (TypeError, ValueError):
+            pass
+    return DEFAULT_GIT_TIMEOUT
+
+
+def _timeout_failure(cmd, check, timeout):
+    """Translate a ``subprocess.TimeoutExpired`` into the failure shape the
+    caller already handles (#13262): raise ``CalledProcessError`` when
+    ``check=True`` (mirroring subprocess's own check-failure contract), else
+    return a synthetic non-zero ``CompletedProcess`` (rc=124, the conventional
+    timeout code) so ``check=False`` callers fall into their existing
+    ``returncode != 0`` / ``(False, ...)`` recovery."""
+    msg = f"git command timed out after {timeout}s: {cmd}"
+    print(f"WARNING: {msg}", file=sys.stderr)
+    if check:
+        raise subprocess.CalledProcessError(124, cmd, output=None, stderr=msg)
+    return subprocess.CompletedProcess(cmd, 124, stdout="", stderr=msg)
+
+
+def _run(cmd, check=True, timeout=None):
     """Run a shell command from repo root (only for static commands)."""
-    return subprocess.run(
-        cmd, shell=True, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        check=check, cwd=str(REPO_ROOT),
-    )
+    if timeout is None:
+        timeout = _git_timeout()
+    try:
+        return subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT), timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return _timeout_failure(cmd, check, timeout)
 
 
-def _run_list(cmd_list, check=True):
+def _run_list(cmd_list, check=True, timeout=None):
     """Run a command from repo root using list form (safe for variable args)."""
-    return subprocess.run(
-        cmd_list, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        check=check, cwd=str(REPO_ROOT),
-    )
+    if timeout is None:
+        timeout = _git_timeout()
+    try:
+        return subprocess.run(
+            cmd_list, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT), timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return _timeout_failure(cmd_list, check, timeout)
 
 
 _GH_AVAILABLE_CACHE = None
@@ -403,11 +459,9 @@ def commit(role, message):
     """Commit with role prefix and Co-Authored-By trailer."""
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit")
@@ -821,11 +875,9 @@ def commit_code(role, branch, message):
     # Commit
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit on branch")
@@ -1047,11 +1099,9 @@ def commit_state(role, message):
     # Commit
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit")
