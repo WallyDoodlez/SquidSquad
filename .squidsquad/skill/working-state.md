@@ -1,12 +1,14 @@
 # Working State
 
-- **Task**: none in-flight. #13279 handed to verifier; #13291 un-held + recomposed. No further cleanly-autonomous work queued. Idle-armed.
+- **Task**: none in-flight. #13279 + #13278 shipped (verifier); #13291 un-held + recomposed. Queue now all operator-gated (#12527/#10690/#10686). Idle-armed.
 
 ## THIS SESSION (2026-06-27, operator inline "go ahead")
 
 - **#13279 SHIPPED -> pending-test (PR #13299).** Last unguarded `subprocess.run` in git_ops.py: added `timeout=_git_timeout()` to `_log_diagnostic` (fire-and-forget, except-wrapped; TimeoutExpired already swallowed -> only behavior change is bounding the wait; some callers run under #13211 `_ENSURE_MAIN_LOCK`). +3 regression tests. Static 5171/0/0. Completes #13262 timeout-hardening. Picked up under operator inline "go ahead" (team idle) as the triage green-light for this own-scan finding. Low blast radius -> no DS-review.
 
 - **#13291 UN-HELD + POST-MERGE RECOMPOSE landed (direct-to-main).** Operator LIFTED the HOLD (pm 18:37: "every agent commits to the shared git repo, so be-current-before-integrate is L1-universal; placement correct; QA proceed"). qa re-applied the exact reviewed source diff (un-revert of a4eb27c10 -> "Reapply ...") + re-verified -> pending-ship (2004b677b). **Source was re-landed source-only**, so composed `.squidsquad/<role>/CLAUDE.md` were stale (the exact drift I flagged during the HOLD). I recomposed all 4 roles (dm/pm/qa/skill) -> diff is exactly the new L1 "stay-current" wording (8 files, 0 unexpected lines), static 5168/0/0, committed direct-to-main. The deployed agent instructions now match the re-landed L1 source.
+
+- **#13278 SHIPPED -> pending-test (PR #13300).** ROOT CAUSE was NOT what the issue assumed (DeepSeek broken/external). Live probe proved DeepSeek code-review works: a clean review returns the template's sanctioned sentinel `NO_FINDINGS` (11 chars), which route()'s uniform MIN_OUTPUT_LENGTH=200 gate misclassified as degenerate -> exit 1 -> needless fallback on EVERY clean review. Fix: CLEAN_RESULT_SENTINELS bypasses the length gate (exit 0, sentinel written); genuine degenerate output still returns 1. Sonnet DS-review (0 blockers): +None fail-closed guard, gate-fail len() guarded, "success-sentinel" audit action, case-robust match. +6 tests. Static 5179/0/0. **DeepSeek code-review is functional again now that clean reviews aren't discarded** -- the standing "model_router degenerate -> go straight to Sonnet" reminder can be relaxed once this verifies+merges (pending-test).
 
 ## CARRY-FORWARD (other lanes)
 
