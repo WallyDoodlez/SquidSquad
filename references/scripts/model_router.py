@@ -84,6 +84,15 @@ MAX_FILE_READ_BYTES = 500_000  # ~500KB
 # Minimum acceptable output length (chars) — below this triggers fallback
 MIN_OUTPUT_LENGTH = 200
 
+# Valid short-result sentinels: a response that begins with one of these is a
+# legitimate clean result, NOT degenerate output, so it bypasses the
+# MIN_OUTPUT_LENGTH gate (#13278). The code-review template (#5932) instructs
+# the model to emit exactly `NO_FINDINGS` for clean code (11 chars); without
+# this exemption the length gate misclassified every clean review as degenerate
+# and forced a needless Claude fallback, making the DeepSeek code-review path
+# look broken when it was working correctly.
+CLEAN_RESULT_SENTINELS = ("NO_FINDINGS",)
+
 
 # ---------------------------------------------------------------------------
 # Config parsing
@@ -799,8 +808,17 @@ def route(task_type, task_id, input_files, output_file, context):
 
     elapsed = time.time() - start_time
 
+    # A recognized clean-result sentinel (e.g. code-review's `NO_FINDINGS`) is a
+    # VALID short response, not degenerate output — it must NOT trigger fallback
+    # (#13278). Match case-insensitively and allow trailing explanation text.
+    # `response or ""` guards an adapter that returns None on a non-raising path.
+    stripped_response = (response or "").strip()
+    is_clean_sentinel = any(
+        stripped_response.upper().startswith(s.upper()) for s in CLEAN_RESULT_SENTINELS
+    )
+
     # Quality gate: check minimum output length
-    if len(response.strip()) < MIN_OUTPUT_LENGTH:
+    if not is_clean_sentinel and len(stripped_response) < MIN_OUTPUT_LENGTH:
         _log_diagnostic({
             "timestamp": time.time(),
             "task_type": task_type,
@@ -808,18 +826,18 @@ def route(task_type, task_id, input_files, output_file, context):
             "model": model,
             "provider": provider_name,
             "action": "quality-gate-fail",
-            "response_length": len(response),
+            "response_length": len(stripped_response),
             "elapsed_seconds": round(elapsed, 1),
         })
         print(
             f"[model_router] Output below minimum length threshold "
-            f"({len(response)} < {MIN_OUTPUT_LENGTH}). Falling back to Claude.",
+            f"({len(stripped_response)} < {MIN_OUTPUT_LENGTH}). Falling back to Claude.",
             file=sys.stderr,
         )
         # Write error status instead of deleting (#5046)
         try:
             Path(output_file).write_text(
-                f"# STATUS: error -- output below minimum length ({len(response)} chars)\n",
+                f"# STATUS: error -- output below minimum length ({len(stripped_response)} chars)\n",
                 encoding="utf-8",
             )
         except Exception:
@@ -841,7 +859,9 @@ def route(task_type, task_id, input_files, output_file, context):
         "task_id": task_id,
         "model": model,
         "provider": provider_name,
-        "action": "success",
+        # #13278: distinguish a sentinel-exempted short clean result from a
+        # normal pass so the bypass is auditable in the diagnostics log.
+        "action": "success-sentinel" if is_clean_sentinel else "success",
         "response_length": len(response),
         "elapsed_seconds": round(elapsed, 1),
     })
