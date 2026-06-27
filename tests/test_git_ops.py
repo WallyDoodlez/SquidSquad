@@ -2701,6 +2701,43 @@ class TestScopeAudit13285:
         assert any(c[:3] == ["git", "push", "origin"] for c in calls)
         assert not any("--force" in c or "reset" in c for c in calls)
 
+    def test_rename_old_path_not_a_violation(self):
+        """A dissimilar rename shows as D(old)+A(new); gh declares BOTH paths, so
+        the deleted old path is in `declared` and is NOT a false violation."""
+        with patch.object(git_ops, "_pr_declared_files",
+                          return_value={"old_name.py", "new_name.py"}), \
+             patch.object(git_ops, "_merge_deleted_files",
+                          return_value={"old_name.py"}):
+            assert git_ops._scope_audit_violations(1, "sha") == []
+
+    def test_merge_commit_sha_null_is_unresolved(self):
+        """gh prints literal 'null' before the merge commit is recorded -> None
+        (fail-safe), not the string 'null'."""
+        with patch.object(git_ops, "_run_list",
+                          return_value=_mock_result(stdout="null\n")):
+            assert git_ops._merge_commit_sha(1) is None
+
+    def test_auto_revert_aborts_when_checkout_fails(self):
+        """_safe_checkout False -> no revert, no push (cannot safely act)."""
+        with patch.object(git_ops, "_safe_checkout", return_value=False), \
+             patch.object(git_ops, "_run_list") as rl:
+            git_ops._auto_revert_merge("sha123", 1)
+        rl.assert_not_called()
+
+    def test_auto_revert_push_failure_undoes_local_revert(self):
+        """A failed push must reset the local revert commit so the next pull can't
+        silently fuse it into main without review."""
+        def rl(args, **kw):
+            if args[:2] == ["git", "push"]:
+                return _mock_result(returncode=1, stderr="non-fast-forward")
+            return _mock_result()
+
+        with patch.object(git_ops, "_safe_checkout", return_value=True), \
+             patch.object(git_ops, "_run_list", side_effect=rl) as rl_mock:
+            git_ops._auto_revert_merge("sha123", 1)
+        called = [c.args[0] for c in rl_mock.call_args_list]
+        assert ["git", "reset", "--keep", "HEAD~1"] in called
+
     def test_auto_revert_aborts_on_revert_failure(self):
         def rl(args, **kw):
             if args[:2] == ["git", "revert"] and "--abort" not in args:

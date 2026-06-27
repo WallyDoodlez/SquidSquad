@@ -711,7 +711,13 @@ def _merge_commit_sha(pr_number):
     if res.returncode != 0:
         return None
     sha = res.stdout.strip()
-    return sha or None
+    # `--jq .mergeCommit.oid` prints the literal "null" when GitHub has not yet
+    # recorded the merge commit (a real post-merge timing window) -- treat it as
+    # unresolved so the caller fails-safe with the correct "could not resolve
+    # SHA" message rather than a misleading "could not determine file set".
+    if not sha or sha == "null":
+        return None
+    return sha
 
 
 def _merge_deleted_files(sha):
@@ -757,6 +763,10 @@ def _post_merge_scope_audit(pr_number, issue_num):
     trusted. FAIL-SAFE: any audit uncertainty (gh/git error) -> warn + return
     without reverting; a false revert of a legitimate merge is worse than a miss
     (the #13271 guard still backstops). Never raises.
+
+    GitHub-only: uses ``gh`` + GitHub-specific fields. ``pr_merge`` returns early
+    on non-GitHub forge-adapter backends before this runs, so the audit does not
+    fire there (a non-GitHub merge path would need its own equivalent).
 
     NOTE (scope): this is the file-DELETION net (the #13271 mass-revert class).
     The ahead-DROP variant (#13280 -- a squash that omitted the branch's newest
@@ -843,9 +853,16 @@ def _auto_revert_merge(sha, pr_number):
         return
     push = _run_list(["git", "push", "origin", "main"], check=False)
     if push.returncode != 0:
-        print(f"WARN: auto-revert pushed FAILED for {sha[:9]}: "
-              f"{push.stderr.strip()} -- revert committed locally, push manually",
-              file=sys.stderr)
+        # Undo the local revert commit so a diverged local main can't be silently
+        # fused into a noise merge by the next pull() (the revert content would
+        # reach origin with NO violation-review context, defeating the point).
+        # Safe: the commit was created by this function one step earlier, so there
+        # is no other local work to preserve. The incident comment already tells a
+        # human to revert + push manually.
+        print(f"WARN: auto-revert push FAILED for {sha[:9]}: "
+              f"{push.stderr.strip()} -- undoing the local revert to avoid "
+              f"divergence; human must revert + push manually", file=sys.stderr)
+        _run_list(["git", "reset", "--keep", "HEAD~1"], check=False)
         return
     print(f"AUTO-REVERTED scope-violating merge {sha[:9]} (PR #{pr_number}) -- "
           f"non-destructive revert commit pushed to main (#13285).")
