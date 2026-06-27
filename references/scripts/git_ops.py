@@ -673,6 +673,184 @@ def _pr_behind_by(pr_number):
         return None
 
 
+def _merge_auto_revert_enabled():
+    """#13285 -- whether the post-merge scope-audit AUTO-REVERTS a violating merge
+    (vs detect+alert only). Default OFF (``SQUIDSQUAD_MERGE_AUTO_REVERT=1`` opts
+    in) -- the destructive `git revert + push` ships defused so detection runs in
+    production first; an operator flips it on once the audit is trusted. Detection
+    + the loud incident comment are ALWAYS on regardless of this flag."""
+    import os
+    raw = os.environ.get("SQUIDSQUAD_MERGE_AUTO_REVERT", "")
+    return raw.strip().lower() in ("1", "true", "yes")
+
+
+def _pr_declared_files(pr_number):
+    """The set of file paths the PR legitimately changed (added/modified/deleted),
+    per ``gh pr view --json files``. Returns ``None`` on any gh/parse failure so
+    the caller FAILS-SAFE (cannot determine scope -> do not guess at a violation).
+
+    A legitimate deletion (e.g. a refactor removing a file) appears here, so it is
+    never flagged; only a deletion the merge made that the PR never declared (the
+    stale-tree symptom, #13271) falls outside this set."""
+    res = _run_list(
+        ["gh", "pr", "view", str(pr_number), "--json", "files"], check=False)
+    if res.returncode != 0:
+        return None
+    try:
+        data = json.loads(res.stdout.strip())
+        return {f["path"] for f in data.get("files", [])}
+    except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
+        return None
+
+
+def _merge_commit_sha(pr_number):
+    """The squash/merge commit SHA GitHub recorded for the PR, or ``None``."""
+    res = _run_list(
+        ["gh", "pr", "view", str(pr_number),
+         "--json", "mergeCommit", "--jq", ".mergeCommit.oid"], check=False)
+    if res.returncode != 0:
+        return None
+    sha = res.stdout.strip()
+    return sha or None
+
+
+def _merge_deleted_files(sha):
+    """Files the merge commit ``sha`` DELETED relative to its parent --
+    ``git show --diff-filter=D``. File-deletions only (the #13271 incident was 194
+    FILE deletions); a line-level deletion inside a surviving file is NOT a
+    delete and is correctly excluded. Returns ``None`` on git failure (fail-safe).
+    Requires the commit to be local -- the caller fetches origin first."""
+    res = _run_list(
+        ["git", "show", "--diff-filter=D", "--name-only", "--format=", sha],
+        check=False)
+    if res.returncode != 0:
+        return None
+    return {line.strip() for line in res.stdout.splitlines() if line.strip()}
+
+
+def _scope_audit_violations(pr_number, sha):
+    """#13285 -- files the merge ``sha`` DELETED that the PR never declared
+    (``deleted - declared``): the behind-clone stale-tree mass-revert signature
+    (#13271). Returns a sorted list of violating paths, or ``None`` if the audit
+    could not be performed (gh/git uncertainty -> caller fails SAFE: flag-don't-
+    guess, never auto-revert on ``None``)."""
+    declared = _pr_declared_files(pr_number)
+    if declared is None:
+        return None
+    deleted = _merge_deleted_files(sha)
+    if deleted is None:
+        return None
+    return sorted(deleted - declared)
+
+
+def _post_merge_scope_audit(pr_number, issue_num):
+    """#13285 -- after a successful merge, audit the squash for an out-of-scope
+    mass file-deletion (the behind-clone stale-tree revert, #13271 SEV-1) and
+    raise a LOUD signal so it is caught at merge time instead of by luck hours
+    later. The complement to the #13271 pre-merge behind-count guard: that's a
+    >50-behind threshold heuristic; this checks what the merge ACTUALLY did.
+
+    Always: detect + (on violation) print + post an incident comment with the
+    evidence and the exact non-destructive remediation. Auto-revert (git revert
+    + push) only when ``_merge_auto_revert_enabled()`` (default OFF) -- shipped
+    defused so detection runs in production before the destructive action is
+    trusted. FAIL-SAFE: any audit uncertainty (gh/git error) -> warn + return
+    without reverting; a false revert of a legitimate merge is worse than a miss
+    (the #13271 guard still backstops). Never raises.
+
+    NOTE (scope): this is the file-DELETION net (the #13271 mass-revert class).
+    The ahead-DROP variant (#13280 -- a squash that omitted the branch's newest
+    ADDITIONS) is a missing-addition, not a deletion, so it is out of this audit's
+    scope; tracked separately.
+    """
+    try:
+        # The squash lives on the remote -- fetch so it is inspectable locally.
+        _run_list(["git", "fetch", "origin", "main"], check=False)
+        sha = _merge_commit_sha(pr_number)
+        if not sha:
+            print(f"WARN: #{pr_number} post-merge scope-audit skipped -- "
+                  f"could not resolve the merge commit SHA (fail-safe)",
+                  file=sys.stderr)
+            return
+        violations = _scope_audit_violations(pr_number, sha)
+        if violations is None:
+            print(f"WARN: #{pr_number} post-merge scope-audit inconclusive -- "
+                  f"could not determine the PR's declared file set (fail-safe; "
+                  f"NOT reverting)", file=sys.stderr)
+            return
+        if not violations:
+            return  # clean merge -- pass untouched
+        # Violation: out-of-scope file deletions = stale-tree mass-revert signature.
+        preview = ", ".join(violations[:8])
+        more = f" (+{len(violations) - 8} more)" if len(violations) > 8 else ""
+        print(f"SCOPE VIOLATION: merge {sha[:9]} for PR #{pr_number} DELETED "
+              f"{len(violations)} file(s) outside the PR's declared scope: "
+              f"{preview}{more} -- likely a behind-clone stale-tree revert "
+              f"(#13271 class).", file=sys.stderr)
+        _emit_scope_incident(issue_num, pr_number, sha, violations)
+        if _merge_auto_revert_enabled():
+            _auto_revert_merge(sha, pr_number)
+        else:
+            print(f"  [auto-revert OFF] set SQUIDSQUAD_MERGE_AUTO_REVERT=1 to "
+                  f"auto-revert; meanwhile a human runs: git revert --no-edit "
+                  f"{sha} && git push", file=sys.stderr)
+    except Exception as e:  # never let the audit break the merge flow
+        print(f"WARN: #{pr_number} post-merge scope-audit raised "
+              f"{type(e).__name__}: {e} (fail-safe -- merge stands)",
+              file=sys.stderr)
+
+
+def _emit_scope_incident(issue_num, pr_number, sha, violations):
+    """Post the loud incident comment (append-only) so a human/DM confirms +
+    reverts. Best-effort -- a comment failure must not break the merge flow."""
+    if not issue_num:
+        return
+    preview = "\n".join(f"- `{v}`" for v in violations[:30])
+    extra = (f"\n...and {len(violations) - 30} more"
+             if len(violations) > 30 else "")
+    body = (
+        f"[!] **POST-MERGE SCOPE VIOLATION (#13285 auto-detect)** -- merge "
+        f"`{sha[:9]}` (PR #{pr_number}) DELETED **{len(violations)} file(s) "
+        f"outside the PR's declared scope**. This is the behind-clone "
+        f"stale-tree mass-revert signature (#13271 SEV-1 class).\n\n"
+        f"Out-of-scope deletions:\n{preview}{extra}\n\n"
+        f"**Remediation (non-destructive):** `git revert --no-edit {sha} && "
+        f"git push` then route this issue back to in-progress. Verify the "
+        f"revert restores only the out-of-scope files."
+    )
+    res = _run_list(
+        ["gh", "issue", "comment", str(issue_num), "--body", body], check=False)
+    if res.returncode != 0:
+        print(f"WARN: could not post scope-violation incident comment to "
+              f"#{issue_num}: {res.stderr.strip()}", file=sys.stderr)
+
+
+def _auto_revert_merge(sha, pr_number):
+    """Non-destructive auto-revert of a scope-violating merge (#13285, opt-in via
+    SQUIDSQUAD_MERGE_AUTO_REVERT). ``git revert`` creates a NEW commit -- never a
+    force-push / history rewrite -- and is idempotent-enough (a second run no-ops
+    on 'nothing to commit'). Best-effort + fail-safe: a revert/push failure is
+    logged, never raised (the incident comment already alerted a human)."""
+    if not _safe_checkout("main"):
+        print(f"WARN: auto-revert of {sha[:9]} aborted -- could not checkout main",
+              file=sys.stderr)
+        return
+    rev = _run_list(["git", "revert", "--no-edit", sha], check=False)
+    if rev.returncode != 0:
+        print(f"WARN: auto-revert `git revert {sha[:9]}` failed: "
+              f"{rev.stderr.strip()} -- human must revert manually", file=sys.stderr)
+        _run_list(["git", "revert", "--abort"], check=False)
+        return
+    push = _run_list(["git", "push", "origin", "main"], check=False)
+    if push.returncode != 0:
+        print(f"WARN: auto-revert pushed FAILED for {sha[:9]}: "
+              f"{push.stderr.strip()} -- revert committed locally, push manually",
+              file=sys.stderr)
+        return
+    print(f"AUTO-REVERTED scope-violating merge {sha[:9]} (PR #{pr_number}) -- "
+          f"non-destructive revert commit pushed to main (#13285).")
+
+
 def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
@@ -768,6 +946,7 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                 ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
                 check=False,
             )
+            audit_issue = None
             if branch_result.returncode == 0:
                 try:
                     branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
@@ -775,9 +954,15 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                     parts = branch_name.split("/")
                     if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
                         issue_num = parts[-1]
+                        audit_issue = issue_num
                         print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
                 except (json.JSONDecodeError, AttributeError, IndexError):
                     pass
+            # #13285 -- post-merge scope-audit: catch a behind-clone stale-tree
+            # mass-revert (the #13271 SEV-1 class) at merge time. Detection +
+            # incident comment always run; auto-revert is opt-in (default OFF).
+            # Fully fail-safe — never raises, never blocks the merge result.
+            _post_merge_scope_audit(pr_number, audit_issue)
             return True, "merged"
 
         error = result.stderr.strip()

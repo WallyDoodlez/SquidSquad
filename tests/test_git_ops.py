@@ -508,7 +508,11 @@ class TestPrMerge:
         # #13271: default the behind-count guard to "current" (0) so the existing
         # merge-flow tests below exercise the merge path unchanged; the dedicated
         # guard tests re-patch _pr_behind_by to a high value to assert the refusal.
-        with patch("git_ops._pr_behind_by", return_value=0):
+        # #13285: stub the post-merge scope-audit to a no-op so it does not consume
+        # the per-test _run_list mock sequence (the audit has its own tests in
+        # TestScopeAudit13285).
+        with patch("git_ops._pr_behind_by", return_value=0), \
+                patch("git_ops._post_merge_scope_audit"):
             yield
 
     @patch("git_ops._run_list")
@@ -2588,3 +2592,125 @@ class TestEnsureMainAndPullSerialized13211:
             f"ensure_main_and_pull ran {state['max']}-way concurrent — "
             f"_ENSURE_MAIN_LOCK is not serializing (#13211)"
         )
+
+
+# ---------------------------------------------------------------------------
+# #13285 — post-merge scope-audit + (opt-in) auto-revert
+# ---------------------------------------------------------------------------
+
+class TestScopeAudit13285:
+    def test_violations_are_deleted_minus_declared(self):
+        with patch.object(git_ops, "_pr_declared_files",
+                          return_value={"a.py", "b.py"}), \
+             patch.object(git_ops, "_merge_deleted_files",
+                          return_value={"a.py", "config.md",
+                                        ".squidsquad/pm/CLAUDE.md"}):
+            v = git_ops._scope_audit_violations(1, "sha")
+        # a.py was declared (a legit deletion); the other two are out-of-scope.
+        assert v == [".squidsquad/pm/CLAUDE.md", "config.md"]
+
+    def test_clean_merge_no_violations(self):
+        with patch.object(git_ops, "_pr_declared_files",
+                          return_value={"a.py", "b.py"}), \
+             patch.object(git_ops, "_merge_deleted_files",
+                          return_value={"a.py"}):  # only a declared deletion
+            assert git_ops._scope_audit_violations(1, "sha") == []
+
+    def test_fail_safe_when_declared_unknown(self):
+        """gh failure → declared None → audit returns None (caller won't revert)."""
+        with patch.object(git_ops, "_pr_declared_files", return_value=None), \
+             patch.object(git_ops, "_merge_deleted_files", return_value={"x"}):
+            assert git_ops._scope_audit_violations(1, "sha") is None
+
+    def test_fail_safe_when_deleted_unknown(self):
+        with patch.object(git_ops, "_pr_declared_files", return_value={"a"}), \
+             patch.object(git_ops, "_merge_deleted_files", return_value=None):
+            assert git_ops._scope_audit_violations(1, "sha") is None
+
+    def test_auto_revert_flag_default_off(self, monkeypatch):
+        monkeypatch.delenv("SQUIDSQUAD_MERGE_AUTO_REVERT", raising=False)
+        assert git_ops._merge_auto_revert_enabled() is False
+
+    def test_auto_revert_flag_on(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_AUTO_REVERT", "1")
+        assert git_ops._merge_auto_revert_enabled() is True
+
+    def test_audit_clean_merge_emits_nothing(self):
+        with patch.object(git_ops, "_run_list", return_value=_mock_result()), \
+             patch.object(git_ops, "_merge_commit_sha", return_value="sha123"), \
+             patch.object(git_ops, "_scope_audit_violations", return_value=[]), \
+             patch.object(git_ops, "_emit_scope_incident") as emit, \
+             patch.object(git_ops, "_auto_revert_merge") as revert:
+            git_ops._post_merge_scope_audit(1, "42")
+        emit.assert_not_called()
+        revert.assert_not_called()
+
+    def test_audit_violation_emits_incident_no_revert_when_off(self, monkeypatch):
+        monkeypatch.delenv("SQUIDSQUAD_MERGE_AUTO_REVERT", raising=False)
+        with patch.object(git_ops, "_run_list", return_value=_mock_result()), \
+             patch.object(git_ops, "_merge_commit_sha", return_value="sha123"), \
+             patch.object(git_ops, "_scope_audit_violations",
+                          return_value=["config.md", ".squidsquad/pm/CLAUDE.md"]), \
+             patch.object(git_ops, "_emit_scope_incident") as emit, \
+             patch.object(git_ops, "_auto_revert_merge") as revert:
+            git_ops._post_merge_scope_audit(1, "42")
+        emit.assert_called_once()
+        revert.assert_not_called()  # default OFF → detect+alert only
+
+    def test_audit_violation_auto_reverts_when_on(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_AUTO_REVERT", "1")
+        with patch.object(git_ops, "_run_list", return_value=_mock_result()), \
+             patch.object(git_ops, "_merge_commit_sha", return_value="sha123"), \
+             patch.object(git_ops, "_scope_audit_violations",
+                          return_value=["config.md"]), \
+             patch.object(git_ops, "_emit_scope_incident"), \
+             patch.object(git_ops, "_auto_revert_merge") as revert:
+            git_ops._post_merge_scope_audit(1, "42")
+        revert.assert_called_once_with("sha123", 1)
+
+    def test_audit_fail_safe_no_revert_on_inconclusive(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_AUTO_REVERT", "1")
+        with patch.object(git_ops, "_run_list", return_value=_mock_result()), \
+             patch.object(git_ops, "_merge_commit_sha", return_value="sha123"), \
+             patch.object(git_ops, "_scope_audit_violations", return_value=None), \
+             patch.object(git_ops, "_emit_scope_incident") as emit, \
+             patch.object(git_ops, "_auto_revert_merge") as revert:
+            git_ops._post_merge_scope_audit(1, "42")
+        emit.assert_not_called()
+        revert.assert_not_called()  # None = uncertainty → never revert
+
+    def test_audit_never_raises(self):
+        """A fault anywhere in the audit must not break the merge flow."""
+        with patch.object(git_ops, "_run_list",
+                          side_effect=RuntimeError("boom")):
+            # must not raise
+            git_ops._post_merge_scope_audit(1, "42")
+
+    def test_auto_revert_is_non_destructive_revert_then_push(self):
+        calls = []
+
+        def rec(args, **kw):
+            calls.append(args)
+            return _mock_result()
+
+        with patch.object(git_ops, "_safe_checkout", return_value=True), \
+             patch.object(git_ops, "_run_list", side_effect=rec):
+            git_ops._auto_revert_merge("sha123", 1)
+        # git revert --no-edit (NOT reset/force), then push.
+        assert ["git", "revert", "--no-edit", "sha123"] in calls
+        assert any(c[:3] == ["git", "push", "origin"] for c in calls)
+        assert not any("--force" in c or "reset" in c for c in calls)
+
+    def test_auto_revert_aborts_on_revert_failure(self):
+        def rl(args, **kw):
+            if args[:2] == ["git", "revert"] and "--abort" not in args:
+                return _mock_result(returncode=1, stderr="conflict")
+            return _mock_result()
+
+        with patch.object(git_ops, "_safe_checkout", return_value=True), \
+             patch.object(git_ops, "_run_list", side_effect=rl) as rl_mock:
+            git_ops._auto_revert_merge("sha123", 1)
+        # On a failed revert it must `git revert --abort` and NOT push.
+        called = [c.args[0] for c in rl_mock.call_args_list]
+        assert ["git", "revert", "--abort"] in called
+        assert not any(c[:2] == ["git", "push"] for c in called)
