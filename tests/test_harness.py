@@ -3000,6 +3000,59 @@ class TestGetEventsForRole(unittest.TestCase):
         self.assertEqual(len(data["events"]), 1)
         self.assertEqual(data["events"][0]["id"], "e1")
 
+    def test_excludes_self_emitted_reacts_to_events_13255(self):
+        """#13255: a reacts-to match emitted BY the requesting role itself is
+        excluded — an agent must not self-wake on its own git-commit /
+        status-transition events (they always drain to a care-filter no-op).
+        Cross-agent reacts-to events (different emitter) are still delivered, and
+        explicit target_alias targeting always wins (even self-emitted)."""
+        from harness import event_stream
+
+        event_stream.append({  # self-emitted reacts-to -> EXCLUDED
+            "id": "own1", "event_type": "git-commit", "role": "skill",
+            "payload": {"result": "ok"},
+        })
+        event_stream.append({  # cross-agent reacts-to -> INCLUDED
+            "id": "other1", "event_type": "git-commit", "role": "qa",
+            "payload": {"result": "ok"},
+        })
+        event_stream.append({  # self-emitted BUT explicitly targeted -> INCLUDED
+            "id": "selftarget1", "event_type": "assigned-to", "role": "skill",
+            "payload": {"target_alias": "skill"},
+        })
+
+        with patch("harness._validate_role"), \
+             patch("config.get_event_filters_for_role",
+                   return_value=["git-commit", "status-transition"]):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        ids = [e["id"] for e in resp.json()["events"]]
+        self.assertNotIn("own1", ids, "self-emitted git-commit must be excluded (#13255)")
+        self.assertIn("other1", ids, "cross-agent git-commit must still be delivered")
+        self.assertIn("selftarget1", ids, "explicit target_alias must win over self-emitted exclusion")
+
+    def test_self_emit_filter_includes_event_with_missing_emitter_13255(self):
+        """#13255 (review LOW): an event with no top-level `role` field has
+        emitter "" — it cannot be attributed to the requesting role, so the
+        self-emit exclusion must NOT drop it (conservative-correct: include)."""
+        from harness import event_stream
+
+        event_stream.append({  # reacts-to match, NO emitter -> INCLUDED
+            "id": "noemit1", "event_type": "git-commit",
+            "payload": {"result": "ok"},
+        })
+
+        with patch("harness._validate_role"), \
+             patch("config.get_event_filters_for_role",
+                   return_value=["git-commit"]):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        ids = [e["id"] for e in resp.json()["events"]]
+        self.assertIn("noemit1", ids,
+                      "event with missing emitter must not be excluded (#13255)")
+
     def test_since_cursor_filters_events(self):
         """GET /events/for/skill?since=X returns only events after cursor."""
         from harness import event_stream
