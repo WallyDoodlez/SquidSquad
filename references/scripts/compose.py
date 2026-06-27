@@ -187,6 +187,17 @@ _V2_MANIFEST_FILENAME = "includes.yml"
 def _load_manifest_v2(role_name: str) -> list | None:
     """Load the role's v2 mode-agnostic manifest (PRD-D D5 #10676, PRD-E E6 #10685).
 
+    .. note:: TOMBSTONE (#13264) — UNREACHABLE from production post-E6 (#10685).
+       The deploy entrypoints (``deploy_role_v2`` / deploy-all / wizard) route
+       through ``v2_link_stage.emit_v2_linked`` → ``atomic_emit.assemble_and_emit``,
+       NOT this loader. The only callers are this function pair's own ``base_role``
+       recursion and the unit tests. It is RETAINED (not deleted) so the
+       ``base_role`` + ``additional_includes`` schema reader — and the #13172
+       fail-closed guard hardening it — survive intact should the manifest-loader
+       path ever be re-wired. Remove (with its tests) only after confirming the
+       path is permanently retired. Do not add new production callers without
+       re-deciding this tombstone.
+
     Reads ``references/roles/<role>/includes.yml`` for base roles via the
     ``_V2_MANIFEST_FILENAME`` constant and follows the
     ``base_role`` + ``additional_includes`` schema. Variant Layer-3
@@ -257,6 +268,10 @@ def _load_manifest_v2(role_name: str) -> list | None:
 def _load_manifest_v2_from_file(
         manifest_path: Path, role_name: str) -> list | None:
     """Parse a v2 manifest file (or a variant ``includes.yml``).
+
+    .. note:: TOMBSTONE (#13264) — UNREACHABLE from production post-E6; see
+       ``_load_manifest_v2`` above for the full rationale. Called only from
+       ``_load_manifest_v2`` (and the unit tests); retained, not deleted.
 
     Shared body for ``_load_manifest_v2`` — keeps base-role and variant
     paths reading from a single YAML loader + schema dispatcher. Resolves
