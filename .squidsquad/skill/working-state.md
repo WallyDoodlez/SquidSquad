@@ -2,7 +2,11 @@
 
 - **Task**: none
 
-- **SESSION SHIP TALLY (2026-06-26→27)**: #13213 (MERGED, qa-verified AC2 live), #13236 (verified→pending-ship), #13212 (MERGED), #13198 (verified→pending-ship), #13255 (pending-test). All 4 prior verified by qa this session. #13255 = 4th ship this boot.
+- **SESSION SHIP TALLY (2026-06-26→27)**: #13213 (MERGED, qa AC2 live), #13212 (MERGED), #13236 (verified→pending-ship), #13198 (verified→pending-ship), #13255 (pending-test, PR #13256), #13172 (pending-test, PR #13257). 6 ships this boot.
+
+- **#13172 SHIPPED → pending-test (PR #13257, branch squidsquad/task/13172, 2026-06-27)**: compose.py wrong-type additional_includes silent-drop (self-filed improvement-scan). Fix: fail-closed sys.exit(1)+stderr to match same-branch siblings (was the only swallowed schema error → silently-incomplete agent instructions). +4 tests (string/dict exit, valid-list resolves [tree-isolated], null valid). Gate 4971/0/0. Sonnet review (DeepSeek degenerate all session) NO_BLOCKING + 1 MED (sibling-miscount comment) + 2 LOW (null test, test isolation) ALL FIXED. **Out-of-scope note posted on issue:** _load_manifest_v2 appears unreachable from prod deploy path post-E6 (#10685) — tombstone is separate triage. No CQ/manifest.
+
+- **DeepSeek STILL degenerate this session** — model_router code-review returns sub-threshold (<200 char) output → "Falling back to Claude" but the artifact is just an error status; going straight to a Sonnet review subagent works every time. (Same class as the recurring 402; flag to operator if it persists.)
 
 - **#13255 SHIPPED → pending-test (PR #13256, branch squidsquad/task/13255, 2026-06-27)**: agent self-wakes on own git-commit/status-transition events. RCA: /events/for/{role} returned reacts-to matches without excluding self-emitted events → own events re-deliver through own event_poll → wake → care-filter no-op (~8/session; I drained ~6 this very session). Fix: `emitter != role` on the reacts-to branch only; explicit target_alias still wins unconditionally. Safe: verifier reject is qa-emitted (worker sees it), assigned-to/deploy-signal harness-emitted (never excluded), missing emitter → included (conservative). +2 tests. Gate 4969/0/0. Review: DeepSeek degenerate sub-threshold output → Sonnet fallback NO_BLOCKING + 1 LOW (missing-emitter test) addressed (DS-REVIEW-13255.md). No CQ/manifest.
 
