@@ -258,7 +258,9 @@ class AgentState:
                  "in_flight_until", "waiting_since", "compacting_since",
                  "last_stop_failure",
                  # #12271 slice d — dispatch reference for progress-liveness
-                 "last_dispatch_at")
+                 "last_dispatch_at",
+                 # #12801 — operator FORCE-reboot marker (non-crash death signal)
+                 "operator_force_at")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -353,6 +355,14 @@ class AgentState:
         # timer) so a legitimately idle agent — nothing dispatched — is never
         # judged dead. None until the first dispatch.
         self.last_dispatch_at = None
+        # #12801 — epoch a FORCE reboot (operator-initiated, TUI action bar) was
+        # issued for this agent. A force reboot kills the claude PID immediately,
+        # overriding the busy/graceful path; that death has NO SessionEnd, so it
+        # would otherwise read as a crash and wrongly accumulate the #12244
+        # crash-loop streak (AC6). When this stamp is >= last_spawn_at the death
+        # classifier treats the death as operator-initiated (not a crash). Cleared
+        # on respawn. Transient/harness-session-owned: reset to None on load.
+        self.operator_force_at = None
 
     def reset_session_telemetry(self):
         """Clear per-session activity + pause telemetry on a fresh (re)spawn.
@@ -516,6 +526,23 @@ class AgentState:
         la = self.last_activity_at
         return ld is None or (la is not None and la >= ld)
 
+    def operator_force_death(self):
+        """#12801 — True when this agent's death was an operator FORCE reboot.
+
+        A force reboot (TUI action bar) kills the claude PID immediately, so the
+        death carries NO SessionEnd and would otherwise read as a crash. The
+        marker is stamped at force time and is authoritative only when it postdates
+        the current spawn (``>= last_spawn_at``) — a stale marker from a prior
+        session must not excuse a later natural crash. The death classifier treats
+        an operator-force death as non-crash (does NOT accumulate the #12244
+        streak, AC6) and clears the marker on consume."""
+        ofa = self.operator_force_at
+        return bool(
+            ofa is not None
+            and self.last_spawn_at is not None
+            and ofa >= self.last_spawn_at
+        )
+
     def to_dict(self):
         return {
             "role": self.role,
@@ -551,6 +578,8 @@ class AgentState:
             "last_stop_failure": self.last_stop_failure,
             # #12271 slice d — dispatch reference for progress-liveness
             "last_dispatch_at": self.last_dispatch_at,
+            # #12801 — operator FORCE-reboot marker (non-crash death signal)
+            "operator_force_at": self.operator_force_at,
         }
 
 
@@ -997,12 +1026,22 @@ class HarnessState:
                     # escalate the streak.
                     se = agent.last_session_end
                     se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
+                    # #12801: an operator FORCE reboot is non-crash too — it has
+                    # no SessionEnd but is operator-initiated, so it must not
+                    # escalate the streak (AC6).
+                    operator_forced = agent.operator_force_death()
                     graceful = bool(
                         agent.last_spawn_at is not None
                         and se_at >= agent.last_spawn_at
-                    )
+                    ) or operator_forced
                     if not graceful:
                         agent.consecutive_fast_deaths += 1
+                    if operator_forced:
+                        # Consume the one-shot marker here too (symmetry with the
+                        # non-throttle death path) so it can never excuse a later
+                        # crash even if a future branch lands between this path
+                        # and the respawn that would otherwise self-expire it.
+                        agent.operator_force_at = None
                     over = max(0, agent.consecutive_fast_deaths
                                - FAST_DEATH_THRESHOLD)
                     backoff = min(
@@ -1047,11 +1086,28 @@ class HarnessState:
                     # makes `.get("at", 0)` return None, and `None >= float`
                     # raises TypeError, aborting the whole health poll.
                     se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
+                    # #12801: an operator FORCE reboot (TUI action bar) kills the
+                    # PID immediately, so there is NO SessionEnd — but it is
+                    # operator-initiated, not a fault, and must not accumulate the
+                    # #12244 crash streak (AC6). Consume the marker here.
+                    operator_forced = agent.operator_force_death()
                     graceful = bool(
                         agent.last_spawn_at is not None
                         and se_at >= agent.last_spawn_at
                     )
-                    if graceful:
+                    if operator_forced:
+                        # #12801 AC6: do NOT increment the streak. Like the
+                        # graceful branch we do NOT reset it to 0 either — a force
+                        # reboot must not let an agent ZERO a real accumulated
+                        # crash streak. Clear the one-shot marker on consume so a
+                        # later natural crash is classified normally.
+                        agent.operator_force_at = None
+                        _log(
+                            f"{role}: operator force reboot — not counted as a "
+                            f"crash (streak stays "
+                            f"{agent.consecutive_fast_deaths}) (#12801)"
+                        )
+                    elif graceful:
                         # #12418 AC4: a graceful exit is NOT a crash — do NOT
                         # increment the streak. We deliberately do NOT reset
                         # it to 0 either (DS-REVIEW-12418-C F2): a misbehaving
@@ -1600,6 +1656,11 @@ class HarnessState:
                 # #12271 slice d — restore dispatch reference (None for older
                 # state files / fresh agents).
                 agent.last_dispatch_at = agent_data.get("last_dispatch_at")
+                # #12801 — a FORCE reboot is owned by the harness session that
+                # issued it (like the RESTARTING intent reset above). Never
+                # resurrect a stale force marker across a harness restart: it
+                # would mis-classify the next natural crash as operator-initiated.
+                agent.operator_force_at = None
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -2633,6 +2694,34 @@ async def stop_all():
 
     # #9242: disk write off the asyncio event loop.
     await asyncio.to_thread(state.save_state)
+    return {"results": results}
+
+
+@app.post("/agents/all/restart")
+async def restart_all(force: bool = False):
+    """#12801 — reboot every agent (TUI action-bar "reboot all"). Delegates to
+    the per-agent restart so the graceful-vs-force semantics, the operator-force
+    crash-streak exclusion (AC6), and the no-auto-reboot refusal are identical
+    for the bulk path. ``force=true`` kills each agent's PID immediately."""
+    roles = boot_remote._get_all_roles()
+    _log(f"Restarting all agents (force={force}): {', '.join(roles)}")
+    results = []
+    for role in roles:
+        try:
+            res = await restart_agent(role, force=force)
+            # restart_agent returns a dict (success) or a JSONResponse (clone
+            # resolution failure) — normalize to a per-role dict either way.
+            if isinstance(res, dict):
+                results.append({"role": role, **{k: v for k, v in res.items()
+                                                 if k != "role"}})
+            else:
+                results.append({"role": role, "action": "restart",
+                                "success": False,
+                                "message": "clone resolution failed"})
+        except Exception as e:  # never let one role 500 the whole bulk action
+            results.append({"role": role, "action": "restart", "success": False,
+                            "message": f"{type(e).__name__}: {e}"})
+            _log(f"  {role}: restart-all error — {type(e).__name__}: {e}")
     return {"results": results}
 
 
@@ -3830,10 +3919,18 @@ async def stop_agent(role: str):
 
 
 @app.post("/agents/{role}/restart")
-async def restart_agent(role: str):
+async def restart_agent(role: str, force: bool = False):
     """Restart agent. If idle, kill immediately and let auto-reboot fire (#8689).
     If mid-cycle, just set intent=restarting and let the agent exit cleanly at
-    its next cycle boundary (#4966 graceful-restart behavior preserved)."""
+    its next cycle boundary (#4966 graceful-restart behavior preserved).
+
+    #12801 — ``force=true`` (TUI action bar FORCE reboot): kill the claude PID
+    IMMEDIATELY regardless of busy/in-flight state, overriding the graceful
+    next-boundary path. The death is stamped ``operator_force_at`` so the health
+    poller classifies it as operator-initiated (NOT a crash → does not accumulate
+    the #12244 crash streak, AC6). A graceful (non-force) restart of a BUSY agent
+    is unchanged: it queues intent=restarting and the agent checkpoints + exits at
+    its next cycle boundary."""
     _validate_role(role)
 
     # #10538 (gap-fix): when auto-reboot is disabled there is NO respawn path,
@@ -3885,6 +3982,12 @@ async def restart_agent(role: str):
     # #8695: restart will respawn the process → new boot must re-assert
     # bootup-complete before events flow again.
     agent_state.bootup_complete = False
+    # #12801: stamp the FORCE marker BEFORE the immediate kill below, so the
+    # health poller that detects the dead PID reads it and classifies the death
+    # as operator-initiated rather than a crash (AC6). Harmless on the graceful
+    # path (left None) — only a force kill produces a SessionEnd-less death.
+    if force:
+        agent_state.operator_force_at = time.time()
     state.set_agent(role, agent_state)
     # #9242: disk write off the asyncio event loop.
     await asyncio.to_thread(state.save_state)
@@ -3903,12 +4006,16 @@ async def restart_agent(role: str):
     except (FileNotFoundError, OSError):
         pass
 
-    immediate = current_state.startswith("idle")
+    # #12801: a FORCE reboot kills immediately regardless of busy/in-flight
+    # state (overriding the idle-only fast path); a graceful restart keeps the
+    # idle-only immediate kill and queues a busy agent for next-boundary exit.
+    immediate = force or current_state.startswith("idle")
     killed_pid = None
     if immediate:
         claude_pid, alive = reboot_agent._read_claude_pid(clone_path_p, role)
         if alive and claude_pid:
-            _log(f"  {role}: idle — killing PID {claude_pid} for immediate reboot")
+            _why = "force" if force else "idle"
+            _log(f"  {role}: {_why} — killing PID {claude_pid} for immediate reboot")
             try:
                 reboot_agent._kill_process(claude_pid)
                 killed_pid = claude_pid
@@ -3920,14 +4027,20 @@ async def restart_agent(role: str):
             immediate = False
 
     if immediate:
-        _log(f"  {role}: restart requested (idle path — killed PID {killed_pid})")
+        _kind = "force" if force else "idle"
+        _log(f"  {role}: restart requested ({_kind} path — killed PID {killed_pid})")
         return {
             "role": role,
             "action": "restart",
             "success": True,
             "immediate": True,
+            "forced": force,
             "killed_pid": killed_pid,
-            "message": "Restart requested — agent was idle, killed and will be auto-rebooted",
+            "message": (
+                "Force reboot — agent killed immediately and will be auto-rebooted"
+                if force else
+                "Restart requested — agent was idle, killed and will be auto-rebooted"
+            ),
         }
 
     _log(f"  {role}: restart requested (intent=restarting)")

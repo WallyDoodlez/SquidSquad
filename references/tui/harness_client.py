@@ -231,6 +231,46 @@ def fetch_json(base_url, path, *, timeout=2):
         return None
 
 
+def post_json(base_url, path, *, timeout=5):
+    """POST ``base_url + path`` (empty body) and parse the JSON reply.
+
+    Returns ``(ok, payload)``: ``ok`` is True on a 2xx with parseable JSON;
+    ``payload`` is the parsed object on success or an ``{"error": ...}`` dict on
+    any transport/HTTP/parse failure, so the action bar can surface a reason
+    without crashing. A longer default timeout than the GET path — a force reboot
+    kills a PID and the harness may take a beat to respond."""
+    url = base_url.rstrip("/") + path
+    req = urllib.request.Request(url, data=b"", method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8")
+        return True, (json.loads(body) if body.strip() else {})
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8")[:200]
+        except Exception:
+            pass
+        return False, {"error": f"HTTP {e.code}", "detail": detail}
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        return False, {"error": str(e)}
+
+
+def restart_agent(base_url, role, *, force=False, timeout=5):
+    """Reboot a single agent via ``POST /agents/{role}/restart``. ``force=True``
+    sends ``?force=true`` (immediate kill, overriding busy). Returns
+    ``(ok, payload)`` from :func:`post_json`."""
+    suffix = "?force=true" if force else ""
+    return post_json(base_url, f"/agents/{role}/restart{suffix}", timeout=timeout)
+
+
+def restart_all(base_url, *, force=False, timeout=10):
+    """Reboot every agent via ``POST /agents/all/restart``. ``force=True`` sends
+    ``?force=true``. Longer default timeout — it fans out across all roles."""
+    suffix = "?force=true" if force else ""
+    return post_json(base_url, f"/agents/all/restart{suffix}", timeout=timeout)
+
+
 def fetch_status(base_url, *, timeout=2):
     """Fetch ``GET /status`` (or ``None`` if unreachable)."""
     return fetch_json(base_url, "/status", timeout=timeout)

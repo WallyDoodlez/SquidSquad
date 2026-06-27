@@ -42,7 +42,12 @@ class TestCompose:
     def test_yields_titlebar_then_agents_panel(self):
         widgets = list(app.HarnessTUI(project="demo").compose())
         ids = [w.id for w in widgets]
-        assert ids == ["titlebar", "agents-panel"]
+        # #12801: titlebar + agents-panel, then the bottom action bar (a Footer,
+        # which carries no id) added with the reboot actions.
+        assert ids[:2] == ["titlebar", "agents-panel"]
+        from textual.widgets import Footer
+        assert any(isinstance(w, Footer) for w in widgets), \
+            "compose must yield the Footer action bar (#12801 AC1)"
 
     def test_titlebar_carries_branded_text(self):
         titlebar = list(app.HarnessTUI(project="demo").compose())[0]
@@ -75,11 +80,14 @@ async def test_mount_and_repaint(monkeypatch):
                          "last_activity_at": 0, "lag": 0}]},
             1000,
         )
-        a._repaint(cells, True)
+        # #12801: _repaint now also takes per-row meta (role + work_state) so a
+        # cursor row maps back to its agent for the action bar.
+        meta = [{"role": "skill", "work_state": hc.WORK_STATE_WORKING}]
+        a._repaint(cells, meta, True)
         await pilot.pause()
         assert table.row_count == 1
 
         # unreachable: a single placeholder row, not a crash.
-        a._repaint([], False)
+        a._repaint([], [], False)
         await pilot.pause()
         assert table.row_count == 1
