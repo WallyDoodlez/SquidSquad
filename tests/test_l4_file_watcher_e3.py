@@ -807,39 +807,33 @@ class TestEnsureMainAndPull12906:
         assert "unexpected" in detail
 
 
-class TestFreshenSerialized13197:
-    """#13197: each per-role-class debounce callback fires
-    _default_ensure_fresh_source on its OWN Timer thread, all against the SAME
-    harness clone. Without serialization, concurrent `git pull` collided on
-    `.git/index.lock` → an N-way pull-failed/compose-failed storm. _FRESHEN_LOCK
-    must single-flight the git freshen."""
+class TestFreshenSerialized13197And13211:
+    """#13197 + #13211: concurrent freshens against the same clone must be
+    single-flighted to avoid `.git/index.lock` collisions (an N-way
+    pull-failed/compose-failed storm). #13197 originally put a watcher-local
+    `_FRESHEN_LOCK` here; #13211 RELOCATED the serialization into
+    `git_ops.ensure_main_and_pull` (`git_ops._ENSURE_MAIN_LOCK`) so it also
+    covers the post-merge deploy-all path, which called ensure_main_and_pull
+    outside the watcher lock. These tests measure concurrency INSIDE the real
+    git_ops.ensure_main_and_pull (via a mocked git layer), validating the
+    relocated lock rather than a watcher-local one."""
 
-    def test_freshen_lock_exists(self):
-        assert isinstance(lfw._FRESHEN_LOCK, type(threading.Lock()))
+    def _make_measuring_git(self, state, guard, barrier):
+        """Return (fake_run, fake_pull): _run reports branch==main (so
+        ensure_main_and_pull skips checkout and goes straight to pull), and pull
+        measures max concurrency — it runs INSIDE _ENSURE_MAIN_LOCK."""
+        from types import SimpleNamespace
 
-    def test_concurrent_freshens_are_serialized(self, monkeypatch, tmp_path):
-        """11 threads (the observed burst size) calling the freshen must never
-        run the underlying git op concurrently — the lock keeps max in-flight
-        at 1. Without _FRESHEN_LOCK this would observe up to 11-way concurrency
-        (the index.lock-collision regression)."""
-        import git_ops
-        state = {"now": 0, "max": 0}
-        guard = threading.Lock()
-        N = 11
-        # All threads rendezvous INSIDE fake_ensure before the concurrency
-        # measurement, so a missing _FRESHEN_LOCK is exposed deterministically
-        # (not dependent on a sleep window): without the lock all N reach the
-        # barrier together → max==N; with it, only one can be inside at a time
-        # so the (N-1)th never arrives and the barrier would deadlock — hence a
-        # short timeout that, when it trips, PROVES serialization.
-        barrier = threading.Barrier(N)
+        def fake_run(cmd, check=False):
+            return SimpleNamespace(returncode=0, stdout="main\n", stderr="")
 
-        def fake_ensure(role=None):
+        def fake_pull(role=None):
             try:
+                # Serialized → only one thread is ever inside the lock, so the
+                # barrier never fills and times out. The timeout IS the
+                # serialization proof (without the lock all N rendezvous → max==N).
                 barrier.wait(timeout=0.5)
             except threading.BrokenBarrierError:
-                # Expected WITH the lock: serialized → barrier never fills →
-                # times out. That is the serialization signal, not a failure.
                 pass
             with guard:
                 state["now"] += 1
@@ -847,26 +841,77 @@ class TestFreshenSerialized13197:
             time.sleep(0.02)
             with guard:
                 state["now"] -= 1
-            return True, "on-main-synced"
+            return True
 
-        monkeypatch.setattr(git_ops, "ensure_main_and_pull", fake_ensure)
+        return fake_run, fake_pull
+
+    def test_lock_relocated_to_git_ops_13211(self):
+        import git_ops
+        assert isinstance(git_ops._ENSURE_MAIN_LOCK, type(threading.Lock()))
+        # the watcher-local lock is retired (serialization now shared in git_ops)
+        assert not hasattr(lfw, "_FRESHEN_LOCK")
+
+    def test_concurrent_freshens_are_serialized(self, monkeypatch, tmp_path):
+        """11 threads through the watcher freshen never run the git op
+        concurrently — the relocated lock keeps max in-flight at 1."""
+        import git_ops
+        state = {"now": 0, "max": 0}
+        N = 11
+        fake_run, fake_pull = self._make_measuring_git(
+            state, threading.Lock(), threading.Barrier(N))
+        monkeypatch.setattr(git_ops, "_run", fake_run)
+        monkeypatch.setattr(git_ops, "pull", fake_pull)
 
         results = []
 
         def worker():
             results.append(lfw._default_ensure_fresh_source(repo_root=tmp_path))
 
-        threads = [threading.Thread(target=worker) for _ in range(11)]
+        threads = [threading.Thread(target=worker) for _ in range(N)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
 
-        assert len(results) == 11
+        assert len(results) == N
         assert all(ok for ok, _ in results)  # all succeed (serialized no-ops)
         assert state["max"] == 1, (
-            f"git freshen ran {state['max']}-way concurrent — _FRESHEN_LOCK is "
-            f"not serializing (the #13197 .git/index.lock-collision regression)"
+            f"git freshen ran {state['max']}-way concurrent — _ENSURE_MAIN_LOCK "
+            f"is not serializing (the #13197/#13211 .git/index.lock regression)"
+        )
+
+    def test_watcher_and_deploy_paths_share_the_lock_13211(self, monkeypatch, tmp_path):
+        """The #13211 fix: the post-merge deploy path calls
+        git_ops.ensure_main_and_pull DIRECTLY (harness.py:4221), previously
+        outside the watcher lock. With the lock in git_ops, running the watcher
+        freshen AND the direct deploy call concurrently still keeps max
+        in-flight at 1 — both callers share one lock."""
+        import git_ops
+        state = {"now": 0, "max": 0}
+        N = 10
+        fake_run, fake_pull = self._make_measuring_git(
+            state, threading.Lock(), threading.Barrier(N))
+        monkeypatch.setattr(git_ops, "_run", fake_run)
+        monkeypatch.setattr(git_ops, "pull", fake_pull)
+
+        def watcher_worker():
+            lfw._default_ensure_fresh_source(repo_root=tmp_path)
+
+        def deploy_worker():
+            git_ops.ensure_main_and_pull("harness")  # the post-merge deploy path
+
+        threads = (
+            [threading.Thread(target=watcher_worker) for _ in range(N // 2)]
+            + [threading.Thread(target=deploy_worker) for _ in range(N - N // 2)]
+        )
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert state["max"] == 1, (
+            f"watcher + deploy paths ran {state['max']}-way concurrent — the "
+            f"relocated lock does not cover both callers (#13211)"
         )
 
 

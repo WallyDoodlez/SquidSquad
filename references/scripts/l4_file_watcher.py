@@ -192,17 +192,17 @@ def emit_results(results, *, emit_event):
         )
 
 
-# #13197: serialize the freshen across debounce callbacks. Each role-class key
-# fires its debounce callback on its OWN threading.Timer thread (see _Debouncer),
-# so a burst that touches N role-classes runs N _default_ensure_fresh_source
-# calls CONCURRENTLY against the SAME harness clone. Concurrent `git pull`
-# invocations then collide on `.git/index.lock` and most return pull-failed — an
-# N-way compose-failed storm to PM (the all-fail-at-once #13197 pattern), NOT the
-# "fast already-up-to-date no-op" the docstring assumed. A module-level lock
-# serializes the git freshen so the first call does the real pull and the rest
-# run as genuine fast no-ops. Scoped to this process's watcher threads (the
-# collision source); a threading.Lock is the right primitive.
-_FRESHEN_LOCK = threading.Lock()
+# #13197/#13211: the freshen must be single-flighted — each role-class debounce
+# callback fires on its OWN threading.Timer thread (see _Debouncer), so a burst
+# touching N role-classes runs N concurrent git freshens against the SAME harness
+# clone and collides on `.git/index.lock` (an N-way compose-failed storm to PM).
+# #13197 originally added a watcher-local lock here, but the post-merge deploy-all
+# path called git_ops.ensure_main_and_pull OUTSIDE it, so a watcher burst could
+# still race the deploy. #13211 HOISTED the serialization into
+# git_ops.ensure_main_and_pull (git_ops._ENSURE_MAIN_LOCK) so EVERY in-process
+# caller — this freshen AND the deploy path — shares one lock. The watcher-local
+# lock is therefore retired; serialization now lives at the single shared
+# implementation, not at each call site.
 
 
 def _default_ensure_fresh_source(*, repo_root):
@@ -221,19 +221,20 @@ def _default_ensure_fresh_source(*, repo_root):
     ``run_compose=``) so unit tests never shell out to git. Returns
     ``(ok, detail)``.
 
-    #13197: the git freshen runs under ``_FRESHEN_LOCK`` so a burst of
-    per-role-class debounce callbacks (each on its own Timer thread) cannot
-    fire concurrent ``git`` against the shared clone and collide on
-    ``.git/index.lock``. Serialized, the first pull does the work and the rest
-    are fast no-ops.
+    #13197/#13211: a burst of per-role-class debounce callbacks (each on its own
+    Timer thread) must not fire concurrent ``git`` against the shared clone and
+    collide on ``.git/index.lock``. Serialization now lives inside
+    ``git_ops.ensure_main_and_pull`` (``git_ops._ENSURE_MAIN_LOCK``, #13211) so it
+    covers this freshen AND the post-merge deploy-all path from one place — no
+    watcher-local lock needed here. Serialized, the first call does the real pull
+    and the rest are fast no-ops.
     """
     try:
         import git_ops
     except Exception as exc:  # noqa: BLE001 — import failure must not crash watch
         return False, f"git_ops import failed: {exc!r}"
     try:
-        with _FRESHEN_LOCK:
-            return git_ops.ensure_main_and_pull(role="harness")
+        return git_ops.ensure_main_and_pull(role="harness")
     except Exception as exc:  # noqa: BLE001 — guard must never crash the watch
         return False, f"ensure_main_and_pull raised: {exc!r}"
 
