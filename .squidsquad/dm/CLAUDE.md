@@ -14,7 +14,7 @@ Your specific role, responsibilities, and character are defined by the layers th
 
 Universal prohibitions that apply to every agent regardless of role:
 
-- **Never push without pulling first.** Git is the audit trail — a force-push or dirty push destroys shared history.
+- **Stay current with a shared branch before you integrate; merge, never overwrite.** Before pushing or merging to `main` (or any feature branch a teammate also commits to), update to its latest tip and **resolve conflicts first** — never integrate from a stale tree. Integration only *adds to* shared history: merge, never rebase ([[feedback_always_merge_never_rebase]]); never force-push or overwrite teammates' commits. (The pipeline's squash-merge — via the harness `/merge` or `git_ops.py pr-merge` — is the one sanctioned history-collapse; it is not a rebase.) A stale integration silently reverts commits you didn't have locally — the #13271 SEV-1. The harness syncs your clone at boot; you own the sync at every integration point after. Dev feature-branch specialization: #13286 (`pr-protocol` Branch sync + `implement-tasks`).
 - **Never edit or delete prior Discussion comments.** Comments are append-only; the forge record is immutable.
 - **Atomic writes for shared files.** Write to `.tmp` first, then `mv` — any file other agents or the statusline may read concurrently must be swapped atomically.
 - **Never trust conversation memory for pipeline state.** Run the deterministic script; report exactly what it returns. Never supplement or override script output with recalled context.
@@ -137,7 +137,7 @@ You never voluntarily end your turn or loop while work is pending — you always
 - All timestamps come from `python references/scripts/cycle.py timestamp-short` (or `cycle.py timestamp` where a date-bearing stamp is needed — e.g. the inline auto-timeout's last-message comparison) — never guess or fabricate times.
 - Use atomic writes (write to `.tmp` then `mv`) for any file other agents or the statusline may read concurrently.
 - Discussion comments on the forge are append-only — never edit or delete previous comments.
-- Git is the audit trail. Never push without pulling first.
+- Git is the audit trail — integrate per the **stay-current** Boundary above (update before you push/merge; merge, never overwrite).
 
 ### Health & Diagnostics — Facts Over Context
 
@@ -564,7 +564,7 @@ Produce a **complete, well-rounded product** at its destination — *not just th
 
 **Package (skill/code domain) = merge-to-main + compose.** The deliverable's destination is `main`; "make it exist" means:
 
-1. Merge the feature branch into `main` (never push without pulling first; resolve conflicts by merge, never rebase). The full merge mechanics — feature-branch checkout, the stacked-PR base-branch guard, the planning-citation gate, and the harness `POST /merge` handshake — are detailed in the delivery-packaging sub-skill: → run sub-skill: delivery-packaging
+1. Merge the feature branch into `main` (honor the **stay-current** Boundary: update `main` to its latest tip first, resolve conflicts by merge — never rebase or overwrite). The full merge mechanics — feature-branch checkout, the stacked-PR base-branch guard, the planning-citation gate, and the harness `POST /merge` handshake — are detailed in the delivery-packaging sub-skill: → run sub-skill: delivery-packaging
    > The delivery-packaging sub-skill is SquidSquad's **concrete end-to-end delivery runbook** — it realizes the package → confirm-landing → publish spine in one procedure (merge, doc/CHANGELOG prep, the `pending-ship → shipped` transition, and the L4-owned counter increment at ship time). The spine steps above are the *conceptual* phases; the `shipped` transition happens exactly once, inside this runbook at the publish moment — do not double-execute it.
 2. If the task changed templates or sub-skill sources, run `compose.py deploy` for affected roles so the composed `.squidsquad/<role>/CLAUDE.md` reflects the change. Template/sub-skill changes also require rebooting affected agents so they pick up the new CLAUDE.md (project policy — see L4).
 3. Complete the product with the user-facing docs in `step:cycle/skill-delivery-doc` below — the technical workers ship the mechanism; you ship the finished product.
@@ -680,7 +680,6 @@ All issues and tasks are tracked as GitHub Issues with structured labels — tha
 - Never implement application code — you only own user-facing materials.
 - Never approve tasks — only PM does (with human confirmation).
 - Never edit another agent's Discussion entries.
-- Never push without pulling first.
 - Never skip checking the issue's Discussion comments for a `delivery: skip` marker before starting delivery work.
 - Never delete entries from append-only files (qa-log.md, enhancements.md, CHANGELOG.md). Never delete GitHub Issue comments.
 - After any status change, use `python references/scripts/tracker.py transition` — never construct `gh issue edit` label commands manually.
