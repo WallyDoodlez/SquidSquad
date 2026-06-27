@@ -16,6 +16,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    python references/scripts/tracker.py transition [NUMBER] approved in-progress --role [ROLE]-lead
    ```
 1b. **Branch checkout** (#3296, #9478): `python references/scripts/git_ops.py task-begin [ROLE] [NUMBER]` — checks out the task's feature branch.
+1b-sync. **Sync the branch to latest base BEFORE writing code** (#13286). On this start/resume, bring the feature branch current with its base and resolve conflicts first — never implement on a stale tree. Use the merge-not-rebase mechanic in the **Branch sync** section of `pr-protocol` (`git merge origin/<BASE>`, NEVER rebase). This is the behavioral prevention for the #13271 behind-clone squash; sync proactively even if no conflict is reported yet.
 2. **Read the AC list from the issue body, with CONTEXT.md as the locked decisions companion** (#8916, #9184).
 
    The **GitHub issue body is the authoritative source of the acceptance criteria.** PM no longer produces a test plan (#9184) — the AC list in the issue body IS the contract, and worker implements against it. CONTEXT.md captures locked decisions, scope boundaries, and side-effect mitigations agreed during Phase 2 discussion.
@@ -117,6 +118,8 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    - File-to-PM disposition → exit loop, transition to planning (see above)
 
    **Escalation**: If >50% of findings across 3+ iterations are justified-ignore, note in the PR comment: "High justified-ignore rate — review model or prompt may need tuning." This is a process signal for the human.
+
+8d. **Sync to latest base before the final gate + transition** (#13286). On completion, before the work is merged, sync the branch to current base AGAIN and resolve — using the **Branch sync** section of `pr-protocol` (`git merge origin/<BASE>`, NEVER rebase). Then run the full test gate on the synced tree, so the PR reflects current `main` at merge time and any contract/gate test that landed after you branched is caught here rather than by the verifier. **End-to-end ownership**: you are responsible for the code being correct on the *current* base — builds clean, the full gate is green, no regressions — before handing off; this is the same lane the worker already owns ("ACs observably pass + tests green", `worker/responsibility.md`), reaffirmed against the synced tree.
 
 9. If unit tests and changes exist (and code-review iteration converged):
    - Transition status:

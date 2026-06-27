@@ -1,0 +1,30 @@
+{
+  "issue": 13286,
+  "title": "Dev-agent forge workflow: a fresh worker agent, from the prose alone, syncs the branch to base BEFORE starting code work AND AGAIN before merge (merge-not-rebase), and understands end-to-end correctness ownership on the current base — the behavioral root-cause prevention for the #13271 behind-clone squash",
+  "files": [
+    "references/sub-skills/common/pr-protocol.md",
+    "references/sub-skills/roles/worker/implement-tasks.md"
+  ],
+  "questions": [
+    {
+      "id": "sync-before-start",
+      "question": "Read references/sub-skills/roles/worker/implement-tasks.md and the 'Branch sync' section of references/sub-skills/common/pr-protocol.md. A worker has just run `git_ops.py task-begin` and adopted the feature branch for an approved task. It is eager to start editing code. According to the prose, what must it do BEFORE the first code change, exactly which git operation accomplishes it (and which operation is explicitly forbidden), and what is the stated reason this matters? Does it only do this when a conflict is already reported?",
+      "expected": "Before writing any code, the worker must SYNC the feature branch to its latest base and resolve conflicts first — never implement on a stale tree (implement-tasks step 1b-sync). The operation is `git merge origin/<BASE>` (merge the base INTO the feature branch); `git rebase` is explicitly FORBIDDEN (the operator's standing 'always merge, never rebase' rule). The reason: a stale base is exactly what produces an out-of-scope squash later — this is the behavioral root-cause prevention for the #13271 SEV-1 (a PR squashed from a ~154-commit-behind clone reverted ~155 commits of fleet work). It must sync PROACTIVELY even when `gh pr view --json mergeable` does NOT yet report CONFLICTING — the goal is a CURRENT tree, not merely a conflict-free one."
+    },
+    {
+      "id": "sync-before-merge",
+      "question": "Read implement-tasks.md (the steps near the pending-test transition) and the 'Branch sync' section of pr-protocol.md. The worker has finished implementing and its tests passed when it started. Is it done, or is there a second sync? If there is, when does it happen relative to the final test gate, what does it protect against, and how does this relate to the mechanical #13271 / #13285 guards?",
+      "expected": "There is a SECOND sync. On COMPLETION, before the work is merged (implement-tasks step 8d), the worker syncs the branch to current base AGAIN with `git merge origin/<BASE>` (never rebase), resolves, and THEN runs the full test gate on the synced tree — the sync happens BEFORE the final gate so the gate runs against current main. This protects against: (a) the PR not reflecting current `main` at merge time (new commits land on main constantly, so a branch current at start can be behind by completion), and (b) a contract/gate test that landed on main AFTER the branch was cut being missed — it gets caught here rather than by the verifier (the full-static-gate-not-subset lesson). Relationship to the guards: this behavioral sync is the PRIMARY prevention; the pre-merge behind-count refusal (#13271) and the post-merge scope-audit (#13285) are the BACKSTOP, not the primary defense — syncing keeps the branch from ever getting far enough behind to trip them."
+    },
+    {
+      "id": "ownership-on-current-base",
+      "question": "Read implement-tasks.md step 8d and references/sub-skills/roles/worker/responsibility.md. State the end-to-end ownership rule the worker must reaffirm before handing off, specifically with respect to the BASE the code is correct against. Is this a brand-new responsibility or a restatement of an existing one — and where does the existing lane language live?",
+      "expected": "The worker is responsible for the code being correct on the CURRENT base — builds clean, the FULL gate is green, no regressions — before handing off (implement-tasks step 8d). This is NOT a brand-new responsibility: it is a RESTATEMENT / reaffirmation of the lane the worker already owns, expressed in worker/responsibility.md as 'Worker's lane ends at ACs observably pass + tests green'. Step 8d reaffirms that ownership specifically against the SYNCED tree (i.e. correctness is measured on current main, not on the stale base the work may have started from). The concept is authored once (responsibility.md owns the lane) and referenced, not duplicated."
+    },
+    {
+      "id": "dry-single-location",
+      "question": "Read pr-protocol.md and implement-tasks.md. The merge-not-rebase mechanic (the actual `git merge origin/<BASE>` how-to) and the WHEN-to-sync rule could each have been written in several places. Where is each concept authored, and how do the start/completion sync steps in implement-tasks avoid duplicating the merge mechanic?",
+      "expected": "DRY single-authoring: the merge-not-rebase MECHANIC (the HOW — `git merge origin/<BASE>`, never rebase, resolve, run tests, push) is authored in pr-protocol.md (the 'Branch sync' section plus the adjacent 'Conflict on the PR' section it points to). The WHEN-to-sync moments (at start/resume, and again before merge) are authored as the two sync steps in implement-tasks.md (1b-sync and 8d). Those two steps do NOT restate the git mechanic — each REFERENCES the 'Branch sync' section of pr-protocol for the how, so the mechanic lives in exactly one place and the work-lifecycle steps only mark the two moments it must run. Both sync moments are also summarized once inside pr-protocol's 'Branch sync' section itself."
+    }
+  ]
+}
