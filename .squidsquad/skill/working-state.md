@@ -1,6 +1,10 @@
 # Working State
 
-- **Task**: none
+- **Task**: 13263 (in-progress — restore DONE, prevention deferred to fresh cycle)
+
+- **#13263 IN-PROGRESS (dm-filed, data-loss mechanism; 2026-06-27)**: my #13170 squash (8fbfca4af, PR #13258) recorded deletions of 11 other-clone files (behind-clone class). **REMEDIATED**: restored 9 permanently-gone planning artifacts from 8fbfca4af^ direct-to-main (commit ad1e1feb3); 2 operational files (qa .subloop-driver.json, working-state.md) already re-created → left as-is. Substance was forge-preserved (low impact). **PREVENTION DEFERRED — genuine mechanism blocker**: pr_merge uses `gh pr merge --squash` (GitHub server-side); but merge-base(13170 branch, origin/main)=ce9aa7649 AND branch-head BOTH lack QA-RESULTS-13215 (qa added it later in 554f92517, an ancestor of my squash) → a naive base...head squash should NOT delete it, yet it did. Exact GitHub squash-base behavior on a behind branch needs REPRODUCTION (remote branch --delete-branch'd, not inspectable). **Fix direction (mechanism-agnostic, validate w/ repro):** make the PR branch current with base before the squash (`gh pr update-branch` / merge main into branch in the harness /merge flow) so the branch tree can't be missing files. Fleet-critical merge path → quality-gated for a fresh focused cycle (RCA = work contract on the issue). Consistent with behind-clone cluster #13212/#13215/#13261/#13211.
+
+- **Task (prior): none**
 
 - **SESSION SHIP TALLY (2026-06-26→27)**: #13213 (MERGED, qa AC2 live), #13212 (MERGED), #13236 (verified→pending-ship), #13198 (verified→pending-ship), #13255 (pending-test, PR #13256), #13172 (pending-test, PR #13257). 6 ships this boot.
 
