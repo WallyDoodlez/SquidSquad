@@ -109,6 +109,25 @@ The flag is read **once when each agent starts**, so a restart is what makes a c
 
 ---
 
+## Harness Dashboard
+
+The harness ships a terminal dashboard for watching and steering your team at a glance — no command line needed for the common operator actions:
+
+```bash
+python references/tui/app.py
+```
+
+It shows a live row per agent (role, status, what each is doing) and a **bottom action bar** for rebooting agents — useful when you've changed an agent's instructions, or one needs a fresh start:
+
+- **`r`** — reboot the selected agent (pick it with the arrow keys). This is a **graceful** reboot: the agent finishes its current cycle first, so no work is interrupted.
+- **`R`** — reboot every agent (graceful).
+- **`f`** — **force** reboot the selected agent even if it's busy. Because this interrupts in-flight work, it asks you to confirm first and shows whether the agent is currently busy. A force reboot is treated as an intentional restart, not a crash, so it won't trip the crash-loop guard.
+- **`q`** — quit the dashboard (your agents keep running).
+
+The dashboard is read-only except for these reboot actions — it never changes your project or pipeline state, so it's safe to leave open.
+
+---
+
 ## Team Shapes
 
 The wizard proposes a team based on what you're building:
