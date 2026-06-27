@@ -90,6 +90,31 @@ class TestFleetWiring13198:
         assert (SCRIPTS / "cli_stdio.py").exists()
 
 
+class TestHarnessWiring13236:
+    """#13236 — harness.py was named in #13198's cp1252 crash-class list but
+    left unwired (out of #13198's agent-facing-CLI scope). It is the
+    long-running server, not a fire-and-exit CLI, so the harm is a crash+respawn
+    on its banner rather than a false-failure double-emit — but a strict cp1252
+    console still raises UnicodeEncodeError on the box-drawing banner art.
+    harness.py main() must invoke harden_stdio(); its banner literals are
+    intentional ASCII-art and are deliberately NOT in the #13198 print-sweep
+    guard (TestNoDecorativeNonAsciiInPrints13198.SWEPT)."""
+
+    def test_harness_main_invokes_harden_stdio(self):
+        src = (SCRIPTS / "harness.py").read_text(encoding="utf-8")
+        assert "from cli_stdio import harden_stdio" in src
+        assert "harden_stdio()" in src, (
+            "harness.py main() must invoke harden_stdio() (#13236) — the "
+            "cp1252 banner crash-proofing was dropped"
+        )
+
+    def test_harness_not_in_ascii_sweep_guard(self):
+        """harness.py's banner is intentional box-drawing art — it must stay out
+        of the print-literal ASCII sweep (which would flag/destroy the logo).
+        harden_stdio() crash-proofs it instead."""
+        assert "harness" not in TestNoDecorativeNonAsciiInPrints13198.SWEPT
+
+
 def _print_string_literals(src):
     """Yield (lineno, text) for every str literal passed to a `print(...)` call.
 
