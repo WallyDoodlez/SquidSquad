@@ -709,6 +709,69 @@ class TestResolveVariant:
         assert compose._resolve_variant("skill") is None
 
 
+class TestManifestV2AdditionalIncludesWrongType13172:
+    """#13172: a wrong-TYPE additional_includes (e.g. a bare string instead of
+    a list) must fail CLOSED — matching every sibling schema-error path in
+    _load_manifest_v2_from_file — not silently reset to [] (which dropped the
+    variant's sub-skills from the composed CLAUDE.md with zero diagnostic)."""
+
+    def _write(self, tmp_path, additional):
+        import yaml as _yaml
+        p = tmp_path / "includes.yml"
+        p.write_text(
+            _yaml.safe_dump({"base_role": "worker",
+                             "additional_includes": additional}),
+            encoding="utf-8",
+        )
+        return p
+
+    def test_string_additional_includes_exits(self, tmp_path, capsys):
+        """The exact typo from the report: a bare string -> sys.exit(1)."""
+        p = self._write(tmp_path, "common/cycle-runner")
+        # Base-role recursion is isolated — we only exercise the type guard.
+        with patch.object(compose, "_load_manifest_v2",
+                          return_value=["common/boot-bootstrap"]):
+            with pytest.raises(SystemExit) as exc:
+                compose._load_manifest_v2_from_file(p, "worker-skill")
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "additional_includes" in err
+        assert "expected list" in err
+
+    def test_dict_additional_includes_exits(self, tmp_path):
+        """Any non-list type fails closed, not just str."""
+        p = self._write(tmp_path, {"oops": 1})
+        with patch.object(compose, "_load_manifest_v2",
+                          return_value=["common/boot-bootstrap"]):
+            with pytest.raises(SystemExit):
+                compose._load_manifest_v2_from_file(p, "worker-skill")
+
+    def test_valid_list_additional_includes_still_resolves(self, tmp_path):
+        """Regression guard: a correctly-typed list is unaffected by the fix —
+        base + additional are concatenated. Isolated from the live sub-skill
+        tree (stub file + patched SUB_SKILLS_DIR) so a future rename of any real
+        sub-skill can't make this fail with a misleading missing-file exit."""
+        subskills = tmp_path / "sub-skills"
+        (subskills / "common").mkdir(parents=True)
+        (subskills / "common" / "cycle-runner.md").write_text("x", encoding="utf-8")
+        p = self._write(tmp_path, ["common/cycle-runner"])
+        with patch.object(compose, "_load_manifest_v2",
+                          return_value=["common/boot-bootstrap"]), \
+             patch.object(compose, "SUB_SKILLS_DIR", subskills):
+            result = compose._load_manifest_v2_from_file(p, "worker-skill")
+        assert result == ["common/boot-bootstrap", "common/cycle-runner"]
+
+    def test_null_additional_includes_is_valid(self, tmp_path):
+        """Regression guard for the `... or []` idiom: an explicit YAML null
+        (or absent key) normalizes to [] and must NOT fail closed — only a
+        wrong NON-empty type does (#13172)."""
+        p = self._write(tmp_path, None)
+        with patch.object(compose, "_load_manifest_v2",
+                          return_value=["common/boot-bootstrap"]):
+            result = compose._load_manifest_v2_from_file(p, "worker-skill")
+        assert result == ["common/boot-bootstrap"]
+
+
 class TestAssembleSoul:
     """Test _assemble_soul produces L1 base + role SOUL flat output."""
 
