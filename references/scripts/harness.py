@@ -4160,7 +4160,21 @@ async def merge_pr(request: Request):
 
     Request body: {"pr_number": int, "branch": str, "role": str}
     """
-    body = await request.json()
+    # #13170: fail CLOSED on a malformed/non-object body, mirroring the
+    # established guard on POST /events (#13156) and POST /work/assign (#12495).
+    # A bare request.json() raises JSONDecodeError/ValueError on a truncated or
+    # control-char body, and a valid-but-non-object body ([1,2], null, 42)
+    # raises AttributeError on .get() below — both propagate to the global
+    # handler as a 500 (traceback-to-disk) where a clean 400 is the contract.
+    # /merge was the last unguarded JSON-body POST handler.
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed /merge body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+
     pr_number = body.get("pr_number")
     branch = body.get("branch", "")
     role = body.get("role", "unknown")

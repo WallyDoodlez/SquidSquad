@@ -3100,6 +3100,48 @@ class TestCompleteEventEndpoint(unittest.TestCase):
         self.assertEqual(resp.status_code, 410)
 
 
+class TestMergeBodyGuard13170(unittest.TestCase):
+    """#13170: POST /merge must fail CLOSED (400) on a malformed or non-object
+    JSON body — mirroring POST /events (#13156) and POST /work/assign (#12495).
+    Unguarded, a truncated body raised JSONDecodeError and a non-object body
+    raised AttributeError on .get(), both propagating to the global handler as
+    a 500 where a clean 400 is the contract. Both rejections fire BEFORE any
+    merge thread spawns, so no git_ops mocking is needed."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app
+
+        cls.client = TestClient(app, raise_server_exceptions=False)
+
+    def test_malformed_json_body_400(self):
+        resp = self.client.post(
+            "/merge", content=b"{not valid json",
+            headers={"Content-Type": "application/json"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("malformed JSON body", resp.json()["detail"])
+
+    def test_non_dict_body_400(self):
+        """A valid-but-non-object body ([1,2], null, 42) -> 400, not a 500 on
+        .get(). Sent as raw JSON content (TestClient json=None would send an
+        empty body, which is the malformed-parse case, not a JSON null)."""
+        for raw in (b"[1, 2]", b"null", b"42"):
+            resp = self.client.post(
+                "/merge", content=raw,
+                headers={"Content-Type": "application/json"})
+            self.assertEqual(resp.status_code, 400,
+                             f"non-dict body {raw!r} must be 400")
+            self.assertIn("must be a JSON object", resp.json()["detail"])
+
+    def test_valid_object_missing_pr_number_still_400(self):
+        """Regression: a well-formed object without pr_number keeps its own 400
+        (the new guard does not shadow the pre-existing required-field check)."""
+        resp = self.client.post("/merge", json={"branch": "x", "role": "skill"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("pr_number is required", resp.json()["detail"])
+
+
 class TestSafePullInClone13215(unittest.TestCase):
     """#13215: the deploy sequence's clone pull must survive a DIRTY working
     tree (uncommitted change to a file the incoming commit touches) by
