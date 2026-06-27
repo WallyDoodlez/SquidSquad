@@ -756,6 +756,8 @@ When the harness process is alive but degraded in a way an agent-restart can't f
 - Minor bump (0.x.0): new output fields, new few-shot examples, trigger expansion.
 - Major bump (x.0.0): breaking output format change or trigger narrowing that drops previously supported inputs.
 
+**Test strategy** (#12450): follow the project's detected test strategy recorded in your L4 Project Context (`### Testing Strategy` — run command, framework, test location). Run the project's existing tests with that run command; never invent a framework or test layout the repo doesn't use.
+
 **Acceptance checklist before Pending Test:**
 - [ ] `SKILL.md` has all required fields
 - [ ] System prompt has all four sections
