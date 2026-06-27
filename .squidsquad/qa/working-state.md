@@ -4,27 +4,26 @@
 
 ## Status
 
-Idle 2026-06-26 (EVENT mode, harness :7373). Fresh boot honored the prior session's pending restart (l4-recompose). Verified 4 items → pending-ship this session; pipeline clean (0 pending-test).
+Idle 2026-06-27 (EVENT mode, harness :7373, Verbose Mode ON). Fresh boot drained 19 boot events → 4 pending-test assignments; #13211 arrived mid-session. **5 items verified → pending-ship this session (all PASS, zero gaps); pipeline now CLEAN (0 pending-test).** DM actively shipping them.
 
-### This session — 4 verified → pending-ship (all PASS, zero gaps)
-- **#13198** cp1252 stdout crash class / AC-4 ASCII sweep (re-verify of prior reject). Independent AST scan of print() literals across 8 swept CLIs = 0 decorative. PR #13214. **SHIPPED.**
-- **#13213** Wire UserPromptSubmit activity hook → activity_hook.py (compose hooks-emission; rel #12271). All 6 ACs; **AC2 confirmed LIVE E2E** on running harness. Plain heartbeat / no in-flight (correct). PR #13237. **SHIPPED.**
-- **#13236** harness.py main() stdout hardening (out-of-scope finding I filed during #13198 → skill fixed same session). harden_stdio() first in main(); cp1252 crash-net proven behaviorally. PR #13243. **SHIPPED.**
-- **#13212** post-cycle commit stages untracked comprehension specs (my filed finding from boot recovery → skill fixed). tests/comprehension/ added to qa owned-patterns; planning/ already covered by common; boundary preserved. Boot-pull-surfacing half correctly = sibling #13215's scope (deploy-fragility cluster). PR #13249. pending-ship.
+### This session — 5 verified → pending-ship (all PASS, zero gaps, each with a promoted independent test)
+- **#13255** exclude self-emitted events from GET /events/for/{role} (my own filed bug). harness.py emitter!=role on reacts-to branch only. QA added AC3 (harness-emitted no-target) coverage skill's tests missed. PR #13256. tests/test_feat_13255_self_emit_filter.py.
+- **#13215** deploy-pull survives dirty clone (_safe_pull_in_clone stash-around-merge). Authored REAL-git integration test reproducing the bare-pull abort + proving survival. PR #13259. tests/test_feat_13215_deploy_pull_dirty_clone.py.
+- **#13172** compose fail-closed on wrong-type additional_includes. QA added role-name + int-type coverage. PR #13257. tests/test_feat_13172_additional_includes_failclosed.py.
+- **#13170** POST /merge fail-closed JSON-body guard. QA confirmed valid-dict reaches merge path (202) + empty/whitespace coverage. PR #13258. tests/test_feat_13170_merge_body_guard.py.
+- **#13211** freshen lock hoisted into git_ops.ensure_main_and_pull (my own filed residual from #13197). QA added lock-release-on-exception (no-deadlock) proof. PR #13260. tests/test_feat_13211_ensure_main_lock.py. **Deploy-fragility cluster COMPLETE (#13212/#13215/#13211).**
 
-### Idle improvement scan (1 burst)
-- Filed #13236 (verified+shipped above) + enriched #13169 (comprehension `_get_result` id-mismatch RCA lead).
+### Process notes this session
+- **Sibling-PR additive test-file conflict**: #13170/#13215/#13255 all cut from the same base; sequential squash-merges → the later PR (#13258) conflicted on tests/test_harness.py (all added a new test class at the same anchor line). Resolution = keep-both (purely additive, skill's work preserved). Pushed merge to skill's branch to land. See [[learning-sibling-pr-additive-test-conflict-keep-both]].
+- **git stash landmine avoided**: this clone carries 63 ancient stashes (#13167 territory). A bare `git stash`/`pop` around a pull risks popping an ancient stash. Avoided by pulling directly with untracked artifacts present; resolved the one .subloop-driver.json conflict by taking upstream (newer last_run).
+- tests/test_feat_*.py is OUTSIDE qa role-scoped commit (commit-state covers .squidsquad/{role}/ + tests/comprehension/ only) — committed promoted tests manually via git to avoid #13212-class silent-drop.
+- No closing keyword in main commits (transition auto-closes).
 
-### Learnings / process
-- [[learning-reverify-transition-blocked-by-own-prior-reject]] — `--force` past unread-feedback guard when it's feedback I've read+addressed (own reject for #13198; PM doc-spec for #13213).
-- `.claude/settings.json` is deploy-pipeline-owned compose output: goes dirty after a hooks-affecting merge; `commit-state` is scoped to `.squidsquad/` (never sweeps it); restore via `git checkout` when it blocks a pull (origin's deploy-committed version wins).
-- commit_role_scoped: `common` covers `.squidsquad/{role}/`; `tests/comprehension/` is qa-owned (post-#13212). skill wrote [[learning-commit-role-scoped-foreign-file-silent-drop]].
-
-### >>> OPEN: #13169 comprehension-harness failures (in-progress w/ skill) <<<
-19 pre-existing full-suite failures (comprehension `_get_result` id-mismatch 9184/2183/2195 + #10360-marker drift). Not in ship gate; not blocking.
-
-### >>> OPEN: qa-clone 63 ancient stashes (awaiting human confirm) <<<
-`git stash clear` (local-only, obsolete ~cycle 122-691 stashes, zero working-tree loss) PENDING human confirm. #13167 fix protects the clean-tree pop landmine regardless.
+### >>> OPEN (not mine, tracked) <<<
+- #13262 (skill): _run/_run_list no timeout= — hung git wedges callers. Out-of-scope follow-up correctly filed by skill during #13211. Not a gap.
+- #13261 (skill): git_ops follow-up from skill's scan.
+- #13169 comprehension-harness pre-existing failures (in-progress w/ skill). Not in ship gate.
+- qa-clone 63 ancient stashes — `git stash clear` still PENDING human confirm (local-only, obsolete).
 
 ## Improvement Scan
 _Informational only - .subloop-driver.json authoritative._
