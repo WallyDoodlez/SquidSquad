@@ -120,7 +120,14 @@ def agent_rows(status_json, now):
     Each row carries the already-derived display fields so panels render
     without re-deriving: role, work_state (+ color), lag, lag_bar, lag_alert,
     current task, and last-activity epoch.
+
+    #13276: tolerant of a missing/None status payload (harness unreachable →
+    fetch_status returns None) → []. Mirrors agent_table_rows' guard; without it
+    app.refresh_agents crashes building its meta rows exactly when the harness is
+    down — when an operator opens the TUI to reboot.
     """
+    if not status_json:
+        return []
     rows = []
     for a in status_json.get("agents", []):
         lag = a.get("lag", 0) or 0
