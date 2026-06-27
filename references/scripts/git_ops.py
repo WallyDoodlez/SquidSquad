@@ -558,6 +558,67 @@ def pr_ready(pr_number):
     return True
 
 
+# #13271 (SEV-1 prevention): the GitHub server-side squash of a PR branch that is
+# far behind its base can record a STALE tree — mass-reverting/deleting shipped
+# fleet work the behind branch never had locally (the #13263 behind-clone
+# mechanism; it hit 194 files / ~155 commits at 154-behind). A clone merging
+# `origin/main` before push is NOT sufficient (the anomaly fired anyway), so the
+# guard lives at the MERGE step. This pre-merge behind-count check is the
+# fail-SAFE interim defense (it can only refuse — never mutate main); the robust
+# net is a post-merge scope audit + auto-revert (follow-up). The threshold sits
+# well above the #10540 batch-ship drain so it never false-blocks the normal
+# behind-by-a-few race; tune via SQUIDSQUAD_MERGE_MAX_BEHIND.
+# Default 50: comfortably above any realistic sequential batch-ship drain depth
+# (a queue of N PRs leaves the last ~N-1 behind), well below the 154-commit
+# SEV-1 event (#13271) — so it catches the catastrophe class without tripping
+# normal shipping.
+MERGE_MAX_BEHIND_DEFAULT = 50
+
+
+def _merge_max_behind():
+    """Resolve the max-behind merge threshold: ``SQUIDSQUAD_MERGE_MAX_BEHIND`` env
+    override if a non-negative int, else ``MERGE_MAX_BEHIND_DEFAULT`` (#13271)."""
+    import os
+    raw = os.environ.get("SQUIDSQUAD_MERGE_MAX_BEHIND")
+    if raw:
+        try:
+            v = int(raw)
+            if v >= 0:
+                return v
+        except (TypeError, ValueError):
+            pass
+    return MERGE_MAX_BEHIND_DEFAULT
+
+
+def _pr_behind_by(pr_number):
+    """Return how many commits the PR's base branch is AHEAD of the PR head (the
+    branch's 'behind' count), or ``None`` if it can't be determined (#13271).
+
+    Uses the GitHub compare API's ``behind_by`` field — authoritative about the
+    real divergence regardless of how GitHub later computes the squash. ``None``
+    on any gh/API/parse failure so the caller can fail-OPEN (a guard hiccup must
+    not wedge all shipping; the post-merge audit is the reliable net)."""
+    refs = _run_list(
+        ["gh", "pr", "view", str(pr_number),
+         "--json", "baseRefName,headRefName"], check=False)
+    if refs.returncode != 0:
+        return None
+    try:
+        data = json.loads(refs.stdout.strip())
+        base, head = data["baseRefName"], data["headRefName"]
+    except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
+        return None
+    cmp = _run_list(
+        ["gh", "api", f"repos/{{owner}}/{{repo}}/compare/{base}...{head}",
+         "--jq", ".behind_by"], check=False)
+    if cmp.returncode != 0:
+        return None
+    try:
+        return int(cmp.stdout.strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
@@ -616,6 +677,29 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                 return False, "PR closed without merge"
         except (json.JSONDecodeError, AttributeError):
             pass
+
+    # #13271 (SEV-1 prevention): refuse to squash-merge a branch that is FAR
+    # behind base — a stale-tree squash from a deeply-behind clone mass-reverts
+    # shipped fleet work (194 files at 154-behind). Fail-SAFE: refuse (never
+    # mutate main) and route back to re-sync (merge base into the branch) before
+    # retry. Fail-OPEN when the count is undeterminable (don't wedge shipping on
+    # a gh/API hiccup). Only applies to the squash strategy (the stale-tree risk
+    # is squash-specific; a real merge commit preserves base's history).
+    # Fail-open scope (returns None → proceed): gh absent/unauthenticated, a
+    # non-GitHub/unresolved remote where `gh api {owner}/{repo}` can't infer the
+    # repo (e.g. a CI runner without `gh auth`), a rate-limited compare API, or a
+    # malformed response. Those are accepted for this INTERIM guard — the robust
+    # net is the planned post-merge scope-audit + auto-revert (#13271 follow-up).
+    if strategy == "squash":
+        behind = _pr_behind_by(pr_number)
+        max_behind = _merge_max_behind()
+        if behind is not None and behind > max_behind:
+            msg = (f"PR #{pr_number} branch is {behind} commits behind base "
+                   f"(> {max_behind}) - refusing the squash to avoid a "
+                   f"stale-tree mass-revert (#13271). Merge base into the branch "
+                   f"and retry.")
+            print(f"ERROR: {msg}", file=sys.stderr)
+            return False, "branch too far behind base"
 
     # Attempt merge, retrying ONLY the transient "Base branch was modified"
     # batch-ship race (#10540). A real merge conflict is terminal.
