@@ -503,6 +503,14 @@ class TestPrCreate:
 # ---------------------------------------------------------------------------
 
 class TestPrMerge:
+    @pytest.fixture(autouse=True)
+    def _safe_behind(self):
+        # #13271: default the behind-count guard to "current" (0) so the existing
+        # merge-flow tests below exercise the merge path unchanged; the dedicated
+        # guard tests re-patch _pr_behind_by to a high value to assert the refusal.
+        with patch("git_ops._pr_behind_by", return_value=0):
+            yield
+
     @patch("git_ops._run_list")
     def test_successful_squash_merge(self, mock_run):
         # Calls: 1) check state, 2) merge, 3) branch name lookup, 4) ship transition
@@ -683,6 +691,109 @@ class TestPrMerge:
         mock_adapter.merge_pr.assert_called_once_with(42, "squash")
         # gh CLI should NOT be called when adapter handles it
         mock_run.assert_not_called()
+
+    # --- #13271: behind-count merge guard (SEV-1 stale-tree prevention) ---
+
+    @patch("git_ops._run_list")
+    def test_far_behind_squash_is_refused(self, mock_run):
+        """A squash of a branch FAR behind base is refused (fail-safe) BEFORE any
+        merge call — preventing the #13271 stale-tree mass-revert."""
+        with patch("git_ops._pr_behind_by", return_value=154), \
+             patch("git_ops._merge_max_behind", return_value=50):
+            mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
+            success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert "behind" in msg
+        # state check only — NO merge attempt (call_count==1 proves no `gh pr merge`).
+        assert mock_run.call_count == 1
+
+    @patch("git_ops._run_list")
+    def test_within_threshold_proceeds(self, mock_run):
+        """A branch within the behind threshold merges normally."""
+        with patch("git_ops._pr_behind_by", return_value=3), \
+             patch("git_ops._merge_max_behind", return_value=50):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            ]
+            success, msg = git_ops.pr_merge(42)
+        assert success is True
+
+    @patch("git_ops._run_list")
+    def test_undeterminable_behind_fails_open(self, mock_run):
+        """If the behind-count can't be determined (gh/API hiccup → None), the
+        guard fails OPEN (merge proceeds) — it must not wedge all shipping."""
+        with patch("git_ops._pr_behind_by", return_value=None):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            ]
+            success, msg = git_ops.pr_merge(42)
+        assert success is True
+
+    @patch("git_ops._run_list")
+    def test_far_behind_non_squash_not_guarded(self, mock_run):
+        """The guard is squash-specific — a real merge commit preserves base
+        history, so a behind branch is not refused for strategy=merge."""
+        with patch("git_ops._pr_behind_by", return_value=999):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "feature"}'),
+            ]
+            success, _ = git_ops.pr_merge(42, strategy="merge")
+        assert success is True
+
+    def test_merge_max_behind_env_override(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_MAX_BEHIND", "7")
+        assert git_ops._merge_max_behind() == 7
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_MAX_BEHIND", "bad")
+        assert git_ops._merge_max_behind() == git_ops.MERGE_MAX_BEHIND_DEFAULT
+
+
+class TestPrBehindBy:
+    """#13271: _pr_behind_by — kept OUT of TestPrMerge (whose autouse fixture
+    patches _pr_behind_by) so these exercise the real function."""
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_parses_compare_api(self, mock_run):
+        """_pr_behind_by reads behind_by from the compare API after resolving the
+        PR's base/head refs."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "squidsquad/task/42"}'),
+            _mock_result(stdout="154\n"),  # gh api .behind_by
+        ]
+        assert git_ops._pr_behind_by(42) == 154
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_api_failure(self, mock_run):
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "x"}'),
+            _mock_result(returncode=1, stderr="api error"),
+        ]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_bad_refs_json(self, mock_run):
+        mock_run.side_effect = [_mock_result(stdout="not json", returncode=0)]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_when_refs_view_fails(self, mock_run):
+        """First `gh pr view` call non-zero (refs lookup failed) → None (fail-open)."""
+        mock_run.side_effect = [_mock_result(returncode=1, stderr="not found")]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_non_integer_behind(self, mock_run):
+        """A malformed compare response (e.g. `null`) → ValueError → None."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "x"}'),
+            _mock_result(stdout="null\n"),  # not an int
+        ]
+        assert git_ops._pr_behind_by(42) is None
 
 
 class TestNoNonAsciiInPrintStatements:
