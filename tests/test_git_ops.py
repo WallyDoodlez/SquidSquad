@@ -116,6 +116,15 @@ class TestPull:
         mock_run.assert_called_once()
 
     @patch("git_ops._run")
+    def test_first_pull_is_no_rebase(self, mock_run):
+        """#13267: the FIRST pull must be pinned to `git pull --no-rebase` (never
+        a bare pull that could rebase under pull.rebase=true and leave a REBASE
+        state the #13261 recovery can't clear)."""
+        mock_run.return_value = _mock_result()
+        git_ops.pull()
+        assert mock_run.call_args_list[0][0][0] == "git pull --no-rebase"
+
+    @patch("git_ops._run")
     def test_pull_stash_pop(self, mock_run):
         """Dirty tree → stash CREATES an entry (refs/stash changes), pull, pop."""
         mock_run.side_effect = [

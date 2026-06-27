@@ -320,7 +320,13 @@ def pull(role=None):
 
     Returns True on success, False on failure. Never crashes.
     """
-    result = _run("git pull", check=False)
+    # #13267: pin to a MERGE pull (never rebase). Under a clone-local or global
+    # `pull.rebase=true` a bare `git pull` would REBASE; a first-pull rebase
+    # conflict leaves a REBASE-in-progress state that the subsequent `git stash`
+    # cannot work over and that the #13261 recovery (`git merge --abort`) cannot
+    # clear. `--no-rebase` keeps the first pull consistent with the pinned retry
+    # below and with the project's always-merge-never-rebase rule.
+    result = _run("git pull --no-rebase", check=False)
     if result.returncode == 0:
         print("Pulled")
         _emit("git-pull", {"result": "ok"}, role=role)
