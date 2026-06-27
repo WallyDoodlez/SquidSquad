@@ -194,5 +194,109 @@ class TestWriteL4ReadsRepoScan(unittest.TestCase):
             self.assertIn("### Test Command", content)
 
 
+class TestFormatScanSummaryTestStrategy(unittest.TestCase):
+    """#12450 S3 — the scan summary surfaces the richer detected test strategy
+    (run command / location / coverage), so the wizard can confirm it with the
+    operator and detect the undetectable (ask-human) case."""
+
+    def test_detected_strategy_surfaced(self):
+        scan = {
+            "languages": ["Python"],
+            "test_strategy": {
+                "run_command": "pytest -q",
+                "location": "tests/",
+                "coverage": "coverage.py",
+                "detected": True,
+            },
+        }
+        out = wizard.format_scan_summary(scan)
+        self.assertIn("**Test Strategy**", out)
+        self.assertIn("pytest -q", out)
+        self.assertIn("tests/", out)
+        self.assertIn("coverage.py", out)
+
+    def test_undetected_strategy_no_line(self):
+        scan = {
+            "languages": ["Python"],
+            "test_strategy": {"detected": False},
+        }
+        out = wizard.format_scan_summary(scan)
+        self.assertNotIn("**Test Strategy**", out)
+
+    def test_absent_strategy_no_crash(self):
+        out = wizard.format_scan_summary({"languages": ["Go"]})
+        self.assertNotIn("**Test Strategy**", out)
+
+    def test_detected_but_empty_fields_no_line(self):
+        """detected=True but no run_command/location/coverage → no empty line."""
+        scan = {"languages": ["Python"], "test_strategy": {"detected": True}}
+        out = wizard.format_scan_summary(scan)
+        self.assertNotIn("**Test Strategy**", out)
+
+
+class TestSetTestStrategyCLI(unittest.TestCase):
+    """#12450 S3 — the undetectable ask-human path persists the operator's answer
+    into .repo-scan.json (the source of truth all downstream consumers read)."""
+
+    def _scan_path(self, td):
+        return Path(td) / ".squidsquad" / ".repo-scan.json"
+
+    def test_writes_strategy_to_fresh_repo_scan(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            rc = wizard.cmd_set_test_strategy(
+                ["--run-command", "pytest -q", "--framework", "pytest",
+                 "--location", "tests/", td])
+            self.assertEqual(rc, 0)
+            data = json.loads(self._scan_path(td).read_text(encoding="utf-8"))
+            ts = data["test_strategy"]
+            self.assertTrue(ts["detected"])
+            self.assertEqual(ts["source"], "human")
+            self.assertEqual(ts["run_command"], "pytest -q")
+            self.assertEqual(ts["framework"], "pytest")
+            self.assertEqual(ts["location"], "tests/")
+            self.assertEqual(data["test_command"], "pytest -q")
+
+    def test_merges_into_existing_repo_scan(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            sp = self._scan_path(td)
+            sp.parent.mkdir(parents=True)
+            sp.write_text(json.dumps({"languages": ["Python"]}), encoding="utf-8")
+            rc = wizard.cmd_set_test_strategy(["--run-command", "npm test", td])
+            self.assertEqual(rc, 0)
+            data = json.loads(sp.read_text(encoding="utf-8"))
+            self.assertEqual(data["languages"], ["Python"])  # preserved
+            self.assertEqual(data["test_strategy"]["run_command"], "npm test")
+            self.assertTrue(data["test_strategy"]["detected"])
+
+    def test_run_command_required(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            rc = wizard.cmd_set_test_strategy(["--framework", "pytest", td])
+            self.assertEqual(rc, 2)
+
+    def test_flag_missing_value_errors(self):
+        rc = wizard.cmd_set_test_strategy(["--run-command"])
+        self.assertEqual(rc, 2)
+
+    def test_malformed_existing_scan_overwritten_cleanly(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            sp = self._scan_path(td)
+            sp.parent.mkdir(parents=True)
+            sp.write_text("{ not json", encoding="utf-8")
+            rc = wizard.cmd_set_test_strategy(["--run-command", "go test ./...", td])
+            self.assertEqual(rc, 0)
+            data = json.loads(sp.read_text(encoding="utf-8"))
+            self.assertEqual(data["test_strategy"]["run_command"], "go test ./...")
+
+    def test_registered_in_dispatch(self):
+        """The command must be wired into main()'s dispatch table."""
+        import inspect
+        src = inspect.getsource(wizard.main)
+        self.assertIn('"set-test-strategy": cmd_set_test_strategy', src)
+
+
 if __name__ == "__main__":
     unittest.main()

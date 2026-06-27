@@ -3377,6 +3377,22 @@ def format_scan_summary(scan_data):
     if tests:
         sections.append(f"**Test Tools**: {', '.join(tests)}")
 
+    # #12450 S3: surface the richer detected test strategy (the S1 detection
+    # ladder — run command / location / coverage) so the wizard can show the
+    # operator what the agents will follow, and detect the undetectable case
+    # (ask-human path in WIZARD.md Step 1c).
+    test_strategy = scan_data.get("test_strategy") or {}
+    if test_strategy.get("detected"):
+        ts_parts = []
+        if test_strategy.get("run_command"):
+            ts_parts.append(f"runs `{test_strategy['run_command']}`")
+        if test_strategy.get("location"):
+            ts_parts.append(f"tests in `{test_strategy['location']}`")
+        if test_strategy.get("coverage"):
+            ts_parts.append(f"coverage via {test_strategy['coverage']}")
+        if ts_parts:
+            sections.append(f"**Test Strategy**: {', '.join(ts_parts)}")
+
     ci = scan_data.get("ci_cd", [])
     if ci:
         sections.append(f"**CI/CD**: {', '.join(ci)}")
@@ -3532,6 +3548,68 @@ def cmd_scan_summary(args):
             print("ERROR: repo_scan.py not available", file=sys.stderr)
             return 1
     print(format_scan_summary(scan_data))
+    return 0
+
+
+def cmd_set_test_strategy(args):
+    """Persist a human-provided test strategy into ``.repo-scan.json`` (#12450 S3).
+
+    Usage: wizard.py set-test-strategy --run-command <cmd> [--framework <f>]
+           [--location <l>] [--coverage <c>] [target_dir]
+
+    The undetectable path in WIZARD.md Step 1c: when the repo scan could not
+    detect how the project runs its unit tests, the wizard asks the operator
+    and records the answer here. ``.repo-scan.json`` is the single source of
+    truth every downstream consumer reads (the L4 seed writer, generate-defaults),
+    so writing it here makes the human answer flow through uniformly — marked
+    ``detected: true`` with ``source: "human"`` so it is no longer "undetected".
+    """
+    opts = {}
+    target = "."
+    i = 0
+    flag_map = {
+        "--run-command": "run_command",
+        "--framework": "framework",
+        "--location": "location",
+        "--coverage": "coverage",
+    }
+    while i < len(args):
+        tok = args[i]
+        if tok in flag_map:
+            if i + 1 >= len(args):
+                print(f"ERROR: {tok} requires a value", file=sys.stderr)
+                return 2
+            opts[flag_map[tok]] = args[i + 1]
+            i += 2
+        else:
+            target = tok
+            i += 1
+    if not opts.get("run_command"):
+        print("ERROR: --run-command is required", file=sys.stderr)
+        return 2
+
+    scan_path = Path(target) / ".squidsquad" / ".repo-scan.json"
+    scan_data = {}
+    if scan_path.exists():
+        try:
+            scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            scan_data = {}
+
+    test_strategy = scan_data.get("test_strategy") or {}
+    test_strategy.update({k: v for k, v in opts.items() if v})
+    test_strategy["detected"] = True
+    test_strategy["source"] = "human"
+    scan_data["test_strategy"] = test_strategy
+    # Keep the legacy flat test_command in sync so older consumers also see it.
+    scan_data["test_command"] = opts["run_command"]
+
+    scan_path.parent.mkdir(parents=True, exist_ok=True)
+    scan_path.write_text(
+        json.dumps(scan_data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps({"ok": True, "test_strategy": test_strategy}, indent=2))
     return 0
 
 
@@ -3747,6 +3825,7 @@ def main():
         "load-spec": cmd_load_spec,
         "save-spec": cmd_save_spec,
         "scan-summary": cmd_scan_summary,
+        "set-test-strategy": cmd_set_test_strategy,
         "generate-defaults": cmd_generate_defaults,
         "setup-yes": cmd_setup_yes,
         "preflight": cmd_preflight,
