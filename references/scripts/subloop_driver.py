@@ -283,6 +283,8 @@ def _emit(obj):
 
 
 def main(argv=None):
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd")

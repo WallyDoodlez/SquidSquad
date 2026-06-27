@@ -4,25 +4,24 @@
 
 ## Status
 
-Idle 2026-06-21 (EVENT mode, harness :7373). Fresh boot recovered a badly-desynced clone, then verified 4 items.
+Idle 2026-06-26 (EVENT mode, harness :7373). Fresh boot honored the prior session's pending restart (l4-recompose) — running on current composed CLAUDE.md now. Boot-drained a large #13198 re-nudge backlog and shipped the re-verification.
 
 ### This session
-- **Clone recovery**: boot found local main **99 behind** origin (harness boot-pull failed for this clone — swallowed deploy-errors, the #13176 class). Fast-forwarded clean (ahead=0, no file collisions; the 63 ancient stashes are untouched by a plain pull). git_ops.py now the #13167-fixed version.
-- **Verified 4 → pending-ship (all PASS, zero gaps)**:
-  - #13066 vault frontmatter conformance (data-only; vault_check clean; delivery:skip) — **DM not yet shipped at last check**.
-  - #13176 deploy-error empty-detail + benign re-trigger (4925/0/0; 4 regression tests proven to fail pre-fix) — **SHIPPED by DM**.
-  - #13175 Case E boot-drain deploy-signal contract (LLM-consumed; comprehension 3/3; premises fact-checked vs harness.py; 4921/0/0) — **SHIPPED by DM**.
-  - #13179 progress_liveness boot-timeout (shadow-only; 4925/0/0; pre-fix proven; the qa-wedge it bounds is THIS clone's earlier 54-min wedge) — pending-ship.
-- All TEST-PLAN/QA-RESULTS + comprehension specs committed (prior ~18 work products were uncommitted — harness-git failure for this clone; recovered in one commit).
+- **#13198 RE-VERIFIED → pending-ship (PASS, zero gaps)** — cp1252 stdout crash class, AC-4 ASCII sweep.
+  - Prior cycle FAILed AC-4 (9 decorative chars remained). Worker (skill) re-submitted (commit 8cfa10a9b) claiming all 29 fixed + regression guard.
+  - **Independent AST scan** of every print() literal across the 8 swept CLIs = **0 decorative chars** (confirmed the worker's superset fix). Crash-net half unchanged/intact. Regression guard TestNoDecorativeNonAsciiInPrints13198 24/24. No machine-output regression (no ensure_ascii=False). Ship gate run_tests.py 53/53.
+  - Full pytest: 5128 passed / 51 skipped / **19 pre-existing failures UNRELATED to #13198** (comprehension-harness `_get_result` id-mismatch in 9184/2183/2195; #10360-marker drift in roles/worker/instructions.md) — flagged to PM, not a block.
+  - PR #13214 merged via harness; transition forced past the self-feedback guard (the unread feedback WAS my own prior reject, now addressed).
+- **Boot drain**: acked through ~125 #13198 re-nudge events (10-min re-emits accrued over ~8h while prior session was offline) + 2 skill transitions (skip). Cursor current; bootup-complete emitted.
 
-### >>> OPEN: restart-required (l4-recompose) pending <<<
-A `restart-required`/`reason:l4-recompose` signal (event cd071c873, 19:40) targets qa — harness already recomposed my CLAUDE.md; I only need to restart to pick it up. My running CLAUDE.md is stale (spawned from 99-behind source). Tree now clean + git_ops fixed → a restart's boot-pull is safe. Honor on next clean boundary.
+### >>> OPEN: harness.py stdout not hardened (flagged PM, possible follow-up) <<<
+harness.py main() doesn't reconfigure its own stdout and start.ps1 launches it via bare python (no PYTHONUTF8) → 4 decorative + 33 emoji prints latently cp1252-vulnerable. Same crash class as #13198 but OUTSIDE its locked scope (the 9 agent-facing CLIs). cycle_pre/post/cycle self-protect via own UTF-8 reconfigure. Raised on #13198 discussion for PM triage.
 
-### >>> OPEN: deploy-signal handling (boot-drain) <<<
-2 stale pre-respawn deploy-signals were in boot-drain; ack'd past as residual (defensible: pre-respawn, harness intent:running) — note this is what #13175's NEW (now-verified) contract calls trap #2; the signals were genuinely stale. Live deploy/restart-required now supersedes.
+### >>> OPEN: 19 pre-existing full-suite failures (flagged PM, repo-health) <<<
+Comprehension-harness `_get_result` returns None even when the LLM answers correctly (id 'Q-1' vs lookup "1") → silently breaks the comprehension gate in test_comprehension_{9184,2183,2195}.py. Plus test_compose_author_comments_11142 #10360-marker drift. Not in ship gate; pre-existing; not #13198-caused.
 
 ### >>> OPEN: qa-clone 63 ancient stashes (awaiting human confirm) <<<
-`git stash clear` (local-only, obsolete cycle ~122-691 stashes, zero working-tree loss) still PENDING human confirm. #13167 fix now protects against the clean-tree pop landmine regardless.
+`git stash clear` (local-only, obsolete cycle ~122-691 stashes, zero working-tree loss) still PENDING human confirm. #13167 fix protects against the clean-tree pop landmine regardless.
 
 ## Improvement Scan
 _Informational only - .subloop-driver.json authoritative._
