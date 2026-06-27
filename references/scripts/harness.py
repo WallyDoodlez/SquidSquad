@@ -1027,7 +1027,35 @@ class HarnessState:
                 # the confirmed-death branch exactly as before #12458).
                 fresh_death = is_dead and was_alive
                 held = agent.status == "paused" and not alive
-                death_candidate = (fresh_death or held) and should_reboot
+                # #13283 — never-resolved-PID wedge. An agent stuck at
+                # status="starting" whose initial spawn never resolved a claude
+                # PID (claude_pid=None → alive=False) is invisible to every other
+                # reboot trigger: the #12492 cutover kill-step needs alive=True,
+                # the status block above only runs its death branch for
+                # status != "starting", and is_dead excludes "starting".
+                # progress_liveness() already returns DEAD for such an agent once
+                # it ages past BOOT_GRACE_SECONDS (#13179 "wedged-boot-timeout") —
+                # consume that verdict here so it auto-reboots through the normal
+                # death/backoff path (with #12244/#12409 breakers) instead of
+                # needing a manual operator reap. Gated on the cutover flag (the
+                # verdict is only authoritative post-#12492); within boot grace
+                # progress_liveness returns alive, so a legitimately-booting agent
+                # is never caught. Routed through death_candidate (not a bare
+                # reboot append) so the pause-aware guard + crash-loop backoff all
+                # apply uniformly. Orphan edge (pre-existing, surfaced not worsened):
+                # if the spawn DID start a claude that never wrote .claude-pid
+                # (thin_launcher crashed after exec, before the file write), the
+                # respawn cannot see it and boot_remote.boot_agent's singleton /
+                # .claude-pid-liveness check is the partial net — this fix
+                # auto-triggers that recovery instead of requiring a manual reap.
+                wedged_start = (
+                    _PROGRESS_LIVENESS_AUTHORITATIVE
+                    and agent.status == "starting"
+                    and not alive
+                    and not prog_alive
+                )
+                death_candidate = (
+                    (fresh_death or held or wedged_start) and should_reboot)
                 pause_reason = agent.active_pause(now) if death_candidate else None
 
                 if death_candidate and pause_reason is not None:
