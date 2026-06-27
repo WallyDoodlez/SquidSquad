@@ -116,7 +116,9 @@ The owning worker keeps the feature branch **current with its base** at two mome
 1. **On START or RESUME of code work** — before the first code change, bring the branch up to the latest base and **resolve conflicts first**. Never begin or continue implementation on a stale tree; a stale base is exactly what produces an out-of-scope squash later.
 2. **On COMPLETION, before the work is merged** — sync again so the PR reflects current `main` at merge time. New commits land on `main` constantly, so a branch that was current at start can be behind by completion; this sync is also where a contract/gate test that landed on `main` after you branched gets caught before the verifier does (the `feedback_full_static_gate_not_subset` lesson).
 
-Both syncs use the **merge-not-rebase** mechanic in *Conflict on the PR* below — `git merge origin/<BASE>` (NEVER `git rebase`), resolve, run tests, push. Sync **proactively**, even when `gh pr view --json mergeable` does not yet report `CONFLICTING`: the goal is a *current* tree, not merely a conflict-free one.
+`<BASE>` is `main` for a standard task branch; for a chain-merge task branch (the polish-bundle pattern) it is the explicit `--base` the branch was created against — the same base `git_ops.py pr-create` resolves. Never `git merge origin/main` on a chain-merge branch, or you corrupt the chain.
+
+Both syncs use the **merge-not-rebase** mechanic in the *Conflict on the PR* section of this `pr-protocol` file — `git merge origin/<BASE>` (NEVER `git rebase`), resolve, run tests, push. Sync **proactively**, even when `gh pr view --json mergeable` does not yet report `CONFLICTING`: the goal is a *current* tree, not merely a conflict-free one.
 
 ### Conflict on the PR
 

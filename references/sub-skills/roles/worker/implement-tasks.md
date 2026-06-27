@@ -113,13 +113,16 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    ```
 
    **Re-run review** after applying fixes. Loop until:
-   - Clean review (zero findings) → exit loop immediately, proceed to step 9
-   - 5 iterations reached with remaining findings → proceed to step 9 with all findings noted in PR comment. Verifier decides whether to accept.
+   - Clean review (zero findings) → exit loop immediately, proceed to step 8d
+   - 5 iterations reached with remaining findings → proceed to step 8d with all findings noted in PR comment. Verifier decides whether to accept.
    - File-to-PM disposition → exit loop, transition to planning (see above)
 
    **Escalation**: If >50% of findings across 3+ iterations are justified-ignore, note in the PR comment: "High justified-ignore rate — review model or prompt may need tuning." This is a process signal for the human.
 
-8d. **Sync to latest base before the final gate + transition** (#13286). On completion, before the work is merged, sync the branch to current base AGAIN and resolve — using the **Branch sync** section of `pr-protocol` (`git merge origin/<BASE>`, NEVER rebase). Then run the full test gate on the synced tree, so the PR reflects current `main` at merge time and any contract/gate test that landed after you branched is caught here rather than by the verifier. **End-to-end ownership**: you are responsible for the code being correct on the *current* base — builds clean, the full gate is green, no regressions — before handing off; this is the same lane the worker already owns ("ACs observably pass + tests green", `worker/responsibility.md`), reaffirmed against the synced tree.
+8d. **Sync to latest base before the final gate + transition** (#13286). On completion, before the work is merged:
+   - Sync the branch to current base AGAIN and resolve — using the **Branch sync** section of `pr-protocol` (`git merge origin/<BASE>`, NEVER rebase).
+   - THEN run the full test gate on the synced tree, so the PR reflects current `main` at merge time and any contract/gate test that landed after you branched is caught here rather than by the verifier.
+   - **End-to-end ownership**: you are responsible for the code being correct on the *current* base — builds clean, the full gate green, no regressions — before handing off. This is the same lane the worker already owns ("ACs observably pass + tests green", `references/roles/worker/responsibility.md`), reaffirmed against the synced tree.
 
 9. If unit tests and changes exist (and code-review iteration converged):
    - Transition status:
