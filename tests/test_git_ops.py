@@ -823,14 +823,27 @@ class TestRoleOwnedPatterns:
         assert "SKILL.md" in pats
         assert ".squidsquad/config.md" in pats
 
-    def test_qa_has_no_extras_beyond_common(self):
+    def test_qa_extras(self):
+        """#13212: qa (verifier) owns tests/comprehension/ — it authors the
+        comprehension regression specs (#9184) and must be able to stage them
+        in its own post-cycle commit (they live outside .squidsquad/, so they
+        matched no pattern before and were left untracked as 'foreign')."""
         pats = git_ops._role_owned_patterns("qa")
-        # QA must NOT pick up config or delivery docs
+        assert "tests/comprehension/" in pats
+        # QA must still NOT pick up config or delivery docs / SKILL.md —
+        # the new extra does not loosen the rest of the boundary.
         assert ".squidsquad/config.md" not in pats
         assert "README.md" not in pats
-        # #9474 sanity check: QA also must NOT pick up SKILL.md —
-        # the DM-extras additions don't bleed into other roles.
         assert "SKILL.md" not in pats
+
+    def test_comprehension_specs_are_qa_only(self):
+        """#13212: only the verifier authors comprehension specs — the
+        tests/comprehension/ ownership must NOT bleed into other roles (else a
+        non-verifier cycle could stage a half-written spec)."""
+        for role in ("pm", "dm", "skill"):
+            assert "tests/comprehension/" not in git_ops._role_owned_patterns(role), (
+                f"{role} must not own tests/comprehension/ (#13212 — verifier-only)"
+            )
 
     def test_pm_does_not_pick_up_dm_extras(self):
         """#9474: PM and DM co-own .squidsquad/config.md, but PM must
@@ -1050,6 +1063,41 @@ class TestCommitRoleScoped:
         assert ".squidsquad/qa/working-state.md" in staged
         assert ".squidsquad/config.md" not in staged
         assert ".squidsquad/config.md" in capsys.readouterr().err
+
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_qa_stages_untracked_comprehension_spec_13212(
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_push, mock_commit, capsys,
+    ):
+        """#13212: the exact bug — an UNTRACKED comprehension spec (porcelain
+        '??') authored by the verifier must be staged by its post-cycle commit,
+        not classified foreign and left to rot until a manual recovery commit."""
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                return _mock_result(stdout="main\n")
+            return _mock_result(stdout=(
+                " M .squidsquad/qa/working-state.md\n"
+                "?? tests/comprehension/13250_spec.json\n"
+            ))
+        mock_run.side_effect = _run_side
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("qa", "qa cycle")
+
+        staged = [c[0][0][-1] for c in mock_run_list.call_args_list
+                  if c[0][0][:2] == ["git", "add"]]
+        assert "tests/comprehension/13250_spec.json" in staged, (
+            "qa post-cycle must stage untracked comprehension specs (#13212) — "
+            "they were silently left foreign before this fix"
+        )
+        assert ".squidsquad/qa/working-state.md" in staged
+        # not left in the foreign-skip warning
+        assert "tests/comprehension/13250_spec.json" not in capsys.readouterr().err
+        assert result is True
 
     @patch("git_ops._run")
     def test_returns_false_when_no_own_files(self, mock_run, capsys):

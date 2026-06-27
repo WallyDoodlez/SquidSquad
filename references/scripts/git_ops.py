@@ -872,7 +872,15 @@ def _role_owned_patterns(role):
             "SKILL.md",
             ".squidsquad/config.md",
         ],
-        # qa: nothing beyond common
+        # qa (verifier) authors comprehension specs under tests/comprehension/
+        # (#9184 — the verifier derives CQ specs; skill never self-authors them).
+        # These are permanent regression assets that MUST land in the repo, but
+        # tests/comprehension/ is outside .squidsquad/ so it matched no pattern
+        # and commit_role_scoped classified every new spec as "foreign" — leaving
+        # it untracked until a manual "recover N-behind" rescue commit (#13212).
+        # Adding it here lets the verifier's normal post-cycle commit stage its
+        # own specs. Scoped to qa only: no other role authors comprehension specs.
+        "qa": ["tests/comprehension/"],
     }
     return common + role_specific.get(role, [])
 
