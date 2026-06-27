@@ -242,6 +242,15 @@ class TestHarnessClientPost:
         assert ok is False
         assert "error" in payload
 
+    def test_agent_rows_tolerates_none_status(self):
+        """#13276: agent_rows must return [] for a None status (harness
+        unreachable → fetch_status returns None), mirroring agent_table_rows —
+        else app.refresh_agents crashes building meta rows exactly when the
+        harness is down (when the operator opens the TUI to reboot)."""
+        import harness_client as hc
+        assert hc.agent_rows(None, 0) == []
+        assert hc.agent_table_rows(None, 0) == []  # sibling already guarded
+
 
 # ---------------------------------------------------------------------------
 # C. App action dispatch — Textual headless Pilot
