@@ -387,6 +387,69 @@ class TestRoute:
 
 
 # ---------------------------------------------------------------------------
+# Clean-result sentinel bypasses the MIN_OUTPUT_LENGTH quality gate (#13278)
+# ---------------------------------------------------------------------------
+
+class TestCleanResultSentinel:
+    """#13278: a short `NO_FINDINGS` code-review result is a VALID clean review,
+    not degenerate output — it must return 0 (no Claude fallback), while a short
+    NON-sentinel response still trips the length gate and returns 1."""
+
+    def _route_with_response(self, response, output_file, task_type="code-review"):
+        manifest = {"auth": {"env_var": "DEEPSEEK_API_KEY"}, "api_base": "https://x"}
+        adapter = MagicMock()
+        adapter.call.return_value = response
+        with patch("model_router.get_model_for_task", return_value="deepseek-v4-pro"), \
+             patch("model_router._load_provider_manifest", return_value=("deepseek", manifest)), \
+             patch("model_router._ensure_deps"), \
+             patch("model_router.assemble_prompt", return_value="PROMPT"), \
+             patch("model_router._load_adapter", return_value=adapter), \
+             patch.dict("model_router.os.environ", {"DEEPSEEK_API_KEY": "k"}):
+            return model_router.route(task_type, "TEST", "", str(output_file), "ctx")
+
+    def test_short_no_findings_sentinel_returns_0(self, tmp_path):
+        out = tmp_path / "out.md"
+        code = self._route_with_response("NO_FINDINGS", out)
+        assert code == 0, "a valid short NO_FINDINGS review must NOT trigger fallback"
+        assert out.read_text(encoding="utf-8").strip() == "NO_FINDINGS"
+
+    def test_sentinel_case_insensitive_with_trailing_text_returns_0(self, tmp_path):
+        out = tmp_path / "out.md"
+        code = self._route_with_response("no_findings\n\nNothing to flag.", out)
+        assert code == 0
+        assert "no_findings" in out.read_text(encoding="utf-8").lower()
+
+    def test_short_non_sentinel_response_still_returns_1(self, tmp_path):
+        """The gate must still fire for genuinely degenerate short output."""
+        out = tmp_path / "out.md"
+        code = self._route_with_response("oops", out)
+        assert code == 1
+        assert "below minimum length" in out.read_text(encoding="utf-8")
+
+    def test_long_review_unaffected_returns_0(self, tmp_path):
+        out = tmp_path / "out.md"
+        code = self._route_with_response("FINDING: " + ("x" * 300), out)
+        assert code == 0
+
+    def test_none_response_returns_1_without_crashing(self, tmp_path):
+        """An adapter returning None on a non-raising path must fail closed
+        (gate fires -> exit 1), not raise AttributeError on .strip()."""
+        out = tmp_path / "out.md"
+        code = self._route_with_response(None, out)
+        assert code == 1
+
+    def test_sentinel_bypass_is_audited_in_diagnostics(self, tmp_path):
+        """The success diagnostic distinguishes a sentinel bypass from a normal
+        pass so the exemption is observable in production."""
+        out = tmp_path / "out.md"
+        with patch("model_router._log_diagnostic") as diag:
+            code = self._route_with_response("NO_FINDINGS", out)
+        assert code == 0
+        actions = [c.args[0].get("action") for c in diag.call_args_list]
+        assert "success-sentinel" in actions
+
+
+# ---------------------------------------------------------------------------
 # CLI dispatch — bare 'route' subcommand (#3814)
 # ---------------------------------------------------------------------------
 
