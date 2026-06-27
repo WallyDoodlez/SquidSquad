@@ -1,6 +1,19 @@
 # Working State
 
-- **Task**: none (idle — clone healthy, all work safe on remote)
+- **Task**: #12450 NEXT (installer test-strategy auto-detect — in-progress, Surfaces 1+2 done; remaining = L3 software-dev "follow the project's test strategy" behavior + undetectable→ask-human wizard fallback + CQ + fixture tests). Large fleet-wide L3 instruction authoring → wants fresh context for the quality bar. Front-loaded plan when picked up.
+
+- **TURN TALLY (2026-06-27, this boot continuation): 5 ships + 1 route — git_ops deploy-path hardening cluster COMPLETE:**
+  - **#13261** → pending-test (PR #13266): git_ops.pull aborts merge before stash restore on genuine-conflict retry + retry pinned --no-rebase.
+  - **#13169** → pending-test (PR #13268): comprehension judge-echoed `Q-<id>` canonicalized to bare spec id at the runner seam (the real cause of the run-live reds).
+  - **#12801** → pending-test (PR #13269): TUI bottom action bar — reboot per-agent/all, busy-aware, graceful + confirmed-force (operator_force_at non-crash classification, AC6). HARNESS-ARCH updated. **Operator-requested headline feature.**
+  - **#13267** → pending-test (PR #13270): git_ops.pull first pull pinned --no-rebase (consistency w/ #13261 retry).
+  - **#13262** → pending-test (PR #13272): git_ops _run/_run_list fail-fast subprocess timeout (300s, SQUIDSQUAD_GIT_TIMEOUT override) + 3 raw commit calls routed through _run_list.
+  - **#13263** → pending-human-review (routed to PM): squash-from-behind-branch data-loss PREVENTION blocked on (a) gh 2.34.0 lacks `gh pr update-branch`, (b) the #10540 batch-ship interaction, (c) unreproduced squash anomaly — needs a human design call. Data already remediated.
+  - Cluster: #13211/#13215/#13261/#13267/#13262 all shipped. All gates green; DS-reviews (Sonnet — DeepSeek degenerate all session) clean/addressed.
+
+- **NOTE — stashed main-side drift (clone SquidSquad-2):** a `git stash` ("main-side state/composed drift (not 12801)") holds dirty `.squidsquad/*/CLAUDE.md` + `config.md` (Verbose Mode: yes) + `.claude/settings.json` — composed/state artifacts, main-only per #11511, NOT mine. Left stashed (non-destructive); reconciled on main via compose/deploy. Don't ride feature branches with it.
+
+- **⚠️ CORRECTION (2026-06-27): the "clone degraded / data loss at scale" alarm earlier this session was a FALSE ALARM.** Root cause: `git cat-file -e <ref>:<path>` gives FALSE NEGATIVES on this setup — reported files absent that `git ls-tree origin/main` + gh API + on-disk all confirm PRESENT (same commit/tree). Clone is HEALTHY; all session work safe on remote (gh-verified). [[learning-git-cat-file-ref-path-false-negative-use-ls-tree]].
 
 - **⚠️ CORRECTION (2026-06-27): the "clone degraded / data loss at scale" alarm earlier this session was a FALSE ALARM.** Root cause: `git cat-file -e <ref>:<path>` gives FALSE NEGATIVES on this setup — reported files absent that `git ls-tree origin/main` + gh API + on-disk all confirm PRESENT (same commit/tree). Clone is HEALTHY; all session work safe on remote (gh-verified). [[learning-git-cat-file-ref-path-false-negative-use-ls-tree]]. (#13263's 9-file restore was still legitimate — staged as genuine additions; #13263 mechanism stands on the squash --stat evidence.)
 
