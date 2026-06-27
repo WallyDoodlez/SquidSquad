@@ -26,8 +26,12 @@ sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
 import harness  # noqa: E402
 from harness import HarnessState, AgentState  # noqa: E402
 
-# A spawn old enough that lifetime > FAST_DEATH_WINDOW_SECONDS so the wedged
-# reboot is immediate (not held by the #12244 fast-death backoff).
+# progress_liveness() is mocked in these tests, so the wedged-vs-booting verdict
+# is driven by the mock, NOT by _NOW. _NOW is still load-bearing for the DOWNSTREAM
+# (un-mocked) death-path math: lifetime = _NOW - last_spawn_at must exceed
+# FAST_DEATH_WINDOW_SECONDS so the wedge takes the immediate-reboot branch rather
+# than accumulating the #12244 fast-death streak (a real wedge only fires past
+# BOOT_GRACE >> FAST_DEATH_WINDOW, so this mirrors production timing).
 _SPAWN_AT = 1000.0
 _NOW = _SPAWN_AT + harness.FAST_DEATH_WINDOW_SECONDS + 100.0
 
@@ -118,6 +122,31 @@ class TestWedgedStartReboot13283(unittest.TestCase):
                 patch("harness._NO_AUTO_REBOOT", False):
             boot = self._run(hs, self._patches(prog_alive=False))
         boot.assert_not_called()
+
+    def test_pause_hook_holds_wedged_reboot(self):
+        """The wedge routes through death_candidate, so the #12458 pause-aware
+        guard applies: an explained in-flight hook HOLDS the reboot ("paused")
+        rather than respawning."""
+        hs, agent = self._set_up()
+        agent.in_flight_until = _NOW + 10  # within TOOL_CALL_MAX, future → in-flight
+        with patch("harness._PROGRESS_LIVENESS_AUTHORITATIVE", True), \
+                patch("harness._NO_AUTO_REBOOT", False):
+            boot = self._run(hs, self._patches(prog_alive=False))
+        boot.assert_not_called()
+        self.assertEqual(agent.status, "paused")
+
+    def test_slow_loop_breaker_bounds_repeated_wedge(self):
+        """A wedge that keeps wedging on respawn must not tight-loop: once the
+        #12409 frequency breaker threshold is reached the wedge backs off
+        (crash-looping) instead of rebooting again this poll."""
+        hs, agent = self._set_up()
+        # Pre-populate recent reboots to the slow-loop threshold.
+        agent.reboot_history = [_NOW - 1.0] * harness.SLOW_LOOP_THRESHOLD
+        with patch("harness._PROGRESS_LIVENESS_AUTHORITATIVE", True), \
+                patch("harness._NO_AUTO_REBOOT", False):
+            boot = self._run(hs, self._patches(prog_alive=False))
+        boot.assert_not_called()
+        self.assertEqual(agent.status, "crash-looping")
 
 
 if __name__ == "__main__":

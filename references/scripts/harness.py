@@ -1042,7 +1042,12 @@ class HarnessState:
                 # progress_liveness returns alive, so a legitimately-booting agent
                 # is never caught. Routed through death_candidate (not a bare
                 # reboot append) so the pause-aware guard + crash-loop backoff all
-                # apply uniformly.
+                # apply uniformly. Orphan edge (pre-existing, surfaced not worsened):
+                # if the spawn DID start a claude that never wrote .claude-pid
+                # (thin_launcher crashed after exec, before the file write), the
+                # respawn cannot see it and boot_remote.boot_agent's singleton /
+                # .claude-pid-liveness check is the partial net — this fix
+                # auto-triggers that recovery instead of requiring a manual reap.
                 wedged_start = (
                     _PROGRESS_LIVENESS_AUTHORITATIVE
                     and agent.status == "starting"
