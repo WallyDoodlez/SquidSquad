@@ -71,22 +71,78 @@ def _get_working_branch():
         return "main"
 
 
-def _run(cmd, check=True):
+# #13262 — every git_ops subprocess gets a timeout so a hung `git` (network
+# stall, stuck index.lock, a credential-helper wedge — cf. the documented
+# `credential.helper=manager` silent hang) fails fast into the callers' existing
+# failure paths instead of blocking the thread (and, since #13211, the whole
+# in-process recompose surface behind `_ENSURE_MAIN_LOCK`) indefinitely. The
+# default is generous (git ops are normally sub-second; a slow network fetch/push
+# of a large pack is the worst legitimate case) so it fail-fasts a true hang
+# without false-tripping. Overridable per-call and fleet-wide via the
+# `SQUIDSQUAD_GIT_TIMEOUT` env var (no config-schema change → existing installs
+# keep the default).
+DEFAULT_GIT_TIMEOUT = 300
+
+
+def _git_timeout():
+    """Resolve the git subprocess timeout (seconds): ``SQUIDSQUAD_GIT_TIMEOUT``
+    env override if a positive int, else ``DEFAULT_GIT_TIMEOUT``.
+
+    Installs on very high-latency links or with very large packs (a `git pull`/
+    `git fetch` that legitimately runs minutes) can raise the cap via
+    ``SQUIDSQUAD_GIT_TIMEOUT=600`` without a code or config-schema change."""
+    import os
+    raw = os.environ.get("SQUIDSQUAD_GIT_TIMEOUT")
+    if raw:
+        try:
+            val = int(raw)
+            if val > 0:
+                return val
+        except (TypeError, ValueError):
+            pass
+    return DEFAULT_GIT_TIMEOUT
+
+
+def _timeout_failure(cmd, check, timeout):
+    """Translate a ``subprocess.TimeoutExpired`` into the failure shape the
+    caller already handles (#13262): raise ``CalledProcessError`` when
+    ``check=True`` (mirroring subprocess's own check-failure contract), else
+    return a synthetic non-zero ``CompletedProcess`` (rc=124, the conventional
+    timeout code) so ``check=False`` callers fall into their existing
+    ``returncode != 0`` / ``(False, ...)`` recovery."""
+    msg = f"git command timed out after {timeout}s: {cmd}"
+    print(f"WARNING: {msg}", file=sys.stderr)
+    if check:
+        raise subprocess.CalledProcessError(124, cmd, output=None, stderr=msg)
+    return subprocess.CompletedProcess(cmd, 124, stdout="", stderr=msg)
+
+
+def _run(cmd, check=True, timeout=None):
     """Run a shell command from repo root (only for static commands)."""
-    return subprocess.run(
-        cmd, shell=True, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        check=check, cwd=str(REPO_ROOT),
-    )
+    if timeout is None:
+        timeout = _git_timeout()
+    try:
+        return subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT), timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return _timeout_failure(cmd, check, timeout)
 
 
-def _run_list(cmd_list, check=True):
+def _run_list(cmd_list, check=True, timeout=None):
     """Run a command from repo root using list form (safe for variable args)."""
-    return subprocess.run(
-        cmd_list, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        check=check, cwd=str(REPO_ROOT),
-    )
+    if timeout is None:
+        timeout = _git_timeout()
+    try:
+        return subprocess.run(
+            cmd_list, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT), timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return _timeout_failure(cmd_list, check, timeout)
 
 
 _GH_AVAILABLE_CACHE = None
@@ -409,11 +465,9 @@ def commit(role, message):
     """Commit with role prefix and Co-Authored-By trailer."""
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit")
@@ -558,6 +612,67 @@ def pr_ready(pr_number):
     return True
 
 
+# #13271 (SEV-1 prevention): the GitHub server-side squash of a PR branch that is
+# far behind its base can record a STALE tree — mass-reverting/deleting shipped
+# fleet work the behind branch never had locally (the #13263 behind-clone
+# mechanism; it hit 194 files / ~155 commits at 154-behind). A clone merging
+# `origin/main` before push is NOT sufficient (the anomaly fired anyway), so the
+# guard lives at the MERGE step. This pre-merge behind-count check is the
+# fail-SAFE interim defense (it can only refuse — never mutate main); the robust
+# net is a post-merge scope audit + auto-revert (follow-up). The threshold sits
+# well above the #10540 batch-ship drain so it never false-blocks the normal
+# behind-by-a-few race; tune via SQUIDSQUAD_MERGE_MAX_BEHIND.
+# Default 50: comfortably above any realistic sequential batch-ship drain depth
+# (a queue of N PRs leaves the last ~N-1 behind), well below the 154-commit
+# SEV-1 event (#13271) — so it catches the catastrophe class without tripping
+# normal shipping.
+MERGE_MAX_BEHIND_DEFAULT = 50
+
+
+def _merge_max_behind():
+    """Resolve the max-behind merge threshold: ``SQUIDSQUAD_MERGE_MAX_BEHIND`` env
+    override if a non-negative int, else ``MERGE_MAX_BEHIND_DEFAULT`` (#13271)."""
+    import os
+    raw = os.environ.get("SQUIDSQUAD_MERGE_MAX_BEHIND")
+    if raw:
+        try:
+            v = int(raw)
+            if v >= 0:
+                return v
+        except (TypeError, ValueError):
+            pass
+    return MERGE_MAX_BEHIND_DEFAULT
+
+
+def _pr_behind_by(pr_number):
+    """Return how many commits the PR's base branch is AHEAD of the PR head (the
+    branch's 'behind' count), or ``None`` if it can't be determined (#13271).
+
+    Uses the GitHub compare API's ``behind_by`` field — authoritative about the
+    real divergence regardless of how GitHub later computes the squash. ``None``
+    on any gh/API/parse failure so the caller can fail-OPEN (a guard hiccup must
+    not wedge all shipping; the post-merge audit is the reliable net)."""
+    refs = _run_list(
+        ["gh", "pr", "view", str(pr_number),
+         "--json", "baseRefName,headRefName"], check=False)
+    if refs.returncode != 0:
+        return None
+    try:
+        data = json.loads(refs.stdout.strip())
+        base, head = data["baseRefName"], data["headRefName"]
+    except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
+        return None
+    cmp = _run_list(
+        ["gh", "api", f"repos/{{owner}}/{{repo}}/compare/{base}...{head}",
+         "--jq", ".behind_by"], check=False)
+    if cmp.returncode != 0:
+        return None
+    try:
+        return int(cmp.stdout.strip())
+    except (TypeError, ValueError):
+        return None
+
+
 def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
@@ -616,6 +731,29 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                 return False, "PR closed without merge"
         except (json.JSONDecodeError, AttributeError):
             pass
+
+    # #13271 (SEV-1 prevention): refuse to squash-merge a branch that is FAR
+    # behind base — a stale-tree squash from a deeply-behind clone mass-reverts
+    # shipped fleet work (194 files at 154-behind). Fail-SAFE: refuse (never
+    # mutate main) and route back to re-sync (merge base into the branch) before
+    # retry. Fail-OPEN when the count is undeterminable (don't wedge shipping on
+    # a gh/API hiccup). Only applies to the squash strategy (the stale-tree risk
+    # is squash-specific; a real merge commit preserves base's history).
+    # Fail-open scope (returns None → proceed): gh absent/unauthenticated, a
+    # non-GitHub/unresolved remote where `gh api {owner}/{repo}` can't infer the
+    # repo (e.g. a CI runner without `gh auth`), a rate-limited compare API, or a
+    # malformed response. Those are accepted for this INTERIM guard — the robust
+    # net is the planned post-merge scope-audit + auto-revert (#13271 follow-up).
+    if strategy == "squash":
+        behind = _pr_behind_by(pr_number)
+        max_behind = _merge_max_behind()
+        if behind is not None and behind > max_behind:
+            msg = (f"PR #{pr_number} branch is {behind} commits behind base "
+                   f"(> {max_behind}) - refusing the squash to avoid a "
+                   f"stale-tree mass-revert (#13271). Merge base into the branch "
+                   f"and retry.")
+            print(f"ERROR: {msg}", file=sys.stderr)
+            return False, "branch too far behind base"
 
     # Attempt merge, retrying ONLY the transient "Base branch was modified"
     # batch-ship race (#10540). A real merge conflict is terminal.
@@ -827,11 +965,9 @@ def commit_code(role, branch, message):
     # Commit
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit on branch")
@@ -1053,11 +1189,9 @@ def commit_state(role, message):
     # Commit
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit")

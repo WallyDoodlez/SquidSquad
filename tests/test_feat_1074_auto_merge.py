@@ -17,6 +17,16 @@ sys.path.insert(0, str(SCRIPTS))
 import git_ops
 
 
+@pytest.fixture(autouse=True)
+def _safe_behind_guard():
+    """#13271: the pre-merge behind-count guard adds two gh calls before the
+    squash. These pre-existing pr_merge tests mock _run_list sequences that
+    predate the guard, so default the behind-count to 0 (current) — the guard's
+    own behavior is covered in test_git_ops.py::TestPrMerge/TestPrBehindBy."""
+    with patch("git_ops._pr_behind_by", return_value=0):
+        yield
+
+
 def _mock_result(stdout="", stderr="", returncode=0):
     r = MagicMock()
     r.stdout = stdout

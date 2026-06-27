@@ -27,6 +27,84 @@ def _mock_result(stdout="", stderr="", returncode=0):
 
 
 # ---------------------------------------------------------------------------
+# _run / _run_list subprocess timeout (#13262)
+# ---------------------------------------------------------------------------
+
+class TestRunTimeout:
+    def test_run_passes_default_timeout(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run("git status", check=False)
+        assert sp.call_args.kwargs["timeout"] == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_run_list_passes_default_timeout(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run_list(["git", "status"], check=False)
+        assert sp.call_args.kwargs["timeout"] == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_per_call_timeout_override(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run("git status", check=False, timeout=7)
+        assert sp.call_args.kwargs["timeout"] == 7
+
+    def test_env_override_respected(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "42")
+        assert git_ops._git_timeout() == 42
+
+    def test_env_override_ignored_when_invalid(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "not-an-int")
+        assert git_ops._git_timeout() == git_ops.DEFAULT_GIT_TIMEOUT
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "0")  # non-positive → ignore
+        assert git_ops._git_timeout() == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_timeout_check_false_returns_nonzero_result(self):
+        """A hung git with check=False must fail fast into the existing
+        non-zero recovery path, NOT raise (#13262)."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("git pull", 300)):
+            res = git_ops._run("git pull", check=False)
+        assert res.returncode == 124
+        assert "timed out" in res.stderr
+
+    def test_timeout_check_true_raises_called_process_error(self):
+        """With check=True the timeout mirrors subprocess's check-failure
+        contract (raises CalledProcessError) so check=True callers' expectations
+        hold."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("git pull", 300)):
+            with pytest.raises(subprocess.CalledProcessError) as ei:
+                git_ops._run("git pull", check=True)
+        assert ei.value.returncode == 124
+
+    def test_run_list_timeout_check_false_returns_nonzero(self):
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(["git", "pull"], 300)):
+            res = git_ops._run_list(["git", "pull"], check=False)
+        assert res.returncode == 124
+        assert "timed out" in res.stderr
+
+    def test_run_list_timeout_check_true_raises(self):
+        """Symmetry with _run: _run_list + check=True + timeout raises."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(["git", "fetch"], 300)):
+            with pytest.raises(subprocess.CalledProcessError) as ei:
+                git_ops._run_list(["git", "fetch"], check=True)
+        assert ei.value.returncode == 124
+
+    def test_commit_routes_through_run_list_with_timeout(self):
+        """#13262: commit() must go through the timeout-protected _run_list (not a
+        raw subprocess.run), so a hung commit / pre-commit hook fails fast."""
+        with patch("git_ops._run_list") as rl, patch("git_ops._get_alias",
+                                                      return_value="skill"):
+            rl.return_value = _mock_result(returncode=0)
+            git_ops.commit("skill", "msg")
+        assert rl.called
+        assert rl.call_args[0][0][:2] == ["git", "commit"]
+
+
+# ---------------------------------------------------------------------------
 # pull()
 # ---------------------------------------------------------------------------
 
@@ -425,6 +503,14 @@ class TestPrCreate:
 # ---------------------------------------------------------------------------
 
 class TestPrMerge:
+    @pytest.fixture(autouse=True)
+    def _safe_behind(self):
+        # #13271: default the behind-count guard to "current" (0) so the existing
+        # merge-flow tests below exercise the merge path unchanged; the dedicated
+        # guard tests re-patch _pr_behind_by to a high value to assert the refusal.
+        with patch("git_ops._pr_behind_by", return_value=0):
+            yield
+
     @patch("git_ops._run_list")
     def test_successful_squash_merge(self, mock_run):
         # Calls: 1) check state, 2) merge, 3) branch name lookup, 4) ship transition
@@ -605,6 +691,109 @@ class TestPrMerge:
         mock_adapter.merge_pr.assert_called_once_with(42, "squash")
         # gh CLI should NOT be called when adapter handles it
         mock_run.assert_not_called()
+
+    # --- #13271: behind-count merge guard (SEV-1 stale-tree prevention) ---
+
+    @patch("git_ops._run_list")
+    def test_far_behind_squash_is_refused(self, mock_run):
+        """A squash of a branch FAR behind base is refused (fail-safe) BEFORE any
+        merge call — preventing the #13271 stale-tree mass-revert."""
+        with patch("git_ops._pr_behind_by", return_value=154), \
+             patch("git_ops._merge_max_behind", return_value=50):
+            mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
+            success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert "behind" in msg
+        # state check only — NO merge attempt (call_count==1 proves no `gh pr merge`).
+        assert mock_run.call_count == 1
+
+    @patch("git_ops._run_list")
+    def test_within_threshold_proceeds(self, mock_run):
+        """A branch within the behind threshold merges normally."""
+        with patch("git_ops._pr_behind_by", return_value=3), \
+             patch("git_ops._merge_max_behind", return_value=50):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            ]
+            success, msg = git_ops.pr_merge(42)
+        assert success is True
+
+    @patch("git_ops._run_list")
+    def test_undeterminable_behind_fails_open(self, mock_run):
+        """If the behind-count can't be determined (gh/API hiccup → None), the
+        guard fails OPEN (merge proceeds) — it must not wedge all shipping."""
+        with patch("git_ops._pr_behind_by", return_value=None):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            ]
+            success, msg = git_ops.pr_merge(42)
+        assert success is True
+
+    @patch("git_ops._run_list")
+    def test_far_behind_non_squash_not_guarded(self, mock_run):
+        """The guard is squash-specific — a real merge commit preserves base
+        history, so a behind branch is not refused for strategy=merge."""
+        with patch("git_ops._pr_behind_by", return_value=999):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "feature"}'),
+            ]
+            success, _ = git_ops.pr_merge(42, strategy="merge")
+        assert success is True
+
+    def test_merge_max_behind_env_override(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_MAX_BEHIND", "7")
+        assert git_ops._merge_max_behind() == 7
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_MAX_BEHIND", "bad")
+        assert git_ops._merge_max_behind() == git_ops.MERGE_MAX_BEHIND_DEFAULT
+
+
+class TestPrBehindBy:
+    """#13271: _pr_behind_by — kept OUT of TestPrMerge (whose autouse fixture
+    patches _pr_behind_by) so these exercise the real function."""
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_parses_compare_api(self, mock_run):
+        """_pr_behind_by reads behind_by from the compare API after resolving the
+        PR's base/head refs."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "squidsquad/task/42"}'),
+            _mock_result(stdout="154\n"),  # gh api .behind_by
+        ]
+        assert git_ops._pr_behind_by(42) == 154
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_api_failure(self, mock_run):
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "x"}'),
+            _mock_result(returncode=1, stderr="api error"),
+        ]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_bad_refs_json(self, mock_run):
+        mock_run.side_effect = [_mock_result(stdout="not json", returncode=0)]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_when_refs_view_fails(self, mock_run):
+        """First `gh pr view` call non-zero (refs lookup failed) → None (fail-open)."""
+        mock_run.side_effect = [_mock_result(returncode=1, stderr="not found")]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_non_integer_behind(self, mock_run):
+        """A malformed compare response (e.g. `null`) → ValueError → None."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "x"}'),
+            _mock_result(stdout="null\n"),  # not an int
+        ]
+        assert git_ops._pr_behind_by(42) is None
 
 
 class TestNoNonAsciiInPrintStatements:
@@ -1270,11 +1459,10 @@ class TestCommitCodePushFailure:
             _mock_result(stdout=" M src/app.py\n"),  # status --porcelain
             _mock_result(stdout="squidsquad/task/100\n"),  # branch --show-current
         ]
-        mock_subproc.return_value = _mock_result()  # git commit succeeds
-        mock_run_list.side_effect = [
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        mock_subproc.return_value = _mock_result()  # (legacy: commit no longer here)
+        # #13262: the commit now routes through _run_list too — use return_value
+        # so the add / config-revert / commit calls all succeed regardless of count.
+        mock_run_list.return_value = _mock_result()
         # push now routed through _git_push (#9890) and FAILS here
         mock_git_push.return_value = _mock_result(returncode=1, stderr="push rejected")
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
@@ -1295,11 +1483,9 @@ class TestCommitCodePushFailure:
             _mock_result(stdout=" M src/app.py\n"),  # status
             _mock_result(stdout="squidsquad/task/100\n"),  # branch
         ]
-        mock_subproc.return_value = _mock_result()  # commit
-        mock_run_list.side_effect = [
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        mock_subproc.return_value = _mock_result()  # (legacy: commit no longer here)
+        # #13262: commit routes through _run_list now → any-count success.
+        mock_run_list.return_value = _mock_result()
         mock_git_push.return_value = _mock_result()  # push succeeds (#9890)
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
         assert result is True
@@ -1325,12 +1511,9 @@ class TestCommitCodeUsesWorkingBranch:
             _mock_result(stdout=" M src/app.py\n"),  # git status --porcelain
             _mock_result(stdout="develop\n"),  # current branch
         ]
-        mock_run_list.side_effect = [
-            _mock_result(returncode=0),  # rev-parse (branch exists)
-            _mock_result(),  # git checkout
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        # #13262: commit routes through _run_list now (one more call); use
+        # return_value so add / checkout / rev-parse / commit all succeed (rc0).
+        mock_run_list.return_value = _mock_result(returncode=0)
         mock_git_push.return_value = _mock_result()  # push (#9890)
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
