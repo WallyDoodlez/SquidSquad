@@ -397,27 +397,34 @@ class TestIntentSetAt(unittest.TestCase):
                 )
 
     def test_ack_stop_confirmed_guarded_by_stopping_intent(self):
-        """Iter-1 finding 4 + iter-2 findings 2/3: a stale stop-confirmed
-        ack must NOT overwrite intent when the agent has moved on to
-        RUNNING/RESTARTING/STOPPED, and must NOT reset intent_set_at when
-        intent is already STOPPING (which would extend the 60s force-kill
-        window indefinitely per CONTEXT-4792.md §3.3)."""
+        """Iter-1 finding 4 + iter-2 findings 2/3 (+ #13148): the stop-path
+        ack-stop handler recognizes the SETTLED result enum
+        ('checkpointed'/'aborted'/'drained' per AGENT-RUNTIME §10 Q11), not the
+        obsolete 'stop-confirmed'. A stale stop ack must NOT overwrite intent
+        when the agent has moved on to RUNNING/RESTARTING/STOPPED, and must NOT
+        reset intent_set_at when intent is already STOPPING (which would extend
+        the 60s force-kill window indefinitely per CONTEXT-4792.md §3.3)."""
         import inspect
         from harness import receive_event
         src = inspect.getsource(receive_event)
-        assert "stop-confirmed" in src
+        # #13148: settled enum recognized (replaces obsolete "stop-confirmed").
+        assert '"checkpointed"' in src and '"aborted"' in src and '"drained"' in src, (
+            "stop-path ack-stop handler must recognize the settled enum "
+            "(checkpointed/aborted/drained), not the obsolete 'stop-confirmed'"
+        )
         # The guard must be == STOPPING (the only state where ack is valid),
         # not the iter-1 weaker `!= RESTARTING`.
         assert "agent.intent == AgentState.INTENT_STOPPING" in src, (
-            "stop-confirmed handler must require intent == STOPPING"
+            "stop-path ack handler must require intent == STOPPING"
         )
         # And it must NOT contain a `intent_set_at = time.time()` inside the
         # ack branch — that would reset the force-kill clock on every ack.
-        # Locate the stop-confirmed block and assert no clock-reset inside.
-        idx = src.find("stop-confirmed")
-        block = src[idx:idx + 600]
+        # Locate the stop-enum block and assert no clock-reset inside.
+        idx = src.find("_stop_result in (")
+        assert idx != -1, "expected the settled-enum membership check"
+        block = src[idx:idx + 700]
         assert "intent_set_at = time.time()" not in block, (
-            "stop-confirmed ack must not reset intent_set_at — it is set "
+            "stop ack must not reset intent_set_at — it is set "
             "at stop-REQUEST time, not at ack time"
         )
 
@@ -471,6 +478,12 @@ class TestForceKillSafetyNet(unittest.TestCase):
                   return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=pid_alive),
+            # #12294: update_health now resolves liveness via the image-verified
+            # helper, so control that instead of the bare liveness check; pin
+            # write-back to a no-op so the self-heal doesn't touch /clone.
+            patch("harness.process_utils.is_claude_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.time.time", return_value=fake_now),
             patch("harness._log"),
         ]
@@ -667,6 +680,10 @@ class TestCrashLoopBackoff(unittest.TestCase):
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=pid_alive),
+            # #12294: image-verified liveness is the path update_health uses now.
+            patch("harness.process_utils.is_claude_process_alive",
+                  return_value=pid_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid",
                   return_value=(None, False)),
             patch("harness.time.time", return_value=fake_now),
@@ -942,11 +959,29 @@ class TestRestartLifecycle(unittest.TestCase):
             (pid_changed=True).
         """
         kill = MagicMock()
+        # #12294: update_health resolves liveness via the image-verified helper
+        # for BOTH the stored PID and the .claude-pid file PID. Mirror the old
+        # two-source semantics with a per-PID side_effect: the stored PID's
+        # liveness is `stored_pid_alive`; the file PID's is `read_pid_return`'s
+        # alive flag. Write-back is pinned to a no-op (it would touch /clone).
+        stored_pid = hs.get_agent("skill").claude_pid
+        file_pid, file_alive = read_pid_return
+
+        def _claude_alive(pid):
+            if stored_pid is not None and pid == stored_pid:
+                return stored_pid_alive
+            if file_pid is not None and pid == file_pid:
+                return file_alive
+            return False
+
         patches = [
             patch("harness.boot_remote._get_all_roles", return_value=["skill"]),
             patch("harness.boot_remote._get_clone_path", return_value="/clone"),
             patch("harness.boot_remote._is_process_alive",
                   return_value=stored_pid_alive),
+            patch("harness.process_utils.is_claude_process_alive",
+                  side_effect=_claude_alive),
+            patch("harness.reboot_agent.write_claude_pid", return_value=True),
             patch("harness.reboot_agent._read_claude_pid",
                   return_value=read_pid_return),
             patch("harness.reboot_agent._kill_process", kill),
@@ -1222,6 +1257,97 @@ class TestPortManagement(unittest.TestCase):
         finally:
             s.close()
 
+    def test_find_free_port_zero_returns_real_port(self):
+        """#12820: find_free_port(0) returns the OS-assigned ephemeral port,
+        not the literal 0 — so a --port 0 caller can advertise the real port."""
+        from harness import find_free_port
+        port = find_free_port(0)
+        self.assertNotEqual(port, 0)
+        self.assertGreater(port, 0)
+
+
+class TestSingletonPortGuard(unittest.TestCase):
+    """#12820: production harness must acquire the canonical port or refuse —
+    never bind an ephemeral port (which would poison clone .harness-port files).
+    """
+
+    def _serve(self, body: bytes):
+        """Spin a throwaway HTTP server returning ``body`` for GET /status.
+        Returns (port, shutdown_callable). Lets HTTPServer bind an OS-assigned
+        ephemeral port itself (no probe-then-rebind gap) and reads the actual
+        port back from server_address — avoids a TOCTOU race on the port."""
+        import http.server
+        import threading
+
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *a):  # silence test noise
+                pass
+
+        httpd = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+        port = httpd.server_address[1]
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        return port, httpd.shutdown
+
+    def test_probe_no_server(self):
+        """No listener on the port → not a live harness."""
+        from harness import _probe_harness_status, find_free_port
+        dead_port = find_free_port(0)  # found free, nothing bound to it now
+        self.assertFalse(_probe_harness_status(dead_port, timeout=1.0))
+
+    def test_probe_live_harness(self):
+        """A server returning harness-shaped /status JSON → live harness."""
+        from harness import _probe_harness_status
+        port, shutdown = self._serve(b'{"harness": {"status": "running"}, "agents": []}')
+        try:
+            self.assertTrue(_probe_harness_status(port, timeout=2.0))
+        finally:
+            shutdown()
+
+    def test_probe_non_harness_200(self):
+        """A 200 from an unrelated server lacking the 'harness' key → not ours."""
+        from harness import _probe_harness_status
+        port, shutdown = self._serve(b'{"hello": "world"}')
+        try:
+            self.assertFalse(_probe_harness_status(port, timeout=2.0))
+        finally:
+            shutdown()
+
+    def test_resolve_explicit_port_zero_is_ephemeral(self):
+        """--port 0 takes the explicit path and yields a real ephemeral port."""
+        from harness import _resolve_listen_port
+        port = _resolve_listen_port(0)
+        self.assertGreater(port, 0)
+
+    def test_resolve_explicit_specific_free_port(self):
+        """An explicit free --port is returned unchanged (no probe, no refuse)."""
+        from harness import _resolve_listen_port, find_free_port
+        free = find_free_port(0)
+        self.assertEqual(_resolve_listen_port(free), free)
+
+    def test_resolve_production_free_claims_canonical(self):
+        """Production path (no --port): canonical port free → claim it."""
+        import harness
+        with patch.object(harness, "_read_config_port", return_value=59321), \
+             patch.object(harness, "_probe_harness_status", return_value=False):
+            self.assertEqual(harness._resolve_listen_port(None), 59321)
+
+    def test_resolve_production_live_harness_refuses(self):
+        """Production path: a live harness on the canonical port → refuse (exit 1),
+        never falls back to an ephemeral port that would poison clones."""
+        import harness
+        with patch.object(harness, "_read_config_port", return_value=59322), \
+             patch.object(harness, "_probe_harness_status", return_value=True):
+            with self.assertRaises(SystemExit) as ctx:
+                harness._resolve_listen_port(None)
+            self.assertEqual(ctx.exception.code, 1)
+
 
 class TestCLIPortDiscovery(unittest.TestCase):
     """Test CLI port discovery from .harness-port file."""
@@ -1493,8 +1619,12 @@ class TestHarnessHealthPolling(unittest.TestCase):
             (role_dir / ".claude-pid").write_text(str(os.getpid()), encoding="utf-8")
 
             hs = HarnessState()
+            # #12294: the test PID is this python process, not a claude.exe, so
+            # image verification would (correctly) reject it. Stub the
+            # image-verified check to True so the .claude-pid PID is adopted.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -1541,6 +1671,13 @@ class TestEndpointsViaTestClient(unittest.TestCase):
         cls.client = TestClient(app, raise_server_exceptions=False)
         cls.app = app
         cls.state = state
+
+    def setUp(self):
+        # #12825 DS-F2: /shutdown and /restart share a single-winner teardown
+        # guard whose flag the real process clears by exiting. Tests reuse the
+        # process (and the flag can leak in from other test files), so reset it.
+        import harness
+        harness._teardown_in_progress = False
 
     def test_get_status(self):
         """GET /status returns harness and agent info."""
@@ -2105,6 +2242,7 @@ class TestIntentLifecycle(unittest.TestCase):
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
                  patch("harness.boot_remote.boot_agent", return_value=spawn_result), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2132,8 +2270,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = None  # PID cleared when agent died
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2159,8 +2300,11 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = None
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True.
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2185,8 +2329,12 @@ class TestManualRebootClearsStoppingIntent(unittest.TestCase):
             agent.claude_pid = os.getpid()  # Same PID — stop is in-flight
             hs.set_agent("skill", agent)
 
+            # #12294: os.getpid() is python, not claude — stub image-verify True
+            # so the same-PID-alive case is exercised (intent stays STOPPING).
             with patch("harness.boot_remote._get_all_roles", return_value=["skill"]), \
                  patch("harness.boot_remote._get_clone_path", return_value=tmpdir), \
+                 patch("harness.process_utils.is_claude_process_alive", return_value=True), \
+                 patch("harness.reboot_agent.write_claude_pid", return_value=True), \
                  patch("harness.HARNESS_STATE_FILE", Path(tmpdir) / ".harness-state.json"):
                 hs.update_health()
 
@@ -2852,6 +3000,59 @@ class TestGetEventsForRole(unittest.TestCase):
         self.assertEqual(len(data["events"]), 1)
         self.assertEqual(data["events"][0]["id"], "e1")
 
+    def test_excludes_self_emitted_reacts_to_events_13255(self):
+        """#13255: a reacts-to match emitted BY the requesting role itself is
+        excluded — an agent must not self-wake on its own git-commit /
+        status-transition events (they always drain to a care-filter no-op).
+        Cross-agent reacts-to events (different emitter) are still delivered, and
+        explicit target_alias targeting always wins (even self-emitted)."""
+        from harness import event_stream
+
+        event_stream.append({  # self-emitted reacts-to -> EXCLUDED
+            "id": "own1", "event_type": "git-commit", "role": "skill",
+            "payload": {"result": "ok"},
+        })
+        event_stream.append({  # cross-agent reacts-to -> INCLUDED
+            "id": "other1", "event_type": "git-commit", "role": "qa",
+            "payload": {"result": "ok"},
+        })
+        event_stream.append({  # self-emitted BUT explicitly targeted -> INCLUDED
+            "id": "selftarget1", "event_type": "assigned-to", "role": "skill",
+            "payload": {"target_alias": "skill"},
+        })
+
+        with patch("harness._validate_role"), \
+             patch("config.get_event_filters_for_role",
+                   return_value=["git-commit", "status-transition"]):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        ids = [e["id"] for e in resp.json()["events"]]
+        self.assertNotIn("own1", ids, "self-emitted git-commit must be excluded (#13255)")
+        self.assertIn("other1", ids, "cross-agent git-commit must still be delivered")
+        self.assertIn("selftarget1", ids, "explicit target_alias must win over self-emitted exclusion")
+
+    def test_self_emit_filter_includes_event_with_missing_emitter_13255(self):
+        """#13255 (review LOW): an event with no top-level `role` field has
+        emitter "" — it cannot be attributed to the requesting role, so the
+        self-emit exclusion must NOT drop it (conservative-correct: include)."""
+        from harness import event_stream
+
+        event_stream.append({  # reacts-to match, NO emitter -> INCLUDED
+            "id": "noemit1", "event_type": "git-commit",
+            "payload": {"result": "ok"},
+        })
+
+        with patch("harness._validate_role"), \
+             patch("config.get_event_filters_for_role",
+                   return_value=["git-commit"]):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        ids = [e["id"] for e in resp.json()["events"]]
+        self.assertIn("noemit1", ids,
+                      "event with missing emitter must not be excluded (#13255)")
+
     def test_since_cursor_filters_events(self):
         """GET /events/for/skill?since=X returns only events after cursor."""
         from harness import event_stream
@@ -2897,6 +3098,211 @@ class TestCompleteEventEndpoint(unittest.TestCase):
         """The 410 fires before any body validation — pure deprecation shell."""
         resp = self.client.post("/events/any-id/complete", json={})
         self.assertEqual(resp.status_code, 410)
+
+
+class TestMergeBodyGuard13170(unittest.TestCase):
+    """#13170: POST /merge must fail CLOSED (400) on a malformed or non-object
+    JSON body — mirroring POST /events (#13156) and POST /work/assign (#12495).
+    Unguarded, a truncated body raised JSONDecodeError and a non-object body
+    raised AttributeError on .get(), both propagating to the global handler as
+    a 500 where a clean 400 is the contract. Both rejections fire BEFORE any
+    merge thread spawns, so no git_ops mocking is needed."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from harness import app
+
+        cls.client = TestClient(app, raise_server_exceptions=False)
+
+    def test_malformed_json_body_400(self):
+        resp = self.client.post(
+            "/merge", content=b"{not valid json",
+            headers={"Content-Type": "application/json"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("malformed JSON body", resp.json()["detail"])
+
+    def test_non_dict_body_400(self):
+        """A valid-but-non-object body ([1,2], null, 42) -> 400, not a 500 on
+        .get(). Sent as raw JSON content (TestClient json=None would send an
+        empty body, which is the malformed-parse case, not a JSON null)."""
+        for raw in (b"[1, 2]", b"null", b"42"):
+            resp = self.client.post(
+                "/merge", content=raw,
+                headers={"Content-Type": "application/json"})
+            self.assertEqual(resp.status_code, 400,
+                             f"non-dict body {raw!r} must be 400")
+            self.assertIn("must be a JSON object", resp.json()["detail"])
+
+    def test_valid_object_missing_pr_number_still_400(self):
+        """Regression: a well-formed object without pr_number keeps its own 400
+        (the new guard does not shadow the pre-existing required-field check)."""
+        resp = self.client.post("/merge", json={"branch": "x", "role": "skill"})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("pr_number is required", resp.json()["detail"])
+
+
+class TestSafePullInClone13215(unittest.TestCase):
+    """#13215: the deploy sequence's clone pull must survive a DIRTY working
+    tree (uncommitted change to a file the incoming commit touches) by
+    stashing-around-merge, instead of aborting and silently skipping the
+    deploy-sync. _safe_pull_in_clone mirrors git_ops.pull (#13167/#13045) over
+    an arbitrary clone via _git_in_clone. Driven entirely by a scripted
+    _git_in_clone responder (no real git)."""
+
+    def _resp(self, rc=0, out="", err=""):
+        from types import SimpleNamespace
+        return SimpleNamespace(returncode=rc, stdout=out, stderr=err)
+
+    def _responder(self, scripted):
+        """Return a _git_in_clone side_effect. `scripted` maps a command key to
+        a LIST of responses consumed in order; unscripted commands default to
+        rc=0. Keys: 'pull','stash','stash pop','stash drop','rev-parse','diff',
+        'checkout'."""
+        def _key(args):
+            if args[:2] == ["stash", "pop"]:
+                return "stash pop"
+            if args[:2] == ["stash", "drop"]:
+                return "stash drop"
+            return args[0]
+
+        def _side(clone_path, args, **kw):
+            k = _key(list(args))
+            q = scripted.get(k)
+            if q:
+                return q.pop(0)
+            return self._resp(0)
+        return _side
+
+    def test_clean_pull_succeeds(self):
+        import harness
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder({"pull": [self._resp(0)]})):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "pulled")
+
+    def test_already_up_to_date_succeeds(self):
+        import harness
+        with patch.object(harness, "_git_in_clone", side_effect=self._responder(
+                {"pull": [self._resp(1, err="Already up to date.")]})):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "already-up-to-date")
+
+    def test_dirty_tree_stashes_pulls_and_pops(self):
+        """The exact #13215 bug: first pull aborts (dirty), stash creates an
+        entry, retry pull succeeds, clean pop -> success."""
+        import harness
+        scripted = {
+            "pull": [self._resp(1, err="local changes would be overwritten by merge"),
+                     self._resp(0)],
+            # rev-parse: pre (no stash) then post (stash exists)
+            "rev-parse": [self._resp(1, out=""), self._resp(0, out="abc123")],
+            "stash": [self._resp(0)],
+            "stash pop": [self._resp(0)],
+        }
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder(scripted)):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "pulled (stashed and popped)")
+
+    def test_genuine_merge_conflict_fails_after_stash(self):
+        """A committed-divergence conflict: retry pull also fails -> (False, ...)
+        so the caller routes to §11 recovery. The merge is aborted (clears
+        MERGE_HEAD + markers) BEFORE the stash is restored, so the clone is not
+        left in MERGING state (which would loop the next deploy's checkout)."""
+        import harness
+        calls = []
+        scripted = {
+            "pull": [self._resp(1, err="conflict A"),
+                     self._resp(1, err="CONFLICT (content): merge conflict in x")],
+            "rev-parse": [self._resp(1, out=""), self._resp(0, out="abc123")],
+            "stash": [self._resp(0)],
+            "stash pop": [self._resp(0)],  # restore after merge --abort
+        }
+        responder = self._responder(scripted)
+
+        def _tracking(clone_path, args, **kw):
+            calls.append(list(args))
+            return responder(clone_path, args, **kw)
+        with patch.object(harness, "_git_in_clone", side_effect=_tracking):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertFalse(ok)
+        self.assertIn("pull-failed", detail)
+        # #13215 review MED: the merge is aborted before restoring the stash, and
+        # the abort precedes the stash pop (so MERGING state is cleared first).
+        self.assertIn(["merge", "--abort"], calls)
+        self.assertLess(calls.index(["merge", "--abort"]),
+                        calls.index(["stash", "pop"]),
+                        "merge --abort must precede the stash restore")
+
+    def test_clean_tree_transient_first_failure_no_pop(self):
+        """First pull fails but the tree is CLEAN (stash creates nothing) — the
+        retry succeeds and there is nothing to pop (#13167 no-op-stash guard)."""
+        import harness
+        scripted = {
+            "pull": [self._resp(1, err="transient"), self._resp(0)],
+            "rev-parse": [self._resp(1, out=""), self._resp(1, out="")],  # unchanged
+            "stash": [self._resp(0)],
+        }
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder(scripted)):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "pulled (no local changes to stash)")
+
+    def test_stash_command_failure_returns_false(self):
+        import harness
+        scripted = {
+            "pull": [self._resp(1, err="dirty")],
+            "rev-parse": [self._resp(1, out="")],
+            "stash": [self._resp(1, err="stash boom")],
+        }
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder(scripted)):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertFalse(ok)
+        self.assertIn("stash-failed", detail)
+
+    def test_stash_pop_conflict_resolves_to_pulled_state(self):
+        """Retry pull succeeds but the stashed local change conflicts on pop ->
+        force-resolved to HEAD, still reported as a successful pull (the
+        CLAUDE.md sync landed; the stale local change is discarded)."""
+        import harness
+        scripted = {
+            "pull": [self._resp(1, err="dirty"), self._resp(0)],
+            "rev-parse": [self._resp(1, out=""), self._resp(0, out="abc123")],
+            "stash": [self._resp(0)],
+            "stash pop": [self._resp(1, err="conflict")],
+            "diff": [self._resp(0, out="config.md\n")],  # unmerged path
+            "checkout": [self._resp(0)],
+            "stash drop": [self._resp(0)],
+        }
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder(scripted)):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertIn("resolved to pulled state", detail)
+
+    def test_safe_stash_pop_in_clone_no_unmerged_does_not_drop(self):
+        """A pop that fails for a NON-conflict reason (no unmerged paths) must
+        NOT drop the stash (would discard un-applied work)."""
+        import harness
+        calls = []
+
+        def _side(clone_path, args, **kw):
+            calls.append(list(args))
+            if list(args)[:2] == ["stash", "pop"]:
+                return self._resp(1, err="no stash")
+            if list(args)[0] == "diff":
+                return self._resp(0, out="")  # no unmerged
+            return self._resp(0)
+        with patch.object(harness, "_git_in_clone", side_effect=_side):
+            result = harness._safe_stash_pop_in_clone("/clone")
+        self.assertFalse(result)
+        self.assertNotIn(["stash", "drop"], calls)
 
 
 # ---------------------------------------------------------------------------
@@ -3200,29 +3606,43 @@ class TestReviewFixes(unittest.TestCase):
                     hs.load_state()
                 self.assertFalse(hs.get_agent("skill").bootup_complete)
 
-    def test_reboot_affected_agents_clears_bootup_complete(self):
-        """#8695 R2: compose-driven restart resets bootup_complete=False."""
+    def test_reboot_affected_agents_emits_deploy_signal(self):
+        """#12912 (supersedes #8695 R2): _reboot_affected_agents is now the
+        deploy-signal EMITTER. It sets intent=DEPLOYING and emits a deploy-signal
+        to the affected alias — and deliberately LEAVES bootup_complete=True so
+        the signal is actually delivered off the event bus (the cooperative
+        deploy-halt replaces the old slam-bootup_complete-False force restart;
+        the agent stops picking up work itself when it halts)."""
         from harness import HarnessState, AgentState
         hs = HarnessState()
         agent = AgentState("skill")
         agent.intent = AgentState.INTENT_RUNNING
+        agent.status = "running"  # #12912 iter-3 F1: only ALIVE agents are signaled
         agent.bootup_complete = True
         hs.set_agent("skill", agent)
         import harness
         prev_state = harness.state
         harness.state = hs
-        # Fake git-diff output so the function decides skill's CLAUDE.md changed
         fake_git_diff = MagicMock()
         fake_git_diff.returncode = 0
         fake_git_diff.stdout = ".squidsquad/skill/CLAUDE.md\n"
+        emitted = []
         try:
             with patch("harness._log"), \
                  patch("harness.subprocess.run", return_value=fake_git_diff), \
+                 patch("harness._emit_event",
+                       side_effect=lambda *a, **k: emitted.append((a, k))), \
                  patch.object(hs, "save_state"):
                 harness._reboot_affected_agents(123, ["references/sub-skills/common/x.md"])
         finally:
             harness.state = prev_state
-        self.assertFalse(hs.get_agent("skill").bootup_complete)
+        updated = hs.get_agent("skill")
+        self.assertEqual(updated.intent, AgentState.INTENT_DEPLOYING)
+        # bootup_complete is intentionally NOT cleared (signal must be delivered).
+        self.assertTrue(updated.bootup_complete)
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0][0][0], "deploy-signal")
+        self.assertEqual(emitted[0][1]["payload"]["target_alias"], "skill")
 
     # ---- #8694 review fixes ------------------------------------------------
 
@@ -3286,6 +3706,7 @@ class TestEADStatusRouting12342(unittest.TestCase):
         "pm": ("pm", None),
         "verifier": ("verifier", None),
         "dm": ("dm", None),
+        "human": ("human", None),  # #12800: non-agent role-class
     }
 
     def _issue(self, num, status, role="skill", updated="2099-01-01T00:00:00Z"):
@@ -3328,6 +3749,37 @@ class TestEADStatusRouting12342(unittest.TestCase):
         _, emitted = self._run([self._issue(2, "pending-ship", role="skill")])
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0]["target_alias"], "dm")
+
+    def test_pending_human_review_routes_to_human(self):
+        """#12800 AC3: an agent-needs-human handoff routes to the install's
+        `human` alias (was pm), resolved via the role-class registry."""
+        _, emitted = self._run(
+            [self._issue(20, "pending-human-review", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "human",
+                         "pending-human-review must route to the human alias "
+                         "(#12800), NOT pm and NOT the issue's worker label")
+
+    def test_pending_human_setup_routes_to_human(self):
+        """#12800 AC3: worker-pause-for-setup also routes to the human alias."""
+        _, emitted = self._run(
+            [self._issue(21, "pending-human-setup", role="skill")])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0]["target_alias"], "human")
+
+    def test_pending_human_does_not_enter_handoff_reemit_12800(self):
+        """#12800: a human is NOT on the event bus, so the assigned-to <human>
+        is emitted once for forge/audit but must NOT enter the #12442 handoff
+        re-emit cadence (re-nudging would pile up never-consumed events). A
+        real agent handoff (pending-test → verifier) DOES seed the re-emit."""
+        det, emitted = self._run(
+            [self._issue(22, "pending-human-review", role="skill")])
+        self.assertEqual(emitted[0]["target_alias"], "human")
+        self.assertNotIn(22, det._handoff_emit_at,
+                         "human routing must not seed the handoff re-emit timer")
+        det2, _ = self._run([self._issue(23, "pending-test", role="skill")])
+        self.assertIn(23, det2._handoff_emit_at,
+                      "agent handoff (pending-test) must seed the re-emit timer")
 
     def test_approved_routes_to_worker_label(self):
         _, emitted = self._run([self._issue(3, "approved", role="skill")])
@@ -4715,6 +5167,37 @@ class TestPauseHook12458(unittest.TestCase):
         self.client.post("/hooks/activity", headers=self._hdr(),
                          json={"event": "PostToolUse"})
         self.assertIsNone(self._agent().in_flight_until)
+
+    def test_userpromptsubmit_records_heartbeat_no_in_flight_13213(self):
+        """#13213 AC2/AC4/AC5: a UserPromptSubmit heartbeat advances
+        last_activity_at and records the event (so progress_liveness/the shadow
+        verdict sees the agent received input), but is a PLAIN heartbeat — it
+        does NOT open an in-flight window. That is deliberate: an in-flight
+        window would MASK the freeze-after-prompt-before-first-tool-call gap this
+        signal exists to expose."""
+        r = self.client.post("/hooks/activity", headers=self._hdr(),
+                             json={"event": "UserPromptSubmit"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json().get("ok"))
+        agent = self._agent()
+        # AC2: heartbeat recorded — last_activity_at advanced, event stamped.
+        self.assertIsInstance(agent.last_activity_at, float)
+        self.assertEqual(agent.last_activity["event"], "UserPromptSubmit")
+        # AC4: plain heartbeat — NOT an in-flight opener (only PreToolUse opens).
+        self.assertIsNone(agent.in_flight_until)
+
+    def test_userpromptsubmit_does_not_disturb_open_in_flight_13213(self):
+        """A UserPromptSubmit arriving while a tool call is in flight must not
+        clear the in-flight window (it is neither the PreToolUse opener nor the
+        Post* closer) — only a real tool-call boundary moves that window."""
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PreToolUse"})
+        opened = self._agent().in_flight_until
+        self.assertIsNotNone(opened)
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "UserPromptSubmit"})
+        # in-flight window untouched; only Post* closes it.
+        self.assertEqual(self._agent().in_flight_until, opened)
 
     def test_activity_clears_waiting(self):
         # set waiting via a Notification, then any activity clears it

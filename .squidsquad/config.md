@@ -64,14 +64,16 @@
 - **Improvement Scan Cool-Down**: 30m
 - **Idle Scan Burst**: 3
 
-## Vault Optimize
+## Verbose Mode
 
 - **Enabled**: yes
+
+## Vault Optimize
+
 - **Threshold**: 20
 
 ## Vault Remember
 
-- **Enabled**: yes
 - **Writes Per Cycle**: 2
 - **BRIEFING Token Budget**: 2000
 - **Confidence Decay Days**: 60
@@ -114,7 +116,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 38
+- **Shipped Since Last Bump**: 50
 
 ## Agent Effort
 

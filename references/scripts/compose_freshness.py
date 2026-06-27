@@ -209,6 +209,7 @@ def check_and_repair(
     stored_checksum,
     runner=None,
     compute_checksum=None,
+    detect_only=False,
 ):
     """Run the E1 freshness check + repair sequence.
 
@@ -237,6 +238,24 @@ def check_and_repair(
             status="clean",
             new_checksum=current,
             diagnostic="compose inputs unchanged since last boot",
+        )
+
+    # #12912 S5 (HARNESS-ARCH §10 step 1b retired): detect-only mode does NOT
+    # run compose.py deploy-all locally. The harness boot path uses this to
+    # DETECT drift, then emits deploy-signals so each affected clone recomposes
+    # pull-first (§7.6). Local boot-time compose has no guarantee the source tree
+    # is current (the repo may be behind origin/main) — the root cause of the
+    # stale-source revert bug. Returns "drift" (differ or absent stored checksum)
+    # without composing; the caller drives the deploy-signal path.
+    if detect_only:
+        return FreshnessResult(
+            status="drift",
+            new_checksum=current,
+            diagnostic=(
+                "first boot — no stored checksum; deploy-signal path will run"
+                if not stored_checksum
+                else "drift detected — deploy-signal path will run (no local compose)"
+            ),
         )
 
     # Drift / first boot / missing checksum — repair.

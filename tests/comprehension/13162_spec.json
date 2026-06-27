@@ -1,0 +1,38 @@
+{
+  "issue": 13162,
+  "title": "Config-gated Verbose Mode — boot-read, session-sticky narration toggle",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 19:05",
+  "ac": "comprehension (#9184 hard gate, AC8): from the composed CLAUDE.md a fresh agent must (1) in quiet/OFF posture expose ZERO internal mechanics and reject banned terms incl 'acknowledged'/'event' (AC5 explicit check), using plain outcome language; (2) in verbose/ON posture narrate the full firehose with internal terms allowed (AC4); (3) treat an absent section / 'no' as the quiet default; (4) hold posture session-sticky — a mid-session config toggle takes effect only on next restart.",
+  "method": "Fresh agent (model: sonnet) given ONLY the composed User-Facing Communication rule (both postures) + the Verbose Mode boot-read step, no other context. Verifier-derived per #9184 (skill correctly left the spec to verifier).",
+  "target": "composed .squidsquad/<alias>/CLAUDE.md — Soul 'User-Facing Communication' (quiet + verbose postures) + boot-bootstrap 'Verbose Mode — boot-read, session-sticky' (source: references/roles/SOUL.md + references/roles/instructions.md)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Verbose Mode OFF; no-action wake. How do you tell the operator — and may you write '🦑 Acknowledged the change — nothing on the event queue needs action'?",
+      "expected": "One short plain sentence (e.g. '🦑 Checked the latest activity — nothing needs my attention right now.'). May NOT write that line — quiet posture bans 'acknowledge'/'acknowledged' AND 'event'/'event queue' (and any internal-knowledge term) even as natural English; substitute plain outcome language.",
+      "must_not": "Permitting 'acknowledged'/'event queue' (or any banned term) in OFF-mode operator output."
+    },
+    {
+      "id": "CQ2",
+      "q": "Verbose Mode ON; you processed several events and advanced your cursor. How much do you narrate; are 'cursor'/'ack' allowed?",
+      "expected": "Narrate every cycle step + event in full internal detail (drained events, acks, cursor advances, care-filter decisions, transitions). Yes — internal terms allowed and expected; the jargon-ban is lifted for the session.",
+      "must_not": "Claiming the firehose still bans internal terms, or that ON-mode should be brief/jargon-free."
+    },
+    {
+      "id": "CQ3",
+      "q": "Shipped-default install (no Verbose Mode section, or 'no'). Which posture?",
+      "expected": "Quiet posture — both an absent section and 'no' return quiet, the shipped default.",
+      "must_not": "Claiming default is verbose, or that an absent section errors/defaults to ON."
+    },
+    {
+      "id": "CQ4",
+      "q": "Mid-session the operator edits config.md to flip Verbose Mode off→on. Do you switch to the firehose now? When does it take effect?",
+      "expected": "No — session-sticky; read once at boot, hold for the whole session. Takes effect only on the next agent restart, never mid-cycle.",
+      "must_not": "Switching posture mid-session, or claiming a config edit applies without a restart."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 19:06",
+  "evidence": "Fresh sonnet agent (id a576c52bad34a9920) given ONLY the composed posture text, no other context. 4/4 correct, zero must_not violations. CQ1: 'one short plain sentence... may NOT write Acknowledged the change... bans acknowledge/acknowledged AND event queue... substitute plain outcome language.' CQ2: 'narrate every cycle step in full internal detail... cursor and ack explicitly allowed and expected... jargon-ban lifted.' CQ3: 'quiet posture... absent section and no return quiet... shipped default.' CQ4: 'No... session-sticky, read once at boot... next agent restart, never mid-cycle.' Confirms AC4 (verbose firehose), AC5 (quiet zero-mechanics incl the acknowledg* explicit check), default-quiet, and stickiness."
+}

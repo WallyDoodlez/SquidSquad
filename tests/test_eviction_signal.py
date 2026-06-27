@@ -142,16 +142,36 @@ class TestGetSinceWithEvictionMarker(unittest.TestCase):
         # 12 emitted − 5 retained = 7 evicted.
         self.assertEqual(marker["evicted_count_hint"], 7)
 
-    def test_empty_deque_with_evicted_cursor_has_none_oldest_id(self):
-        """Degenerate: harness cold-start with stale cursor → no anchor."""
+    def test_empty_deque_with_evicted_cursor_suppresses_marker(self):
+        """#12837: harness cold-start / fully-churned deque with a stale cursor
+        has NO anchor to advance to. Emitting a marker here would yield the
+        self-contradictory ``evicted`` + empty-batch + ``oldest_id:None`` triple
+        that trips event_poll's fatal guard and kills the agent's listener
+        (exit 2). The marker MUST be suppressed — a benign empty result instead
+        — so the harness never emits that triple. (Previously this returned a
+        marker with ``oldest_id=None``, which was the defect.)"""
         stream = EventStream(maxlen=10)
 
         events, marker = stream.get_since_with_eviction("stale", limit=100)
         self.assertEqual(events, [])
+        self.assertIsNone(
+            marker,
+            "empty deque + stale cursor must yield NO eviction marker (#12837)",
+        )
+
+    def test_eviction_marker_oldest_id_is_never_none(self):
+        """#12837 contract: whenever a marker IS emitted, ``oldest_id`` is a
+        real retained id — never None. This is what lets event_poll trust that
+        a marker always carries a usable anchor."""
+        stream = EventStream(maxlen=10)
+        for i in range(3):
+            stream.append(_ev(f"e{i}"))
+        # Cursor predates the window (not in deque) but the deque is non-empty.
+        events, marker = stream.get_since_with_eviction("evicted-pre", limit=100)
         self.assertIsNotNone(marker)
         assert marker is not None
-        self.assertIsNone(marker["oldest_id"])
-        self.assertEqual(marker["evicted_count_hint"], 0)
+        self.assertIsNotNone(marker["oldest_id"])
+        self.assertEqual(marker["oldest_id"], "e0")
 
     def test_cursor_at_head_returns_empty_no_marker(self):
         """Cursor IS the most recent event — empty, no marker."""

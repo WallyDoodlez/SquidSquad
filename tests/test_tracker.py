@@ -320,6 +320,81 @@ class TestGetState:
         assert state == "UNKNOWN"
 
 
+class TestGetLabelsStateCliFallbackFailClosed13132:
+    """#13132: get_labels / get_state CLI-fallback paths must fail closed
+    (no raw traceback) on gh non-zero exit, empty stdout, or malformed exit-0
+    JSON — mirroring the adapter paths and _get_issue_role_labels."""
+
+    def _cli(self, monkeypatch, result):
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", lambda cmd, **kw: result)
+
+    def test_get_labels_nonzero_returns_empty(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(returncode=1, stderr="boom"))
+        assert tracker.get_labels(42) == []
+
+    def test_get_labels_empty_stdout_returns_empty(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(stdout="", returncode=0))
+        assert tracker.get_labels(42) == []
+
+    def test_get_labels_malformed_json_returns_empty(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(stdout="not json{", returncode=0))
+        assert tracker.get_labels(42) == []
+
+    def test_get_labels_drops_nameless_label_objects(self, monkeypatch):
+        # DS-review fold: a label dict missing "name" must be dropped, not
+        # injected as "" (matches _get_issue_*_labels filtering).
+        data = {"labels": [{"name": "role:skill"}, {}, {"name": "squidsquad"}]}
+        self._cli(monkeypatch, _mock_result(stdout=json.dumps(data), returncode=0))
+        assert tracker.get_labels(42) == ["role:skill", "squidsquad"]
+
+    def test_get_state_nonzero_returns_unknown(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(returncode=1, stderr="boom"))
+        assert tracker.get_state(42) == "UNKNOWN"
+
+    def test_get_state_empty_stdout_returns_unknown(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(stdout="", returncode=0))
+        assert tracker.get_state(42) == "UNKNOWN"
+
+    def test_get_state_malformed_json_returns_unknown(self, monkeypatch):
+        self._cli(monkeypatch, _mock_result(stdout="<html>500</html>", returncode=0))
+        assert tracker.get_state(42) == "UNKNOWN"
+
+    def test_get_state_missing_state_key_returns_unknown(self, monkeypatch):
+        # exit-0 JSON without a "state" field previously raised KeyError.
+        self._cli(monkeypatch, _mock_result(stdout='{"title": "x"}', returncode=0))
+        assert tracker.get_state(42) == "UNKNOWN"
+
+
+class TestCheckUnreadFeedbackFailClosed13132:
+    """#13132 Finding 2: _check_unread_feedback must return the fail-closed
+    sentinel on a malformed exit-0 response, not raise JSONDecodeError."""
+
+    _SENTINEL = [("unknown (API error)", "unknown")]
+
+    def test_malformed_exit0_returns_sentinel(self, monkeypatch):
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(stdout="not json{", returncode=0),
+        )
+        assert tracker._check_unread_feedback(42, "skill") == self._SENTINEL
+
+    def test_nonzero_still_returns_sentinel(self, monkeypatch):
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(returncode=1),
+        )
+        assert tracker._check_unread_feedback(42, "skill") == self._SENTINEL
+
+    def test_valid_no_comments_returns_empty(self, monkeypatch):
+        # Happy path still works: valid JSON, no comments → no unread feedback.
+        monkeypatch.setattr(
+            tracker, "_run_list",
+            lambda cmd, **kw: _mock_result(stdout='{"comments": []}', returncode=0),
+        )
+        assert tracker._check_unread_feedback(42, "skill") == []
+
+
 class TestCloseIssue:
     def test_calls_close(self, monkeypatch):
         calls = []
@@ -454,6 +529,22 @@ class TestWorkQueue:
                             lambda *a, **kw: _mock_result(returncode=1, stderr="error"))
         result = tracker.work_queue("skill")
         assert result == []
+
+    def test_return_path_reassigned_ticket_surfaces_to_originator_12800(self, monkeypatch):
+        """#12800 AC5: the human-handoff return path is async — a human is not
+        on the event bus. The ticket keeps its `role:<originator>` label while
+        parked at pending-human-* (EAD routes those by role-class, not label),
+        so once it is re-assigned back (status → in-progress, role unchanged)
+        it surfaces in the originator's work_queue and resumes on the next
+        wake. No assigned-to is needed for the originator — the forge queue is
+        the resume mechanism."""
+        items = [_make_gh_item(77, "Resumed after human answer", "in-progress",
+                               "task", priority="high")]
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda *a, **kw: _mock_result(stdout=json.dumps(items)))
+        result = tracker.work_queue("skill")
+        assert [r["number"] for r in result] == [77]
+        assert result[0]["status"] == "in-progress"
 
 
 # ---------------------------------------------------------------------------
@@ -675,3 +766,57 @@ class TestTransitionShipGateSquashMerge:
         captured = capsys.readouterr()
         assert "BLOCKED" in captured.err
         assert "not merged to the working branch" in captured.err
+
+
+class TestHardenStdio13185:
+    """#13185: tracker.py CLI stdout/stderr must be crash-proof on a console
+    whose encoding can't represent a printed char (Windows cp1252 has no glyph
+    for U+2192). The crash hit a SUCCESS print after the side effect (the wake
+    emit) had landed → false-failure exit 1 + double-emit risk."""
+
+    def _cp1252_stream(self):
+        # A TextIOWrapper over bytes using strict cp1252 — mimics the Windows
+        # console that triggered the crash.
+        import io
+        return io.TextIOWrapper(io.BytesIO(), encoding="cp1252", newline="")
+
+    def test_regression_cp1252_arrow_crashes_without_hardening(self):
+        """Baseline repro: the original U+2192 success line raises on a strict
+        cp1252 stream — the exact UnicodeEncodeError #13185 reported."""
+        s = self._cp1252_stream()
+        with pytest.raises(UnicodeEncodeError):
+            s.write("work-assign → skill")  # the pre-fix decorative char
+
+    def test_hardening_makes_cp1252_unencodable_char_not_raise(self):
+        """After the _harden_stdio reconfigure, the SAME unencodable char no
+        longer crashes — it is backslash-escaped instead."""
+        s = self._cp1252_stream()
+        s.reconfigure(errors="backslashreplace")
+        s.write("work-assign → skill")  # must NOT raise
+        s.flush()
+        assert s.errors == "backslashreplace"
+
+    def test_harden_stdio_sets_backslashreplace(self):
+        s = self._cp1252_stream()
+        with patch.object(tracker.sys, "stdout", s), \
+             patch.object(tracker.sys, "stderr", self._cp1252_stream()):
+            tracker._harden_stdio()
+            assert tracker.sys.stdout.errors == "backslashreplace"
+            assert tracker.sys.stderr.errors == "backslashreplace"
+
+    def test_harden_stdio_safe_when_stream_not_reconfigurable(self):
+        """Best-effort: a stream without reconfigure() (e.g. a captured/replaced
+        stream) is left as-is, no raise."""
+        class _NoReconfigure:
+            pass
+        with patch.object(tracker.sys, "stdout", _NoReconfigure()), \
+             patch.object(tracker.sys, "stderr", _NoReconfigure()):
+            tracker._harden_stdio()  # must not raise
+
+    def test_work_assign_success_line_is_ascii(self):
+        """Guard against reintroducing a decorative non-ASCII char in the
+        work-assign success print (the reported crash site)."""
+        import inspect
+        src = inspect.getsource(tracker.work_assign)
+        assert "→" not in src, "work-assign success print must stay ASCII (#13185)"
+        assert "work-assign ->" in src

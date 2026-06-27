@@ -41,8 +41,17 @@ import catalog_parser as _cp
 # (slash-bearing catalog names like `roles/dm/events/pr-merge-wait`
 # are valid per D1). Capture only the name; trailing whitespace and
 # the optional comment tail are not part of the lookup key.
+#
+# #13052: the name may be wrapped in backticks. The v2 link stage emits
+# top-level markers BARE, but markers hand-authored INSIDE sub-skill bodies
+# are styled `→ run sub-skill: \`pr-protocol\`` (see git-commit.md). Tolerate
+# the optional surrounding backticks so chained references are visible to
+# find_references. (A transitive-closure compose gate that walks resolved
+# sub-skill bodies would need this too, but that Part-2 enhancement is
+# DEFERRED — the naive closure walk false-positives on illustrative example
+# markers such as l4-curation.md's `security-smoke`; see #13052.)
 _REF_RE = re.compile(
-    r"→\s+run\s+sub-skill:\s+([a-z][a-z0-9/_-]*)"
+    r"→\s+run\s+sub-skill:\s+`?([a-z][a-z0-9/_-]*)`?"
 )
 
 

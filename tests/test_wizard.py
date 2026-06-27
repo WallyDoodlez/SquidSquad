@@ -601,6 +601,7 @@ class TestBuildConfigMdStructure:
             "## Loop",
             "## Flags",
             "## Improvement Scanning",  # #11091
+            "## Verbose Mode",  # #13162
             "## Git Branches",
             "## Forge Backend",
             "## Model Routing",
@@ -611,6 +612,12 @@ class TestBuildConfigMdStructure:
         text = wizard.build_config_md(_minimal_spec())
         assert "## Improvement Scanning" in text
         assert "- **Improvement Scan Cool-Down**: 30" in text
+
+    def test_verbose_mode_section_defaults_off(self):
+        """#13162 — wizard emits Verbose Mode section, shipped default off."""
+        text = wizard.build_config_md(_minimal_spec())
+        assert "## Verbose Mode" in text
+        assert "- **Enabled**: no" in text
 
     def test_header_includes_version_and_architecture(self):
         text = wizard.build_config_md(_minimal_spec())
@@ -2409,6 +2416,41 @@ class TestScanSummary:
         result = wizard.format_scan_summary(scan)
         assert "rust" in result
         assert "Frameworks" not in result  # empty list not shown
+
+
+class TestCmdScanSummaryMalformed12846:
+    """#12846: a malformed/unreadable .repo-scan.json must NOT crash
+    cmd_scan_summary — it falls back to a fresh on-the-fly scan (matching the
+    guarded reads in cmd_generate_defaults / scaffold_install)."""
+
+    def test_malformed_cache_falls_back_not_crash(self, tmp_path, capsys, monkeypatch):
+        import repo_scan
+        monkeypatch.setattr(repo_scan, "scan", lambda target: {
+            "languages": ["python"], "frameworks": [], "test_frameworks": []})
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        (ss / ".repo-scan.json").write_text("{not valid json", encoding="utf-8")
+        # Pre-fix: uncaught JSONDecodeError. Post-fix: clean fallback, rc 0.
+        rc = wizard.cmd_scan_summary([str(tmp_path)])
+        assert rc == 0
+        assert "python" in capsys.readouterr().out  # fell back to fresh scan
+
+    def test_valid_cache_used_not_rescanned(self, tmp_path, capsys, monkeypatch):
+        import json as _json
+        import repo_scan
+        called = []
+        monkeypatch.setattr(repo_scan, "scan",
+                            lambda target: called.append(1) or {})
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        (ss / ".repo-scan.json").write_text(
+            _json.dumps({"languages": ["rust"], "frameworks": [],
+                         "test_frameworks": []}),
+            encoding="utf-8")
+        rc = wizard.cmd_scan_summary([str(tmp_path)])
+        assert rc == 0
+        assert "rust" in capsys.readouterr().out
+        assert not called  # valid cache used — no wasteful rescan
 
 
 # ---------------------------------------------------------------------------

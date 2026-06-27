@@ -192,6 +192,101 @@ def emit_results(results, *, emit_event):
         )
 
 
+# #13197/#13211: the freshen must be single-flighted — each role-class debounce
+# callback fires on its OWN threading.Timer thread (see _Debouncer), so a burst
+# touching N role-classes runs N concurrent git freshens against the SAME harness
+# clone and collides on `.git/index.lock` (an N-way compose-failed storm to PM).
+# #13197 originally added a watcher-local lock here, but the post-merge deploy-all
+# path called git_ops.ensure_main_and_pull OUTSIDE it, so a watcher burst could
+# still race the deploy. #13211 HOISTED the serialization into
+# git_ops.ensure_main_and_pull (git_ops._ENSURE_MAIN_LOCK) so EVERY in-process
+# caller — this freshen AND the deploy path — shares one lock. The watcher-local
+# lock is therefore retired; serialization now lives at the single shared
+# implementation, not at each call site.
+
+
+def _default_ensure_fresh_source(*, repo_root):
+    """Put the harness clone on ``main`` + pull origin before a recompose.
+
+    #12906 (Phase 1 of #12895): a behind-origin (or on-a-feature-branch)
+    clone recomposes every affected alias's ``CLAUDE.md`` from STALE L4
+    source; the post-cycle auto-commit then pushes that revert
+    fleet-wide. The guard freshens the clone first, and if it can't be
+    made fresh the caller ABORTS the batch so agents keep their
+    last-known-good composed output. Delegates to the canonical
+    ``git_ops.ensure_main_and_pull`` so this and the post-merge
+    deploy-all path share one implementation.
+
+    Lives behind ``ensure_fresh_source=`` injection (same pattern as
+    ``run_compose=``) so unit tests never shell out to git. Returns
+    ``(ok, detail)``.
+
+    #13197/#13211: a burst of per-role-class debounce callbacks (each on its own
+    Timer thread) must not fire concurrent ``git`` against the shared clone and
+    collide on ``.git/index.lock``. Serialization now lives inside
+    ``git_ops.ensure_main_and_pull`` (``git_ops._ENSURE_MAIN_LOCK``, #13211) so it
+    covers this freshen AND the post-merge deploy-all path from one place — no
+    watcher-local lock needed here. Serialized, the first call does the real pull
+    and the rest are fast no-ops.
+    """
+    try:
+        import git_ops
+    except Exception as exc:  # noqa: BLE001 — import failure must not crash watch
+        return False, f"git_ops import failed: {exc!r}"
+    try:
+        return git_ops.ensure_main_and_pull(role="harness")
+    except Exception as exc:  # noqa: BLE001 — guard must never crash the watch
+        return False, f"ensure_main_and_pull raised: {exc!r}"
+
+
+def _freshen_or_abort(ensure_fresh_source, *, repo_root, what, emit_event=None):
+    """Resolve the (possibly-injected) freshness guard, run it, and return
+    ``True`` to proceed / ``False`` to abort the recompose.
+
+    Runs ONCE per role-class recompose (one ``_on_change`` /
+    ``recompose_path`` call). A burst that touches multiple role-class
+    files fires one guard per role-class — the later pulls are fast
+    already-up-to-date no-ops, so this is harmless re-checking, not a
+    per-file storm.
+
+    On abort it logs a WARNING **and**, when ``emit_event`` is supplied,
+    surfaces the failure on the event bus as a ``compose-failed`` event
+    targeted at PM — mirroring the registry-unreadable path so a
+    stale-source abort is observable to operators, not just a console
+    line (DS-12906 F1). ``what`` labels the trigger (a path or
+    role-class) for both the log line and the event reason.
+    """
+    if ensure_fresh_source is None:
+        def ensure_fresh_source():
+            return _default_ensure_fresh_source(repo_root=repo_root)
+    try:
+        ok, detail = ensure_fresh_source()
+    except Exception as exc:  # noqa: BLE001 — guard must never crash the watch
+        ok, detail = False, f"freshness guard raised: {exc!r}"
+    if not ok:
+        print(
+            f"WARNING: l4_file_watcher aborting recompose for {what!r} — "
+            f"could not freshen source ({detail}). Agents keep their "
+            f"current CLAUDE.md until the next successful recompose "
+            f"(#12906 / #12895 stale-source guard).",
+            file=sys.stderr,
+        )
+        if emit_event is not None:
+            emit_event(
+                "assigned-to",
+                "harness",
+                payload={
+                    "target_alias": "pm",
+                    "event_context": "compose-failed",
+                    "reason": "freshen-source-failed",
+                    "stderr": f"recompose for {what!r} aborted: {detail}"[
+                        :_COMPOSE_FAILED_STDERR_MAX
+                    ],
+                },
+            )
+    return ok
+
+
 def _default_run_compose(alias, *, repo_root):
     """Shell out to ``compose.py deploy <alias>`` and return (ok, stdout, stderr).
 
@@ -220,6 +315,7 @@ def recompose_path(
     registry,
     emit_event,
     run_compose=None,
+    ensure_fresh_source=None,
 ):
     """Handle a single L4 file change end-to-end.
 
@@ -229,10 +325,18 @@ def recompose_path(
 
     Returns ``[]`` when ``path`` is not a watched role-class file —
     the watcher uses this as the "ignore unrelated change" signal
-    that drives the AC6 test about temp files.
+    that drives the AC6 test about temp files. Also returns ``[]`` when
+    the #12906 freshness guard aborts the batch (clone could not be put
+    on main + synced) — no recompose runs against stale source.
     """
     role_class = role_class_from_path(path, repo_root=repo_root)
     if role_class is None:
+        return []
+    # #12906 (Phase 1 of #12895): freshen source ONCE before composing.
+    if not _freshen_or_abort(
+        ensure_fresh_source, repo_root=repo_root, what=str(path),
+        emit_event=emit_event,
+    ):
         return []
     if run_compose is None:
         def run_compose(alias):
@@ -326,6 +430,7 @@ def make_change_callback(
     registry_provider,
     emit_event,
     run_compose=None,
+    ensure_fresh_source=None,
 ):
     """Build the callback the watcher/debouncer hands a role-class to.
 
@@ -340,6 +445,14 @@ def make_change_callback(
     collapses to one recompose.
     """
     def _on_change(role_class):
+        # #12906: freshen source ONCE per batch BEFORE reading the
+        # registry — a pull can update config.md's ## Aliases, so the
+        # registry must be read against post-pull source.
+        if not _freshen_or_abort(
+            ensure_fresh_source, repo_root=repo_root, what=role_class,
+            emit_event=emit_event,
+        ):
+            return
         try:
             registry = registry_provider()
         except Exception as exc:  # noqa: BLE001 — registry parse failure
@@ -376,6 +489,7 @@ def start_watcher(
     registry_provider,
     emit_event,
     run_compose=None,
+    ensure_fresh_source=None,
     debounce_seconds=DEFAULT_DEBOUNCE_SECONDS,
 ):
     """Start a ``watchdog.Observer`` watching ``.squidsquad/project/``.
@@ -407,6 +521,7 @@ def start_watcher(
         registry_provider=registry_provider,
         emit_event=emit_event,
         run_compose=run_compose,
+        ensure_fresh_source=ensure_fresh_source,
     )
     debouncer = _Debouncer(debounce_seconds, on_change)
 

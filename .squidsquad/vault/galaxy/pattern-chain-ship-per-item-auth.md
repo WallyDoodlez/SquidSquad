@@ -3,6 +3,12 @@ type: pattern
 title: Per-item chain-ship authorization (not blanket auto-auth)
 created: 2026-06-09
 roles: [pm, dm]
+tags: [delivery, ship, authorization, per-item, pm, dm]
+updated: 2026-06-19
+owner: shared
+status: active
+confidence: medium
+source: observation
 ---
 
 # Per-item chain-ship authorization (not blanket auto-auth)
@@ -48,5 +54,5 @@ Always Path A unless operator explicitly directs Path B.
 
 ## Related
 
-- [[feedback-pm-docs-only]] — PM authorizes via tracker comments, never touches code/branches.
+- [[feedback_pm_docs_only]] — PM authorizes via tracker comments, never touches code/branches.
 - Established 2026-06-09 across #11334/#11382/#11381/#11383 chain on `squidsquad/skill/compose-polish-session` (DM cycles 1872/1876/1877/1879; PM cycles 2161/2162/2164).

@@ -11,6 +11,7 @@ status: active
 confidence: high
 source: observation
 links: [learning-shell-out-provisioning-has-three-sharp-edges]
+updated: 2026-06-15
 ---
 
 # Activity-based liveness: a re-dispatch of unacted work must not reset the grace

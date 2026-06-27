@@ -117,6 +117,36 @@ class TestValidTable:
         result = config.parse_aliases_registry(_wrap_with_aliases(body))
         assert {v[0] for v in result.values()} == {"pm", "worker", "verifier", "dm"}
 
+    def test_human_alias_accepted_table_form(self):
+        """#12800: a `human` non-agent alias parses in table form."""
+        body = (
+            "| alias | role-class | L3 domain |\n"
+            "|---|---|---|\n"
+            "| pm | pm | — |\n"
+            "| wallace | human | — |\n"
+        )
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result["wallace"] == ("human", None)
+
+    def test_multiple_human_aliases_accepted_table_form(self):
+        """#12800: multiple humans supported, like multi-instance workers."""
+        body = (
+            "| alias | role-class | L3 domain |\n"
+            "|---|---|---|\n"
+            "| pm | pm | — |\n"
+            "| wallace | human | — |\n"
+            "| alice | human | — |\n"
+        )
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result["wallace"][0] == "human"
+        assert result["alice"][0] == "human"
+
+    def test_human_alias_accepted_bullet_form(self):
+        """#12800: a `human` non-agent alias parses in legacy bullet form."""
+        body = "- **pm**: pm\n- **human**: human\n"
+        result = config.parse_aliases_registry(_wrap_with_aliases(body))
+        assert result["human"] == ("human", None)
+
 
 # ---------------------------------------------------------------------------
 # Diagnostic-on-malformed cases (one per AC error bullet + boundary cases)
@@ -231,10 +261,29 @@ class TestMalformedInputs:
 class TestExportedConstants:
 
     def test_role_classes_frozenset_matches_spec(self):
-        """COMPOSE-ARCHITECTURE §3.0 enumerates the 4 L2 classes."""
+        """COMPOSE-ARCHITECTURE §3.0: 4 agent classes + non-agent `human` (#12800)."""
         assert config.ALIASES_ROLE_CLASSES == frozenset(
+            {"pm", "worker", "verifier", "dm", "human"}
+        )
+
+    def test_agent_role_classes_are_the_four_spawned_classes(self):
+        """#12800: only these four are spawned/supervised agents."""
+        assert config.AGENT_ROLE_CLASSES == frozenset(
             {"pm", "worker", "verifier", "dm"}
         )
+
+    def test_human_is_non_agent_role_class(self):
+        """#12800: `human` is routable but not an agent."""
+        assert config.NON_AGENT_ROLE_CLASSES == frozenset({"human"})
+        assert "human" not in config.AGENT_ROLE_CLASSES
+        assert "human" in config.ALIASES_ROLE_CLASSES
+
+    def test_aliases_role_classes_is_agent_plus_non_agent_union(self):
+        """#12800: the accepted set is exactly the union (no overlap)."""
+        assert config.ALIASES_ROLE_CLASSES == (
+            config.AGENT_ROLE_CLASSES | config.NON_AGENT_ROLE_CLASSES
+        )
+        assert not (config.AGENT_ROLE_CLASSES & config.NON_AGENT_ROLE_CLASSES)
 
     def test_l3_none_sentinel_is_em_dash(self):
         assert config.ALIASES_L3_NONE_SENTINEL == "—"

@@ -36,7 +36,7 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Live status bar** — emoji-rich status line showing what each agent is doing, backlog counts, context pressure, and cycle countdown
 - **Singleton agent lifecycle** — the harness guarantees exactly one instance per agent. Agents are never killed mid-work — the harness waits for the current cycle to complete before restarting. Crash recovery is automatic via `.harness-state.json` — if the harness restarts, it knows which agents were running and respawns them. Dead agents are automatically re-booted
 - **Pre-flight checks** — the harness verifies prerequisites (gh auth) at startup. Per-cycle checks (correct branch, git pull) run automatically via `cycle_pre.py`
-- **Auto-merge** — when QA verifies an item (both bug fixes and tasks), the harness automatically merges the PR so you don't have to. Agents request merges via the harness API; the harness executes the merge, auto-recomposes agent templates if the PR touched template files, and reboots only the affected agents. Items tagged `merge:manual` are skipped and still require your review. Controlled via `Auto Merge` in `config.md`
+- **Auto-merge** — when QA verifies an item (both bug fixes and tasks), the harness automatically merges the PR so you don't have to. Agents request merges via the harness API; the harness executes the merge, and if the PR touched agent templates it has each affected agent recompose its own instructions from the updated source and restart, so only those agents are refreshed. Items tagged `merge:manual` are skipped and still require your review. Controlled via `Auto Merge` in `config.md`
 - **External code review** — before marking work as ready for QA, the dev agent runs an automated code review against the changed files. Findings are dispositioned (fix, file to PM, or justified-ignore) and posted as PR comments for audit. If a design-level flaw is found, the task is sent back to planning automatically. Configure the review model in `config.md` via `Code Review Model` under the `Model Routing` section — defaults to Claude, works with any supported model
 - **Multi-model subagents** — route token-heavy tasks (research, discussion prep, test plans, improvement scanning, code review) to external models like DeepSeek v4 Pro via API, keeping Claude for the main loop and comprehension testing. The setup wizard guides you through provider selection, API key storage (in `~/.squidsquad/secrets`), and optional connection validation. Configure per-task model routing in `config.md` under `Model Routing`. Falls back to Claude automatically if the external model is unavailable
 - **Pipeline self-healing** — PM's pipeline sentinel detects 6 types of stuck tasks (orphaned PRs, shipped-without-merge, stalled approvals, dead-agent work items, and more). When detected, it unsticks the item immediately and auto-files a root-cause bug so the gap gets fixed permanently
@@ -48,8 +48,9 @@ You have a codebase and Claude Code. You can fix one bug at a time. But what if 
 - **Per-agent working directories** — the setup wizard automatically creates isolated git clones for each non-PM agent, so agents can run concurrently without git conflicts. PM stays in the primary repo as the coordination hub. Backward compatible with single-repo setups
 - **Auto versioning** — ships are counted and minor versions auto-bump when thresholds are met
 - **Communication abstraction layer** — a platform-agnostic adapter interface for real-time agent communication. Agents can send messages, create threads, poll for responses, and share files through any supported platform (Telegram, Slack, Discord) without knowing the underlying service. Ships with a NullAdapter so agents work identically whether comms are configured or not. Add a `## Communication` section to `config.md` to enable a provider
-- **Harness** — a FastAPI-based lifecycle manager that owns the full agent lifecycle. The harness spawns agents via thin launchers into independent terminal windows, monitors health via PID tracking, and exposes a REST API for start/stop/restart/status/merge operations. `GET /status` reports a `code_version` block (squidsquad version + git SHA + branch + dirty flag, captured at boot) and `GET /` returns the same slim version triple — so you can verify which code a long-running harness is actually loaded with, without restarting. It also owns PR merging and template recomposition — when a merge touches agent templates, the harness automatically runs `compose.py deploy-all` and reboots only the affected agents, so templates are always current. Crash recovery via `.harness-state.json` — the harness remembers which agents were running. Ctrl+C graceful shutdown (single=finish cycle, double=warn, triple=force exit). Port discovery via `.squidsquad/.harness-port`. Use the CLI (`squidsquad_cli.py`) or call the API directly
+- **Harness** — a FastAPI-based lifecycle manager that owns the full agent lifecycle. The harness spawns agents via thin launchers into independent terminal windows, monitors health via PID tracking, and exposes a REST API for start/stop/restart/status/merge operations. `GET /status` reports a `code_version` block (squidsquad version + git SHA + branch + dirty flag, captured at boot) and `GET /` returns the same slim version triple — so you can verify which code a long-running harness is actually loaded with, without restarting. It also owns PR merging and template recomposition — when a merge touches agent templates, the harness has each affected agent recompose its own instructions from the updated source on restart (a pull-first, per-agent refresh) and restarts only those agents, so templates are always current. Crash recovery via `.harness-state.json` — the harness remembers which agents were running. Ctrl+C graceful shutdown (single=finish cycle, double=warn, triple=force exit). Port discovery via `.squidsquad/.harness-port`. Use the CLI (`squidsquad_cli.py`) or call the API directly
 - **Real-time agent coordination** — agents react to each other's events without waiting for the next cycle. When QA verifies a fix, the skill agent knows immediately. When a PR is merged, PM transitions the issue within seconds. High-confidence patterns (like PR merge → ship) trigger automatically; lower-confidence events are surfaced to agents for intelligent decision-making. If the event bus is unreachable, agents fall back gracefully to standard 30-minute cycle polling — no breakage
+- **Verbose Mode** — a config-gated toggle for how much your agents narrate to their terminal. Off by default (concise, plain-language output); switch it on in `config.md` to watch every step of every cycle in full detail. Read once at startup — toggle by editing config and restarting. See [Verbose Mode](#verbose-mode) below
 
 ---
 
@@ -80,11 +81,31 @@ python references/scripts/squidsquad_cli.py shutdown   # Stop agents + exit harn
 
 Requires the Python packages in `requirements.txt` (`pip install -r requirements.txt`) — the setup wizard offers to install these for you. The harness owns the full agent lifecycle — starting, stopping, restarting, health monitoring, and crash recovery are all managed through a single process. Each agent runs in its own terminal window; if the harness crashes, your agents keep running. Press Ctrl+C once for graceful shutdown (agents finish their current cycle), twice for a warning, three times for immediate exit.
 
-**Just the harness?** For debugging or a hands-on launch, `start-harness.sh` (macOS/Linux) and `start-harness.bat` (Windows — opens a visible window you can watch) start the harness on its own, with no clone-sync and no dependency install. Most people should use `squidsquad_cli.py start` above, which boots the harness *and* all your agents.
+Most people should use `squidsquad_cli.py start` above, which boots the harness *and* all your agents — and it now runs the harness under the **supervised launcher** so the harness can restart itself in place (an agent or operator calls `POST /restart`; the harness exits and is automatically relaunched, with all agents respawned).
+
+**Just the harness?** For a hands-on, self-healing launch, `restart-harness.sh` (macOS/Linux) and `restart-harness.bat` (Windows — opens a visible window you can watch) run the harness in an auto-relaunch loop: a restart signal (`POST /restart` → exit 42) relaunches it, a clean stop (`POST /shutdown` / Ctrl+C → exit 0) does not, and a crash-loop guard stops endless respawns. This is the documented default for running the harness directly on an install. The older `start-harness.sh` / `start-harness.bat` are **one-shot** (no relaunch) — keep them for quick debugging or the greenfield smoke test, but prefer the supervised launcher for anything that needs self-healing restart. Both skip clone-sync and dependency install.
 
 ### 3. Work
 
 Talk to PM to file bugs, request features, and approve plans. Everything else happens automatically.
+
+---
+
+## Verbose Mode
+
+By default your agents keep their terminal output high-level: short, plain-language status lines that say what happened, not how. **Verbose Mode** flips that — when it's on, each agent narrates everything it does, step by step, so you can watch exactly how SquidSquad works under the hood.
+
+- **Off (default)** — agents report only what matters, in plain language (e.g. `🦑 Activity detected — nothing needs attention`). Best for everyday use and the least noise.
+- **On** — agents narrate every step of every cycle in full detail. Great for learning how the team operates, live demos, or understanding why an agent did something. Expect a lot more output, and higher token usage — it's an explicit trade you opt into.
+
+**To turn it on or off**, edit `.squidsquad/config.md`, set the `Verbose Mode` section's `Enabled` to `yes` or `no`, then restart the agents:
+
+```
+## Verbose Mode
+- **Enabled**: no
+```
+
+The flag is read **once when each agent starts**, so a restart is what makes a change take effect — the same way switching an agent's wake mode does. New installs default to `no`; this only affects the agents in your own install.
 
 ---
 
@@ -149,6 +170,7 @@ This project is developed by SquidSquad itself. The [CHANGELOG](./CHANGELOG.md) 
 | Document | Description |
 |----------|-------------|
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | How SquidSquad works under the hood |
+| [Configuration Reference](docs/CONFIGURATION.md) | Every `config.md` setting explained — what to set at install vs tune later |
 | [Agent Runtime](docs/AGENT-RUNTIME.md) | How agents coordinate in real-time (event bus, lifecycle, triggers) |
 | [DM Architecture](docs/DM-ARCH.md) | The Delivery Manager as a layered role: generic delivery spine (L2), domain mechanics (L3), project release policy (L4) |
 | [Sub-Skill Guide](docs/sub-skill-guide.md) | Creating and contributing sub-skills |

@@ -5,6 +5,7 @@ Single source of truth for git operations used by agents.
 
 Usage:
     python scripts/git_ops.py pull                      # git pull (merge)
+    python scripts/git_ops.py ensure-main-and-pull [role]  # on-main + pull before a recompose (#12906)
     python scripts/git_ops.py add-all                   # git add -A
     python scripts/git_ops.py commit <role> <message>    # git commit with role prefix
     python scripts/git_ops.py push                      # git push
@@ -24,6 +25,7 @@ Usage:
     python scripts/git_ops.py last-hash                 # print last commit hash (short)
     python scripts/git_ops.py check-real-conflict <base> <head>  # real conflict? exit 0=clean/1=conflict/2=err
     python scripts/git_ops.py guard-staged-state         # pre-commit hook: unstage state files on a feature branch (fail-open)
+    python scripts/git_ops.py guard-galaxy-frontmatter   # pre-commit hook: block a staged galaxy note missing YAML frontmatter (fail-closed on violation, fail-open on error)
     python scripts/git_ops.py install-hooks              # activate the pre-commit state guard (core.hooksPath)
     python scripts/git_ops.py --help
 """
@@ -32,7 +34,21 @@ import io
 import json
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
+
+# #13211 — serialize ensure_main_and_pull across ALL in-process callers (the
+# L4 watcher's per-role-class freshen bursts AND the post-merge deploy-all path,
+# both in the harness process). Concurrent main-checkout + pull on the SAME
+# clone collide on .git/index.lock (#13197 fixed this for the watcher-only case
+# via a watcher-local lock; the deploy path called ensure_main_and_pull outside
+# it). Hoisting the lock here covers every caller from one place. ensure_main_
+# and_pull never re-enters itself (it calls _run/pull only), so a plain
+# non-reentrant Lock cannot self-deadlock. Threading-scoped (not cross-process):
+# the racing callers are threads in the one harness process; the CLI caller is a
+# separate process not part of that race.
+_ENSURE_MAIN_LOCK = threading.Lock()
 
 # Ensure stdout/stderr can handle UTF-8 on Windows (cp1252 consoles choke on em dashes etc.)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -190,12 +206,71 @@ def _emit(event_type, payload=None, cycle_number=None, role=None):
         pass
 
 
+def _stash_top_ref():
+    """SHA of the top stash entry (``refs/stash``), or ``""`` if no stash exists.
+
+    Used to detect whether a ``git stash`` actually created a NEW entry: on a
+    CLEAN working tree ``git stash`` is a no-op that still exits 0, so a
+    subsequent pop would apply a PRE-EXISTING (possibly ancient) stash —
+    splattering ``<<<<<<<`` conflict markers tree-wide and breaking compose
+    (#13167). Callers compare this before/after their stash and only pop when
+    the ref changed (i.e. they created the stash they are about to pop).
+    """
+    r = _run("git rev-parse --quiet --verify refs/stash", check=False)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def _safe_stash_pop():
+    """Pop the most recent stash, leaving NO conflict markers behind (#13045).
+
+    A plain ``git stash pop`` that conflicts writes ``<<<<<<< / ======= /
+    >>>>>>>`` merge markers into the unmerged working-tree files and KEEPS the
+    stash. The old recovery only ran ``git stash drop`` — which removes the
+    stash entry but NOT the markers already written, so a state file like
+    ``config.md`` was left corrupt → ``compose.py`` failed on every recompose →
+    a fleet-wide compose-failed loop.
+
+    On conflict we instead restore every conflicted (unmerged) path to the
+    pulled ``HEAD`` version — the just-pulled/checked-out state is authoritative
+    for the state files clone-sync touches (e.g. config.md's ship counter, whose
+    live value lives on main) — then drop the now-applied stash. This discards
+    the stashed local version of the conflicting paths, which is exactly the
+    stale local change that caused the conflict.
+
+    Returns True if the pop applied cleanly, False if it conflicted and was
+    force-resolved to HEAD.
+    """
+    pop = _run("git stash pop", check=False)
+    if pop.returncode == 0:
+        return True
+    conflicted = _run("git diff --name-only --diff-filter=U", check=False)
+    unmerged = [p.strip() for p in conflicted.stdout.splitlines() if p.strip()]
+    if not unmerged:
+        # Pop failed for a NON-conflict reason (no stash entry, or an unrelated
+        # git error) — the stash, if any, was NOT applied. Do NOT drop it: that
+        # would discard un-applied stashed work. Leave it intact and report the
+        # pop did not succeed.
+        return False
+    for path in unmerged:
+        _run_list(["git", "checkout", "HEAD", "--", path], check=False)
+    # A real conflict: git applied the stash WITH markers and kept it. Now that
+    # the conflicted paths are restored to HEAD, drop the retained stash.
+    _run("git stash drop", check=False)
+    return False
+
+
 def pull(role=None):
     """Pull with merge (#5378, #5445).
 
     Returns True on success, False on failure. Never crashes.
     """
-    result = _run("git pull", check=False)
+    # #13267: pin to a MERGE pull (never rebase). Under a clone-local or global
+    # `pull.rebase=true` a bare `git pull` would REBASE; a first-pull rebase
+    # conflict leaves a REBASE-in-progress state that the subsequent `git stash`
+    # cannot work over and that the #13261 recovery (`git merge --abort`) cannot
+    # clear. `--no-rebase` keeps the first pull consistent with the pinned retry
+    # below and with the project's always-merge-never-rebase rule.
+    result = _run("git pull --no-rebase", check=False)
     if result.returncode == 0:
         print("Pulled")
         _emit("git-pull", {"result": "ok"}, role=role)
@@ -208,32 +283,111 @@ def pull(role=None):
         _emit("git-pull", {"result": "ok"}, role=role)
         return True
 
-    # Try stash + pull + pop
+    # Try stash + pull + pop. #13167: guard against `git stash` being a no-op
+    # on a clean tree (exits 0 but creates nothing) — popping then would apply a
+    # PRE-EXISTING ancient stash and write conflict markers tree-wide, breaking
+    # compose. Only pop when our stash actually created a new entry.
+    pre_stash_ref = _stash_top_ref()
     stash_result = _run("git stash", check=False)
     if stash_result.returncode != 0:
         print("WARNING: git stash failed -- skipping pull", file=sys.stderr)
         return False
+    stashed = _stash_top_ref() != pre_stash_ref
 
-    retry = _run("git pull", check=False)
+    # #13261: pin the retry to a MERGE pull (never rebase). The recovery below
+    # cleans up a failed retry with `git merge --abort`, which only clears a
+    # MERGING state — under a clone-local `pull.rebase=true` the retry would
+    # rebase and leave a REBASE state the abort cannot clear. `--no-rebase`
+    # guarantees the abort verb matches what a failed retry leaves behind, and
+    # matches the project's "always merge, never rebase" rule.
+    retry = _run("git pull --no-rebase", check=False)
     if retry.returncode != 0:
-        # Restore stashed changes and report failure
-        _run("git stash pop", check=False)
+        # #13261: the retry pull may have STARTED a merge and hit a
+        # committed-divergence conflict, leaving the clone MERGING (MERGE_HEAD +
+        # conflict markers). Abort that merge FIRST — otherwise (a) the markers
+        # break the next compose, (b) _safe_stash_pop below misreads the merge's
+        # unmerged paths as a stash-pop conflict and DROPS our stash, and (c) a
+        # lingering MERGE_HEAD makes the next op needing a clean tree fail. The
+        # abort is a harmless no-op (non-zero, ignored) when no merge is in
+        # progress (the pull failed before merging). Mirrors the same fix in the
+        # deploy path's _safe_pull_in_clone (#13215). The pull still FAILED →
+        # report failure after restoring our stash.
+        _run("git merge --abort", check=False)
+        # Restore OUR stashed changes (only if we actually created one) and
+        # report failure. Use the marker-safe pop (#13045), never a raw pop.
+        if stashed:
+            _safe_stash_pop()
         print(f"WARNING: git pull failed after stash -- {retry.stderr.strip()}",
               file=sys.stderr)
         return False
 
-    pop_result = _run("git stash pop", check=False)
-    if pop_result.returncode != 0:
-        _log_diagnostic("warning", "stash pop failed during pull — possible merge conflict")
-        # Drop the failed stash to prevent leak accumulation (#4829)
-        _run("git stash drop", check=False)
-        print("WARNING: stash pop failed -- dropped stale stash entry.", file=sys.stderr)
-        print("Pulled (stash pop conflict -- stale stash dropped)")
-        _emit("git-pull", {"result": "stash"}, role=role)
-    else:
+    if not stashed:
+        # Clean tree — `git stash` stashed nothing, so there is nothing of ours
+        # to pop. Do NOT pop a pre-existing stash (#13167).
+        print("Pulled (no local changes to stash)")
+    elif _safe_stash_pop():
         print("Pulled (stashed and popped)")
-        _emit("git-pull", {"result": "stash"}, role=role)
+    else:
+        # #13045: a conflicted pop is resolved to the pulled HEAD (markers
+        # removed) and the stash dropped (#4829 leak-prevention preserved),
+        # so config.md is never left with `<<<<<<<` markers that break compose.
+        _log_diagnostic("warning",
+                        "stash pop conflict during pull — restored conflicted "
+                        "paths to pulled HEAD and dropped stash (#13045)")
+        print("WARNING: stash pop conflict -- conflicts resolved to pulled "
+              "state, stash dropped.", file=sys.stderr)
+        print("Pulled (stash pop conflict -- resolved to pulled state)")
+    _emit("git-pull", {"result": "stash"}, role=role)
     return True
+
+
+def ensure_main_and_pull(role=None):
+    """Put the clone on ``main`` and pull origin before a recompose/deploy.
+
+    #12906 (Phase 1 of #12895): every harness-side recompose path
+    (`compose.py deploy*` driven by the L4 file-watcher and the
+    post-merge deploy-all) MUST run against *current* source. A clone
+    that is on a feature branch or behind origin would otherwise
+    regenerate composed ``CLAUDE.md`` from stale source and push that
+    revert fleet-wide. This guard closes the root condition: ensure
+    main, then merge-pull origin.
+
+    Returns ``(ok: bool, detail: str)``. Never raises — the contract is
+    enforced here (a blanket ``try/except``) so every caller, including
+    the harness merge path that calls this directly, can trust ``ok`` and
+    abort the recompose on ``ok=False`` rather than wrap defensively. On
+    ``ok=False`` the agents keep their last-known-good composed output
+    until a later recompose succeeds.
+    """
+    try:
+        # #13211 — single-flight the checkout+pull across every in-process
+        # caller (watcher freshen bursts + post-merge deploy-all) so concurrent
+        # git on the shared clone can't collide on .git/index.lock. Held across
+        # the subprocess git calls below — exactly the serialization #13197
+        # established (it just lived in the watcher before, missing the deploy
+        # path). Inside the try so the "Never raises" contract still holds.
+        with _ENSURE_MAIN_LOCK:
+            result = _run("git branch --show-current", check=False)
+            branch = result.stdout.strip() if result.returncode == 0 else ""
+            if branch != "main":
+                sw = _run_list(["git", "checkout", "main"], check=False)
+                if sw.returncode != 0:
+                    detail = (sw.stderr or sw.stdout or "").strip()[:200]
+                    print(
+                        f"WARNING: ensure_main_and_pull could not switch to main "
+                        f"from {branch!r}: {detail}",
+                        file=sys.stderr,
+                    )
+                    return False, f"checkout-main-failed (on {branch!r})"
+            if not pull(role=role):
+                return False, "pull-failed"
+            return True, "on-main-synced"
+    except Exception as exc:  # noqa: BLE001 — "Never raises" is the contract
+        print(
+            f"WARNING: ensure_main_and_pull raised unexpectedly: {exc!r}",
+            file=sys.stderr,
+        )
+        return False, f"unexpected: {exc!r}"
 
 
 def add_all():
@@ -404,12 +558,21 @@ def pr_ready(pr_number):
     return True
 
 
-def pr_merge(pr_number, strategy="squash"):
+def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
 
     Checks PR state first — if already merged, returns success.
     On merge conflict or unexpected failure, returns failure with details.
+
+    #10540: "Base branch was modified" is a TRANSIENT batch-ship race (not a
+    real conflict) — when DM drains a deep ship queue, each successful merge
+    moves main's SHA, so PRs dispatched against the old base are rejected until
+    GitHub recomputes mergeability; the same PR retried alone succeeds. The
+    gh-CLI path retries that specific error up to ``_max_base_retries`` times
+    (``_base_retry_delay`` seconds apart, to let GitHub settle), while a real
+    ``merge conflict`` stays terminal (routed back to in-progress for rebase,
+    never retried). The retry knobs are parameters for deterministic testing.
     """
     try:
         from forge_adapter import get_adapter, _read_forge_config
@@ -454,33 +617,49 @@ def pr_merge(pr_number, strategy="squash"):
         except (json.JSONDecodeError, AttributeError):
             pass
 
-    # Attempt merge
+    # Attempt merge, retrying ONLY the transient "Base branch was modified"
+    # batch-ship race (#10540). A real merge conflict is terminal.
     merge_args = ["gh", "pr", "merge", str(pr_number), f"--{strategy}", "--delete-branch"]
-    result = _run_list(merge_args, check=False)
-    if result.returncode == 0:
-        # pr-merge event removed (#6126) — harness emits pr-merged instead
-        print(f"PR #{pr_number} merged ({strategy})")
-        # Extract linked issue number from branch name
-        branch_result = _run_list(
-            ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
-            check=False,
-        )
-        if branch_result.returncode == 0:
-            try:
-                branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
-                # Branch format: squidsquad/role/NUMBER
-                parts = branch_name.split("/")
-                if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
-                    issue_num = parts[-1]
-                    print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
-            except (json.JSONDecodeError, AttributeError, IndexError):
-                pass
-        return True, "merged"
-    else:
+    for attempt in range(_max_base_retries + 1):
+        result = _run_list(merge_args, check=False)
+        if result.returncode == 0:
+            # pr-merge event removed (#6126) — harness emits pr-merged instead
+            print(f"PR #{pr_number} merged ({strategy})")
+            # Extract linked issue number from branch name
+            branch_result = _run_list(
+                ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
+                check=False,
+            )
+            if branch_result.returncode == 0:
+                try:
+                    branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
+                    # Branch format: squidsquad/role/NUMBER
+                    parts = branch_name.split("/")
+                    if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
+                        issue_num = parts[-1]
+                        print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
+                except (json.JSONDecodeError, AttributeError, IndexError):
+                    pass
+            return True, "merged"
+
         error = result.stderr.strip()
-        if "merge conflict" in error.lower() or "not mergeable" in error.lower():
+        error_lower = error.lower()
+        # Real conflict — terminal, never retried (routes back for rebase).
+        if "merge conflict" in error_lower or "not mergeable" in error_lower:
             print(f"PR #{pr_number} has merge conflicts", file=sys.stderr)
             return False, "merge conflict"
+        # Transient batch-ship race — an earlier merge moved main's SHA. Retry
+        # after a short settle so GitHub recomputes mergeability against the new
+        # base (#10540). Checked AFTER the conflict guard so a real conflict
+        # never masquerades as the race.
+        if "base branch was modified" in error_lower and attempt < _max_base_retries:
+            print(
+                f"PR #{pr_number}: base branch moved (batch-ship race) — "
+                f"retry {attempt + 1}/{_max_base_retries} after {_base_retry_delay}s",
+                file=sys.stderr,
+            )
+            time.sleep(_base_retry_delay)
+            continue
         print(f"ERROR: PR #{pr_number} merge failed: {error}", file=sys.stderr)
         return False, f"merge failed: {error}"
 
@@ -568,16 +747,25 @@ def _safe_checkout(target_branch):
     result = _run_list(["git", "checkout", target_branch], check=False)
     if result.returncode == 0:
         return True
-    # Unstaged changes blocking checkout — stash and retry
+    # Checkout failed (commonly unstaged changes, but possibly a non-dirty
+    # reason e.g. branch-not-found) — stash anything present and retry. #13167:
+    # guard the stash so a no-op stash (clean tree / non-dirty failure) never
+    # leads to popping a PRE-EXISTING ancient stash. Only pop what we stashed.
+    pre_stash_ref = _stash_top_ref()
     _run("git stash -q", check=False)
+    stashed = _stash_top_ref() != pre_stash_ref
     result = _run_list(["git", "checkout", target_branch], check=False)
     if result.returncode != 0:
-        # Checkout failed — pop stash to restore original branch state
-        _run("git stash pop -q", check=False)
+        # Checkout failed — restore original branch state. Use the conflict-safe
+        # pop so a conflict here never leaves `<<<<<<<` markers either (#13045).
+        if stashed:
+            _safe_stash_pop()
         print(f"ERROR: could not switch to {target_branch}: {result.stderr}", file=sys.stderr)
         return False
-    # Checkout succeeded — pop stash on the target branch
-    _run("git stash pop -q", check=False)
+    # Checkout succeeded — pop OUR stash on the target branch (conflict-safe,
+    # #13045) only if we created one (#13167).
+    if stashed:
+        _safe_stash_pop()
     return True
 
 
@@ -693,6 +881,11 @@ def _role_owned_patterns(role):
         # gets written locally for whatever in-cycle scripts read it,
         # but it never enters the index again.
         ".squidsquad/.event-state.json",
+        # #12823 — the ship counter lives in its own file now (split out of
+        # config.md so config.md can merge 3-way). It's DM-written but listed in
+        # common so whatever role's cycle writes it (DM bump/reset, the #9772
+        # reconcile) can also stage it via the role-scoped commit path.
+        ".squidsquad/.ship-counter",
         ".squidsquad/vault/",
     ]
     role_specific = {
@@ -708,19 +901,13 @@ def _role_owned_patterns(role):
         # intentional: both roles legitimately mutate different fields
         # (PM: own-domain housekeeping; DM: ship counter + flags).
         #
-        # KNOWN LIMITATION (#9474 follow-up): config.md has
-        # `merge=ours` set in `.gitattributes`. Concurrent edits from
-        # PM and DM can silently overwrite each other's changes via
-        # the "ours" merge driver. The same hazard already existed
-        # under PM-only ownership (PM cycles in parallel clones, plus
-        # compose.py deploy contamination on feature branches —
-        # already guarded by `commit_code`'s checkout-from-working-
-        # branch step). The current single-clone, serial-cycle setup
-        # in `.local-config` makes the race unlikely. If parallel
-        # multi-clone execution is enabled later, split the DM-only
-        # fields (ship-counter + flags) into a separate file with
-        # exclusive ownership, OR convert config.md to a structured
-        # format that tolerates `merge=union`.
+        # RESOLVED (#12823): config.md previously had `merge=ours`, which
+        # silently dropped any other agent's concurrent edit (the all-or-nothing
+        # ours driver). The ship counter — the ONLY field that needed ours-wins
+        # protection — was split into its own `.squidsquad/.ship-counter` file
+        # (still merge=ours), so config.md now merges 3-way: real same-field
+        # conflicts surface, non-overlapping edits (PM flag + DM flag) merge
+        # cleanly. PM and DM co-ownership of config.md is now safe.
         "dm": [
             "README.md",
             "CHANGELOG.md",
@@ -728,7 +915,15 @@ def _role_owned_patterns(role):
             "SKILL.md",
             ".squidsquad/config.md",
         ],
-        # qa: nothing beyond common
+        # qa (verifier) authors comprehension specs under tests/comprehension/
+        # (#9184 — the verifier derives CQ specs; skill never self-authors them).
+        # These are permanent regression assets that MUST land in the repo, but
+        # tests/comprehension/ is outside .squidsquad/ so it matched no pattern
+        # and commit_role_scoped classified every new spec as "foreign" — leaving
+        # it untracked until a manual "recover N-behind" rescue commit (#13212).
+        # Adding it here lets the verifier's normal post-cycle commit stage its
+        # own specs. Scoped to qa only: no other role authors comprehension specs.
+        "qa": ["tests/comprehension/"],
     }
     return common + role_specific.get(role, [])
 
@@ -1144,6 +1339,97 @@ def guard_staged_state():
     return state_staged
 
 
+def _galaxy_frontmatter_violation(content):
+    """Return a one-line reason string if CONTENT fails the galaxy-frontmatter
+    contract, else None. Mirrors ``tests/test_vault.py::TestGalaxyNotes::
+    test_galaxy_notes_have_frontmatter`` EXACTLY so the guard never rejects a
+    note the static gate would accept (no false positives)."""
+    if not content.startswith("---"):
+        return "missing YAML frontmatter (must start with '---')"
+    parts = content.split("---", 2)
+    if len(parts) < 3:
+        return "malformed frontmatter ('---' block not closed)"
+    fm_keys = set()
+    for line in parts[1].strip().splitlines():
+        if ":" in line:
+            fm_keys.add(line.split(":", 1)[0].strip())
+    if not fm_keys:
+        return "empty frontmatter (no keys)"
+    if "type" not in fm_keys:
+        return "missing required 'type' key in frontmatter"
+    return None
+
+
+def guard_galaxy_frontmatter():
+    """Pre-commit guard: reject staged ``vault/galaxy/*.md`` notes that lack a
+    valid YAML frontmatter block (#12905).
+
+    Galaxy notes committed without frontmatter red the shared
+    ``tests/test_vault.py::TestGalaxyNotes`` static gate for the WHOLE fleet
+    (every agent's static run hits it) until someone notices and hand-fixes the
+    note — a recurring, cross-role hygiene drain with a stash/merge-race risk.
+    The root gap is no write-time enforcement; this is the deterministic
+    backstop, independent of which agent/sub-skill wrote the note.
+
+    Validates the STAGED blob (``git show :<path>``) — exactly what the commit
+    will record — against the test contract via ``_galaxy_frontmatter_violation``.
+    Returns the list of ``(path, reason)`` violations (empty = OK).
+
+    FAIL-CLOSED on a real violation: the CLI wrapper exits 1 so the commit is
+    blocked, stopping the bad note at the source. FAIL-OPEN on any guard-internal
+    error (the CLI wrapper catches and exits 0), so a guard bug can NEVER wedge
+    the fleet's commits — the static gate remains the safety net in that case.
+    """
+    staged = _run_list(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        check=False,
+    )
+    if staged.returncode != 0:
+        return []
+    violations = []
+    for raw in staged.stdout.splitlines():
+        p = raw.strip().strip('"')
+        if not p:
+            continue
+        norm = p.replace("\\", "/")
+        # Only galaxy notes under the ACTUAL vault location, *.md. Anchored to
+        # .squidsquad/vault/galaxy/ so an unrelated path that merely contains
+        # 'vault/galaxy' elsewhere (e.g. docs/vault/galaxy/architecture.md) is
+        # never wrongly blocked — the static gate only ever checks
+        # .squidsquad/vault/galaxy/ (DS-12905 Finding 2).
+        if ".squidsquad/vault/galaxy/" not in norm or not norm.endswith(".md"):
+            continue
+        name = norm.rsplit("/", 1)[-1]
+        # Exclude templates (scaffolding). .gitkeep is already filtered by the
+        # .md check above, so no separate name-list is needed (DS-12905 F3).
+        if name.endswith("-template.md"):
+            continue
+        blob = _run_list(["git", "show", f":{p}"], check=False)
+        if blob.returncode != 0:
+            # Unreadable staged blob — fail-open for this path; the static gate
+            # still catches a malformed note.
+            continue
+        reason = _galaxy_frontmatter_violation(blob.stdout)
+        if reason:
+            violations.append((p, reason))
+    if violations:
+        print(
+            f"ERROR: pre-commit guard BLOCKED commit — {len(violations)} galaxy "
+            f"note(s) lack valid YAML frontmatter (#12905; a frontmatter-less "
+            f"note reds tests/test_vault.py for the whole fleet):",
+            file=sys.stderr,
+        )
+        for p, reason in violations:
+            print(f"  {p}: {reason}", file=sys.stderr)
+        print(
+            "  Fix: prepend a '---' frontmatter block with at least a 'type:' "
+            "key (see references/vault-templates/galaxy-template.md), then "
+            "re-stage and commit.",
+            file=sys.stderr,
+        )
+    return violations
+
+
 def install_hooks():
     """Activate the tracked pre-commit guard by pointing core.hooksPath at it (#11511).
 
@@ -1254,11 +1540,15 @@ def main():
     # install_hooks() explicitly in dispatch -- self-healing first would emit a
     # duplicate foreign-hooksPath WARNING). Keeps the commit path lean and
     # avoids re-checking what's already active (#11511).
-    if cmd not in ("guard-staged-state", "install-hooks"):
+    if cmd not in ("guard-staged-state", "guard-galaxy-frontmatter", "install-hooks"):
         _ensure_hooks_installed()
 
     if cmd == "pull":
         pull(role=rest[0] if rest else None)
+    elif cmd == "ensure-main-and-pull":
+        ok, detail = ensure_main_and_pull(role=rest[0] if rest else None)
+        print(detail)
+        sys.exit(0 if ok else 1)
     elif cmd == "add-all":
         add_all()
     elif cmd == "commit":
@@ -1358,6 +1648,29 @@ def main():
     elif cmd == "guard-staged-state":
         guard_staged_state()
         sys.exit(0)            # FAIL-OPEN: the guard never blocks a commit
+    elif cmd == "guard-galaxy-frontmatter":
+        # FAIL-CLOSED on a confirmed violation; FAIL-OPEN on any guard-internal
+        # error (a guard bug never wedges the fleet's commits; the static gate
+        # stays the safety net).
+        try:
+            violations = guard_galaxy_frontmatter()
+        except Exception as e:  # noqa: BLE001 — defensive fail-open
+            print(
+                f"WARNING: galaxy-frontmatter guard errored (fail-open, commit "
+                f"allowed): {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(0)
+        if violations:
+            # The pre-commit shim decides to BLOCK on THIS explicit marker, NOT
+            # on the exit code — a module-level python crash (bad import/syntax)
+            # also exits 1, and keying the block on the exit code would let such
+            # a crash wedge every commit fleet-wide (DS-12905 Finding 1). The
+            # marker is only ever emitted here, after the guard ran and confirmed
+            # a real violation.
+            print("__SQUIDSQUAD_GALAXY_FM_BLOCK__", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
     elif cmd == "install-hooks":
         ok = install_hooks()
         sys.exit(0 if ok else 1)

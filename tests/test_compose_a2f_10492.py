@@ -168,6 +168,45 @@ def test_deploy_alias_v2_output_contains_six_canonical_h2_sections(tmp_path):
     ]
 
 
+def test_deploy_alias_v2_skips_human_non_agent_12800(tmp_path, capsys):
+    """#12800 AC2: a non-agent `human` alias has no L1-L4 sources and no
+    composed CLAUDE.md. deploy_alias_v2 must skip it — return None, write no
+    output, and print a skip notice — instead of walking nonexistent role
+    sources (which would sys.exit(1))."""
+    _stage_minimal_install(tmp_path, alias="pm", role="pm")
+    registry = _mk_registry({"pm": "pm", "wallace": "human"})
+    result = compose.deploy_alias_v2("wallace", registry=registry, target_root=tmp_path)
+    assert result is None
+    assert not (tmp_path / ".squidsquad" / "wallace" / "CLAUDE.md").exists()
+    assert not (tmp_path / ".squidsquad" / "wallace").exists()
+    out = capsys.readouterr().out
+    assert "non-agent role-class 'human'" in out
+
+
+def test_deploy_alias_v2_still_composes_agent_alias_alongside_human_12800(tmp_path):
+    """#12800 AC2: agent aliases still compose normally when a human alias is
+    also present in the registry."""
+    _stage_minimal_install(tmp_path, alias="pm", role="pm")
+    registry = _mk_registry({"pm": "pm", "wallace": "human"})
+    out = compose.deploy_alias_v2("pm", registry=registry, target_root=tmp_path)
+    assert out == tmp_path / ".squidsquad" / "pm" / "CLAUDE.v2.md"
+    assert out.exists()
+
+
+def test_check_alias_staged_l4_skips_human_non_agent_12800(tmp_path):
+    """#12800 AC2: validating a staged L4 for a non-agent role-class is a clean
+    no-op (no L1-L3 to validate against) — returns the role_class, never
+    crashes on the source walk."""
+    _stage_minimal_install(tmp_path, alias="pm", role="pm")
+    # A staged file must exist (check runs a file-exists guard first).
+    staged = tmp_path / "staged_human.md"
+    staged.write_text("# staged\n", encoding="utf-8")
+    registry = _mk_registry({"pm": "pm", "wallace": "human"})
+    result = compose.check_alias_staged_l4(
+        "wallace", staged, target_root=tmp_path, registry=registry)
+    assert result == "human"
+
+
 def test_deploy_alias_v2_emits_generated_header(tmp_path):
     """Output carries the standard `# SquidSquad -- <alias> Lead` + DO NOT EDIT block.
 

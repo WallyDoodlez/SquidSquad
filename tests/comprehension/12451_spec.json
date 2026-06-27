@@ -1,0 +1,38 @@
+{
+  "issue": 12451,
+  "title": "Status bar event-model support — S2 write-side 'Keep current-state honest' idle-marker discipline (event-mode-contract.md)",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 01:15",
+  "ac": "AC8",
+  "method": "Fresh agent (model: sonnet) given ONLY the new 'Keep current-state honest' Always-On Rule + the Case C steps of references/sub-skills/common-events/event-mode-contract.md, no other context and no access to issue #12451. Answers from the supplied text alone. Verifier-authored per #9184. (Fleet-wide fragment — every event-mode agent Reads it at boot.)",
+  "target": "references/sub-skills/common-events/event-mode-contract.md -> 'Keep current-state honest' Always-On Rule + Case C",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You just transitioned a tracker item (closed/handed off your task). What must you do to `current-state`, and why?",
+      "expected": "Write the `idle` marker (`cycle.py status-bar-self idle \"\"`) so current-state no longer names the just-closed task as your current activity. Because current-state is a health-diagnosis signal — a lingering closed task reads as live and sends diagnosers down wrong paths (the #12854 defect).",
+      "must_not": "Leaving current-state pointing at the closed/handed-off task, or saying nothing needs to be written."
+    },
+    {
+      "id": "CQ2",
+      "q": "When you pick up a NEW item (at boot, Case B, Case C, or the idle-cooldown absorb-work tick), what do you write to current-state and when?",
+      "expected": "Write the new task's marker (`status-bar-self <phase> \"<short description>\"`) when you START the item — on the transition/pickup, across every work-pickup path. Not on a file-age cadence.",
+      "must_not": "Saying you only write on a fixed interval / file-age cadence, or only on some paths."
+    },
+    {
+      "id": "CQ3",
+      "q": "Is current-state freshness driven by a file-age/time cadence, or by something else?",
+      "expected": "By write-on-transition: you write the marker on the transition (start of a task, or going idle / task closed / handed off / reassigned away), NOT a file-age cadence artifact. It must never name a task that is no longer your current activity.",
+      "must_not": "Saying freshness is a file-age cadence / time-based refresh."
+    },
+    {
+      "id": "CQ4",
+      "q": "Is the `idle` marker the same thing as the `inline` marker? When is each used?",
+      "expected": "No — they are distinct. The `idle` marker (`status-bar-self idle \"\"`) is written when you go idle or a task is closed/handed-off/reassigned-away. The `inline` marker (`status-bar-self inline \"\"`) is self-written during a live human/operator turn. Do not conflate them.",
+      "must_not": "Saying idle and inline are the same / interchangeable."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 01:15",
+  "evidence": "Fresh sonnet agent (id a78e0d0e6a689522d) given ONLY the 'Keep current-state honest' rule + Case C, no issue context. 4/4 correct, zero must_not violations: CQ1 'write the idle marker... clears your closed task... prevents the #12854 defect'; CQ2 'write the new task's marker... ON THE TRANSITION... at the moment you start the item, not after some delay... every path'; CQ3 'driven by transitions (work events), not by any file-age or time cadence'; CQ4 'No, they are distinct... idle marker when you go idle... inline marker during a human turn... do not conflate'."
+}

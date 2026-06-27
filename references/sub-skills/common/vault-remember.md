@@ -10,11 +10,7 @@ Print: `[🦑 HH:MM:SS] Reflecting on cycle...`
 **Per-role write lane** (see [[vault-protocol]] for the full lane discipline). Each role writes patterns from its own lane only: PM = coordination/decision patterns; worker = implementation patterns; **verifier = testing/verification patterns ONLY — never debate PM or worker decisions in vault writes**; DM = delivery patterns. If a candidate learning is outside your lane, file it on the owning role's tracker as a `learning` note request instead of writing it yourself.
 
 
-**Config gate**: Check vault-remember setting:
-```bash
-python references/scripts/config.py get vault-remember
-```
-If `no`, skip this step entirely.
+Vault-remember is **always-on** — there is no enable/disable toggle. Activation is controlled by the quiet-cycle gate and the per-cycle write budget below (#13043).
 
 **BRIEFING.md staleness check** (runs every cycle — not gated by quiet check):
 
@@ -46,6 +42,8 @@ python references/scripts/vault_remember.py reset-writes [ROLE]
    → If yes: vault-create `galaxy/learning-*.md`
 4. **PROJECT CONTEXT**: Did project goals, constraints, or architecture change?
    → If yes: vault-update `projects/<name>.md` or `BRIEFING.md`
+5. **STYLES**: Did a coding/writing/process style convention get established or confirmed this cycle?
+   → If yes: vault-create `galaxy/style-*.md`
 
 For each candidate, apply these **deterministic gates IN ORDER**:
 
@@ -82,6 +80,8 @@ python references/scripts/vault_remember.py inc-writes [ROLE]
 1. Decisions (architectural choices compound)
 2. Learnings (failure lessons prevent repeat mistakes)
 3. Patterns (useful but can wait a cycle)
+4. Styles (convention drift is costly, but a single style note rarely can't wait)
+5. Project context (usually a BRIEFING.md update, not a budget-consuming write)
 
 Remaining candidates beyond the write budget are noted in the iteration log's Notes field: `Vault-worthy but deferred (budget): [description]`.
 

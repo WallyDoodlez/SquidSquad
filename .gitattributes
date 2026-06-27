@@ -28,10 +28,19 @@
 .squidsquad/vault/areas/*.md merge=union
 .squidsquad/vault/projects/*.md merge=union
 
-# Shared config — last writer wins (cycle_pre validates post-merge) (#5136)
-# merge=union would produce duplicate field lines (invalid config).
-# Version regressions caught by _validate_config_version().
-.squidsquad/config.md merge=ours
+# Ship counter (#12823) — DM-owned transient machine-regenerated value, ours-wins
+# so a stale sibling clone's push can't regress a bump (the ONLY reason config.md
+# carried merge=ours). Lives in its own file so config.md can merge normally.
+.squidsquad/.ship-counter merge=ours
+
+# Shared config — merges 3-way like normal source (#12823). It previously carried
+# `merge=ours` ONLY to protect the ship counter, but ours-wins is all-or-nothing
+# and silently DROPPED every other agent's concurrent config.md edit (a feature
+# flag, a new key) with no conflict marker. The counter now lives in
+# `.ship-counter` (above), so config.md no longer needs ours-wins: 3-way merge
+# surfaces real same-field conflicts and merges non-overlapping edits cleanly.
+# (merge=union is wrong here — it would duplicate field lines into invalid config.)
+# Version regressions still caught by _validate_config_version().
 
 # Git hooks are POSIX /bin/sh scripts — force LF so the shebang never breaks on
 # a CRLF checkout. core.autocrlf=true on Windows would otherwise risk a CRLF

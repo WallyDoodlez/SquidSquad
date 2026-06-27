@@ -72,6 +72,10 @@ SAMPLE_CONFIG = """# SquidSquad Config
 - **Improvement Scan Cool-Down**: 30m
 - **Idle Scan Burst**: 3
 
+## Verbose Mode
+
+- **Enabled**: no
+
 ## Vault Optimize
 
 - **Enabled**: yes
@@ -219,8 +223,12 @@ class TestGetField:
         assert val == "no"
 
     def test_get_shipped_since_bump(self, tmp_path):
+        # #12823: the counter reads from .ship-counter, falling back to the
+        # legacy config.md field when the file is absent (migration). Point the
+        # counter path at a non-existent file to exercise the fallback (== 5).
         cfg = self._setup_config(tmp_path)
-        with patch.object(config, "CONFIG_PATH", cfg):
+        with patch.object(config, "CONFIG_PATH", cfg), \
+             patch.object(config, "SHIP_COUNTER_PATH", tmp_path / ".ship-counter"):
             val = config.get_field("shipped-since-bump")
         assert val == "5"
 
@@ -278,11 +286,15 @@ class TestSetField:
         assert val == "45"
 
     def test_set_shipped_since_bump(self, tmp_path):
+        # #12823: set writes to .ship-counter (NOT config.md); get reads it back.
         cfg = self._setup_config(tmp_path)
-        with patch.object(config, "CONFIG_PATH", cfg):
+        counter = tmp_path / ".ship-counter"
+        with patch.object(config, "CONFIG_PATH", cfg), \
+             patch.object(config, "SHIP_COUNTER_PATH", counter):
             config.set_field("shipped-since-bump", "10")
             val = config.get_field("shipped-since-bump")
         assert val == "10"
+        assert counter.read_text(encoding="utf-8").strip() == "10"
 
     def test_set_preserves_other_fields(self, tmp_path):
         cfg = self._setup_config(tmp_path)

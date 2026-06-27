@@ -38,43 +38,166 @@ class TestPull:
         mock_run.assert_called_once()
 
     @patch("git_ops._run")
-    def test_pull_stash_pop(self, mock_run):
-        """Dirty tree → stash, pull, pop succeeds."""
-        mock_run.side_effect = [
-            _mock_result(returncode=1),  # pull fails
-            _mock_result(),              # stash
-            _mock_result(),              # pull (retry)
-            _mock_result(),              # stash pop
-        ]
-        assert git_ops.pull() is True
-        assert mock_run.call_count == 4
-
-    @patch("git_ops._run")
-    def test_pull_stash_pop_conflict(self, mock_run):
-        """Stash pop fails → stash dropped, still returns True (#4829)."""
-        mock_run.side_effect = [
-            _mock_result(returncode=1),  # pull fails
-            _mock_result(),              # stash
-            _mock_result(),              # pull (retry)
-            _mock_result(returncode=1),  # stash pop fails
-            _mock_result(),              # stash drop (#4829)
-        ]
-        assert git_ops.pull() is True
-        assert mock_run.call_count == 5
-
-    @patch("git_ops._run")
-    def test_pull_stash_pop_conflict_drops_stash(self, mock_run):
-        """Regression #4829: failed stash pop must call git stash drop."""
-        mock_run.side_effect = [
-            _mock_result(returncode=1),  # pull fails
-            _mock_result(),              # stash
-            _mock_result(),              # pull (retry)
-            _mock_result(returncode=1),  # stash pop fails
-            _mock_result(),              # stash drop
-        ]
+    def test_first_pull_is_no_rebase(self, mock_run):
+        """#13267: the FIRST pull must be pinned to `git pull --no-rebase` (never
+        a bare pull that could rebase under pull.rebase=true and leave a REBASE
+        state the #13261 recovery can't clear)."""
+        mock_run.return_value = _mock_result()
         git_ops.pull()
-        drop_call = mock_run.call_args_list[4]
-        assert drop_call[0][0] == "git stash drop"
+        assert mock_run.call_args_list[0][0][0] == "git pull --no-rebase"
+
+    @patch("git_ops._run")
+    def test_pull_stash_pop(self, mock_run):
+        """Dirty tree → stash CREATES an entry (refs/stash changes), pull, pop."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(returncode=1),          # _stash_top_ref pre: no refs/stash → ""
+            _mock_result(),                      # git stash
+            _mock_result(stdout="newsha"),       # _stash_top_ref post: new stash → "newsha"
+            _mock_result(),                      # pull (retry)
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
+        ]
+        assert git_ops.pull() is True
+        assert mock_run.call_count == 6
+        assert any(c[0][0] == "git stash pop" for c in mock_run.call_args_list)
+
+    @patch("git_ops._run")
+    def test_pull_clean_tree_does_not_pop_preexisting_stash(self, mock_run):
+        """#13167 ROOT-CAUSE: on a clean tree `git stash` is a no-op (refs/stash
+        UNCHANGED). The pop MUST be skipped — otherwise a PRE-EXISTING ancient
+        stash is applied, writing conflict markers tree-wide and breaking
+        compose. Asserts NO `git stash pop` (and no `_safe_stash_pop` machinery)
+        runs when the stash created nothing."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(stdout="oldsha"),       # _stash_top_ref pre: pre-existing stash
+            _mock_result(),                      # git stash (no-op on clean tree)
+            _mock_result(stdout="oldsha"),       # _stash_top_ref post: UNCHANGED → stashed=False
+            _mock_result(),                      # pull (retry) succeeds
+        ]
+        assert git_ops.pull() is True
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git stash pop" not in calls, "must NOT pop a pre-existing stash on a clean tree"
+        assert mock_run.call_count == 5  # no pop call
+
+    @patch("git_ops._run")
+    def test_pull_clean_tree_pull_fail_does_not_pop_preexisting(self, mock_run):
+        """#13167: even on the pull-fail branch, a no-op stash must not pop a
+        pre-existing stash (the raw-pop-on-failure path was a culprit too)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(stdout="oldsha"),       # pre
+            _mock_result(),                      # git stash (no-op)
+            _mock_result(stdout="oldsha"),       # post: unchanged → stashed=False
+            _mock_result(returncode=1),          # pull retry ALSO fails
+            _mock_result(returncode=1),          # #13261: git merge --abort (no merge → no-op)
+        ]
+        assert git_ops.pull() is False
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git stash pop" not in calls
+
+    @patch("git_ops._run")
+    def test_pull_retry_fail_aborts_merge_before_pop(self, mock_run):
+        """#13261: a genuine-divergence conflict on the retry pull leaves the
+        clone MERGING (MERGE_HEAD + conflict markers). pull() MUST `git merge
+        --abort` BEFORE restoring our stash — otherwise _safe_stash_pop misreads
+        the merge's unmerged paths as a stash-pop conflict and DROPS our stash,
+        and a lingering MERGE_HEAD breaks the next clean-tree op. Mirrors the
+        deploy-path fix in _safe_pull_in_clone (#13215)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
+            _mock_result(),                      # git stash (creates entry)
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
+            _mock_result(returncode=1),          # pull retry FAILS (left MERGING)
+            _mock_result(),                      # git merge --abort
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
+        ]
+        assert git_ops.pull() is False
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git merge --abort" in calls, "must abort the in-progress merge"
+        assert "git stash pop" in calls, "must restore our genuinely-created stash"
+        assert calls.index("git merge --abort") < calls.index("git stash pop"), \
+            "merge --abort MUST precede stash pop so the pop sees a clean tree"
+        # #13261: the retry must be a MERGE pull so `git merge --abort` is the
+        # correct cleanup verb (never a rebase, which the abort cannot clear).
+        assert "git pull --no-rebase" in calls, "retry pull must be pinned to merge"
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_pull_stash_pop_conflict(self, mock_run, mock_run_list):
+        """Stash pop conflict → conflicted paths restored to HEAD + stash
+        dropped, still returns True (#4829 + #13045)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre → ""
+            _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post → stashed
+            _mock_result(),                                   # pull (retry)
+            _mock_result(returncode=1),                       # stash pop conflict
+            _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
+            _mock_result(),                                   # stash drop
+        ]
+        mock_run_list.return_value = _mock_result()           # checkout HEAD -- path
+        assert git_ops.pull() is True
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_pull_stash_pop_conflict_drops_stash(self, mock_run, mock_run_list):
+        """Regression #4829: a conflicted stash pop must still call git stash
+        drop (no stash-entry leak)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre
+            _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post
+            _mock_result(),                                   # pull (retry)
+            _mock_result(returncode=1),                       # stash pop conflict
+            _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
+            _mock_result(),                                   # stash drop
+        ]
+        mock_run_list.return_value = _mock_result()
+        git_ops.pull()
+        assert any(c[0][0] == "git stash drop" for c in mock_run.call_args_list), \
+            "conflicted pop must drop the retained stash"
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_pull_stash_pop_conflict_restores_conflicted_paths_to_head(
+            self, mock_run, mock_run_list):
+        """#13045: a conflicted stash pop must restore every unmerged path to
+        the pulled HEAD (removing the `<<<<<<<` markers git wrote) — NOT just
+        drop the stash. Asserts `git checkout HEAD -- <path>` is issued for the
+        conflicted config.md so compose never sees a corrupt file."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre
+            _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post
+            _mock_result(),                                   # pull (retry)
+            _mock_result(returncode=1),                       # stash pop conflict
+            _mock_result(stdout=".squidsquad/config.md\nreferences/x.py\n"),  # diff -U
+            _mock_result(),                                   # stash drop
+        ]
+        mock_run_list.return_value = _mock_result()
+        git_ops.pull()
+        checkouts = [c[0][0] for c in mock_run_list.call_args_list]
+        assert ["git", "checkout", "HEAD", "--", ".squidsquad/config.md"] in checkouts
+        assert ["git", "checkout", "HEAD", "--", "references/x.py"] in checkouts
+
+
+class TestStashTopRef:
+    @patch("git_ops._run")
+    def test_returns_sha_when_stash_exists(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="abc123\n", returncode=0)
+        assert git_ops._stash_top_ref() == "abc123"
+
+    @patch("git_ops._run")
+    def test_returns_empty_when_no_stash(self, mock_run):
+        # `git rev-parse --quiet --verify refs/stash` exits non-zero when there
+        # is no stash ref — must map to "" (not a spurious ref).
+        mock_run.return_value = _mock_result(stdout="", returncode=1)
+        assert git_ops._stash_top_ref() == ""
 
 
 # ---------------------------------------------------------------------------
@@ -381,6 +504,70 @@ class TestPrMerge:
         merge_call = mock_run.call_args_list[1]
         assert "--rebase" in merge_call[0][0]
 
+    # --- #10540: "Base branch was modified" batch-ship race retry ---
+
+    @patch("git_ops._run_list")
+    def test_base_modified_retries_then_succeeds(self, mock_run):
+        """The transient batch-ship race is retried and succeeds once the base
+        settles — distinct from a terminal failure."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),                       # state check
+            _mock_result(stderr="GraphQL: Base branch was modified. Review and try the merge again.", returncode=1),  # attempt 1
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1),  # attempt 2
+            _mock_result(stdout=""),                                        # attempt 3 — success
+            _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),  # branch lookup
+        ]
+        success, msg = git_ops.pr_merge(42, _base_retry_delay=0)
+        assert success is True
+        assert msg == "merged"
+        # 1 state check + 3 merge attempts + 1 branch lookup = 5 calls
+        assert mock_run.call_count == 5
+
+    @patch("git_ops._run_list")
+    def test_base_modified_exhausts_retries(self, mock_run):
+        """If the race never clears within the retry budget, it fails as a
+        merge-failed (not silently, not as a conflict)."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+        ] + [
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1)
+            for _ in range(4)  # _max_base_retries=3 → 4 attempts (initial + 3 retries)
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert "merge failed" in msg
+        assert "Base branch was modified" in msg
+        # 1 state check + 4 merge attempts = 5 calls (no branch lookup on failure)
+        assert mock_run.call_count == 5
+
+    @patch("git_ops._run_list")
+    def test_real_conflict_is_terminal_not_retried(self, mock_run):
+        """A real merge conflict must NOT be retried (it routes back for rebase)
+        — only ONE merge attempt, even though retries are available."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stderr="failed to merge: merge conflict between base and head", returncode=1),
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert msg == "merge conflict"
+        # 1 state check + exactly 1 merge attempt (no retry)
+        assert mock_run.call_count == 2
+
+    @patch("git_ops._run_list")
+    def test_base_modified_then_real_conflict(self, mock_run):
+        """A retry can surface a real conflict (base moved into a true conflict)
+        — once it does, it's terminal, not retried further."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1),  # race
+            _mock_result(stderr="not mergeable: merge conflict", returncode=1),        # now a real conflict
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert msg == "merge conflict"
+        assert mock_run.call_count == 3  # state + race attempt + conflict attempt
+
     @patch("git_ops._run_list")
     def test_state_check_fails_still_attempts_merge(self, mock_run):
         # State check fails (non-zero), merge succeeds, branch lookup
@@ -673,14 +860,27 @@ class TestRoleOwnedPatterns:
         assert "SKILL.md" in pats
         assert ".squidsquad/config.md" in pats
 
-    def test_qa_has_no_extras_beyond_common(self):
+    def test_qa_extras(self):
+        """#13212: qa (verifier) owns tests/comprehension/ — it authors the
+        comprehension regression specs (#9184) and must be able to stage them
+        in its own post-cycle commit (they live outside .squidsquad/, so they
+        matched no pattern before and were left untracked as 'foreign')."""
         pats = git_ops._role_owned_patterns("qa")
-        # QA must NOT pick up config or delivery docs
+        assert "tests/comprehension/" in pats
+        # QA must still NOT pick up config or delivery docs / SKILL.md —
+        # the new extra does not loosen the rest of the boundary.
         assert ".squidsquad/config.md" not in pats
         assert "README.md" not in pats
-        # #9474 sanity check: QA also must NOT pick up SKILL.md —
-        # the DM-extras additions don't bleed into other roles.
         assert "SKILL.md" not in pats
+
+    def test_comprehension_specs_are_qa_only(self):
+        """#13212: only the verifier authors comprehension specs — the
+        tests/comprehension/ ownership must NOT bleed into other roles (else a
+        non-verifier cycle could stage a half-written spec)."""
+        for role in ("pm", "dm", "skill"):
+            assert "tests/comprehension/" not in git_ops._role_owned_patterns(role), (
+                f"{role} must not own tests/comprehension/ (#13212 — verifier-only)"
+            )
 
     def test_pm_does_not_pick_up_dm_extras(self):
         """#9474: PM and DM co-own .squidsquad/config.md, but PM must
@@ -900,6 +1100,41 @@ class TestCommitRoleScoped:
         assert ".squidsquad/qa/working-state.md" in staged
         assert ".squidsquad/config.md" not in staged
         assert ".squidsquad/config.md" in capsys.readouterr().err
+
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_qa_stages_untracked_comprehension_spec_13212(
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_push, mock_commit, capsys,
+    ):
+        """#13212: the exact bug — an UNTRACKED comprehension spec (porcelain
+        '??') authored by the verifier must be staged by its post-cycle commit,
+        not classified foreign and left to rot until a manual recovery commit."""
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                return _mock_result(stdout="main\n")
+            return _mock_result(stdout=(
+                " M .squidsquad/qa/working-state.md\n"
+                "?? tests/comprehension/13250_spec.json\n"
+            ))
+        mock_run.side_effect = _run_side
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("qa", "qa cycle")
+
+        staged = [c[0][0][-1] for c in mock_run_list.call_args_list
+                  if c[0][0][:2] == ["git", "add"]]
+        assert "tests/comprehension/13250_spec.json" in staged, (
+            "qa post-cycle must stage untracked comprehension specs (#13212) — "
+            "they were silently left foreign before this fix"
+        )
+        assert ".squidsquad/qa/working-state.md" in staged
+        # not left in the foreign-skip warning
+        assert "tests/comprehension/13250_spec.json" not in capsys.readouterr().err
+        assert result is True
 
     @patch("git_ops._run")
     def test_returns_false_when_no_own_files(self, mock_run, capsys):
@@ -1163,7 +1398,9 @@ class TestSafeCheckout:
         """On checkout failure after stash, pop restores original branch (#4362)."""
         mock_run.side_effect = [
             _mock_result(stdout="main\n"),      # git branch --show-current
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
             _mock_result(),                      # git stash -q
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
             _mock_result(),                      # git stash pop -q (restore)
         ]
         # First checkout fails, second (after stash) also fails
@@ -1181,11 +1418,34 @@ class TestSafeCheckout:
 
     @patch("git_ops._run_list")
     @patch("git_ops._run")
+    def test_clean_checkout_failure_does_not_pop_preexisting(self, mock_run, mock_run_list):
+        """#13167: if checkout fails for a NON-dirty reason, `git stash -q` is a
+        no-op (refs/stash unchanged) and the recovery pop MUST be skipped — never
+        pop a pre-existing ancient stash."""
+        mock_run.side_effect = [
+            _mock_result(stdout="main\n"),      # branch --show-current
+            _mock_result(stdout="oldsha"),       # _stash_top_ref pre: pre-existing stash
+            _mock_result(),                      # git stash -q (no-op)
+            _mock_result(stdout="oldsha"),       # _stash_top_ref post: UNCHANGED → stashed=False
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1, stderr="no such branch"),  # direct checkout fails
+            _mock_result(returncode=1, stderr="no such branch"),  # stash+checkout fails
+        ]
+        result = git_ops._safe_checkout("feature-branch")
+        assert result is False
+        pop_calls = [c for c in mock_run.call_args_list if "stash pop" in str(c)]
+        assert not pop_calls, "must NOT pop a pre-existing stash when our stash was a no-op"
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
     def test_stash_pop_on_success_applies_to_target(self, mock_run, mock_run_list):
         """On checkout success after stash, pop applies on target branch."""
         mock_run.side_effect = [
             _mock_result(stdout="main\n"),      # git branch --show-current
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
             _mock_result(),                      # git stash -q
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
             _mock_result(),                      # git stash pop -q
         ]
         mock_run_list.side_effect = [
@@ -1195,6 +1455,77 @@ class TestSafeCheckout:
 
         result = git_ops._safe_checkout("feature-branch")
         assert result is True
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_checkout_success_then_pop_conflict_resolves_to_head(
+            self, mock_run, mock_run_list):
+        """#13045: if the pop on the target branch conflicts, _safe_checkout
+        must NOT leave `<<<<<<<` markers — the conflicted paths are restored to
+        HEAD and the stash dropped (via _safe_stash_pop)."""
+        mock_run.side_effect = [
+            _mock_result(stdout="main\n"),                    # branch --show-current
+            _mock_result(returncode=1),                       # _stash_top_ref pre → ""
+            _mock_result(),                                   # git stash -q
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post → stashed=True
+            _mock_result(returncode=1),                       # stash pop conflict
+            _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
+            _mock_result(),                                   # stash drop
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1, stderr="error"),       # direct checkout fails
+            _mock_result(returncode=0),                       # stash+checkout succeeds
+            _mock_result(),                                   # checkout HEAD -- config.md
+        ]
+        result = git_ops._safe_checkout("feature-branch")
+        assert result is True
+        checkouts = [c[0][0] for c in mock_run_list.call_args_list]
+        assert ["git", "checkout", "HEAD", "--", ".squidsquad/config.md"] in checkouts
+        assert any(c[0][0] == "git stash drop" for c in mock_run.call_args_list)
+
+
+# ---------------------------------------------------------------------------
+# _safe_stash_pop (#13045)
+# ---------------------------------------------------------------------------
+
+class TestSafeStashPop:
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_clean_pop_returns_true_no_drop(self, mock_run, mock_run_list):
+        """A clean pop returns True and does NOT drop (the stash is consumed)."""
+        mock_run.side_effect = [_mock_result()]               # git stash pop (ok)
+        assert git_ops._safe_stash_pop() is True
+        assert not any("stash drop" in str(c) for c in mock_run.call_args_list)
+        mock_run_list.assert_not_called()
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_conflict_restores_to_head_and_drops(self, mock_run, mock_run_list):
+        """A conflicted pop restores unmerged paths to HEAD then drops (#13045)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),                       # pop conflict
+            _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
+            _mock_result(),                                   # stash drop
+        ]
+        mock_run_list.return_value = _mock_result()
+        assert git_ops._safe_stash_pop() is False
+        mock_run_list.assert_called_once_with(
+            ["git", "checkout", "HEAD", "--", ".squidsquad/config.md"], check=False)
+        assert any(c[0][0] == "git stash drop" for c in mock_run.call_args_list)
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_non_conflict_pop_failure_does_not_drop(self, mock_run, mock_run_list):
+        """#13045 DS Finding 1: a pop that fails WITHOUT conflicts (no stash /
+        unrelated error → empty unmerged set) must NOT drop a possibly-unapplied
+        stash. No checkout, no drop, returns False."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),                       # pop fails
+            _mock_result(stdout=""),                          # diff: no unmerged paths
+        ]
+        assert git_ops._safe_stash_pop() is False
+        mock_run_list.assert_not_called()
+        assert not any("stash drop" in str(c) for c in mock_run.call_args_list)
 
 
 # ---------------------------------------------------------------------------
@@ -1257,7 +1588,12 @@ class TestGitattributesMergeStrategies:
     def test_ours_merge_for_overwrite_files(self):
         content = (Path(__file__).resolve().parent.parent / ".gitattributes").read_text()
         assert "working-state.md merge=ours" in content
-        assert "config.md merge=ours" in content
+        # #12823: the ship counter (the only field that needed ours-wins) moved
+        # to its own file; config.md itself no longer carries merge=ours.
+        assert ".squidsquad/.ship-counter merge=ours" in content
+        rule_lines = [ln.strip() for ln in content.splitlines()
+                      if ln.strip().startswith(".squidsquad/config.md")]
+        assert all("merge=ours" not in ln for ln in rule_lines)
 
     def test_vault_briefing_merge_ours(self):
         """#5674: BRIEFING.md uses merge=ours (last writer wins)."""
@@ -1997,3 +2333,75 @@ class TestEnsureHooksDispatch11511:
         monkeypatch.setattr(sys, "argv", ["git_ops.py", "has-changes"])
         git_ops.main()
         mock_ensure.assert_called_once()
+
+
+class TestEnsureMainAndPullSerialized13211:
+    """#13211: ensure_main_and_pull single-flights its checkout+pull via the
+    module-level _ENSURE_MAIN_LOCK so concurrent in-process callers (the L4
+    watcher freshen bursts AND the post-merge deploy-all path) cannot collide on
+    `.git/index.lock`. #13197 first added this serialization in the watcher; this
+    hoists it to the shared implementation so every caller is covered."""
+
+    def test_lock_is_a_threading_lock(self):
+        import threading
+        assert isinstance(git_ops._ENSURE_MAIN_LOCK, type(threading.Lock()))
+
+    def test_contract_preserved_on_main_synced(self):
+        """Behaviour unchanged for the happy path: on main + pull ok -> (True,
+        'on-main-synced'). The lock wrap must not alter the return contract."""
+        with patch.object(git_ops, "_run") as mrun, \
+             patch.object(git_ops, "pull", return_value=True):
+            mrun.return_value = MagicMock(returncode=0, stdout="main\n", stderr="")
+            ok, detail = git_ops.ensure_main_and_pull(role="harness")
+        assert ok is True
+        assert detail == "on-main-synced"
+
+    def test_pull_failure_still_reported(self):
+        """The lock must not swallow a pull failure."""
+        with patch.object(git_ops, "_run") as mrun, \
+             patch.object(git_ops, "pull", return_value=False):
+            mrun.return_value = MagicMock(returncode=0, stdout="main\n", stderr="")
+            ok, detail = git_ops.ensure_main_and_pull(role="harness")
+        assert ok is False
+        assert detail == "pull-failed"
+
+    def test_concurrent_calls_are_serialized(self):
+        """N threads calling ensure_main_and_pull directly must never run the
+        underlying git op concurrently — max in-flight stays 1."""
+        import threading
+        import time as _time
+        state = {"now": 0, "max": 0}
+        guard = threading.Lock()
+        N = 11
+        barrier = threading.Barrier(N)
+
+        def fake_pull(role=None):
+            try:
+                barrier.wait(timeout=0.5)  # serialized -> never fills -> times out
+            except threading.BrokenBarrierError:
+                pass
+            with guard:
+                state["now"] += 1
+                state["max"] = max(state["max"], state["now"])
+            _time.sleep(0.02)
+            with guard:
+                state["now"] -= 1
+            return True
+
+        def fake_run(cmd, check=False):
+            return MagicMock(returncode=0, stdout="main\n", stderr="")
+
+        with patch.object(git_ops, "_run", side_effect=fake_run), \
+             patch.object(git_ops, "pull", side_effect=fake_pull):
+            threads = [threading.Thread(
+                target=lambda: git_ops.ensure_main_and_pull("harness"))
+                for _ in range(N)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert state["max"] == 1, (
+            f"ensure_main_and_pull ran {state['max']}-way concurrent — "
+            f"_ENSURE_MAIN_LOCK is not serializing (#13211)"
+        )

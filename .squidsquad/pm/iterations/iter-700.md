@@ -35,4 +35,25 @@ pm clone booted **13 behind origin** again (recurring harness boot-pull lag; cf 
 - **#11140** — flagged as possible misroute (source-layer prose = skill domain); did not reroute unilaterally.
 - **#9969** (low) — deferred.
 
-**Boot otherwise quiet.** No new human messages, no external issues, no work picked up. Entering idle (Monitor armed).
+## Post-boot event work
+
+- **#12837 (HIGH, qa-filed, operator-routed-to-pm-for-triage) → ROUTED to skill.** Harness emits `evicted:true`+`oldest_id:null`+`events:[]` (anchorless eviction marker) → event_poll exit 2 → kills agent event listener (qa hit it this session, no work lost). Fix = `harness.py` eviction-marker (~1409-1421) + `event_poll.py` guard (~298-304) = skill domain. Triaged + posted routing comment + swapped role:pm→role:skill (auto-approved bug). **Cross-linked #12511 as the LIVE TRIGGER** — independently corroborated from the pm listener: continuous synthetic flood on issues 1/42/55/269/999/9967/87654 (illegal transitions at single timestamps) churning the deque = the condition that exposes the latent contract bug.
+- **#12511 (test-isolation leak: test events on LIVE bus) — ESCALATED medium→high** + cross-link comment. Justification: it's now a confirmed trigger for a HIGH-sev liveness failure, not just noise. Same root-enabler family as #12837; recommended skill investigate together. Related lane #12409.
+- **Explains the recurring no-action wakes this session** — the #999/#42/etc. flood I'd been acking through IS #12511's leak. Now properly tracked + escalated.
+
+## Inline operator session — agent recovery
+
+- **qa restart (operator-directed):** qa DEAD (pid None, paused). Harness graceful-restart STUCK (intent=restarting, no live process to exit). Recovered via `boot_remote.py --role qa` → spawned pid 29072 → **but went INERT** (#10855/#12409: current-state written once then froze, no .claude-pid, no bootup). Non-blocking (0 PT). Left for operator loop-mode relaunch.
+- **skill wedge (operator: 'skill has stopped working'):** alive 76m zero-activity (telemetry+git agree), `current-state=running full suite` → **hung full-suite run**. Nudge ignored (blocked mid-tool-call). `POST /agents/skill/restart` → grace timer force-killed ~100s → **respawned clean pid 34064, bootup-complete, active.** RECOVERED.
+- **Filed #12847 (HIGH, skill):** full suite hangs indefinitely (no timeout) → silent unbounded agent wedge. Distinct from #12720(closed)/#12747/#12748. Detection gap = #12271/#12493. #12506 driver can't recover a mid-tool-call block.
+- **Key learning reinforced:** DEAD agent (pid None) → graceful-restart sticks → boot_remote. HUNG agent (mid-tool-call) → graceful-restart grace timer DOES force-kill+respawn. ([[learning-graceful-restart-grace-timer-on-wedged-agent]])
+
+## ROOT-CAUSE CORRECTION (operator, inline) — Facts-Over-Context miss
+
+Operator corrected: the multi-agent freeze was an **ACCOUNT USAGE LIMIT**, not per-agent bugs.
+- skill 'hung suite' (#12847) — **WRONG**, was the limit. #12847 RETRACTED + CLOSED. (No hung subprocess ever observed; I symptom-fit from current-state.)
+- qa 'inert-boot #10855/#12409' — **WRONG**, was the limit + operator talking to it inline (inline → no harness activity → looked dead).
+- **Lesson:** stale harness-activity ≠ dead. Rule out inline-conversation / usage-limit / genuine-wedge first; multiple agents freezing at once ⇒ shared cause (limit), not coincident bugs; ASK operator (they have limit ground truth). Extends [[feedback_health_checks_facts_not_context]].
+- qa rebooted on operator request (pid 52988, booting; limit now clear). ⚠️ My pre-emptive restart killed the session operator was mid-conversation with (apologized). Frozen-on-limit agents don't auto-recover — need restart.
+
+**Boot otherwise quiet.** No external issues, no PM work picked up (approved queue = operator-paced PRDs). Idle (Monitor armed).

@@ -95,9 +95,28 @@ EMITTED = {
         "payload_fields": ["event_id", "role"],
     },
     "ack-stop": {
-        "description": "Agent acknowledges a stop request — confirms the agent has accepted an intent=stopping transition. Result field carries the disposition (e.g. \"stop-confirmed\").",
+        "description": "Agent acknowledges a stop request — confirms the agent has accepted an intent=stopping transition. Result field carries the disposition: one of \"checkpointed\" / \"aborted\" / \"drained\" (the settled stop-path enum, AGENT-RUNTIME §10 Q11), or \"deploy-halted\" for a deploy-signal halt.",
         "source": "event_bus.py ack_stop()",
         "payload_fields": ["event_id", "result"],
+    },
+    # #12912 S3: promoted from RECOGNIZED to EMITTED — harness.py
+    # _reboot_affected_agents now emits this when compose-source drift is
+    # detected (post-merge compose alias-diff, boot checksum drift, or L4 write).
+    # The agent care filter branches on event_type=="deploy-signal" and routes
+    # to the deploy-halt branch (AGENT-RUNTIME §5.2 / §8.1).
+    "deploy-signal": {
+        "description": "Harness detected compose-source drift and requests a coordinated halt so the pull-first deploy sequence can run. Agent finishes its current atomic unit (on main, between tasks), emits ack-stop(result=deploy-halted), and halts without acking the deploy-signal cursor.",
+        "source": "harness.py _reboot_affected_agents (drift detect → emit)",
+        "payload_fields": ["target_alias", "event_type", "event_context"],
+    },
+    # #12912 S4 (HARNESS-ARCH §11): emitted to the pm alias when a per-clone
+    # deploy sequence fails (pull conflict / compose error / push rejection).
+    # The agent is respawned on its existing committed CLAUDE.md and the compose
+    # checksum is NOT advanced, so the drift re-triggers; pm investigates.
+    "deploy-error": {
+        "description": "A per-clone pull-first deploy sequence failed; the affected agent was respawned on its existing CLAUDE.md and last_compose_checksum was NOT advanced. Filed to pm for investigation.",
+        "source": "harness.py _deploy_recover_and_respawn",
+        "payload_fields": ["target_alias", "event_context", "failed_role", "stage", "detail"],
     },
 }
 

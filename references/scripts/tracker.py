@@ -11,9 +11,11 @@ Usage:
     python scripts/tracker.py create-task --title <t> --body <b> --role <r> --priority <p> [--reporter <name>]   (alias: create-feature)
     python scripts/tracker.py transition <number> <from-status> <to-status> --role <r> [--force]
     python scripts/tracker.py comment <number> --role <r> --message <m>
+    python scripts/tracker.py work-assign --target-alias <alias> [--caller <alias>] [--issue <n>] [--event-context <ctx>] [--payload <json>]  # #12495 manual wake (no transition)
     python scripts/tracker.py get-labels <number>
     python scripts/tracker.py get-state <number>
     python scripts/tracker.py close <number>
+    python scripts/tracker.py repair-status-labels [--apply] [--include-unshipped]  # #12914: strip stale status:pending-ship from CLOSED issues (dry-run unless --apply; no-shipped/#9837 set skipped unless --include-unshipped)
     python scripts/tracker.py check-gh                   # Verify gh access
     python scripts/tracker.py --help
 
@@ -608,6 +610,138 @@ def list_by_labels(labels_str, state="open"):
     return issues
 
 
+_REPAIR_PAGE_LIMIT = 1000
+
+
+def repair_status_labels(apply=False, include_unshipped=False):
+    """#12914: enforce the single-status invariant on CLOSED issues carrying a
+    stale ``status:pending-ship`` orphan — the one-time/repeatable cleanup of
+    EXISTING pollution (the durable prevention is the single-status invariant in
+    ``transition()``).
+
+    A closed issue that still carries ``status:pending-ship`` pollutes DM's
+    delivery ``work_queue()``: the #9837 pending-ship query deliberately widens
+    to ``state=all`` (to catch the legitimate closed-but-undelivered case where a
+    PR's ``Closes #N`` closes the issue before DM ships it), so every stale
+    orphan surfaces as a false deliverable. These accumulate when a ship
+    transition leaves the prior label behind, or when a PR/manual close skips the
+    ship path.
+
+    **Two classes of closed pending-ship issue (the #9837 safety split):**
+
+    - **SAFE — carries ``status:shipped``**: unambiguously delivered. Strip every
+      non-shipped ``status:*`` label (incl. the ``pending-ship`` orphan), keeping
+      only ``status:shipped``. Repaired by default.
+    - **AMBIGUOUS — no ``status:shipped``**: could be a genuine closed-but-
+      undelivered issue (the #9837 case) OR a stale leak. Stripping its
+      ``pending-ship`` would silently drop a real deliverable from DM's queue, so
+      these are **skipped + warned** by default. Pass ``include_unshipped=True``
+      to repair them too — and then only the named ``pending-ship`` orphan is
+      removed (any other status label is kept, so a multi-label issue is never
+      blanked).
+
+    OPEN ``pending-ship`` issues are NEVER touched — those are the genuine
+    delivery queue (the query is scoped to ``state=closed``).
+
+    Dry-run by default (prints the plan, changes nothing). Pass ``apply=True`` to
+    execute. Idempotent: a second run after a clean pass finds nothing. Returns
+    the list of ``(number, removed_labels)`` planned/applied (excludes the
+    skipped ambiguous set unless ``include_unshipped``).
+    """
+    ship_label = STATUS_LABELS["pending-ship"]
+    shipped_label = STATUS_LABELS["shipped"]
+    adapter = _get_forge_adapter()
+
+    # Gather closed issues carrying the orphan label. Bounded at
+    # _REPAIR_PAGE_LIMIT (single page); the cleanup is idempotent and the
+    # transition() invariant stops new accumulation, so re-running drains any
+    # overflow — but we warn if the page is full so a truncated run is visible
+    # rather than silently partial (DS-12914 F2).
+    if adapter:
+        issues = adapter.list_issues(
+            labels=[ship_label], state="closed", limit=_REPAIR_PAGE_LIMIT
+        )
+    else:
+        result = _run_list(
+            ["gh", "issue", "list", "--label", ship_label, "--state", "closed",
+             "--json", "number,labels", "--limit", str(_REPAIR_PAGE_LIMIT)],
+            check=False,
+        )
+        if result.returncode != 0:
+            print(f"ERROR: gh list failed: {result.stderr}", file=sys.stderr)
+            return []
+        issues = json.loads(result.stdout) if result.stdout.strip() else []
+
+    planned = []           # (number, removed_labels) — to be repaired
+    skipped_ambiguous = []  # numbers skipped as possible #9837 deliverables
+    for issue in issues:
+        number = issue.get("number")
+        status_now = {
+            lbl.get("name", "")
+            for lbl in issue.get("labels", [])
+            if lbl.get("name", "").startswith("status:")
+        }
+        if ship_label not in status_now:
+            continue  # defensive — the query already filtered to pending-ship
+        if shipped_label in status_now:
+            # SAFE: delivered — collapse to the single terminal status.
+            remove = sorted(status_now - {shipped_label})
+        elif include_unshipped:
+            # AMBIGUOUS, explicitly opted in: remove ONLY the named orphan so a
+            # multi-label issue keeps its other status (never blanked) — F3.
+            remove = [ship_label]
+        else:
+            # AMBIGUOUS, default: could be a genuine closed-but-undelivered
+            # (#9837). Skip and warn rather than risk dropping a deliverable.
+            skipped_ambiguous.append(number)
+            continue
+        if remove:
+            planned.append((number, remove))
+
+    mode = "APPLYING" if apply else "DRY-RUN"
+    print(
+        f"#12914 status-label repair ({mode}): {len(planned)} closed issue(s) "
+        f"to repair, {len(skipped_ambiguous)} ambiguous (no status:shipped) "
+        f"{'INCLUDED' if include_unshipped else 'SKIPPED'}.",
+        file=sys.stderr,
+    )
+    if len(issues) >= _REPAIR_PAGE_LIMIT:
+        print(
+            f"  WARNING: result hit the {_REPAIR_PAGE_LIMIT}-issue page limit -- "
+            f"the set may be truncated; re-run after applying to drain the rest.",
+            file=sys.stderr,
+        )
+    verb = "removing" if apply else "would remove"
+    for number, remove in planned:
+        print(f"  #{number}: {verb} {', '.join(remove)}", file=sys.stderr)
+        if apply:
+            if adapter:
+                adapter.edit_labels(number, add=[], remove=remove)
+            else:
+                cmd = ["gh", "issue", "edit", str(number)]
+                for lbl in remove:
+                    cmd += ["--remove-label", lbl]
+                _run_list(cmd, check=False)
+    if skipped_ambiguous and not include_unshipped:
+        preview = ", ".join(f"#{n}" for n in skipped_ambiguous[:20])
+        more = "" if len(skipped_ambiguous) <= 20 else f" (+{len(skipped_ambiguous) - 20} more)"
+        print(
+            f"  SKIPPED {len(skipped_ambiguous)} closed pending-ship issue(s) with "
+            f"NO status:shipped -- each MAY be a legitimate closed-but-undelivered "
+            f"issue (#9837: PR auto-close before DM ships). Verify none are awaiting "
+            f"delivery, then re-run with --include-unshipped to strip them: "
+            f"{preview}{more}",
+            file=sys.stderr,
+        )
+    if not planned and not skipped_ambiguous:
+        print(
+            "  (nothing to repair -- all closed pending-ship issues are already "
+            "single-status)",
+            file=sys.stderr,
+        )
+    return planned
+
+
 def list_all_open():
     """List all open issues (for ingestion/triage of external issues)."""
     adapter = _get_forge_adapter()
@@ -1079,7 +1213,12 @@ def _check_unread_feedback(number, caller_role):
         # Fail closed — if we can't read comments, block the transition
         return [("unknown (API error)", "unknown")]
 
-    data = json.loads(result.stdout)
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        # Malformed exit-0 response — fail closed (same sentinel) so the guard
+        # blocks rather than aborting transition() with an uncaught traceback.
+        return [("unknown (API error)", "unknown")]
     comments = data.get("comments", [])
     if not comments:
         return []
@@ -1237,7 +1376,7 @@ def transition(number, from_status, to_status, role=None, force=False):
         except ImportError:
             # tc_coverage.py not available — graceful degradation
             print(
-                "WARNING: tc_coverage.py not found — TC coverage gate skipped.",
+                "WARNING: tc_coverage.py not found -- TC coverage gate skipped.",
                 file=sys.stderr,
             )
 
@@ -1252,7 +1391,7 @@ def transition(number, from_status, to_status, role=None, force=False):
                 f"Blocked shipped transition on #{number}: unmerged PR #{pr_num}",
             )
             print(
-                f"BLOCKED: Cannot ship #{number} — PR #{pr_num} is open and unmerged. "
+                f"BLOCKED: Cannot ship #{number} -- PR #{pr_num} is open and unmerged. "
                 f"Merge the PR first: {pr_url}",
                 file=sys.stderr,
             )
@@ -1287,27 +1426,38 @@ def transition(number, from_status, to_status, role=None, force=False):
                     f"has {commit_count} unmerged commit(s)",
                 )
                 print(
-                    f"BLOCKED: Cannot ship #{number} — branch '{branch_name}' has "
+                    f"BLOCKED: Cannot ship #{number} -- branch '{branch_name}' has "
                     f"{commit_count} commit(s) not merged to the working branch. "
                     f"Merge the branch or create a PR first.",
                     file=sys.stderr,
                 )
                 sys.exit(1)
 
-    # Determine which status label(s) to remove. On the normal (non-forced)
-    # path the legality matrix guarantees `from_label` is the actual current
-    # status, so remove exactly that (no extra gh round-trip on the hot path).
-    # On the forced path (#12475) the caller-supplied `from_status` is NOT
-    # trusted: a wrong value would no-op the remove and leave the issue with
-    # two status:* labels. So query the live status labels and strip ALL of
-    # them (except the target) — a forced status change always lands exactly
-    # one status label. Falls back to `from_label` if the query fails.
-    remove_labels = [from_label]
-    if force:
-        live_status = _get_issue_status_labels(number)
-        stale = sorted(live_status - {to_label})
-        if stale:
-            remove_labels = stale
+    # Enforce the single-status invariant (#12914): an issue must NEVER carry
+    # 2+ `status:*` labels. Query the live status labels and strip ALL of them
+    # except the target, regardless of the caller-supplied `from_status`.
+    #
+    # The old normal (non-forced) path trusted the legality matrix and removed
+    # only `from_label`, skipping the live query to save a gh round-trip. That
+    # optimization is exactly what let stale labels accumulate: any divergence
+    # from the assumed-current label — an earlier leak, a concurrent transition
+    # race, or a slightly-wrong `from_status` — survived the swap. The result was
+    # 30 closed issues carrying an orphan `status:pending-ship` (polluting every
+    # DM `work_queue()` and risking ~30 spurious version bumps), with one issue
+    # carrying `approved`+`pending-ship`+`shipped` at once. Correctness wins over
+    # the saved round-trip here: transitions are low-frequency, and a stale status
+    # label is a fleet-wide, growing defect. Same strip-all logic the forced
+    # (#12475) path already used — now unconditional.
+    #
+    # Falls back to `[from_label]` only when the live query returns nothing (API
+    # failure or a genuinely label-less issue), so behavior is never worse than
+    # the old path. When the issue already carries exactly `to_label` (idempotent
+    # re-transition), the stale set is empty and nothing is removed.
+    live_status = _get_issue_status_labels(number)
+    if live_status:
+        remove_labels = sorted(live_status - {to_label})
+    else:
+        remove_labels = [from_label]
 
     adapter = _get_forge_adapter()
     if adapter:
@@ -1448,9 +1598,21 @@ def get_labels(number):
         labels = [l["name"] for l in data.get("labels", [])] if data else []
         print(json.dumps(labels))
         return labels
-    result = _run_list(["gh", "issue", "view", str(number), "--json", "labels"])
-    data = json.loads(result.stdout)
-    labels = [l["name"] for l in data.get("labels", [])]
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "labels"],
+        check=False,
+    )
+    # Fail closed: a gh blip or malformed exit-0 JSON yields [] (no labels)
+    # rather than a raw traceback — mirrors _get_issue_role_labels.
+    labels = []
+    if result.returncode == 0 and result.stdout.strip():
+        try:
+            data = json.loads(result.stdout)
+            # Drop label objects missing a "name" (would otherwise inject "");
+            # mirrors the startswith-filtering in _get_issue_*_labels.
+            labels = [n for n in (l.get("name", "") for l in data.get("labels", [])) if n]
+        except json.JSONDecodeError:
+            labels = []
     print(json.dumps(labels))
     return labels
 
@@ -1463,9 +1625,19 @@ def get_state(number):
         state = (data or {}).get("state") or "UNKNOWN"
         print(state)
         return state
-    result = _run_list(["gh", "issue", "view", str(number), "--json", "state"])
-    data = json.loads(result.stdout)
-    state = data["state"]
+    result = _run_list(
+        ["gh", "issue", "view", str(number), "--json", "state"],
+        check=False,
+    )
+    # Fail closed to "UNKNOWN" on gh failure / malformed exit-0 JSON / missing
+    # field — mirrors the adapter path's `(data or {}).get("state") or "UNKNOWN"`.
+    data = {}
+    if result.returncode == 0 and result.stdout.strip():
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            data = {}
+    state = (data or {}).get("state") or "UNKNOWN"
     print(state)
     return state
 
@@ -1478,6 +1650,87 @@ def close_issue(number):
     else:
         _run_list(["gh", "issue", "close", str(number)])
     print(f"Closed #{number}")
+
+
+def work_assign(target_alias, caller, issue=None, event_context=None, payload=None):
+    """Manual wake-injection primitive (#12495).
+
+    POSTs ``/work/assign`` to the harness, which emits an ``assigned-to`` wake
+    to ``target_alias`` WITHOUT a status transition (the distinguishing feature
+    vs ``transition``). This is the sanctioned BACKUP / babysitting path —
+    PM waking a stuck-but-alive agent, or any agent surfacing a process concern
+    to PM — for when the primary wake paths (self-wake #12506, never-stop
+    #12853, EAD on forge-state change) don't fire. NOT the default routing
+    mechanism; transition handoffs route via EAD off forge state.
+
+    ``caller`` is the calling agent's alias; it is sent as the
+    ``X-Squidsquad-Alias`` header so the harness can enforce the self-assign
+    invariant. Returns the harness's emitted ``event_id`` on success.
+
+    Prints a diagnostic and returns ``None`` on any failure (harness
+    unreachable, 404 unknown alias, 400 self-assign/malformed) — the caller
+    sees a non-zero exit via ``main``.
+    """
+    import urllib.request
+    import urllib.error
+
+    # Reuse the event_bus port-discovery so we hit the same harness the
+    # mechanical event path uses.
+    try:
+        from event_bus import _discover_port
+    except ImportError:
+        print("ERROR: cannot import event_bus for port discovery", file=sys.stderr)
+        return None
+
+    port = _discover_port()
+    if port is None:
+        print("ERROR: harness port not discoverable (.harness-port absent) -- "
+              "is the harness running?", file=sys.stderr)
+        return None
+
+    # Strip a decorated caller ("skill-lead (skill)") down to the bare alias so
+    # the self-assign header matches the registry namespace (same rule as the
+    # transition emit, #12342).
+    caller_alias = (caller or "").split(" ")[0].replace("-lead", "")
+
+    body = {"target_alias": target_alias}
+    if issue is not None:
+        body["issue_number"] = str(issue)
+    if event_context:
+        body["event_context"] = event_context
+    if payload:
+        try:
+            body["payload"] = json.loads(payload) if isinstance(payload, str) else payload
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"ERROR: --payload is not valid JSON: {e}", file=sys.stderr)
+            return None
+
+    data = json.dumps(body).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if caller_alias:
+        headers["X-Squidsquad-Alias"] = caller_alias
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/work/assign",
+        data=data, headers=headers, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = e.read().decode("utf-8")
+        except Exception:
+            pass
+        print(f"ERROR: /work/assign returned HTTP {e.code}: {detail}", file=sys.stderr)
+        return None
+    except (urllib.error.URLError, OSError) as e:
+        print(f"ERROR: /work/assign request failed: {e}", file=sys.stderr)
+        return None
+
+    event_id = result.get("event_id")
+    print(f"work-assign -> {target_alias} (event_id={event_id})")
+    return event_id
 
 
 def _parse_args():
@@ -1506,7 +1759,21 @@ def _parse_args():
     return cmd, positional, opts
 
 
+def _harden_stdio():
+    """#13185 / #13198: crash-proof CLI stdout/stderr on a cp1252 console.
+
+    The canonical implementation now lives in the shared ``cli_stdio`` module
+    (#13198 consolidated it for fleet-wide reuse — every agent-facing CLI script
+    calls it). This is kept as a thin delegate so existing callers/tests resolve
+    unchanged. See ``cli_stdio.harden_stdio`` for the rationale (a non-ASCII
+    char in a SUCCESS print on cp1252 raised UnicodeEncodeError AFTER the side
+    effect landed → false-failure exit + double-emit risk)."""
+    from cli_stdio import harden_stdio
+    harden_stdio()
+
+
 def main():
+    _harden_stdio()
     cmd, pos, opts = _parse_args()
 
     if cmd == "check-gh":
@@ -1565,6 +1832,26 @@ def main():
             sys.exit(1)
         comment(int(pos[0]), opts["role"], opts["message"])
 
+    elif cmd == "work-assign":
+        # #12495: manual wake-injection primitive — emit assigned-to without a
+        # transition. --target-alias required; --caller is the calling agent's
+        # alias (sent as X-Squidsquad-Alias for the self-assign guard).
+        if "target-alias" not in opts:
+            print(
+                "Usage: tracker.py work-assign --target-alias <alias> [--caller <alias>] "
+                "[--issue <n>] [--event-context <ctx>] [--payload <json>]",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        event_id = work_assign(
+            opts["target-alias"],
+            opts.get("caller"),
+            issue=opts.get("issue"),
+            event_context=opts.get("event-context"),
+            payload=opts.get("payload"),
+        )
+        sys.exit(0 if event_id else 1)
+
     elif cmd == "get-labels":
         if not pos:
             print("Usage: tracker.py get-labels <number>", file=sys.stderr)
@@ -1597,6 +1884,15 @@ def main():
             print("Usage: tracker.py add-labels <number> <labels>", file=sys.stderr)
             sys.exit(1)
         add_labels(int(pos[0]), pos[1])
+
+    elif cmd == "repair-status-labels":
+        # #12914: dry-run by default; --apply executes; --include-unshipped also
+        # repairs the ambiguous no-status:shipped set (#9837 closed-but-undelivered
+        # risk — default-skipped).
+        repair_status_labels(
+            apply=opts.get("apply", False),
+            include_unshipped=opts.get("include-unshipped", False),
+        )
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)

@@ -21,7 +21,7 @@ if ($LASTEXITCODE -ne 0) { pip install -r requirements.txt }
 Write-Host "Syncing clones..."
 # Primary repo
 $null = git checkout main 2>&1
-$null = git pull --rebase 2>&1
+$null = git pull --no-rebase 2>&1
 Write-Host "  primary: OK"
 
 # Agent clones from .local-config
@@ -40,7 +40,7 @@ if (Test-Path $localConfig) {
                 Push-Location $path
                 try {
                     $null = git checkout main 2>&1
-                    $null = git pull --rebase 2>&1
+                    $null = git pull --no-rebase 2>&1
                     Write-Host "  ${role}: OK"
                 } catch {
                     Write-Host "  ${role}: WARN (could not sync)"

@@ -79,10 +79,27 @@ def _read_current_state_file(role):
         return ""
 
 
+def _is_inline_marker(line):
+    """True if `line` is the agent-self-written `inline` current-state marker.
+
+    During a live operator (inline) turn the cycle wrappers do not fire
+    (#12800), so the agent self-writes `inline|...` to `current-state` and
+    clears it when the turn ends. Because the wrappers are quiet, the
+    harness phase is necessarily stale during that window — so this explicit,
+    agent-cleared marker must take precedence over the harness, not be masked
+    by it (#12451 AC4 / #12854 lingering-content).
+    """
+    return line.split("|", 1)[0].strip().lower() == "inline"
+
+
 def cmd_phase(role):
     """Print `phase|description` for a role. Empty line if unavailable.
 
-    Event-driven mode pulls phase + intent from the harness via
+    Precedence: an explicit `inline` marker in `current-state` wins in either
+    wake mode (#12451 AC4) — it's a self-written operator-session state the
+    wrappers can't refresh, so a stale harness phase must not mask it.
+
+    Otherwise, event-driven mode pulls phase + intent from the harness via
     `GET /agents/<role>` (in-memory state, updated by `phase-change` events)
     rather than `/agents/<role>/health` which only re-reads the on-disk
     current-state file (defeats the purpose in events mode).
@@ -90,6 +107,15 @@ def cmd_phase(role):
     Falls back to the file when the harness is unreachable so the line
     doesn't go blank during a brief harness restart.
     """
+    file_line = _read_current_state_file(role)
+
+    # Inline marker takes precedence over the (stale) harness phase, in either
+    # mode — render it as a distinct, clearly-labelled operator-session state.
+    if _is_inline_marker(file_line):
+        desc = file_line.split("|", 1)[1].strip() if "|" in file_line else ""
+        print(f"inline|{desc or 'operator session'}")
+        return 0
+
     if _get_wake_mode(role) == "event-driven":
         data = _harness_get(f"/agents/{role}")
         if isinstance(data, dict):
@@ -110,9 +136,8 @@ def cmd_phase(role):
         # Fall through to file on harness-unreachable / unknown agent so the
         # line doesn't go blank during a brief harness restart.
 
-    line = _read_current_state_file(role)
-    if line:
-        print(line)
+    if file_line:
+        print(file_line)
     return 0
 
 

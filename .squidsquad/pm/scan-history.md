@@ -503,3 +503,131 @@
 - **Findings**: PHASE2-LOCKED-10781 premise CONFIRMED — self-restart/context-pressure/cycle-runner have 0 references/ invocations (correctly removed from catalog); boot-bootstrap + agent-lifecycle have 2 each in references/agent-instructions.md + references/roles/instructions.md (correctly kept). Post-E6 (after agent-instructions.md deletes), count drops to 1 each but still ≥1 threshold — Phase 2 lock stays valid.
 - **Auto-fixed**: none (verification scan only)
 - **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 11:15
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs forge + /status); cross-ref against this session's verified ship-states
+- **Findings**: BRIEFING.md heavily stale — Team State 4 days old ("pm inline / qa LOOP pinned"); #12506/#12853/#12442/#11394/#12408/#12585/#12824/#12820/#12749 all shipped but still listed in-flight or as active constraints; retired #12442 manual-dm-nudge workaround still listed as a live constraint
+- **Auto-fixed**: BRIEFING.md refreshed (PM own-domain) — new 2026-06-19 Active-Priorities increment (verified ships + #12895 decision + boot-pull-lag), Team State rewritten from /status (pm/dm/skill EVENT, qa POLLING-alive), Constraints updated (boot-pull-lag chronic + #12442 retired), Recently-Shipped 06-18/19 line added
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 14:15 (local ~11:15→ actually 18:15 UTC; 2nd burst scan)
+
+- **Files scanned**: repo-wide grep "Never Block on a Human" across *.md (post-#12853/#12800 SOUL-rename drift check — verify the rename to 'Never Stop While Work Is Pending' was complete in load-bearing source/spec files)
+- **Findings**: none — ZERO occurrences in references/ or docs/ (source + specs). All 12 *.md hits are historical records (working-state, iter logs, qa/planning QA-RESULTS/TEST-PLAN) or intentional rename references (BRIEFING, decision-agents-never-stop-while-work-pending). #12853 rename clean in source.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 18:42 UTC (3rd burst scan)
+
+- **Files scanned**: vault wikilink integrity (`vault_check.py check-wikilinks`) across .squidsquad/vault/
+- **Findings**: intra-vault link integrity CLEAN (0 broken decision-/pattern-/learning-/style- targets). All ~20 WARN are cross-layer references the checker can't resolve — vault→memory (feedback_*/project_*) and vault→docs (AGENT-RUNTIME/VAULT-ARCH) — which are intentional, not breakage. Tooling note: check-wikilinks is low-signal because cross-layer refs dominate the output (a real intra-vault break would be buried). NOT filed (low value, likely known limitation; vault_check.py = skill code domain).
+- **Auto-fixed**: pattern-chain-ship-per-item-auth.md — `[[feedback-pm-docs-only]]` → `[[feedback_pm_docs_only]]` (hyphen→underscore, canonical memory-note name)
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 21:13 (post-restart idle-driver tick, 1st burst scan)
+
+- **Files scanned**: HARNESS-ARCH.md §7/§11 (deploy-signal/recompose/restart — verify shipped #12906 + #12912-design accuracy); config.md Improvement-Scanning defaults vs idle-cooldown-loop; .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this boot's verified facts)
+- **Findings**: HARNESS-ARCH §7.6/§11 coherent — deploy-signal model documented as the #12912 design contract (intentional target-state doc-first, NOT drift); `deploying` intent + ensure-main→pull→recompose→commit→push + deploy-halt exit + multi-clone-consistency window all consistent. Config defaults (30m cool-down, burst 3) match driver output. No actionable doc-drift finding (the planned-vs-pending-human-* surfacing distinction is intentional design, not a gap — NOT filed).
+- **Auto-fixed**: BRIEFING.md refreshed (PM own-domain, Tier-1) — new 2026-06-19 ~20:48 post-restart Active-Priorities increment (restart succeeded, #12906 confirmed-live, qa now EVENT, #12896 intaken→planned); Team State rewritten (all 4 EVENT, harness sha 398d1c1a); Constraints updated (boot-pull-lag regression neutralized by #12906-live → restore-dance now backstop); version sha b15e7fc5→398d1c1a.
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-19 22:11 (post-restart idle-driver tick, 2nd burst scan)
+
+- **Files scanned**: references/sub-skills/roles/pm/checkin.md (advertise-duty mechanics) + references/roles/pm/responsibility.md advertise-duty — consistency/completeness check (PM about to rely on it for #12896-planned + #10686-parked surfacing)
+- **Findings**: none filed. Considered a candidate gap — the check-in advertise step (checkin.md:17) covers only `role:<human>` + `pending-human-*` items, NOT PM-owned `planned` items awaiting approval (e.g. #12896). Concluded INTENTIONAL/coherent, not a gap: PM tracks its own `planned` items in working-state and surfaces them with judgment at check-in; advertise-duty is specifically the cross-agent pending-human-* return-path (items OTHER agents hand off that PM wouldn't otherwise know). A blanket 'advertise all planned' would nag the operator about deliberately operator-paced items (#10837/#10838/#10839 etc.). PM judgment + working-state tracking covers the #12896 case. NOT filed (designed distinction, filing would be marginal noise).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-20 00:02 (fresh-boot idle-driver tick, 3rd/burst-cap scan)
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md (PM core stall-detection sub-skill, exercised live this boot; not scanned recently)
+- **Findings**: 1 identified, NOT filed (dedup). pipeline-sentinel.md is framed in pure loop-mode terms — "Step 6f" anchor (event-hydrated cycle puts it at Step 4.1), "runs every cycle", "90 minutes (3 cycles at 30-min interval)" cadence reasoning — while the canonical architecture is event-mode. The 90-min WALL-CLOCK stall threshold is still correct; only the loop-cadence FRAMING is stale. **Already in scope of in-flight #12493** ("L2: pipeline-sentinel — detect HALT, investigate, unblock (event-effective)") which explicitly rewrites THIS file event-effectively → a competent event-mode rewrite sweeps up the cadence framing. Filing would duplicate. Cannot Tier-1 auto-fix: references/sub-skills/ is skill's domain (PM-docs-only boundary) AND skill is actively rewriting this file under #12493 — an edit would conflict.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+- **Burst note**: 3rd scan of this idle period → at_cap, driver cancelled + cron deleted (re-arms on next forge-work re-idle).
+
+## Scan — 2026-06-20 01:17 (idle-driver tick, fresh burst after reidle, 1st scan)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this boot's forge-verified ship-states + /status)
+- **Findings**: BRIEFING stale — latest Active-Priorities increment predated this boot (~20:48); #12526 listed as an OPEN chronic blocker but it SHIPPED 00:58 (PR #12993); "pipeline otherwise idle (0 pending-test/ship)" claim outdated after a full bug-fix ship burst (#12818/#12914/#12823/#12526); newly-shipped items absent from Recently-Shipped.
+- **Auto-fixed**: BRIEFING.md refreshed (PM own-domain, Tier-1) — new 2026-06-20 ~01:00 increment (ship burst + #12912 qa-bounce + #12854→#12451 fold + #12896-planned + PM idle); #12526 Constraints line corrected (open-blocker → shipped/mitigated); Recently-Shipped 2026-06-20 line added. Left alone: auto-versioning counter line (DM-owned; #12823 ship-counter-split just changed its semantics — DM to refresh, not PM to guess); Team State (all 4 EVENT + sha 398d1c1a still accurate).
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-20 02:16 (idle-driver tick, 2nd scan of burst)
+
+- **Files scanned**: .squidsquad/config.md (integrity / internal-consistency check — roster, counters, event-reactions, interval coherence)
+- **Findings**: none filed. Two candidates examined: (1) Auto-Versioning `Shipped Since Last Bump: 50` vs `Ship Threshold: 10` looks 5× overdue, but version bumps are under the operator's standing bump-hold (CHANGELOG batched to v0.45.0 per Recent-Decisions c1383) AND #12823 just reworked counter mechanics (DM-owned; DM's own comment shows 50→51 active management) → intentional, not a defect. (2) `dm: dm/skill` alias mapping is unusual but the team boots correctly on it and it's unconfirmable-as-wrong without the config.py schema (skill domain) → not fabricating a finding. Rest internally consistent (Iteration-Interval 30 ↔ Cool-Down 30m, Port 7373, Event-Reactions covers all 4 roles, scanning/vault values match driver).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-20 03:18 (idle-driver tick, 3rd/burst-cap scan — post-#12912-ship drift hunt)
+
+- **Files scanned**: grep deploy-all / compose.py deploy across references/ (role templates, overlays, commands, docs) — drift check vs the just-shipped #12912 deploy-signal model
+- **Findings**: 1 FILED (Tier-2 → #13030, role:skill, low, improvement-scan). #12912 retires agent-manual compose.py deploy-all as the recompose trigger (deploy-signal = sole pull-first path), but PM 'Post-merge recompose' overlay + references/roles/*/instructions.md 'edit source → run compose.py deploy' + dm/skill/instructions.md:27 still direct manual recompose → drift + double-recompose/race risk once the model goes live. GATED on deploy-signal go-live (harness restart) — must NOT land before (current fleet still uses manual model). Scoped to agent-facing manual-trigger instructions only (compose.py command + operator/install tooling stay). No existing tracking issue found (dedup clean).
+- **Auto-fixed**: none (Tier-2 cross-role, gated — filed not fixed; references/ is skill domain)
+- **Items rejected by human**: (none)
+- **Burst note**: 3rd scan of idle period → at_cap, driver cancelled + cron 6c7ee7bc deleted (re-arms on next forge-work re-idle).
+
+## Scan — 2026-06-20 15:47 (idle-driver tick, 1st scan of fresh burst — post-#12896-approval re-idle)
+
+- **Files scanned**: docs/COMPOSE-ARCHITECTURE.md §3.0 (Aliases schema), .squidsquad/config.md ## Aliases, references/scripts/config.py parse_aliases_registry — alias-form doc-vs-reality consistency (prompted by this boot's config.md `dm/skill` revert investigation + the 02:16 scan's unresolved candidate)
+- **Findings**: 1 FILED (Tier-2 → #13038, role:pm, low, improvement-scan). §3.0 documents ONLY the canonical 3-column table Aliases form, but live config.md uses the legacy bullet form with packed `<role-class>/<l3-domain>` (`dm: dm/skill`) — supported by config.py (#10385/#12749) but undocumented in the arch doc. Doc-vs-reality TRD drift; cost cycles twice (02:16 scan gave up unconfirmable; this boot's config-revert investigation had to read config.py). Resolution = arch decision: (a) document the legacy bullet form in §3.0, or (b) migrate config.md to the table form. Dedup clean (#10385 closed, no open issue). RESOLVES the 02:16 unconfirmable candidate.
+- **Auto-fixed**: none (Tier-2, arch decision — filed not auto-fixed). NOTE for future scans: `dm: dm/skill` is CONFIRMED CORRECT/intentional (L3-variant syntax) — do NOT re-flag as suspicious; the gap is the missing DOC, now tracked in #13038.
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-20 16:47 (idle-driver tick, 2nd scan of burst — installer-readiness, operator-prompted)
+
+- **Files scanned**: docs/INSTALLER-ARCH.md §4.1, references/scripts/wizard.py, start.sh, requirements.txt (fresh-install readiness; prompted by operator "do we have all steps for a new install")
+- **Findings**: 1 FILED (Tier-2 → #13041, role:pm, low, improvement-scan). INSTALLER-ARCH §4.1 "Current state (target vs today)" note STALE — 3 claims false vs shipped #11613: (1) wizard.py no longer gh-only (has setup_requirements gather-all + per-platform python3/gh maps); (2) start.sh installs FULL requirements.txt, not 2-of-4; (3) pyyaml already in requirements.txt:16. #11537 pointer imprecise (was the doc-section task, shipped — not the impl). Caused a PM misassessment to operator BEFORE verification → corrected in-conversation. Caught via facts-over-context (read shipped code, not just doc).
+- **Auto-fixed**: none (Tier-2 TRD reconcile — needs careful full-state verify of wizard.py consent/re-verify flow; filed not hastily patched).
+- **Items rejected by human**: (none)
+- **Burst note**: 2nd scan of burst (scan_count 2/3, not at cap) — driver stays armed.
+
+## Scan — 2026-06-20 17:46 (idle-driver tick, 3rd/burst-cap scan — BRIEFING freshness)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this session's forge-verified state + /status)
+- **Findings**: BRIEFING stale — top Active-Priorities increment was ~01:00 (pre 2nd-restart); missed today's ship burst (#12912/#12294/#13032/#12409/#12363), #12896 approval + #13035 filing, #12451-S2 unblock, the 2nd restart (sha 398d1c1a→253179a2), the deferred-restart accrual, and the installer-readiness review. Team-State sha + auto-versioning counter (said 0, actually 50) both stale.
+- **Auto-fixed**: BRIEFING.md refreshed (PM own-domain, Tier-1) — new 2026-06-20 ~17:20 top increment (2nd-restart + ship burst + #12896-approved/#13035 + #12451-S2 + deferred-restart + installer review + 4 pending operator decisions); Team-State version line → sha 253179a2 boot 14:35; Constraints auto-versioning → 50 (batched v0.45.0, operator-paced).
+- **Items rejected by human**: (none)
+- **Burst note**: 3rd scan of idle period → at_cap, driver cancelled + cron 707769b1 deleted (re-arms on next forge-work re-idle).
+
+## Scan — 2026-06-21 01:37 (idle-driver tick, 1st/burst scan — freshly-shipped PM sub-skill drift check)
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md (just shipped via #12493/#12494), references/sub-skills/roles/pm/improvement-scan.md (cross-ref)
+- **Findings**: 1 — residual loop-mode cadence FRAMING in pipeline-sentinel.md header (`### Step 6f` anchor [event-hydrated cycle puts it at Step 4.1], "runs **every cycle**" [event mode = per-cared-event; doesn't run during pure idle — the exact gap #13119 closes], "90 minutes (**3 cycles**)" cadence reasoning). The #12493 rewrite made the halt-detect/investigate/unblock/escalate BODY fully event-aware (EAD, [[comment-handling]], failed-handoff class) — excellent — but left the header framing loop-mode. 90-min WALL-CLOCK threshold itself is correct; only the cadence framing is stale. NOTE: the 2026-06-20 00:02 scan predicted #12493 would sweep this up; it did not — so I did NOT re-defer silently. **NOT separately filed (dedup): routed as an advisory scope-note onto #13119** (skill, open — couples pipeline-sentinel to the idle driver tick → it edits this file's cadence/idle model anyway → natural home for the framing fix). Cannot Tier-1 auto-fix (references/sub-skills/ = skill domain, PM-docs-only boundary).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+- **Context note**: operator signalled imminent harness restart (deferred #13077-reaper activation) once agents idle; pipeline fully drained (0 pending-test/ship/human). Scan kept bounded; chose advisory-on-#13119 over a new orphan task per quality-over-noise + dedup rules.
+
+## Scan — 2026-06-21 12:22 (idle-driver tick, 1st scan of burst — #13158 doc-pairing drift)
+
+- **Files scanned**: docs/HARNESS-ARCH.md §11 Failure Modes table (deploy-pull / deploy-push rows), grep deploy-pull/ff-only/git-pull across docs/*ARCH*.md — drift created by the in-flight #13158 deploy-pull merge fix
+- **Findings**: 1 — HARNESS-ARCH §11 rows L510 ('Deploy: git pull non-fast-forward or conflict') AND L512 ('Deploy: git push rejection') document the CURRENT --ff-only behavior (divergence → futile re-pull → deploy-error+respawn, 0 retries). #13158 (pending-test) changes harness deploy-pull to 'git pull --no-rebase' (merge) → benign divergence now MERGES through; both rows become inaccurate on ship. In-lane TRD drift (PM owns HARNESS-ARCH).
+- **Auto-fixed**: none (can't pre-edit to unshipped behavior; would describe code that isn't merged). Routed as advisory ON #13158 (couple doc edit to code ship, zero drift window) + tracked in working-state for action on #13158 shipped event. NOT a separate orphan task (dedup/quality — same pattern as #13119).
+- **Items rejected by human**: (none)
+- **Burst note**: 1st scan of burst (scan_count→2/3 after record), driver stays armed.
+
+## Scan — 2026-06-21 13:27 (idle-driver tick, 3rd/burst-cap scan — BRIEFING freshness)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this session's forge-verified ships)
+- **Findings**: BRIEFING 12:00 increment said #13158 'filed' — it SHIPPED this session (~15min cycle); #13148/#13147 also shipped; #13030 approved + arch-doc-scoped this session. Recently-Shipped had no 2026-06-21 entry.
+- **Auto-fixed**: BRIEFING refreshed (PM own-domain, Tier-1) — 12:00 increment updated (#13158 filed→SHIPPED + HARNESS-ARCH §11 doc-pairing e74fd590a + #13030 approved/scoped/open-question-to-skill); added 2026-06-21 Recently-Shipped entry (#13158/#13148/#13147 + #13030 approval).
+- **Items rejected by human**: (none)
+- **Burst note**: 3rd scan of idle period → at_cap expected; driver cancels + CronDelete after record-scan.
+
+## Scan — 2026-06-21 18:42 (idle-driver tick, 1st scan of burst — Verbose Mode #13162 post-ship drift check)
+
+- **Files scanned**: references/roles/SOUL.md (L1 postures), references/roles/instructions.md (boot-read selector §234 + no-action-wake §104), docs/AGENT-RUNTIME.md §9.7 (PM-owned TRD), + compose-drift check across all 4 deployed CLAUDE.md (pm/skill/qa/dm). Target chosen: freshest cross-cutting ship (#13162 Verbose Mode, shipped 18:35 this session) = highest drift risk.
+- **Findings**: NONE. (1) Three source authoring sites consistent — boot-read selector (`config.py get verbose-mode`, yes→verbose/no→quiet), session-sticky, no-recompose, graceful-default, both postures defined, "all agents + both wake modes" — no contradictions. Wording diffs are explicitly-adaptable example one-liners, not drift. (2) Compose-drift check CLEAN: all 4 deployed CLAUDE.md carry the boot-read selector (1×) + both quiet & verbose postures (2× each) — Verbose Mode correctly deployed fleet-wide.
+- **Auto-fixed**: none (clean verification — no drift to fix).
+- **Items rejected by human**: (none)
+- **Burst note**: 1st scan of this idle burst (scan_count→1 after record); driver stays armed.
+
+## Scan — 2026-06-21 19:5x (idle-driver tick, 2nd scan of burst — BRIEFING freshness)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this session's forge-verified events + /status).
+- **Findings**: BRIEFING stale — top Active-Priorities increment was ~12:00, missing the entire evening session: #13162 Verbose Mode SHIPPED, the qa verifier wedge + PM recovery, #12271 progress-liveness structuring (Slice A #13179 shipped, cutover #12492 at pending-human-review = operator), #13197 recompose-path-degraded, ships #13066/#13176/#13175, #13185 filed. Recently-Shipped had no evening entry.
+- **Auto-fixed**: BRIEFING refreshed (PM own-domain, Tier-1) — new 2026-06-21 ~19:50 top increment (Verbose Mode ship + qa wedge/recovery + #12271 cutover-pending + #13197 + ships + 2 operator advisories); added evening Recently-Shipped bullet (#13162/#13066/#13176/#13175/#13179).
+- **Items rejected by human**: (none)
+- **Burst note**: 2nd scan of idle burst (scan_count→2 after record); driver stays armed (not at cap).

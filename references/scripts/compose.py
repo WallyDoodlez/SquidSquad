@@ -187,6 +187,17 @@ _V2_MANIFEST_FILENAME = "includes.yml"
 def _load_manifest_v2(role_name: str) -> list | None:
     """Load the role's v2 mode-agnostic manifest (PRD-D D5 #10676, PRD-E E6 #10685).
 
+    .. note:: TOMBSTONE (#13264) — UNREACHABLE from production post-E6 (#10685).
+       The deploy entrypoints (``deploy_role_v2`` / deploy-all / wizard) route
+       through ``v2_link_stage.emit_v2_linked`` → ``atomic_emit.assemble_and_emit``,
+       NOT this loader. The only callers are this function pair's own ``base_role``
+       recursion and the unit tests. It is RETAINED (not deleted) so the
+       ``base_role`` + ``additional_includes`` schema reader — and the #13172
+       fail-closed guard hardening it — survive intact should the manifest-loader
+       path ever be re-wired. Remove (with its tests) only after confirming the
+       path is permanently retired. Do not add new production callers without
+       re-deciding this tombstone.
+
     Reads ``references/roles/<role>/includes.yml`` for base roles via the
     ``_V2_MANIFEST_FILENAME`` constant and follows the
     ``base_role`` + ``additional_includes`` schema. Variant Layer-3
@@ -258,6 +269,10 @@ def _load_manifest_v2_from_file(
         manifest_path: Path, role_name: str) -> list | None:
     """Parse a v2 manifest file (or a variant ``includes.yml``).
 
+    .. note:: TOMBSTONE (#13264) — UNREACHABLE from production post-E6; see
+       ``_load_manifest_v2`` above for the full rationale. Called only from
+       ``_load_manifest_v2`` (and the unit tests); retained, not deleted.
+
     Shared body for ``_load_manifest_v2`` — keeps base-role and variant
     paths reading from a single YAML loader + schema dispatcher. Resolves
     ``base_role`` recursively via ``_load_manifest_v2`` so the base
@@ -291,7 +306,23 @@ def _load_manifest_v2_from_file(
             sys.exit(1)
         additional = data.get("additional_includes", []) or []
         if not isinstance(additional, list):
-            additional = []
+            # #13172 — fail CLOSED to match the sibling schema-error paths in
+            # THIS (base_role / variant) branch: base_role-missing and a
+            # missing sub-skill file both sys.exit(1). (The base-manifest
+            # `includes` wrong-type path below returns None instead — a
+            # different branch with a different contract; not the precedent
+            # here.) A bare-string additional_includes (e.g.
+            # `additional_includes: common/cycle-runner` instead of a list) was
+            # silently reset to [] — the variant's sub-skills then vanished from
+            # the composed CLAUDE.md with zero diagnostic. A schema typo must
+            # surface, not yield silently-incomplete agent instructions.
+            print(
+                f"ERROR: {manifest_path.name} for {role_name}: "
+                f"`additional_includes` is {type(additional).__name__}, "
+                f"expected list",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         for inc_path in additional:
             full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
             if not full_path.exists():
@@ -342,7 +373,7 @@ def _read_role_manifest(role_id: str) -> dict | None:
         data = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
     except Exception as e:
         print(
-            f"WARNING: #9925 — failed to parse {manifest_path}: {e}",
+            f"WARNING: #9925 -- failed to parse {manifest_path}: {e}",
             file=sys.stderr,
         )
         _ROLE_MANIFEST_CACHE[role_id] = None
@@ -391,7 +422,7 @@ def _render_role_roster() -> str:
     if not active:
         # D8 degraded mode: no active roles discoverable — skip roster.
         print(
-            "WARNING: #9925 — no active roles found for role-roster injection; "
+            "WARNING: #9925 -- no active roles found for role-roster injection; "
             "leaving {{role-roster}} marker in composed output",
             file=sys.stderr,
         )
@@ -413,7 +444,7 @@ def _render_role_roster() -> str:
                 manifest = _read_role_manifest("dev")
         if manifest is None:
             print(
-                f"WARNING: #9925 — no manifest for active role {role_id!r}; "
+                f"WARNING: #9925 -- no manifest for active role {role_id!r}; "
                 "skipping in roster (D8 degraded mode)",
                 file=sys.stderr,
             )
@@ -423,7 +454,7 @@ def _render_role_roster() -> str:
         if not display:
             # D8: missing display_name is a BUILD ERROR (per AC11).
             print(
-                f"ERROR: #9925 — role {role_id!r} manifest is missing required "
+                f"ERROR: #9925 -- role {role_id!r} manifest is missing required "
                 "`display_name` field; cannot render roster",
                 file=sys.stderr,
             )
@@ -433,13 +464,13 @@ def _render_role_roster() -> str:
         description = manifest.get("description", "")
         if not tagline:
             print(
-                f"WARNING: #9925 — role {role_id!r} manifest has no `tagline`; "
+                f"WARNING: #9925 -- role {role_id!r} manifest has no `tagline`; "
                 "rendering with empty tagline",
                 file=sys.stderr,
             )
         if not description:
             print(
-                f"WARNING: #9925 — role {role_id!r} manifest has no "
+                f"WARNING: #9925 -- role {role_id!r} manifest has no "
                 "`description`; rendering with empty description",
                 file=sys.stderr,
             )
@@ -972,7 +1003,7 @@ def agent_compose(deterministic_output: str, role_name: str,
 
         if len(polished_code_blocks) < len(original_code_blocks):
             print(f"  WARNING: Agent compose lost code blocks "
-                  f"({len(original_code_blocks)} → {len(polished_code_blocks)}), "
+                  f"({len(original_code_blocks)} -> {len(polished_code_blocks)}), "
                   f"using deterministic", file=sys.stderr)
             return deterministic_output
 
@@ -984,7 +1015,7 @@ def agent_compose(deterministic_output: str, role_name: str,
                 sample = cqs[:5]
                 for cq in sample:
                     if cq["source_heading"].lower() not in polished.lower():
-                        print(f"  WARNING: CQ fail — '{cq['source_heading']}' "
+                        print(f"  WARNING: CQ fail -- '{cq['source_heading']}' "
                               f"missing from polished output", file=sys.stderr)
                         # Don't fail on CQ — just warn. Full CQ runs at deploy time.
 
@@ -1044,6 +1075,13 @@ def check_alias_staged_l4(alias, staged_l4_path, *, target_root=None,
             f"Known aliases: {sorted(registry)}"
         )
     role_class, l3_domain = registry[alias]
+
+    # #12800: non-agent role-classes (e.g. `human`) have no L1-L3 sources to
+    # validate a staged L4 against. A human alias should never stage an L4,
+    # but guard so this never crashes on the source walk — return the
+    # role_class as a clean no-op.
+    if role_class in _config_module.NON_AGENT_ROLE_CLASSES:
+        return role_class
 
     # Lazy imports — same pattern as deploy_alias_v2: keep v1 paths
     # from loading these modules.
@@ -1134,6 +1172,16 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
         )
         sys.exit(1)
     role, l3_domain = registry[alias]
+
+    # #12800: non-agent role-classes (e.g. `human`) are routable on the forge
+    # but are NOT agents — they have no composed CLAUDE.md, no L1-L4 sources,
+    # and no L4 file. Skip compose entirely and return None so callers
+    # (single `deploy` and `deploy-all`) treat it as a clean no-op instead of
+    # walking nonexistent role sources (which would otherwise sys.exit(1)).
+    if role in _config_module.NON_AGENT_ROLE_CLASSES:
+        print(f"  {alias}: non-agent role-class '{role}' -- skipping compose "
+              f"(no CLAUDE.md, no L4)")
+        return None
 
     # Lazy imports — these modules live under references/scripts/ on the
     # same path compose.py inhabits; importing at module top would force
@@ -1819,10 +1867,11 @@ def _session_end_hook_group() -> dict:
     }
 
 
-# #12443 — activity-heartbeat hooks (HARNESS-ARCH §15.1). PostToolUse /
-# PostToolUseFailure fire on EVERY tool call, so they MUST NOT block or delay
-# the agent (AC2). Native `type: http` hooks are SYNCHRONOUS (they block the
-# tool call; default timeout 600s) and only `type: command` hooks support
+# #12443/#13213 — activity-heartbeat hooks (HARNESS-ARCH §15.1). UserPromptSubmit
+# fires at prompt-receipt and PostToolUse / PostToolUseFailure fire on EVERY tool
+# call, so they MUST NOT block or delay the agent (AC2). Native `type: http` hooks
+# are SYNCHRONOUS (they block the tool call; default timeout 600s) and only
+# `type: command` hooks support
 # `async` — verified against the Claude Code hook API (#12443) — so these are
 # async command hooks: Claude Code backgrounds them and ignores exit/output,
 # giving true zero-latency fire-and-forget. (SessionEnd, slice a, stays http: a
@@ -1875,7 +1924,7 @@ def _ensure_hook_entries(settings_path, entries: dict) -> bool:
     if not isinstance(hooks, dict):
         if hooks:
             print(f"WARNING: .claude/settings.json `hooks` was "
-                  f"{type(hooks).__name__}, not an object — replacing "
+                  f"{type(hooks).__name__}, not an object -- replacing "
                   f"(prior hooks dropped): {settings_path}", file=sys.stderr)
         hooks = data["hooks"] = {}
     for name, group in entries.items():
@@ -1895,13 +1944,24 @@ def _ensure_session_end_hook(settings_path) -> bool:
 
 
 def _ensure_activity_hooks(settings_path) -> bool:
-    """#12443/#12458 — ensure the per-tool-call hooks are present in
-    ``.claude/settings.json`` (see ``_ensure_hook_entries``). All three are
-    async command hooks (NEVER block the tool call): PostToolUse/
-    PostToolUseFailure are the #12443 activity heartbeat; PreToolUse (#12458)
+    """#12443/#12458/#13213 — ensure the activity-heartbeat hooks are present in
+    ``.claude/settings.json`` (see ``_ensure_hook_entries``). All are async
+    command hooks (NEVER block/delay the agent's turn): PostToolUse/
+    PostToolUseFailure are the #12443 per-tool-call heartbeat; PreToolUse (#12458)
     additionally opens the in-flight window so a long tool call isn't mistaken
-    for a wedge (the harness sets in_flight_until on the PreToolUse event)."""
+    for a wedge (the harness sets in_flight_until on the PreToolUse event).
+
+    #13213 adds **UserPromptSubmit** as a prompt-receipt heartbeat: it stamps
+    last_activity_at the moment a prompt is submitted (nudge tick, idle-driver
+    tick, or inline operator turn), closing the freeze-after-prompt-before-first-
+    tool-call gap (a sibling of the #12271 wedge class). It is a PLAIN heartbeat
+    by design — the harness /hooks/activity handler sets in_flight_until ONLY on
+    PreToolUse, so UserPromptSubmit advances last_activity_at without opening an
+    in-flight window. That is deliberate: an in-flight window would MASK the very
+    freeze-after-prompt window this signal exists to expose. (HARNESS-ARCH §15.1/
+    §16; the prompt-receipt heartbeat does not set in-flight.)"""
     return _ensure_hook_entries(settings_path, {
+        "UserPromptSubmit": _activity_hook_group(),
         "PreToolUse": _activity_hook_group(),
         "PostToolUse": _activity_hook_group(),
         "PostToolUseFailure": _activity_hook_group(),
@@ -2046,6 +2106,8 @@ def _aliases_for_roles(roles: list) -> list:
 
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     args = sys.argv[1:]
     if not args or args[0] == "--help":
         print(__doc__)
@@ -2102,7 +2164,7 @@ def main():
         print(
             "ERROR: `compose.py all` was retired in E6 (#10685). The "
             "bundled `references/agent-instructions.md` is no longer "
-            "generated — each agent has its own composed CLAUDE.md "
+            "generated -- each agent has its own composed CLAUDE.md "
             "under `.squidsquad/<role>/CLAUDE.md`. Use "
             "`python compose.py deploy <role>` for a single role, or "
             "`python compose.py deploy-all` for every alias in the "
@@ -2148,7 +2210,7 @@ def main():
             except LinkStageValidationError as e:
                 # AC: stderr names the rule that failed (R1-R7).
                 print(
-                    f"  {role_name} (staged): VALIDATION FAIL — {e}",
+                    f"  {role_name} (staged): VALIDATION FAIL -- {e}",
                     file=sys.stderr,
                 )
                 sys.exit(CHECK_EXIT_DRIFT)
@@ -2165,6 +2227,10 @@ def main():
         # restore in a follow-up if cross-agent validation regresses.
         try:
             output = deploy_alias_v2(role_name)
+            if output is None:
+                # #12800: non-agent role-class (human) — deploy_alias_v2
+                # already printed the skip notice and wrote nothing.
+                return
             lines = output.read_text(encoding="utf-8").count("\n")
             # Use the returned path's actual basename; post-E6 cutover
             # (#10685) it is ``CLAUDE.md`` (assembled).
@@ -2209,12 +2275,16 @@ def main():
         for alias in sorted(registry):
             try:
                 output = deploy_alias_v2(alias, registry=registry)
+                if output is None:
+                    # #12800: non-agent alias (human) — deploy_alias_v2 already
+                    # printed the skip notice and wrote nothing. Not a failure.
+                    continue
                 lines = output.read_text(encoding="utf-8").count("\n")
                 print(f"  {alias}: {lines} lines -> {output.relative_to(REPO_ROOT)}")
             except SystemExit:
                 failed.append(alias)
             except Exception as e:
-                print(f"  {alias}: FAILED — {e}", file=sys.stderr)
+                print(f"  {alias}: FAILED -- {e}", file=sys.stderr)
                 failed.append(alias)
         if failed:
             print(f"ERROR: {len(failed)} alias(es) failed: {', '.join(failed)}", file=sys.stderr)
@@ -2239,9 +2309,9 @@ def main():
         se_settings = REPO_ROOT / ".claude" / "settings.json"
         if _ensure_session_end_hook(se_settings):
             print(f"  SessionEnd hook -> {se_settings.relative_to(REPO_ROOT)}")
-        # #12443/#12458 — ensure the per-tool-call hooks (PreToolUse +
-        # PostToolUse + PostToolUseFailure) are present too (same idempotent
-        # settings.json integration).
+        # #12443/#12458/#13213 — ensure the activity-heartbeat hooks
+        # (UserPromptSubmit + PreToolUse + PostToolUse + PostToolUseFailure) are
+        # present too (same idempotent settings.json integration).
         if _ensure_activity_hooks(se_settings):
             print(f"  Activity hooks -> {se_settings.relative_to(REPO_ROOT)}")
         # #12458 — ensure the pause-aware lifecycle hooks (Notification /

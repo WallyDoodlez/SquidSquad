@@ -6,6 +6,7 @@ updated: 2026-06-18
 owner: dm-lead
 status: active
 confidence: high
+source: observation
 ---
 
 # Pattern: no-fiction-window main-landing delivery

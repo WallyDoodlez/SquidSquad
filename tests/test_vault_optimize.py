@@ -1,6 +1,7 @@
 """Tests for references/scripts/vault_optimize.py — fake vault corpus, no real git."""
 
 import json
+import re
 import sys
 import time
 from datetime import datetime, timedelta
@@ -231,6 +232,34 @@ class TestDecay:
         assert "confidence: medium" in text
         assert "Confidence decayed by vault-optimize" in text
 
+    def test_decay_preserves_updated_field(self, patched_vault):
+        """#13042 / VAULT-ARCH §4.4: decay rewrites `confidence:` but must
+        NOT touch `updated:`. The decay clock keys off the last human/agent
+        semantic edit, not the decay event — bumping `updated:` to today
+        restarts the medium→low clock (so the note never reaches `low` on
+        the 120-day-from-edit schedule) and hides the just-decayed note from
+        the next decay-scan for ~60 days. The decay event is recorded by the
+        changelog entry instead.
+        """
+        path = patched_vault / "galaxy" / "decision-stale-high.md"
+        updated_before = re.search(
+            r"updated: (\S+)", path.read_text(encoding="utf-8")
+        ).group(1)
+
+        results = vault_optimize.decay(dry_run=False)
+        assert any("decision-stale-high" in r for r in results)
+
+        after = path.read_text(encoding="utf-8")
+        assert "confidence: medium" in after  # confidence did decay
+        updated_after = re.search(r"updated: (\S+)", after).group(1)
+        assert updated_after == updated_before, (
+            f"decay rewrote updated: {updated_before} -> {updated_after}; "
+            "VAULT-ARCH §4.4 requires it be preserved (the #13042 bug)"
+        )
+        assert updated_after != datetime.now().strftime("%Y-%m-%d"), (
+            "decay bumped updated: to today — the #13042 regression"
+        )
+
     def test_decay_does_not_corrupt_body_content(self, patched_vault):
         """#6514: Body containing 'confidence: high' must not be modified."""
         old_date = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
@@ -346,19 +375,43 @@ class TestPendingQuestions:
 
 
 # ---------------------------------------------------------------------------
+# CLI dispatch
+# ---------------------------------------------------------------------------
+
+class TestCliRunAlias:
+    def test_run_is_alias_for_full_sweep(self, patched_vault, monkeypatch, capsys):
+        """#13043 item 2: `vault_optimize.py run` must dispatch the same
+        full optimize pass as `full-sweep` (VAULT-ARCH §7.3/§8.3 and the
+        vault-optimize sub-skill reference `run`, which previously errored
+        with 'Unknown command: run')."""
+        monkeypatch.setattr(sys, "argv", ["vault_optimize.py", "run", "--dry-run"])
+        rc = vault_optimize.main()
+        out = capsys.readouterr().out
+        assert rc in (0, None)
+        # full-sweep/run print the run_optimize() result as JSON — not the
+        # "Unknown command" error path.
+        assert "Unknown command" not in out
+        assert json.loads(out)  # parses as JSON (the optimize result)
+
+
+# ---------------------------------------------------------------------------
 # Guards
 # ---------------------------------------------------------------------------
 
 class TestGuards:
-    def test_config_disabled(self, patched_vault):
+    def test_config_enabled_field_is_ignored_always_on(self, patched_vault):
+        """#13043: vault-optimize is always-on — there is no enable/disable
+        toggle. A stale `Enabled: no` in config.md must NOT block the guards
+        (activation is gated by note-count + quiet-cycle + cooldown, not config)."""
         config = patched_vault.parent / "config.md"
         config.write_text(
             "# SquidSquad Config\n\n## Vault Optimize\n\n- **Enabled**: no\n",
             encoding="utf-8",
         )
         ok, reason = vault_optimize._check_guards()
-        assert not ok
-        assert "disabled" in reason
+        # patched_vault has 25 notes (above threshold), so guards pass despite
+        # the stale Enabled: no.
+        assert ok, f"always-on guards should pass; blocked with: {reason}"
 
     def test_vault_too_small(self, tmp_path, monkeypatch):
         small_vault = tmp_path / ".squidsquad" / "vault" / "galaxy"

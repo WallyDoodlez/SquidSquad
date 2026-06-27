@@ -11,6 +11,7 @@ author: skill
 owner: skill
 status: active
 confidence: high
+source: observation
 ---
 
 # Learning: an in-process handler's daemon `os._exit` thread can silently kill the whole test suite

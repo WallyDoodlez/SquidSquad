@@ -30,6 +30,9 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
+import urllib.error
+import urllib.request
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -67,6 +70,33 @@ SQUIDSQUAD_DIR = _resolve_squidsquad_dir()
 HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
+# #12825: dedicated exit code that signals the supervised launcher
+# (restart-harness.bat / .sh) to RELAUNCH the harness, vs a clean exit 0 (do not
+# relaunch). Mirrors the agent self-restart exit-42 convention (HARNESS-ARCH
+# §7.4) — the wrapper owns harness lifecycle the way the harness owns agent
+# lifecycle. POST /restart triggers this exit; the one-shot launcher ignores it
+# (harness simply ends) so the behavior degrades gracefully without the wrapper.
+HARNESS_RESTART_EXIT_CODE = 42
+# #12825 DS-F2: /shutdown and /restart each spawn a teardown thread that ends in
+# os._exit() with a different code (0 vs 42). Two concurrent teardown requests
+# would race to os._exit() — last writer wins the exit code, so the wrapper
+# might relaunch a harness an operator meant to stop (or vice-versa). This
+# lock+flag makes "begin teardown" a single-winner gate; the loser gets 409.
+_teardown_lock = threading.Lock()
+_teardown_in_progress = False
+
+
+def _begin_teardown() -> bool:
+    """Atomically claim the single teardown slot. Returns True for the first
+    caller (it should proceed), False if a teardown is already underway."""
+    global _teardown_in_progress
+    with _teardown_lock:
+        if _teardown_in_progress:
+            return False
+        _teardown_in_progress = True
+        return True
+
+
 HEALTH_POLL_INTERVAL = 5  # seconds
 # PRD-E E3 (#10682): cadence of the L4-write file-watcher supervisor.
 # The watchdog Observer runs as its own thread; this interval governs
@@ -95,6 +125,19 @@ FAST_DEATH_WINDOW_SECONDS = 60
 FAST_DEATH_THRESHOLD = 3
 CRASH_BACKOFF_BASE_SECONDS = 30
 CRASH_BACKOFF_CAP_SECONDS = 1800  # 30m — a sane ceiling, not infinite
+
+# #12409 — SLOW reboot-loop breaker (frequency-based), complementing the #12244
+# fast-death (lifetime) breaker above. #12244 only trips on >=FAST_DEATH_THRESHOLD
+# deaths that each lived <FAST_DEATH_WINDOW_SECONDS; a loop where each session
+# lives LONGER than that window (qa's incident: 4 auto-reboots in ~18min, each
+# >60s apart) keeps resetting consecutive_fast_deaths, so #12244 never engages
+# and the agent churns freely. This breaker is lifetime-agnostic: if an agent is
+# auto-rebooted >=SLOW_LOOP_THRESHOLD times within SLOW_LOOP_WINDOW_SECONDS, it
+# backs off (same capped-exponential machinery + crash-looping status) instead
+# of rebooting again. The two breakers compose — fast-death takes precedence; a
+# slow loop that escapes it is caught here. Cause-agnostic, same as #12244.
+SLOW_LOOP_WINDOW_SECONDS = 900  # 15m sliding window
+SLOW_LOOP_THRESHOLD = 3         # reboots within the window before backing off
 
 # #12458 (#12271 slice c) — pause-aware liveness guard. Agent silence / a dead
 # PID is treated as death ONLY when no hook explains it. Each "explained pause"
@@ -131,6 +174,15 @@ STOP_FAILURE_RECENT_SECONDS = 180    # a StopFailure older than this is stale
 #     PreToolUse fires) or model latency never false-positives; tunable from the
 #     shadow-mode divergence data this slice gathers.
 ACTIVITY_GRACE_SECONDS = 600         # 10m
+#   #13179 (#12271 Slice A) — boot-completion grace. A not-yet-booted agent
+#     (bootup_complete=False) is legitimately mid-boot only for so long; past
+#     this window with no bootup-complete it is a wedged boot, not a slow one
+#     (the #12271 qa incident sat bootup_complete=False ~54m at intent=deploying).
+#     Bounds the otherwise-unbounded "booting" escape in progress_liveness so a
+#     never-completing boot reads wedged in the SHADOW verdict (does NOT drive
+#     reboot until the #12492 cutover). Generous so a slow first boot never
+#     false-positives; tunable from the same shadow-mode divergence data.
+BOOT_GRACE_SECONDS = 600             # 10m
 
 # #9242: Diagnostic escape hatch. When True (set by `main()` from
 # `--no-auto-start` or `SQUIDSQUAD_HARNESS_NO_AUTO_START=1`), the
@@ -165,6 +217,7 @@ _NO_FRESHNESS_CHECK = False
 
 import boot_remote
 import health_check
+import process_utils
 import reboot_agent
 
 try:
@@ -195,6 +248,8 @@ class AgentState:
                  # #12244 P2 — crash-loop / session-limit backoff
                  "last_spawn_at", "consecutive_fast_deaths",
                  "reboot_blocked_until",
+                 # #12409 — frequency-based slow-loop breaker (reboot timestamps)
+                 "reboot_history",
                  # #12418 — last SessionEnd hook reason (graceful-exit signal)
                  "last_session_end",
                  # #12443 — activity heartbeat (progress-based liveness)
@@ -214,6 +269,13 @@ class AgentState:
     INTENT_STOPPING = "stopping"
     INTENT_RESTARTING = "restarting"
     INTENT_STOPPED = "stopped"
+    # #12912 (deploy-signal recompose model): a coordinated deploy halt. Set the
+    # moment the harness emits a deploy-signal (AGENT-RUNTIME §5.2 intent-
+    # sequencing rule), BEFORE the agent halts and its PID dies — so the health
+    # poller does not misread the deploy-halt death as a crash and auto-respawn
+    # it out of order (AC9). The deploy sequence (HARNESS-ARCH §7.1) owns the
+    # respawn; it resets intent → RUNNING after the fresh PID boots.
+    INTENT_DEPLOYING = "deploying"
 
     def __init__(self, role: str, clone_path: str = ""):
         self.role = role
@@ -248,6 +310,10 @@ class AgentState:
         self.last_spawn_at = None
         self.consecutive_fast_deaths = 0
         self.reboot_blocked_until = None
+        # #12409 — auto-reboot timestamps (epoch) within the sliding
+        # SLOW_LOOP_WINDOW_SECONDS, for the frequency-based slow-loop breaker.
+        # Pruned to the window on every record/read; persisted across restarts.
+        self.reboot_history = []
         # #12418 — last SessionEnd hook report: {"reason": <stop_reason>,
         # "at": <epoch>}, or None if no SessionEnd seen since boot. The
         # PRESENCE of an entry stamped after last_spawn_at means the agent
@@ -287,6 +353,30 @@ class AgentState:
         # timer) so a legitimately idle agent — nothing dispatched — is never
         # judged dead. None until the first dispatch.
         self.last_dispatch_at = None
+
+    def reset_session_telemetry(self):
+        """Clear per-session activity + pause telemetry on a fresh (re)spawn.
+
+        #13113: the spawn paths already reset claude_pid / bootup_complete /
+        last_session_end / last_dispatch_at, but left these per-session fields
+        carrying the OLD session's values across the PID boundary. A respawned
+        record then showed the dead session's last_activity_at (frozen at the
+        pre-kill timestamp) until the new session landed its first heartbeat —
+        making a healthy fresh agent read as wedged, and (via a stale
+        in_flight_until) holding off death-detection in active_pause(). Reset
+        them to their fresh-AgentState defaults so a respawned record is
+        indistinguishable from a first boot.
+
+        Scope: only the per-session activity/pause telemetry. Crash-loop and
+        backoff bookkeeping (last_spawn_at, consecutive_fast_deaths,
+        reboot_history, reboot_blocked_until, last_stop_failure) is meant to
+        PERSIST across respawns by design and is deliberately not touched here.
+        """
+        self.last_activity_at = None
+        self.last_activity = None
+        self.in_flight_until = None
+        self.waiting_since = None
+        self.compacting_since = None
 
     def active_pause(self, now):
         """#12458 — return a short reason string if a hook currently explains
@@ -330,6 +420,23 @@ class AgentState:
         return (cause in STOP_FAILURE_BACKOFF_CAUSES
                 and 0 <= now - at < STOP_FAILURE_RECENT_SECONDS)
 
+    def _prune_reboot_history(self, now):
+        """#12409 — drop reboot timestamps older than SLOW_LOOP_WINDOW_SECONDS."""
+        cutoff = now - SLOW_LOOP_WINDOW_SECONDS
+        self.reboot_history = [t for t in self.reboot_history if t >= cutoff]
+
+    def record_reboot(self, now):
+        """#12409 — record an auto-reboot for the frequency-based slow-loop
+        breaker, pruning to the sliding window."""
+        self.reboot_history.append(now)
+        self._prune_reboot_history(now)
+
+    def recent_reboot_count(self, now):
+        """#12409 — count of auto-reboots within SLOW_LOOP_WINDOW_SECONDS (prunes
+        as a side effect so a stable agent's history empties over time)."""
+        self._prune_reboot_history(now)
+        return len(self.reboot_history)
+
     def progress_liveness(self, now):
         """#12271 slice d — progress-based liveness verdict (HARNESS-ARCH §15.1).
 
@@ -354,9 +461,21 @@ class AgentState:
         (``update_health``) already holds it when it reads agent state for the
         PID check, so wiring this in there satisfies the contract for free.
         """
-        # A not-yet-booted agent has no heartbeat baseline — never judge it dead
-        # by activity silence (it may be mid-boot). Treat as alive.
+        # A not-yet-booted agent has no heartbeat baseline — within a generous
+        # boot-grace it may legitimately be mid-boot, so treat it as alive. But
+        # the escape is BOUNDED (#13179 / #12271 Slice A): a boot that never
+        # completes is a wedge, not a slow boot (the qa incident sat
+        # bootup_complete=False ~54m). Age it from the most recent spawn
+        # (last_spawn_at; fall back to boot_time) — past BOOT_GRACE_SECONDS with
+        # no bootup-complete it reads wedged. If we have no spawn reference we
+        # cannot age it, so stay conservative and report booting (never
+        # false-positive a death we cannot time). Shadow-only: this changes the
+        # logged verdict, not the reboot decision (cutover is #12492).
         if not self.bootup_complete:
+            boot_ref = (self.last_spawn_at
+                        if self.last_spawn_at is not None else self.boot_time)
+            if boot_ref is not None and now - boot_ref > BOOT_GRACE_SECONDS:
+                return False, "wedged-boot-timeout"
             return True, "booting"
         # An explained pause (in-flight tool call / compacting / waiting) means
         # the silence is accounted for — alive. Reuses the slice-c guard so the
@@ -418,6 +537,8 @@ class AgentState:
             "last_spawn_at": self.last_spawn_at,
             "consecutive_fast_deaths": self.consecutive_fast_deaths,
             "reboot_blocked_until": self.reboot_blocked_until,
+            # #12409 — slow-loop breaker reboot timestamps
+            "reboot_history": list(self.reboot_history),
             # #12418 — last SessionEnd hook reason (graceful-exit signal)
             "last_session_end": self.last_session_end,
             # #12443 — activity heartbeat (progress-based liveness)
@@ -471,6 +592,12 @@ class HarnessState:
         # survives harness restart — a prior failure stays in effect
         # until the operator fixes the source set + restarts.
         self.compose_freshness_failed = False
+        # #12912 S5: set True by the boot freshness DETECT-only check when the
+        # compose source drifted (or no checksum is stored). _deferred_init reads
+        # it after auto-start and emits deploy-signals so each clone recomposes
+        # pull-first — the harness never runs compose.py deploy-all locally at
+        # boot (HARNESS-ARCH §10 step 1b retired). Boot-scoped: not persisted.
+        self._boot_deploy_drift = False
 
     def get_agent(self, role: str) -> AgentState | None:
         with self._lock:
@@ -534,23 +661,64 @@ class HarnessState:
                 agent.last_health_check = time.time()
                 prev_status = agent.status
 
-                # Direct PID check (#4966) — primary health detection
+                # Direct PID check (#4966) — primary health detection.
+                # #12294: trust a PID only if it is alive AND its image is
+                # actually claude (image-verified liveness). A recycled PID now
+                # owned by an unrelated process must not read as "agent alive"
+                # (AC3), and a possibly-stale .claude-pid must be reconciled
+                # against the real process, not blindly trusted (AC1). Where the
+                # image can't be determined, is_claude_process_alive falls back
+                # to plain liveness so a live agent is never mis-reclaimed (AC2).
                 pid = agent.claude_pid
                 alive = False
                 pid_changed = False
-                if pid:
-                    alive = boot_remote._is_process_alive(pid)
+                # The image-verify helpers are total (never raise), but this is
+                # the fleet-wide health poll — guard the whole resolution block
+                # so any unforeseen fault degrades THIS agent to "treat as dead"
+                # rather than aborting liveness for every remaining role
+                # (DS-12294-c3 Finding 1). file_pid is captured once and reused
+                # by the write-back to avoid a second .claude-pid read
+                # (DS-12294-c3 Finding 3).
+                file_pid = None
+                file_read = False
+                try:
+                    if pid:
+                        alive = process_utils.is_claude_process_alive(pid)
 
-                # If no stored PID or PID stale, try reading .claude-pid file
-                if not alive:
-                    file_pid, file_alive = reboot_agent._read_claude_pid(clone_path, role)
-                    if file_pid and file_alive:
-                        pid = file_pid
-                        alive = True
-                        if agent.claude_pid != pid:
-                            pid_changed = True
-                        agent.claude_pid = pid
-                        state_changed = True
+                    # If no stored PID or it didn't image-verify, reconcile from
+                    # the .claude-pid file — image-verified, so a stale (dead) or
+                    # recycled (live non-claude) holder is reclaimed rather than
+                    # adopted.
+                    if not alive:
+                        file_pid, _ = reboot_agent._read_claude_pid(clone_path, role)
+                        file_read = True
+                        if file_pid and process_utils.is_claude_process_alive(file_pid):
+                            pid = file_pid
+                            alive = True
+                            if agent.claude_pid != pid:
+                                pid_changed = True
+                            agent.claude_pid = pid
+                            state_changed = True
+
+                    # #12294 (C) write-back: when we hold an image-verified live
+                    # claude PID for a RUNNING agent, keep .claude-pid in sync
+                    # with the harness's in-memory truth so a *subsequent*
+                    # restart isn't blind to this agent (the missing/stale-file
+                    # observation that motivated this issue). Gated on
+                    # intent=RUNNING so we never race thin_launcher's spawn-time
+                    # write during a restart/deploy (DS-12294-c3 Finding 5);
+                    # only writes when the file is missing or divergent;
+                    # best-effort.
+                    if alive and pid and agent.intent == AgentState.INTENT_RUNNING:
+                        if not file_read:
+                            file_pid, _ = reboot_agent._read_claude_pid(clone_path, role)
+                        if file_pid != pid:
+                            reboot_agent.write_claude_pid(clone_path, role, pid)
+                except Exception as e:
+                    _log(f"{role}: liveness resolution error — {e!r}; "
+                         f"treating as dead this poll")
+                    alive = False
+                    pid_changed = False
 
                 # Fallback: check .health file for legacy wrapper agents
                 if not alive and not pid:
@@ -671,11 +839,20 @@ class HarnessState:
                     # AND disarms the 60s force-kill safety net, so a wedged /
                     # non-cycling agent could never be restarted OR force-killed
                     # via the documented endpoint. Mirrors the STOPPING branch.
-                    if agent.intent == AgentState.INTENT_RESTARTING and pid_changed:
+                    if agent.intent in (
+                        AgentState.INTENT_RESTARTING,
+                        AgentState.INTENT_DEPLOYING,
+                    ) and pid_changed:
+                        # #12912: a fresh PID under intent=deploying means the
+                        # deploy sequence respawned the agent — settle back to
+                        # running exactly like a restart (the deploy sequence
+                        # also sets RUNNING explicitly; this is the defensive
+                        # health-poll mirror).
+                        prev_intent = agent.intent
                         agent.intent = AgentState.INTENT_RUNNING
                         agent.intent_set_at = None  # #4792 Phase 1
                         state_changed = True
-                        _log(f"{role}: alive with new PID (restart complete), reset to running (#11538)")
+                        _log(f"{role}: alive with new PID ({prev_intent} complete), reset to running (#11538/#12912)")
                     elif agent.intent in (
                         AgentState.INTENT_STOPPING,
                         AgentState.INTENT_STOPPED,
@@ -713,6 +890,35 @@ class HarnessState:
                         AgentState.INTENT_STOPPING, AgentState.INTENT_STOPPED
                     ):
                         agent.status = "stopped"
+                    elif agent.intent == AgentState.INTENT_DEPLOYING:
+                        # #12912 (HARNESS-ARCH §7.1.1 / §7.4): a death while
+                        # intent=deploying is normally the EXPECTED deploy-halt
+                        # exit — the deploy sequence owns the respawn — so settle
+                        # to "deploying" (not is_dead below) and suppress the
+                        # crash-respawn path (AC9).
+                        # DS-12912 iter-3 Finding 2: BUT if the agent has been dead
+                        # at intent=deploying longer than the deploy window (it
+                        # crashed BEFORE emitting ack-stop, or the deploy thread
+                        # hung/died), the deploy will never complete and nothing
+                        # else will respawn it. Treat it as a crashed running agent
+                        # so the normal auto-reboot path respawns it on its
+                        # existing committed CLAUDE.md (next poll: "running" → dead
+                        # → "stalled" → reboot; mirrors the load_state recovery).
+                        _deploy_age = (
+                            time.time() - agent.intent_set_at
+                            if agent.intent_set_at is not None else None
+                        )
+                        if (_deploy_age is not None
+                                and _deploy_age > _DEPLOY_WINDOW_SECONDS):
+                            _log(f"{role}: dead at intent=deploying for "
+                                 f"{_deploy_age:.0f}s (> {_DEPLOY_WINDOW_SECONDS}s "
+                                 f"deploy window) — deploy never completed; "
+                                 f"recovering via auto-respawn")
+                            agent.intent = AgentState.INTENT_RUNNING
+                            agent.intent_set_at = None
+                            agent.status = "running"
+                        else:
+                            agent.status = "deploying"
                     elif prev_status == "running":
                         agent.status = "stalled"
                     elif agent.status not in ("stopped",):
@@ -893,6 +1099,35 @@ class HarnessState:
                             f"session/usage limit or a startup crash; not "
                             f"hammering the respawn."
                         )
+                    elif agent.recent_reboot_count(now) >= SLOW_LOOP_THRESHOLD:
+                        # #12409 — frequency-based slow-loop breaker. The
+                        # fast-death streak above reset (this death lived long
+                        # enough), but the agent has still been auto-rebooted
+                        # SLOW_LOOP_THRESHOLD+ times within
+                        # SLOW_LOOP_WINDOW_SECONDS — a SLOW reboot loop #12244
+                        # cannot see. Back off (capped exponential keyed on how
+                        # far over the threshold we are) instead of rebooting,
+                        # reusing the crash-looping status + reboot_blocked_until
+                        # machinery so the resume path below wakes it.
+                        recent = agent.recent_reboot_count(now)
+                        over = recent - SLOW_LOOP_THRESHOLD
+                        backoff = min(
+                            CRASH_BACKOFF_BASE_SECONDS * (2 ** over),
+                            CRASH_BACKOFF_CAP_SECONDS,
+                        )
+                        agent.reboot_blocked_until = now + backoff
+                        agent.status = "crash-looping"
+                        agent.claude_pid = None
+                        agent.bootup_complete = False
+                        state_changed = True
+                        _log(
+                            f"{role}: {recent} auto-reboots within "
+                            f"{SLOW_LOOP_WINDOW_SECONDS}s — slow reboot-loop "
+                            f"breaker (#12409) backing off {backoff:.0f}s "
+                            f"(status=crash-looping). Each session outlived the "
+                            f"#12244 fast-death window, so this frequency breaker "
+                            f"is what catches it."
+                        )
                     else:
                         reboot_roles.append(role)
                         agent.status = "starting"
@@ -954,7 +1189,15 @@ class HarnessState:
             _log(f"Auto-rebooting {role} (was running, intent={self.agents[role].intent})")
             try:
                 result = boot_remote.boot_agent(role)
-                if result.get("success"):
+                # DS-12409 F1: gate on action=="spawn", not success alone. A
+                # success=True/action="skip" (agent came back alive in a race, or
+                # a concurrent boot holds the .booting sentinel) means NO process
+                # was spawned — stamping last_spawn_at / recording a reboot /
+                # clearing the SessionEnd signal would corrupt the fast-death
+                # lifetime and inflate the #12409 slow-loop count for a reboot
+                # that did not happen. Matches the other three spawn paths
+                # (start_team / start_all / deploy respawn).
+                if result.get("success") and result.get("action") == "spawn":
                     with self._lock:
                         agent = self.agents.get(role)
                         if agent:
@@ -963,10 +1206,11 @@ class HarnessState:
                             # death's lifetime is measured from here; this is
                             # what makes the fast-death streak accumulate across
                             # auto-reboots (boot_time is not refreshed here).
-                            # Gated on success (not terminal_pid) to match the
-                            # other three spawn paths — a successful spawn always
-                            # stamps, even if terminal_pid is absent.
                             agent.last_spawn_at = time.time()
+                            # #12409 — record this auto-reboot for the
+                            # frequency-based slow-loop breaker (lifetime-agnostic,
+                            # complements last_spawn_at's fast-death timing).
+                            agent.record_reboot(time.time())
                             # #12418 F3 — clear the prior lifecycle's SessionEnd
                             # so only a hook from THIS spawn can mark the next
                             # death graceful (closes the delayed-hook race).
@@ -976,6 +1220,11 @@ class HarnessState:
                             # baseline (a stale last_dispatch_at from before the
                             # death must not make the fresh agent read wedged).
                             agent.last_dispatch_at = None
+                            # #13113 — same rationale for the per-session activity
+                            # + pause telemetry: a stale last_activity_at / pause
+                            # flag from the dead session must not survive into the
+                            # fresh record (frozen-telemetry masquerade).
+                            agent.reset_session_telemetry()
                 elif result.get("action") == "error":
                     # #11640: boot_agent refused (e.g. unregistered/missing
                     # clone). Never spawned in REPO_ROOT — surface the refusal
@@ -1193,6 +1442,10 @@ class HarnessState:
                         "last_spawn_at": a.last_spawn_at,
                         "consecutive_fast_deaths": a.consecutive_fast_deaths,
                         "reboot_blocked_until": a.reboot_blocked_until,
+                        # #12409 — persist the slow-loop reboot history so a
+                        # harness restart mid-loop doesn't reset the frequency
+                        # breaker and re-enter a slow respawn loop.
+                        "reboot_history": list(a.reboot_history),
                         # #12418 — persist last SessionEnd reason so the
                         # graceful-vs-crash signal survives a harness restart.
                         "last_session_end": a.last_session_end,
@@ -1268,7 +1521,17 @@ class HarnessState:
                 # is left alone. A genuinely-wanted restart can be re-requested
                 # against THIS harness. STOPPING is deliberately NOT reset — an
                 # explicit operator stop MUST survive a harness restart.
-                if agent.intent == AgentState.INTENT_RESTARTING:
+                # #12912: INTENT_DEPLOYING is reset the same way — a deploy in
+                # progress is owned by the harness session that emitted the
+                # deploy-signal. If the harness restarted mid-deploy the sequence
+                # was interrupted; reset to RUNNING so the agent respawns on its
+                # existing committed CLAUDE.md. The deploy did not advance
+                # last_compose_checksum, so drift stays detectable and a future
+                # deploy-signal re-triggers.
+                if agent.intent in (
+                    AgentState.INTENT_RESTARTING,
+                    AgentState.INTENT_DEPLOYING,
+                ):
                     agent.intent = AgentState.INTENT_RUNNING
                     agent.intent_set_at = None
                 # #4792 Phase 1 — two-case migration per CONTEXT-4792.md §5.1,
@@ -1289,6 +1552,23 @@ class HarnessState:
                 agent.boot_time = agent_data.get("boot_time")
                 agent.claude_pid = agent_data.get("claude_pid")
                 agent.terminal_pid = agent_data.get("terminal_pid")
+                # DS-12912 iter-2 Finding 5: restore `status` (save_state persists
+                # it but load_state historically dropped it, so every agent came
+                # back as "unknown" — never in is_dead — and a dead-before-restart
+                # agent was never auto-rebooted). Restoring it lets the health
+                # poller recover: a restored "running" agent whose PID is dead
+                # settles to "stalled" (was_alive=True) and respawns; the
+                # crash-looping / paused resume branches also need their status
+                # back. Defaults to "unknown" for legacy/fresh state files.
+                agent.status = agent_data.get("status", "unknown")
+                # #12912: an interrupted mid-deploy (status="deploying") restored
+                # after a harness restart had its intent reset to RUNNING above;
+                # settle the status to "running" so the dead PID is treated as a
+                # crashed running agent and respawned on its existing committed
+                # CLAUDE.md. The deploy did not complete (checksum unadvanced), so
+                # a future deploy-signal re-triggers.
+                if agent.status == "deploying":
+                    agent.status = "running"
                 # #8695: restore so already-running agents stay ungated after
                 # a harness restart. Defaults to False for older state files.
                 agent.bootup_complete = agent_data.get("bootup_complete", False)
@@ -1298,6 +1578,12 @@ class HarnessState:
                 agent.consecutive_fast_deaths = agent_data.get(
                     "consecutive_fast_deaths", 0) or 0
                 agent.reboot_blocked_until = agent_data.get("reboot_blocked_until")
+                # #12409 — restore the slow-loop reboot history (defaults [] for
+                # older state files / fresh agents). Coerce to a list of numbers
+                # defensively against a hand-edited/corrupt state file.
+                _rh = agent_data.get("reboot_history") or []
+                agent.reboot_history = [t for t in _rh
+                                        if isinstance(t, (int, float))]
                 # #12418 — restore last SessionEnd reason (defaults None for
                 # older state files / fresh agents).
                 agent.last_session_end = agent_data.get("last_session_end")
@@ -1377,13 +1663,19 @@ class EventStream:
         deque, the marker becomes::
 
             {
-                "oldest_id": <str|None>,
+                "oldest_id": <str>,
                 "evicted_count_hint": <int>,
             }
 
         - ``oldest_id`` is the id of the oldest event still retained
-          (the cursor's safe re-anchor point), or ``None`` if the
-          deque is empty.
+          (the cursor's safe re-anchor point). The marker is emitted
+          ONLY when the deque is non-empty, so ``oldest_id`` is always
+          a real id — never ``None``. When the cursor predates the
+          window but the deque is EMPTY (no anchor possible), the
+          marker is suppressed and ``(events, None)`` is returned
+          instead (a benign empty result), so the harness never emits
+          the self-contradictory ``evicted`` + empty + no-anchor triple
+          that trips event_poll's fatal guard (#12837).
         - ``evicted_count_hint`` is a coarse upper bound on the number
           of events that have been pushed out of the retained window
           since boot (lifetime emits − currently retained). Operators
@@ -1409,8 +1701,22 @@ class EventStream:
             # Cursor predates the retained window — emit the eviction
             # signal so the agent can log + advance to a known anchor
             # instead of silently moving past the gap.
+            #
+            # #12837: when the deque is EMPTY there is no anchor to advance
+            # to, so building a marker here would yield the self-contradictory
+            # triple ``evicted:true`` + ``events:[]`` + ``oldest_id:None``.
+            # That is exactly the "harness contract violation" event_poll's
+            # fatal guard (event_poll.py:304) refuses — it returns None and the
+            # agent's Monitor exits 2, taking down the event listener (#9742).
+            # A stale cursor against an empty (cold-start / fully-churned) deque
+            # is a benign "nothing to deliver", NOT an unrecoverable gap: return
+            # an empty result with NO marker. When a real event later lands, the
+            # next poll re-enters this path with a non-empty deque and a valid
+            # ``oldest_id``, and the agent re-anchors normally — no events lost.
+            if not items:
+                return [], None
             events = items[:limit] if len(items) > limit else items
-            oldest_id = items[0].get("id") if items else None
+            oldest_id = items[0].get("id")
             evicted_count_hint = max(
                 0, self._total_emitted_count - len(items)
             )
@@ -1910,9 +2216,18 @@ async def lifespan(app: FastAPI):
                         agent_state.last_spawn_at = time.time()  # #12244 P2
                         agent_state.last_session_end = None  # #12418 F3
                         agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+                        agent_state.reset_session_telemetry()  # #13113
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
+            # #12912 S5: if boot detected compose-source drift, emit deploy-signals
+            # to the freshly-spawned agents so each recomposes pull-first (§10 step
+            # 1b). Safe to emit now even though agents are still booting — the
+            # harness holds their events until status=ready and the deploy-signal is
+            # delivered in the agent's boot drain (§8.2).
+            if getattr(state, "_boot_deploy_drift", False):
+                _emit_boot_deploy_signals()
+                state._boot_deploy_drift = False
         except Exception as e:
             _log(f"Auto-start failed: {e}")
 
@@ -1956,9 +2271,15 @@ async def lifespan(app: FastAPI):
     else:
         try:
             import compose_freshness as _cf
+            # #12912 S5 (HARNESS-ARCH §10 step 1b retired): DETECT-ONLY. The boot
+            # path no longer runs compose.py deploy-all locally — local compose
+            # has no guarantee the source tree is current (the clone may be behind
+            # origin/main), the root cause of the stale-source revert. On drift we
+            # emit deploy-signals (after spawn) so each clone recomposes pull-first.
             _freshness = _cf.check_and_repair(
                 repo_root=REPO_ROOT,
                 stored_checksum=state.get_last_compose_checksum(),
+                detect_only=True,
             )
         except Exception as e:  # noqa: BLE001 — defensive against import bugs
             _log(
@@ -1967,29 +2288,17 @@ async def lifespan(app: FastAPI):
             )
             _freshness = None
     if _freshness is not None:
-        if _freshness.status == "failed":
-            state.compose_freshness_failed = True
-            # DS-10684 F2: persist the flag immediately so a harness
-            # crash between here and the next save_state-triggering
-            # event doesn't lose the failure signal. Matches the
-            # `repaired` branch's flush pattern below.
+        # Detect-only never composes, so it never returns "failed"/"repaired".
+        # The legacy boot-compose spawn-refusal gate is retired — compose failures
+        # now surface per-clone as deploy-error events (§11) — so clear any stale
+        # persisted flag that would otherwise block auto-start forever.
+        state.compose_freshness_failed = False
+        if _freshness.status == "drift":
+            state._boot_deploy_drift = True
             state.save_state()
             _log(
-                "ERROR: compose freshness check FAILED — harness will NOT "
-                "spawn agents. Operator: fix the source issue + restart "
-                "the harness."
-            )
-            _log(f"  diagnostic: {_freshness.diagnostic}")
-            if _freshness.compose_stderr:
-                _log(
-                    f"  compose stderr (truncated): {_freshness.compose_stderr}"
-                )
-        elif _freshness.status == "repaired":
-            state.set_last_compose_checksum(_freshness.new_checksum)
-            state.save_state()
-            _log(
-                f"compose freshness: {_freshness.diagnostic} — checksum "
-                f"now {_freshness.new_checksum[:12]}..."
+                f"compose freshness: {_freshness.diagnostic} — deploy-signals "
+                f"will be emitted after agent spawn (no local compose)"
             )
         else:  # clean
             _log(
@@ -2042,6 +2351,87 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# ---------------------------------------------------------------------------
+# Error capture (#12824) — persist unhandled-exception tracebacks to disk.
+#
+# The #12824 assigned-to 500 transient could not be root-caused: the traceback
+# went only to the harness terminal stdout, which was lost by the time the bug
+# was investigated. These helpers write method+path+traceback to a persisted
+# log so the NEXT 500 (or any swallowed internal hiccup) is diagnosable.
+# ---------------------------------------------------------------------------
+
+
+# Bound the error log so a recurring fault can't fill the disk (#12824
+# DS-review F3): .squidsquad/ lives inside the repo checkout, so exhaustion
+# would break ALL harness persistence (state saves, event persistence, port
+# file). Single-file rotation caps total at ~2× this threshold.
+_HARNESS_ERROR_LOG_MAX_BYTES = 1_000_000
+
+
+def _harness_error_log_path() -> Path:
+    """Path to the persisted harness error log. Resolved per-call so test
+    isolation (SQUIDSQUAD_DIR override) is honored and the helper is patchable."""
+    return SQUIDSQUAD_DIR / "harness-errors.log"
+
+
+def _persist_harness_error(context: str) -> None:
+    """Append the *current* exception's traceback to the harness error log.
+
+    Call from inside an ``except`` block — ``traceback.format_exc()`` captures
+    the active exception. ``context`` describes where it fired (method+path, or
+    the swallowed-work site). Best-effort: any failure writing the log is
+    itself swallowed so the error-logger can never mask the original fault.
+    """
+    tb = traceback.format_exc()
+    ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    entry = f"\n===== {ts} {context} =====\n{tb}\n"
+    try:
+        log_path = _harness_error_log_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Rotate before append if the log has grown past the cap (DS-review F3).
+        try:
+            if (log_path.exists()
+                    and log_path.stat().st_size > _HARNESS_ERROR_LOG_MAX_BYTES):
+                log_path.replace(log_path.with_name(log_path.name + ".1"))
+        except OSError:
+            # Rotation is best-effort — fall through to the append regardless.
+            pass
+        with open(log_path, "a", encoding="utf-8") as fh:
+            fh.write(entry)
+    except Exception:
+        # Never let the error-logger itself raise — it runs on the failure path.
+        pass
+
+
+@app.exception_handler(Exception)
+async def _capture_unhandled_exception(request: Request, exc: Exception):
+    """Global 500 handler (#12824): persist the traceback, then return the
+    standard 500 contract.
+
+    Starlette routes ``HTTPException`` (the intentional 400/404/503 raises)
+    through ``ServerErrorMiddleware``'s sibling ``ExceptionMiddleware``, so this
+    handler only fires on genuinely-unhandled exceptions — the 500s we want
+    diagnosable. The ``isinstance`` re-raise below is defensive belt-and-braces
+    (DS-review F1): it makes the "4xx are unaffected" invariant explicit and
+    robust even if that middleware split ever changes. The response body matches
+    Starlette's default ``ServerErrorMiddleware`` 500 so no caller contract
+    changes; the only added behavior is the on-disk traceback.
+    """
+    if isinstance(exc, HTTPException):
+        # Intentional 4xx/503 — let Starlette render the real status. (Currently
+        # unreachable here; see docstring.)
+        raise exc
+    _persist_harness_error(
+        f"{request.method} {request.url.path} :: "
+        f"{type(exc).__name__}: {exc}"
+    )
+    _log(
+        f"500 on {request.method} {request.url.path}: "
+        f"{type(exc).__name__}: {exc} (traceback → harness-errors.log)"
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
 def _validate_role(role: str) -> str:
@@ -2157,6 +2547,7 @@ async def start_all():
                 agent_state.last_spawn_at = time.time()  # #12244 P2
                 agent_state.last_session_end = None  # #12418 F3
                 agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+                agent_state.reset_session_telemetry()  # #13113
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
@@ -2271,6 +2662,7 @@ async def start_agent(role: str):
             agent_state.last_spawn_at = time.time()  # #12244 P2
             agent_state.last_session_end = None  # #12418 F3
             agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+            agent_state.reset_session_telemetry()  # #13113
             agent_state.terminal_pid = result.get("terminal_pid")
             # #8695: spawning a fresh agent → bootup-complete must be re-asserted
             # by the new process before we'll dispatch any events to it.
@@ -2701,7 +3093,19 @@ async def receive_event(request: Request):
       auto-assigned (#11404 AC1) so the event cannot be silently skipped by
       id-tracking consumers (``event_poll`` skips id-less events).
     """
-    body = await request.json()
+    # #13156: fail CLOSED on a malformed body. stdlib json.loads (strict=True,
+    # used by Starlette's request.json()) raises JSONDecodeError on a raw
+    # (unescaped) control character in a string field — e.g. a hand-built /
+    # curl body or an emit path that serializes multi-line text without
+    # JSON-escaping. Unguarded, that propagated to the global handler as a 500
+    # (47x in harness-errors.log, a fixed-position retry loop). Reject cleanly
+    # with 400 instead so the bad event is dropped, not crashed-on. (ValueError
+    # covers JSONDecodeError + UnicodeDecodeError, both ValueError subclasses.)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed event body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
 
     # Validate minimal fields
     event_type = body.get("event_type")
@@ -2827,25 +3231,219 @@ async def receive_event(request: Request):
             # §3.3 Q7). Also only fires when the agent is still in STOPPING:
             # any subsequent operator action (RUNNING / RESTARTING / STOPPED)
             # supersedes this ack, which is now stale.
-            if ack_payload.get("result") == "stop-confirmed":
+            #
+            # #13148: the stop-path ack-stop result enum is SETTLED to
+            # 'checkpointed' | 'aborted' | 'drained' (AGENT-RUNTIME §10 Q11,
+            # closed 2026-05-30). This branch previously keyed on the obsolete
+            # 'stop-confirmed' (NOT in the enum) — so a correctly-emitted stop
+            # ack would have silently missed it. Recognize the settled values:
+            # 'checkpointed'/'drained' = clean stop; 'aborted' = graceful stop
+            # FAILED → the existing 60s force-kill net is the escalation (logged
+            # for visibility). No agent-side emitter exists yet (event_bus
+            # .ack_stop has no callers); wiring one is the follow-on — this
+            # aligns the handler so it works correctly when that lands.
+            _stop_result = ack_payload.get("result")
+            if _stop_result in ("checkpointed", "aborted", "drained"):
+                if _stop_result == "aborted":
+                    _log(f"{role}: ack-stop result=aborted (graceful stop FAILED)"
+                         f" — 60s force-kill net will escalate")
                 with state._lock:
                     agent = state.agents.get(role)
                     if agent and agent.intent == AgentState.INTENT_STOPPING:
                         # Intent already STOPPING and intent_set_at already
-                        # recorded at request time — nothing to update here.
-                        # The save_state below is a no-op for these fields
-                        # but kept for parity with other ack paths.
+                        # recorded at request time — do NOT reset it (would
+                        # extend the 60s window). The save_state below is a
+                        # no-op for these fields but kept for parity with
+                        # other ack paths.
                         pass
                 # #9242: disk write off the asyncio event loop.
                 await asyncio.to_thread(state.save_state)
+            elif ack_payload.get("result") == "deploy-halted":
+                # #12912 (HARNESS-ARCH §7.1 / §7.4 / AGENT-RUNTIME §5.2): the
+                # agent finished its current atomic unit and halted on a
+                # deploy-signal. Intent was set to DEPLOYING at emit time
+                # (intent-sequencing, AC9), so the imminent PID death is NOT
+                # auto-respawned by the health poller. Record the halt and hand
+                # off to the pull-first deploy sequence (ensure-main → pull →
+                # compose deploy <alias> → commit → push → respawn), which runs
+                # off the asyncio loop (S4).
+                with state._lock:
+                    agent = state.agents.get(role)
+                    if agent:
+                        if agent.intent != AgentState.INTENT_DEPLOYING:
+                            # Defensive: the emit side (S3) sets DEPLOYING; keep
+                            # the invariant even if a deploy-halted ack races the
+                            # emit-side intent write. On the boot-drift path the
+                            # emit side does NOT pre-set intent (pid_changed reset
+                            # race), so THIS is where DEPLOYING is established —
+                            # synchronously, before the agent's PID death is polled
+                            # (the agent exits only after emitting this ack-stop),
+                            # which is the intent-sequencing guarantee on the boot
+                            # path (DS-12912 Finding 4).
+                            agent.intent = AgentState.INTENT_DEPLOYING
+                            agent.intent_set_at = time.time()
+                        agent.status = "deploying"
+                        # DS-12912 Finding 3 (HARNESS-ARCH §7.3): arm a respawn-
+                        # suppression window across the git/compose deploy as
+                        # defense-in-depth (status="deploying" already keeps it out
+                        # of is_dead; the deploy sequence respawns explicitly and
+                        # clears this).
+                        agent.reboot_blocked_until = time.time() + _DEPLOY_WINDOW_SECONDS
+                await asyncio.to_thread(state.save_state)
+                _log(f"{role}: deploy-halted — handing off to deploy sequence")
+                # #12912 S4: run the pull-first per-clone deploy sequence off the
+                # asyncio loop. The thread serializes on _deploy_lock so multiple
+                # affected clones deploy sequentially (AC8), avoiding push races.
+                # The deploy-signal's event_id (ack_event_id, set by the agent per
+                # event-mode-contract Case E) is passed so the harness can advance
+                # the agent's cursor past the deploy-signal before respawn —
+                # without which the respawned agent re-fetches and re-halts on it
+                # (DS-12912 Finding 1 / AC4 infinite-loop guard).
+                threading.Thread(
+                    target=_run_deploy_sequence, args=(role, ack_event_id),
+                    daemon=True, name=f"deploy-{role}",
+                ).start()
 
-    # Update AgentState from event
-    _update_agent_from_event(body)
+    # Update AgentState from event.
+    # #12824: fail-soft. The event_lifecycle.append above is the
+    # routing-critical work (it is what wakes event-mode agents); this
+    # post-append bookkeeping is non-critical. A throw here must NOT 500 the
+    # emission path — assigned-to nudges and EAD handoff routing ride this same
+    # path, and a 500 on it silently breaks waking dormant agents (#12824).
+    # Swallow + persist the traceback (so the next occurrence is diagnosable)
+    # rather than failing the request.
+    try:
+        _update_agent_from_event(body)
+    except Exception:
+        _persist_harness_error(
+            f"POST /events post-append _update_agent_from_event "
+            f"(type={event_type!r}, role={role!r})"
+        )
+        _log(
+            f"post-append _update_agent_from_event failed for "
+            f"type={event_type!r} role={role!r} — swallowed (see harness-errors.log)"
+        )
 
     # Log to console
-    _log_event(body)
+    try:
+        _log_event(body)
+    except Exception:
+        _persist_harness_error(
+            f"POST /events post-append _log_event "
+            f"(type={event_type!r}, role={role!r})"
+        )
+        _log(
+            f"post-append _log_event failed for type={event_type!r} "
+            f"role={role!r} — swallowed (see harness-errors.log)"
+        )
 
     return {"status": "ok"}
+
+
+@app.post("/work/assign")
+async def work_assign(request: Request):
+    """Manual wake-injection primitive (#12495).
+
+    Emits an ``assigned-to`` event to ``target_alias`` **without** a status
+    transition — the distinguishing feature versus ``tracker.py transition``.
+    This is the sanctioned BACKUP / babysitting path for waking a stuck-but-
+    alive agent (PM duty) or surfacing a process concern to PM, for when the
+    PRIMARY wake paths (self-wake #12506, never-stop #12853, EAD on forge-state
+    change) don't fire. It is NOT the default routing mechanism: transition-
+    driven handoffs are routed by the ExternalActivityDetector off forge state
+    (AGENT-RUNTIME §8.3), not through this endpoint.
+
+    Deliberately does **not** rewrite the ``role:*`` label: a manual re-nudge
+    targets work the agent already owns (or pings PM), so ownership is
+    unchanged. (The aspirational "universal router that rewrites labels on every
+    call" §8.3 design is NOT what this implements — see the #12495 changelog.)
+
+    Response contract (matches HARNESS-ARCH §4.3):
+    - ``200`` ``{"status": "ok", "event_id": ...}`` — assigned-to emitted.
+    - ``404`` — ``target_alias`` not in the install's registered aliases.
+    - ``400`` — malformed body, missing ``target_alias``, or self-assign
+      (``target_alias == X-Squidsquad-Alias``; structural anti-loop invariant).
+
+    Check order: malformed-body → missing-target → self-assign (400) →
+    alias-existence (404). Self-assign is checked before existence so a
+    self-targeted call returns the terse 400 rather than a 404 that would
+    echo the full known-alias registry. If the config is unreadable the
+    existence check falls OPEN (same posture as POST /events' unknown-role
+    guard — a broken-config wedge is worse than letting one event through).
+
+    Authority: the harness enforces only alias-existence + the self-assign
+    invariant — NOT class-from-class permissions (decision-class-vs-alias-
+    routing-model, 2026-05-25). Who *should* call it (PM babysitting; any agent
+    escalating a process concern to PM) is process discipline documented in
+    §8.3, not a harness gate.
+    """
+    # Fail CLOSED on a malformed body, same guard as POST /events (#13156).
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed /work/assign body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+
+    target_alias = body.get("target_alias")
+    if not target_alias:
+        raise HTTPException(status_code=400, detail="target_alias is required")
+
+    # Self-assign invariant: an agent may not assign work to itself (structural
+    # anti-loop, not a permission check). The caller's identity is the
+    # X-Squidsquad-Alias request header; absent header → caller unidentified,
+    # invariant un-checkable, so it is skipped (the tracker.py CLI always sets
+    # it). EAD does not use this HTTP path, so no __ead__ sentinel is needed.
+    emitter_alias = request.headers.get("X-Squidsquad-Alias")
+    if emitter_alias and emitter_alias == target_alias:
+        raise HTTPException(
+            status_code=400,
+            detail=f"self-assign forbidden: target_alias == emitter ({target_alias})",
+        )
+
+    # Alias-existence validation (the harness's one routing check).
+    try:
+        allowed_roles = set(boot_remote._get_all_roles()) | {"pm"}
+    except (SystemExit, Exception):
+        # Config unreadable — fall open rather than reject (same posture as
+        # POST /events' unknown-role guard).
+        allowed_roles = None
+    if allowed_roles is not None and target_alias not in allowed_roles:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "unknown alias",
+                "target_alias": target_alias,
+                "known_aliases": sorted(allowed_roles),
+            },
+        )
+
+    # Build the assigned-to payload. issue_number / event_context / payload are
+    # all optional for a manual wake; event_context defaults to "work-assign".
+    issue_number = body.get("issue_number")
+    event_context = body.get("event_context") or "work-assign"
+    extra_payload = body.get("payload")
+    payload = {
+        "target_alias": target_alias,
+        "event_context": event_context,
+    }
+    if issue_number is not None:
+        payload["issue_number"] = str(issue_number)
+    if isinstance(extra_payload, dict):
+        # Caller-supplied payload fields ride through (e.g. title, concern).
+        # Reserved keys above win to keep the event shape coherent.
+        for k, v in extra_payload.items():
+            payload.setdefault(k, v)
+
+    event = _emit_event("assigned-to", "harness", payload=payload)
+    _log(
+        f"/work/assign → {target_alias}"
+        f"{f' (issue #{issue_number})' if issue_number is not None else ''}"
+        f" context={event_context!r} by={emitter_alias or '?'}"
+    )
+    return {"status": "ok", "event_id": event["id"]}
 
 
 @app.get("/events")
@@ -2944,14 +3542,24 @@ async def get_events_for_role(
     else:
         events = event_stream.get_recent(limit * 3)
 
-    # Filter: events targeted at this role OR matching the role's reaction types
+    # Filter: events targeted at this role OR matching the role's reaction types.
+    # #13255: a reacts-to match must EXCLUDE events the requesting role emitted
+    # itself — otherwise an agent's own git-commit / status-transition events
+    # come back through its own event_poll, wake it via Monitor, and drain to a
+    # guaranteed no-op (the care filter skips them: no target_alias). Explicit
+    # target_alias targeting still wins unconditionally (so a hypothetical
+    # self-assign via target_alias is preserved); only the broadcast reacts-to
+    # branch suppresses self-emitted events. Cross-agent awareness is unaffected:
+    # a verifier reject is qa-emitted, so the worker (different emitter) still
+    # sees it; assigned-to / deploy-signal are harness-emitted, never suppressed.
     filtered = []
     for e in events:
         target = e.get("payload", {}).get("target_alias", "")
         etype = e.get("event_type", "")
+        emitter = e.get("role", "")
         if target == role:
             filtered.append(e)
-        elif relevant_types and etype in relevant_types:
+        elif relevant_types and etype in relevant_types and emitter != role:
             filtered.append(e)
 
     # Same skim-then-advance rule as GET /events: oldest-first when the
@@ -3302,83 +3910,86 @@ async def restart_agent(role: str):
     }
 
 
-@app.post("/shutdown", status_code=202)
-async def shutdown():
-    """Stop all agents, then exit harness. Only stops agents that are running.
+def _teardown_and_exit(exit_code, delete_port_file):
+    """Stop all running agents, optionally clean the port file, then exit the
+    harness process with ``exit_code`` (#12825).
 
-    Returns 202 Accepted immediately. Shutdown work runs in a background thread
-    to avoid blocking the async event loop (time.sleep in async = blocked responses).
+    Shared by ``/shutdown`` (exit 0, delete port file — the harness is gone) and
+    ``/restart`` (exit ``HARNESS_RESTART_EXIT_CODE``, keep the port file — the
+    supervised launcher relaunches on the same port and the new harness rewrites
+    it at boot). Runs in a background daemon thread so the async event loop is
+    never blocked by the agent-idle wait / sleeps.
     """
-    _log("Shutdown requested — starting background shutdown...")
+    roles = boot_remote._get_all_roles()
 
-    def _do_shutdown():
-        """Background thread: stop agents, clean port file, exit."""
-        roles = boot_remote._get_all_roles()
+    running_roles = []
+    for role in roles:
+        # Use intent to check if already stopping (#4949)
+        agent = state.get_agent(role)
+        if agent and agent.intent == AgentState.INTENT_STOPPING:
+            _log(f"  {role}: skip (already stopping)")
+            continue
+        # #11640: _needs_boot resolves the clone and now raises for an
+        # unregistered / missing one. Such a role cannot be running in a
+        # clone we refuse to resolve — skip it rather than crashing the
+        # teardown thread.
+        try:
+            needs_boot, _, _ = boot_remote._needs_boot(role)
+        except boot_remote.CloneResolutionError as e:
+            _log(f"  {role}: skip (clone unresolved — {e})")
+            continue
+        if needs_boot:
+            _log(f"  {role}: skip (not running)")
+            continue
+        running_roles.append(role)
 
-        running_roles = []
-        for role in roles:
-            # Use intent to check if already stopping (#4949)
-            agent = state.get_agent(role)
-            if agent and agent.intent == AgentState.INTENT_STOPPING:
-                _log(f"  {role}: skip (already stopping)")
-                continue
-            # #11640: _needs_boot resolves the clone and now raises for an
-            # unregistered / missing one. Such a role cannot be running in a
-            # clone we refuse to resolve — skip it rather than crashing the
-            # shutdown thread.
-            try:
-                needs_boot, _, _ = boot_remote._needs_boot(role)
-            except boot_remote.CloneResolutionError as e:
-                _log(f"  {role}: skip (clone unresolved — {e})")
-                continue
-            if needs_boot:
-                _log(f"  {role}: skip (not running)")
-                continue
-            running_roles.append(role)
+    if running_roles:
+        _log(f"Stopping running agents: {', '.join(running_roles)}")
+        for role in running_roles:
+            clone_path = boot_remote._get_clone_path(role)
+            # Set intent — cycle_post.py queries API for intent (#4966).
+            # Only stamp intent_set_at on the transition INTO STOPPING so a
+            # repeat call does not extend the 60s force-kill clock.
+            agent = state.get_agent(role) or AgentState(role, clone_path)
+            if agent.intent != AgentState.INTENT_STOPPING:
+                agent.intent = AgentState.INTENT_STOPPING
+                agent.intent_set_at = time.time()  # #4792 Phase 1
+            state.set_agent(role, agent)
+        # NOTE: this `state.save_state()` runs inside the sync teardown daemon
+        # thread (see threading.Thread in the endpoints below), NOT on the
+        # asyncio event loop, so it is intentionally NOT wrapped in
+        # `asyncio.to_thread`.
+        state.save_state()
 
-        if running_roles:
-            _log(f"Stopping running agents: {', '.join(running_roles)}")
+        _log("Waiting for agents to idle (max 30s)...")
+        for _ in range(6):
+            all_idle = True
             for role in running_roles:
-                clone_path = boot_remote._get_clone_path(role)
-                # Set intent — cycle_post.py queries API for intent (#4966).
-                # Only stamp intent_set_at on the transition INTO STOPPING so a
-                # repeat /shutdown call does not extend the 60s force-kill clock.
-                agent = state.get_agent(role) or AgentState(role, clone_path)
-                if agent.intent != AgentState.INTENT_STOPPING:
-                    agent.intent = AgentState.INTENT_STOPPING
-                    agent.intent_set_at = time.time()  # #4792 Phase 1
-                state.set_agent(role, agent)
-            # NOTE: this `state.save_state()` runs inside the sync
-            # `_do_shutdown` daemon thread (see threading.Thread
-            # below), NOT on the asyncio event loop, so it is
-            # intentionally NOT wrapped in `asyncio.to_thread`.
-            state.save_state()
+                state_file = SQUIDSQUAD_DIR / role / "current-state"
+                try:
+                    content = state_file.read_text(encoding="utf-8").strip()
+                    if not content.startswith("idle"):
+                        all_idle = False
+                        break
+                except (OSError, FileNotFoundError):
+                    pass
+            if all_idle:
+                break
+            time.sleep(5)
 
-            _log("Waiting for agents to idle (max 30s)...")
-            for _ in range(6):
-                all_idle = True
-                for role in running_roles:
-                    state_file = SQUIDSQUAD_DIR / role / "current-state"
-                    try:
-                        content = state_file.read_text(encoding="utf-8").strip()
-                        if not content.startswith("idle"):
-                            all_idle = False
-                            break
-                    except (OSError, FileNotFoundError):
-                        pass
-                if all_idle:
-                    break
-                time.sleep(5)
+        for role in running_roles:
+            clone_path = boot_remote._get_clone_path(role)
+            claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
+            if alive and claude_pid:
+                _log(f"  Killing {role} (PID {claude_pid})...")
+                reboot_agent._kill_process(claude_pid)
+    else:
+        _log("No running agents to stop.")
 
-            for role in running_roles:
-                clone_path = boot_remote._get_clone_path(role)
-                claude_pid, alive = reboot_agent._read_claude_pid(Path(clone_path), role)
-                if alive and claude_pid:
-                    _log(f"  Killing {role} (PID {claude_pid})...")
-                    reboot_agent._kill_process(claude_pid)
-        else:
-            _log("No running agents to stop.")
-
+    # #12825: only the permanent shutdown removes the port file. On restart the
+    # supervised launcher relaunches immediately and the new harness rewrites
+    # the port file at boot — deleting it would open a needless discovery gap.
+    if delete_port_file:
         for attempt in range(3):
             try:
                 if HARNESS_PORT_FILE.exists():
@@ -3389,13 +4000,50 @@ async def shutdown():
                 _log(f"WARNING: Could not delete port file (attempt {attempt + 1}/3): {e}")
                 time.sleep(0.5)
 
-        _log("Harness exiting.")
-        time.sleep(1)
-        os._exit(0)
+    _log(f"Harness exiting (code {exit_code}).")
+    time.sleep(1)
+    os._exit(exit_code)
 
-    threading.Thread(target=_do_shutdown, daemon=True, name="shutdown").start()
 
+@app.post("/shutdown", status_code=202)
+async def shutdown():
+    """Stop all agents, then exit harness (code 0 — permanent; not relaunched).
+
+    Returns 202 Accepted immediately. Teardown runs in a background thread to
+    avoid blocking the async event loop (time.sleep in async = blocked responses).
+    """
+    if not _begin_teardown():
+        raise HTTPException(status_code=409, detail="Teardown already in progress.")
+    _log("Shutdown requested — starting background shutdown...")
+    threading.Thread(
+        target=_teardown_and_exit, args=(0, True),
+        daemon=True, name="shutdown",
+    ).start()
     return {"status": "shutting_down", "message": "Shutdown initiated. Harness will exit shortly."}
+
+
+@app.post("/restart", status_code=202)
+async def restart():
+    """Restart the harness (#12825): stop all agents cleanly, then exit with
+    ``HARNESS_RESTART_EXIT_CODE`` so the supervised launcher relaunches it.
+
+    Distinct from ``/shutdown`` (which exits 0 and is NOT relaunched). This is
+    the agent-callable harness-restart trigger — the requesting agent's own
+    session ends with the harness and respawns fresh under the relaunched one.
+    Under the one-shot launcher (no wrapper) the harness simply exits and is not
+    relaunched; the wrapper is what makes restart self-healing.
+    """
+    if not _begin_teardown():
+        raise HTTPException(status_code=409, detail="Teardown already in progress.")
+    _log(f"Restart requested — tearing down for relaunch (exit "
+         f"{HARNESS_RESTART_EXIT_CODE})...")
+    threading.Thread(
+        target=_teardown_and_exit, args=(HARNESS_RESTART_EXIT_CODE, False),
+        daemon=True, name="restart",
+    ).start()
+    return {"status": "restarting",
+            "message": "Restart initiated. Harness will exit with the restart "
+                       "code; the supervised launcher will relaunch it."}
 
 
 # ---------------------------------------------------------------------------
@@ -3458,6 +4106,9 @@ def _emit_event(event_type, role, payload=None, **extra):
     event.update(extra)
     event_lifecycle.append(event)
     _log_event(event)
+    # #12495: return the emitted event so HTTP callers (e.g. POST /work/assign)
+    # can report the generated event_id. Existing callers ignore the return.
+    return event
 
 
 def _get_pr_files(pr_number):
@@ -3509,7 +4160,21 @@ async def merge_pr(request: Request):
 
     Request body: {"pr_number": int, "branch": str, "role": str}
     """
-    body = await request.json()
+    # #13170: fail CLOSED on a malformed/non-object body, mirroring the
+    # established guard on POST /events (#13156) and POST /work/assign (#12495).
+    # A bare request.json() raises JSONDecodeError/ValueError on a truncated or
+    # control-char body, and a valid-but-non-object body ([1,2], null, 42)
+    # raises AttributeError on .get() below — both propagate to the global
+    # handler as a 500 (traceback-to-disk) where a clean 400 is the contract.
+    # /merge was the last unguarded JSON-body POST handler.
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed /merge body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+
     pr_number = body.get("pr_number")
     branch = body.get("branch", "")
     role = body.get("role", "unknown")
@@ -3570,6 +4235,24 @@ async def merge_pr(request: Request):
 
             if refs_changed:
                 _log(f"PR #{pr_number} touched references/ — running compose...")
+                # #12906 (Phase 1 of #12895): the PR was merged on the
+                # remote — the local clone must be put on main + pulled
+                # BEFORE deploy-all, or compose regenerates every
+                # CLAUDE.md from pre-merge (stale) source and pushes that
+                # revert fleet-wide. If the clone can't be freshened,
+                # abort the recompose so agents keep last-known-good
+                # composed output until a later recompose succeeds.
+                fresh_ok, fresh_detail = git_ops.ensure_main_and_pull("harness")
+                if not fresh_ok:
+                    _log(f"WARNING: aborting compose after PR #{pr_number} — "
+                         f"could not freshen source ({fresh_detail}). Agents "
+                         f"keep current CLAUDE.md until next recompose.")
+                    _emit_event("compose-completed", "harness", payload={
+                        "success": False,
+                        "error": f"freshen-source-failed: {fresh_detail}",
+                        "trigger_pr": str(pr_number),
+                    })
+                    return
                 compose_result = subprocess.run(
                     [sys.executable, str(SCRIPT_DIR / "compose.py"), "deploy-all"],
                     capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -3656,18 +4339,564 @@ def _reboot_affected_agents(pr_number, files_changed):
         _log(f"Compose after PR #{pr_number}: no agent templates changed — no reboots needed")
         return
 
-    _log(f"Compose after PR #{pr_number}: rebooting affected agents: {', '.join(sorted(affected_roles))}")
-    for role in affected_roles:
+    # #12912 (HARNESS-ARCH §7.6): _reboot_affected_agents is the deploy-signal
+    # EMITTER. It does NOT recompose-and-restart directly any more. For each
+    # affected alias it sets intent=DEPLOYING (intent-sequencing, AC9 — committed
+    # BEFORE the agent can possibly respond, so the deploy-halt death is never
+    # misread as a crash) and emits a deploy-signal. The agent halts at its next
+    # between-task on-main boundary and emits ack-stop(result=deploy-halted),
+    # whereupon the per-clone pull-first deploy sequence runs (§7.1 / S4).
+    # Emitting only on actual post-compose alias drift (the git-diff scope above)
+    # is what closes #12397 (no spurious restart on a no-op recompose).
+    # NB: bootup_complete is deliberately left TRUE — unlike the restart paths,
+    # the agent MUST still receive this deploy-signal off the event bus to halt
+    # cooperatively; suppressing dispatch would strand the signal undelivered.
+    _log(f"Compose after PR #{pr_number}: emitting deploy-signal to affected "
+         f"agents: {', '.join(sorted(affected_roles))}")
+    for role in sorted(affected_roles):
         agent = state.get_agent(role)
-        if agent and agent.intent == AgentState.INTENT_RUNNING:
-            agent.intent = AgentState.INTENT_RESTARTING
-            agent.intent_set_at = time.time()  # #4792 Phase 1
-            # #8695: match the other three restart paths — close the window
-            # where events would still dispatch after we've marked the agent
-            # for restart but before its process actually dies.
+        # DS-12912 iter-3 Finding 1: only signal agents that are actually ALIVE.
+        # A crash-looping / paused / dead agent still carries intent=RUNNING;
+        # flipping it to DEPLOYING would lock it out of the crash-loop resume
+        # path (which needs should_reboot, excluding DEPLOYING) — a permanent
+        # wedge until harness restart. A non-running affected agent picks up the
+        # new CLAUDE.md when it next recovers/boots (a residual drift re-triggers
+        # a deploy-signal on the next boot drift-check).
+        if (agent and agent.intent == AgentState.INTENT_RUNNING
+                and agent.status == "running"):
+            agent.intent = AgentState.INTENT_DEPLOYING
+            agent.intent_set_at = time.time()
+            state.set_agent(role, agent)
+            state.save_state()  # commit intent BEFORE emit (sequencing)
+            _emit_event("deploy-signal", "harness", payload={
+                "target_alias": role,
+                "event_type": "deploy-signal",
+                "event_context": "deploy-signal",
+            })
+
+
+# ---------------------------------------------------------------------------
+# #12912 (HARNESS-ARCH §7.1 / §7.6 / §11): per-clone pull-first deploy sequence
+# ---------------------------------------------------------------------------
+
+# Serializes per-clone deploys so concurrent deploy-halts never race a push to
+# the shared origin/main ref (AC8 / design §3 decision 5). Each deploy-halt ack
+# spawns a thread that acquires this lock, so the deploys run one clone at a time
+# (deploy A → pull/compose/commit/push/restart A → then B …).
+_deploy_lock = threading.Lock()
+
+_DEPLOY_COMPOSED_FILES = ("CLAUDE.md", "SOUL.md", "CLAUDE.linked.md")
+# Respawn-suppression window armed when a deploy-halt ack arrives (HARNESS-ARCH
+# §7.3). Generous — covers ensure-main → pull → compose → commit → push. The
+# deploy sequence respawns explicitly and clears it well before this elapses.
+_DEPLOY_WINDOW_SECONDS = 300
+
+# #13077: how long the deploy respawn waits for the deploy-halted agent's OWN
+# claude process to be reaped by the OS AFTER the harness force-kills it (the
+# agent cannot self-/quit, so the harness terminates it actively — see
+# _respawn_agent_process). boot_agent's singleton guard refuses to spawn over a
+# live process, so we confirm the killed PID is gone before booting its
+# replacement. Kept SHORT because a force-kill is near-instant — this only
+# covers OS reap latency. Still alive after this window means the force-kill
+# itself failed (permission / un-killable) → abort fast rather than block the
+# serialized _deploy_lock for long (DS-13032-B F3: a full fix moves the respawn
+# outside _deploy_lock so the wait never blocks other clones' deploys — tracked
+# follow-up).
+_DEPLOY_RESPAWN_PID_WAIT_S = 10
+
+
+def _await_pid_death(pid, timeout_s, poll_s=0.5):
+    """Poll until ``pid`` is no longer alive, up to ``timeout_s`` (#13032).
+
+    Returns True if the process died within the window, False if still alive at
+    the deadline. Runs in the deploy daemon thread (off the asyncio loop), so a
+    blocking sleep is fine. Uses plain liveness (``boot_remote._is_process_alive``):
+    we are observing a KNOWN PID disappear, which is safe regardless of PID
+    recycling — we never force-kill on this signal (an image-verified force-kill
+    auto-recovery is a #12294-dependent follow-up)."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if not boot_remote._is_process_alive(pid):
+            return True
+        time.sleep(poll_s)
+    return not boot_remote._is_process_alive(pid)
+
+
+def _respawn_agent_process(role):
+    """Explicitly respawn a deploy-halted agent's claude process (DS-12912
+    Finding 2). The agent's old claude PID is typically still ALIVE — it halted
+    on the deploy-signal but an LLM cannot self-/quit (#13077) — so we force-kill
+    it and confirm death before booting. After a deploy its status is "deploying"
+    — which is NOT in the health poller's is_dead set, so the poller will NEVER
+    auto-respawn it. We therefore boot it directly and stamp fresh-spawn state,
+    mirroring the auto-start path.
+
+    Returns True iff the respawn succeeded — a fresh process was spawned OR the
+    agent was already alive (boot_agent action="skip"); i.e. the agent is now
+    alive/recovering. Returns False only when boot_agent raised or reported
+    success=False (DS-12912 iter-3 Finding 4: the return feeds `respawn_ok` in
+    the deploy-error event, whose useful meaning to the operator is "is the agent
+    recovered" — not the narrower "was a brand-new PID spawned").
+
+    On ANY non-spawn outcome — boot_agent raised, returned success=False, or
+    returned a non-"spawn" action — the agent MUST NOT be left at
+    status="deploying" (it would be permanently stuck: not is_dead, never
+    auto-respawned — DS-12912 iter-2 Findings 1+2). We settle a failure to
+    "error" (which IS in is_dead) with intent=RUNNING so it is honest and
+    surfaced, and a success-without-spawn to "starting"."""
+    agent = state.get_agent(role) or AgentState(role)
+
+    # #13077: actively terminate the deploy-halted agent's OWN claude process
+    # before booting its replacement. The #13032 code WAITED for a cooperative
+    # self-exit ("the agent /quits itself per Case E"), but an LLM agent CANNOT
+    # execute /quit — it can only stop emitting output (operator-confirmed,
+    # inline 2026-06-21: "agent cannot kill itself, it doesnt work. so the
+    # harness has to act"). The old process therefore never exits on its own, so
+    # the passive wait always timed out to status=error and deploy-halt →
+    # recompose → respawn never completed. The deploy path also gets NO help from
+    # the 60s force-kill safety net (that net only fires on intent STOPPING /
+    # RESTARTING; a deploy-halted agent sits at status="deploying"), so this is
+    # the one respawn path that must force-kill the old process itself.
+    #
+    # Force-kill the old process tree (reaps the Monitor-spawned event_poll
+    # sidecar too, #12363), then CONFIRM death before booting — boot_agent's
+    # singleton guard refuses to spawn over a live PID, which would no-op the
+    # respawn and strand the agent on the stale pre-recompose CLAUDE.md (the
+    # original #13032 failure mode). _DEPLOY_RESPAWN_PID_WAIT_S now bounds the
+    # post-kill OS-reap confirm (force-kill is near-instant), not a self-exit.
+    old_pid = agent.claude_pid
+    if old_pid and boot_remote._is_process_alive(old_pid):
+        _log(f"{role}: deploy respawn — force-killing deploy-halted claude PID "
+             f"{old_pid} (agent cannot self-/quit, #13077)")
+        try:
+            reboot_agent._kill_process(old_pid)
+        except Exception as e:
+            _log(f"{role}: deploy respawn force-kill of PID {old_pid} raised "
+                 f"{type(e).__name__}: {e}")
+        if not _await_pid_death(old_pid, _DEPLOY_RESPAWN_PID_WAIT_S):
+            agent.status = "error"
+            agent.intent = AgentState.INTENT_RUNNING
+            agent.intent_set_at = None
+            agent.reboot_blocked_until = None
             agent.bootup_complete = False
             state.set_agent(role, agent)
+            state.save_state()
+            _log(f"{role}: deploy respawn ABORTED — claude PID {old_pid} still "
+                 f"alive {_DEPLOY_RESPAWN_PID_WAIT_S}s after force-kill — "
+                 f"left status=error")
+            # The deploy-error emit is owned by the caller (DS-13032-B F1:
+            # avoids a double-emit when called from _deploy_recover_and_respawn,
+            # which emits its own stage failure).
+            return False
+
+    agent.reboot_blocked_until = None
+    agent.intent = AgentState.INTENT_RUNNING
+    agent.intent_set_at = None
+    agent.bootup_complete = False
+    try:
+        result = boot_remote.boot_agent(role)
+    except Exception as e:
+        agent.status = "error"          # is_dead → honest, not a "deploying" wedge
+        agent.claude_pid = None
+        state.set_agent(role, agent)
+        state.save_state()
+        _log(f"{role}: deploy respawn boot_agent raised "
+             f"{type(e).__name__}: {e} — left status=error")
+        return False
+    spawned = bool(result.get("success") and result.get("action") == "spawn")
+    if spawned:
+        agent.status = "starting"
+        agent.boot_time = time.time()
+        agent.last_spawn_at = time.time()
+        agent.last_session_end = None
+        agent.last_dispatch_at = None
+        agent.reset_session_telemetry()  # #13113
+        agent.terminal_pid = result.get("terminal_pid")
+        state.set_agent(role, agent)
+        state.save_state()
+        _log(f"{role}: deploy respawn — spawn OK")
+        return True
+
+    # #13032: success-without-spawn (action="skip" — boot_agent found the agent
+    # STILL ALIVE) is unexpected here: we already waited for the old PID to die,
+    # so a skip means a stale .claude-pid or a race produced a live process we
+    # did NOT just spawn. Do NOT silently settle it to running on the old
+    # instructions (the original #13032 no-op) — fail honest + surface it.
+    agent.status = "error"
+    agent.claude_pid = None
+    state.set_agent(role, agent)
     state.save_state()
+    detail = (f"boot_agent returned action={result.get('action')!r} "
+              f"success={result.get('success')!r} after PID-death wait: "
+              f"{result.get('message')}")
+    _log(f"{role}: deploy respawn FAILED — {detail}")
+    # deploy-error emit owned by the caller (DS-13032-B F1).
+    return False
+
+
+def _emit_boot_deploy_signals():
+    """#12912 S5 (HARNESS-ARCH §10 step 1b): on boot drift, emit a deploy-signal
+    to each running agent so it recomposes pull-first — the harness never composes
+    deploy-all locally at boot.
+
+    Unlike the post-merge emitter (_reboot_affected_agents), intent is NOT pre-set
+    to DEPLOYING here: a just-spawned agent's first health poll resets a DEPLOYING
+    intent back to RUNNING on pid_changed, so pre-setting at boot is futile. The
+    ack-stop(result=deploy-halted) handler sets DEPLOYING when the agent actually
+    halts — before its PID dies — which is the intent-sequencing guarantee on the
+    boot path. A no-op deploy (committed output already current — the common case
+    at boot) is a clean success, so emitting to every alias on drift is safe; at
+    boot the affected set is unknown without composing, and composing is exactly
+    what we are retiring. Called once per harness boot (from _deferred_init), so
+    post-deploy respawns never re-trigger it."""
+    if _NO_AUTO_REBOOT:
+        _log("[no-auto-reboot] boot deploy-signal emit skipped")
+        return
+    signaled = []
+    for role in boot_remote._get_all_roles():
+        agent = state.get_agent(role)
+        if agent and agent.intent == AgentState.INTENT_RUNNING:
+            _emit_event("deploy-signal", "harness", payload={
+                "target_alias": role,
+                "event_type": "deploy-signal",
+                "event_context": "deploy-signal",
+            })
+            signaled.append(role)
+    if signaled:
+        _log(f"Boot drift: emitted deploy-signal to {', '.join(signaled)} "
+             f"(pull-first per-clone deploy; no local boot compose)")
+
+
+def _git_in_clone(clone_path, args, timeout=120):
+    """Run a git command inside a specific agent clone (the harness operating on
+    another clone is new machinery — design §0). Returns the CompletedProcess."""
+    return subprocess.run(
+        ["git", *args],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        check=False, cwd=str(clone_path), timeout=timeout,
+    )
+
+
+def _safe_stash_pop_in_clone(clone_path):
+    """Clone-aware mirror of ``git_ops._safe_stash_pop`` (#13045): pop the top
+    stash leaving NO conflict markers. On a pop conflict, restore each unmerged
+    path to the pulled ``HEAD`` and drop the now-applied stash — the just-pulled
+    state is authoritative for the state files clone-sync touches (e.g.
+    config.md's ship counter). Returns True on a clean pop, False if it
+    conflicted and was force-resolved (or popped nothing)."""
+    pop = _git_in_clone(clone_path, ["stash", "pop"])
+    if pop.returncode == 0:
+        return True
+    conflicted = _git_in_clone(
+        clone_path, ["diff", "--name-only", "--diff-filter=U"])
+    unmerged = [p.strip() for p in conflicted.stdout.splitlines() if p.strip()]
+    if not unmerged:
+        # Pop failed for a NON-conflict reason (no stash entry / unrelated git
+        # error) — the stash was NOT applied. Do NOT drop it (that would discard
+        # un-applied work). Leave it intact and report the pop did not succeed.
+        return False
+    for path in unmerged:
+        _git_in_clone(clone_path, ["checkout", "HEAD", "--", path])
+    _git_in_clone(clone_path, ["stash", "drop"])
+    return False
+
+
+def _safe_pull_in_clone(clone_path):
+    """Merge-pull ``origin/main`` into a clone, surviving a DIRTY working tree.
+
+    Mirrors ``git_ops.pull``'s stash-around-merge (#13167/#13045) but operates
+    on an arbitrary clone via ``_git_in_clone`` (``git_ops.pull`` only knows the
+    harness process cwd, so the deploy sequence — which runs against another
+    agent's clone — cannot reuse it). #13215: a clone carrying an uncommitted
+    change to a file the incoming commit also touches makes a bare
+    ``git pull --no-rebase`` ABORT (``local changes would be overwritten by
+    merge``) → deploy-sync silently skipped, the clone drifts from shipped
+    source. Stashing the dirty change lets the merge land, then the change is
+    re-applied — or, if it conflicts with the pulled content, resolved to the
+    pulled ``HEAD`` and dropped (same authoritative-pulled-state rule as
+    ``_safe_stash_pop_in_clone``).
+
+    A genuine MERGE conflict (committed divergence that truly conflicts) still
+    fails the retry pull → returns ``(False, …)`` so the caller routes to §11
+    recovery; only a DIRTY-TREE abort is newly survived.
+
+    Returns ``(ok: bool, detail: str)``.
+    """
+    pull_args = ["pull", "--no-rebase", "--no-edit", "origin", "main"]
+    first = _git_in_clone(clone_path, pull_args)
+    if first.returncode == 0:
+        return True, "pulled"
+    combined = (first.stdout + first.stderr).lower()
+    if "already up to date" in combined or "up to date" in combined:
+        return True, "already-up-to-date"
+
+    # First pull failed. Stash any dirty change and retry: a dirty-tree abort
+    # then merges cleanly; a genuine merge conflict fails the retry the same way
+    # and routes to recovery.
+    def _stash_ref():
+        r = _git_in_clone(
+            clone_path, ["rev-parse", "--quiet", "--verify", "refs/stash"])
+        return r.stdout.strip() if r.returncode == 0 else ""
+
+    pre_ref = _stash_ref()
+    stash = _git_in_clone(clone_path, ["stash"])
+    if stash.returncode != 0:
+        return False, f"stash-failed: {(stash.stderr or first.stderr).strip()[:200]}"
+    # #13167: `git stash` on a CLEAN tree is a no-op that still exits 0 — only
+    # pop a stash we actually created (ref changed), else a pop would splatter a
+    # pre-existing/ancient stash tree-wide and break compose.
+    stashed = _stash_ref() != pre_ref
+
+    retry = _git_in_clone(clone_path, pull_args)
+    if retry.returncode != 0:
+        # Genuine merge conflict (committed divergence) or other failure. If the
+        # retry STARTED a merge and hit a conflict, the clone is now in MERGING
+        # state (.git/MERGE_HEAD + conflict markers in the tree). Abort that
+        # merge FIRST — otherwise (a) the markers break the next compose, (b)
+        # _safe_stash_pop_in_clone would misread the merge's unmerged paths as a
+        # stash-pop conflict and DROP our stash, and (c) a lingering MERGE_HEAD
+        # makes the NEXT deploy's `checkout main` fail ("you have not concluded
+        # your merge") → a recurring deploy-error loop until manually cleared.
+        # `git merge --abort` exits non-zero (harmlessly ignored) when no merge
+        # is in progress (the pre-merge dirty-tree-abort case). After the abort
+        # the tree is back at the post-stash clean state, so restoring our stash
+        # lands our dirty change correctly. The pull itself still FAILED (origin
+        # not synced) → report failure so the caller routes to §11 recovery.
+        _git_in_clone(clone_path, ["merge", "--abort"])
+        if stashed:
+            _safe_stash_pop_in_clone(clone_path)
+        return False, f"pull-failed: {retry.stderr.strip()[:200]}"
+
+    if not stashed:
+        # Clean tree — the first failure was transient and nothing of ours was
+        # stashed, so there is nothing to pop.
+        return True, "pulled (no local changes to stash)"
+    if _safe_stash_pop_in_clone(clone_path):
+        return True, "pulled (stashed and popped)"
+    return True, "pulled (stash pop conflict — resolved to pulled state)"
+
+
+def _bump_compose_checksum(clone_path):
+    """Advance last_compose_checksum to the just-deployed source state (§7.6).
+    Best-effort: a checksum-compute failure must not fail an otherwise-good
+    deploy (the worst case is one redundant future deploy-signal)."""
+    try:
+        import compose_freshness as _cf
+        checksum = _cf.compute_compose_checksum(clone_path)
+        state.set_last_compose_checksum(checksum)
+        state.save_state()
+    except Exception as e:
+        _log(f"deploy: checksum update skipped ({type(e).__name__}: {e})")
+
+
+def _respawn_after_deploy(role):
+    """Successful deploy: respawn the halted agent against the freshly-committed
+    CLAUDE.md. The old PID is typically still alive (halted but not exited — an
+    LLM cannot self-/quit, #13077) and status is "deploying" (not in is_dead), so
+    the health poller will not do it — respawn explicitly via
+    _respawn_agent_process, which force-kills the old process and boots the
+    replacement (DS-12912 Finding 2).
+
+    #13032 (DS-13032-B F1/F2): this success path owns the deploy-error emit for a
+    respawn failure. Previously a respawn that no-op'd here was SILENT (the agent
+    kept running stale instructions); now any respawn failure — agent didn't exit,
+    boot_agent raised, or boot no-op'd — surfaces a single deploy-error to pm."""
+    _log(f"{role}: deploy complete — respawning on fresh CLAUDE.md")
+    if not _respawn_agent_process(role):
+        _emit_event("deploy-error", "pm", payload={
+            "target_alias": "pm",
+            "event_context": "deploy-error",
+            "failed_role": role,
+            "stage": "respawn",
+            "detail": (f"{role}: deploy succeeded but the respawn failed (agent "
+                       f"did not exit on the deploy-halt /quit, boot raised, or "
+                       f"boot no-op'd) — see harness log; the agent may still be "
+                       f"on the stale pre-recompose CLAUDE.md"),
+            "respawn_ok": False,
+        })
+
+
+def _deploy_recover_and_respawn(role, stage, detail):
+    """§11 failure recovery: respawn the agent on its EXISTING committed
+    CLAUDE.md, file a deploy-error event to pm, and do NOT advance the compose
+    checksum (drift stays detectable and re-triggers a future deploy-signal).
+    The respawn is explicit for the same reason as the success path (Finding 2)."""
+    _log(f"{role}: deploy FAILED at {stage}: {detail} — respawning on existing "
+         f"CLAUDE.md, filing deploy-error to pm (checksum NOT advanced)")
+    respawn_ok = _respawn_agent_process(role)
+    # DS-12912 iter-2 Finding 3: report the real respawn outcome so the operator
+    # is not misdirected by a "respawned" claim when the respawn itself failed.
+    _emit_event("deploy-error", "pm", payload={
+        "target_alias": "pm",
+        "event_context": "deploy-error",
+        "failed_role": role,
+        "stage": stage,
+        "detail": str(detail)[:500],
+        "respawn_ok": respawn_ok,
+    })
+
+
+def _stage_composed_outputs(clone_path, alias):
+    """Stage ONLY the alias's composed outputs (CLAUDE.md / SOUL.md /
+    CLAUDE.linked.md) — never the whole .squidsquad/<alias>/ dir, which also
+    holds working-state and other per-cycle churn. Returns True only if a real
+    staged DIFF resulted. NB: per-alias `compose.py deploy` does NOT write
+    .claude/settings.json (AC11 / #12519) — that stays an installer-managed
+    artifact, out of scope.
+
+    #13176: keying on `add.returncode == 0` was wrong — `git add` of an
+    UNCHANGED file exits 0 while staging nothing, so this returned True whenever
+    the composed output already matched HEAD (the common no-net-change deploy).
+    The caller then ran `git commit`, which failed benignly with 'nothing to
+    commit, working tree clean' (written to STDOUT, exit non-zero, empty stderr)
+    → an undiagnosable deploy-error with empty detail AND §11 recovery that left
+    the checksum unadvanced, re-firing the deploy on the next pass. Keying on the
+    actual staged diff (`git diff --cached --quiet`) routes the no-net-change case
+    to the caller's clean no-op success path (checksum advanced, no deploy-error)."""
+    staged_paths = []
+    for fn in _DEPLOY_COMPOSED_FILES:
+        rel = f".squidsquad/{alias}/{fn}"
+        if (clone_path / rel).exists():
+            add = _git_in_clone(clone_path, ["add", "--", rel])
+            if add.returncode == 0:
+                staged_paths.append(rel)
+    if not staged_paths:
+        return False
+    # `git diff --cached --quiet` exits 0 when there is NO staged diff, non-zero
+    # when there IS one. Scope to the paths we staged so unrelated index state
+    # (there should be none after a clean pull) can't mask the result.
+    diff = _git_in_clone(
+        clone_path, ["diff", "--cached", "--quiet", "--", *staged_paths])
+    return diff.returncode != 0
+
+
+def _run_deploy_sequence(role, deploy_signal_event_id=None):
+    """Pull-first per-clone deploy on a deploy-halted agent (HARNESS-ARCH §7.1).
+
+    ensure-main → pull → compose.py deploy <alias> → commit → push → respawn,
+    serialized across clones by _deploy_lock (AC8). Failure at any step routes to
+    §11 recovery (respawn on existing CLAUDE.md, deploy-error to pm, checksum
+    unchanged). Runs in a daemon thread, off the asyncio loop.
+    """
+    with _deploy_lock:
+        # DS-12912 Finding 1 / AC4 (infinite-loop guard): the agent did NOT
+        # ack-cursor the deploy-signal — the harness owns advancing past it.
+        # Do it up front so the cursor moves past the signal regardless of
+        # whether the deploy succeeds or hits §11 recovery; otherwise the
+        # respawned agent's boot drain re-fetches the deploy-signal, re-halts,
+        # and loops (deploy → respawn → re-halt → deploy …). A future drift
+        # still re-triggers via a NEW deploy-signal (checksum is only advanced
+        # on success), so advancing the cursor here loses nothing.
+        if deploy_signal_event_id:
+            # DS-12912 iter-2 Finding 4: a silent advance failure reintroduces the
+            # re-halt loop (the respawned agent re-fetches the signal). The normal
+            # return values are all safe — "advanced" (moved past it), "regression"
+            # (cursor already past it), "evicted" (signal no longer in the deque,
+            # so unreachable anyway). Only an exception is concerning; retry once,
+            # then log loudly so the loop risk is visible rather than silent.
+            for _attempt in range(2):
+                try:
+                    outcome = event_lifecycle.advance_cursor(
+                        role, deploy_signal_event_id)
+                    _log(f"{role}: advanced cursor past deploy-signal "
+                         f"{deploy_signal_event_id} ({outcome})")
+                    break
+                except Exception as e:
+                    if _attempt == 1:
+                        _log(f"{role}: WARNING deploy-signal cursor advance failed "
+                             f"after retry ({type(e).__name__}: {e}) — respawned "
+                             f"agent may re-halt on the stale signal")
+                    else:
+                        _log(f"{role}: deploy-signal cursor advance raised "
+                             f"{type(e).__name__}: {e} — retrying once")
+        try:
+            clone_path = Path(boot_remote._get_clone_path(role))
+        except Exception as e:
+            _deploy_recover_and_respawn(role, "clone-resolve", e)
+            return
+        import config as _cfg
+        alias = _cfg.get_alias(role) or role
+        scripts = clone_path / "references" / "scripts"
+
+        try:
+            # 1. ensure-main + MERGE pull (never rebase). A prior deploy whose
+            #    push was rejected leaves this clone with an unpushed compose
+            #    commit; if origin/main has since advanced, the branch is
+            #    DIVERGED — `git pull --ff-only` would FATAL on every such deploy
+            #    (#13158, recurring `deploy-error stage=pull`). `--no-rebase`
+            #    merges the divergence instead (consistent with the team's
+            #    always-merge-never-rebase rule + the #12526 launcher fix);
+            #    `--no-edit` keeps it non-interactive. #13215: a DIRTY working
+            #    tree (uncommitted change to a file the incoming commit touches)
+            #    made even the merge-pull ABORT ("local changes would be
+            #    overwritten") → deploy-sync silently skipped; _safe_pull_in_clone
+            #    stashes-around-merge (mirroring git_ops.pull) so the dirty case
+            #    survives. A genuine merge CONFLICT still fails → §11 recovery
+            #    (the rare case the old --ff-only conflated with benign
+            #    divergence).
+            co = _git_in_clone(clone_path, ["checkout", "main"])
+            if co.returncode != 0:
+                _deploy_recover_and_respawn(role, "checkout-main", co.stderr.strip()[:300])
+                return
+            pull_ok, pull_detail = _safe_pull_in_clone(clone_path)
+            if not pull_ok:
+                _deploy_recover_and_respawn(role, "pull", pull_detail[:300])
+                return
+
+            # 2. compose the alias using the CLONE's own compose.py (so its repo
+            #    root is the clone). Bad source / parse error → §11.
+            comp = subprocess.run(
+                [sys.executable, str(scripts / "compose.py"), "deploy", alias],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                check=False, cwd=str(clone_path), timeout=300,
+            )
+            if comp.returncode != 0:
+                _deploy_recover_and_respawn(role, "compose", comp.stderr.strip()[:300])
+                return
+
+            # 3. commit + push the composed output. A no-op recompose (output
+            #    already current) is a clean, idempotent success — skip to respawn.
+            if not _stage_composed_outputs(clone_path, alias):
+                _bump_compose_checksum(clone_path)
+                _respawn_after_deploy(role)
+                return
+            commit = _git_in_clone(
+                clone_path,
+                ["commit", "-m",
+                 f"deploy: recompose {alias} CLAUDE.md (#12912 deploy-signal)"],
+            )
+            if commit.returncode != 0:
+                # #13176: `git commit` writes some failures to STDOUT (e.g.
+                # 'nothing to commit, working tree clean'), so stderr alone can be
+                # empty — combine both streams (stderr first) so the deploy-error
+                # detail is never empty/undiagnosable. With the staged-diff guard
+                # in _stage_composed_outputs above, the benign 'nothing to commit'
+                # case no longer reaches here, so this branch now means a GENUINE
+                # commit failure whose detail the operator needs.
+                detail = (commit.stderr.strip() or commit.stdout.strip()
+                          or "git commit failed with no stdout/stderr")
+                _deploy_recover_and_respawn(role, "commit", detail[:300])
+                return
+            push = _git_in_clone(clone_path, ["push", "origin", "main"])
+            if push.returncode != 0:
+                # DS-12912 iter-3 Finding 3: no retry loop. A rejected push means
+                # origin/main advanced (a concurrent clone pushed) and this clone
+                # now holds an unpushed local compose commit (diverged). We do NOT
+                # retry-in-place; the sequential _deploy_lock makes genuine
+                # concurrent pushes rare, and §11 recovery handles it cleanly:
+                # respawn on the existing CLAUDE.md + file deploy-error; the
+                # unadvanced checksum re-triggers a fresh deploy-signal whose
+                # merge-pull (#13158, step 1) reconciles the divergence next pass.
+                _deploy_recover_and_respawn(role, "push", push.stderr.strip()[:300])
+                return
+
+            # 4. success — advance the checksum, then respawn on fresh output.
+            _bump_compose_checksum(clone_path)
+            _respawn_after_deploy(role)
+        except subprocess.TimeoutExpired as e:
+            _deploy_recover_and_respawn(role, "timeout", e)
+        except Exception as e:
+            _deploy_recover_and_respawn(role, "unexpected", e)
 
 
 # ---------------------------------------------------------------------------
@@ -3675,12 +4904,19 @@ def _reboot_affected_agents(pr_number, files_changed):
 # ---------------------------------------------------------------------------
 
 def find_free_port(default: int = DEFAULT_PORT) -> int:
-    """Find an available port, preferring the default."""
+    """Find an available port, preferring the default.
+
+    When ``default`` is 0 the OS assigns an ephemeral port; this returns the
+    actually-bound port number (not 0) so a caller that opts into ephemeral
+    binding via ``--port 0`` (the integration test harness) gets the real
+    number to advertise in its ``.harness-port`` file (#12820).
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         s.bind(("127.0.0.1", default))
+        actual = s.getsockname()[1]
         s.close()
-        return default
+        return actual
     except OSError:
         s.close()
         # Find any free port
@@ -3711,6 +4947,77 @@ def _read_config_port() -> int:
         pass
 
     return DEFAULT_PORT
+
+
+def _probe_harness_status(port: int, timeout: float = 2.0) -> bool:
+    """Return True iff a live SquidSquad harness answers ``GET /status`` on ``port``.
+
+    The production singleton path (#12820) uses this to tell apart:
+    - a LIVE harness already holding the canonical port → refuse to start, so
+      a second harness can never bind an ephemeral port and poison every
+      clone's ``.harness-port`` file (the root cause of #12820); and
+    - a stale socket / TIME_WAIT slot left by a just-exited harness mid-restart
+      → safe to reclaim the canonical port (uvicorn's ``SO_REUSEADDR`` bind
+      rebinds a TIME_WAIT slot cleanly).
+
+    A ``200`` from some unrelated server that lacks the harness-shaped
+    ``harness`` key reads as "not a harness" (False) — better to try to claim
+    our reserved port than refuse to boot for an unrelated squatter.
+    """
+    try:
+        with urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/status", timeout=timeout
+        ) as resp:
+            if resp.status != 200:
+                return False
+            body = json.loads(resp.read().decode("utf-8"))
+            return isinstance(body, dict) and "harness" in body
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def _resolve_listen_port(explicit_port) -> int:
+    """Resolve the port the harness listens on, or refuse to start (#12820).
+
+    ``explicit_port`` is ``args.port`` — ``None`` when no ``--port`` was passed.
+
+    - **Explicit** (including ``--port 0``): legacy ``find_free_port`` behavior,
+      ephemeral fallback allowed. This is the integration test harness path
+      (``real_harness`` passes ``--port 0``); it self-writes its port into an
+      isolated tmp ``.harness-port`` and never touches real clones.
+    - **None** (production singleton): probe the canonical port. A live harness
+      there → ``SystemExit(1)`` (refuse — never bind an ephemeral port and
+      poison clone ``.harness-port`` files). Otherwise claim the canonical port;
+      uvicorn's ``SO_REUSEADDR`` bind reclaims a TIME_WAIT slot left by a
+      just-exited harness during a supervised restart.
+
+    Returns the resolved port. Raises ``SystemExit(1)`` on refuse-to-start.
+    """
+    if explicit_port is not None:
+        actual = find_free_port(explicit_port)
+        if actual != explicit_port and explicit_port != 0:
+            print(f"Port {explicit_port} in use — using {actual}")
+        return actual
+
+    desired = _read_config_port()
+    if _probe_harness_status(desired):
+        print(
+            f"A SquidSquad harness is already running and responding on "
+            f"127.0.0.1:{desired}. Refusing to start a second instance — a "
+            f"second harness would bind an ephemeral port and poison every "
+            f"clone's .harness-port file, forcing the team into polling "
+            f"fallback (#12820). Use the running harness, or stop it first."
+        )
+        sys.exit(1)
+    # Free, or a stale/TIME_WAIT slot from a just-exited harness (restart):
+    # claim the canonical port. uvicorn's bind sets SO_REUSEADDR so a
+    # TIME_WAIT slot rebinds cleanly. A genuinely live *non-harness* squatter
+    # on the reserved canonical port is an operator configuration error: on
+    # Unix uvicorn's bind then fails loudly (EADDRINUSE — SO_REUSEADDR only
+    # bypasses TIME_WAIT, not a live listener); on Windows SO_REUSEADDR may
+    # permit a duplicate bind, but the /status probe above already rules out a
+    # live *harness* peer, which is the case that actually matters for #12820.
+    return desired
 
 
 # ---------------------------------------------------------------------------
@@ -3784,6 +5091,14 @@ class ExternalActivityDetector:
         "status:approved": ("label", None),
         "status:pending-test": ("role_class", "verifier"),
         "status:pending-ship": ("role_class", "dm"),
+        # #12800: human-needed handoffs route to the install's `human`-class
+        # alias (AGENT-RUNTIME §8.3; was pm). Resolved via
+        # config.parse_aliases_registry; falls back to the bare class name
+        # `human` if no human alias is registered. An assigned-to <human>
+        # event is appended for forge/audit correctness — the human is not on
+        # the event bus and reads it on the forge (or inline), per §3.1.
+        "status:pending-human-review": ("role_class", "human"),
+        "status:pending-human-setup": ("role_class", "human"),
     }
 
     # #12442: terminal HANDOFF statuses route to a *different* agent than the
@@ -3960,6 +5275,17 @@ class ExternalActivityDetector:
 
         check_time = time.time()
 
+        # #12800: the #12442 re-emit cadence is a backstop for handoff work
+        # dispatched to an *agent* on the event bus (verifier/dm) that may be
+        # busy. Non-agent role-classes (`human`) are not on the bus and never
+        # consume the nudge, so they must emit once (forge/audit) but never
+        # re-emit. Resolve the agent role-class set once per poll.
+        try:
+            import config as _cfg_handoff
+            _agent_role_classes = _cfg_handoff.AGENT_ROLE_CLASSES
+        except Exception:
+            _agent_role_classes = frozenset({"pm", "worker", "verifier", "dm"})
+
         for issue in issues:
             issue_num = issue.get("number", 0)
             labels = {l.get("name", "") for l in issue.get("labels", [])}
@@ -3973,8 +5299,14 @@ class ExternalActivityDetector:
             # planned, pending, planning) emit nothing.
             routing = self._STATUS_ROUTING.get(status)
             # is_handoff: routes to a *different* agent than the builder
-            # (verifier/dm). These get the #12442 re-emit cadence.
-            is_handoff = bool(routing) and routing[0] == "role_class"
+            # (verifier/dm). These get the #12442 re-emit cadence. #12800:
+            # non-agent role-classes (`human`) route via role_class but are NOT
+            # on the bus — exclude them so they emit once and never re-nudge.
+            is_handoff = (
+                bool(routing)
+                and routing[0] == "role_class"
+                and routing[1] in _agent_role_classes
+            )
 
             # Change-detection (#12342): has the status changed since we last
             # recorded it for this issue? A different status will re-record
@@ -4021,8 +5353,9 @@ class ExternalActivityDetector:
                 # Worker statuses (approved/open) route to the issue's own
                 # role:* alias. In single-instance teams the value following
                 # `role:` is the alias; in multi-instance teams the `role:*`
-                # label always carries the routed alias per AGENT-RUNTIME.md
-                # §8.3 (the harness rewrites `role:*` on every `/work/assign`).
+                # label carries the routed alias (set by PM at planned→approved;
+                # the harness does NOT rewrite role:* — the "universal router"
+                # /work/assign label-rewrite design was never built, see #12495).
                 # Either way the extracted string IS the alias. NOTE (#12342 /
                 # DS Finding 3): a multi-role issue wakes only the alphabetically
                 # first role:* alias — single-worker-per-issue is the assumed
@@ -4195,6 +5528,19 @@ def _build_uvicorn_config(app_, host, port, log_level="warning"):
 
 
 def main():
+    # #13236 — crash-proof our own stdout/stderr first thing, before any print
+    # (banner, port-in-use notice, status lines). harness.py was named in the
+    # #13198 cp1252 crash-class list but left unwired: its banner is intentional
+    # box-drawing ASCII-art (U+2588 et al.) that cannot encode on a strict cp1252
+    # console, so a bare `python harness.py` launch (start.ps1:57, no PYTHONUTF8)
+    # would raise UnicodeEncodeError on the banner. harden_stdio() uses
+    # errors="backslashreplace" — the art degrades to escapes on a legacy console
+    # (no crash) and renders normally on UTF-8. In-process parity with the rest
+    # of the fleet (#13198); the banner literals are deliberately NOT ASCII-swept
+    # (unlike the agent-facing CLIs) — they are decorative art, not messages.
+    from cli_stdio import harden_stdio
+    harden_stdio()
+
     # On Windows, the default ProactorEventLoop's cleanup path
     # (_ProactorBasePipeTransport._call_connection_lost) does not handle
     # ConnectionResetError gracefully — when a client (uvicorn keepalive,
@@ -4267,12 +5613,12 @@ def main():
         or env_freshness.lower() in ("1", "true", "yes")
     )
 
-    # Determine port
-    desired_port = args.port or _read_config_port()
-    actual_port = find_free_port(desired_port)
-
-    if actual_port != desired_port:
-        print(f"Port {desired_port} in use — using {actual_port}")
+    # Determine port (#12820 — see _resolve_listen_port). The production
+    # singleton path (no --port) acquires the canonical port or refuses; it
+    # never binds an ephemeral port, so it cannot poison clone .harness-port
+    # files. An explicit --port (incl. --port 0) keeps the legacy
+    # ephemeral-fallback behavior the integration test harness relies on.
+    actual_port = _resolve_listen_port(args.port)
 
     state.port = actual_port
     _print_banner(actual_port)
