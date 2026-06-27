@@ -223,6 +223,7 @@ def _log_diagnostic(severity, message):
         subprocess.run(
             [sys.executable, str(SCRIPT_DIR / "diagnostics.py"), "log", severity, "git_ops", message],
             capture_output=True, check=False, encoding="utf-8", errors="replace", cwd=str(REPO_ROOT),
+            timeout=_git_timeout(),  # #13279: bound the wait so a hung diagnostics.py can't block the calling thread (TimeoutExpired is swallowed by the except below). Completes #13262 timeout-hardening.
         )
     except Exception:
         pass

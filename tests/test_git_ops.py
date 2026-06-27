@@ -105,6 +105,37 @@ class TestRunTimeout:
 
 
 # ---------------------------------------------------------------------------
+# _log_diagnostic subprocess timeout (#13279 — last unguarded git_ops subprocess)
+# ---------------------------------------------------------------------------
+
+class TestLogDiagnosticTimeout:
+    def test_log_diagnostic_passes_default_timeout(self):
+        """#13279: the fire-and-forget _log_diagnostic subprocess.run must carry a
+        timeout= so a hung diagnostics.py can't block the calling thread (some
+        callers run under the #13211 _ENSURE_MAIN_LOCK). Completes #13262."""
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._log_diagnostic("warning", "boom")
+        assert sp.call_args.kwargs["timeout"] == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_log_diagnostic_honors_env_timeout_override(self, monkeypatch):
+        """The timeout resolves through _git_timeout(), so the env override applies."""
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "11")
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._log_diagnostic("error", "boom")
+        assert sp.call_args.kwargs["timeout"] == 11
+
+    def test_log_diagnostic_swallows_timeout_expired(self):
+        """A hung diagnostics.py (TimeoutExpired) must be swallowed by the existing
+        except — _log_diagnostic stays fire-and-forget and never crashes the caller."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("diagnostics.py", 300)):
+            # must not raise
+            git_ops._log_diagnostic("error", "boom")
+
+
+# ---------------------------------------------------------------------------
 # pull()
 # ---------------------------------------------------------------------------
 
