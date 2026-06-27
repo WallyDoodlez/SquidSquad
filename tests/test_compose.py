@@ -563,10 +563,10 @@ class TestEnsureSessionEndHook12418:
 
 
 class TestEnsureActivityHooks12443:
-    """#12443 AC1: the pipeline places PostToolUse + PostToolUseFailure
-    activity-heartbeat hooks in .claude/settings.json — async command hooks (NOT
-    blocking http), idempotently, preserving everything else (incl. slice-a's
-    SessionEnd hook)."""
+    """#12443/#13213 AC1: the pipeline places the activity-heartbeat hooks
+    (UserPromptSubmit + PreToolUse + PostToolUse + PostToolUseFailure) in
+    .claude/settings.json — async command hooks (NOT blocking http),
+    idempotently, preserving everything else (incl. slice-a's SessionEnd hook)."""
 
     def _load(self, p):
         import json
@@ -578,10 +578,12 @@ class TestEnsureActivityHooks12443:
         assert changed is True
         hooks = self._load(p)["hooks"]
         # #12458: PreToolUse joins the per-tool-call async command hooks.
-        for name in ("PreToolUse", "PostToolUse", "PostToolUseFailure"):
+        # #13213: UserPromptSubmit joins as the prompt-receipt heartbeat.
+        for name in ("UserPromptSubmit", "PreToolUse", "PostToolUse",
+                     "PostToolUseFailure"):
             assert name in hooks, f"{name} hook missing"
             hook = hooks[name][0]["hooks"][0]
-            # AC2: must be a non-blocking async COMMAND hook, not a blocking
+            # AC2/AC4: must be a non-blocking async COMMAND hook, not a blocking
             # native http hook.
             assert hook["type"] == "command"
             assert hook["async"] is True
@@ -590,6 +592,19 @@ class TestEnsureActivityHooks12443:
             assert hook["args"] == [
                 "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"]
             assert isinstance(hook["timeout"], int)
+
+    def test_user_prompt_submit_heartbeat_13213(self, tmp_path):
+        """#13213 AC1: UserPromptSubmit is emitted as an async command hook
+        invoking activity_hook.py — same group shape as the other heartbeats
+        (it is a PLAIN heartbeat; the in-flight distinction is harness-side, on
+        event name, not in the settings group)."""
+        p = tmp_path / ".claude" / "settings.json"
+        assert compose._ensure_activity_hooks(p) is True
+        hook = self._load(p)["hooks"]["UserPromptSubmit"][0]["hooks"][0]
+        assert hook["type"] == "command"
+        assert hook["async"] is True
+        assert hook["args"] == [
+            "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"]
 
     def test_idempotent_no_rewrite(self, tmp_path):
         p = tmp_path / ".claude" / "settings.json"
@@ -659,9 +674,9 @@ class TestEnsurePauseHooks12458:
         assert compose._ensure_activity_hooks(p) is True
         assert compose._ensure_pause_hooks(p) is True
         hooks = self._load(p)["hooks"]
-        for name in ("SessionEnd", "PreToolUse", "PostToolUse",
-                     "PostToolUseFailure", "Notification", "PreCompact",
-                     "PostCompact", "StopFailure"):
+        for name in ("SessionEnd", "UserPromptSubmit", "PreToolUse",
+                     "PostToolUse", "PostToolUseFailure", "Notification",
+                     "PreCompact", "PostCompact", "StopFailure"):
             assert name in hooks, f"{name} missing"
 
 

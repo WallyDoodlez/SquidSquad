@@ -4910,6 +4910,37 @@ class TestPauseHook12458(unittest.TestCase):
                          json={"event": "PostToolUse"})
         self.assertIsNone(self._agent().in_flight_until)
 
+    def test_userpromptsubmit_records_heartbeat_no_in_flight_13213(self):
+        """#13213 AC2/AC4/AC5: a UserPromptSubmit heartbeat advances
+        last_activity_at and records the event (so progress_liveness/the shadow
+        verdict sees the agent received input), but is a PLAIN heartbeat — it
+        does NOT open an in-flight window. That is deliberate: an in-flight
+        window would MASK the freeze-after-prompt-before-first-tool-call gap this
+        signal exists to expose."""
+        r = self.client.post("/hooks/activity", headers=self._hdr(),
+                             json={"event": "UserPromptSubmit"})
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json().get("ok"))
+        agent = self._agent()
+        # AC2: heartbeat recorded — last_activity_at advanced, event stamped.
+        self.assertIsInstance(agent.last_activity_at, float)
+        self.assertEqual(agent.last_activity["event"], "UserPromptSubmit")
+        # AC4: plain heartbeat — NOT an in-flight opener (only PreToolUse opens).
+        self.assertIsNone(agent.in_flight_until)
+
+    def test_userpromptsubmit_does_not_disturb_open_in_flight_13213(self):
+        """A UserPromptSubmit arriving while a tool call is in flight must not
+        clear the in-flight window (it is neither the PreToolUse opener nor the
+        Post* closer) — only a real tool-call boundary moves that window."""
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "PreToolUse"})
+        opened = self._agent().in_flight_until
+        self.assertIsNotNone(opened)
+        self.client.post("/hooks/activity", headers=self._hdr(),
+                         json={"event": "UserPromptSubmit"})
+        # in-flight window untouched; only Post* closes it.
+        self.assertEqual(self._agent().in_flight_until, opened)
+
     def test_activity_clears_waiting(self):
         # set waiting via a Notification, then any activity clears it
         self.client.post("/hooks/pause", headers=self._hdr(),
