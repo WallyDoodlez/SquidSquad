@@ -34,8 +34,21 @@ import io
 import json
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
+
+# #13211 — serialize ensure_main_and_pull across ALL in-process callers (the
+# L4 watcher's per-role-class freshen bursts AND the post-merge deploy-all path,
+# both in the harness process). Concurrent main-checkout + pull on the SAME
+# clone collide on .git/index.lock (#13197 fixed this for the watcher-only case
+# via a watcher-local lock; the deploy path called ensure_main_and_pull outside
+# it). Hoisting the lock here covers every caller from one place. ensure_main_
+# and_pull never re-enters itself (it calls _run/pull only), so a plain
+# non-reentrant Lock cannot self-deadlock. Threading-scoped (not cross-process):
+# the racing callers are threads in the one harness process; the CLI caller is a
+# separate process not part of that race.
+_ENSURE_MAIN_LOCK = threading.Lock()
 
 # Ensure stdout/stderr can handle UTF-8 on Windows (cp1252 consoles choke on em dashes etc.)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -324,21 +337,28 @@ def ensure_main_and_pull(role=None):
     until a later recompose succeeds.
     """
     try:
-        result = _run("git branch --show-current", check=False)
-        branch = result.stdout.strip() if result.returncode == 0 else ""
-        if branch != "main":
-            sw = _run_list(["git", "checkout", "main"], check=False)
-            if sw.returncode != 0:
-                detail = (sw.stderr or sw.stdout or "").strip()[:200]
-                print(
-                    f"WARNING: ensure_main_and_pull could not switch to main "
-                    f"from {branch!r}: {detail}",
-                    file=sys.stderr,
-                )
-                return False, f"checkout-main-failed (on {branch!r})"
-        if not pull(role=role):
-            return False, "pull-failed"
-        return True, "on-main-synced"
+        # #13211 — single-flight the checkout+pull across every in-process
+        # caller (watcher freshen bursts + post-merge deploy-all) so concurrent
+        # git on the shared clone can't collide on .git/index.lock. Held across
+        # the subprocess git calls below — exactly the serialization #13197
+        # established (it just lived in the watcher before, missing the deploy
+        # path). Inside the try so the "Never raises" contract still holds.
+        with _ENSURE_MAIN_LOCK:
+            result = _run("git branch --show-current", check=False)
+            branch = result.stdout.strip() if result.returncode == 0 else ""
+            if branch != "main":
+                sw = _run_list(["git", "checkout", "main"], check=False)
+                if sw.returncode != 0:
+                    detail = (sw.stderr or sw.stdout or "").strip()[:200]
+                    print(
+                        f"WARNING: ensure_main_and_pull could not switch to main "
+                        f"from {branch!r}: {detail}",
+                        file=sys.stderr,
+                    )
+                    return False, f"checkout-main-failed (on {branch!r})"
+            if not pull(role=role):
+                return False, "pull-failed"
+            return True, "on-main-synced"
     except Exception as exc:  # noqa: BLE001 — "Never raises" is the contract
         print(
             f"WARNING: ensure_main_and_pull raised unexpectedly: {exc!r}",

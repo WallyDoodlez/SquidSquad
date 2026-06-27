@@ -2296,3 +2296,75 @@ class TestEnsureHooksDispatch11511:
         monkeypatch.setattr(sys, "argv", ["git_ops.py", "has-changes"])
         git_ops.main()
         mock_ensure.assert_called_once()
+
+
+class TestEnsureMainAndPullSerialized13211:
+    """#13211: ensure_main_and_pull single-flights its checkout+pull via the
+    module-level _ENSURE_MAIN_LOCK so concurrent in-process callers (the L4
+    watcher freshen bursts AND the post-merge deploy-all path) cannot collide on
+    `.git/index.lock`. #13197 first added this serialization in the watcher; this
+    hoists it to the shared implementation so every caller is covered."""
+
+    def test_lock_is_a_threading_lock(self):
+        import threading
+        assert isinstance(git_ops._ENSURE_MAIN_LOCK, type(threading.Lock()))
+
+    def test_contract_preserved_on_main_synced(self):
+        """Behaviour unchanged for the happy path: on main + pull ok -> (True,
+        'on-main-synced'). The lock wrap must not alter the return contract."""
+        with patch.object(git_ops, "_run") as mrun, \
+             patch.object(git_ops, "pull", return_value=True):
+            mrun.return_value = MagicMock(returncode=0, stdout="main\n", stderr="")
+            ok, detail = git_ops.ensure_main_and_pull(role="harness")
+        assert ok is True
+        assert detail == "on-main-synced"
+
+    def test_pull_failure_still_reported(self):
+        """The lock must not swallow a pull failure."""
+        with patch.object(git_ops, "_run") as mrun, \
+             patch.object(git_ops, "pull", return_value=False):
+            mrun.return_value = MagicMock(returncode=0, stdout="main\n", stderr="")
+            ok, detail = git_ops.ensure_main_and_pull(role="harness")
+        assert ok is False
+        assert detail == "pull-failed"
+
+    def test_concurrent_calls_are_serialized(self):
+        """N threads calling ensure_main_and_pull directly must never run the
+        underlying git op concurrently — max in-flight stays 1."""
+        import threading
+        import time as _time
+        state = {"now": 0, "max": 0}
+        guard = threading.Lock()
+        N = 11
+        barrier = threading.Barrier(N)
+
+        def fake_pull(role=None):
+            try:
+                barrier.wait(timeout=0.5)  # serialized -> never fills -> times out
+            except threading.BrokenBarrierError:
+                pass
+            with guard:
+                state["now"] += 1
+                state["max"] = max(state["max"], state["now"])
+            _time.sleep(0.02)
+            with guard:
+                state["now"] -= 1
+            return True
+
+        def fake_run(cmd, check=False):
+            return MagicMock(returncode=0, stdout="main\n", stderr="")
+
+        with patch.object(git_ops, "_run", side_effect=fake_run), \
+             patch.object(git_ops, "pull", side_effect=fake_pull):
+            threads = [threading.Thread(
+                target=lambda: git_ops.ensure_main_and_pull("harness"))
+                for _ in range(N)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert state["max"] == 1, (
+            f"ensure_main_and_pull ran {state['max']}-way concurrent — "
+            f"_ENSURE_MAIN_LOCK is not serializing (#13211)"
+        )
