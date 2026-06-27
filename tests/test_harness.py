@@ -3000,6 +3000,59 @@ class TestGetEventsForRole(unittest.TestCase):
         self.assertEqual(len(data["events"]), 1)
         self.assertEqual(data["events"][0]["id"], "e1")
 
+    def test_excludes_self_emitted_reacts_to_events_13255(self):
+        """#13255: a reacts-to match emitted BY the requesting role itself is
+        excluded — an agent must not self-wake on its own git-commit /
+        status-transition events (they always drain to a care-filter no-op).
+        Cross-agent reacts-to events (different emitter) are still delivered, and
+        explicit target_alias targeting always wins (even self-emitted)."""
+        from harness import event_stream
+
+        event_stream.append({  # self-emitted reacts-to -> EXCLUDED
+            "id": "own1", "event_type": "git-commit", "role": "skill",
+            "payload": {"result": "ok"},
+        })
+        event_stream.append({  # cross-agent reacts-to -> INCLUDED
+            "id": "other1", "event_type": "git-commit", "role": "qa",
+            "payload": {"result": "ok"},
+        })
+        event_stream.append({  # self-emitted BUT explicitly targeted -> INCLUDED
+            "id": "selftarget1", "event_type": "assigned-to", "role": "skill",
+            "payload": {"target_alias": "skill"},
+        })
+
+        with patch("harness._validate_role"), \
+             patch("config.get_event_filters_for_role",
+                   return_value=["git-commit", "status-transition"]):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        ids = [e["id"] for e in resp.json()["events"]]
+        self.assertNotIn("own1", ids, "self-emitted git-commit must be excluded (#13255)")
+        self.assertIn("other1", ids, "cross-agent git-commit must still be delivered")
+        self.assertIn("selftarget1", ids, "explicit target_alias must win over self-emitted exclusion")
+
+    def test_self_emit_filter_includes_event_with_missing_emitter_13255(self):
+        """#13255 (review LOW): an event with no top-level `role` field has
+        emitter "" — it cannot be attributed to the requesting role, so the
+        self-emit exclusion must NOT drop it (conservative-correct: include)."""
+        from harness import event_stream
+
+        event_stream.append({  # reacts-to match, NO emitter -> INCLUDED
+            "id": "noemit1", "event_type": "git-commit",
+            "payload": {"result": "ok"},
+        })
+
+        with patch("harness._validate_role"), \
+             patch("config.get_event_filters_for_role",
+                   return_value=["git-commit"]):
+            resp = self.client.get("/events/for/skill")
+
+        self.assertEqual(resp.status_code, 200)
+        ids = [e["id"] for e in resp.json()["events"]]
+        self.assertIn("noemit1", ids,
+                      "event with missing emitter must not be excluded (#13255)")
+
     def test_since_cursor_filters_events(self):
         """GET /events/for/skill?since=X returns only events after cursor."""
         from harness import event_stream
@@ -3087,6 +3140,169 @@ class TestMergeBodyGuard13170(unittest.TestCase):
         resp = self.client.post("/merge", json={"branch": "x", "role": "skill"})
         self.assertEqual(resp.status_code, 400)
         self.assertIn("pr_number is required", resp.json()["detail"])
+
+
+class TestSafePullInClone13215(unittest.TestCase):
+    """#13215: the deploy sequence's clone pull must survive a DIRTY working
+    tree (uncommitted change to a file the incoming commit touches) by
+    stashing-around-merge, instead of aborting and silently skipping the
+    deploy-sync. _safe_pull_in_clone mirrors git_ops.pull (#13167/#13045) over
+    an arbitrary clone via _git_in_clone. Driven entirely by a scripted
+    _git_in_clone responder (no real git)."""
+
+    def _resp(self, rc=0, out="", err=""):
+        from types import SimpleNamespace
+        return SimpleNamespace(returncode=rc, stdout=out, stderr=err)
+
+    def _responder(self, scripted):
+        """Return a _git_in_clone side_effect. `scripted` maps a command key to
+        a LIST of responses consumed in order; unscripted commands default to
+        rc=0. Keys: 'pull','stash','stash pop','stash drop','rev-parse','diff',
+        'checkout'."""
+        def _key(args):
+            if args[:2] == ["stash", "pop"]:
+                return "stash pop"
+            if args[:2] == ["stash", "drop"]:
+                return "stash drop"
+            return args[0]
+
+        def _side(clone_path, args, **kw):
+            k = _key(list(args))
+            q = scripted.get(k)
+            if q:
+                return q.pop(0)
+            return self._resp(0)
+        return _side
+
+    def test_clean_pull_succeeds(self):
+        import harness
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder({"pull": [self._resp(0)]})):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "pulled")
+
+    def test_already_up_to_date_succeeds(self):
+        import harness
+        with patch.object(harness, "_git_in_clone", side_effect=self._responder(
+                {"pull": [self._resp(1, err="Already up to date.")]})):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "already-up-to-date")
+
+    def test_dirty_tree_stashes_pulls_and_pops(self):
+        """The exact #13215 bug: first pull aborts (dirty), stash creates an
+        entry, retry pull succeeds, clean pop -> success."""
+        import harness
+        scripted = {
+            "pull": [self._resp(1, err="local changes would be overwritten by merge"),
+                     self._resp(0)],
+            # rev-parse: pre (no stash) then post (stash exists)
+            "rev-parse": [self._resp(1, out=""), self._resp(0, out="abc123")],
+            "stash": [self._resp(0)],
+            "stash pop": [self._resp(0)],
+        }
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder(scripted)):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "pulled (stashed and popped)")
+
+    def test_genuine_merge_conflict_fails_after_stash(self):
+        """A committed-divergence conflict: retry pull also fails -> (False, ...)
+        so the caller routes to §11 recovery. The merge is aborted (clears
+        MERGE_HEAD + markers) BEFORE the stash is restored, so the clone is not
+        left in MERGING state (which would loop the next deploy's checkout)."""
+        import harness
+        calls = []
+        scripted = {
+            "pull": [self._resp(1, err="conflict A"),
+                     self._resp(1, err="CONFLICT (content): merge conflict in x")],
+            "rev-parse": [self._resp(1, out=""), self._resp(0, out="abc123")],
+            "stash": [self._resp(0)],
+            "stash pop": [self._resp(0)],  # restore after merge --abort
+        }
+        responder = self._responder(scripted)
+
+        def _tracking(clone_path, args, **kw):
+            calls.append(list(args))
+            return responder(clone_path, args, **kw)
+        with patch.object(harness, "_git_in_clone", side_effect=_tracking):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertFalse(ok)
+        self.assertIn("pull-failed", detail)
+        # #13215 review MED: the merge is aborted before restoring the stash, and
+        # the abort precedes the stash pop (so MERGING state is cleared first).
+        self.assertIn(["merge", "--abort"], calls)
+        self.assertLess(calls.index(["merge", "--abort"]),
+                        calls.index(["stash", "pop"]),
+                        "merge --abort must precede the stash restore")
+
+    def test_clean_tree_transient_first_failure_no_pop(self):
+        """First pull fails but the tree is CLEAN (stash creates nothing) — the
+        retry succeeds and there is nothing to pop (#13167 no-op-stash guard)."""
+        import harness
+        scripted = {
+            "pull": [self._resp(1, err="transient"), self._resp(0)],
+            "rev-parse": [self._resp(1, out=""), self._resp(1, out="")],  # unchanged
+            "stash": [self._resp(0)],
+        }
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder(scripted)):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertEqual(detail, "pulled (no local changes to stash)")
+
+    def test_stash_command_failure_returns_false(self):
+        import harness
+        scripted = {
+            "pull": [self._resp(1, err="dirty")],
+            "rev-parse": [self._resp(1, out="")],
+            "stash": [self._resp(1, err="stash boom")],
+        }
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder(scripted)):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertFalse(ok)
+        self.assertIn("stash-failed", detail)
+
+    def test_stash_pop_conflict_resolves_to_pulled_state(self):
+        """Retry pull succeeds but the stashed local change conflicts on pop ->
+        force-resolved to HEAD, still reported as a successful pull (the
+        CLAUDE.md sync landed; the stale local change is discarded)."""
+        import harness
+        scripted = {
+            "pull": [self._resp(1, err="dirty"), self._resp(0)],
+            "rev-parse": [self._resp(1, out=""), self._resp(0, out="abc123")],
+            "stash": [self._resp(0)],
+            "stash pop": [self._resp(1, err="conflict")],
+            "diff": [self._resp(0, out="config.md\n")],  # unmerged path
+            "checkout": [self._resp(0)],
+            "stash drop": [self._resp(0)],
+        }
+        with patch.object(harness, "_git_in_clone",
+                          side_effect=self._responder(scripted)):
+            ok, detail = harness._safe_pull_in_clone("/clone")
+        self.assertTrue(ok)
+        self.assertIn("resolved to pulled state", detail)
+
+    def test_safe_stash_pop_in_clone_no_unmerged_does_not_drop(self):
+        """A pop that fails for a NON-conflict reason (no unmerged paths) must
+        NOT drop the stash (would discard un-applied work)."""
+        import harness
+        calls = []
+
+        def _side(clone_path, args, **kw):
+            calls.append(list(args))
+            if list(args)[:2] == ["stash", "pop"]:
+                return self._resp(1, err="no stash")
+            if list(args)[0] == "diff":
+                return self._resp(0, out="")  # no unmerged
+            return self._resp(0)
+        with patch.object(harness, "_git_in_clone", side_effect=_side):
+            result = harness._safe_stash_pop_in_clone("/clone")
+        self.assertFalse(result)
+        self.assertNotIn(["stash", "drop"], calls)
 
 
 # ---------------------------------------------------------------------------

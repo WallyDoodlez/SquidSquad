@@ -3542,14 +3542,24 @@ async def get_events_for_role(
     else:
         events = event_stream.get_recent(limit * 3)
 
-    # Filter: events targeted at this role OR matching the role's reaction types
+    # Filter: events targeted at this role OR matching the role's reaction types.
+    # #13255: a reacts-to match must EXCLUDE events the requesting role emitted
+    # itself — otherwise an agent's own git-commit / status-transition events
+    # come back through its own event_poll, wake it via Monitor, and drain to a
+    # guaranteed no-op (the care filter skips them: no target_alias). Explicit
+    # target_alias targeting still wins unconditionally (so a hypothetical
+    # self-assign via target_alias is preserved); only the broadcast reacts-to
+    # branch suppresses self-emitted events. Cross-agent awareness is unaffected:
+    # a verifier reject is qa-emitted, so the worker (different emitter) still
+    # sees it; assigned-to / deploy-signal are harness-emitted, never suppressed.
     filtered = []
     for e in events:
         target = e.get("payload", {}).get("target_alias", "")
         etype = e.get("event_type", "")
+        emitter = e.get("role", "")
         if target == role:
             filtered.append(e)
-        elif relevant_types and etype in relevant_types:
+        elif relevant_types and etype in relevant_types and emitter != role:
             filtered.append(e)
 
     # Same skim-then-advance rule as GET /events: oldest-first when the
@@ -4567,6 +4577,105 @@ def _git_in_clone(clone_path, args, timeout=120):
     )
 
 
+def _safe_stash_pop_in_clone(clone_path):
+    """Clone-aware mirror of ``git_ops._safe_stash_pop`` (#13045): pop the top
+    stash leaving NO conflict markers. On a pop conflict, restore each unmerged
+    path to the pulled ``HEAD`` and drop the now-applied stash — the just-pulled
+    state is authoritative for the state files clone-sync touches (e.g.
+    config.md's ship counter). Returns True on a clean pop, False if it
+    conflicted and was force-resolved (or popped nothing)."""
+    pop = _git_in_clone(clone_path, ["stash", "pop"])
+    if pop.returncode == 0:
+        return True
+    conflicted = _git_in_clone(
+        clone_path, ["diff", "--name-only", "--diff-filter=U"])
+    unmerged = [p.strip() for p in conflicted.stdout.splitlines() if p.strip()]
+    if not unmerged:
+        # Pop failed for a NON-conflict reason (no stash entry / unrelated git
+        # error) — the stash was NOT applied. Do NOT drop it (that would discard
+        # un-applied work). Leave it intact and report the pop did not succeed.
+        return False
+    for path in unmerged:
+        _git_in_clone(clone_path, ["checkout", "HEAD", "--", path])
+    _git_in_clone(clone_path, ["stash", "drop"])
+    return False
+
+
+def _safe_pull_in_clone(clone_path):
+    """Merge-pull ``origin/main`` into a clone, surviving a DIRTY working tree.
+
+    Mirrors ``git_ops.pull``'s stash-around-merge (#13167/#13045) but operates
+    on an arbitrary clone via ``_git_in_clone`` (``git_ops.pull`` only knows the
+    harness process cwd, so the deploy sequence — which runs against another
+    agent's clone — cannot reuse it). #13215: a clone carrying an uncommitted
+    change to a file the incoming commit also touches makes a bare
+    ``git pull --no-rebase`` ABORT (``local changes would be overwritten by
+    merge``) → deploy-sync silently skipped, the clone drifts from shipped
+    source. Stashing the dirty change lets the merge land, then the change is
+    re-applied — or, if it conflicts with the pulled content, resolved to the
+    pulled ``HEAD`` and dropped (same authoritative-pulled-state rule as
+    ``_safe_stash_pop_in_clone``).
+
+    A genuine MERGE conflict (committed divergence that truly conflicts) still
+    fails the retry pull → returns ``(False, …)`` so the caller routes to §11
+    recovery; only a DIRTY-TREE abort is newly survived.
+
+    Returns ``(ok: bool, detail: str)``.
+    """
+    pull_args = ["pull", "--no-rebase", "--no-edit", "origin", "main"]
+    first = _git_in_clone(clone_path, pull_args)
+    if first.returncode == 0:
+        return True, "pulled"
+    combined = (first.stdout + first.stderr).lower()
+    if "already up to date" in combined or "up to date" in combined:
+        return True, "already-up-to-date"
+
+    # First pull failed. Stash any dirty change and retry: a dirty-tree abort
+    # then merges cleanly; a genuine merge conflict fails the retry the same way
+    # and routes to recovery.
+    def _stash_ref():
+        r = _git_in_clone(
+            clone_path, ["rev-parse", "--quiet", "--verify", "refs/stash"])
+        return r.stdout.strip() if r.returncode == 0 else ""
+
+    pre_ref = _stash_ref()
+    stash = _git_in_clone(clone_path, ["stash"])
+    if stash.returncode != 0:
+        return False, f"stash-failed: {(stash.stderr or first.stderr).strip()[:200]}"
+    # #13167: `git stash` on a CLEAN tree is a no-op that still exits 0 — only
+    # pop a stash we actually created (ref changed), else a pop would splatter a
+    # pre-existing/ancient stash tree-wide and break compose.
+    stashed = _stash_ref() != pre_ref
+
+    retry = _git_in_clone(clone_path, pull_args)
+    if retry.returncode != 0:
+        # Genuine merge conflict (committed divergence) or other failure. If the
+        # retry STARTED a merge and hit a conflict, the clone is now in MERGING
+        # state (.git/MERGE_HEAD + conflict markers in the tree). Abort that
+        # merge FIRST — otherwise (a) the markers break the next compose, (b)
+        # _safe_stash_pop_in_clone would misread the merge's unmerged paths as a
+        # stash-pop conflict and DROP our stash, and (c) a lingering MERGE_HEAD
+        # makes the NEXT deploy's `checkout main` fail ("you have not concluded
+        # your merge") → a recurring deploy-error loop until manually cleared.
+        # `git merge --abort` exits non-zero (harmlessly ignored) when no merge
+        # is in progress (the pre-merge dirty-tree-abort case). After the abort
+        # the tree is back at the post-stash clean state, so restoring our stash
+        # lands our dirty change correctly. The pull itself still FAILED (origin
+        # not synced) → report failure so the caller routes to §11 recovery.
+        _git_in_clone(clone_path, ["merge", "--abort"])
+        if stashed:
+            _safe_stash_pop_in_clone(clone_path)
+        return False, f"pull-failed: {retry.stderr.strip()[:200]}"
+
+    if not stashed:
+        # Clean tree — the first failure was transient and nothing of ours was
+        # stashed, so there is nothing to pop.
+        return True, "pulled (no local changes to stash)"
+    if _safe_stash_pop_in_clone(clone_path):
+        return True, "pulled (stashed and popped)"
+    return True, "pulled (stash pop conflict — resolved to pulled state)"
+
+
 def _bump_compose_checksum(clone_path):
     """Advance last_compose_checksum to the just-deployed source state (§7.6).
     Best-effort: a checksum-compute failure must not fail an otherwise-good
@@ -4717,16 +4826,21 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
             #    (#13158, recurring `deploy-error stage=pull`). `--no-rebase`
             #    merges the divergence instead (consistent with the team's
             #    always-merge-never-rebase rule + the #12526 launcher fix);
-            #    `--no-edit` keeps it non-interactive. A genuine merge CONFLICT
-            #    still fails the pull → §11 recovery (the rare case the old
-            #    --ff-only conflated with benign divergence).
+            #    `--no-edit` keeps it non-interactive. #13215: a DIRTY working
+            #    tree (uncommitted change to a file the incoming commit touches)
+            #    made even the merge-pull ABORT ("local changes would be
+            #    overwritten") → deploy-sync silently skipped; _safe_pull_in_clone
+            #    stashes-around-merge (mirroring git_ops.pull) so the dirty case
+            #    survives. A genuine merge CONFLICT still fails → §11 recovery
+            #    (the rare case the old --ff-only conflated with benign
+            #    divergence).
             co = _git_in_clone(clone_path, ["checkout", "main"])
             if co.returncode != 0:
                 _deploy_recover_and_respawn(role, "checkout-main", co.stderr.strip()[:300])
                 return
-            pull = _git_in_clone(clone_path, ["pull", "--no-rebase", "--no-edit", "origin", "main"])
-            if pull.returncode != 0:
-                _deploy_recover_and_respawn(role, "pull", pull.stderr.strip()[:300])
+            pull_ok, pull_detail = _safe_pull_in_clone(clone_path)
+            if not pull_ok:
+                _deploy_recover_and_respawn(role, "pull", pull_detail[:300])
                 return
 
             # 2. compose the alias using the CLONE's own compose.py (so its repo
