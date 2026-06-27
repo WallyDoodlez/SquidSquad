@@ -2,7 +2,9 @@
 
 - **Task**: none
 
-- **SESSION SHIP TALLY (2026-06-26→27)**: #13213 (MERGED, qa AC2 live), #13212 (MERGED), #13236 (verified→pending-ship), #13198 (verified→pending-ship), #13255 (pending-test, PR #13256), #13172 (pending-test, PR #13257), #13170 (pending-test, PR #13258). **7 ships this boot.**
+- **SESSION SHIP TALLY (2026-06-26→27)**: #13213 (MERGED), #13212 (MERGED), #13236, #13198 (both verified→pending-ship), #13255 (PR #13256), #13172 (PR #13257), #13170 (PR #13258), #13215 (PR #13259). **8 ships this boot.**
+
+- **#13215 SHIPPED → pending-test (PR #13259, branch squidsquad/task/13215, 2026-06-27)** [deploy-cluster sibling 1]: deploy-pull aborts on a dirty clone tree → silent deploy-sync skip. Fix **Option A** (clone-aware _safe_pull_in_clone + _safe_stash_pop_in_clone mirroring git_ops.pull #13167/#13045 via _git_in_clone; OFF the every-agent git_ops.pull path to contain blast radius). Sonnet review NO_BLOCKING + **MED FIXED** (added `git merge --abort` before stash-restore so a genuine-conflict retry doesn't leave the clone MERGING → loop the next deploy's checkout) + LOW docstring-mitigated. **Follow-up noted on issue: same MERGING gap exists in git_ops.pull (every-agent path) = separate higher-blast-radius slice, not folded.** +8 tests. Gate 4975/0/0. No CQ/manifest. Pairs with #13212 (shipped). **#13211 remains** = move _FRESHEN_LOCK into git_ops.ensure_main_and_pull (last cluster sibling; concurrency analysis needed; quality-gate for fresh context).
 
 - **#13170 SHIPPED → pending-test (PR #13258, branch squidsquad/task/13170, 2026-06-27)**: POST /merge fail-open JSON-body 500 (self-filed; last unguarded JSON-body POST handler). Fix: try/except(JSONDecodeError,ValueError)->400 + isinstance(dict)->400, mirroring #13156 /events + #12495 /work/assign. +3 tests (malformed->400, non-dict raw [1,2]/null/42->400, missing-pr_number keeps own 400 — guard doesn't shadow required-field check). Gate 4970/0/0. No DS-review (#13156/#12495 deterministic-guard class). No CQ/manifest. NOTE: test sends raw JSON content not TestClient json=None (which sends empty body = the parse-error case, not a JSON null).
 
