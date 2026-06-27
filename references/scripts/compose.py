@@ -291,7 +291,23 @@ def _load_manifest_v2_from_file(
             sys.exit(1)
         additional = data.get("additional_includes", []) or []
         if not isinstance(additional, list):
-            additional = []
+            # #13172 — fail CLOSED to match the sibling schema-error paths in
+            # THIS (base_role / variant) branch: base_role-missing and a
+            # missing sub-skill file both sys.exit(1). (The base-manifest
+            # `includes` wrong-type path below returns None instead — a
+            # different branch with a different contract; not the precedent
+            # here.) A bare-string additional_includes (e.g.
+            # `additional_includes: common/cycle-runner` instead of a list) was
+            # silently reset to [] — the variant's sub-skills then vanished from
+            # the composed CLAUDE.md with zero diagnostic. A schema typo must
+            # surface, not yield silently-incomplete agent instructions.
+            print(
+                f"ERROR: {manifest_path.name} for {role_name}: "
+                f"`additional_includes` is {type(additional).__name__}, "
+                f"expected list",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         for inc_path in additional:
             full_path = SUB_SKILLS_DIR / f"{inc_path}.md"
             if not full_path.exists():
