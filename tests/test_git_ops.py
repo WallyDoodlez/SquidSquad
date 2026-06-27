@@ -27,6 +27,84 @@ def _mock_result(stdout="", stderr="", returncode=0):
 
 
 # ---------------------------------------------------------------------------
+# _run / _run_list subprocess timeout (#13262)
+# ---------------------------------------------------------------------------
+
+class TestRunTimeout:
+    def test_run_passes_default_timeout(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run("git status", check=False)
+        assert sp.call_args.kwargs["timeout"] == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_run_list_passes_default_timeout(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run_list(["git", "status"], check=False)
+        assert sp.call_args.kwargs["timeout"] == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_per_call_timeout_override(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run("git status", check=False, timeout=7)
+        assert sp.call_args.kwargs["timeout"] == 7
+
+    def test_env_override_respected(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "42")
+        assert git_ops._git_timeout() == 42
+
+    def test_env_override_ignored_when_invalid(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "not-an-int")
+        assert git_ops._git_timeout() == git_ops.DEFAULT_GIT_TIMEOUT
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "0")  # non-positive → ignore
+        assert git_ops._git_timeout() == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_timeout_check_false_returns_nonzero_result(self):
+        """A hung git with check=False must fail fast into the existing
+        non-zero recovery path, NOT raise (#13262)."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("git pull", 300)):
+            res = git_ops._run("git pull", check=False)
+        assert res.returncode == 124
+        assert "timed out" in res.stderr
+
+    def test_timeout_check_true_raises_called_process_error(self):
+        """With check=True the timeout mirrors subprocess's check-failure
+        contract (raises CalledProcessError) so check=True callers' expectations
+        hold."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("git pull", 300)):
+            with pytest.raises(subprocess.CalledProcessError) as ei:
+                git_ops._run("git pull", check=True)
+        assert ei.value.returncode == 124
+
+    def test_run_list_timeout_check_false_returns_nonzero(self):
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(["git", "pull"], 300)):
+            res = git_ops._run_list(["git", "pull"], check=False)
+        assert res.returncode == 124
+        assert "timed out" in res.stderr
+
+    def test_run_list_timeout_check_true_raises(self):
+        """Symmetry with _run: _run_list + check=True + timeout raises."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(["git", "fetch"], 300)):
+            with pytest.raises(subprocess.CalledProcessError) as ei:
+                git_ops._run_list(["git", "fetch"], check=True)
+        assert ei.value.returncode == 124
+
+    def test_commit_routes_through_run_list_with_timeout(self):
+        """#13262: commit() must go through the timeout-protected _run_list (not a
+        raw subprocess.run), so a hung commit / pre-commit hook fails fast."""
+        with patch("git_ops._run_list") as rl, patch("git_ops._get_alias",
+                                                      return_value="skill"):
+            rl.return_value = _mock_result(returncode=0)
+            git_ops.commit("skill", "msg")
+        assert rl.called
+        assert rl.call_args[0][0][:2] == ["git", "commit"]
+
+
+# ---------------------------------------------------------------------------
 # pull()
 # ---------------------------------------------------------------------------
 
@@ -1270,11 +1348,10 @@ class TestCommitCodePushFailure:
             _mock_result(stdout=" M src/app.py\n"),  # status --porcelain
             _mock_result(stdout="squidsquad/task/100\n"),  # branch --show-current
         ]
-        mock_subproc.return_value = _mock_result()  # git commit succeeds
-        mock_run_list.side_effect = [
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        mock_subproc.return_value = _mock_result()  # (legacy: commit no longer here)
+        # #13262: the commit now routes through _run_list too — use return_value
+        # so the add / config-revert / commit calls all succeed regardless of count.
+        mock_run_list.return_value = _mock_result()
         # push now routed through _git_push (#9890) and FAILS here
         mock_git_push.return_value = _mock_result(returncode=1, stderr="push rejected")
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
@@ -1295,11 +1372,9 @@ class TestCommitCodePushFailure:
             _mock_result(stdout=" M src/app.py\n"),  # status
             _mock_result(stdout="squidsquad/task/100\n"),  # branch
         ]
-        mock_subproc.return_value = _mock_result()  # commit
-        mock_run_list.side_effect = [
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        mock_subproc.return_value = _mock_result()  # (legacy: commit no longer here)
+        # #13262: commit routes through _run_list now → any-count success.
+        mock_run_list.return_value = _mock_result()
         mock_git_push.return_value = _mock_result()  # push succeeds (#9890)
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
         assert result is True
@@ -1325,12 +1400,9 @@ class TestCommitCodeUsesWorkingBranch:
             _mock_result(stdout=" M src/app.py\n"),  # git status --porcelain
             _mock_result(stdout="develop\n"),  # current branch
         ]
-        mock_run_list.side_effect = [
-            _mock_result(returncode=0),  # rev-parse (branch exists)
-            _mock_result(),  # git checkout
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        # #13262: commit routes through _run_list now (one more call); use
+        # return_value so add / checkout / rev-parse / commit all succeed (rc0).
+        mock_run_list.return_value = _mock_result(returncode=0)
         mock_git_push.return_value = _mock_result()  # push (#9890)
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
