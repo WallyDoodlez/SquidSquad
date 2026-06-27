@@ -10,7 +10,7 @@ updated: 2026-05-24
 owner: skill
 status: active
 confidence: medium
-source: observation
+source: cycle-1361-reflection
 links: [learning-strip-vs-wire-audit-findings, decision-improvement-loop-philosophy]
 ---
 

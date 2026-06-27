@@ -7,11 +7,6 @@ type: learning
 tags: [learning, process, architecture, doc-first, trd, 12244, 12271, 12300]
 created: 2026-06-14
 author: pm
-updated: 2026-06-17
-owner: pm
-status: active
-confidence: medium
-source: observation
 ---
 
 # Learning: doc-first for architecture changes

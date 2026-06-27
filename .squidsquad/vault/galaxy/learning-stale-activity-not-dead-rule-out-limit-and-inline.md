@@ -10,7 +10,7 @@ updated: 2026-06-18
 owner: pm
 status: active
 confidence: high
-source: observation
+source: incident
 links: [feedback_health_checks_facts_not_context, feedback_minimal_repro_over_symptom_match, learning-graceful-restart-grace-timer-on-wedged-agent, feedback_manual_agents]
 ---
 

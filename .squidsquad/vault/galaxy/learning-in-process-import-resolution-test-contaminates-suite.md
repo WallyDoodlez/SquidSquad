@@ -7,7 +7,6 @@ status: active
 confidence: high
 source: observation
 links: [learning-tests-must-not-mutate-shared-live-state, decision-deterministic-testing, learning-gate-collection-abort-masks-reds]
-updated: 2026-06-17
 ---
 
 ## Context

@@ -7,7 +7,6 @@ owner: dm-lead
 status: active
 confidence: high
 source: observation
-updated: 2026-06-19
 ---
 
 # A harness.py-only ship triggers a restart-required that is usually a NO-OP

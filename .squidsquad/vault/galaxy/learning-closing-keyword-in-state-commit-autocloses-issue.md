@@ -6,11 +6,6 @@ metadata:
 type: learning
 tags: [git, github, tracker, qa, pending-ship, gotcha]
 created: 2026-06-19
-updated: 2026-06-19
-owner: verifier
-status: active
-confidence: medium
-source: observation
 ---
 
 # Learning — A closing keyword in a commit to main auto-closes the issue
