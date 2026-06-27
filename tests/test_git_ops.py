@@ -81,10 +81,38 @@ class TestPull:
             _mock_result(),                      # git stash (no-op)
             _mock_result(stdout="oldsha"),       # post: unchanged → stashed=False
             _mock_result(returncode=1),          # pull retry ALSO fails
+            _mock_result(returncode=1),          # #13261: git merge --abort (no merge → no-op)
         ]
         assert git_ops.pull() is False
         calls = [c[0][0] for c in mock_run.call_args_list]
         assert "git stash pop" not in calls
+
+    @patch("git_ops._run")
+    def test_pull_retry_fail_aborts_merge_before_pop(self, mock_run):
+        """#13261: a genuine-divergence conflict on the retry pull leaves the
+        clone MERGING (MERGE_HEAD + conflict markers). pull() MUST `git merge
+        --abort` BEFORE restoring our stash — otherwise _safe_stash_pop misreads
+        the merge's unmerged paths as a stash-pop conflict and DROPS our stash,
+        and a lingering MERGE_HEAD breaks the next clean-tree op. Mirrors the
+        deploy-path fix in _safe_pull_in_clone (#13215)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
+            _mock_result(),                      # git stash (creates entry)
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
+            _mock_result(returncode=1),          # pull retry FAILS (left MERGING)
+            _mock_result(),                      # git merge --abort
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
+        ]
+        assert git_ops.pull() is False
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git merge --abort" in calls, "must abort the in-progress merge"
+        assert "git stash pop" in calls, "must restore our genuinely-created stash"
+        assert calls.index("git merge --abort") < calls.index("git stash pop"), \
+            "merge --abort MUST precede stash pop so the pop sees a clean tree"
+        # #13261: the retry must be a MERGE pull so `git merge --abort` is the
+        # correct cleanup verb (never a rebase, which the abort cannot clear).
+        assert "git pull --no-rebase" in calls, "retry pull must be pinned to merge"
 
     @patch("git_ops._run_list")
     @patch("git_ops._run")
