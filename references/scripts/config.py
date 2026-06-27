@@ -279,7 +279,7 @@ def get_field(field):
             if val is not None:
                 print(
                     f"WARNING: config.md uses deprecated field "
-                    f"`{dfield}:` — rename to `{entry[1] if entry else field}:` "
+                    f"`{dfield}:` -- rename to `{entry[1] if entry else field}:` "
                     f"before #6274.3 cutover.",
                     file=sys.stderr,
                 )
@@ -1042,6 +1042,8 @@ def dump_all():
 
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     if len(sys.argv) < 2 or sys.argv[1] == "--help":
         print(__doc__)
         print("Fields:", ", ".join(sorted(FIELD_MAP.keys())))

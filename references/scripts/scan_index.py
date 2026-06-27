@@ -441,7 +441,7 @@ def record_decision(issue_number, accepted, db_path=None):
 
     conn.commit()
     conn.close()
-    print(f"Recorded decision: issue #{issue_number} → {decision}")
+    print(f"Recorded decision: issue #{issue_number} -> {decision}")
     return True
 
 
@@ -799,6 +799,8 @@ def _parse_args():
 
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     args = _parse_args()
 
     if args.command == "suggest-targets":
