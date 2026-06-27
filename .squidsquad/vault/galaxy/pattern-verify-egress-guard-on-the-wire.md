@@ -6,11 +6,6 @@ metadata:
 type: pattern
 tags: [testing, verification, test-isolation, egress, qa, craft]
 created: 2026-06-19
-updated: 2026-06-19
-owner: verifier
-status: active
-confidence: medium
-source: review
 ---
 
 # Pattern — Verify a test-isolation / egress guard ON THE WIRE, not by its own assertions

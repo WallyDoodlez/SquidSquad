@@ -2,12 +2,7 @@
 type: pattern
 lane: verification
 created: 2026-06-18
-source: review
-tags: [verification, installer, manifest, shipped-file, qa]
-updated: 2026-06-18
-owner: verifier
-status: active
-confidence: medium
+source: "#12506 verification (cy323) — event-mode periodic driver"
 ---
 
 # Pattern: a new runtime file must reach the ship manifest, not just the repo

@@ -225,22 +225,6 @@
           }
         ]
       }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"
-            ],
-            "async": true,
-            "timeout": 30
-          }
-        ]
-      }
     ]
   }
 }

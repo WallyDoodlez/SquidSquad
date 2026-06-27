@@ -6,7 +6,7 @@ updated: 2026-06-12
 owner: verifier
 status: active
 confidence: high
-source: review
+source: verification
 links: [learning-spawn-prompt-must-not-decide-wake-mode]
 ---
 

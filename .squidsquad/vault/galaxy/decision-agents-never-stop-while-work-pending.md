@@ -10,7 +10,7 @@ updated: 2026-06-19
 owner: pm
 status: active
 confidence: high
-source: conversation
+source: operator-directive
 links: [decision-async-no-pause-never-block-human, learning-stale-activity-not-dead-rule-out-limit-and-inline]
 ---
 
