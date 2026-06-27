@@ -448,6 +448,52 @@ Ask the user for confirmation in one sentence:
 
 ---
 
+## Step 3b — Test strategy detection (software-dev only, #12450)
+
+The preset is now confirmed (Step 3). **Run this step only when the confirmed
+preset is `software-dev`.** Skip it entirely for the design or minimal presets
+(no code, no unit tests to detect) and go straight to Step 4.
+
+The repo scan (`repo_scan.detect_test_strategy`) already classifies how this
+project runs its unit tests — framework, run command, test location, coverage
+tool. Surface what it found, and when it found nothing, **ask the operator
+rather than letting the agents guess**:
+
+1. Run `python references/scripts/wizard.py scan-summary`. Look for a
+   **Test Strategy** line in the output.
+
+2. **Detected** (a Test Strategy line is present) — confirm it with the
+   operator so they can correct a wrong guess:
+
+   > I detected your test setup: it runs `pytest -q`, tests live in `tests/`.
+   > The agents will follow this convention. Sound right? (Enter to accept)
+
+   If the operator corrects it, record the correction with
+   `python references/scripts/wizard.py set-test-strategy --run-command "<cmd>"
+   [--framework <f>] [--location <l>] [--coverage <c>]`.
+
+3. **Undetected** (no Test Strategy line — empty repo, or an unrecognised
+   testing setup) — **ask, do not guess**:
+
+   > I couldn't detect how this project runs its unit tests. What's the test
+   > command (e.g. `pytest -q`, `npm test`, `go test ./...`)? I'll record it so
+   > the agents follow your convention instead of inventing one.
+
+   Record the answer:
+
+   ```bash
+   python references/scripts/wizard.py set-test-strategy --run-command "<their command>"
+   ```
+
+   If the operator genuinely has no tests yet, accept that and move on — the
+   L4 seed falls back to a "Not detected" note and the agents will ask later.
+
+This step writes `.squidsquad/.repo-scan.json` (the single source of truth the
+L4 Project Context seed reads at scaffold time, Step 7.3b), so a human-provided
+command flows into the agents' Project Context exactly like a detected one.
+
+---
+
 ## Step 4 — Walk setup_requirements
 
 This is the generic manifest-driven walker (Q-new13). For every role

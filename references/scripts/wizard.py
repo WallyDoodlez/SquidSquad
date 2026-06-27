@@ -1833,24 +1833,86 @@ def _write_l4_project_files(spec, project_dir, summary):
 
     project_info = spec.get("project", {})
 
+    # Read the detected test strategy specifics (framework / location) from the
+    # persisted scan artifact (#12450, design call X). The agent spec only
+    # carries the run_command string; the richer test_strategy dict lives in
+    # .repo-scan.json (written by the scaffold), which is the source of truth
+    # that survives both --yes and interactive installs. Graceful: any
+    # absence/parse-failure leaves test_strategy empty and we fall back to the
+    # per-agent test_command below.
+    test_strategy = {}
+    scan_file = project_dir.parent / ".repo-scan.json"
+    if scan_file.exists():
+        try:
+            test_strategy = (
+                json.loads(scan_file.read_text(encoding="utf-8")).get(
+                    "test_strategy"
+                )
+                or {}
+            )
+        except (OSError, ValueError):
+            test_strategy = {}
+
     # shared-stack-details.md — detected tech stack and test commands
     stack_file = project_dir / "shared-stack-details.md"
     if stack_file.exists():
         summary.setdefault("preserved", []).append(str(stack_file))
     else:
         stack = scan_data.get("stack", "Not detected")
-        test_cmd = scan_data.get("test_command", "Not detected")
         name = project_info.get("name", "Unknown")
+        test_section = _format_test_strategy_section(
+            test_strategy, scan_data.get("test_command")
+        )
         stack_file.write_text(
             f"## Project Stack Details — {name}\n\n"
             f"These details apply to all agents on this project.\n\n"
             f"### Stack\n\n- **Detected stack**: {stack}\n\n"
-            f"### Test Command\n\n- **Test command**: `{test_cmd}`\n\n"
+            f"{test_section}"
             f"### Conventions\n\n"
             f"_To be populated by the installer agent or human with "
             f"project-specific conventions, patterns, and preferences._\n",
             encoding="utf-8",
         )
+
+
+def _md_inline_code(value):
+    """Sanitize a value for an inline-code (backtick) span (#12450 DS-F1).
+
+    A literal backtick in a detected run command would break out of the code
+    span and corrupt the generated markdown. Backticks are illegal inside a
+    single-backtick span anyway, so replacing them with apostrophes is lossless
+    for any realistic test command.
+    """
+    return str(value).replace("`", "'")
+
+
+def _format_test_strategy_section(test_strategy, fallback_command):
+    """Render the L4 '### Testing Strategy' markdown block for #12450.
+
+    When the scan detected a strategy, emit run command + framework + location
+    + coverage so workers reference the detected strategy rather than inventing
+    one. Otherwise emit a single 'Not detected' test-command line (legacy shape),
+    using ``fallback_command`` if the spec carried one.
+    """
+    if test_strategy.get("detected"):
+        run_command = test_strategy.get("run_command") or "Not detected"
+        framework = test_strategy.get("framework") or "Not detected"
+        location = test_strategy.get("location") or "Not detected"
+        lines = [
+            "### Testing Strategy\n",
+            f"- **Run command**: `{_md_inline_code(run_command)}`",
+            f"- **Framework**: {framework}",
+            f"- **Test location**: {location}",
+        ]
+        if test_strategy.get("coverage"):
+            lines.append(f"- **Coverage tool**: {test_strategy['coverage']}")
+        lines.append(
+            "\n_Auto-detected at install (task #12450). Run the project's existing "
+            "tests with the run command above — do not invent a new test setup._\n"
+        )
+        return "\n".join(lines) + "\n"
+    test_cmd = fallback_command or "Not detected"
+    return f"### Test Command\n\n- **Test command**: `{_md_inline_code(test_cmd)}`\n\n"
 
 
 def _copy_l4_seed_stubs(project_dir, summary):
@@ -3315,6 +3377,22 @@ def format_scan_summary(scan_data):
     if tests:
         sections.append(f"**Test Tools**: {', '.join(tests)}")
 
+    # #12450 S3: surface the richer detected test strategy (the S1 detection
+    # ladder — run command / location / coverage) so the wizard can show the
+    # operator what the agents will follow, and detect the undetectable case
+    # (ask-human path in WIZARD.md Step 1c).
+    test_strategy = scan_data.get("test_strategy") or {}
+    if test_strategy.get("detected"):
+        ts_parts = []
+        if test_strategy.get("run_command"):
+            ts_parts.append(f"runs `{test_strategy['run_command']}`")
+        if test_strategy.get("location"):
+            ts_parts.append(f"tests in `{test_strategy['location']}`")
+        if test_strategy.get("coverage"):
+            ts_parts.append(f"coverage via `{test_strategy['coverage']}`")
+        if ts_parts:
+            sections.append(f"**Test Strategy**: {', '.join(ts_parts)}")
+
     ci = scan_data.get("ci_cd", [])
     if ci:
         sections.append(f"**CI/CD**: {', '.join(ci)}")
@@ -3350,17 +3428,25 @@ def generate_default_spec(scan_data=None, repo_info=None):
     project_name = info.get("name", "")
     project_repo = info.get("repo", "")
 
-    # Detect test command from scan
-    test_frameworks = scan.get("test_frameworks", [])
+    # Detect test command from scan. Prefer the richer test_strategy run_command
+    # (#12450 — a detection ladder over package.json scripts / pytest / go / cargo
+    # / mvn / gradle / rspec / make, far beyond the four-framework heuristic);
+    # fall back to the legacy test_frameworks heuristic when test_strategy is
+    # absent (older scan artifacts) or detected nothing.
+    test_strategy = scan.get("test_strategy") or {}
     test_command = ""
-    if "pytest" in test_frameworks:
-        test_command = "pytest"
-    elif "jest" in test_frameworks:
-        test_command = "npx jest"
-    elif "vitest" in test_frameworks:
-        test_command = "npx vitest"
-    elif "mocha" in test_frameworks:
-        test_command = "npx mocha"
+    if test_strategy.get("detected") and test_strategy.get("run_command"):
+        test_command = test_strategy["run_command"]
+    else:
+        test_frameworks = scan.get("test_frameworks", [])
+        if "pytest" in test_frameworks:
+            test_command = "pytest"
+        elif "jest" in test_frameworks:
+            test_command = "npx jest"
+        elif "vitest" in test_frameworks:
+            test_command = "npx vitest"
+        elif "mocha" in test_frameworks:
+            test_command = "npx mocha"
 
     # Detect stack from scan
     langs = scan.get("languages", [])
@@ -3462,6 +3548,74 @@ def cmd_scan_summary(args):
             print("ERROR: repo_scan.py not available", file=sys.stderr)
             return 1
     print(format_scan_summary(scan_data))
+    return 0
+
+
+def cmd_set_test_strategy(args):
+    """Persist a human-provided test strategy into ``.repo-scan.json`` (#12450 S3).
+
+    Usage: wizard.py set-test-strategy --run-command <cmd> [--framework <f>]
+           [--location <l>] [--coverage <c>] [target_dir]
+
+    The undetectable path in WIZARD.md Step 1c: when the repo scan could not
+    detect how the project runs its unit tests, the wizard asks the operator
+    and records the answer here. ``.repo-scan.json`` is the single source of
+    truth every downstream consumer reads (the L4 seed writer, generate-defaults),
+    so writing it here makes the human answer flow through uniformly — marked
+    ``detected: true`` with ``source: "human"`` so it is no longer "undetected".
+    """
+    opts = {}
+    target = "."
+    i = 0
+    flag_map = {
+        "--run-command": "run_command",
+        "--framework": "framework",
+        "--location": "location",
+        "--coverage": "coverage",
+    }
+    while i < len(args):
+        tok = args[i]
+        if tok in flag_map:
+            if i + 1 >= len(args):
+                print(f"ERROR: {tok} requires a value", file=sys.stderr)
+                return 2
+            opts[flag_map[tok]] = args[i + 1]
+            i += 2
+        elif tok.startswith("--"):
+            # An unknown flag (e.g. a typo like --run-comand) must error, not be
+            # silently swallowed as a target path — that would write the strategy
+            # to the wrong directory.
+            print(f"ERROR: unknown flag {tok}", file=sys.stderr)
+            return 2
+        else:
+            target = tok
+            i += 1
+    if not opts.get("run_command"):
+        print("ERROR: --run-command is required", file=sys.stderr)
+        return 2
+
+    scan_path = Path(target) / ".squidsquad" / ".repo-scan.json"
+    scan_data = {}
+    if scan_path.exists():
+        try:
+            scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            scan_data = {}
+
+    test_strategy = scan_data.get("test_strategy") or {}
+    test_strategy.update({k: v for k, v in opts.items() if v})
+    test_strategy["detected"] = True
+    test_strategy["source"] = "human"
+    scan_data["test_strategy"] = test_strategy
+    # Keep the legacy flat test_command in sync so older consumers also see it.
+    scan_data["test_command"] = opts["run_command"]
+
+    scan_path.parent.mkdir(parents=True, exist_ok=True)
+    scan_path.write_text(
+        json.dumps(scan_data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps({"ok": True, "test_strategy": test_strategy}, indent=2))
     return 0
 
 
@@ -3677,6 +3831,7 @@ def main():
         "load-spec": cmd_load_spec,
         "save-spec": cmd_save_spec,
         "scan-summary": cmd_scan_summary,
+        "set-test-strategy": cmd_set_test_strategy,
         "generate-defaults": cmd_generate_defaults,
         "setup-yes": cmd_setup_yes,
         "preflight": cmd_preflight,

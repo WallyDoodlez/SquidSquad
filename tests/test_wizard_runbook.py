@@ -41,6 +41,8 @@ _WIZARD_COMMANDS = {
     "migration-plan", "stamp-version",
     # #12420 §10.3 post-commit harness restart.
     "restart-agents",
+    # #12450 Step 1c test-strategy detection + undetectable ask-human.
+    "scan-summary", "set-test-strategy",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}
