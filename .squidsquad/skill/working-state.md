@@ -1,39 +1,35 @@
 # Working State
 
-- **Task**: none in-flight. All this-cycle work handed off to verifier (pending-test). Next actionable: #12271 (liveness, in-progress, high), then approved #12527/#12492/#10690/#10686 — all warrant fresh context.
+- **Task**: none in-flight. The instruction-layering cluster is on OPERATOR HOLD (below). No new actionable autonomous work in queue. Idle-armed.
 
-## THIS CYCLE (2026-06-27, EVENT-mode continuation)
+## OPERATOR HOLD — instruction-layering cluster (2026-06-27)
 
-- **#13275 + #13276 RE-LANDED → pending-test (PR #13280).** Root cause: PR #13274's squash captured a STALE INTERMEDIATE commit (b649dc5b9), silently dropping the 2 newest branch commits — ecf6ffb9a (#13275 TUI infra: requirements-tui.txt / tui/__init__.py / render+drift tests / installer-files 254→258) and 03ab86ef8 (#13276 agent_rows None-guard). Verifier correctly REJECTED both (fixes never reached main). Recovered verbatim from branch tip 03ab86ef8 onto a fresh branch off main. Gate 5076 (TUI subset 30). **This is a distinct squash-loss variant** (partial loss on an AHEAD branch) — the #13271 behind-count guard does NOT catch it; data point posted on #13271; see [[learning-squash-drops-newest-commits-of-ahead-branch]].
+- **#13291 (L1 universal "stay-current" norm) — REVERTED + PARKED at `pending-human-review`.** Timeline: pm posted an operator HOLD (16:55) on the whole cluster (#13291 L1 norm / #13286 dev rule / #13287 dev-domain layer) while I was mid-build; I finished the in-flight atomic unit and shipped to pending-test (17:09, PR #13292) before the hold surfaced (pm: expected). qa picked up, verified + squash-merged before reading the hold, then git-reverted both the squash (2fe73dfb3) and the QA-RESULTS commit (e9b944004) — non-destructive revert commits a4eb27c10.., pushed. **No cluster trace on main**: identity.md back to "never push without pulling first", per-role bullets restored, all 4 composed CLAUDE.md = 0 occurrences of the new norm.
+- **DIRECTIVE: drop the cluster from active work; do NOT touch #13291/#13287; await operator re-approval.** Nothing from this cluster lands in main until the operator confirms direction (re-discussion pending).
+- **Self-correction this session**: on resume I had an in-flight post-merge recompose (composed CLAUDE.md carrying the new L1 wording, generated against the briefly-merged source) — DISCARDED before commit. Caught the re-land vector. Process note posted on #13291: reverting an L1 *source* change does not auto-revert *deployed* composed output; recompose is a separate post-merge step (harmless here — #13292 shipped source-only, no deploy ran — but a guard for the cluster design).
 
-- **#12450 S3+S4 SHIPPED → pending-test (PR #13281).** Installer auto-detects + follows the project's test strategy (operator request; PM split L3=behavior / L4-seed=specifics).
-  - S3: `format_scan_summary` surfaces the detected strategy; new `wizard.py set-test-strategy` persists a human answer into `.repo-scan.json` (source of truth → L4 seed); **WIZARD.md Step 3b** (after preset confirm, software-dev only) surfaces detection + ASKS the operator on the undetectable case.
-  - S4 (PM rec(a)): "follow the project's detected test strategy; never invent a framework/layout the repo doesn't use" duplicated into all 5 per-stack worker L3 sources (android/ios/web/fullstack/skill). Deploy-verified the behavior reaches the composed worker CLAUDE.md.
-  - Gate **5121/0/0**. DS-review (Sonnet — model_router degenerate per #13278): 1 BLOCKER (step ran before preset known → moved to Step 3b) + 4 SHOULD/NIT, ALL fixed.
-  - **Comprehension flag (verifier+PM):** WIZARD.md Step 3b + 5 L3 blocks are LLM-consumed; AC1/AC2 ARE the comprehension-testable behaviors. Requested verifier author the CQ spec per TEST-PLAN; did NOT self-generate.
+## CARRY-FORWARD (other lanes — not mine)
 
-## CARRY-FORWARD
+- **#13285 (post-merge scope-audit) — VERIFIED → pending-ship (PR #13288 merged; QA-RESULTS-13285 on main).** Flag to operator: flip `SQUIDSQUAD_MERGE_AUTO_REVERT=1` once detection is trusted in prod.
+- **#13286 (dev forge-workflow) — VERIFIED + MERGED → CLOSED (PR #13290).** Landed BEFORE the hold; the operator may revisit it in cluster re-discussion (their call, not mine to revert).
+- **#13275/#13276, #12450, #12492/#12271** all landed/closed earlier this run.
 
-- **#13286 SHIPPED → pending-test (PR #13290).** Operator-requested behavioral dev-workflow rule (the #13271 root-cause prevention; mechanical #13271/#13285 guards = backstop): sync-before-start (implement-tasks 1b-sync) + sync-before-merge (8d) via merge-not-rebase + own-correctness-on-current-base. DRY: pr-protocol.md owns the Branch sync WHEN+WHY referencing the existing merge mechanic; implement-tasks marks the 2 moments by reference; ownership references roles/worker/responsibility.md. +CQ spec (4 Qs). Marker-loaded sub-skills (deploy-verified). DS-review (Sonnet) caught 2 blockers (8c→8d skip; dead path) + fixed. **⚠️ PROCESS LAPSE: committed #13286 source direct-to-main first (skipped branch-create when picking up from idle — task-begin not run on the idle→pickup path). Recovered: branched the local-only commits, `git reset --hard origin/main`, re-PR'd clean. Lesson: picking up a task straight from idle BYPASSES the cycle's task-begin → must run `git switch -c` manually. See [[feedback_create_branch_before_code_edits]].**
-- **#13285 SHIPPED → VERIFIED → pending-ship (PR #13288 merged; QA-RESULTS-13285 on main).** Post-merge scope-audit, the durable complement to the #13271 behind-count PRE-merge guard (wired into git_ops.pr_merge after merge success). Violation = merge-DELETED files (`git show --diff-filter=D`) NOT in the PR's declared set (`gh pr view --json files`) = the #13271 stale-tree signature; legit refactor/rename deletions are declared so never false-flagged; any uncertainty → flag-never-revert. **Detection + incident comment ALWAYS on; auto-revert behind SQUIDSQUAD_MERGE_AUTO_REVERT (default OFF)** — defused-by-default safe rollout (the #12492 escape-hatch pattern) is what bounded the blast radius enough to ship this cycle. git revert non-destructive (aborts on conflict, undoes local revert on push-fail). **Scope: file-DELETION net only** (the #13271 mass-revert class); ahead-DROP (#13280, missing additions) is out of scope, noted. Gate 5164/0/0; 17 tests; DS-review (Sonnet) NO BLOCKERS (fixed null-SHA race + failed-push divergence). **Flag to PM/operator: flip SQUIDSQUAD_MERGE_AUTO_REVERT=1 once detection is trusted in prod.**
-- **#13283 SHIPPED → CLOSED (verified, PR #13284 merged).** Verifier-found blind spot in the #12492 cutover: a never-resolved-PID agent stuck at status=starting was never auto-rebooted (cutover kill-step needs alive=True; status block skips "starting"; is_dead excludes it). Fix: a `wedged_start` death_candidate disjunct (status=="starting" + not alive + not prog_alive, cutover-gated) consumes progress_liveness()'s wedged-boot-timeout verdict (#13179), routed through the existing death path so #12458 pause-hold + #12244 streak + #12409 slow-loop breaker all apply. Gate 5147/0/0; 7 tests (incl pause-hold + slow-loop combos); DS-review (Sonnet) NO BLOCKERS. Fixed at peak context (just shipped the cutover).
-- **#12450 + #12492 VERIFIED + MERGED → CLOSED; #12271 umbrella VERIFIED (QA-RESULTS-12271 on main).** Test-strategy auto-detect and the progress-liveness cutover both landed on main.
-- **#12271 UMBRELLA → pending-test** (all slices shipped; final = #12492 cutover closed). Handed to verifier for holistic verification against main (no umbrella PR — each slice shipped separately). When verified+shipped: #12409 retest+close, qa→event-mode unblocks. Follow-up (separately tracked #12416): the now-removable #10101/#10440 Windows liveness-path machinery (PID no longer the liveness verdict).
-- **#12492 (history) SHIPPED → pending-test (PR #13282).** The progress-liveness cutover. progress_liveness() now authoritative: a zombie (PID-alive + progress-dead, #10855) is killed in update_health → normal reboot path respawns it next poll (proven §7.4 kill-this-poll/reboot-next-poll pattern). PID demoted to teardown-only; dead-PID stays the instant crash signal (§15.4). Additive single gated kill-step in the shadow-divergence block — death/backoff/streak machinery untouched. Guards: intent=RUNNING / not _NO_AUTO_REBOOT / not pid_changed / booting-grace+pause inside progress_liveness(). Escape: SQUIDSQUAD_HARNESS_PROGRESS_LIVENESS_SHADOW_ONLY=1. **AC2 evidence = operator GO** (shadow is console-only, no on-disk artifact — flagged on issue). Gate 5137/0/0; DS-review (Sonnet) NO BLOCKERS (+pid_changed test added). HARNESS-ARCH §1/§13.7 status synced; §15 narrative left to PM (TRD lane, flagged). **When merged: #12271 closes; #12409 retest+close; qa→event-mode unblocks.**
-- **#12271** (in-progress, HIGH): progress-based liveness umbrella — closes when #12492 merges.
-- **Approved**: #12527 (greenfield FOREIGN-repo installer smoke — LIVE run human-supervised; only static foreign-repo-assumption audit is autonomous), #10690 (gated E6+E7), #10686 (PRD-E E7 manual migration smoke).
-- **#13278, #13279** (open, mine, improvement-scan): model_router degenerate output / git_ops._log_diagnostic no timeout. NOT self-fixable without triage.
-- **#13271 robust follow-up** (recorded on issue): post-merge scope-audit + auto-revert — the mechanism-agnostic net. Now reinforced by today's partial-loss data point (behind-count guard insufficient; verify merged squash == branch-tip diff, not an older commit).
+## NOT CLEANLY AUTONOMOUS (operator-gated)
+
+- **#12527** — greenfield FOREIGN-repo installer smoke: LIVE run human-supervised; static audit done.
+- **#10690** — wiki-link rework, gated on E6+E7.
+- **#10686** — PRD-E E7 manual on-repo migration smoke.
+- **#13278, #13279** (open, mine, improvement-scan): model_router degenerate / git_ops._log_diagnostic no timeout. NOT self-fixable without triage.
 
 ## STANDING REMINDERS
 
-- Feature work on `squidsquad/task/<n>`; working-state + planning commit DIRECT to main (#11511 strips them from feature branches). `git switch -c` BEFORE code edits.
+- Feature work on `squidsquad/task/<n>`; working-state + planning commit DIRECT to main (#11511 strips them from feature branches). `git switch -c` BEFORE code edits — esp. on idle->pickup (no task-begin fires).
 - Push: `git -c credential.helper='!gh auth git-credential' push`.
-- Pending-test gate = `python tests/run_tests.py static` (~5121 gated, fail-closed). Baseline known-failures: test_agent_boundaries + test_compose_author_comments_11142 (both #10360-blocked) → gate still exits 0.
-- DeepSeek/model_router degenerate this session → go straight to a Sonnet review subagent (#13278).
-- After heading/string rename in LLM-consumed source: `grep -rn "Old Anchor" tests/`.
+- Pending-test gate = `python tests/run_tests.py static` (~5168 gated, fail-closed). Known-failures test_agent_boundaries + test_compose_author_comments_11142 (both #10360-blocked) -> gate still exits 0.
+- model_router/DeepSeek degenerate this session (#13278) -> go straight to a Sonnet review subagent.
+- **L1/L4 source revert ≠ composed revert**: after any revert of a DEPLOYED instruction-layer change, recompose every affected role (`compose.py deploy <alias>`) or composed output silently keeps the reverted wording.
 
 ## Improvement Scan
-Status: armed. Prior idle stretch filed #13278 (model_router degenerate) + #13279 (git_ops._log_diagnostic no timeout). Not auto-fixed (await triage).
+Status: armed. Prior idle stretch filed #13278 + #13279 (await triage).
 
 ## Quiet Cycle Counter: 0
