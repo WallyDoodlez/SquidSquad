@@ -662,6 +662,8 @@ def boot_all(dry_run=False):
 # ---------------------------------------------------------------------------
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     args = sys.argv[1:]
     if "--help" in args or "-h" in args:
         print(__doc__)
@@ -698,7 +700,7 @@ def main():
     else:
         for r in results:
             status = "OK" if r["success"] else "FAIL"
-            print(f"[{r['role']}] {r['action']} — {status}: {r['message']}")
+            print(f"[{r['role']}] {r['action']} -- {status}: {r['message']}")
 
     # Exit code: 1 if any spawn failed
     any_failed = any(
