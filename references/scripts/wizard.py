@@ -3389,7 +3389,7 @@ def format_scan_summary(scan_data):
         if test_strategy.get("location"):
             ts_parts.append(f"tests in `{test_strategy['location']}`")
         if test_strategy.get("coverage"):
-            ts_parts.append(f"coverage via {test_strategy['coverage']}")
+            ts_parts.append(f"coverage via `{test_strategy['coverage']}`")
         if ts_parts:
             sections.append(f"**Test Strategy**: {', '.join(ts_parts)}")
 
@@ -3581,6 +3581,12 @@ def cmd_set_test_strategy(args):
                 return 2
             opts[flag_map[tok]] = args[i + 1]
             i += 2
+        elif tok.startswith("--"):
+            # An unknown flag (e.g. a typo like --run-comand) must error, not be
+            # silently swallowed as a target path — that would write the strategy
+            # to the wrong directory.
+            print(f"ERROR: unknown flag {tok}", file=sys.stderr)
+            return 2
         else:
             target = tok
             i += 1

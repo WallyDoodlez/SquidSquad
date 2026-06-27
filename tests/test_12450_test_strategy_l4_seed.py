@@ -280,6 +280,13 @@ class TestSetTestStrategyCLI(unittest.TestCase):
         rc = wizard.cmd_set_test_strategy(["--run-command"])
         self.assertEqual(rc, 2)
 
+    def test_unknown_flag_errors_not_swallowed_as_target(self):
+        """A typo flag (e.g. --run-comand) must error, not be treated as a
+        target dir — else the strategy writes to the wrong path silently."""
+        rc = wizard.cmd_set_test_strategy(
+            ["--run-command", "pytest", "--run-comand", "oops"])
+        self.assertEqual(rc, 2)
+
     def test_malformed_existing_scan_overwritten_cleanly(self):
         import tempfile
         with tempfile.TemporaryDirectory() as td:
