@@ -288,8 +288,25 @@ def pull(role=None):
         return False
     stashed = _stash_top_ref() != pre_stash_ref
 
-    retry = _run("git pull", check=False)
+    # #13261: pin the retry to a MERGE pull (never rebase). The recovery below
+    # cleans up a failed retry with `git merge --abort`, which only clears a
+    # MERGING state — under a clone-local `pull.rebase=true` the retry would
+    # rebase and leave a REBASE state the abort cannot clear. `--no-rebase`
+    # guarantees the abort verb matches what a failed retry leaves behind, and
+    # matches the project's "always merge, never rebase" rule.
+    retry = _run("git pull --no-rebase", check=False)
     if retry.returncode != 0:
+        # #13261: the retry pull may have STARTED a merge and hit a
+        # committed-divergence conflict, leaving the clone MERGING (MERGE_HEAD +
+        # conflict markers). Abort that merge FIRST — otherwise (a) the markers
+        # break the next compose, (b) _safe_stash_pop below misreads the merge's
+        # unmerged paths as a stash-pop conflict and DROPS our stash, and (c) a
+        # lingering MERGE_HEAD makes the next op needing a clean tree fail. The
+        # abort is a harmless no-op (non-zero, ignored) when no merge is in
+        # progress (the pull failed before merging). Mirrors the same fix in the
+        # deploy path's _safe_pull_in_clone (#13215). The pull still FAILED →
+        # report failure after restoring our stash.
+        _run("git merge --abort", check=False)
         # Restore OUR stashed changes (only if we actually created one) and
         # report failure. Use the marker-safe pop (#13045), never a raw pop.
         if stashed:

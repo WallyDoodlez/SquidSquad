@@ -709,6 +709,37 @@ class TestResolveVariant:
         assert compose._resolve_variant("skill") is None
 
 
+class TestManifestV2TombstoneUnreachable13264:
+    """#13264: `_load_manifest_v2` / `_load_manifest_v2_from_file` are dead code
+    post-E6 (#10685) — the deploy path routes through `v2_link_stage.emit_v2_linked`,
+    not this loader. They are TOMBSTONED (retained for the schema reader + #13172
+    guard, in case the manifest path is ever re-wired), NOT removed. This guard
+    locks the tombstone: if a production script (re)wires `_load_manifest_v2`, this
+    fails → forcing a re-decision rather than silently reviving dead code."""
+
+    def test_symbol_only_referenced_within_compose(self):
+        scripts = Path(__file__).resolve().parent.parent / "references" / "scripts"
+        offenders = []
+        for py in scripts.glob("*.py"):
+            if py.name == "compose.py":
+                continue  # the def-site + own recursion live here, by design
+            if "_load_manifest_v2" in py.read_text(encoding="utf-8"):
+                offenders.append(py.name)
+        assert not offenders, (
+            "_load_manifest_v2 is tombstoned/unreachable (#13264) but is now "
+            f"referenced by production script(s): {offenders} — re-decide the "
+            "tombstone (remove it, or drop the dead-code marker) before wiring "
+            "a new caller"
+        )
+
+    def test_tombstone_marker_present(self):
+        """The tombstone rationale must stay in the source so a future reader
+        knows the function is intentionally-retained dead code, not live."""
+        src = (Path(__file__).resolve().parent.parent / "references" / "scripts"
+               / "compose.py").read_text(encoding="utf-8")
+        assert "TOMBSTONE (#13264)" in src
+
+
 class TestManifestV2AdditionalIncludesWrongType13172:
     """#13172: a wrong-TYPE additional_includes (e.g. a bare string instead of
     a list) must fail CLOSED — matching every sibling schema-error path in
