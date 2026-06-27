@@ -215,6 +215,22 @@ _NO_AUTO_REBOOT = False
 # verifying source freshness themselves.
 _NO_FRESHNESS_CHECK = False
 
+# #12492 (#12271 slice-4 pt2) — progress-liveness cutover. When True (the
+# shipped default after #12492), progress_liveness() (§15.3) is AUTHORITATIVE
+# for the reboot decision: a PID-alive agent the progress model deems dead — a
+# ZOMBIE (inert process; the #10855 false-positive PID-liveness cannot catch) —
+# is killed so the normal death/reboot path respawns it on the next poll. PID is
+# demoted to teardown-only: PID-aliveness no longer VETOES a reboot, though a
+# dead PID is still the instant crash signal (§15.4). The zombie kill respects
+# every existing guard: intent must be RUNNING, _NO_AUTO_REBOOT suppresses it
+# (a kill with no respawn is silent death — worse than churn), the booting grace
+# (#13179) and pause-aware guard (#12458) already keep progress_liveness alive
+# during a legitimate boot/explained pause so neither reads as a zombie.
+# Set SQUIDSQUAD_HARNESS_PROGRESS_LIVENESS_SHADOW_ONLY=1 to revert to the
+# pre-cutover shadow-only behaviour (divergence logged, never acted on) if the
+# authoritative path ever misbehaves in production.
+_PROGRESS_LIVENESS_AUTHORITATIVE = True
+
 import boot_remote
 import health_check
 import process_utils
@@ -786,8 +802,44 @@ class HarnessState:
                         f"{role}: LIVENESS DIVERGENCE — PID says "
                         f"{'alive' if alive else 'dead'}, progress says "
                         f"{'alive' if prog_alive else 'dead'} ({prog_reason}) "
-                        f"[shadow #12271-d: {_kind}]"
+                        f"[#12271-d: {_kind}]"
                     )
+
+                # #12492 (#12271 slice-4 pt2) — progress-liveness CUTOVER.
+                # A zombie (PID-alive but progress-dead) is the case PID-liveness
+                # reports healthy forever (#10855). With the cutover active,
+                # progress is authoritative: kill the inert PID so the normal
+                # death/reboot path (below, next poll once the PID reads dead)
+                # respawns it — mirroring the §7.4 force-kill net's
+                # kill-this-poll / reboot-next-poll pattern rather than racing a
+                # same-poll respawn against a not-yet-reaped process. Guards:
+                # only a RUNNING agent (a stopping/deploying/restarting agent's
+                # silence is expected and handled elsewhere); never under
+                # _NO_AUTO_REBOOT (a kill with no respawn is silent death — worse
+                # than the zombie); skip when pid_changed (a fresh PID this poll
+                # is a just-rebooted agent, not a zombie). The booting-grace
+                # (#13179) and pause-aware (#12458) guards live inside
+                # progress_liveness(), so a legitimately booting or
+                # explained-paused agent returns prog_alive=True and is never
+                # seen here as a zombie (AC3).
+                if (_PROGRESS_LIVENESS_AUTHORITATIVE
+                        and alive and not prog_alive
+                        and not pid_changed
+                        and agent.intent == AgentState.INTENT_RUNNING
+                        and not _NO_AUTO_REBOOT):
+                    _log(
+                        f"{role}: PROGRESS-LIVENESS REBOOT — zombie "
+                        f"(PID {pid} alive but progress dead: {prog_reason}); "
+                        f"killing inert PID so the reboot path respawns it "
+                        f"(#12492 cutover)"
+                    )
+                    try:
+                        reboot_agent._kill_process(pid)
+                    except Exception as e:
+                        _log(
+                            f"{role}: zombie kill of PID {pid} raised "
+                            f"{type(e).__name__}: {e}"
+                        )
 
                 # #4792 Phase 1 (Q7) — 60s force-kill safety net.
                 # If the agent has been STOPPING/RESTARTING for longer than
@@ -5716,10 +5768,16 @@ def main():
     # that don't go through argparse (e.g. test harnesses, restart
     # scripts) can opt in too.
     global _NO_AUTO_START, _NO_AUTO_REBOOT, _NO_FRESHNESS_CHECK
+    global _PROGRESS_LIVENESS_AUTHORITATIVE
     env_flag = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_START", "")
     _NO_AUTO_START = args.no_auto_start or env_flag.lower() in ("1", "true", "yes")
     env_reboot = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT", "")
     _NO_AUTO_REBOOT = args.no_auto_reboot or env_reboot.lower() in ("1", "true", "yes")
+    # #12492 cutover escape hatch — revert to pre-cutover shadow-only liveness.
+    env_shadow = os.environ.get(
+        "SQUIDSQUAD_HARNESS_PROGRESS_LIVENESS_SHADOW_ONLY", "")
+    _PROGRESS_LIVENESS_AUTHORITATIVE = (
+        env_shadow.lower() not in ("1", "true", "yes"))
     env_freshness = os.environ.get("SQUIDSQUAD_HARNESS_NO_FRESHNESS_CHECK", "")
     _NO_FRESHNESS_CHECK = (
         args.no_freshness_check
