@@ -2,7 +2,11 @@
 
 - **Task**: none
 
-- **SESSION SHIP TALLY (2026-06-26→27)**: #13213 (MERGED, qa AC2 live), #13212 (MERGED), #13236 (verified→pending-ship), #13198 (verified→pending-ship), #13255 (pending-test, PR #13256), #13172 (pending-test, PR #13257). 6 ships this boot.
+- **SESSION SHIP TALLY (2026-06-26→27)**: #13213 (MERGED, qa AC2 live), #13212 (MERGED), #13236 (verified→pending-ship), #13198 (verified→pending-ship), #13255 (pending-test, PR #13256), #13172 (pending-test, PR #13257), #13170 (pending-test, PR #13258). **7 ships this boot.**
+
+- **#13170 SHIPPED → pending-test (PR #13258, branch squidsquad/task/13170, 2026-06-27)**: POST /merge fail-open JSON-body 500 (self-filed; last unguarded JSON-body POST handler). Fix: try/except(JSONDecodeError,ValueError)->400 + isinstance(dict)->400, mirroring #13156 /events + #12495 /work/assign. +3 tests (malformed->400, non-dict raw [1,2]/null/42->400, missing-pr_number keeps own 400 — guard doesn't shadow required-field check). Gate 4970/0/0. No DS-review (#13156/#12495 deterministic-guard class). No CQ/manifest. NOTE: test sends raw JSON content not TestClient json=None (which sends empty body = the parse-error case, not a JSON null).
+
+- **REMAINING QUEUE = all gated/blocked or deploy-cluster.** Clean ungated low-bug backlog now EXHAUSTED this stretch (#13255/#13172/#13170 all shipped). Left: #13169 (needs live-repro, verifier env), #12801 (TUI, operator render-check), #12450 (PM-blocked L3), #12271/#12492 (cutover, shadow-window+operator gated), #12527 (human-supervised live run), #10690/#10686 (gated), **#13215/#13211 (deploy cluster — highest blast radius, RCAs front-loaded on issues, quality-gated for fresh focused context)**. Genuine idle.
 
 - **#13172 SHIPPED → pending-test (PR #13257, branch squidsquad/task/13172, 2026-06-27)**: compose.py wrong-type additional_includes silent-drop (self-filed improvement-scan). Fix: fail-closed sys.exit(1)+stderr to match same-branch siblings (was the only swallowed schema error → silently-incomplete agent instructions). +4 tests (string/dict exit, valid-list resolves [tree-isolated], null valid). Gate 4971/0/0. Sonnet review (DeepSeek degenerate all session) NO_BLOCKING + 1 MED (sibling-miscount comment) + 2 LOW (null test, test isolation) ALL FIXED. **Out-of-scope note posted on issue:** _load_manifest_v2 appears unreachable from prod deploy path post-E6 (#10685) — tombstone is separate triage. No CQ/manifest.
 
