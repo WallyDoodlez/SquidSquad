@@ -1836,10 +1836,11 @@ def _session_end_hook_group() -> dict:
     }
 
 
-# #12443 — activity-heartbeat hooks (HARNESS-ARCH §15.1). PostToolUse /
-# PostToolUseFailure fire on EVERY tool call, so they MUST NOT block or delay
-# the agent (AC2). Native `type: http` hooks are SYNCHRONOUS (they block the
-# tool call; default timeout 600s) and only `type: command` hooks support
+# #12443/#13213 — activity-heartbeat hooks (HARNESS-ARCH §15.1). UserPromptSubmit
+# fires at prompt-receipt and PostToolUse / PostToolUseFailure fire on EVERY tool
+# call, so they MUST NOT block or delay the agent (AC2). Native `type: http` hooks
+# are SYNCHRONOUS (they block the tool call; default timeout 600s) and only
+# `type: command` hooks support
 # `async` — verified against the Claude Code hook API (#12443) — so these are
 # async command hooks: Claude Code backgrounds them and ignores exit/output,
 # giving true zero-latency fire-and-forget. (SessionEnd, slice a, stays http: a
@@ -1912,13 +1913,24 @@ def _ensure_session_end_hook(settings_path) -> bool:
 
 
 def _ensure_activity_hooks(settings_path) -> bool:
-    """#12443/#12458 — ensure the per-tool-call hooks are present in
-    ``.claude/settings.json`` (see ``_ensure_hook_entries``). All three are
-    async command hooks (NEVER block the tool call): PostToolUse/
-    PostToolUseFailure are the #12443 activity heartbeat; PreToolUse (#12458)
+    """#12443/#12458/#13213 — ensure the activity-heartbeat hooks are present in
+    ``.claude/settings.json`` (see ``_ensure_hook_entries``). All are async
+    command hooks (NEVER block/delay the agent's turn): PostToolUse/
+    PostToolUseFailure are the #12443 per-tool-call heartbeat; PreToolUse (#12458)
     additionally opens the in-flight window so a long tool call isn't mistaken
-    for a wedge (the harness sets in_flight_until on the PreToolUse event)."""
+    for a wedge (the harness sets in_flight_until on the PreToolUse event).
+
+    #13213 adds **UserPromptSubmit** as a prompt-receipt heartbeat: it stamps
+    last_activity_at the moment a prompt is submitted (nudge tick, idle-driver
+    tick, or inline operator turn), closing the freeze-after-prompt-before-first-
+    tool-call gap (a sibling of the #12271 wedge class). It is a PLAIN heartbeat
+    by design — the harness /hooks/activity handler sets in_flight_until ONLY on
+    PreToolUse, so UserPromptSubmit advances last_activity_at without opening an
+    in-flight window. That is deliberate: an in-flight window would MASK the very
+    freeze-after-prompt window this signal exists to expose. (HARNESS-ARCH §15.1/
+    §16; the prompt-receipt heartbeat does not set in-flight.)"""
     return _ensure_hook_entries(settings_path, {
+        "UserPromptSubmit": _activity_hook_group(),
         "PreToolUse": _activity_hook_group(),
         "PostToolUse": _activity_hook_group(),
         "PostToolUseFailure": _activity_hook_group(),
@@ -2264,9 +2276,9 @@ def main():
         se_settings = REPO_ROOT / ".claude" / "settings.json"
         if _ensure_session_end_hook(se_settings):
             print(f"  SessionEnd hook -> {se_settings.relative_to(REPO_ROOT)}")
-        # #12443/#12458 — ensure the per-tool-call hooks (PreToolUse +
-        # PostToolUse + PostToolUseFailure) are present too (same idempotent
-        # settings.json integration).
+        # #12443/#12458/#13213 — ensure the activity-heartbeat hooks
+        # (UserPromptSubmit + PreToolUse + PostToolUse + PostToolUseFailure) are
+        # present too (same idempotent settings.json integration).
         if _ensure_activity_hooks(se_settings):
             print(f"  Activity hooks -> {se_settings.relative_to(REPO_ROOT)}")
         # #12458 — ensure the pause-aware lifecycle hooks (Notification /
