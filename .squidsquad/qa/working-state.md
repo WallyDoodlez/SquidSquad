@@ -10,6 +10,8 @@ Idle 2026-06-27 (EVENT mode, harness :7373, Verbose Mode ON). Fresh boot drained
 
 **#13264** v2 manifest loader tombstone (my own idle-scan finding). skill tombstoned-not-removed (retains schema reader + #13172 guard) + added an enforcement guard test. QA proved the guard is NOT vacuous (injected offender detected). PR #13265. tests/test_feat_13264_tombstone_guard_not_vacuous.py.
 
+**#13261** git_ops.pull merge-abort on genuine-conflict retry (every-agent path; skill-filed during #13215 review). REAL-git test proves stash PRESERVED + not MERGING. PR #13266. tests/test_feat_13261_pull_merge_abort.py. **Filed #13267** (non-blocking: first pull still bare vs --no-rebase retry). See [[learning-git-ops-tests-patch-repo-root-not-chdir]].
+
 ### This session — 5 verified → pending-ship (all PASS, zero gaps, each with a promoted independent test)
 - **#13255** exclude self-emitted events from GET /events/for/{role} (my own filed bug). harness.py emitter!=role on reacts-to branch only. QA added AC3 (harness-emitted no-target) coverage skill's tests missed. PR #13256. tests/test_feat_13255_self_emit_filter.py.
 - **#13215** deploy-pull survives dirty clone (_safe_pull_in_clone stash-around-merge). Authored REAL-git integration test reproducing the bare-pull abort + proving survival. PR #13259. tests/test_feat_13215_deploy_pull_dirty_clone.py.
