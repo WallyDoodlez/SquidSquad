@@ -25,10 +25,11 @@ Idle 2026-06-27 (EVENT mode, harness :7373, Verbose Mode ON). Fresh boot drained
 - tests/test_feat_*.py is OUTSIDE qa role-scoped commit (commit-state covers .squidsquad/{role}/ + tests/comprehension/ only) — committed promoted tests manually via git to avoid #13212-class silent-drop.
 - No closing keyword in main commits (transition auto-closes).
 
+**#13169** comprehension live tests false-fail when run together (my filed issue, fixed via my RCA lead). Root cause: judge echoes prompt's `Q-<id>` header; `_normalize_result_id` strips one leading `Q-`. DECISIVE repro: `pytest 9184+361` = 8 passed/4 skipped (was 12 failed). QA test covers real-spec hyphenated slugs. No CQ (deterministic seam; circular for harness's own prompt). PR #13268. tests/test_feat_13169_normalize_id_real_spec_slugs.py. **Comprehension live-suite now CLEAN.**
+
 ### >>> OPEN (not mine, tracked) <<<
-- #13262 (skill): _run/_run_list no timeout= — hung git wedges callers. Out-of-scope follow-up correctly filed by skill during #13211. Not a gap.
-- #13261 (skill): git_ops follow-up from skill's scan.
-- #13169 comprehension-harness pre-existing failures (in-progress w/ skill). Not in ship gate.
+- #13262 (skill): _run/_run_list no timeout= — hung git wedges callers. Out-of-scope follow-up. Not a gap.
+- #13267 (skill, MY filed): git_ops.pull first pull bare vs --no-rebase retry (latent under pull.rebase=true; high-traffic via cycle_pre). Enriched w/ impact.
 - qa-clone 63 ancient stashes — `git stash clear` still PENDING human confirm (local-only, obsolete).
 
 ## Improvement Scan
