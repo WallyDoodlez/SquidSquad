@@ -1051,6 +1051,26 @@ class TestContentChangeGate13303:
         assert results[0].noop is False
         assert results[0].event_context == "restart-required"
 
+    def test_after_read_raises_fails_safe_to_emit(self):
+        # Asymmetric failure: the BEFORE read succeeds but the AFTER read
+        # raises (e.g. file locked mid-write). The gate cannot prove
+        # no-change -> must emit, never silently suppress. Locks the
+        # fail-safe direction against a future "smarter" refactor.
+        calls = [0]
+
+        def partial_reader(alias):
+            calls[0] += 1
+            if calls[0] == 1:
+                return "existing content\n"   # before: succeeds
+            raise RuntimeError("deployed file locked")  # after: raises
+
+        results = lfw.recompose_for_role_class(
+            "dm", _REGISTRY, run_compose=_ok_compose,
+            read_deployed=partial_reader,
+        )
+        assert results[0].noop is False
+        assert results[0].event_context == "restart-required"
+
     def test_compose_failure_unaffected_by_gate(self):
         _dep, read_deployed, _mc = self._stateful({"dm-skill": "X\n"})
         results = lfw.recompose_for_role_class(

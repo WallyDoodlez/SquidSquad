@@ -245,7 +245,7 @@ def emit_results(results, *, emit_event):
     that the harness uses for the alias-care filter).
     """
     for r in results:
-        if getattr(r, "noop", False):
+        if r.noop:
             # #13303: no-op recompose (output unchanged) — nothing for the
             # agent to pick up, so emit no restart-required event.
             continue
