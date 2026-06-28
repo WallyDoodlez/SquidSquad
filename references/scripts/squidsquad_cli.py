@@ -41,10 +41,11 @@ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 HARNESS_SCRIPT = SCRIPT_DIR / "harness.py"
 # Supervised launchers (#12825) — the relaunch wrapper that owns harness
 # lifecycle. Spawning the harness UNDER the wrapper is what makes POST /restart
-# self-healing: the harness exits 42, the wrapper relaunches it in place. Live
-# at repo root (installed via installer-files.txt).
-RESTART_WRAPPER_BAT = REPO_ROOT / "restart-harness.bat"
-RESTART_WRAPPER_SH = REPO_ROOT / "restart-harness.sh"
+# self-healing: the harness exits 42, the supervised launcher relaunches it in
+# place. The consolidated single launchers (#13318) live in .squidsquad/ and run
+# the supervised loop under their `--bare` flag (harness only — no deps/sync/TUI).
+RESTART_WRAPPER_PS1 = SQUIDSQUAD_DIR / "start.ps1"
+RESTART_WRAPPER_SH = SQUIDSQUAD_DIR / "start.sh"
 
 HARNESS_STARTUP_TIMEOUT = 15  # seconds to wait for harness to start
 API_TIMEOUT = 10  # seconds for individual API calls
@@ -321,22 +322,24 @@ def cmd_shutdown():
 def _harness_launch_tail(system: str) -> list[str]:
     """Resolve the command tail that runs the harness for `system`.
 
-    Prefers the SUPERVISED launcher (restart-harness.*) so an agent's
-    ``POST /restart`` relaunches the harness in place (#12825). Falls back to
-    running ``harness.py`` directly when the wrapper file is absent (partial
-    install / dev tree) — that path still boots the harness, but ``POST
+    Prefers the SUPERVISED launcher (``.squidsquad/start.* --bare``, #13318) so
+    an agent's ``POST /restart`` relaunches the harness in place (#12825). Falls
+    back to running ``harness.py`` directly when the launcher file is absent
+    (partial install / dev tree) — that path still boots the harness, but ``POST
     /restart`` will stop it WITHOUT relaunching (graceful degradation).
 
     `system` is one of ``"windows"`` / ``"darwin"`` / ``"linux"``. The returned
     list is the program+args to run; POSIX callers shell-join it, the Windows
-    caller appends it to the terminal-spawn argv.
+    caller appends it to the terminal-spawn argv. ``--bare`` runs the supervised
+    relaunch loop only (no deps/sync/TUI) — the harness-only process this spawns.
     """
     if system == "windows":
-        if RESTART_WRAPPER_BAT.exists():
-            return [str(RESTART_WRAPPER_BAT)]
+        if RESTART_WRAPPER_PS1.exists():
+            return ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                    "-File", str(RESTART_WRAPPER_PS1), "--bare"]
     else:
         if RESTART_WRAPPER_SH.exists():
-            return ["bash", str(RESTART_WRAPPER_SH)]
+            return ["bash", str(RESTART_WRAPPER_SH), "--bare"]
     return ["python", str(HARNESS_SCRIPT)]
 
 

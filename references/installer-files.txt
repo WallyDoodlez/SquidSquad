@@ -7,12 +7,8 @@
 # capability, preset, or sub-skill, add its files here too.
 
 SKILL.md
-start.sh
-start.ps1
-start-harness.sh
-start-harness.bat
-restart-harness.sh
-restart-harness.bat
+.squidsquad/start.sh
+.squidsquad/start.ps1
 references/commands/squidsquad-compose.md
 references/commands/squidsquad-upgrade.md
 references/wizard/WIZARD.md

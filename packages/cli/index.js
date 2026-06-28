@@ -356,7 +356,7 @@ function installFiles(gitRoot) {
   info("Committing SquidSquad files...");
   try {
     execSync(
-      "git add SKILL.md start.sh start.ps1 references/ .claude/commands/",
+      "git add SKILL.md .squidsquad/start.sh .squidsquad/start.ps1 references/ .claude/commands/",
       { cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     );
     execSync(
