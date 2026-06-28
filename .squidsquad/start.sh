@@ -54,8 +54,10 @@ harness_port() {
     echo "$p"
 }
 harness_up() {
-    command -v curl >/dev/null 2>&1 || return 1
-    curl -sf --max-time 3 "http://127.0.0.1:$(harness_port)/status" >/dev/null 2>&1
+    # Probe via python3 (guaranteed present in full mode after ensure_deps) so
+    # the singleton check does not silently fail on hosts without curl (#13318
+    # review M1 — a false "down" would double-start the harness).
+    python3 -c "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:$(harness_port)/status', timeout=3)" >/dev/null 2>&1
 }
 
 # --- Supervised harness loop (folds restart-harness.sh #12825) ---
@@ -99,7 +101,7 @@ run_supervised() {
         echo "[start] harness exited abnormally (code $code) - crash ${crash_count}/${CRASH_THRESHOLD}."
         if [ "$crash_count" -ge "$CRASH_THRESHOLD" ]; then
             echo "[start] crash-loop detected ($crash_count crashes) - giving up." >&2
-            echo "[start] inspect the harness output above and .squidsquad/harness-errors.log." >&2
+            echo "[start] inspect the harness output above, .squidsquad/harness-supervisor.log (detached full-mode output), and .squidsquad/harness-errors.log." >&2
             return 1
         fi
         sleep 1
@@ -129,6 +131,11 @@ ensure_deps() {
     # Runtime deps (#11613): import probe covers every runtime dep so a partial
     # environment triggers a full reinstall from requirements.txt.
     python3 -c "import fastapi, uvicorn, starlette, watchdog, yaml" 2>/dev/null || pip3 install -r requirements.txt
+    # TUI dep (#12801/#13318): full mode launches references/tui/app.py, which
+    # imports `textual` — kept in requirements-tui.txt, separate from the harness
+    # runtime set (test_runtime_requirements drift guard). Without this, full mode
+    # would pass the harness-dep probe then crash at TUI launch on a fresh machine.
+    python3 -c "import textual" 2>/dev/null || pip3 install -r requirements-tui.txt
     # claude CLI
     command -v claude &>/dev/null || echo "WARNING: 'claude' not on PATH (npm i -g @anthropic-ai/claude-code)"
 }

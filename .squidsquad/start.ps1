@@ -92,7 +92,7 @@ function Invoke-Supervised {
         $crashCount++
         Write-Host "[start] harness exited abnormally (code $code) - crash $crashCount/$CrashThreshold."
         if ($crashCount -ge $CrashThreshold) {
-            Write-Error "[start] crash-loop detected ($crashCount crashes) - giving up. See output above and .squidsquad\harness-errors.log."
+            Write-Error "[start] crash-loop detected ($crashCount crashes) - giving up. See output above, .squidsquad\harness-supervisor.log (detached full-mode output), and .squidsquad\harness-errors.log."
             return 1
         }
         Start-Sleep -Seconds 1
@@ -108,6 +108,12 @@ function Initialize-Deps {
     # environment triggers a full reinstall from requirements.txt.
     python -c "import fastapi, uvicorn, starlette, watchdog, yaml" 2>$null
     if ($LASTEXITCODE -ne 0) { pip install -r requirements.txt }
+    # TUI dep (#12801/#13318): full mode launches references/tui/app.py, which
+    # imports `textual` — kept in requirements-tui.txt, separate from the harness
+    # runtime set. Without this, full mode would pass the harness-dep probe then
+    # crash at TUI launch on a fresh machine.
+    python -c "import textual" 2>$null
+    if ($LASTEXITCODE -ne 0) { pip install -r requirements-tui.txt }
 }
 
 function Sync-Clones {
