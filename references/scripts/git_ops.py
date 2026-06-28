@@ -1005,8 +1005,27 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
         return False, f"merge failed: {error}"
 
 
+def _is_launcher_script(path):
+    """The consolidated launchers (#13318) live under ``.squidsquad/`` per the
+    operator directive (``.squidsquad/start.ps1`` + ``.squidsquad/start.sh``), but
+    they are versioned CODE deliverables — not transient agent state. They must
+    ship through the normal feature-branch PR/verifier flow, so they are exempt
+    from the ``.squidsquad/`` state-strip.
+
+    Narrow, explicit allow-list (same spirit as ``_is_plan_body`` #12750): only
+    these two exact paths, never a prefix, so it can never re-open the #11511
+    state-leak for working-state / config.md / vault notes. Because the exemption
+    lives in ``_is_state_file`` itself, ALL three callers honor it — ``commit_code``
+    stages them as code, the ``guard_staged_state`` hook does not strip them, and
+    ``_auto_resolve_state_conflicts`` leaves a launcher conflict unresolved (a code
+    conflict the worker must resolve, never silently --theirs'd like state)."""
+    return path in (".squidsquad/start.sh", ".squidsquad/start.ps1")
+
+
 def _is_state_file(path):
     """Check if a path is a state/ephemeral file that should not appear in feature PRs."""
+    if _is_launcher_script(path):
+        return False
     STATE_PREFIXES = (".squidsquad/", ".claude/")
     return any(path.startswith(p) for p in STATE_PREFIXES)
 
