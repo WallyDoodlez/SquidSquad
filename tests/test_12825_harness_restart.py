@@ -5,13 +5,14 @@ Covers the deterministic foundation (this slice):
 - **AC2** — ``POST /restart`` is distinct from ``/shutdown``: it tears down agents
   and exits with ``HARNESS_RESTART_EXIT_CODE`` (so the supervised launcher
   relaunches), keeping the port file; ``/shutdown`` exits 0 and removes it.
-- **AC1** — ``restart-harness.sh`` auto-relaunches on the restart code, stops on a
-  clean exit, and gives up after a crash-loop (bash-gated behavioral test).
+- **AC1** — the consolidated launcher's supervised loop (``.squidsquad/start.sh
+  --bare`` / ``start.ps1 --bare``, #13318) auto-relaunches on the restart code,
+  stops on a clean exit, and gives up after a crash-loop (behavioral test).
 
 - **AC5** — ``squidsquad_cli._harness_launch_tail`` runs the harness UNDER the
-  supervised wrapper when present (so the canonical ``squidsquad_cli start`` path
-  is self-healing), and falls back to bare ``harness.py`` when the wrapper is
-  absent. The installer manifest ships both wrappers.
+  supervised launcher (``.squidsquad/start.* --bare``) when present (so the
+  canonical ``squidsquad_cli start`` path is self-healing), and falls back to bare
+  ``harness.py`` when it is absent. The installer manifest ships both launchers.
 
 AC3 (sub-skill), AC4 (catalog), AC6 (compose), AC7 (CQ), AC8 (DS audit) are
 verified outside this file (docs / composed output / comprehension specs).
@@ -144,18 +145,22 @@ class TestSupervisedLauncherSh(unittest.TestCase):
     exit codes are scripted, and verify relaunch / stop / crash-guard."""
 
     def _run_launcher(self, tmp, stub_body, extra_env=None):
-        # Lay out tmp/restart-harness.sh + tmp/references/scripts/harness.py stub.
+        # Lay out tmp/.squidsquad/start.sh + tmp/references/scripts/harness.py stub.
+        # The supervised loop now lives in the consolidated launcher, reached via
+        # --bare (skips deps/sync; runs the relaunch loop only). #13318.
+        squidsquad_dir = Path(tmp) / ".squidsquad"
+        squidsquad_dir.mkdir(parents=True)
         scripts = Path(tmp) / "references" / "scripts"
         scripts.mkdir(parents=True)
         (scripts / "harness.py").write_text(stub_body, encoding="utf-8")
-        shutil.copy2(REPO_ROOT / "restart-harness.sh", Path(tmp) / "restart-harness.sh")
+        shutil.copy2(REPO_ROOT / ".squidsquad" / "start.sh", squidsquad_dir / "start.sh")
         env = dict(os.environ)
         env["SQUIDSQUAD_HARNESS_CMD"] = f"{sys.executable} references/scripts/harness.py"
         env["SQUIDSQUAD_HARNESS_CRASH_THRESHOLD"] = "3"
         if extra_env:
             env.update(extra_env)
         return subprocess.run(
-            [_BASH, "restart-harness.sh"],
+            [_BASH, str(squidsquad_dir / "start.sh"), "--bare"],
             cwd=tmp, env=env, capture_output=True, text=True, timeout=60,
         )
 
@@ -191,11 +196,12 @@ class TestSupervisedLauncherSh(unittest.TestCase):
             self.assertIn("crash-loop detected", r.stderr)
 
 
-@unittest.skipUnless(sys.platform == "win32", "restart-harness.bat is Windows-only")
-class TestSupervisedLauncherBat(unittest.TestCase):
-    """AC1 behavioral test (Windows): run restart-harness.bat against a scripted
-    stub harness and verify relaunch / clean-stop / crash-guard. Mirrors the .sh
-    class so both launchers carry equivalent coverage."""
+@unittest.skipUnless(sys.platform == "win32", "Windows PowerShell launcher path")
+class TestSupervisedLauncherPs1(unittest.TestCase):
+    """AC1 behavioral test (Windows): run `.squidsquad/start.ps1 --bare` against a
+    scripted stub harness and verify relaunch / clean-stop / crash-guard. Mirrors
+    the .sh class so both consolidated launchers carry equivalent coverage. #13318
+    folded the former restart-harness.bat supervised loop into Invoke-Supervised."""
 
     _STUB = (
         "import os\n"
@@ -208,17 +214,23 @@ class TestSupervisedLauncherBat(unittest.TestCase):
     )
 
     def _run_launcher(self, tmp, extra_env=None):
+        squidsquad_dir = Path(tmp) / ".squidsquad"
+        squidsquad_dir.mkdir(parents=True)
         scripts = Path(tmp) / "references" / "scripts"
         scripts.mkdir(parents=True)
         (scripts / "harness.py").write_text(self._STUB, encoding="utf-8")
-        shutil.copy2(REPO_ROOT / "restart-harness.bat", Path(tmp) / "restart-harness.bat")
+        shutil.copy2(REPO_ROOT / ".squidsquad" / "start.ps1", squidsquad_dir / "start.ps1")
         env = dict(os.environ)
-        env["SQUIDSQUAD_HARNESS_CMD"] = f"{sys.executable} references\\scripts\\harness.py"
+        # Forward slashes: Invoke-Supervised space-splits HARNESS_CMD and invokes
+        # via `&`, which handles forward-slash paths fine on Windows.
+        env["SQUIDSQUAD_HARNESS_CMD"] = f"{sys.executable} references/scripts/harness.py"
         env["SQUIDSQUAD_HARNESS_CRASH_THRESHOLD"] = "3"
         if extra_env:
             env.update(extra_env)
+        pwsh = shutil.which("pwsh") or shutil.which("powershell")
         return subprocess.run(
-            ["cmd", "/c", str(Path(tmp) / "restart-harness.bat")],
+            [pwsh, "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-File", str(squidsquad_dir / "start.ps1"), "--bare"],
             cwd=tmp, env=env, capture_output=True, text=True, timeout=60,
         )
 
@@ -254,35 +266,36 @@ class TestCliSupervisedLaunch(unittest.TestCase):
     under the supervised wrapper so POST /restart relaunches in place — with a
     graceful fallback to bare harness.py when the wrapper is absent."""
 
-    def _tail(self, system, bat_exists, sh_exists):
-        bat = MagicMock()
-        bat.exists.return_value = bat_exists
-        bat.__str__ = lambda self: "/repo/restart-harness.bat"
+    def _tail(self, system, ps1_exists, sh_exists):
+        ps1 = MagicMock()
+        ps1.exists.return_value = ps1_exists
+        ps1.__str__ = lambda self: "/repo/.squidsquad/start.ps1"
         sh = MagicMock()
         sh.exists.return_value = sh_exists
-        sh.__str__ = lambda self: "/repo/restart-harness.sh"
-        with patch.object(squidsquad_cli, "RESTART_WRAPPER_BAT", bat), \
+        sh.__str__ = lambda self: "/repo/.squidsquad/start.sh"
+        with patch.object(squidsquad_cli, "RESTART_WRAPPER_PS1", ps1), \
              patch.object(squidsquad_cli, "RESTART_WRAPPER_SH", sh):
             return squidsquad_cli._harness_launch_tail(system)
 
-    def test_windows_uses_wrapper_bat_when_present(self):
-        tail = self._tail("windows", bat_exists=True, sh_exists=False)
-        self.assertEqual(tail, ["/repo/restart-harness.bat"])
+    def test_windows_uses_ps1_launcher_bare_when_present(self):
+        tail = self._tail("windows", ps1_exists=True, sh_exists=False)
+        self.assertEqual(tail, ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                                "-File", "/repo/.squidsquad/start.ps1", "--bare"])
 
-    def test_posix_uses_wrapper_sh_via_bash_when_present(self):
+    def test_posix_uses_sh_launcher_bare_via_bash_when_present(self):
         for system in ("darwin", "linux"):
-            tail = self._tail(system, bat_exists=False, sh_exists=True)
-            self.assertEqual(tail, ["bash", "/repo/restart-harness.sh"])
+            tail = self._tail(system, ps1_exists=False, sh_exists=True)
+            self.assertEqual(tail, ["bash", "/repo/.squidsquad/start.sh", "--bare"])
 
     def test_falls_back_to_bare_harness_when_wrapper_absent(self):
         for system in ("windows", "darwin", "linux"):
-            tail = self._tail(system, bat_exists=False, sh_exists=False)
+            tail = self._tail(system, ps1_exists=False, sh_exists=False)
             self.assertEqual(tail[0], "python")
             self.assertTrue(tail[1].endswith("harness.py"))
 
-    def test_real_wrappers_exist_on_disk(self):
-        # The wrappers the manifest ships must actually be present at repo root.
-        self.assertTrue(squidsquad_cli.RESTART_WRAPPER_BAT.exists())
+    def test_real_launchers_exist_on_disk(self):
+        # The consolidated launchers the manifest ships must be present in .squidsquad/.
+        self.assertTrue(squidsquad_cli.RESTART_WRAPPER_PS1.exists())
         self.assertTrue(squidsquad_cli.RESTART_WRAPPER_SH.exists())
 
 
