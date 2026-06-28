@@ -14,12 +14,12 @@
     {
       "id": "CQ2",
       "q": "The /status probe finds the harness unreachable (reachable:false). Does the wizard start the harness itself, or do something else?",
-      "expected": "It does NOT start anything. No running squad to refresh — fall through to the cold-start message and report the user-driven command (./start.sh on Linux/macOS, .\\start.ps1 on Windows). The wizard is ephemeral and NEVER self-spawns the harness (Q-new21)."
+      "expected": "It does NOT start anything. No running squad to refresh — fall through to the cold-start message and report the user-driven command (.squidsquad/start.sh on Linux/macOS, .squidsquad\\start.ps1 on Windows). The wizard is ephemeral and NEVER self-spawns the harness (Q-new21)."
     },
     {
       "id": "CQ3",
       "q": "The harness is reachable; restarting alias 'dm' fails (ok:false, failures non-empty) but the other aliases succeed. Does the wizard abort or roll back the install, or continue? What does it tell the user?",
-      "expected": "Continue — a per-alias failure is non-fatal; the loop still restarts the remaining aliases. Tell the user WHICH agents failed (failures[].alias/.error) and that they can re-run ./start.sh (or .\\start.ps1) to bring the team back up. Do NOT roll back — the on-disk install is valid."
+      "expected": "Continue — a per-alias failure is non-fatal; the loop still restarts the remaining aliases. Tell the user WHICH agents failed (failures[].alias/.error) and that they can re-run .squidsquad/start.sh (or .squidsquad\\start.ps1) to bring the team back up. Do NOT roll back — the on-disk install is valid."
     },
     {
       "id": "CQ4",
