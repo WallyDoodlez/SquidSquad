@@ -1,77 +1,54 @@
 # Working State
 
-_Condensed 2026-06-21 23:34 (PM EVENT mode RESUME boot after operator-stop; Verbose Mode ON). Prior incident narrative in iteration logs + forge._
+## >>> HARNESS RESTART TRIGGERED 2026-06-28 (operator-directed) — RESPAWNED PM: VERIFY THIS FIRST <<<
+- **Why:** running harness was sha 2cc9e058, up ~28.5h, **117 commits behind origin/main**. Today's harness.py fixes were MERGED-BUT-DORMANT: #12492 progress-liveness cutover (zombie auto-reboot), #13283 (auto-reboot never-resolved-PID agent stuck at status=starting), #13170 (/merge fail-closed), #13215 (deploy-pull dirty-clone), #13255 (self-event exclusion), #13236 (stdout hardening). Restart loads current code → activates them.
+- **Action taken:** PM (coordinator) POSTed /restart per harness-restart sub-skill. Whole team respawns on current origin/main (HEAD was c8ea3da08 at trigger).
+- **POST-RESTART VERIFICATION (do from FACTS, respawned PM):**
+  1. `GET /status`: all 4 aliases (pm/dm/qa/skill) status=running + bootup_complete=true; harness sha should now be current (NOT 2cc9e058) + low uptime.
+  2. All agents event-mode (not polling fallback).
+  3. Progress-liveness now LIVE: confirm #12492 code is in the running harness (sha advanced past b01d8fbae). The earlier wedges (qa-frozen, skill-never-came-up) should now auto-recover without manual boot_remote.
+  - If agents do NOT come back → harness was one-shot launcher (not supervised) → operator must relaunch (restart-harness.* / squidsquad_cli start).
+- **Still-open HIGH harness gaps after restart:** #9888 (singleton not enforced / orphan accumulation), #9874 (harness internal arch review, planning). #13263 (behind-clone merge sibling) at pending-human-review — operator bump pending.
 
-## >>> RESUMED 2026-06-21 ~23:34 (03:30Z) — fleet restarted post-stop; PM landed #13213 docs + honoring boot deploy-signal <<<
-- Team operator-stopped ~20:5x; now all 4 (pm/dm/qa/skill) RESTARTED & running (harness boot 03:30Z, sha 44743a69). I am a fresh PM EVENT session.
-- **Boot drain = 1 event: a boot-drift deploy-signal (target pm).** Tree was DIRTY with forward PM work + clone was 5-behind origin. Verified (facts): my dirty files (docs/HARNESS-ARCH+AGENT-RUNTIME #13213 edits, pm state, vault) are FORWARD content, NOT stale reverts (#12895 ruled out); 5 incoming commits touch only qa/skill planning → zero overlap.
-- **PM action before honoring deploy-halt:** committed forward PM work (the #13213 v29/rev19 docs = the handoff skill is blocked on; + pm state + vault) → merged origin/main 5 commits (--no-edit, no rebase) → pushed → then honor the deploy-signal (clean synced tree). QA's planning files + transient logs/driver-state left untouched.
-- **On resume after deploy-respawn:** #13213 (approved, role:skill) can now build against HARNESS-ARCH v29/rev19 (on main). **#12271/#12492 liveness cutover still awaits operator go/no-go (PM rec GO).**
 
-## >>> #13213 UserPromptSubmit liveness hook — FILED (skill, approved) + PM DOC-PAIRING DONE + DS-AUDITED <<<
-- **Operator idea** (inline): hook tool-use/prompt-submit → harness so it knows the agent is alive. Confirmed the tool-use side already ships (PreToolUse/PostToolUse → activity_hook.py → /hooks/activity → last_activity_at; #12443). Buildable delta = **UserPromptSubmit** hook (closes freeze-after-prompt-before-first-tool-call gap, the qa-wedge class).
-- **#13213 filed → approved** (role:skill, medium): wire UserPromptSubmit → activity_hook.py in the compose-generated settings.json template; rel #12271, coordinate w/ #12492 cutover.
-- **PM doc-first (operator-directed "update agent runtime + diagrams + DS audit"):** edited **HARNESS-ARCH v29** (§15.1 third heartbeat source, §15.3 sequence diagram, §4.6 /hooks/activity row, §16.1 catalog, §16.2 consumer, §16.3+banner command-vs-http transport reconcile, §16.1 Stop row fix) + **AGENT-RUNTIME rev 19** (§8.2 hook list). **DS-audited** via model_router code-review (DeepSeek) → `.squidsquad/pm/planning/REVIEW-13213-DEEPSEEK.md` verdict **PASS**, 2 minor findings APPLIED (Stop-label contradiction; PostToolUseFailure omission). DeepSeek 402-balance blip mid-task → operator topped up → re-ran clean.
-- **Doc edits uncommitted in working tree** (inline mode = no post-cycle wrapper) → land on main via next harness commit; skill builds #13213 against v29/rev19 once present.
 
-## Boot summary (this session — 2026-06-21 ~18:28Z local, EVENT mode)
-- GH OK; harness :7373 reachable (EVENT mode). **Verbose Mode = ON** (config `verbose-mode: yes`) → full-firehose narration this session.
-- Cursor `d658b7ca5bd79663` → drained 1 event `6d726c7c4a1b6a17` (tracker-comment, my own #13162 AC6 confirm echo, commenter_role pm) → **skipped** (no target_alias; bare comment). Acked. Drain empty. Cursor now `6d726c7c4a1b6a17`. bootup-complete emitted.
-- No in-progress task to resume. No cared event, no PM-actionable work → entered idle cool-down loop.
+_Condensed 2026-06-26 ~22:28 local (PM EVENT-mode fresh boot on new fleet restart; Verbose Mode ON). Prior 2026-06-22 narrative in iteration logs + forge._
 
-## Pipeline (forge-verified 18:3x via gh label queries; updated thru 18:35)
-- **#13162 VERBOSE MODE SHIPPED 18:35Z** (DM pending-ship→shipped, CLOSED; AC7 DM-README + PR #13171 landed). Whole feature done; PM lane (AC6) was complete prior boot.
-- **pending-test: #13066** (role:skill shipped to main a59af1904 @18:30 → now VERIFIER lane). Watch for >90min verifier stall on next driver tick.
-- **pending-ship: 0** (DM now free).
-- **role:human / pending-human-*: 0** → nothing to advertise to operator.
-- **untriaged externals: 0.**
-- **status:pending intake queue:** large operator-paced backlog (no role:human signal on any) → NOT autonomously actionable; intake fires only on operator approve/request.
-- **in-progress:** skill #13169 (upd 18:53, active), #12801, #12450; PM parked coord-holds #11092, #10839, #9968 (intentional umbrellas, not stalls).
-- **approved:** skill #12527/#12492/#12271/#10686; #10690 (role:skill+pm, gated E6+E7).
+## >>> THIS BOOT 2026-06-26 ~22:28 local — fresh PM EVENT session <<<
+- Harness :7373 reachable (EVENT mode). GH OK. **Verbose Mode = ON** (full-firehose narration).
+- New fleet restart in progress (harness uptime ~22s at first probe): dm running+bootup=True; pm (me) + qa mid-boot; skill was status=starting (still spawning).
+- Boot drain from cursor `5c9ef30764cd2115` = **0 events** (cursor already at head). No legacy cursor line → no migration.
+- Working-state was 4 days stale → did fresh forge read for pipeline truth.
+- Driver `.subloop-driver.json` = armed:true, scan_count:0, last_run 2026-06-21T23:54Z (throttle preserved). Session cron **464dc7c3** (6,36 * * * *) created this boot. bootup-complete emitted.
 
-## >>> VERIFIER (qa) WEDGE RECOVERED ~23:18Z (driver-tick safety-net catch) <<<
-- **Detected via driver-tick forge-read:** qa wedged-alive ~54min — frozen at intent=DEPLOYING (set 22:24Z, never progressed), bootup_complete=false, last_activity 22:22Z (last act = PreToolUse AskUserQuestion, a blocking modal), PID 30604 ALIVE → harness PID-liveness passed → no auto-reboot (the #12271/#13077 gap). 3 pending-test items (#13066/#13175/#13176) piling up unverified.
-- **Root chain (observed, RCA=owner):** qa blocked on AskUserQuestion → never reached task boundary to honor the deploy-signal that flipped it to deploying → harness never ran deploy (no respawn) → intent=deploying NOT covered by 60s force-kill net → stranded indefinitely.
-- **Recovery (PM, sanctioned harness API):** `POST /agents/qa/restart` (current-state was stale "idle" → immediate-kill path) → killed 30604, auto-rebooted → **fresh PID 41892, intent=running, actively booting** (verified act_age 5s). Pipeline unblocked.
-- **Tracked:** corroboration comment on **#12271** (progress-based liveness — the canonical auto-detect fix) w/ observed facts + the intent=deploying-strand nuance for the fix design. NOT a dup filing. Earlier boot-time read ("qa alive, not a stall") corrected by 54min frozen-time facts.
+## >>> OPERATOR INLINE REQUEST — handled this boot <<<
+- Operator (inline ~22:28): "kill agent for me when you are loaded" → clarified via AskUserQuestion: target=**skill**, semantics=**kill + respawn**.
+- Action: `POST /agents/skill/restart` → success:true, immediate:false (skill was mid-spawn → graceful path). Intent flipped to **restarting** — BUT respawn never fired (force-kill net had no claude_pid; auto-reboot is_dead never tripped).
+- **ROOT CAUSE:** skill had been wedged in `status=starting` since fleet boot — its original spawn never resolved a claude PID. Both terminal_pid (17304) AND claude_pid (None) were dead; harness state stale. PID-liveness blind to a never-came-up spawn (the #12271 progress-liveness gap).
+- **RECOVERY (PM stall-recovery, sanctioned):** `boot_remote.py --dry-run --role skill` → safe ("no PID file found") → `boot_remote.py --role skill` → spawned. **VERIFIED skill now healthy: status=running, claude_pid=24532, bootup=True.** Kill+respawn complete end-to-end.
+- **POSSIBLE FOLLOW-UP (offered to operator, not yet filed):** bug vs role:skill — "spawn dies before claude-PID resolution → harness auto-reboot never fires" variant of #12271. Awaiting operator go.
 
-## >>> #12271 PROGRESS-LIVENESS CUTOVER — PM STRUCTURED, operator decision pending <<<
-- Skill investigated #12271 (driven by my qa+#13142 wedge corroborations) → routed to **pending-human-review** for: (a) slice-structuring [PM], (b) fleet-reboot cutover go/no-go [operator].
-- **PM resolved the structuring half** (comment on #12271): A→B→C plan approved.
-  - **Slice A** (bound the unbounded `booting` escape that the qa wedge exposed; shadow-only, zero blast radius) = **GREENLIT, filed #13179, skill BUILDING (in-progress).** Bug-class, no human gate. Reached skill via work-assign wake.
-  - **Slice B** (intent=deploying force-kill backstop) = approved as own slice, sequenced AFTER A; skill files it; **DS-review + PM HARNESS-ARCH doc-pairing** required (ping me on ship).
-  - **Slice C = #12492 cutover** (progress-liveness authoritative + demote PID) = **OPERATOR DECISION** (fleet-reboot blast radius). PM recommends **GO** (3/3 wedges caught by progress-liveness, missed by PID). #12271 stays pending-human-review for this.
-- **>>> ADVERTISE TO OPERATOR: #12271/#12492 liveness cutover go/no-go — PM recommends GO after A(#13179)+B land. <<<**
+## >>> QA WEDGE RECOVERED ~01:10 local 2026-06-27 <<<
+- QA (verifier) **wedged-alive ~48min**: claude.exe (45192) + event_poll sidecar (27492) BOTH alive, bootup=True, but frozen — `last_dispatch_at` (38m) > `last_activity_at` (48m) = dispatched work, zero tool-call response; 3 items piled in pending-test, none picked up. PID-liveness blind (the #12271 class — exactly what operator just GO'd).
+- Diagnosed from 3 facts (process-alive + sidecar-alive + dispatch>activity). A fresh nudge wouldn't help (session frozen, not transport). Recovery: `POST /agents/qa/restart` → immediate path, killed 45192. **VERIFIED recovered: fresh pid 50876, bootup=True, active (tool-calls flowing).** 3rd wedge-class incident this session-history (qa-zombie / skill-never-came-up / now qa-frozen) — reinforces the #12271 GO.
+- **WATCH**: confirm QA drains pending-test (#13255/#13215/#13172/#13170) → pending-ship on next wake; if it re-wedges, escalate.
 
-## #13185 FILED (role:skill, LOW) — tracker.py work-assign cp1252 crash
-- `tracker.py work-assign` crashes (UnicodeEncodeError, U+2192 in success print, tracker.py:1732) on Windows cp1252 console AFTER the wake event already emitted → false-failure exit 1 + double-emit risk (I nearly retried). Behavior+impact+repro filed; fix=ASCII/utf-8 stdout (skill's RCA).
+## >>> SEV-1 (#13271) ROOT-CAUSE CLUSTER — session 2026-06-27 <<<
+- **#13271** SHIPPED (behind-count merge guard, git_ops.pr_merge >50). **#13285** SHIPPED (post-merge scope-audit + auto-revert, mechanism-agnostic). **#13286** SHIPPED (dev sync-before-start/before-merge mechanics).
+- **#13291** (L1 universal sync norm: be-current-before-integrate / merge-never-overwrite) — operator-confirmed L1-universal placement; un-held → **pending-test** (QA verifying). Was held then resumed.
+- **#13287** (developer-domain sub-layer: 'a worker isn't always a dev') — **PARKED** (pending, role:pm). Separate arch question; revisit on own merits.
+- **#13277** (TUI README) — un-held → approved (dm).
+- **#13298 (role:pm) — DONE + CLOSED 2026-06-27.** #13291 shipped → gate cleared → picked up + completed in one DS-audited pass. Landed commit **ac2b5af78** (PM doc lane): HARNESS-ARCH §4.5.1 (git_ops guards #13271/#13285) + v30; AGENT-RUNTIME §5.1 L1-norm callout (#13291); COMPOSE-ARCH #13287 open-question. DS-audit REVIEW-13298-DEEPSEEK.md (PASS-WITH-FIXES, both applied; code-cross-checked). Task=none now.
 
-## FLEET-HEALTH (≈19:35Z)
-- pm running. dm running (shipped #13066). skill running bootup=True, actively building #13179 (Slice A) + queue. **qa RECOVERED (PID 41892, bootup=True) — VERIFYING AGAIN: verified #13066 pending-test→pending-ship ~11min post-reboot → dm shipped it. Full end-to-end recovery confirmed.**
+## Pipeline (forge-verified ~22:30 local)
+- **pending-test: 0 · pending-ship: 0 · pending-human-review: 0 · untriaged externals: not yet swept (team mid-boot).**
+- **work_queue (role:pm approved): #10690 ONLY — GATED** on E7 (#10686 not shipped). Not pickable. No autonomously-actionable PM work this boot.
+- **in-progress (pm, intentional parked coord-holds — NOT stalls):** #11092, #10839 (DS-re-audit gated), #9968.
 
-## >>> RECOMPOSE PATH DEGRADED ~19:43Z → #13197 FILED (role:skill, low) <<<
-- **11x compose-failed/freshen-source-failed/"pull-failed" to pm** in a 2s burst (l4_file_watcher → git_ops.ensure_main_and_pull role=harness). Harness clone (=main repo) was **0/0 synced but DIRTY** (my uncommitted state files + untracked harness-errors.log/.subloop-driver.json/qa artifacts). NOT divergence (#13158 shared fix covers that). Recomposes ABORTED — #12906 guard correctly keeps agents on current CLAUDE.md (NO outage, no stale-source revert).
-- **#13197**: hypotheses (NOT asserted) = concurrent burst pulls colliding on .git/index.lock, OR dirty-tree blocking freshen. Fix dir: serialize per-burst freshen + tolerate dirty clone + gitignore transient artifacts. RCA=skill.
-- **>>> ADVERTISE OPERATOR: recompose/deploy path degraded (#13197). #13175 merged event-mode-contract.md (a COMPOSE SOURCE) — needs recompose to propagate; if freshen stays broken, agents drift from shipped source. Not an outage; fix is skill's. <<<**
-- Side note: 19:40 restart-required (l4-recompose) to pm was a **NO-OP recompose** (pm CLAUDE.md git-clean = identical to committed bfc83308c, my boot content) → **no restart taken** (pointless churn). Likely from #13178 references/ merge.
-
-## Pipeline (≈19:46Z, forge-verified)
-- **SHIPPED this session:** #13162 (Verbose Mode), #13066 (vault frontmatter), #13176 (deploy stage=commit, PR#13178), #13175 (deploy-signal boot-drain, PR#13177). **pending-test: #13179** (Slice A, PR#13191 — verifier's lane). **in-progress (skill):** #13185 (cp1252 work-assign), #13169/#12801/#12450, #12492 (cutover impl, gated). **pending-human-review: #12271** (liveness cutover go/no-go — OPERATOR; PM recommends GO after A+B). **pending-ship: 0.** qa RECOVERED + verifying; skill shipping fast.
-
-## #13162 VERBOSE MODE — PM lane COMPLETE (prior boot)
-- AC6 landed on main (commit 09fb8ddb5): docs/AGENT-RUNTIME.md §9.7 + revision-log rev 18. Now pending-ship under DM; AC7 (DM README operator section) is the remaining coupled gate. PM has no residual.
-
-## #13176 FILED THIS SESSION (role:skill, LOW) — deploy-error stage=commit empty detail
-- Cared deploy-error event (target pm, failed_role skill, stage=commit, detail="", respawn_ok=true) @18:38:10Z. Verified skill HEALTHY from /status (running, 0 fast-deaths, respawned+active) → no recovery needed.
-- Filed: deploy-error stage=commit carries empty detail (harness.py:4696-4702 sources detail from commit.stderr only; git commit writes to stdout e.g. "nothing to commit"). Impact: undiagnosable + checksum-unadvanced re-trigger/thrash risk. Hypothesis (marked, not asserted): benign "nothing to commit" conflated as failure, analogous to #13158 pull-stage fix. Behavior+impact+repro only; RCA is skill's.
-
-## #13174 (filed prior boot, role:skill LOW) — CLOSED as dup of #13156
-- Harness POST /events HTTP 500 on unescaped control char. Skill triaged as duplicate of #13156 (itself closed) and closed #13174. Resolved by owning role.
-
-## PM standing backlog (operator-paced/gated, NOT autonomously actionable)
-- **approved (gated):** #10690 (E6+E7). **in-progress parked coord-holds:** #11092, #10839, #9968.
-- **pending intake (operator-paced):** #13173, #13165, #13119, #13044 (HIGH blast, pending approval), #13041, #13038, #13036, #13034, #12913, #12508, #12416, #12410, #12300, #11570, #11400, #10393, #10377, #10360, #10358, #10355, #10354, #10182, #10181, #10180, #10178, and #10x compose-arch series + older. Operator paces; PM does not churn intake unprompted.
+## >>> OPERATOR DECISIONS — this session <<<
+- **#12271 liveness cutover: OPERATOR GO (2026-06-27, inline).** Decision LOCKED + recorded on #12271. Transitioned pending-human-review → in-progress (gate cleared, wakes skill). **#12492 (cutover) unblocked.** Asked skill to confirm sequencing: heartbeat hooks (#13213) land first ✓; **Slice B (intent=deploying force-kill backstop) must exist before the PID-off flip** — flagged to skill to file/confirm B's disposition. Cutover stays behind verification ACs. NO LONGER an advertise item.
+- TUI task = **#12801** (Harness TUI bottom action bar w/ reboot, busy-aware) — in-progress (skill); operator asked its location this session.
 
 ## Improvement Scan
-Status: idle this boot. Driver `.subloop-driver.json` = armed:true, scan_count:0, last_run 2026-06-21T17:27Z (fresh burst, throttle preserved). Session cron `9c98d9fa` (7,37 * * * *) created this boot to drive ticks.
-(This boot: clean pipeline, no cared event, no actionable PM work; armed idle driver + created live cron; refreshed this working-state inline. Idle.)
+Status: idle this boot. Driver armed + live cron 464dc7c3. Throttle last_run 2026-06-21T23:54Z preserved.
+(This boot: 0 cared events; handled operator inline skill-kill; pipeline clean; no actionable PM work; armed driver + live cron; refreshed stale working-state. Idle/listening.)
