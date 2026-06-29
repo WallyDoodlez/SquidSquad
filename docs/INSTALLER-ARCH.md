@@ -303,7 +303,7 @@ A single atomic commit on `main` (or the operator's chosen branch) containing th
 
 ### 4.12 Phase 9 — Print "ready" message and exit
 
-The installer prints a one-line confirmation with next steps — typically how to invoke `start.sh` to boot the harness — and exits its Claude Code session. No background process; the human is now in control.
+The installer prints a one-line confirmation with next steps — typically how to invoke `.squidsquad/start.sh` to boot the harness — and exits its Claude Code session. No background process; the human is now in control.
 
 ---
 
@@ -542,7 +542,7 @@ The previous "preserved during upgrade" framing is retired — there is no separ
 
 ### 10.3 Post-installer harness restart
 
-> **Status: implemented (#12420, shipped 2026-06-17).** `WIZARD.md` Step 7.5c probes the harness and restarts agents (stop+start per alias when reachable; user-driven `./start.sh` cold-start when not), via `wizard.py restart-agents`. The behavior below is live.
+> **Status: implemented (#12420, shipped 2026-06-17).** `WIZARD.md` Step 7.5c probes the harness and restarts agents (stop+start per alias when reachable; user-driven `.squidsquad/start.sh` cold-start when not), via `wizard.py restart-agents`. The behavior below is live.
 
 After Phase 8 commits the new tree, the installer triggers a per-agent restart so running agents pick up the new composed CLAUDE.md. This is **separate from Phase 8** (which is just commit+push per §4.11) and **separate from the migration walk** (which completes before Phase 1). Restart happens after Phase 8's atomic commit and before Phase 9's exit message.
 
@@ -554,7 +554,7 @@ Detection: the installer issues `GET http://localhost:<port>/status` (port read 
   POST /agents/<alias>/start   # boot with new composed CLAUDE.md
   ```
   For each agent in the install's `## Aliases` registry. The URL-template token is named `{role}` in the source code for legacy compatibility; the value is always the alias (rename to `{alias}` tracked in HARNESS-ARCH §9 (Vocabulary note) + #10358).
-- **Harness unreachable** (port file missing / port unreachable / timeout) — the installer does **not** self-spawn the harness (the wizard is ephemeral; per Q-new21 it never boots long-running processes). Instead it reports the **user-driven cold-start**: the user runs `./start.sh` from the repo root. `start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots all configured agents. If each restarted agent's boot probe succeeds, the agent arms its own `event_poll.py` via its Monitor tool per HARNESS-ARCH §7.2 step 6.
+- **Harness unreachable** (port file missing / port unreachable / timeout) — the installer does **not** self-spawn the harness (the wizard is ephemeral; per Q-new21 it never boots long-running processes). Instead it reports the **user-driven cold-start**: the user runs `.squidsquad/start.sh` (the script resolves the repo root as its own parent directory and `cd`s there). `.squidsquad/start.sh` reads `.squidsquad/.local-config` to find clone paths, boots the harness, which in turn boots all configured agents. If each restarted agent's boot probe succeeds, the agent arms its own `event_poll.py` via its Monitor tool per HARNESS-ARCH §7.2 step 6.
 
 **In-flight-work handling.** Before stopping each agent, the harness checks whether the agent has an active iteration (between `cycle_pre.py` and `cycle_post.py`). If so, the harness waits for the agent's `ack-stop` event — the agent finishes its current iteration, calls `cycle_post.py` (which commits and pushes `working-state.md` + any in-flight changes), and exits via the normal exit-42 path. If the iteration does not complete within a configurable timeout (default 5 minutes), the harness logs a warning and proceeds with the stop; on next boot the agent recovers from `working-state.md` (see AGENT-RUNTIME §6 + §7.5).
 
@@ -617,7 +617,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 - [`references/scripts/shared_fs.py`](../references/scripts/shared_fs.py) — shared filesystem init
 - [`references/scripts/compose.py`](../references/scripts/compose.py) — compose pipeline
 - [`references/scripts/forgejo_setup.py`](../references/scripts/forgejo_setup.py) — Forgejo backend (alt tracker)
-- [`start.sh`](../start.sh) — post-install boot script
+- [`.squidsquad/start.sh`](../.squidsquad/start.sh) — post-install boot script (consolidated launcher; `.squidsquad/start.ps1` on Windows)
 - [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) — what runs after install
 - [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) — composed CLAUDE.md generation
 - [`sub-skill-catalog.md`](sub-skill-catalog.md) — sub-skills the installer wires up
