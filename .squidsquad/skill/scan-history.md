@@ -1868,3 +1868,10 @@
 - **Findings**: #13261 (git_ops.pull MERGING-state-after-failed-retry drops stash + leaves MERGE_HEAD — same gap #13215 fixed in the deploy path's _safe_pull_in_clone, on the every-agent path), #13262 (_run/_run_list no subprocess timeout= — a hung git wedges callers; scope widened by #13211 lock unification)
 - **Criteria note**: DS-review of a fix often surfaces the SAME defect class in a sibling code path (here: the every-agent git_ops.pull mirrored the deploy-path bug). Capture those reviewer "the identical gap exists in X" asides as filed findings, not just PR comments.
 - **Items rejected by human**: none
+
+## Scan — 2026-06-28 09:11
+
+- **Files scanned**: references/scripts/subloop_driver.py (in-lane; heavily exercised this session, not in recent scan history; error-handling + contract-consistency lens)
+- **Findings**: 1 filed — #13316 (low — idle-cooldown-loop `--drained` contract is binary on work_queue() emptiness; gated/non-pickable approved tasks force scan-starvation under a strict reading. Empirically hit THIS tick: skill work_queue() = 3 gated tasks; passed --drained true by judgment. PM hits identical case.)
+- **Items rejected by human**: none
+- **Criteria note**: "scan the module you just exercised heavily" is productive — running the idle driver live surfaced the contract gap that reading it cold would have missed. The defensive read_state/coercion and atomic_write_text are clean; no error-handling findings. The finding is a prose/contract gap, not a code defect — driver `tick()` is correct given its inputs; the ambiguity is in how the agent computes `--drained`.
