@@ -131,7 +131,7 @@ class TestUnreachable:
         result = wizard.restart_agents(tmp_path)
         assert result["reachable"] is False
         assert result["ok"] is True  # unreachable is a normal branch, not an error
-        assert result["cold_start_cmd"] == "./start.sh"
+        assert result["cold_start_cmd"] == ".squidsquad/start.sh"
         # No lifecycle calls were made — the wizard never spawns the harness.
         assert fake.posts() == []
 

@@ -858,7 +858,7 @@ line prompt if you're unsure.
 ### 7.5b — Re-ensure harness Python dependencies (#11403)
 
 Step 0 (§4.1 gather-all) already provisions the runtime Python packages with
-the user's consent, and `start.sh` / `start.ps1` re-ensure them silently at
+the user's consent, and `.squidsquad/start.sh` / `.squidsquad/start.ps1` re-ensure them silently at
 every boot. This step is a belt-and-suspenders re-ensure for the rare case
 where Step 0 was skipped on a re-run path or the environment drifted between
 Phase 0 and here. The packages are declared in `requirements.txt` (seeded with
@@ -897,8 +897,8 @@ port in `.squidsquad/.harness-port`, 5s timeout) and branches on `reachable`:
     running team has been refreshed with the new setup — no action needed.
   - `failures` non-empty (`ok: false`): list which agents failed to restart
     (`failures[].alias` / `.error`) and tell the user they can re-run
-    `./start.sh` (Linux/macOS) or `.\start.ps1` (Windows) to bring the whole
-    team back up cleanly. Do NOT roll back — the on-disk install is valid.
+    `.squidsquad/start.sh` (Linux/macOS) or `.squidsquad\start.ps1` (Windows) to
+    bring the whole team back up cleanly. Do NOT roll back — the on-disk install is valid.
 - **`reachable: false`** — no squad is running (nothing to refresh). This is the
   normal fresh-install / stopped-squad case. The helper does NOT start anything
   (you are ephemeral — see 7.6); fall through to the cold-start message in 7.6.
@@ -922,8 +922,8 @@ the boot command per OS):
 
   > SquidSquad ready. To start your team, run:
   >
-  >     ./start.sh            (Linux / macOS)
-  >     .\\start.ps1          (Windows)
+  >     .squidsquad/start.sh            (Linux / macOS)
+  >     .squidsquad\start.ps1          (Windows)
   >
   > The harness boots all agents (PM, Verifier, DM, workers) automatically.
 

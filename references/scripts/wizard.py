@@ -1186,12 +1186,12 @@ def restart_agents(base_dir=None, timeout=HARNESS_PROBE_TIMEOUT):
             "ok": True,
             "reachable": False,
             "port": port,
-            "cold_start_cmd": "./start.sh",
+            "cold_start_cmd": ".squidsquad/start.sh",
             "detail": (
                 f"Harness not reachable on port {port} within {timeout}s — "
                 f"no running squad to refresh. Cold start is user-driven "
-                f"(run ./start.sh); the wizard is ephemeral and never spawns "
-                f"the harness itself (Q-new21)."
+                f"(run .squidsquad/start.sh); the wizard is ephemeral and never "
+                f"spawns the harness itself (Q-new21)."
             ),
         }
     aliases = _install_aliases(base_dir)

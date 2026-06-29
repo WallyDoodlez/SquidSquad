@@ -71,8 +71,9 @@ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
 # #12825: dedicated exit code that signals the supervised launcher
-# (restart-harness.bat / .sh) to RELAUNCH the harness, vs a clean exit 0 (do not
-# relaunch). Mirrors the agent self-restart exit-42 convention (HARNESS-ARCH
+# (.squidsquad/start.{ps1,sh} --bare, consolidated #13318) to RELAUNCH the
+# harness, vs a clean exit 0 (do not relaunch). Mirrors the agent self-restart
+# exit-42 convention (HARNESS-ARCH
 # §7.4) — the wrapper owns harness lifecycle the way the harness owns agent
 # lifecycle. POST /restart triggers this exit; the one-shot launcher ignores it
 # (harness simply ends) so the behavior degrades gracefully without the wrapper.
