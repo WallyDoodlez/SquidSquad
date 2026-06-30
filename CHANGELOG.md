@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.45.0] — 2026-06-30
+
+This release makes SquidSquad markedly easier to launch, watch, and trust on a fresh install. It bundles ~120 changes since 0.44.0 — the highlights below, with a large body of reliability and test-hygiene fixes underneath.
+
+### Added
+
+- #13318 — **One start script per platform.** A single `.squidsquad/start.ps1` (Windows) or `.squidsquad/start.sh` (macOS/Linux) now brings up your whole team — harness, agents, and the dashboard — in one command. It finds your project automatically, keeps the harness alive across restarts, and takes `--bare` / `--no-setup` for a minimal launch. The seven older overlapping launcher scripts are gone, so there's nothing to guess at.
+- #12801 / #13277 — **Harness dashboard with a reboot action bar.** The terminal dashboard now has a bottom action bar to reboot agents — one, all, or force-reboot a busy agent with a confirmation prompt — so you can recover the team without leaving the screen. README now documents it.
+- #12825 — **Supervised harness + one-command restart.** The harness runs under a supervisor that relaunches it automatically, and you can trigger a clean restart on demand.
+- #13162 — **Verbose Mode.** A config switch that makes agents narrate what they're doing each cycle. Off by default; flip it on when you want to watch the work happen.
+- #11613 — **Guided dependency setup.** The installer now detects the harness's runtime dependencies and offers to install them, so a fresh machine comes up working.
+- #12419 — **Upgrade walkthrough.** Upgrading an existing install now walks you through what changed between versions.
+- #12450 — **Test-strategy auto-detection.** Setup recognizes how your project runs its tests.
+- #12800 — **Human-as-a-role.** You can now be addressed as a first-class participant for handoffs and routing, not just an outside observer.
+
+### Changed
+
+- #12271 (slices #12418/#12443/#12458/#12460/#12492) — **Smarter agent liveness.** Agents are now judged by real progress rather than just "is the process running," so a stuck-but-alive agent gets recovered and a quietly-busy healthy agent is left alone.
+- #12912 / #13032 / #13077 — **Reliable instruction updates.** When agent instructions change, the team picks them up through a single pull-first path, and the harness cleanly restarts agents itself instead of waiting on them to exit.
+- #12342 / #12442 — **Hands-off pipeline.** Verified and ship-ready work now flows to the QA and delivery roles automatically in event mode — no manual nudging.
+- #12853 / #13035 / #13291 — **Persistent autonomy.** Agents keep moving while work is pending (handing off rather than stopping), an idle human conversation releases after 20 minutes, and agents always sync with shared branches before integrating — merging, never overwriting.
+- #12585 — **Health checks grounded in facts**, not recollection — agents diagnose from live ground truth.
+- #12506 — **Idle time stays productive** — agents resume proactive improvement scans instead of going silent.
+- #11329 — Event runtime acknowledges each event individually for cleaner crash recovery.
+- #12749 — Delivery internals reorganized onto the layered model for cleaner per-project customization.
+
+### Fixed
+
+- **Catastrophic-merge prevention (SEV-1)** — #13271 / #13285: a stale clone can no longer silently revert large swaths of `main`; the merge is refused, and a post-merge audit can automatically undo any out-of-scope collateral.
+- **Event-bus & harness reliability** — #12824 / #12837 / #13156 / #13158 / #13167 / #13045 / #13255: routing failures, cursor eviction, malformed-request crashes, deploy-pull conflicts, and self-wake noise are all hardened so agents stay reachable.
+- **Trustworthy test gate** — #11394 / #11503 / #12408 / #12720: the static test gate no longer reports false-green or silently skips a large fraction of the suite.
+- **Deploy & git robustness** — #13211 / #13212 / #13215 / #13261 / #13262 / #13267 / #13279 / #13303: dirty-clone syncs, hung-git timeouts, stash safety, and spurious "please restart" signals on unchanged instructions are all fixed.
+- **Complete fresh installs** — #12907 / #12909 / #12861 / #13101 / #12915: the install manifest now ships every runtime script, sub-skill, and base file a brand-new install needs.
+- **Windows console** — #13185 / #13198 / #13236: non-ASCII output no longer crashes the CLI on Windows code pages.
+- Plus ~80 further reliability, test-hygiene, installer, and documentation fixes across the harness, compose pipeline, tracker, and shared vault.
+
 ## [0.44.0] — 2026-06-12
 
 ### Added
