@@ -50,7 +50,9 @@ Not a rigid questionnaire; these are the stages the installer moves through, ada
 2. **Understand the project.** Spend real time: read the **documentation first** (if any), then read the **code**, to understand what the project is trying to do. When done, **describe the findings back to the user** — "here's what I think your project is and does" — ask whether that's accurate, and invite them to add anything you missed.
 3. **Understand how they work.** Ask how a piece of work actually gets done in this project: how tasks are **created**, how they're **delivered**, how they're **verified**, and how they're **technically done**. This picture of their workflow is what tells the installer **which team roster to propose**.
 4. **Reconcile what's already there.** Surface overlaps between the project's existing systems and SquidSquad's (vault, skills, commands, conventions); propose how they integrate — captured as L4 project customization so the squad respects them. (Ties #13329.)
-5. **Propose, scaffold, hand off.** Propose the team roster and customizations (from steps 2–4), confirm with the user, then scaffold `.squidsquad/`, compose the agents, configure the tracker, commit — and hand off to the running squad with a clear, plain-language "what you have now and how to steer it."
+5. **Propose & apply.** Propose the team roster and customizations (from steps 2–4), confirm with the user, then scaffold `.squidsquad/`, compose the agents, and apply the L4 customizations.
+6. **Verify the customized workflow is functional — with an independent sub-agent.** Before committing the user to the install, spawn a **separate sub-agent** to check that the customized team will actually work: that the L4 customizations compose cleanly and don't contradict SquidSquad's model, that the proposed roster can carry a piece of work end-to-end through *this project's* create → deliver → verify → done workflow, and that nothing in the customization breaks the squad's own operating model. A **fresh, independent agent** — not the installer that made the choices — performs this so the check is objective (the same reason the squad uses fresh-agent verification elsewhere). On problems, the installer revises the customization and re-verifies; only a clean pass proceeds. This step is the concrete guarantee behind §3's "maximum benefit *without breaking SquidSquad's working model*."
+7. **Commit & hand off.** Configure the tracker, commit, and hand off to the running squad with a clear, plain-language "what you have now and how to steer it."
 
 ## 5. The runtime model the installer must convey correctly
 
@@ -84,6 +86,7 @@ The user must leave knowing they can reshape the team **any time**, not just by 
 - Speak in the user's terms and benefits; hide SquidSquad internals.
 - Infer sensible defaults and **confirm them** rather than interrogating for every choice.
 - Reconcile the project's existing systems with SquidSquad's — integrate, don't override.
+- **Verify the customized workflow with an independent sub-agent before finalizing** — never hand off a customization that hasn't been checked for functionality.
 - Ground every statement in the current (event-driven) reality.
 
 **Don't:**
@@ -109,5 +112,6 @@ The user must leave knowing they can reshape the team **any time**, not just by 
 - **Roster-from-workflow**: how does the "how tasks are created / delivered / verified / technically done" answer concretely map to a roster + preset? (Needs a mapping the installer can reason with — the manifest/preset system is the raw material.)
 - **Depth of codebase analysis**: how far does step-2 analysis go (README + top-level docs + entry points?), and how is it time-boxed so setup stays pleasant?
 - **Reconcile mechanics**: for an existing vault/skills, what does "integrate" concretely produce — L4 references, a summary, a pointer? (Shared with #13329.)
+- **Functional-verification sub-agent (§4 step 6)**: what exactly does it check, and what are the pass/fail criteria? Candidates: L4 composes cleanly (compose dry-run + the existing L4 safety gates), no customization contradicts the base model, the roster covers every stage of the project's stated create→deliver→verify→done workflow, and a dry "can a piece of work flow through this team?" trace. How is a failure surfaced/repaired — installer auto-revises, or asks the user?
 - **WIZARD.md retirement path**: what still-needed mechanics migrate where, and when does `WIZARD.md` get deleted vs slimmed to a thin procedural appendix?
 - **Adequacy checklist**: capture each specific way the real install felt inadequate, so we can verify this definition fixes it.
