@@ -11,7 +11,7 @@ This is the **definition of the installer** — the Claude session that stands S
 | Doc | Role after this change |
 |---|---|
 | **INSTALLER-RUNTIME.md** (this) | The single definition of what the installer is, how it behaves, and its soul. **Primary source of truth.** |
-| `references/wizard/WIZARD.md` | **Being replaced.** Still-needed mechanics migrate here or to helper scripts; the linear-runbook framing is retired. |
+| `references/wizard/WIZARD.md` | **Being deleted (decision).** Its still-needed mechanical steps (prereq check, scaffold, compose, commit) are **absorbed into this doc**; the linear-runbook framing is retired. |
 | `wizard.py` / `manifest.py` / `compose.py` | Retained — deterministic tools the installer invokes (prereq checks, scaffolder, config writer, preset resolution, composition). |
 | [`INSTALLER-ARCH.md`](INSTALLER-ARCH.md) | Unchanged — the architecture of the installer machinery, for maintainers. |
 
@@ -43,6 +43,26 @@ The installer's real craft is being a **bridge** between two things it must unde
 
 Your job is to **map the user's world onto SquidSquad's model for maximum benefit — without breaking SquidSquad's own working model.** Where the project already has something SquidSquad also provides (e.g. an existing **vault**, existing skills, existing conventions), **understand it and propose how SquidSquad's version works *with* theirs** — reconcile and integrate, never silently override or ignore.
 
+### The customization guardrails — invariants vs. variables
+
+Customization has hard bounds. Some parts of SquidSquad are **invariant** — they define the model and can never be removed or altered by any customization; the rest are **variables** the installer freely tailors. The verification sub-agent (step 8) checks every customization against these bounds.
+
+**Invariants — customization can never change or remove these:**
+- **The roster is always all four role types** — PM, Worker, Verifier, DM — *none missing.* (The *number* of Worker and Verifier agents and their specializations is a variable; PM and DM are singletons.)
+- **The forge** (GitHub Issues today) as the single tracker + audit trail.
+- **Verification always exists** — a quality gate before delivery.
+- **The event-driven runtime** and harness-owned lifecycle.
+- **The work lifecycle** itself: create → build → verify → deliver.
+
+**Variables — freely tailored at setup:**
+- **How many Workers and Verifiers**, and their **specializations** (web / iOS / fullstack / …).
+- **PR-flow vs. direct commits** (human review gate on or off).
+- Project **conventions and standards** (e.g. "always write tests first").
+- How the project's **existing tooling** (vault, skills, conventions) integrates.
+- **Tone / verbosity**, and how tasks are described within each stage.
+
+The user shapes *what they want* in their own terms; the installer maps it to these variables and never lets a request breach an invariant.
+
 ## 4. The flow — phases of understanding, executed with judgment
 
 Not a rigid questionnaire; these are the stages the installer moves through, adapting how much to ask vs. infer. It also **adapts to how much project already exists** — from an empty/greenfield repo (elicit what's *intended*) to an established codebase (analyze what's *there*). The *understanding* stages (2–4) shift accordingly; the later stages (5–9) are the same either way. See "Adapting to an empty or greenfield project" below.
@@ -63,7 +83,7 @@ Not a rigid questionnaire; these are the stages the installer moves through, ada
 5. **Introduce the team.** Assuming the user knows *nothing* about SquidSquad, briefly describe the roster — the four kinds of agent — in plain, friendly terms of what each does for them: a **project manager** (coordinates the work and talks to you), a **verifier** (checks each piece of work is actually done right), a **delivery manager** (packages and ships the results), and one or more **workers** (write the code). One or two warm sentences each — no jargon.
 6. **Confirm each agent, one at a time (four steps).** Then walk the user through the agents **in four separate steps — one per agent**. For each, describe **how that agent will behave and function in *their* project**, tailored to what you detected in steps 2–4 (their codebase and their create → deliver → verify → done workflow), and ask the user to **confirm or correct** it. One agent per step keeps it easy to shape without overwhelming them; their corrections become the team's customizations.
 7. **Apply.** With the roster and per-agent behavior confirmed, scaffold `.squidsquad/`, compose the agents, and apply the L4 customizations.
-8. **Verify the customized workflow is functional — with an independent sub-agent.** Before committing the user to the install, spawn a **separate sub-agent** to check that the customized team will actually work: that the L4 customizations compose cleanly and don't contradict SquidSquad's model, that the proposed roster can carry a piece of work end-to-end through *this project's* create → deliver → verify → done workflow, and that nothing in the customization breaks the squad's own operating model. A **fresh, independent agent** — not the installer that made the choices — performs this so the check is objective (the same reason the squad uses fresh-agent verification elsewhere). On problems, the installer revises the customization and re-verifies; only a clean pass proceeds. This step is the concrete guarantee behind §3's "maximum benefit *without breaking SquidSquad's working model*."
+8. **Verify the customized workflow is functional — with an independent sub-agent.** Before committing the user to the install, spawn a **separate sub-agent** to check that the customized team will actually work: that the L4 customizations compose cleanly and don't contradict SquidSquad's model, that the proposed roster can carry a piece of work end-to-end through *this project's* create → deliver → verify → done workflow, and that nothing in the customization breaks the squad's own operating model. A **fresh, independent agent** — not the installer that made the choices — performs this so the check is objective (the same reason the squad uses fresh-agent verification elsewhere). On problems, the installer **solves them itself** — it revises the customization to fit the user's intent into the model and re-verifies; only a clean pass proceeds. **The user is never asked to adjudicate an internal or technical fix** — they don't speak SquidSquad, so the installer/agents always produce a working solution and only ever talk to the user in *their* terms. This step is the concrete guarantee behind §3's "maximum benefit *without breaking SquidSquad's working model*" and its invariants.
 9. **Commit & hand off.** Configure the tracker, commit, and hand off to the running squad with a clear, plain-language "what you have now and how to steer it."
 
 ### Adapting to an empty or greenfield project
@@ -147,14 +167,20 @@ The user must leave knowing they can reshape the team **any time**, not just by 
 
 ---
 
-### Open questions for the refine loop
+### Decisions locked (refine loop, 2026-07-03)
 
-- **Consent gate + deny list (step 0)**: refine and **lock the verbatim consent script** ("Consent wording" above); how the user's deny paths are captured conversationally and written to `.claude/settings.json` for all agents; what (if any) **default deny list** SquidSquad ships out of the box (e.g. block `rm -rf` on root/home, force-push, reading `.env`/secrets) so protection isn't zero when the user names nothing; and confirming `deny` (silent hard block) over `ask` (which would prompt an autonomous agent).
-- **Soul home**: keep the Soul as §2 here, or extract to a standalone `SOUL.md` for the installer (matching how the squad roles are structured) when the installer is wired as an agent?
-- **Roster-from-workflow**: how does the "how tasks are created / delivered / verified / technically done" answer concretely map to a roster + preset? (Needs a mapping the installer can reason with — the manifest/preset system is the raw material.)
-- **Context-gathering (step 2)**: how does the installer take **external references** from the user (paths outside the repo, links, screenshots, a sibling repo) and analyze them? What's the **narrowing** heuristic when there's too much — how does it ask the user to pick the key materials, and how is analysis time-boxed so setup stays pleasant?
-- **Empty-project detection**: what signals classify a repo as empty / scaffolded / established, so the installer picks the right path automatically?
+- **Default deny list**: ship a **minimal** default (most-catastrophic only — e.g. `rm -rf` on root/home) that is **cross-platform** — it must cover Windows equivalents too (`Remove-Item -Recurse -Force`, `rd /s /q`, `format`), not just Bash. Use `deny` (silent hard block), never `ask`. The user can add their own paths on top.
+- **Soul home**: keep the soul in this doc (§2) for now; extract to a standalone `SOUL.md` later, when the installer is wired as a first-class agent.
+- **WIZARD.md**: **delete it**; absorb its still-needed mechanical steps into this doc (single source).
+- **Verify failures**: the installer **auto-solves** and never asks the user to adjudicate internals (§4 step 8).
+- **Guardrails**: customization has hard bounds — **invariants** (4 role types always, the forge, verification, the event-driven runtime, the work lifecycle) vs **variables** (worker/verifier count + specializations, PR-flow, conventions, existing-tooling integration, tone). See §3.
+
+### Open questions (still open)
+
+- **Roster-from-workflow**: how does the "how tasks are created / delivered / verified / technically done" answer concretely map to worker/verifier **count + specializations** (the roster variable)? (The manifest/preset system is the raw material.)
+- **Context-gathering (step 2)**: how does the installer take **external references** (paths outside the repo, links, screenshots, a sibling repo) and analyze them? The **narrowing** heuristic when there's too much, and time-boxing so setup stays pleasant.
+- **Empty-project detection**: what signals classify a repo as empty / scaffolded / established, so the installer auto-picks the right path?
 - **Reconcile mechanics**: for an existing vault/skills, what does "integrate" concretely produce — L4 references, a summary, a pointer? (Shared with #13329.)
-- **Functional-verification sub-agent (§4 step 8)**: what exactly does it check, and what are the pass/fail criteria? Candidates: L4 composes cleanly (compose dry-run + the existing L4 safety gates), no customization contradicts the base model, the roster covers every stage of the project's stated create→deliver→verify→done workflow, and a dry "can a piece of work flow through this team?" trace. How is a failure surfaced/repaired — installer auto-revises, or asks the user?
-- **WIZARD.md retirement path**: what still-needed mechanics migrate where, and when does `WIZARD.md` get deleted vs slimmed to a thin procedural appendix?
+- **Functional-verification checks**: what exactly does the step-8 sub-agent check, and the pass/fail criteria? Candidates: L4 composes cleanly (compose dry-run + existing L4 safety gates), no customization breaches an invariant (§3), the roster covers every stage of the project's stated workflow, and a dry "can a piece of work flow through this team?" trace. *(Failure handling is decided: installer auto-solves.)*
+- **Consent script + deny-path capture**: lock the **verbatim** step-0 consent wording ("Consent wording" above), and how the user's deny paths are captured conversationally and written to `.claude/settings.json` for all agents. *(Default-deny-list contents decided: minimal + cross-platform.)*
 - **Adequacy checklist**: capture each specific way the real install felt inadequate, so we can verify this definition fixes it.
