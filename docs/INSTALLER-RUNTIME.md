@@ -46,6 +46,11 @@ Your job is to **map the user's world onto SquidSquad's model for maximum benefi
 
 Not a rigid questionnaire; these are the stages the installer moves through, adapting how much to ask vs. infer. It also **adapts to how much project already exists** — from an empty/greenfield repo (elicit what's *intended*) to an established codebase (analyze what's *there*). The *understanding* stages (2–4) shift accordingly; the later stages (5–9) are the same either way. See "Adapting to an empty or greenfield project" below.
 
+0. **Consent & guardrails — the very first thing.** Before doing anything else, be transparent, in plain language: SquidSquad's agents run with **elevated ("bypass") permissions** so they can work autonomously — **and** SquidSquad **always respects a deny list**, no matter what. Invite the user, right now, to name any **files or paths they don't want the agents to touch or even read** (secrets, credentials, private folders); these are written into the shared settings for **all** agents. Then get an explicit decision:
+   - **Yes** — they agree (after providing any deny paths) → proceed with setup.
+   - **No** — they don't → **quit**, gracefully. SquidSquad can't run without this permission model, and that boundary is respected.
+
+   *(Basis, verified against Claude Code docs: a `deny` rule holds in **every** mode including `bypassPermissions` — deny always takes precedence and is never skipped. Use `deny` rules, not `ask`, so nothing prompts an autonomous agent mid-work.)*
 1. **Basics.** The still-essential setup: confirm there's a GitHub repo, `gh` is authenticated, prerequisites are present, and the seeded references are good. (This is the part today's wizard already does well — keep it.)
 2. **Understand the project — from all available context, efficiently.** Build a real picture of what the project is and is trying to do, drawing on every source available:
    - **The working directory** — read the **documentation first** (if any), then the **code**. But remember SquidSquad only sees the folder it's installed in.
@@ -100,6 +105,7 @@ The user must leave knowing they can reshape the team **any time**, not just by 
 ## 8. Installer do / don't
 
 **Do:**
+- **Be transparent about the bypass-permission model up front, and honor the user's deny list** — disclose it plainly, capture the paths they want off-limits, and never proceed without their explicit yes.
 - Investigate before acting; adapt to the specific project.
 - Speak in the user's terms and benefits; hide SquidSquad internals.
 - Infer sensible defaults and **confirm them** rather than interrogating for every choice.
@@ -126,6 +132,7 @@ The user must leave knowing they can reshape the team **any time**, not just by 
 
 ### Open questions for the refine loop
 
+- **Consent gate + deny list (step 0)**: exact wording of the bypass disclosure; how the user's deny paths are captured conversationally and written to `.claude/settings.json` for all agents; what (if any) **default deny list** SquidSquad ships out of the box (e.g. block `rm -rf` on root/home, force-push, reading `.env`/secrets) so protection isn't zero when the user names nothing; and confirming `deny` (silent hard block) over `ask` (which would prompt an autonomous agent).
 - **Soul home**: keep the Soul as §2 here, or extract to a standalone `SOUL.md` for the installer (matching how the squad roles are structured) when the installer is wired as an agent?
 - **Roster-from-workflow**: how does the "how tasks are created / delivered / verified / technically done" answer concretely map to a roster + preset? (Needs a mapping the installer can reason with — the manifest/preset system is the raw material.)
 - **Context-gathering (step 2)**: how does the installer take **external references** from the user (paths outside the repo, links, screenshots, a sibling repo) and analyze them? What's the **narrowing** heuristic when there's too much — how does it ask the user to pick the key materials, and how is analysis time-boxed so setup stays pleasant?
