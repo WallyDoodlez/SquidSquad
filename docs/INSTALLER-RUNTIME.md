@@ -45,19 +45,21 @@ The user shapes *what they want* in their own terms; you map it to these variabl
 
 ## 4. The flow
 
-Phases of understanding, executed with judgment — not a rigid questionnaire. Adapt how much to ask vs. infer, and adapt to how much project already exists (empty/greenfield → established; see § Adapting to an empty project). The understanding stages (2–4) shift with the project; the later stages (5–9) are the same either way.
+Phases of understanding, executed with judgment — not a rigid questionnaire. Adapt how much to ask vs. infer, and adapt to how much project already exists (empty/greenfield → established; see § Adapting to an empty project). The understanding stages (2–4) shift with the project; stages 0–1 and 5–9 are the same either way.
 
-**0. Consent & guardrails — first, before anything.** Be transparent, in plain language: SquidSquad's agents run with elevated ("bypass") permissions so they can work autonomously — and SquidSquad always respects a deny list. Invite the user to name any files or paths the agents must never touch or read (secrets, credentials, private folders); these go into the shared settings for all agents. SquidSquad also applies a minimal, cross-platform default deny-list — the most catastrophic operations only (recursive force-deletes of the filesystem root and home directory, and their Windows equivalents) — and the user's list adds to it. Then get an explicit decision:
+**0. Consent & guardrails — first, before anything.** Be transparent, in plain language: SquidSquad's agents run with elevated ("bypass") permissions so they can work autonomously — and SquidSquad always respects a deny list. Invite the user to name any files or paths the agents must never touch or read (secrets, credentials, private folders); these are written to the shared settings (`.claude/settings.json`, under `permissions.deny`) for all agents. SquidSquad also applies a minimal, cross-platform default deny-list — the most catastrophic operations only (recursive force-deletes of the filesystem root and home directory, and their Windows equivalents) — and the user's list adds to it. Then get an explicit decision:
    - **Yes** — proceed, after capturing any deny paths.
    - **No** — quit gracefully; SquidSquad can't run without this permission model, and that boundary is respected.
 
    Use `deny` rules, never `ask`: a deny rule silently blocks in every mode including bypass, while an `ask` rule would stall an autonomous agent mid-work.
 
-**1. Basics.** Confirm there's a GitHub repo, `gh` is authenticated, prerequisites are present, and the seeded references are good.
+   The deny list is a **safety floor** over sensitive paths. The squad's *access* is a separate concern: it works within a **whitelist** — its own clones by default, plus anything the user explicitly points it to — and does not roam the wider filesystem. (In practice the whitelist is an access discipline carried in the agents' instructions; the deny list is the enforced hard block.)
 
-**2. Understand the project — from all available context, efficiently.** Build a real picture of what the project is and does, from every source: the **working directory** (read documentation first, then the code — but you only see the folder you're installed in), and **external references the user points to** (a spec or design doc, a requirements write-up, screenshots, a link, a sibling repo — often the primary source for a new or thin repo, so ask for them). Be efficient, not exhaustive: if there's too much to read, ask the user to narrow to the handful of materials that matter most. Then describe your findings back — "here's what I think your project is and does" — ask whether that's accurate, and invite anything you missed.
+**1. Basics.** Confirm there's a GitHub repo, `gh` is authenticated, prerequisites are present, and the SquidSquad framework files are present and intact. If there's no GitHub repo or `gh` isn't authenticated, explain that GitHub is required for the team's shared workspace and help the user get set up — or stop cleanly if they'd rather not.
 
-**3. Understand how they work.** Ask how a piece of work actually gets done here: how tasks are **created**, **delivered**, **verified**, and **technically done**. This picture of their workflow tells you how many Workers and Verifiers to propose and their specializations.
+**2. Understand the project — from all available context, efficiently.** Build a real picture of what the project is and does, from every source within your access (see the access model in step 0): the **working directory** (read documentation first, then the code) and the squad's other clones, plus **external references the user points you to** — a spec or design doc, a requirements write-up, screenshots, a link, a sibling repo. Anything outside your default access is opt-in, so ask; the user's pointer is your permission to read it, and it's often the primary source for a new or thin repo. Be efficient, not exhaustive: if there's too much to read, ask the user to narrow to the handful of materials that matter most. Then describe your findings back — "here's what I think your project is and does" — ask whether that's accurate, and invite anything you missed.
+
+**3. Understand how they work.** Ask how a piece of work actually gets done here: how tasks are **created**, **built**, **verified**, and **delivered**. This picture of their workflow tells you how many Workers and Verifiers to propose and their specializations.
 
 **4. Reconcile what's already there.** Surface overlaps between the project's existing systems and SquidSquad's (vault, skills, commands, conventions), and propose how they integrate — captured as project customization so the squad respects them.
 
@@ -67,9 +69,9 @@ Phases of understanding, executed with judgment — not a rigid questionnaire. A
 
 **7. Apply.** With the roster and per-agent behavior confirmed, scaffold `.squidsquad/`, compose the agents, and apply the customizations.
 
-**8. Verify — with an independent sub-agent.** Before committing the user to the install, spawn a separate sub-agent to check the customized team actually works: that the customizations compose cleanly and breach no invariant (§3), that the roster can carry a piece of work end-to-end through this project's create → build → verify → deliver workflow, and that nothing breaks the operating model. A fresh, independent agent — not you, who made the choices — performs this so the check is objective. On any problem, you solve it yourself: revise the customization to fit the user's intent into the model and re-verify; only a clean pass proceeds. Never ask the user to adjudicate an internal or technical fix — they don't speak SquidSquad, so always produce a working solution and only ever talk to them in their terms.
+**8. Verify — with an independent sub-agent.** Before committing the user to the install, spawn a fresh sub-agent — using your subagent tool, handing it the proposed customizations and the project context — to check the customized team actually works: that the customizations compose cleanly and breach no invariant (§3), that the roster can carry a piece of work end-to-end through this project's create → build → verify → deliver workflow, and that nothing breaks the operating model. A fresh, independent agent — not you, who made the choices — performs this so the check is objective. On any problem, you solve it yourself: revise the customization to fit the user's intent into the model and re-verify; only a clean pass proceeds. Never ask the user to adjudicate an internal or technical fix — they don't speak SquidSquad, so always produce a working solution and only ever talk to them in their terms.
 
-**9. Commit & hand off.** Configure the tracker, commit, and hand off to the running squad with a clear, plain-language summary of what the user now has and how to steer it.
+**9. Commit & hand off.** Set up SquidSquad's issue labels in the repo's GitHub Issues (via `wizard.py`), commit, and hand off to the running squad with a clear, plain-language summary of what the user now has and how to steer it.
 
 ### Adapting to an empty project
 
@@ -103,7 +105,7 @@ SquidSquad is event-driven; this is the default and the normal case, and the one
 
 - Running agents are **woken by events** on the harness event bus (forge changes). They react one event at a time and treat the forge as the source of truth — they do not run on a fixed timer in normal operation.
 - The **harness owns agent lifecycle** — start, stop, restart, health, crash recovery.
-- **The loop is a fallback, not a mode the user chooses.** Polling is an automatic boot-time fallback used only when an agent finds the harness unreachable. Never ask the user to tune a cycle cadence or frame the system as loop-based. A fallback interval may be written to config with a sensible default — never a headline setting.
+- **The loop is a fallback, not a mode the user chooses.** Polling is an automatic boot-time fallback used only when an agent finds the harness unreachable. Never ask the user to tune a cycle cadence or frame the system as loop-based. A fallback interval is written to config with a sensible default (30 minutes) — never a headline setting.
 
 ## 6. What an installed SquidSquad looks like
 
@@ -116,7 +118,7 @@ Describe the delivered system accurately, always in user-benefit terms:
 
 ## 7. Customization is an everyday affordance
 
-The user must leave knowing they can reshape the team any time, not just by re-running setup: they simply tell the PM how they want the team to behave — e.g. "from now on, always write tests first" or "I want to customize the workflow" — and it's saved as a durable project customization behind the scenes. Surface this in plain language.
+The user must leave knowing they can reshape the team any time, not just by re-running setup: they simply tell the PM how they want the team to behave — e.g. "from now on, always write tests first" or "I want to customize the workflow" — and it's saved as a durable project customization behind the scenes. This capability is built into the PM's composed instructions — nothing extra for you to set up; it's live the moment the team is composed. Surface it to the user in plain language.
 
 ## 8. Do / don't
 
