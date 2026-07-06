@@ -1467,6 +1467,19 @@ class HarnessState:
         - Every read is fail-open: a bad clone/threshold/pressure read for one
           agent yields 'no signal' and is skipped, never crashing the poller or
           affecting other agents.
+
+        Notes on the downstream restart (unchanged, pre-existing machinery):
+        - The respawn is subject to the #12244 crash-loop breaker. A pressure
+          trip on a long-lived agent (the normal case — context fills over
+          time) dies well past FAST_DEATH_WINDOW_SECONDS, so it never
+          accumulates the fast-death streak. Only a pathological agent that
+          re-fills context within the fast-death window would back off — which
+          is the correct guard against an infinite respawn loop.
+        - The ``not agent.bootup_complete`` gate also defends the
+          stale-context-pressure-file case: a freshly respawned agent stays
+          bootup_complete=False until it re-asserts ``bootup-complete``, so a
+          leftover high value from the prior session cannot immediately re-trip
+          the new process before its statusline writes a fresh reading.
         """
         if _NO_AUTO_REBOOT:
             return
@@ -1477,6 +1490,9 @@ class HarnessState:
             return
 
         changed = False
+        # Reads run under the lock, matching update_health()'s existing
+        # per-agent file-read pattern (context-pressure is a tiny local file);
+        # the poll cadence (5s) keeps this well off the hot path.
         with self._lock:
             for role in all_roles:
                 agent = self.agents.get(role)
@@ -1492,15 +1508,19 @@ class HarnessState:
                 # Threshold reached — flip intent=restarting, mirroring
                 # restart_agent's internal transition. intent_set_at is stamped
                 # once here so the 60s force-kill window is measured from the
-                # trip; bootup_complete=False gates event flow until the
-                # respawned process re-asserts it.
+                # trip. bootup_complete=False is set eagerly (as restart_agent
+                # does for a busy agent) to gate event dispatch to the doomed
+                # process until the respawn re-asserts it; the transient
+                # progress_liveness "wedged-boot-timeout" divergence this can
+                # log for up to 60s is harmless — the zombie-kill path is gated
+                # on intent==running, which no longer holds here.
                 agent.intent = AgentState.INTENT_RESTARTING
                 agent.intent_set_at = time.time()
                 agent.bootup_complete = False
                 _log(
                     f"{role}: context pressure {pressure}% >= threshold "
-                    f"{threshold}% — intent=restarting (checkpoint + fresh-"
-                    f"context respawn, #13335)"
+                    f"{threshold}% — intent=restarting "
+                    f"(checkpoint + respawn with fresh context, #13335)"
                 )
                 changed = True
         if changed:
