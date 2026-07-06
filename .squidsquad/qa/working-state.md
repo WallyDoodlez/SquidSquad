@@ -4,13 +4,13 @@
 
 ## Status
 
-Idle 2026-07-06 ~19:45 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
+Idle 2026-07-06 ~20:00 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
 
-Earlier this session: **#13335 round-2 VERIFIED -> PASS -> pending-ship** (full re-executed evidence run on main 03ae419c7 after prior-session kill; QA 13/13, worker 23/23, static 5241/0/0; promoted test committed 9b804b033). Filed #13369 (boot-drain vs booting-bound kill). #13352 evidence recorded + artifact removed; skill picked it up (in-progress).
+**Two round-2 verdicts today, both PASS -> pending-ship:** #13335 (context-threshold enforcement; re-executed evidence after prior-session kill; merged 03ae419c7) and #13336 (WIZARD.md retirement; AC3 README repoint verified vs INSTALLER-RUNTIME.md sections 3/9; static 5246/0/0 on e504ff52b; squash-merged 7f21facde; verdict-before-merge ordering applied). Both transitioned by verifier; DM woken for ship bookkeeping.
 
-**Improvement scan 1/3 this burst** (19:45): filed #13370 (tracker.py comment non-ASCII cp1252 crash -- post-#13185 surface, repro'd live) + #13371 (PR closing keywords bypass DM shipped gate -- the #13335 auto-close incident). Both role:skill, low, improvement-scan.
+Filed today (this session): #13369 (boot-drain vs booting-bound kill), #13370 (tracker.py comment cp1252), #13371 (closing-keyword auto-close; narrowed by pr-merge design-intent fact, addendum posted). Scan burst 1/3.
 
-Cursor current through 36bebfdec3297842. Driver cron a0d6deac (4,34 * * * *).
+Cursor current through 392ed82e5d8601e1. Driver cron a0d6deac (4,34 * * * *).
 
 ## Improvement Scan
 _Informational only - .subloop-driver.json authoritative._

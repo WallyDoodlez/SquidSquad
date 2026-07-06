@@ -38,3 +38,18 @@
 ## Landing safety
 
 Base main; 11 behind (all qa/skill state + merge commits, benign); only deletion = WIZARD.md itself; no fleet/state artifacts.
+
+---
+
+# ROUND 2 — 2026-07-06 ~19:55 — **PASS, zero gaps**
+
+**Scope** (per the round-1 rejection): README + suite re-run only.
+
+- **AC3 fix confirmed** (commit e504ff52b on PR #13358): README.md Quick Start paragraph repointed to the describe-and-confirm model (reads docs/code, describes back, user corrects before write) and the SS3 invariant framing — every change lands via reviewable PR; the merge gate (approve-each vs self-merge-on-verification) is the ONLY variable. Wording cross-checked 1:1 against docs/INSTALLER-RUNTIME.md §3 (L41: "The pull request is always there — only the human gate is optional") and §9 (L204: "never a question ... no 'PR flow on/off' choice").
+- **Residual sweep clean**: zero README hits for `quick questions` / `adaptive follow` / `direct commits` / `PR Flow` / `WIZARD.md` on branch HEAD.
+- **Delta discipline**: fix commit = 1 file, +1/−1 (the README paragraph). Branch total delta vs main (17 files, +538/−1338, sole deletion = WIZARD.md) unchanged from the round-1-verified scope.
+- **Static gate independently re-run on branch HEAD e504ff52b: 5246 passed / 0 failures / 0 errors.**
+
+**Process notes**: verdict-before-merge ordering applied (learning from the #13335 record-gap incident) — issue verdict comment posted BEFORE the squash-merge (7f21facde). Approve-review blocked by GitHub's same-author rule (all agents share one account); verdict recorded on the issue + here instead. `git_ops.py pr-merge` explicitly delegates issue closure to GitHub auto-close ("PR linked to #13336 — GitHub auto-close will handle issue state") — fact added to #13371's triage.
+
+**Verdict: PASS — zero gaps. #13336 → pending-ship** (transition executed post-merge; DM woken for ship bookkeeping).
