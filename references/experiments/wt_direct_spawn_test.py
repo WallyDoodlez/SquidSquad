@@ -31,6 +31,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -86,10 +87,10 @@ def test_env_propagation() -> dict:
     if not wt:
         return {"name": "env_propagation", "ok": False, "reason": "wt not found on PATH"}
 
-    out_file = Path.cwd() / ".squidsquad" / "skill" / "planning" / "wt-env-probe.txt"
-    out_file.parent.mkdir(parents=True, exist_ok=True)
-    if out_file.exists():
-        out_file.unlink()
+    # Scratch probe file — MUST live outside any repo clone. A cwd-relative
+    # .squidsquad/ path here wrote probe artifacts into whichever agent
+    # clone the script happened to run from (#13352 live-surface leak).
+    out_file = Path(tempfile.mkdtemp(prefix="wt-env-probe-")) / "wt-env-probe.txt"
 
     sentinel_value = f"PROPAGATED-{int(time.time())}"
 

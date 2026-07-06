@@ -48,6 +48,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -180,9 +181,10 @@ def main() -> int:
         if proc.isalive():
             proc.terminate(force=True)
 
-    # Dump raw output to a file for inspection
-    dump_path = Path(".squidsquad/skill/planning/conpty-spike-raw-output.txt")
-    dump_path.parent.mkdir(parents=True, exist_ok=True)
+    # Dump raw output to a file for inspection. Scratch output MUST live
+    # outside any repo clone — a cwd-relative .squidsquad/ path wrote spike
+    # artifacts into whichever agent clone ran the script (#13352).
+    dump_path = Path(tempfile.mkdtemp(prefix="conpty-spike-")) / "conpty-spike-raw-output.txt"
     dump_path.write_text(output, encoding="utf-8")
     print(f"\nPTY output ({len(output)} chars) written to {dump_path}")
 

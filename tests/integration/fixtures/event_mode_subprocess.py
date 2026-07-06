@@ -268,13 +268,41 @@ def gh_shim_dir() -> Path:
     return Path(__file__).resolve().parent / "gh_shim"
 
 
+# Process-lifetime empty squid dir used to isolate shimmed subprocesses
+# from the live event bus (#13352). It deliberately stays EMPTY — no
+# ``.harness-port`` is ever written here, so ``event_bus._discover_port``
+# in the subprocess returns None and every emit is a silent no-op.
+# One dir per test process is enough; the OS temp cleaner reaps it.
+_ISOLATED_SQUID_DIR: Path | None = None
+
+
+def _isolated_squid_dir() -> Path:
+    global _ISOLATED_SQUID_DIR
+    if _ISOLATED_SQUID_DIR is None:
+        _ISOLATED_SQUID_DIR = Path(
+            tempfile.mkdtemp(prefix="squid-shim-isolated-")
+        )
+    return _ISOLATED_SQUID_DIR
+
+
 def env_with_gh_shim(
     base_env: dict[str, str] | None = None,
     fixtures_dir: Path | None = None,
+    squid_dir: Path | None = None,
 ) -> dict[str, str]:
     """Build a subprocess env dict with the gh-shim directory
     prepended to ``PATH`` and (optionally) ``GH_SHIM_FIXTURES_DIR``
     set so reads find their fixture files.
+
+    ``SQUIDSQUAD_DIR`` is ALWAYS set (#13352): to ``squid_dir`` when the
+    caller provides one (e.g. to pair the subprocess with a
+    ``real_harness`` squid dir), otherwise to a process-lifetime EMPTY
+    tmpdir. Without this, a shimmed ``tracker.py transition``
+    subprocess falls back to the live ``.squidsquad/.harness-port``
+    and posts its synthetic status-transition events (issue 87654)
+    onto the PRODUCTION event bus — every agent then pays a real
+    wake + forge-read for a fabricated event. Callers that assign
+    ``env["SQUIDSQUAD_DIR"]`` after this call still win.
 
     Returns a *new* dict — does not mutate ``base_env`` or
     ``os.environ``.
@@ -284,6 +312,9 @@ def env_with_gh_shim(
     env["PATH"] = shim + os.pathsep + env.get("PATH", "")
     if fixtures_dir is not None:
         env["GH_SHIM_FIXTURES_DIR"] = str(fixtures_dir)
+    env["SQUIDSQUAD_DIR"] = str(
+        squid_dir if squid_dir is not None else _isolated_squid_dir()
+    )
     return env
 
 
