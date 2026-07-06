@@ -306,18 +306,23 @@ When `Auto Merge: yes` is set in `config.md`, the harness automatically merges P
 ## Setup Instructions
 
 When this skill is invoked (via `npx squidsquad` or `/squidsquad-setup`), the
-**install wizard** walks the user through an interactive setup. The canonical,
-step-by-step runbook the installer agent follows is:
+**installer agent** walks the user through an adaptive, conversation-driven
+setup. The canonical operating manual the installer session follows, top to
+bottom, is:
 
-> **`references/wizard/WIZARD.md`**
+> **`docs/INSTALLER-RUNTIME.md`**
 
-That file covers every step (0 / 0b / 1..7), the intent classifier prompt, the
-manifest-driven setup_requirements walker, the review screen, the installer
-agent lifecycle, and error recovery. Do NOT reimplement the setup flow inline
-here — the runbook is the single source of truth. SKILL.md describes
-SquidSquad's architecture; WIZARD.md describes how to install it.
+That manual covers the installer's soul and flow (consent & guardrails,
+project understanding, workflow mapping, per-agent confirmation, apply,
+independent verification, commit & hand-off), the installer agent lifecycle
+(ephemeral — hand off and exit), and its § helper playbook carries the
+concrete helper invocation sequences, the manifest-driven setup_requirements
+walker, the migration walk, and error recovery. Do NOT reimplement the setup
+flow inline here — the manual is the single source of truth. SKILL.md
+describes SquidSquad's architecture; INSTALLER-RUNTIME.md describes how the
+installer behaves when installing it.
 
-The install wizard uses these mechanical helpers:
+The installer uses these mechanical helpers:
 
 - `references/scripts/wizard.py` — gh prerequisite check, re-run detection,
   repo metadata, project-name validation, config.md writer, filesystem
@@ -327,7 +332,7 @@ The install wizard uses these mechanical helpers:
 - `references/scripts/compose.py deploy <role>` — per-role CLAUDE.md
   composition (role template + shared sub-skills + placeholder substitution)
 
-All three expose JSON-output CLI commands so the prose runbook can call them
+All three expose JSON-output CLI commands so the installer agent can call them
 and act on structured results without parsing free text.
 
 The taxonomy the installer uses is **not** a hardcoded table. It lives in:

@@ -4,7 +4,8 @@ Covers the wizard.py code half — port discovery, alias enumeration, and the
 `restart_agents` routing (reachable → per-alias stop+start; unreachable →
 user-driven cold-start). The single network touchpoint is `wizard._http_request`,
 monkeypatched here so the tests exercise both branches without a live harness.
-The LLM-driven runbook step (WIZARD.md Step 7.5c) is not unit-tested — these
+The LLM-driven manual step (docs/INSTALLER-RUNTIME.md §9, Step 9 — Commit &
+hand off; #13336 — was WIZARD.md Step 7.5c) is not unit-tested — these
 tests pin the deterministic *what happens*, not the prose.
 """
 
