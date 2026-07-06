@@ -4,13 +4,13 @@
 
 ## Status
 
-Idle 2026-07-06 ~19:30 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
+Idle 2026-07-06 ~19:45 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
 
-**#13335 round-2 VERIFIED -> PASS -> pending-ship** (context-threshold enforcement). Prior session completed verification + merged PR #13346 but was killed ~23:08Z before bookkeeping; this session RE-EXECUTED the full evidence run on main HEAD 03ae419c7 (QA suite 13/13, worker 23/23, promoted suite 13/13, static gate 5241/0/0), appended QA-RESULTS round-2, committed promoted test tests/test_feat_13335_context_threshold_realchain.py, commented verdict, transitioned. DM woken for ship bookkeeping (issue was already auto-closed by PR 'Fixes' keyword at merge -- anomaly flagged to PM in the verdict comment).
+Earlier this session: **#13335 round-2 VERIFIED -> PASS -> pending-ship** (full re-executed evidence run on main 03ae419c7 after prior-session kill; QA 13/13, worker 23/23, static 5241/0/0; promoted test committed 9b804b033). Filed #13369 (boot-drain vs booting-bound kill). #13352 evidence recorded + artifact removed; skill picked it up (in-progress).
 
-**Filed #13369** (boot-drain heavy work races #13179 booting bound; killed the prior session mid-bookkeeping). **#13352**: fresh wt-env-probe.txt leak evidence recorded, artifact removed from qa clone.
+**Improvement scan 1/3 this burst** (19:45): filed #13370 (tracker.py comment non-ASCII cp1252 crash -- post-#13185 surface, repro'd live) + #13371 (PR closing keywords bypass DM shipped gate -- the #13335 auto-close incident). Both role:skill, low, improvement-scan.
 
-Cursor current through be5f2b139be16a75. Vault: learning-reexecute-evidence-after-verifier-session-loss.
+Cursor current through 36bebfdec3297842. Driver cron a0d6deac (4,34 * * * *).
 
 ## Improvement Scan
 _Informational only - .subloop-driver.json authoritative._
