@@ -60,8 +60,9 @@ installer stamps that itself after a successful walk (`wizard.py stamp-version`,
 
 ## Three-gate application
 
-Each migration file is applied under the §10 three-gate model (the WIZARD.md Step 0b
-runbook drives this; the LLM applies prose, `wizard.py` only selects the chain):
+Each migration file is applied under the §10 three-gate model (the installer manual —
+`docs/INSTALLER-RUNTIME.md` §9, Step 1 — Basics — drives this; the LLM applies prose,
+`wizard.py` only selects the chain):
 
 1. **DeepSeek audit** — a deepseek-class model reviews the planned writes against the
    migration prose's stated intent (mechanical flagged if non-deterministic; judgment-call

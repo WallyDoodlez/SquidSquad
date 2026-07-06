@@ -79,7 +79,7 @@ flowchart LR
 - Redesigning the L1-L4 *responsibility model* itself — that landed in #9925 and is preserved as-is.
 - Defining the event bus, harness lifecycle, or agent state machine — see [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md).
 - Replacing the role-class concept itself (pm / verifier / worker / dm — see [AGENT-RUNTIME.md](AGENT-RUNTIME.md) Terminology) — those are stable.
-- Specifying the wizard install flow beyond compose hooks — see `WIZARD.md`.
+- Specifying the installer's flow beyond compose hooks — see [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) (behavior + helper playbook) and [`INSTALLER-ARCH.md`](INSTALLER-ARCH.md) (architecture).
 
 ---
 

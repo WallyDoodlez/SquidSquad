@@ -11,7 +11,7 @@ SKILL.md
 .squidsquad/start.ps1
 references/commands/squidsquad-compose.md
 references/commands/squidsquad-upgrade.md
-references/wizard/WIZARD.md
+docs/INSTALLER-RUNTIME.md
 references/VERSION
 references/migrations/README.md
 references/scripts/activity_hook.py
