@@ -125,10 +125,36 @@ class TestManualStructure:
         ], "playbook section")
 
     def test_consent_wording_is_verbatim_scripted(self, manual):
-        """Consent moments are fixed scripts — the section and its script
-        must be present (the one place phrasing is not adaptive)."""
+        """Consent moments are fixed scripts — the one place phrasing is
+        not adaptive (operator carve-out on #13336: bucket-3 UX artifacts
+        retired, consent stays VERBATIM). Locks the exact script."""
         assert "### Consent wording — verbatim" in manual
-        assert "How would you like to go ahead?" in manual
+        # Step 0 must bind to the script explicitly, before the flow moves on.
+        step0 = manual[manual.find("**0. Consent & guardrails"):manual.find("**1. Basics.**")]
+        assert "verbatim from § Consent wording" in step0, (
+            "Step 0 must direct the installer to present the consent text "
+            "verbatim from § Consent wording"
+        )
+        # The exact consent script — any rewording is a consent-drift reject.
+        for line in (
+            "> Before we begin, one important thing about how your team works.",
+            "> So the agents can get on with the work without stopping to ask "
+            "you about every little step, they run with broad access to this "
+            "project. I want to be upfront about that.",
+            '> You stay in control of the limits. I\'ll always honor a "please '
+            "don't touch this\" list — for **every** agent, permanently. If "
+            "there's anything you'd rather they never read or change — "
+            "passwords, API keys, `.env` files, private notes, a whole folder "
+            "— tell me now and I'll lock it off.",
+            "> How would you like to go ahead?",
+            "> - **Yes** — I'm good with this. *(List any files or folders to "
+            'keep off-limits, or say "nothing for now.")*',
+            "> - **No** — I'd rather not. *(That's completely fine — we'll "
+            "stop here, nothing is changed.)*",
+        ):
+            assert line in manual, (
+                f"Verbatim consent script line missing or reworded: {line!r}"
+            )
 
     def test_event_driven_model_is_the_default(self, manual):
         """§5: event-driven is the reality; the loop is only a fallback."""
@@ -137,6 +163,27 @@ class TestManualStructure:
 
     def test_roster_invariant_names_all_four_role_types(self, manual):
         assert "PM, Worker, Verifier, DM — none missing" in manual
+
+    def test_pr_flow_is_invariant_not_a_choice(self, manual):
+        """PR flow is a §3 invariant (change lands through review); the manual
+        must never offer a PR-flow on/off choice — only the merge gate is a
+        variable. `pr-flow-prompt` is drifted wizard.py surface (#9478 D2);
+        its retirement is a sibling task — the manual must not carry it."""
+        assert "pr-flow-prompt" not in manual, (
+            "Manual offers the retired 'PR flow on/off' choice — PR flow is "
+            "an invariant; only the merge gate (Auto Merge) is a variable"
+        )
+        assert "Change lands through review" in manual
+
+    def test_silent_config_defaults_match_code(self, manual):
+        """The silent defaults must match wizard.py's (30m interval / 70
+        context threshold) — a doc-vs-code contradiction here misleads the
+        installer into writing wrong config."""
+        assert "context-pressure threshold (default 70)" in manual, (
+            "Context-threshold silent default must read 70 (wizard.py "
+            "context_threshold) — not 80 or any other value"
+        )
+        assert "default 30 minutes" in manual
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +239,6 @@ class TestHelperCommandReferences:
             "wizard.py scaffold",
             "wizard.py ensure-labels",
             "wizard.py restart-agents",
-            "wizard.py pr-flow-prompt",
             "manifest.py list",
             "manifest.py load",
             "shared_fs.py init",

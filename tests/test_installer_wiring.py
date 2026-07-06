@@ -193,6 +193,20 @@ class TestCliIndexJs:
             "'SKILL.md Setup Instructions section' language"
         )
 
+    def test_slash_command_read_target_exists(self, cli_js):
+        """#13336 HARD GATE: every file the spawn-time prompt tells Claude to
+        Read must exist in this repo — otherwise fresh installs boot against
+        a deleted file (the failure mode WIZARD.md's retirement risked)."""
+        cmd = _extract_setup_command_prose(cli_js)
+        read_targets = re.findall(r"Read `([^`]+)`", cmd)
+        assert read_targets, "setupCommand names no Read target at all"
+        for target in read_targets:
+            assert (REPO_ROOT / target).is_file(), (
+                f"setupCommand tells the installer to read {target!r}, "
+                "which does not exist — fresh installs would boot against "
+                "a missing file"
+            )
+
     def test_slash_command_mentions_ephemeral_installer(self, cli_js):
         """Q-new21 — installer lifecycle must be stated in the slash command."""
         cmd = _extract_setup_command_prose(cli_js)
