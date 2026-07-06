@@ -109,6 +109,10 @@ L4_WATCHER_SUPERVISE_INTERVAL = 5  # seconds
 # net catches the case where the agent never reaches a cycle boundary or
 # /quit hangs (CONTEXT-4792.md §3.3 Q7).
 FORCE_KILL_TIMEOUT_SECONDS = 60
+# #13335 — event-mode context-threshold enforcement. Fallback used only when
+# config.md's `Context Pressure / Threshold` is absent or unparseable; the
+# operator-facing default is the same 70 documented in context-pressure.md.
+CONTEXT_THRESHOLD_DEFAULT = 70
 HARNESS_STATE_FILE = SQUIDSQUAD_DIR / ".harness-state.json"
 
 # #12244 P2 — crash-loop / session-limit backoff. A spawn that dies within
@@ -1395,7 +1399,112 @@ class HarnessState:
                 self.update_health()
             except Exception:
                 pass  # Don't crash poller on transient errors
+            # #13335 — event-mode context-threshold enforcement. Kept in its
+            # own try so a pressure-read fault never blocks liveness polling.
+            try:
+                self._enforce_context_pressure()
+            except Exception:
+                pass
             time.sleep(HEALTH_POLL_INTERVAL)
+
+    def _read_context_threshold(self):
+        """#13335 — resolve the context-pressure threshold (int %) from
+        config.md's ``Context Pressure / Threshold``. Falls back to
+        CONTEXT_THRESHOLD_DEFAULT when the field is absent or non-integer, so a
+        malformed config never disables enforcement or crashes the poller."""
+        try:
+            import config as _cfg
+            raw = _cfg.get_field("context-threshold")
+            if raw is None:
+                return CONTEXT_THRESHOLD_DEFAULT
+            return int(str(raw).strip())
+        except Exception:
+            return CONTEXT_THRESHOLD_DEFAULT
+
+    def _read_agent_pressure(self, role, agent):
+        """#13335 — read an agent's current context-pressure (int %) from its
+        own clone's ``.squidsquad/<role>/context-pressure`` (the file the
+        statusline writes each cycle). Returns ``None`` when the file is
+        absent, unreadable, or non-integer — treated as 'no signal', never
+        enforced against."""
+        clone_path = getattr(agent, "clone_path", None)
+        if not clone_path:
+            try:
+                clone_path = boot_remote._get_clone_path(role)
+            except Exception:
+                return None
+        try:
+            ctx_file = (
+                Path(clone_path) / ".squidsquad" / role / "context-pressure"
+            )
+            return int(ctx_file.read_text(encoding="utf-8").strip())
+        except (FileNotFoundError, OSError, ValueError):
+            return None
+
+    def _enforce_context_pressure(self):
+        """#13335 — the missing event-mode ACTOR for ``context-threshold``.
+
+        In event mode nothing runs ``cycle_post.py`` per event, so the
+        loop-mode exit-42 pressure path never fires and agents run unbounded
+        past the threshold until Claude Code's lossy auto-compact or a human
+        intervenes. This closes that gap: the 5s health poller reads each
+        running agent's context-pressure and, when it reaches the configured
+        threshold, flips ``intent=restarting`` — reusing the existing
+        graceful-restart machinery verbatim (the agent checkpoints
+        ``working-state.md`` at its next task boundary per event-mode-contract
+        Case E; the 60s force-kill net + auto-reboot then respawn it with a
+        fresh context window). This makes ``event-mode-contract.md``'s
+        long-claimed "the harness initiates a restart via the restarting
+        intent" behavior real.
+
+        Guards / fail-open:
+        - Skipped entirely under ``_NO_AUTO_REBOOT`` — with no respawn path a
+          restart would only tear down a working agent (mirrors
+          ``restart_agent``'s refusal under the same flag).
+        - Only a fully-booted, ``running`` agent whose intent is ``running`` is
+          a candidate; an agent already ``stopping``/``restarting`` is skipped
+          so a repeat trip never re-arms the 60s force-kill window.
+        - Every read is fail-open: a bad clone/threshold/pressure read for one
+          agent yields 'no signal' and is skipped, never crashing the poller or
+          affecting other agents.
+        """
+        if _NO_AUTO_REBOOT:
+            return
+        threshold = self._read_context_threshold()
+        try:
+            all_roles = boot_remote._get_all_roles()
+        except Exception:
+            return
+
+        changed = False
+        with self._lock:
+            for role in all_roles:
+                agent = self.agents.get(role)
+                if agent is None:
+                    continue
+                if agent.intent != AgentState.INTENT_RUNNING:
+                    continue
+                if not agent.bootup_complete or agent.status != "running":
+                    continue
+                pressure = self._read_agent_pressure(role, agent)
+                if pressure is None or pressure < threshold:
+                    continue
+                # Threshold reached — flip intent=restarting, mirroring
+                # restart_agent's internal transition. intent_set_at is stamped
+                # once here so the 60s force-kill window is measured from the
+                # trip; bootup_complete=False gates event flow until the
+                # respawned process re-asserts it.
+                agent.intent = AgentState.INTENT_RESTARTING
+                agent.intent_set_at = time.time()
+                agent.bootup_complete = False
+                _log(
+                    f"{role}: context pressure {pressure}% >= threshold "
+                    f"{threshold}% — intent=restarting (checkpoint + fresh-"
+                    f"context respawn, #13335)"
+                )
+                changed = True
+        if changed:
+            self.save_state()
 
     # ----- PRD-E E3 (#10682): L4-write file-watch lifecycle -------------
 

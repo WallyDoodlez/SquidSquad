@@ -23,3 +23,5 @@ If context usage **exceeds the threshold**:
 4. **Continue the cycle normally.** Claude Code automatically compresses prior messages as context approaches limits, so the conversation can keep going indefinitely. At cycle end, `cycle_post.py` detects the exceeded threshold from `cycle-input.json` and exits with code 42, triggering a harness respawn.
 
 If context usage is below threshold, continue normally.
+
+> **Loop mode vs event mode (#13335).** The check above is the **loop-mode** path: it runs as Step 1b of each cycle and the actor that respawns you is `cycle_post.py` exit-42 at cycle end. In **event mode** there is no per-event `cycle_post.py`, so this step does not run — instead the **harness health poller** enforces the same `context-threshold` for you: roughly every 5 seconds it reads your `.squidsquad/[ROLE]/context-pressure` and, at/over threshold, flips your `intent` to `restarting` so you checkpoint at a task boundary and respawn with a fresh context window (see [[event-mode-contract]]). Keep `working-state.md` fresh at every task boundary either way — that checkpoint is what survives the respawn.
