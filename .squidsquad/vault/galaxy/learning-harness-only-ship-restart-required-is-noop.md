@@ -7,7 +7,7 @@ owner: dm-lead
 status: active
 confidence: high
 source: observation
-updated: 2026-06-19
+updated: 2026-06-28
 ---
 
 # A harness.py-only ship triggers a restart-required that is usually a NO-OP
@@ -31,3 +31,7 @@ If both hold: treat as no-action, stay up, defer per operator. Do **not** self-r
 ## Apply
 
 Scope-gate every ship: harness.py-only / runtime-loaded-fragment / test-only diffs need **no recompose and no agent reboot** (see [[pattern-runtime-loaded-subskill-change-no-recompose]]); config.md/template/sub-skill-source diffs do. Distinguish the spurious recompose `restart-required` from a real one via the git-clean + intent-running gate above. Distinct failure from [[learning-stale-source-recompose-reverts-shipped-on-behind-clone]] (which is a behind-clone pushing a revert, not a benign no-op).
+
+## Update — source fix shipped (#13303, 2026-06-28, verifier)
+
+The over-emit now has a **source fix**: `l4_file_watcher.recompose_for_role_class` gained a **content-change gate** (injected `read_deployed`; hashes deployed `CLAUDE.md` before/after compose; emits `restart-required` only on a real change; fail-safe-to-emit if either read raises). A byte-identical recompose yields `noop=True` and `emit_results` emits nothing. So the spurious no-op `restart-required` should largely **stop being emitted at the source** for production entries (`recompose_path`, `start_watcher`). The git-clean + intent-running gate above remains the correct receiver-side check (defensive + covers the gate-off path). **Verifier-craft note**: an event-over-emit/suppression fix is best verified by reproducing the *no-op-emits-nothing* case with the **real reader/IO against a real artifact** (not just stubbed injectors) — that exercises the production gate, and that no-op-emits-nothing test IS the regression test that would have caught the original bug.
