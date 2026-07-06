@@ -81,3 +81,40 @@ Run on branch HEAD: see addendum below (run was in flight at verdict time; verdi
 ## Out-of-scope observations (not reblocking findings for #13335)
 
 - `.squidsquad/.harness-port` in this clone reads `8251` while the harness runs on `7373` (config + live /status agree on 7373) — a strict port-file-first boot probe falls back to polling mode falsely. Filed separately.
+
+---
+
+# ROUND 2 — 2026-07-06 19:19 — **PASS, zero gaps**
+
+**Scope**: TC-3 fix (commit e739ea8b3 on PR #13346) + no-regression. Everything else stood from round 1 per the rejection's "stands on re-verify" list.
+
+**Record-integrity note**: round-2 verification first completed at ~23:07Z (PR #13346 comment "verifier round-2 PASS", 2026-07-06T23:07:36Z) and the PR was merged via the auto-merge lane at 23:07:40Z (approve-review blocked by GitHub's same-author rule — verdict recorded as PR comment instead). The verifier session was terminated seconds later, before this file, the promoted test, the issue comment, and the status transition landed. This section is a **full re-execution of the evidence run against merged main HEAD `03ae419c7`** — not a transcription of the lost session's claims.
+
+## TC-3 re-verification (the round-1 defect)
+
+- `context-threshold: "70"` registered in config.py `_FIELD_DEFAULTS` (config.py:220; section/field mapping at config.py:89) — the #13162 verbose-mode precedent, exactly the required fix. An absent `## Context Pressure` section now resolves to 70 through the REAL `get_field`, no `sys.exit(1)`.
+- `_read_context_threshold` (harness.py:1410) additionally catches `(SystemExit, Exception)` — defense-in-depth against the exact BaseException class that killed the poller thread in the round-1 repro; docstring documents both layers.
+- `test_tc3_default_70_when_config_section_absent` (69 no-flip / 70 flips, real absent-section config.md, real get_field) — **PASSES as written**.
+
+## Runs (all on main HEAD 03ae419c7)
+
+| Suite | Result |
+|---|---|
+| QA real-chain suite `.squidsquad/qa/planning/TEST-13335-tests.py` (13 TCs) | **13/13 PASS** |
+| Worker suite `tests/test_13335_context_pressure_enforcement.py` (20 + 3 new real-chain regression) | **23/23 PASS** |
+| Promoted verifier suite `tests/test_feat_13335_context_threshold_realchain.py` | **13/13 PASS** |
+| Full static gate `run_tests.py static` | **5241 passed / 0 failures / 0 errors** |
+
+Promoted file = planning suite verbatim except `REPO_ROOT` resolution adapted to its `tests/` location (verified by diff).
+
+## AC walk delta vs round 1
+
+- AC2 (threshold from config, default 70): round-1 **FAIL → PASS** (TC-3 above).
+- AC4 caveat (mock-encoded `test_absent_field_defaults`): closed — worker added real-chain regression tests through the real `get_field` (absent-section → 70; configured 55 wins; SystemExit-escape lock).
+- AC1/AC3/AC5: unchanged from round 1 (PASS; enforcement logic, docs+CQ 4/4, guards).
+
+**Verdict: PASS — zero gaps. #13335 → pending-ship.**
+
+## Pipeline anomaly (flagged to PM, not a #13335 gap)
+
+PR #13346's body carried `Fixes #13335`, so the auto-merge lane's squash-merge **auto-closed the issue at merge time (23:07:41Z)** — before any verifier verdict existed on the issue record and bypassing the pending-ship → shipped DM gate. Combined with the verifier session kill at ~23:08Z, the forge briefly showed a CLOSED high-sev issue with `status:pending-test` and no recorded verdict — indistinguishable from an unverified ship. Verification happened (twice, now); the record gap is repaired by this section + the issue comment + the transition.

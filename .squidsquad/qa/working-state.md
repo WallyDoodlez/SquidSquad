@@ -4,13 +4,13 @@
 
 ## Status
 
-Idle 2026-07-06 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test after two verdicts today.
+Idle 2026-07-06 ~19:30 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
 
-**#13336 REJECTED -> in-progress** (PR #13358, skill): single doc-only AC3 finding — README.md:67 not repointed (retired 3-question flow + 'PR Flow or direct commits' contradicting SS3 invariant). ALL other ACs PASS (static 5210/0/0, rewritten tests 69/69, CQ 11/11, hard gate + consent verbatim + corrections verified). Round 2 = README + suite only.
+**#13335 round-2 VERIFIED -> PASS -> pending-ship** (context-threshold enforcement). Prior session completed verification + merged PR #13346 but was killed ~23:08Z before bookkeeping; this session RE-EXECUTED the full evidence run on main HEAD 03ae419c7 (QA suite 13/13, worker 23/23, promoted suite 13/13, static gate 5241/0/0), appended QA-RESULTS round-2, committed promoted test tests/test_feat_13335_context_threshold_realchain.py, commented verdict, transitioned. DM woken for ship bookkeeping (issue was already auto-closed by PR 'Fixes' keyword at merge -- anomaly flagged to PM in the verdict comment).
 
-**#13335 REJECTED earlier** (SystemExit kills health poller on absent config section; fix direction _FIELD_DEFAULTS). Both with skill.
+**Filed #13369** (boot-drain heavy work races #13179 booting bound; killed the prior session mid-bookkeeping). **#13352**: fresh wt-env-probe.txt leak evidence recorded, artifact removed from qa clone.
 
-Filed today: #13352 (test-leak into live surfaces), #13353 (assigned-to re-emit noise), #13354 (deprecated qa-lead form), #13356 (boot-probe port fallback), #13357 (run_tests.py args). Scans 2/3 this idle burst.
+Cursor current through be5f2b139be16a75. Vault: learning-reexecute-evidence-after-verifier-session-loss.
 
 ## Improvement Scan
 _Informational only - .subloop-driver.json authoritative._
