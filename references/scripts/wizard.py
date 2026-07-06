@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """SquidSquad install wizard — mechanical helpers for the installer agent.
 
-The wizard is a prose runbook that a Claude session (the "installer agent",
-Q-new21) follows interactively. This script owns the *mechanical* pieces:
-prerequisite checks, re-run detection, repo metadata probing, etc. Anything
-that should be testable without talking to an LLM lives here. The intent
-classifier, the setup_requirements walker, and the natural conversation
-live in the prose runbook and use Claude's judgement.
+The installer is a Claude session that follows the operating manual at
+docs/INSTALLER-RUNTIME.md interactively. This script owns the *mechanical*
+pieces: prerequisite checks, re-run detection, repo metadata probing, etc.
+Anything that should be testable without talking to an LLM lives here. The
+setup_requirements walker guidance and the natural conversation live in the
+manual (its §9 helper playbook) and use Claude's judgement.
 
 Commands:
     python scripts/wizard.py check-gh              # Step 0
@@ -740,7 +740,7 @@ def detect_existing_install(base_dir=None):
         default_action: str — "abort" — the safe default on the 3-way prompt
 
     This helper intentionally does NOT prompt the user — it reports state
-    and lets the prose runbook drive the interactive 3-way prompt.
+    and lets the installer manual drive the interactive 3-way prompt.
     """
     if base_dir is None:
         base_dir = REPO_ROOT
@@ -1986,9 +1986,9 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             build_config_md) or if an agent references a role identity
             that does not exist under `references/roles/`.
         FileExistsError — if `.squidsquad/` exists and `overwrite_existing`
-            is False. The caller (the prose runbook) is responsible for
-            the re-run detection + 3-way prompt, so this should only fire
-            as a safety net.
+            is False. The caller (the installer, per its manual) is
+            responsible for the re-run detection + 3-way prompt, so this
+            should only fire as a safety net.
     """
     # Delegate validation of spec shape to build_config_md so we have
     # a single source of truth for required sections.
