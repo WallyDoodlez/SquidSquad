@@ -1411,14 +1411,22 @@ class HarnessState:
         """#13335 — resolve the context-pressure threshold (int %) from
         config.md's ``Context Pressure / Threshold``. Falls back to
         CONTEXT_THRESHOLD_DEFAULT when the field is absent or non-integer, so a
-        malformed config never disables enforcement or crashes the poller."""
+        malformed config never disables enforcement or crashes the poller.
+
+        The absent-section case is handled at the source: ``context-threshold``
+        is registered in config.py's ``_FIELD_DEFAULTS`` (QA TC-3 — an
+        unregistered field makes ``get_field`` ``sys.exit(1)``, and SystemExit
+        is a BaseException that escapes ``except Exception`` and silently kills
+        the whole health poller). The SystemExit catch below is defense in
+        depth for that same class, should a config.py regression ever
+        reintroduce an exit path."""
         try:
             import config as _cfg
             raw = _cfg.get_field("context-threshold")
             if raw is None:
                 return CONTEXT_THRESHOLD_DEFAULT
             return int(str(raw).strip())
-        except Exception:
+        except (SystemExit, Exception):
             return CONTEXT_THRESHOLD_DEFAULT
 
     def _read_agent_pressure(self, role, agent):

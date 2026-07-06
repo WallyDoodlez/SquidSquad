@@ -179,6 +179,52 @@ class TestReadContextThreshold13335(unittest.TestCase):
         with patch("config.get_field", side_effect=RuntimeError("boom")):
             self.assertEqual(self._read(), harness.CONTEXT_THRESHOLD_DEFAULT)
 
+    # ------------------------------------------------------------------
+    # QA TC-3 regression (#13335 verifier bounce): the tests above patch
+    # config.get_field — the defect lived below that seam. These run the
+    # REAL config.get_field against a real config.md.
+    # ------------------------------------------------------------------
+
+    def test_tc3_real_get_field_absent_section_defaults_no_systemexit(self):
+        """A config.md with NO `## Context Pressure` section must resolve to
+        the registered default 70 via the real get_field — not sys.exit(1)
+        (SystemExit escaped except-Exception and silently killed the whole
+        health poller on its first tick)."""
+        import tempfile
+        import config as config_mod
+        with tempfile.TemporaryDirectory() as td:
+            cfg = Path(td) / "config.md"
+            cfg.write_text(
+                "# SquidSquad Config\n\n## Project\n\n- **Name**: X\n",
+                encoding="utf-8",
+            )
+            with patch.object(config_mod, "CONFIG_PATH", cfg):
+                # (a) the real get_field returns the registered default…
+                self.assertEqual(config_mod.get_field("context-threshold"), "70")
+                # (b) …and the reader resolves it without dying.
+                self.assertEqual(self._read(), 70)
+
+    def test_tc3_real_get_field_present_section_wins(self):
+        """The registered default must NOT shadow a configured value."""
+        import tempfile
+        import config as config_mod
+        with tempfile.TemporaryDirectory() as td:
+            cfg = Path(td) / "config.md"
+            cfg.write_text(
+                "# SquidSquad Config\n\n## Context Pressure\n\n"
+                "- **Threshold**: 55\n",
+                encoding="utf-8",
+            )
+            with patch.object(config_mod, "CONFIG_PATH", cfg):
+                self.assertEqual(self._read(), 55)
+
+    def test_tc3_systemexit_defense_in_depth(self):
+        """Even if a config.py regression reintroduces an exit path, the
+        reader's fail-open must swallow SystemExit (the exact BaseException
+        class that escaped except-Exception in the QA repro)."""
+        with patch("config.get_field", side_effect=SystemExit(1)):
+            self.assertEqual(self._read(), harness.CONTEXT_THRESHOLD_DEFAULT)
+
 
 class TestReadAgentPressure13335(unittest.TestCase):
     def _write(self, tmp, role, value):
