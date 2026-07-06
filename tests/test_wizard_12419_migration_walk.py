@@ -2,7 +2,8 @@
 
 Covers the wizard.py code half — version reads, chain selection, stamping, and
 the aggregate plan. The LLM-driven three-gate application (DeepSeek audit /
-mini-CQ / compose dry-run) lives in the WIZARD.md runbook and is not unit-tested
+mini-CQ / compose dry-run) lives in the installer manual (docs/INSTALLER-RUNTIME.md
+§9 helper playbook, #13336 — was WIZARD.md) and is not unit-tested
 here; these tests pin the deterministic *what to apply*, not the *how*.
 """
 

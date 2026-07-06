@@ -1,15 +1,17 @@
 """Static consistency checks for the npx install flow (#328 Phase G.4).
 
-After Phase G.3 shipped the prose runbook at `references/wizard/WIZARD.md`,
-Phase G.4 rewires three places to point at it instead of the legacy
-inline setup in SKILL.md:
+The installer session follows the operating manual at
+`docs/INSTALLER-RUNTIME.md` (#13336 — it replaced the retired
+`references/wizard/WIZARD.md` runbook). Three places must point at it
+instead of reimplementing setup inline:
 
   1. `SKILL.md` — its "Setup Instructions" section is a thin pointer to
-     the runbook (not the full step-by-step content it used to contain).
+     the manual (not the full step-by-step content it used to contain).
   2. `packages/cli/index.js` — `npx squidsquad` must fetch BOTH SKILL.md
-     and the wizard runbook, and commit both as seed files.
+     and the manual (via the installer-files manifest), and commit them
+     as seed files.
   3. `.claude/commands/squidsquad-setup.md` (seeded by the CLI) — the
-     slash command prose must point at the runbook, not at SKILL.md's
+     slash command prose must point at the manual, not at SKILL.md's
      Setup Instructions section.
 
 These tests enforce the three-way consistency at static-analysis time so
@@ -25,7 +27,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILL_MD = REPO_ROOT / "SKILL.md"
-WIZARD_MD = REPO_ROOT / "references" / "wizard" / "WIZARD.md"
+INSTALLER_MANUAL = REPO_ROOT / "docs" / "INSTALLER-RUNTIME.md"
 CLI_JS = REPO_ROOT / "packages" / "cli" / "index.js"
 
 # #12861: the sub-skill marker-completeness gate reuses the SAME catalog
@@ -65,12 +67,15 @@ class TestSkillMdSetupInstructions:
     def test_setup_section_present(self, skill_md):
         assert "## Setup Instructions" in skill_md
 
-    def test_setup_section_points_at_runbook(self, skill_md):
-        """The section body must reference the canonical runbook path."""
+    def test_setup_section_points_at_manual(self, skill_md):
+        """The section body must reference the canonical manual path."""
         setup = _extract_section(skill_md, "## Setup Instructions", "## Upgrade Instructions")
-        assert "references/wizard/WIZARD.md" in setup, (
+        assert "docs/INSTALLER-RUNTIME.md" in setup, (
             "SKILL.md Setup Instructions section must reference the "
-            "canonical install wizard runbook at references/wizard/WIZARD.md"
+            "installer's operating manual at docs/INSTALLER-RUNTIME.md"
+        )
+        assert "references/wizard/WIZARD.md" not in setup, (
+            "SKILL.md still points at the retired WIZARD.md runbook (#13336)"
         )
 
     def test_setup_section_is_concise(self, skill_md):
@@ -104,11 +109,11 @@ class TestSkillMdSetupInstructions:
             f"headings: {stragglers}"
         )
 
-    def test_runbook_referenced_in_setup_exists(self, skill_md):
-        """Every `references/...` path in the Setup block must exist."""
+    def test_paths_referenced_in_setup_exist(self, skill_md):
+        """Every `references/...` / `docs/...` path in the Setup block must exist."""
         setup = _extract_section(skill_md, "## Setup Instructions", "## Upgrade Instructions")
         refs = re.findall(
-            r"`(references/(?:wizard|scripts|roles|tools|presets)[A-Za-z0-9_./<>-]*)`",
+            r"`((?:references/(?:wizard|scripts|roles|tools|presets)|docs/)[A-Za-z0-9_./<>-]*)`",
             setup,
         )
         for ref in refs:
@@ -172,11 +177,15 @@ class TestCliIndexJs:
             "infrastructure fetched from the manifest)"
         )
 
-    def test_slash_command_points_at_runbook_not_skill_md(self, cli_js):
-        """The setup slash command prose must target WIZARD.md, not SKILL.md."""
+    def test_slash_command_points_at_manual_not_skill_md(self, cli_js):
+        """The setup slash command prose must target the manual, not SKILL.md."""
         cmd = _extract_setup_command_prose(cli_js)
-        assert "references/wizard/WIZARD.md" in cmd, (
-            "slash command must instruct Claude to read the wizard runbook"
+        assert "docs/INSTALLER-RUNTIME.md" in cmd, (
+            "slash command must instruct Claude to read the installer's "
+            "operating manual (docs/INSTALLER-RUNTIME.md)"
+        )
+        assert "references/wizard/WIZARD.md" not in cmd, (
+            "slash command still points at the retired WIZARD.md runbook (#13336)"
         )
         # And NOT the legacy "read SKILL.md's Setup Instructions" prose
         assert '"Setup Instructions" section' not in cmd, (
@@ -190,11 +199,11 @@ class TestCliIndexJs:
         assert "installer agent" in cmd.lower()
         assert "ephemeral" in cmd.lower()
 
-    def test_slash_command_mentions_nothing_before_step_7(self, cli_js):
-        """The 'no writes before Step 7' invariant must be in the slash command."""
+    def test_slash_command_mentions_nothing_before_apply(self, cli_js):
+        """The 'no writes before step 7 (Apply)' invariant must be in the slash command."""
         cmd = _extract_setup_command_prose(cli_js)
-        assert re.search(r"Step\s*7", cmd)
-        assert re.search(r"(abort|no\s+trace|nothing\s+touches)", cmd, re.IGNORECASE)
+        assert re.search(r"step\s*7", cmd, re.IGNORECASE)
+        assert re.search(r"(abort|no\s+trace|zero\s+trace|nothing\s+touches)", cmd, re.IGNORECASE)
 
     def test_cli_still_pre_checks_gh_python_claude(self, cli_js):
         """Existing prereq checks must not regress."""
@@ -206,21 +215,28 @@ class TestCliIndexJs:
 
 
 # ---------------------------------------------------------------------------
-# WIZARD.md — the target must exist at the canonical path
+# INSTALLER-RUNTIME.md — the target must exist at the canonical path
 # ---------------------------------------------------------------------------
 
 
-class TestWizardRunbookExists:
-    def test_runbook_file_exists(self):
-        assert WIZARD_MD.is_file(), (
-            f"Canonical install wizard runbook missing at {WIZARD_MD}"
+class TestInstallerManualExists:
+    def test_manual_file_exists(self):
+        assert INSTALLER_MANUAL.is_file(), (
+            f"Installer operating manual missing at {INSTALLER_MANUAL}"
         )
 
-    def test_runbook_is_non_trivial(self):
-        content = WIZARD_MD.read_text(encoding="utf-8")
+    def test_manual_is_non_trivial(self):
+        content = INSTALLER_MANUAL.read_text(encoding="utf-8")
         # Must be at least 2KB of actual content
         assert len(content) > 2000, (
-            f"WIZARD.md is suspiciously short ({len(content)} bytes)"
+            f"INSTALLER-RUNTIME.md is suspiciously short ({len(content)} bytes)"
+        )
+
+    def test_retired_runbook_stays_deleted(self):
+        """#13336: WIZARD.md must not silently come back."""
+        assert not (REPO_ROOT / "references" / "wizard").exists(), (
+            "references/wizard/ was retired in #13336 — the manual is "
+            "docs/INSTALLER-RUNTIME.md; do not resurrect the runbook"
         )
 
 
@@ -252,7 +268,7 @@ class TestInstallerFileManifest:
         """Key files the wizard cannot function without."""
         for critical in (
             "SKILL.md",
-            "references/wizard/WIZARD.md",
+            "docs/INSTALLER-RUNTIME.md",
             "references/scripts/wizard.py",
             "references/scripts/manifest.py",
             "references/scripts/compose.py",

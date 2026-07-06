@@ -3,7 +3,8 @@ and provisioning (#11613, INSTALLER-ARCH §4.1).
 
 The model under test is gather-all -> present -> ONE consent -> provision ->
 re-verify. Detection and per-platform install dispatch are deterministic Python
-in wizard.py; the consent prompt itself lives in the WIZARD.md runbook and is
+in wizard.py; the consent prompt itself lives in the installer manual
+(docs/INSTALLER-RUNTIME.md §9 helper playbook, #13336 — was WIZARD.md) and is
 NOT exercised here. All environment probes (shutil.which, wizard._run,
 importlib.util.find_spec, platform.system) are stubbed — no test talks to the
 real gh CLI, pip, npm, or a real package manager.

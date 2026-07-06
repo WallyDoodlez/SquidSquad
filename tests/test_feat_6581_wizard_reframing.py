@@ -12,7 +12,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = REPO / "references" / "scripts"
-WIZARD_MD = REPO / "references" / "wizard" / "WIZARD.md"
+# #13336: WIZARD.md retired — the installer's operating manual (and the L4
+# qualitative-enrichment instruction TC-4 locks) is docs/INSTALLER-RUNTIME.md.
+INSTALLER_MANUAL = REPO / "docs" / "INSTALLER-RUNTIME.md"
 PRESETS_DIR = REPO / "references" / "presets"
 TESTS_DIR = REPO / "tests"
 
@@ -153,39 +155,42 @@ def test_tc_03_scaffold_install_writes_l4_files(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# TC-4: WIZARD.md runbook adds qualitative notes to L4 files (happy path)
+# TC-4: installer manual directs qualitative notes into L4 files (happy path)
 # ---------------------------------------------------------------------------
 
-def test_tc_04_wizard_md_l4_instructions():
-    """TC-4: WIZARD.md references .squidsquad/project/ L4 files and directs
-    the installer agent to add qualitative content (conventions, patterns)
+def test_tc_04_installer_manual_l4_instructions():
+    """TC-4: the installer manual (docs/INSTALLER-RUNTIME.md, #13336 — was
+    WIZARD.md) references .squidsquad/project/ L4 files and directs the
+    installer agent to add qualitative content (conventions, patterns)
     after the scaffold step completes."""
-    assert WIZARD_MD.exists(), f"WIZARD.md not found at {WIZARD_MD}"
+    assert INSTALLER_MANUAL.exists(), (
+        f"installer manual not found at {INSTALLER_MANUAL}"
+    )
 
-    content = WIZARD_MD.read_text(encoding="utf-8")
+    content = INSTALLER_MANUAL.read_text(encoding="utf-8")
 
     # Must reference .squidsquad/project/ or the L4 enrichment section
     assert ".squidsquad/project/" in content, (
-        "WIZARD.md must reference .squidsquad/project/ for L4 file instructions"
+        "the manual must reference .squidsquad/project/ for L4 file instructions"
     )
 
     # Must instruct the agent to add qualitative content (conventions/patterns)
     qualitative_keywords = ["qualitative", "conventions", "Conventions"]
     assert any(kw in content for kw in qualitative_keywords), (
-        "WIZARD.md must direct the installer agent to add qualitative content "
+        "the manual must direct the installer agent to add qualitative content "
         f"(e.g. 'qualitative', 'conventions'). Keywords checked: {qualitative_keywords}"
     )
 
     # Must distinguish between mechanical scaffold output and agent-added content
     # (the two authorship modes)
     assert "scaffold_install" in content or "scaffold" in content.lower(), (
-        "WIZARD.md must reference scaffold_install to distinguish the two "
+        "the manual must reference scaffold_install to distinguish the two "
         "authorship modes (mechanical vs. qualitative)"
     )
 
     # The enrichment section should reference the L4 files written by scaffold_install
     assert "shared-stack-details.md" in content or "project/" in content, (
-        "WIZARD.md must reference the L4 file that scaffold_install writes "
+        "the manual must reference the L4 file that scaffold_install writes "
         "(shared-stack-details.md or .squidsquad/project/)"
     )
 
