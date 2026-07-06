@@ -213,6 +213,11 @@ _FIELD_DEFAULTS = {
     # #13162 — Verbose Mode narration toggle. Shipped default OFF; graceful
     # default `no` so a config.md without the section reads as quiet (no sys.exit).
     "verbose-mode": "no",
+    # #13335 (QA TC-3) — context-pressure restart threshold. Graceful default 70
+    # so a config.md without the `## Context Pressure` section never sys.exit(1)s:
+    # SystemExit is a BaseException, so it would escape the harness health
+    # poller's except-Exception and silently kill the whole poller on first tick.
+    "context-threshold": "70",
 }
 
 

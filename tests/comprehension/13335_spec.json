@@ -1,0 +1,30 @@
+{
+  "issue": 13335,
+  "title": "Event-mode context-threshold enforcement — event-mode-contract + context-pressure comprehension",
+  "source_file": "references/sub-skills/common-events/event-mode-contract.md",
+  "section": "Always-On Rules — the 'Context pressure is enforced by the harness health poller (#13335)' bullet (cross-reads context-pressure.md's loop-mode-vs-event-mode note)",
+  "method": "Fresh agent given ONLY the event-mode-contract context-pressure bullet plus context-pressure.md's loop-mode/event-mode note. Answers must come from the text alone. Pass = zero misreads of (a) which actor enforces the threshold in event mode, (b) how the agent honors it and the idle/never-observed fallback, (c) what survives the respawn; any misread = clarity gap → reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You are running in EVENT mode and your context-pressure reaches the threshold. What actor makes you restart — do you run cycle_post.py, or does something else act? And how does that actor signal the restart?",
+      "expected": "The harness HEALTH POLLER acts (roughly every 5s it reads your context-pressure and, at/over context-threshold, flips your intent to `restarting`). You do NOT run cycle_post.py in event mode — cycle_post.py exit-42 is the LOOP-mode actor. No `stop-requested` event is emitted; the signal is the intent flip itself."
+    },
+    {
+      "id": "CQ2",
+      "q": "The harness has flipped your intent to `restarting` for context pressure. What do you do — and what happens if you are idle and never notice the flip?",
+      "expected": "Honor it at a task boundary: checkpoint working-state.md and halt (cease output / end your turn) — you cannot self-`/quit`. If you are idle or never observe the flip, the harness's 60-second force-kill net terminates the process anyway. Either path ends in a respawn."
+    },
+    {
+      "id": "CQ3",
+      "q": "After the pressure-driven restart, what state survives into the respawned session, and what is the benefit over doing nothing?",
+      "expected": "You respawn with a FRESH context window and resume from your checkpointed working-state.md. The benefit: it pre-empts Claude Code's lossy auto-compact (and unbounded growth), so keeping working-state fresh at every task boundary is what preserves your progress across the respawn."
+    },
+    {
+      "id": "CQ4",
+      "q": "Where does the threshold value come from, and what is its default?",
+      "expected": "config.md's `Context Pressure / Threshold` field (short name context-threshold); default 70."
+    }
+  ]
+}
