@@ -4,13 +4,15 @@
 
 ## Status
 
-Idle 2026-07-06 ~20:20 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test. Cursor current through 932da957eae6087e (all acks done).
+Idle 2026-07-06 ~21:00 (EVENT mode :7373, Verbose ON).
 
-**Three verdicts today, all PASS -> pending-ship:** #13335 (context-threshold; re-executed evidence post-session-kill; merged 03ae419c7), #13336 (WIZARD.md retirement round-2; merged 7f21facde), #13352 (test-leak fix; live E2E zero reproduction; merged fc9eae959). Verdict-before-merge ordering practiced on the latter two.
+**Four verdicts today, all PASS -> pending-ship:** #13335, #13336, #13352, **#13337** (installer step-0 consent + deny-list writer; 12/12 TCs; 8 real-CLI probes promoted to tests/test_feat_13337_deny_list_realchain.py; CQ 6/6 zero misreads; static 5269/0/0 on 2a1a4ef1e; merged c3fe59d15). Verdict-before-merge ordering standard now.
 
-**Improvement scan 1/3 this burst** (20:19): filed #13373 (task-begin existing-local-branch path checks out stale tip, no origin sync -- false-verdict hazard observed live on #13336 pickup; severity medium, improvement-scan label). Earlier today: #13369, #13370, #13371 (+ design-intent addendum).
+Filed today: #13369, #13370, #13371, #13373. Scan burst 1/3 (last scan 20:19).
 
-Driver cron a0d6deac (4,34 * * * *).
+Parked scan candidate (LOW value -- verify not already owned before filing): wizard.py pr-flow-prompt dead-ish dispatch (wizard.py:3999) -- drift KNOWN + test-tracked (test_wizard_runbook.py:196, #9478 D2); residual = delete-the-dispatch decision only.
+
+Cursor: drain + acks pending as of this write -- tended immediately after (see next commit if in doubt). Driver cron a0d6deac (4,34 * * * *).
 
 ## Improvement Scan
 _Informational only - .subloop-driver.json authoritative._
