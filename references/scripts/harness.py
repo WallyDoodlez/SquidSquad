@@ -2370,6 +2370,49 @@ def _cleanup_legacy_sentinels(clone_paths):
     return removed, errors
 
 
+def _distribute_port_to_clones(port) -> int | None:
+    """Write ``port`` into each agent clone's ``.squidsquad/.harness-port``.
+
+    Production-only (#13352): distribution runs ONLY when this harness's
+    ``SQUIDSQUAD_DIR`` is the repo's live ``.squidsquad`` — i.e. the real
+    production singleton. An isolated harness (a test's ``real_harness``
+    with ``SQUIDSQUAD_DIR`` pointing at a tmpdir) must never write its
+    ephemeral port into live clones: ``boot_remote._parse_local_config()``
+    reads the repo-scoped ``.local-config`` regardless of isolation, so
+    without this guard a test harness on an ephemeral port poisons every
+    live clone's port file and strands those agents in polling fallback
+    (the observed ``.harness-port=8251`` leak; same failure family as
+    #12820's second-instance refusal).
+
+    Returns the clone count on distribution, or ``None`` when skipped
+    because this harness is isolated. Exceptions propagate to the caller
+    (which logs a warning), matching the previous inline behavior.
+    """
+    live_squid = REPO_ROOT / ".squidsquad"
+    try:
+        is_production = SQUIDSQUAD_DIR.resolve() == live_squid.resolve()
+    except OSError:
+        is_production = False
+    if not is_production:
+        _log(
+            "Isolated SQUIDSQUAD_DIR — skipping clone port distribution "
+            "(#13352: test harnesses must not poison live clone port files)"
+        )
+        return None
+    clone_paths = boot_remote._parse_local_config()
+    for role, clone_root in clone_paths.items():
+        clone_squid = Path(clone_root) / ".squidsquad"
+        if clone_squid.is_dir() and Path(clone_root).resolve() != REPO_ROOT.resolve():
+            clone_port_file = clone_squid / ".harness-port"
+            try:
+                clone_tmp = clone_port_file.with_suffix(".tmp")
+                clone_tmp.write_text(str(port), encoding="utf-8")
+                clone_tmp.replace(clone_port_file)
+            except OSError:
+                pass
+    return len(clone_paths)
+
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -2431,18 +2474,9 @@ async def lifespan(app: FastAPI):
     def _deferred_init():
         # Write port file to each agent clone's .squidsquad/ directory (#4709 TC-7)
         try:
-            clone_paths = boot_remote._parse_local_config()
-            for role, clone_root in clone_paths.items():
-                clone_squid = Path(clone_root) / ".squidsquad"
-                if clone_squid.is_dir() and Path(clone_root).resolve() != REPO_ROOT.resolve():
-                    clone_port_file = clone_squid / ".harness-port"
-                    try:
-                        clone_tmp = clone_port_file.with_suffix(".tmp")
-                        clone_tmp.write_text(str(state.port), encoding="utf-8")
-                        clone_tmp.replace(clone_port_file)
-                    except OSError:
-                        pass
-            _log(f"Port file distributed to {len(clone_paths)} clone(s)")
+            distributed = _distribute_port_to_clones(state.port)
+            if distributed is not None:
+                _log(f"Port file distributed to {distributed} clone(s)")
         except (SystemExit, Exception) as e:
             _log(f"WARNING: Could not distribute port to clones: {e}")
 
