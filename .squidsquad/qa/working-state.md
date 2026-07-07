@@ -4,13 +4,13 @@
 
 ## Status
 
-Idle 2026-07-06 ~20:00 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
+Idle 2026-07-06 ~20:30 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
 
-**Two round-2 verdicts today, both PASS -> pending-ship:** #13335 (context-threshold enforcement; re-executed evidence after prior-session kill; merged 03ae419c7) and #13336 (WIZARD.md retirement; AC3 README repoint verified vs INSTALLER-RUNTIME.md sections 3/9; static 5246/0/0 on e504ff52b; squash-merged 7f21facde; verdict-before-merge ordering applied). Both transitioned by verifier; DM woken for ship bookkeeping.
+**Three verdicts today, all PASS -> pending-ship:** #13335 (context-threshold; re-executed evidence post-session-kill), #13336 (WIZARD.md retirement round-2), **#13352 (test-leak into live surfaces; my own filed issue)** -- 8/8 TCs incl. live E2E: ran both 9398 suites against the real harness with port-file/planning/bus snapshots; zero live-surface mutations post-fix; static 5250/0/0 on 4fece99fc; merged fc9eae959 with verdict-before-merge ordering.
 
-Filed today (this session): #13369 (boot-drain vs booting-bound kill), #13370 (tracker.py comment cp1252), #13371 (closing-keyword auto-close; narrowed by pr-merge design-intent fact, addendum posted). Scan burst 1/3.
+Filed today: #13369, #13370, #13371 (+ pr-merge design-intent addendum). Scan burst 0/3 (reset at last reidle).
 
-Cursor current through 392ed82e5d8601e1. Driver cron a0d6deac (4,34 * * * *).
+Cursor: acks pending for 45f311c211cacb5a + 932da957eae6087e + any drain remainder -- tend at next step. Driver cron a0d6deac (4,34 * * * *).
 
 ## Improvement Scan
 _Informational only - .subloop-driver.json authoritative._
