@@ -80,16 +80,21 @@ class TestEnvWithGhShimIsolation(unittest.TestCase):
     def test_subprocess_port_discovery_returns_none(self):
         """End-to-end: an event_bus in a subprocess under the shim env
         discovers NO harness port — so every emit is a silent no-op
-        (the exact mechanism that kept fake 87654 events off the bus)."""
+        (the exact mechanism that kept fake 87654 events off the bus).
+
+        The scripts path travels via an env var, not interpolated into
+        the ``-c`` literal — a repo path containing a quote would
+        otherwise break the inline script."""
         env = ems.env_with_gh_shim()
+        env["_SQ_PROBE_SCRIPTS"] = str(REPO_ROOT / "references" / "scripts")
         proc = subprocess.run(
             [
                 sys.executable,
                 "-c",
                 (
-                    "import sys; sys.path.insert(0, r'"
-                    + str(REPO_ROOT / "references" / "scripts")
-                    + "'); import event_bus; "
+                    "import os, sys; "
+                    "sys.path.insert(0, os.environ['_SQ_PROBE_SCRIPTS']); "
+                    "import event_bus; "
                     "print(event_bus._discover_port())"
                 ),
             ],
@@ -142,19 +147,29 @@ class TestHarnessClonePortDistributionGuard(unittest.TestCase):
 
     def test_production_harness_never_writes_own_repo_root(self):
         """The pre-existing self-exclusion still holds after the refactor:
-        a clone entry pointing at REPO_ROOT itself is skipped."""
-        with patch.object(
-                 harness, "SQUIDSQUAD_DIR", REPO_ROOT / ".squidsquad"), \
-             patch.object(
-                 harness.boot_remote, "_parse_local_config",
-                 return_value={"skill": str(REPO_ROOT)},
-             ), \
-             patch.object(Path, "write_text",
-                          side_effect=AssertionError(
-                              "must not write into own REPO_ROOT"
-                          )):
-            result = harness._distribute_port_to_clones(7373)
-        self.assertEqual(result, 1)
+        a clone entry pointing at REPO_ROOT itself is skipped.
+
+        Uses a synthetic repo root (with a real ``.squidsquad`` dir) so
+        the test exercises the self-exclusion branch specifically —
+        pinning it to the checkout's live ``.squidsquad`` would pass
+        vacuously on a layout where that dir is absent (``is_dir()``
+        short-circuits before the exclusion check)."""
+        with tempfile.TemporaryDirectory(prefix="fake-repo-") as tmp:
+            fake_repo = Path(tmp) / "repo"
+            (fake_repo / ".squidsquad").mkdir(parents=True)
+            with patch.object(harness, "REPO_ROOT", fake_repo), \
+                 patch.object(
+                     harness, "SQUIDSQUAD_DIR", fake_repo / ".squidsquad"), \
+                 patch.object(
+                     harness.boot_remote, "_parse_local_config",
+                     return_value={"skill": str(fake_repo)},
+                 ), \
+                 patch.object(Path, "write_text",
+                              side_effect=AssertionError(
+                                  "must not write into own REPO_ROOT"
+                              )):
+                result = harness._distribute_port_to_clones(7373)
+            self.assertEqual(result, 1)
 
 
 class TestExperimentScratchPathsStayOutOfClones(unittest.TestCase):

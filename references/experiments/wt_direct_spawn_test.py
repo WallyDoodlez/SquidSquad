@@ -94,15 +94,20 @@ def test_env_propagation() -> dict:
 
     sentinel_value = f"PROPAGATED-{int(time.time())}"
 
-    # Set env var in our subprocess's env
+    # Set env var in our subprocess's env. The probe path travels as an
+    # env var too (expanded by cmd.exe inside the tab) so temp paths with
+    # spaces/quotes never touch the wt/list2cmdline quoting layers —
+    # embedding the literal path in the command line breaks when the
+    # Windows username contains a space.
     env = os.environ.copy()
     env[SENTINEL_ENV_VAR] = sentinel_value
+    env["_WTE_OUT_FILE"] = str(out_file)
 
     wt_argv = [
         wt, "new-tab",
         "--title", "env-probe",
         "cmd.exe", "/c",
-        f'echo %{SENTINEL_ENV_VAR}% > "{out_file}"',
+        f'echo %{SENTINEL_ENV_VAR}% > "%_WTE_OUT_FILE%"',
     ]
     print(f"  spawning: wt new-tab cmd /c \"echo %{SENTINEL_ENV_VAR}% > <file>\"")
     print(f"  parent env {SENTINEL_ENV_VAR}={sentinel_value}")
