@@ -1,0 +1,40 @@
+{
+  "issue": 13337,
+  "title": "Step-0 consent + deny-list merge-writer — INSTALLER-RUNTIME.md §4 step 0 / §9 Step 0 comprehension",
+  "source_file": "docs/INSTALLER-RUNTIME.md",
+  "section": "§4 step 0 + § Consent wording — verbatim + §9 Step 0 — Consent & deny list + §9 Write discipline",
+  "method": "Fresh agent given ONLY the named sections (§4 step 0, § Consent wording, §9 Write discipline, §9 Step 0), no other context. Answers must come from the text alone. Scenario framing: 'You are the installer agent at the very start of an install.' Pass = the consent-and-deny contract survives with zero drift: verbatim script (no paraphrase), clean-stop on decline, deterministic preview via merge-deny-list --dry-run BEFORE any write, write only on confirmation, merge-never-clobber semantics, deny-never-ask, default deny-list always applied, and the step-0 write correctly understood as a sanctioned write-discipline exception. Any answer that paraphrases the consent script, writes before the preview+confirmation, uses ask rules, or claims nothing may be written before step 7 without naming the step-0 exception is a reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You are starting step 0. How do you word the consent question to the user, and what latitude do you have to adapt it to this project's domain?",
+      "expected": "None — zero latitude on the script itself. The consent text is presented VERBATIM from § Consent wording (the fixed script beginning 'Before we begin, one important thing about how your team works.'); consent moments are fixed scripts, identical across every install — the one place phrasing is not adaptive. The surrounding conversation is the agent's, the script is not; do not paraphrase."
+    },
+    {
+      "id": "CQ2",
+      "q": "The user answers No to the step-0 consent. What do you do, and what state does the project end in?",
+      "expected": "Stop cleanly and respect the boundary — SquidSquad cannot run without this permission model. Nothing has been written; the project is untouched (the decline path ends with zero trace, matching the script's own promise: 'we'll stop here, nothing is changed')."
+    },
+    {
+      "id": "CQ3",
+      "q": "The user says yes and names 'my secrets folder and .env'. Walk the exact mechanical sequence from that answer to the rules landing in the project — name the helper, the flags, what you show the user, and when the write happens.",
+      "expected": "Shape folder answers as globs (secrets/**). First PREVIEW: python references/scripts/wizard.py merge-deny-list --dry-run --path \"secrets/**\" --path \".env\" <project-root> — parse the JSON envelope and show the user exactly the `added` list (what would be appended after deduping; already-present rules appear in `skipped`). Only after their go-ahead, re-run the same command WITHOUT --dry-run to write. The write merges into the TARGET project's .claude/settings.json under permissions.deny. Each --path expands to Read/Edit/Write deny rules (the 'never read or change' promise); --rule passes an already-shaped rule verbatim."
+    },
+    {
+      "id": "CQ4",
+      "q": "The target project already has a .claude/settings.json with its own permissions.deny entries and unrelated keys. What does the merge do to them? And what happens if the file turns out to be malformed JSON?",
+      "expected": "Merge, never clobber: existing deny entries are preserved and deduped against (candidates already present are skipped, not duplicated); every unrelated key in the file is preserved; the file is created only if absent. Malformed JSON (or a non-object settings, or a non-list permissions.deny) → the helper fails closed with ok:false and an error, writing NOTHING — surface the error, help the user fix the file, and re-run; never hand-edit around the helper."
+    },
+    {
+      "id": "CQ5",
+      "q": "The user says 'nothing for now' when invited to name off-limits paths. Does anything still get written to permissions.deny, and why that rule type?",
+      "expected": "Yes — the minimal cross-platform default deny-list is always applied even with no user paths: most-catastrophic operations only (recursive force-deletes of the filesystem root and the home directory, plus their Windows equivalents); the user's paths would add on top. Rules are always `deny`, never `ask` — a deny rule silently blocks in every mode including bypass, while an ask rule would stall an autonomous agent mid-work."
+    },
+    {
+      "id": "CQ6",
+      "q": "The write discipline says nothing is written to the target project before step 7 — yet step 0 writes .claude/settings.json. Reconcile these, quoting the discipline's own terms.",
+      "expected": "The step-0 deny-list merge is one of the four sanctioned exceptions in §9 Write discipline, none of which touch the project's own files uninvited: it is previewed and approved before writing, the safety floor must be in force before anything else runs with elevated permissions, and the merge is additive — never a clobber. (The other exceptions: step-1 host-level tool provisioning, the ~/.squidsquad/ init outside the repo, and the gated migration walk.)"
+    }
+  ]
+}

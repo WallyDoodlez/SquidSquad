@@ -3264,6 +3264,170 @@ def cmd_restart_agents(args):
     return 0 if result.get("ok") else 1
 
 
+# ---------------------------------------------------------------------------
+# Step 0 — consent deny-list writer (#13337, INSTALLER-RUNTIME §4 step 0 + §9)
+# ---------------------------------------------------------------------------
+#
+# The consent conversation itself (verbatim script, capture of user deny
+# paths, inform-before-write) lives in the installer manual; this helper owns
+# the deterministic half: merging deny rules into the TARGET project's
+# .claude/settings.json under permissions.deny — create-if-absent, merge and
+# dedupe (never clobber), every unrelated key preserved, malformed JSON
+# fail-closed. `--dry-run` returns exactly what would be added so the
+# installer can show the user before anything is written.
+
+# Minimal cross-platform default deny-list — the most catastrophic operations
+# only (recursive force-deletes of the filesystem root and the home directory,
+# plus their Windows equivalents). The user's deny paths ADD to these.
+DEFAULT_DENY_RULES = (
+    "Bash(rm -rf /)",
+    "Bash(rm -rf /*)",
+    "Bash(rm -rf ~)",
+    "Bash(rm -rf ~/*)",
+    "Bash(rm -rf $HOME)",
+    "Bash(rm -rf $HOME/*)",
+    "Bash(rd /s /q C:\\)",
+    "Bash(Remove-Item -Recurse -Force C:\\)",
+    "Bash(Remove-Item -Recurse -Force $env:USERPROFILE)",
+)
+
+# Each user-named path is locked against reading AND changing (the consent
+# script's promise: "never read or change"). The installer passes paths
+# already shaped (globs where the user means a folder, e.g. `secrets/**`).
+_DENY_TOOLS_PER_PATH = ("Read", "Edit", "Write")
+
+
+def _expand_deny_paths(paths):
+    """Expand user deny paths into per-tool deny rules, order-preserving."""
+    rules = []
+    for p in paths or ():
+        for tool in _DENY_TOOLS_PER_PATH:
+            rules.append(f"{tool}({p})")
+    return rules
+
+
+def merge_deny_list(base_dir=None, paths=None, rules=None, dry_run=False):
+    """Merge deny rules into ``<base_dir>/.claude/settings.json``.
+
+    Returns a JSON-able dict: ``ok``, ``settings_path``, ``created`` (file
+    did not exist), ``added`` (rules newly appended, in order), ``skipped``
+    (candidates already present), ``total_deny`` (deny count after merge),
+    ``dry_run``. Fail-closed (``ok: False`` + ``error``, no write) when the
+    existing file is malformed JSON, not a JSON object, or has a
+    ``permissions.deny`` that is not a list — never clobber a file we can't
+    faithfully preserve.
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    settings_path = Path(base_dir) / ".claude" / "settings.json"
+    result = {
+        "settings_path": str(settings_path),
+        "created": not settings_path.exists(),
+        "dry_run": bool(dry_run),
+    }
+
+    settings = {}
+    if settings_path.exists():
+        raw = settings_path.read_text(encoding="utf-8")
+        if raw.strip():
+            try:
+                settings = json.loads(raw)
+            except (json.JSONDecodeError, ValueError):
+                result.update(ok=False, error=(
+                    "malformed JSON in .claude/settings.json — refusing to "
+                    "write; fix or move the file and re-run"))
+                return result
+            if not isinstance(settings, dict):
+                result.update(ok=False, error=(
+                    ".claude/settings.json is not a JSON object — refusing "
+                    "to write"))
+                return result
+
+    permissions = settings.get("permissions")
+    if permissions is None:
+        permissions = {}
+    if not isinstance(permissions, dict):
+        result.update(ok=False, error=(
+            "settings.json `permissions` is not an object — refusing to "
+            "write"))
+        return result
+    existing_deny = permissions.get("deny")
+    if existing_deny is None:
+        existing_deny = []
+    if not isinstance(existing_deny, list):
+        result.update(ok=False, error=(
+            "settings.json `permissions.deny` is not a list — refusing to "
+            "write"))
+        return result
+
+    candidates = list(DEFAULT_DENY_RULES) + _expand_deny_paths(paths) + list(rules or ())
+    seen = set(existing_deny)
+    added, skipped = [], []
+    for rule in candidates:
+        if rule in seen:
+            skipped.append(rule)
+        else:
+            seen.add(rule)
+            added.append(rule)
+
+    result.update(ok=True, added=added, skipped=skipped,
+                  total_deny=len(existing_deny) + len(added))
+    if dry_run or not added:
+        # Nothing to write (dry-run preview, or every rule already present).
+        return result
+
+    # MERGE: append the new rules; every existing entry and every unrelated
+    # key survives untouched.
+    permissions = dict(permissions)
+    permissions["deny"] = list(existing_deny) + added
+    settings = dict(settings)
+    settings["permissions"] = permissions
+
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    # Atomic write: settings.json is read by Claude Code sessions.
+    tmp_path = settings_path.with_suffix(".json.tmp")
+    tmp_path.write_text(
+        json.dumps(settings, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    tmp_path.replace(settings_path)
+    return result
+
+
+def cmd_merge_deny_list(args):
+    """CLI: merge consent deny rules into the target's settings.json (#13337).
+
+    Usage: wizard.py merge-deny-list [--path <p>]... [--rule <r>]...
+           [--dry-run] [base_dir]
+
+    `--path` entries expand to Read/Edit/Write deny rules; `--rule` entries
+    are taken verbatim. The cross-platform default deny-list is always
+    included. `--dry-run` reports what would be added without writing —
+    the installer shows that to the user before the real run.
+    """
+    paths, rules, dry_run, base_dir = [], [], False, None
+    it = iter(args)
+    for arg in it:
+        if arg == "--path":
+            paths.append(next(it, "") or "")
+        elif arg == "--rule":
+            rules.append(next(it, "") or "")
+        elif arg == "--dry-run":
+            dry_run = True
+        elif arg.startswith("--"):
+            print(f"Unknown flag: {arg}", file=sys.stderr)
+            return 2
+        else:
+            base_dir = arg
+    if "" in paths or "" in rules:
+        print("Usage: wizard.py merge-deny-list [--path <p>]... "
+              "[--rule <r>]... [--dry-run] [base_dir]", file=sys.stderr)
+        return 2
+    result = merge_deny_list(base_dir, paths=paths, rules=rules, dry_run=dry_run)
+    _print_json(result, ok=result.get("ok", False))
+    return 0 if result.get("ok") else 1
+
+
 def pr_flow_prompt():
     """Return the PR Flow question text and options for the setup agent."""
     return {
@@ -3847,6 +4011,7 @@ def main():
         "migration-plan": cmd_migration_plan,
         "stamp-version": cmd_stamp_version,
         "restart-agents": cmd_restart_agents,
+        "merge-deny-list": cmd_merge_deny_list,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)
