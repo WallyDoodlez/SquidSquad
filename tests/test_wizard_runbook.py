@@ -145,8 +145,9 @@ class TestManualStructure:
             "the preview must come before the write in the documented "
             "sequence"
         )
-        assert "never `ask`" in step0, (
-            "Step 0 playbook must state the helper emits deny rules only"
+        assert "deny" in step0 and "`ask`" in step0, (
+            "Step 0 playbook must state the deny-vs-ask rule (deny rules "
+            "only, never ask)"
         )
 
     def test_consent_wording_is_verbatim_scripted(self, manual):

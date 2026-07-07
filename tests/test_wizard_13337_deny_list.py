@@ -105,6 +105,16 @@ class TestMergeSemantics:
         assert wizard.DEFAULT_DENY_RULES[0] in result["skipped"]
         assert "Read(.env)" in result["skipped"]
 
+    def test_dedupe_path_and_rule_overlap(self, tmp_path):
+        """A --rule that duplicates one of a --path's expansions lands in
+        skipped, never doubled (Sonnet review Finding 2)."""
+        result = wizard.merge_deny_list(
+            tmp_path, paths=[".env"], rules=["Read(.env)"]
+        )
+        deny = _read_settings(tmp_path)["permissions"]["deny"]
+        assert deny.count("Read(.env)") == 1
+        assert "Read(.env)" in result["skipped"]
+
     def test_dedupe_within_candidates(self, tmp_path):
         result = wizard.merge_deny_list(tmp_path, paths=[".env", ".env"])
         deny = _read_settings(tmp_path)["permissions"]["deny"]
