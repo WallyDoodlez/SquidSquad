@@ -1,6 +1,6 @@
 # Installer Architecture (v1 draft)
 
-> **Status**: v1 draft, 2026-05-23. Architecture companion to the step-by-step runbook at [`references/wizard/WIZARD.md`](../references/wizard/WIZARD.md). This doc defines *how* the installer is structured; the runbook defines *what* the installer does at each step.
+> **Status**: v1 draft, 2026-05-23. Architecture companion to the installer's operating manual at [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md). This doc defines *how* the installer is structured; the manual defines *how the installer behaves* and carries the per-step helper mechanics (its § helper playbook).
 > **Companion docs**: [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system), [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (what runs after install), [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (how composed CLAUDE.md is generated; the installer invokes this), [`sub-skill-catalog.md`](sub-skill-catalog.md) (sub-skills the installer wires up).
 
 ---
@@ -40,7 +40,7 @@ In scope:
 
 Out of scope:
 
-- Step-by-step install instructions — see [`references/wizard/WIZARD.md`](../references/wizard/WIZARD.md)
+- The installer's behavior and per-step helper mechanics — see [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md)
 - What agents *do* after install — see [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md)
 - How sub-skills compose into CLAUDE.md outputs — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md)
 - The L1-L4 model itself — see [COMPOSE-ARCHITECTURE.md §2](COMPOSE-ARCHITECTURE.md)
@@ -54,12 +54,12 @@ flowchart LR
     User(["Human operator"])
     Installer["Installer agent<br/>(ephemeral Claude Code session)"]
     Helpers[("Helper scripts<br/>(JSON-out)")]
-    Runbook[("WIZARD.md<br/>step-by-step runbook")]
+    Runbook[("INSTALLER-RUNTIME.md<br/>operating manual")]
     Repo[("Target git repo")]
     Squad["Running SquidSquad<br/>(harness + agents)"]
 
     User -.->|"invokes via /squidsquad-setup"| Installer
-    Installer -->|"reads runbook"| Runbook
+    Installer -->|"reads manual"| Runbook
     Installer -->|"calls per phase"| Helpers
     Installer <-.->|"converses"| User
     Installer -->|"Phase 8 commit"| Repo
@@ -77,7 +77,7 @@ Three commitments:
 
 > **Restart step not shown.** The high-level diagram above ends at Phase 9 (exit). On a **re-run** (existing install), a per-agent harness restart fires *between* the Phase 8 commit and the Phase 9 exit — so running agents pick up the newly composed CLAUDE.md (see §10.3). It is omitted from this mental-model diagram because a fresh install has no running agents to restart (the squad boots later via `start.sh`); the restart is a re-run-only concern.
 
-> **Numbering note.** This doc's "Phases 0–9" are an architectural decomposition of the install flow. The companion runbook [`WIZARD.md`](../references/wizard/WIZARD.md) uses its own "Step 0 / 0a / 0b / 1 / 1b / 2 / 3 / 4 / 5 / 5b / 5c / 5d / 6 / 7" numbering that maps roughly onto these phases. When this doc references a `Step <N>` it means the WIZARD step; `Phase <N>` is always this doc's numbering.
+> **Numbering note.** This doc's "Phases 0–9" are an architectural decomposition of the install flow. The operating manual [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) uses its own "step 0–9" flow numbering (§4 there) that maps roughly onto these phases: manual steps 0–1 ≈ Phases 0–0b, steps 2–6 ≈ Phases 1–4 (conversation through approval), step 7 (Apply) ≈ Phases 5–6, and step 9 ≈ Phases 7–9. When this doc references a `step <N>` it means the manual's flow step; `Phase <N>` is always this doc's numbering. (Historical `Step <N>` references in the §14 revision log use the retired WIZARD.md runbook's numbering, preserved as written.)
 
 ---
 
@@ -194,7 +194,7 @@ Helper: `references/scripts/shared_fs.py init`. Idempotent — re-runs are safe.
 
 ### 4.3 Phase 0b — Re-run detection + migration walk
 
-> **Status: IMPLEMENTED (#12419, shipped 2026-06-17; see §10).** `WIZARD.md` Step 0b now presents Upgrade (default) / Full-rebuild / Abort, where Upgrade runs the §10 three-gate migration walk (reads `squidsquad_version`, applies `references/migrations/` per-version files in order). The flow below matches the runbook.
+> **Status: IMPLEMENTED (#12419, shipped 2026-06-17; see §10).** The installer's existing-install check now presents Upgrade (default) / Full-rebuild / Abort, where Upgrade runs the §10 three-gate migration walk (reads `squidsquad_version`, applies `references/migrations/` per-version files in order). The flow below matches the manual ([`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) §9, Step 1 — Basics).
 
 The installer checks for `.squidsquad/` in the target repo.
 
@@ -390,11 +390,11 @@ The installer agent never invents behavior the helpers already implement. Every 
 
 ## 7. The installer agent (Q-new21)
 
-The installer is a Claude Code session activated via the `squidsquad-setup` skill (or `/squidsquad-setup` slash command). Its full runbook is at [`references/wizard/WIZARD.md`](../references/wizard/WIZARD.md) — 700+ lines of per-step instructions.
+The installer is a Claude Code session activated via the `squidsquad-setup` skill (or `/squidsquad-setup` slash command). Its operating manual is [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) — behavior, flow, and the per-step helper mechanics (its § helper playbook); the session reads it top to bottom and follows it.
 
 Key contracts:
 
-- **Reads the runbook**, doesn't improvise. Every step has explicit success/failure pathways.
+- **Follows the manual** — a reasoning setup agent, not a fixed questionnaire: it investigates and adapts within the manual's flow, and calls the helper sequences its playbook specifies rather than improvising mechanics.
 - **Calls helpers for mechanical work** (file I/O, gh API, label creation). Never replicates helper logic in conversation.
 - **Speaks in domain terms** — never mentions internal files, status labels, or script names unless inside a troubleshooting block.
 - **One question at a time.** No multi-question forms; conversational pacing.
@@ -449,7 +449,7 @@ The default tracker backend is **GitHub Issues** — the canonical tracker descr
 `references/scripts/tracker.py` is the abstraction layer that decouples agent code from any specific tracker backend — agents always call `tracker.py`, never `gh` directly for status transitions or comments. Non-GitHub backends are planned post-v1. As of this doc:
 
 - **GitHub Issues** (default): the installer creates the standard label taxonomy via `gh label create` in Phase 5.
-- **Forgejo** (experimental): `references/scripts/forgejo_setup.py` provides the alternate-backend init flow. The installer offers this during the forge-backend conversation step ([WIZARD.md Step 5c](../references/wizard/WIZARD.md)) if the human explicitly requests it. This conversation happens during this doc's Phase 1.
+- **Forgejo** (experimental): `references/scripts/forgejo_setup.py` provides the alternate-backend init flow. The installer offers this during the forge-backend conversation ([`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) §9, "Optional integrations") if the human explicitly requests it. This conversation happens during this doc's Phase 1.
 
 The choice is recorded in `.squidsquad/config.md` under `Tracker Backend`. Agents read it at boot and route their tracker calls accordingly through `tracker.py`.
 
@@ -457,7 +457,7 @@ The choice is recorded in `.squidsquad/config.md` under `Tracker Backend`. Agent
 
 ## 10. Migration walk (existing-install step)
 
-> **Status: IMPLEMENTED (#12419, shipped 2026-06-17).** This section's migration-walk architecture (agreed 2026-05-30) is now live in the runbook: `WIZARD.md` Step 0b's Upgrade branch reads `squidsquad_version:` and applies `references/migrations/` per-version files in order, with `references/VERSION` as the version source. Verified PASS (verifier cy271, all ACs + comprehension spec `tests/comprehension/12419_spec.json`).
+> **Status: IMPLEMENTED (#12419, shipped 2026-06-17).** This section's migration-walk architecture (agreed 2026-05-30) is live in the installer's instructions: the existing-install Upgrade branch reads `squidsquad_version:` and applies `references/migrations/` per-version files in order, with `references/VERSION` as the version source. Verified PASS (verifier cy271, all ACs + comprehension spec `tests/comprehension/12419_spec.json`). The walk mechanics now live in [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) §9 (Step 1 — Basics).
 
 This section details the migration walk introduced at §4.3. **There is no distinct "upgrade flow"** — the migration walk is one step of the standard installer flow, invoked when `.squidsquad/` already exists at Phase 0b. Every other phase (1 through 9) runs identically regardless of whether this is the first installer run on this repo or the hundredth.
 
@@ -542,7 +542,7 @@ The previous "preserved during upgrade" framing is retired — there is no separ
 
 ### 10.3 Post-installer harness restart
 
-> **Status: implemented (#12420, shipped 2026-06-17).** `WIZARD.md` Step 7.5c probes the harness and restarts agents (stop+start per alias when reachable; user-driven `.squidsquad/start.sh` cold-start when not), via `wizard.py restart-agents`. The behavior below is live.
+> **Status: implemented (#12420, shipped 2026-06-17).** The installer's commit-and-hand-off step probes the harness and restarts agents (stop+start per alias when reachable; user-driven `.squidsquad/start.sh` cold-start when not), via `wizard.py restart-agents`. The behavior below is live; the mechanics live in [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) §9 (Step 9 — Commit & hand off).
 
 After Phase 8 commits the new tree, the installer triggers a per-agent restart so running agents pick up the new composed CLAUDE.md. This is **separate from Phase 8** (which is just commit+push per §4.11) and **separate from the migration walk** (which completes before Phase 1). Restart happens after Phase 8's atomic commit and before Phase 9's exit message.
 
@@ -580,7 +580,7 @@ Operators on consuming installs never write migration files — they consume the
 The installer is designed to be safe to re-run:
 
 - **Phases 0–4** make no changes the user can see in the target repo. (Two host-level exceptions, both outside the repo: Phase 0 provisioning installs system tools + Python packages on the host OS — but only after explicit operator consent per §4.1, and the abort path before consent leaves nothing changed; and Phase 0a `shared_fs.py init` writes to `~/.squidsquad/` but is idempotent — creates dirs only if absent — and is shared across all installs, not specific to this one.)
-- **Phase 5 (local scaffold + forge labels)** is the first phase that writes to the target repo. It uses a "scaffold then write" pattern — failures partway leave the filesystem in a state the next re-run can clean up via WIZARD's Step 7.1 ("Full rebuild cleanup if applicable") cleanup path.
+- **Phase 5 (local scaffold + forge labels)** is the first phase that writes to the target repo. It uses a "scaffold then write" pattern — failures partway leave the filesystem in a state the next re-run can clean up via the full-rebuild cleanup path (INSTALLER-RUNTIME.md §9, Step 7 — Apply, item 1).
 - **Phase 5 label creation on the forge** is per-label idempotent (`gh label create` skips existing labels).
 - **Phase 6 compose** is deterministic *for a given set of inputs* — the same L1-L3 sources + L4 file always produce the same composed CLAUDE.md. During an upgrade (§10), the L1-L3 sources change because the installer pulls newer SquidSquad releases, so the composed output legitimately changes; that is not a determinism violation, just a reflection of the input change. Re-running Phase 6 against an unchanged source set is safely idempotent.
 - **Phases 5–7** are pre-commit local + forge writes. A `git status` after Phase 5 shows untracked `.squidsquad/` files; forge labels created in Phase 5 / initial issues in Phase 7 are visible on GitHub immediately. The atomic git commit + push happens at Phase 8.
@@ -612,7 +612,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 
 ## 13. References
 
-- [`references/wizard/WIZARD.md`](../references/wizard/WIZARD.md) — the step-by-step installer runbook (700+ lines)
+- [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) — the installer's operating manual (behavior + § helper playbook)
 - [`references/scripts/wizard.py`](../references/scripts/wizard.py) — main wizard helper
 - [`references/scripts/shared_fs.py`](../references/scripts/shared_fs.py) — shared filesystem init
 - [`references/scripts/compose.py`](../references/scripts/compose.py) — compose pipeline
@@ -627,6 +627,7 @@ Across both upgrade and clean-rebuild, these are always preserved:
 
 ## 14. Revision log
 
+- **2026-07-06 (#13336 — WIZARD.md retired)** — `references/wizard/WIZARD.md` (the step-by-step runbook) is deleted; [`INSTALLER-RUNTIME.md`](INSTALLER-RUNTIME.md) is the installer's operating manual, and the runbook's surviving mechanics (helper invocation sequences, migration-walk gates, setup_requirements walker, apply/commit order) were absorbed into its §9 helper playbook. All live runbook references in this doc were repointed (§ status header, §1.1 scope, §2 diagram + numbering note, §4.3, §7, §9, §10, §10.3, §11.1, §13). Entries **below this one** mention WIZARD.md as it existed at the time — they are historical record, preserved verbatim on purpose.
 - **2026-06-15 (doc-honesty pass — DS re-audit doc-vs-runbook gaps)** — The re-audit found three behaviors written as current that `WIZARD.md` doesn't implement. Two are genuine impl gaps now honestly labeled as target + given skill tasks: **migration-walk** (§4.3/§10 → #12419; runbook Step 0b is still the flat 3-way prompt) and **post-commit harness restart** (§10.3 → #12420; runbook Step 7.6 just prints "run ./start.sh" + exits). The third was a doc-description error, now corrected: **§4.8/§4.9 "Phase 6 — Compose"** implied scaffold writes CLAUDE.md *placeholders* then a separate compose phase runs — but `wizard.py scaffold_install` calls `compose.deploy_role_v2(<alias>)` **in-process**, composing the final CLAUDE.md inline during Phase 5. Reframed §4.9 as "compose runs inline during scaffold" (no separate Phase 6) and fixed §4.8 step 3 ("placeholders" → composed). Matches the §4.1 dep-provisioning (#11613) target-labeling pattern; the installer impl backlog is now #11613 + #12419 + #12420.
 - **2026-06-15 (event_poll model straggler — cross-doc reconciliation)** — DS re-audit (cross-ref vs the just-corrected HARNESS-ARCH/AGENT-RUNTIME) caught two spots still describing `event_poll.py` as **harness-spawned**: §6 "Runtime-shipped components" and the §10.3 cold-start path. Corrected both to the current model — `event_poll` is **agent-armed via the Monitor tool** (inside the agent's process tree), HARNESS-ARCH cross-ref `§7.2 step 4` → `step 6`. (Same re-audit flagged that §4.3/§10 migration-walk, §10.3 post-commit restart, and §4.8/§4.9 compose-as-separate-phase are presented as current but not yet in `WIZARD.md` — honest-target labeling + impl tasks pending operator decision; NOT changed here.)
 - **2026-06-12 (#11537 R2 — dependency provisioning)** — Rewrote §4.1 Phase 0 from a flat 4-bullet "prerequisite check" into the full **dependency detection & provisioning** design (operator-locked option-b-with-consent, 2026-06-12). New model: **gather-all detect → present full missing-set → one consent prompt → per-platform provision → re-verify**. Locks: provision at **install time** (consent gate) with `start.sh` silent re-ensure at boot; `claude` CLI + `gh auth` stay **guided** (not silently forced); **full scope** (system tools + Python packages, instruct-fallback for the un-installable). Per-dependency provisioning table + platform-dispatch strategy added. Fixed §3.1 Environment-row drift (it listed deps as if all were checked; today only `gh` is — now points to §4.1's gather-all model). Honest target-vs-today callout: gather-all collector, per-platform dispatch, consent prompt, unified-`requirements.txt` read, and `pyyaml` runtime-requirement move are **not yet implemented** — implementation is a separate skill task off #11537. (Note: `start.ps1` already exists alongside `start.sh`; both hard-code a 2-of-4 package subset that the unified read replaces.) §2 commitment 2 + §11.1 updated to carve out Phase 0 host-level provisioning from the 'no writes during Phases 0–4' invariant (repo-write invariant preserved; host installs are consent-gated). Research: `.squidsquad/pm/planning/RESEARCH-INSTALLER-DEPROV-11537.md`. (R2 is the original #10836 scope, split out when R1 absorbed the drift sweep.)

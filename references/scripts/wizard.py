@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """SquidSquad install wizard — mechanical helpers for the installer agent.
 
-The wizard is a prose runbook that a Claude session (the "installer agent",
-Q-new21) follows interactively. This script owns the *mechanical* pieces:
-prerequisite checks, re-run detection, repo metadata probing, etc. Anything
-that should be testable without talking to an LLM lives here. The intent
-classifier, the setup_requirements walker, and the natural conversation
-live in the prose runbook and use Claude's judgement.
+The installer is a Claude session that follows the operating manual at
+docs/INSTALLER-RUNTIME.md interactively. This script owns the *mechanical*
+pieces: prerequisite checks, re-run detection, repo metadata probing, etc.
+Anything that should be testable without talking to an LLM lives here. The
+setup_requirements walker guidance and the natural conversation live in the
+manual (its §9 helper playbook) and use Claude's judgement.
 
 Commands:
     python scripts/wizard.py check-gh              # Step 0
@@ -270,9 +270,10 @@ def preflight(base_dir=None):
 # (it never fails fast on the first missing dependency, unlike check_gh above
 # which is kept for the legacy fail-fast preflight path). Detection and the
 # per-platform install dispatch are deterministic Python here; the consent
-# prompt itself lives in the WIZARD.md runbook (the installer agent presents
-# the missing-set the gather pass returns and asks the human once). The agent
-# acts on this helper JSON and never invents environment checks.
+# prompt itself lives in the installer manual (docs/INSTALLER-RUNTIME.md §9
+# helper playbook — the installer agent presents the missing-set the gather
+# pass returns and asks the human once). The agent acts on this helper JSON
+# and never invents environment checks.
 # ---------------------------------------------------------------------------
 
 # requirements.txt dist name -> import (module) name where they differ.
@@ -739,7 +740,7 @@ def detect_existing_install(base_dir=None):
         default_action: str — "abort" — the safe default on the 3-way prompt
 
     This helper intentionally does NOT prompt the user — it reports state
-    and lets the prose runbook drive the interactive 3-way prompt.
+    and lets the installer manual drive the interactive 3-way prompt.
     """
     if base_dir is None:
         base_dir = REPO_ROOT
@@ -815,9 +816,10 @@ def validate_rerun_action(action):
 # migration markdowns to apply, and stamp the version after a successful walk.
 # They do NOT apply migration prose — that is the LLM's job under the §10
 # three-gate model (DeepSeek audit → mini-CQ → compose dry-run), driven by the
-# WIZARD.md Step 0b runbook. These helpers only compute *what* to apply; the
-# runbook drives *how*, gated. Keeping the seam here is the point: version math
-# and chain selection are testable code; prose application is probabilistic.
+# installer manual's migration-walk playbook (docs/INSTALLER-RUNTIME.md §9).
+# These helpers only compute *what* to apply; the manual drives *how*, gated.
+# Keeping the seam here is the point: version math and chain selection are
+# testable code; prose application is probabilistic.
 # ---------------------------------------------------------------------------
 
 MIGRATIONS_DIRNAME = "migrations"
@@ -1029,9 +1031,10 @@ def stamp_version(version, base_dir=None):
 def migration_walk_plan(base_dir=None):
     """Aggregate the deterministic walk inputs into one JSON-able plan.
 
-    This is what the WIZARD.md Step 0b runbook consumes to decide whether to
-    walk and which files to apply (it then drives the §10 three-gate model per
-    file). Pure read — computes nothing on disk. Shape:
+    This is what the installer's migration walk (docs/INSTALLER-RUNTIME.md §9,
+    Step 1 — Basics) consumes to decide whether to walk and which files to
+    apply (it then drives the §10 three-gate model per file). Pure read —
+    computes nothing on disk. Shape:
 
         {
           "is_fresh": bool,            # no .squidsquad/ — skip the walk entirely
@@ -1069,10 +1072,11 @@ def migration_walk_plan(base_dir=None):
 # Step 7.5c — post-commit harness restart (INSTALLER-ARCH §10.3, #12420)
 # ---------------------------------------------------------------------------
 #
-# After Phase 8's commit (WIZARD.md Step 7.5) the runbook calls `restart-agents`
-# so a *running* squad picks up the freshly-composed CLAUDE.md. The probe +
-# routing + per-alias HTTP are deterministic and belong here, not in runbook
-# prose. The HTTP touchpoint is isolated in `_http_request` so the unit tests
+# After Phase 8's commit the installer calls `restart-agents` (per
+# docs/INSTALLER-RUNTIME.md §9, Step 9 — Commit & hand off) so a *running*
+# squad picks up the freshly-composed CLAUDE.md. The probe + routing +
+# per-alias HTTP are deterministic and belong here, not in manual prose.
+# The HTTP touchpoint is isolated in `_http_request` so the unit tests
 # can monkeypatch it and never open a socket.
 
 HARNESS_DEFAULT_PORT = 7373       # harness.py default; mirrors cycle_post._HARNESS_DEFAULT_PORT
@@ -1084,7 +1088,7 @@ def _read_harness_port(base_dir=None):
 
     Defaults to ``HARNESS_DEFAULT_PORT`` when the file is missing, empty, or not
     a valid integer — same fail-safe the agent boot probe uses
-    (cycle_post._discover_harness_port / WIZARD step:cycle/boot).
+    (cycle_post._discover_harness_port / the boot-bootstrap step:cycle/boot).
     """
     if base_dir is None:
         base_dir = REPO_ROOT
@@ -1817,8 +1821,9 @@ def _write_l4_project_files(spec, project_dir, summary):
     """Write structured L4 project files from scan data in the spec (#6581).
 
     This is the mechanical half of the hybrid L4 writer. Writes stack details,
-    test commands, and detected config as structured markdown. The WIZARD.md
-    runbook adds qualitative content (conventions, patterns) afterward.
+    test commands, and detected config as structured markdown. The installer
+    adds qualitative content (conventions, patterns) afterward, per
+    docs/INSTALLER-RUNTIME.md §9 (Step 7 — Apply).
 
     Respects overwrite guards: existing files are preserved and recorded in
     summary["preserved"].
@@ -1981,9 +1986,9 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             build_config_md) or if an agent references a role identity
             that does not exist under `references/roles/`.
         FileExistsError — if `.squidsquad/` exists and `overwrite_existing`
-            is False. The caller (the prose runbook) is responsible for
-            the re-run detection + 3-way prompt, so this should only fire
-            as a safety net.
+            is False. The caller (the installer, per its manual) is
+            responsible for the re-run detection + 3-way prompt, so this
+            should only fire as a safety net.
     """
     # Delegate validation of spec shape to build_config_md so we have
     # a single source of truth for required sections.
@@ -2032,8 +2037,9 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
     project_dir.mkdir(parents=True, exist_ok=True)
 
     # 1c. L4 structured files — write mechanically-detected project data (#6581).
-    # These are the "structured" half of the hybrid L4 writer. The WIZARD.md
-    # runbook adds qualitative notes (conventions, patterns) after scaffold.
+    # These are the "structured" half of the hybrid L4 writer. The installer
+    # adds qualitative notes (conventions, patterns) after scaffold, per
+    # docs/INSTALLER-RUNTIME.md §9 (Step 7 — Apply).
     _write_l4_project_files(spec, project_dir, summary)
 
     # 1d. L4 seed stubs — copy worker-*/verifier-* stubs from
@@ -3544,7 +3550,7 @@ def format_scan_summary(scan_data):
     # #12450 S3: surface the richer detected test strategy (the S1 detection
     # ladder — run command / location / coverage) so the wizard can show the
     # operator what the agents will follow, and detect the undetectable case
-    # (ask-human path in WIZARD.md Step 1c).
+    # (ask-human path in docs/INSTALLER-RUNTIME.md §9, test-strategy mechanics).
     test_strategy = scan_data.get("test_strategy") or {}
     if test_strategy.get("detected"):
         ts_parts = []
@@ -3721,9 +3727,9 @@ def cmd_set_test_strategy(args):
     Usage: wizard.py set-test-strategy --run-command <cmd> [--framework <f>]
            [--location <l>] [--coverage <c>] [target_dir]
 
-    The undetectable path in WIZARD.md Step 1c: when the repo scan could not
-    detect how the project runs its unit tests, the wizard asks the operator
-    and records the answer here. ``.repo-scan.json`` is the single source of
+    The undetectable path in docs/INSTALLER-RUNTIME.md §9 (test-strategy
+    mechanics): when the repo scan could not detect how the project runs its
+    unit tests, the installer asks the operator and records the answer here. ``.repo-scan.json`` is the single source of
     truth every downstream consumer reads (the L4 seed writer, generate-defaults),
     so writing it here makes the human answer flow through uniformly — marked
     ``detected: true`` with ``source: "human"`` so it is no longer "undetected".
