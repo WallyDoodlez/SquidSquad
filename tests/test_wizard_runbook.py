@@ -47,6 +47,8 @@ _WIZARD_COMMANDS = {
     "restart-agents",
     # #12450 test-strategy detection + undetectable ask-human.
     "scan-summary", "set-test-strategy",
+    # #13337 §9 Step 0 consent deny-list merge-writer.
+    "merge-deny-list",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}
@@ -116,6 +118,7 @@ class TestManualStructure:
         _assert_in_order(manual, [
             "### The helper contract",
             "### Write discipline",
+            "### Step 0 — Consent & deny list",
             "### Step 1 — Basics",
             "### Steps 2–3",
             "### Steps 3 & 5–6",
@@ -123,6 +126,28 @@ class TestManualStructure:
             "### Step 9 — Commit & hand off",
             "### When something breaks",
         ], "playbook section")
+
+    def test_step0_playbook_binds_deny_list_helper(self, manual):
+        """§9 Step 0 binds the consent conversation to the deterministic
+        merge-writer (#13337): preview via --dry-run BEFORE any write,
+        write on confirmation, deny rules only — never ask."""
+        start = manual.find("### Step 0 — Consent & deny list")
+        assert start != -1, "§9 must carry a Step 0 playbook entry"
+        step0 = manual[start:manual.find("### Step 1 — Basics")]
+        assert "merge-deny-list" in step0, (
+            "Step 0 playbook must name the wizard.py merge-deny-list helper"
+        )
+        assert "--dry-run" in step0, (
+            "Step 0 playbook must show the --dry-run preview (inform-"
+            "before-write is deterministic, not narrated)"
+        )
+        assert step0.find("--dry-run") < step0.find("without `--dry-run`"), (
+            "the preview must come before the write in the documented "
+            "sequence"
+        )
+        assert "never `ask`" in step0, (
+            "Step 0 playbook must state the helper emits deny rules only"
+        )
 
     def test_consent_wording_is_verbatim_scripted(self, manual):
         """Consent moments are fixed scripts — the one place phrasing is
