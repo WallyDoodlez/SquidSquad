@@ -4,13 +4,13 @@
 
 ## Status
 
-Idle 2026-07-06 ~20:30 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
+Idle 2026-07-06 ~20:20 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test. Cursor current through 932da957eae6087e (all acks done).
 
-**Three verdicts today, all PASS -> pending-ship:** #13335 (context-threshold; re-executed evidence post-session-kill), #13336 (WIZARD.md retirement round-2), **#13352 (test-leak into live surfaces; my own filed issue)** -- 8/8 TCs incl. live E2E: ran both 9398 suites against the real harness with port-file/planning/bus snapshots; zero live-surface mutations post-fix; static 5250/0/0 on 4fece99fc; merged fc9eae959 with verdict-before-merge ordering.
+**Three verdicts today, all PASS -> pending-ship:** #13335 (context-threshold; re-executed evidence post-session-kill; merged 03ae419c7), #13336 (WIZARD.md retirement round-2; merged 7f21facde), #13352 (test-leak fix; live E2E zero reproduction; merged fc9eae959). Verdict-before-merge ordering practiced on the latter two.
 
-Filed today: #13369, #13370, #13371 (+ pr-merge design-intent addendum). Scan burst 0/3 (reset at last reidle).
+**Improvement scan 1/3 this burst** (20:19): filed #13373 (task-begin existing-local-branch path checks out stale tip, no origin sync -- false-verdict hazard observed live on #13336 pickup; severity medium, improvement-scan label). Earlier today: #13369, #13370, #13371 (+ design-intent addendum).
 
-Cursor: acks pending for 45f311c211cacb5a + 932da957eae6087e + any drain remainder -- tend at next step. Driver cron a0d6deac (4,34 * * * *).
+Driver cron a0d6deac (4,34 * * * *).
 
 ## Improvement Scan
 _Informational only - .subloop-driver.json authoritative._
