@@ -523,6 +523,9 @@ class AgentState:
                 # the bound (#13179 preserved); a boot that worked then
                 # wedged reads wedged once its last heartbeat ages past
                 # ACTIVITY_GRACE_SECONDS — bounded, never wedge-forever.
+                # Worst-case wedge-detection delay: BOOT_GRACE plus the
+                # largest pause ceiling (WAITING_MAX = 30m) ≈ 40m — the
+                # accepted tradeoff vs killing a working boot (#13369).
                 pause = self.active_pause(now)
                 if pause is not None:
                     return True, f"booting-{pause}"
@@ -1513,6 +1516,14 @@ class HarnessState:
           bootup_complete=False until it re-asserts ``bootup-complete``, so a
           leftover high value from the prior session cannot immediately re-trip
           the new process before its statusline writes a fresh reading.
+          NOTE (#13369): the contract now emits bootup-complete BEFORE the
+          boot drain, so this gate opens earlier than it used to — the
+          stale-file window is now the gap between the step-4 emission and
+          the session's first statusline write. A stale high reading landing
+          in that gap trips a graceful checkpoint-and-respawn (not a lost
+          session), so the narrowed defense is an accepted tradeoff vs the
+          drain-kill it replaces; a fresh-reading-before-enforcement
+          handshake would close it fully if it ever bites in practice.
         """
         if _NO_AUTO_REBOOT:
             return

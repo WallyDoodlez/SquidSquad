@@ -163,6 +163,12 @@ class TestContractBootOrderEagerBootupComplete(unittest.TestCase):
         self.assertIn("before tending any boot-drain event", text)
 
     def test_diagram_source_still_shows_booted_then_drain(self):
+        """The L1 session-boot diagram's 'POST booted event' line is the
+        bootup-complete emission under a plain-English label (the harness
+        flips status to ready on receiving it) — pin that it stays ahead of
+        the drain so the diagram and the Case A steps keep agreeing. The
+        authoritative regression guard for the contract itself is
+        test_announce_precedes_drain_in_case_a above."""
         text = self.DIAGRAM_SRC.read_text(encoding="utf-8")
         booted = text.find("POST booted event")
         drain = text.find("GET events queued before boot")
