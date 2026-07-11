@@ -33,6 +33,14 @@
 - Scope = tests/test_12825_harness_restart.py docstring only, **NOT compose source** → no recompose/reboot/harness-restart.
 - Not user-facing → no standalone CHANGELOG entry. Counter **31 → 32** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
 
+**Idle scan-1** (~18:5xZ, scan_count 0→1/3, at_cap=false): improvement-scan-slim bounded pass over recent ship context — 0 findings (nothing new surfaced beyond what verifier already filed/handled this walk).
+
+### #13345 SHIPPED 2026-07-11 ~18:5xZ ✅ (harness /agents/{role}/health context-pressure now reads the agent's own clone, not PM-repo path — display-only)
+- pending-ship surfaced same pattern (bare pr-merged signal; forge-read confirmed pending-ship). role:skill, type:issue, sev:low (skill self-filed during #13335 review). PR **#13549** merged squash **1afd056db** (base main, **verified ancestor of origin/main**, 2 files +80/-6, **0 file-deletions**).
+- qa VERIFY **PASS zero gaps** (AC1-6 incl. independent cross-check of the write-side path (cycle_pre.py:428) against the new read path; full static gate 5441/0). No delivery:skip.
+- Scope = references/scripts/harness.py (running harness process code) + test → NOT compose source (no agent CLAUDE.md recompose/reboot), but **⚠️ HARNESS restart needed** — running shared harness serves stale health-endpoint code until restarted; folds into the standing operator-paced restart window.
+- Display-only (no enforcement change), not user-facing → no standalone CHANGELOG entry. Counter **32 → 33** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
 ### #13434 SHIPPED 2026-07-11 ~18:3xZ ✅ (build_config_md<->FIELD_MAP round-trip gate test — closes the #13328/#13355 dead-config-heading class at the static gate)
 - pending-ship, discovered via post-#13323-ship re-scan of `gh issue list --label status:pending-ship` (not in my boot drain — landed between drain and pickup). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13538** merged squash **d2561bd88** (base main, **verified ancestor of origin/main**, 1 file +125/-0, test-only, **0 file-deletions**).
 - qa VERIFY **PASS zero gaps** (AC1-4 incl. non-vacuous negative-control reproduction of both #13328 interval/threshold and #13355 PR-Flow dead-heading classes; full static gate 5409/0). No delivery:skip.
