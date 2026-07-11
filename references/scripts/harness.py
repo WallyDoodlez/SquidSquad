@@ -4992,9 +4992,18 @@ def _safe_stash_pop_in_clone(clone_path):
         clone_path, ["diff", "--name-only", "--diff-filter=U"])
     unmerged = [p.strip() for p in conflicted.stdout.splitlines() if p.strip()]
     if not unmerged:
-        # Pop failed for a NON-conflict reason (no stash entry / unrelated git
-        # error) — the stash was NOT applied. Do NOT drop it (that would discard
-        # un-applied work). Leave it intact and report the pop did not succeed.
+        # No tracked-file (diff-filter=U) merge conflict. Distinguish the #13456
+        # untracked-restore case — a ``--include-untracked`` stash whose path the
+        # pull now tracks, so ``git stash pop`` refuses to overwrite it ("Could
+        # not restore untracked files from stash") — from a genuine non-conflict
+        # pop error. In the untracked case the pulled/tracked version is
+        # authoritative and already on disk (the failed restore left it
+        # untouched), so DROP the now-redundant stash (same pulled-wins rule as
+        # the tracked-conflict path below). Otherwise the stash was NOT applied
+        # (no stash entry / unrelated git error) — leave it intact, since
+        # dropping would discard un-applied work.
+        if "untracked files from stash" in (pop.stdout + pop.stderr).lower():
+            _git_in_clone(clone_path, ["stash", "drop"])
         return False
     for path in unmerged:
         _git_in_clone(clone_path, ["checkout", "HEAD", "--", path])
@@ -5017,6 +5026,13 @@ def _safe_pull_in_clone(clone_path):
     pulled ``HEAD`` and dropped (same authoritative-pulled-state rule as
     ``_safe_stash_pop_in_clone``).
 
+    #13456: the sibling UNTRACKED case — an untracked local file at a path the
+    incoming commit now tracks makes the pull ABORT with ``untracked working
+    tree files would be overwritten by merge``. A plain ``git stash`` does NOT
+    stash untracked files, so the retry still aborted (recurring dm boot
+    deploy-error). The stash below uses ``--include-untracked`` so those files
+    are moved aside too; on pop, the pulled/tracked version wins.
+
     A genuine MERGE conflict (committed divergence that truly conflicts) still
     fails the retry pull → returns ``(False, …)`` so the caller routes to §11
     recovery; only a DIRTY-TREE abort is newly survived.
@@ -5031,16 +5047,21 @@ def _safe_pull_in_clone(clone_path):
     if "already up to date" in combined or "up to date" in combined:
         return True, "already-up-to-date"
 
-    # First pull failed. Stash any dirty change and retry: a dirty-tree abort
+    # First pull failed. Stash any local change and retry: a dirty-tree abort
     # then merges cleanly; a genuine merge conflict fails the retry the same way
-    # and routes to recovery.
+    # and routes to recovery. #13456: use --include-untracked so an UNTRACKED
+    # local file colliding with an incoming tracked path ("untracked working tree
+    # files would be overwritten by merge") is also moved aside — a plain
+    # `git stash` leaves untracked files in place, so the retry pull still
+    # aborted (recurring dm boot deploy-error). On pop, the untracked-restore
+    # conflict is resolved pulled-wins by _safe_stash_pop_in_clone.
     def _stash_ref():
         r = _git_in_clone(
             clone_path, ["rev-parse", "--quiet", "--verify", "refs/stash"])
         return r.stdout.strip() if r.returncode == 0 else ""
 
     pre_ref = _stash_ref()
-    stash = _git_in_clone(clone_path, ["stash"])
+    stash = _git_in_clone(clone_path, ["stash", "--include-untracked"])
     if stash.returncode != 0:
         return False, f"stash-failed: {(stash.stderr or first.stderr).strip()[:200]}"
     # #13167: `git stash` on a CLEAN tree is a no-op that still exits 0 — only
