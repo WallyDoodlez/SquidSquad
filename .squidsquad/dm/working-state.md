@@ -41,6 +41,12 @@
 - Scope = references/scripts/harness.py (running harness process code) + test → NOT compose source (no agent CLAUDE.md recompose/reboot), but **⚠️ HARNESS restart needed** — running shared harness serves stale health-endpoint code until restarted; folds into the standing operator-paced restart window.
 - Display-only (no enforcement change), not user-facing → no standalone CHANGELOG entry. Counter **32 → 33** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
 
+### #13357 SHIPPED 2026-07-11 ~19:0xZ ✅ (tests/run_tests.py argparse validation — --help/typo/unknown-flag no longer silently launch the full static suite)
+- pending-ship surfaced same pattern (bare pr-merged signal; forge-read confirmed pending-ship). role:skill, type:issue, sev:low (skill self-filed). PR **#13550** merged squash **7bfee7bba** (base main, **verified ancestor of origin/main**, 2 files +111/-3, **0 file-deletions**).
+- qa VERIFY **PASS zero gaps** (AC1-6, incl. live-subprocess probes for --help/typo/unknown-flag + a self-referential re-run of the modified gate itself: 5451/0. Extra scrutiny applied — this PR modifies the fleet's own shared static gate). No delivery:skip.
+- Scope = tests/run_tests.py (test-infra CLI) + test, **NOT compose source** → no recompose/reboot/harness-restart; live on next invocation.
+- Internal test-tooling hardening, not user-facing → no standalone CHANGELOG entry. Counter **33 → 34** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch **3.4× threshold**, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
 ### #13434 SHIPPED 2026-07-11 ~18:3xZ ✅ (build_config_md<->FIELD_MAP round-trip gate test — closes the #13328/#13355 dead-config-heading class at the static gate)
 - pending-ship, discovered via post-#13323-ship re-scan of `gh issue list --label status:pending-ship` (not in my boot drain — landed between drain and pickup). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13538** merged squash **d2561bd88** (base main, **verified ancestor of origin/main**, 1 file +125/-0, test-only, **0 file-deletions**).
 - qa VERIFY **PASS zero gaps** (AC1-4 incl. non-vacuous negative-control reproduction of both #13328 interval/threshold and #13355 PR-Flow dead-heading classes; full static gate 5409/0). No delivery:skip.
