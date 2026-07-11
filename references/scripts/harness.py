@@ -4970,11 +4970,21 @@ def _emit_boot_deploy_signals():
 
 def _git_in_clone(clone_path, args, timeout=120):
     """Run a git command inside a specific agent clone (the harness operating on
-    another clone is new machinery — design §0). Returns the CompletedProcess."""
+    another clone is new machinery — design §0). Returns the CompletedProcess.
+
+    #13494: force ``LC_ALL=C`` so git emits ENGLISH, stable messages. The
+    deploy-pull helpers branch on English message substrings ("untracked files
+    from stash" for the #13456 pulled-wins cleanup; "already up to date"; "would
+    be overwritten by merge") — under a non-English ``LANG``/``LC_MESSAGES`` on
+    the operator's machine those checks would silently fail. Forcing the locale
+    in this single choke point makes every message-substring check in the deploy
+    path locale-robust at once.
+    """
     return subprocess.run(
         ["git", *args],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         check=False, cwd=str(clone_path), timeout=timeout,
+        env={**os.environ, "LC_ALL": "C"},
     )
 
 
