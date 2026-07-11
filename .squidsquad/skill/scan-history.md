@@ -1875,3 +1875,9 @@
 - **Findings**: 1 filed — #13316 (low — idle-cooldown-loop `--drained` contract is binary on work_queue() emptiness; gated/non-pickable approved tasks force scan-starvation under a strict reading. Empirically hit THIS tick: skill work_queue() = 3 gated tasks; passed --drained true by judgment. PM hits identical case.)
 - **Items rejected by human**: none
 - **Criteria note**: "scan the module you just exercised heavily" is productive — running the idle driver live surfaced the contract gap that reading it cold would have missed. The defensive read_state/coercion and atomic_write_text are clean; no error-handling findings. The finding is a prose/contract gap, not a code defect — driver `tick()` is correct given its inputs; the ambiguity is in how the agent computes `--drained`.
+
+## Scan — 2026-07-11 06:51
+
+- **Files scanned**: references/installer-files.txt, docs/INSTALLER-RUNTIME.md (manifest completeness/drift check tied to #13338/#13329 ships)
+- **Findings**: none — manifest healthy: INSTALLER-RUNTIME.md tracked (line 14) + seed-staged (index.js:363); tests/ + comprehension specs correctly excluded (not installer-fetched); `Total: 254` comment accurate (254 actual entries). No shipped-unwired gap from the INSTALLER-RUNTIME.md set.
+- **Items rejected by human**: none
