@@ -129,20 +129,15 @@ def test_tc_03_genuine_conflict_reported_as_failure(scaffold):
     assert git(agent, "rev-parse", "HEAD").stdout.strip() == local_head, "origin not synced on fail"
 
 
-@pytest.mark.xfail(
-    reason="PRE-EXISTING gap (NOT introduced by #13456, outside its untracked-collision "
-    "scope): a genuine committed conflict leaves the first pull MERGING; git stash then "
-    "fails on the unmerged index and _safe_pull_in_clone returns 'stash-failed' BEFORE the "
-    "retry-branch 'git merge --abort' runs, so .git/MERGE_HEAD lingers -- contradicting the "
-    "docstring's no-lingering-MERGE_HEAD claim. Filed separately.",
-    strict=False,
-)
-def test_tc_03b_committed_conflict_leaves_merging_PREEXISTING_GAP(scaffold):
-    """Documents the pre-existing gap surfaced during #13456 verification."""
+def test_tc_03b_committed_conflict_not_left_merging(scaffold):
+    """Was an xfail documenting the pre-existing gap surfaced during #13456
+    verification; FIXED by #13472 (git merge --abort on the stash-failed
+    early-return path). Now a plain assertion: a committed-conflict deploy-pull
+    must NOT leave the clone MERGING."""
     agent = scaffold["agent"]
     _setup_committed_conflict(scaffold)
     harness._safe_pull_in_clone(agent)
-    assert not _is_merging(agent), "clone left in MERGING state after committed conflict"
+    assert not _is_merging(agent), "clone left in MERGING state after committed conflict (#13472 regression)"
 
 
 def test_tc_04_regression_test_present():
