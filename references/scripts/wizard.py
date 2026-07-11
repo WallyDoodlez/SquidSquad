@@ -4088,6 +4088,134 @@ def cmd_propose_roster(args):
     return 0 if result.get("ok", True) else 1
 
 
+# ---------------------------------------------------------------------------
+# #13329 — scan the target repo for existing agent-facing assets so the
+# installer can confirm them with the user and incorporate the confirmed ones
+# as L4 customizations (pointer + trigger). Deterministic detection only; the
+# confirm gate and the L4 pointer-writes are the installer agent's job via
+# l4-curation (docs/INSTALLER-RUNTIME.md §4 step 4 + §9).
+# ---------------------------------------------------------------------------
+
+# Directories that are never a target project's own agent assets.
+_ASSET_SKIP_DIRS = {".squidsquad", "node_modules", ".git", "vendor", ".venv",
+                    "venv", "dist", "build", ".next"}
+
+
+def _parse_asset_frontmatter(path, default_name):
+    """Extract (name, intent) from a skill/command markdown file.
+
+    Prefers YAML frontmatter `name` + `description` — a skill's description
+    usually carries its trigger (WHEN to use it), which is exactly the one-line
+    intent the L4 pointer should record (#13329 Q3). Falls back to the first
+    markdown heading / first non-empty body line. Never raises — an unreadable
+    file yields (default_name, "").
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return default_name, ""
+    # Normalize CRLF so the frontmatter fence matches on Windows-authored files
+    # (the closing `\n---` fence would otherwise miss a `\r\n`-terminated block
+    # and silently drop the description/intent).
+    text = text.replace("\r\n", "\n")
+    name, intent = default_name, ""
+    fm = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
+    if fm:
+        body = fm.group(1)
+        nm = re.search(r"^name:\s*(.+)$", body, re.MULTILINE)
+        ds = re.search(r"^description:\s*(.+)$", body, re.MULTILINE)
+        if nm:
+            name = nm.group(1).strip().strip('"\'')
+        if ds:
+            intent = ds.group(1).strip().strip('"\'')
+    if not intent:
+        after = text[fm.end():] if fm else text
+        for line in after.splitlines():
+            s = line.strip().lstrip("#").strip()
+            if s:
+                intent = s
+                break
+    return name, intent
+
+
+def scan_existing_assets(root="."):
+    """Scan the target repo for existing agent-facing assets (#13329).
+
+    Detects Claude Code skills (`.claude/skills/<name>/SKILL.md`), slash
+    commands (`.claude/commands/*.md`), and CLAUDE.md convention files, so the
+    installer can confirm which are actively used and incorporate the confirmed
+    ones as L4 pointers. MCP servers / other tooling are intentionally OUT of
+    v1 scope (post-install per-agent provisioning, INSTALLER-ARCH §8) — their
+    presence is only *flagged* (`mcp_config_present`) so the user isn't
+    surprised the installer skipped them.
+
+    Returns a dict with `skills`, `commands`, `claude_md_files`,
+    `mcp_config_present`. No side effects — the installer confirms with the user
+    before any L4 write.
+    """
+    root = Path(root)
+    claude_dir = root / ".claude"
+    result = {
+        "skills": [],
+        "commands": [],
+        "claude_md_files": [],
+        "mcp_config_present": False,
+    }
+
+    skills_dir = claude_dir / "skills"
+    if skills_dir.is_dir():
+        for skill_path in sorted(skills_dir.iterdir()):
+            skill_md = skill_path / "SKILL.md"
+            if skill_path.is_dir() and skill_md.is_file():
+                name, intent = _parse_asset_frontmatter(
+                    skill_md, default_name=skill_path.name)
+                result["skills"].append({
+                    "name": name,
+                    "path": str(skill_md.relative_to(root)).replace("\\", "/"),
+                    "intent": intent,
+                })
+
+    commands_dir = claude_dir / "commands"
+    if commands_dir.is_dir():
+        for cmd_file in sorted(commands_dir.glob("*.md")):
+            name, intent = _parse_asset_frontmatter(
+                cmd_file, default_name=cmd_file.stem)
+            result["commands"].append({
+                "name": name or cmd_file.stem,
+                "path": str(cmd_file.relative_to(root)).replace("\\", "/"),
+                "intent": intent,
+            })
+
+    # rglob can raise mid-walk on an unreadable subdirectory (restricted paths);
+    # a scan must degrade to what it could read, never crash the installer.
+    try:
+        claude_mds = sorted(root.rglob("CLAUDE.md"))
+    except OSError:
+        claude_mds = []
+    for claude_md in claude_mds:
+        rel = claude_md.relative_to(root)
+        if set(rel.parts) & _ASSET_SKIP_DIRS:
+            continue
+        result["claude_md_files"].append(str(rel).replace("\\", "/"))
+
+    for mcp_marker in (".mcp.json", ".claude/mcp.json"):
+        if (root / mcp_marker).is_file():
+            result["mcp_config_present"] = True
+            break
+
+    return result
+
+
+def cmd_scan_existing_assets(args):
+    """CLI: scan the target repo for existing Claude skills/commands/CLAUDE.md.
+
+    Usage: wizard.py scan-existing-assets [target_dir]
+    """
+    target = args[0] if args and not args[0].startswith("--") else "."
+    _print_json(scan_existing_assets(target))
+    return 0
+
+
 def cmd_setup_yes(args):
     """Non-interactive setup: generate defaults, scaffold, ensure labels.
 
@@ -4263,6 +4391,7 @@ def main():
         "generate-defaults": cmd_generate_defaults,
         "detect-maturity": cmd_detect_maturity,  # #13339
         "propose-roster": cmd_propose_roster,  # #13339
+        "scan-existing-assets": cmd_scan_existing_assets,  # #13329
         "setup-yes": cmd_setup_yes,
         "preflight": cmd_preflight,
         "gather-deps": cmd_gather_deps,
