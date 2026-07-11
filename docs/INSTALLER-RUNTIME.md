@@ -138,6 +138,10 @@ Describe the delivered system accurately, always in user-benefit terms:
 
 The user must leave knowing they can reshape the team any time, not just by re-running setup: they simply tell the PM how they want the team to behave — e.g. "from now on, always write tests first" or "I want to customize the workflow" — and it's saved as a durable project customization behind the scenes. This capability is built into the PM's composed instructions — nothing extra for you to set up; it's live the moment the team is composed. Surface it to the user in plain language.
 
+**Two moments make it discoverable — hit both:**
+- **When the user asks any "can I change this later?" question** during setup (about the roster, the workflow, a convention, anything) — including the open-ended "can I customize the workflow later?" — lead with the everyday affordance: *"Yes — anytime, just tell your PM how you'd like things to work (like 'from now on, always write tests first') and it sticks."* Do **not** answer only with re-running setup or the upgrade path; those are heavier fallbacks, not the everyday answer.
+- **In the hand-off summary (§4 step 9 / §9 Step 9)** — state it plainly as part of what they now have: they steer the team by talking to their PM, and changes persist as project customizations. Never expose the internal mechanism (no "L4", "compose", etc.) — describe only the benefit.
+
 ## 8. Do / don't
 
 **Do:**
