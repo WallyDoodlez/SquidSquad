@@ -57,78 +57,11 @@ class TestTC47EmptySetupRequirements:
         assert ids == ["variant", "stack"]
 
 
-# ---------------------------------------------------------------------------
-# TC-49..TC-52 — Loop interval validation
-# ---------------------------------------------------------------------------
-
-
-class TestTC49To52IntervalValidation:
-    """Step 5 interval input must be an integer >= 1."""
-
-    def test_tc49_accepts_integer_10(self):
-        r = wizard.validate_interval("10")
-        assert r["ok"] is True
-        assert r["minutes"] == 10
-
-    def test_accepts_integer_1(self):
-        assert wizard.validate_interval("1")["minutes"] == 1
-
-    def test_accepts_integer_high(self):
-        assert wizard.validate_interval("60")["minutes"] == 60
-
-    def test_accepts_native_int(self):
-        r = wizard.validate_interval(5)
-        assert r["ok"] is True
-        assert r["minutes"] == 5
-
-    def test_tc50_rejects_zero(self):
-        r = wizard.validate_interval("0")
-        assert r["ok"] is False
-        assert "at least 1" in r["reason"]
-
-    def test_tc51_rejects_negative(self):
-        r = wizard.validate_interval("-5")
-        assert r["ok"] is False
-        assert r["minutes"] is None
-
-    def test_tc52_rejects_non_numeric(self):
-        r = wizard.validate_interval("abc")
-        assert r["ok"] is False
-        assert "not a number" in r["reason"]
-
-    def test_rejects_float(self):
-        r = wizard.validate_interval("10.5")
-        assert r["ok"] is False
-        assert "whole number" in r["reason"]
-
-    def test_rejects_comma_float(self):
-        """European-locale numeric should be rejected, not silently parsed."""
-        r = wizard.validate_interval("1,5")
-        assert r["ok"] is False
-
-    def test_empty_string_uses_default(self):
-        r = wizard.validate_interval("")
-        assert r["ok"] is True
-        assert r["minutes"] == 10
-
-    def test_none_uses_default(self):
-        r = wizard.validate_interval(None)
-        assert r["ok"] is True
-        assert r["minutes"] == 10
-
-    def test_whitespace_only_uses_default(self):
-        r = wizard.validate_interval("   ")
-        assert r["ok"] is True
-        assert r["minutes"] == 10
-
-    def test_custom_default_respected(self):
-        r = wizard.validate_interval("", default=30)
-        assert r["minutes"] == 30
-
-    def test_whitespace_around_integer_ok(self):
-        r = wizard.validate_interval("  15  ")
-        assert r["ok"] is True
-        assert r["minutes"] == 15
+# TC-49..TC-52 (loop interval validation) removed in #13328 — validate_interval
+# and the interactive loop-interval prompt were retired because the polling
+# interval is not a setup question (event mode is the default; the loop is a
+# boot-time fallback). The silent 30-minute default is covered by
+# tests/test_wizard_13328_interval_silent_default.py.
 
 
 # ---------------------------------------------------------------------------

@@ -388,7 +388,8 @@ Check for and add these sections if missing (with defaults):
 
 - `## Preset` — `Id: software-dev`
 - `## Tools` — `(none)`
-- `## Loop` — `Interval Minutes: [existing interval value]`, `Context Threshold: [existing threshold value]`
+- `## Iteration Interval` — `Minutes: [existing interval value, or 30]` (the polling-fallback cadence; config.py reads it here, not under the old `## Loop` heading)
+- `## Context Pressure` — `Threshold: [existing threshold value, or 70]`
 - `## Flags` — `Diagnostics: yes`, `Improvement Scan: [existing value]`, `PR Flow: [existing value]`, `Vault Remember: [existing value]`
 - `## Git Branches` — `Working Branch: [existing value or main]`, `State Branch: [existing value or squid-squad]`
 - `## Forge Backend` — `Provider: github`, `Endpoint: https://api.github.com`

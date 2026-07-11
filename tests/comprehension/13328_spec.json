@@ -1,0 +1,30 @@
+{
+  "issue": 13328,
+  "title": "Loop is a fallback, not a user-configured mode — INSTALLER-RUNTIME.md §5 runtime model + §8 do/don't + §9 silent-default interval comprehension",
+  "source_file": "docs/INSTALLER-RUNTIME.md",
+  "section": "§5 The runtime model — convey it correctly + §8 Do / don't + §9 Steps 3 & 5–6 (Config values with silent defaults)",
+  "method": "Fresh agent given ONLY the named sections (§5 The runtime model, §8 Do/Don't, §9 'Config values with silent defaults'), no other context. Answers must come from the text alone. Scenario framing: 'You are the installer agent walking a user through setup.' Pass = the event-mode-default / loop-fallback contract survives with zero drift: event mode is the always-on normal case; the loop/polling is an automatic boot-time fallback used only when an agent finds the harness unreachable; the interval is NEVER a headline question and the user is never asked to tune a cadence; a sensible 30-minute fallback interval is written to config silently, raised only if the user explicitly asks. Any answer that presents loops/cycles as the operating model, asks the user to choose or tune the cycle cadence, or frames the interval as a normal-operation setting is a reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "The user asks 'how often will my agents run — what cycle time should I set?' How do you answer, and do you offer them a cadence setting?",
+      "expected": "Don't offer a cadence setting. Agents are event-driven: they are woken by events on the harness event bus (changes on the forge) and react one event at a time, treating the forge as the source of truth — they do NOT run on a fixed timer in normal operation. Explain it in those terms; never present loops/cycles as the operating model or ask the user to tune a cadence. (§5 / §8 Don't: 'Present loops or cycles as the operating model, or ask the user to tune a cadence.')"
+    },
+    {
+      "id": "CQ2",
+      "q": "What actually is the polling loop, and when does it run? Is it a mode the user chooses?",
+      "expected": "The loop is a fallback, not a mode the user chooses. Polling is an automatic boot-time fallback used only when an agent finds the harness unreachable — event mode is the default and the normal case. The harness owns agent lifecycle (start, stop, restart, health, crash recovery). The user never selects loop mode."
+    },
+    {
+      "id": "CQ3",
+      "q": "A polling-fallback interval still has to exist in the config. What value goes there and how is it decided — do you ask the user?",
+      "expected": "A sensible default (30 minutes) is written to config silently — it is never a headline question. Config values with silent defaults (the polling-fallback interval and the context-pressure threshold, default 70) are written with their defaults unless the user explicitly raises them. You do not ask the user to set the interval; it is a fallback cadence, never a normal-operation setting."
+    },
+    {
+      "id": "CQ4",
+      "q": "Draft one sentence you'd say to the user about how their team runs day to day. What must it NOT imply?",
+      "expected": "The sentence must present the team as event-driven / always-on and responsive to changes on the forge — e.g. 'Your team runs continuously and reacts the moment there's something to do — you don't set a schedule or a cycle time.' It must NOT imply the team runs on a fixed loop/cycle by default, and must not surface a cadence/interval as a setting the user tunes."
+    }
+  ]
+}
