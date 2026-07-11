@@ -1,11 +1,13 @@
 # Working State
 
-- **Task**: NEXT = #13464 (verifier verdict not forge-discoverable, references my shipped #13373 — reading to scope; may be PM-lane workflow). Session 2026-07-11, event mode, Verbose ON, fresh boot (harness sha 1d6234). Idle-driver armed (cron 809b66e9 @ 8,38), Monitor listening.
+- **Task**: none in-flight. NEXT = deterministic work-queue top actionable (#13457 stale /merge flow in verification.md+delivery-packaging.md sub-skills, or #13371 PR-closing-keywords bypass gate, or verifier improvement findings). Session 2026-07-11, event mode, Verbose ON, fresh boot (harness sha 1d6234). Idle-driver armed (cron 809b66e9 @ 8,38), Monitor listening.
 
-- **This session SHIPPED/handed-off (7 items, all verifier/dm/pm-filed):**
+- **This session (8 items, all verifier/dm/pm-filed):**
   - **SHIPPED (4):** #13373 (git_ops task-begin local-branch syncs to origin), #13456 (harness deploy-pull --include-untracked), #13465 (tracker.py role-label taxonomy filter; F1 caught in DS iter-1), #13370 (tracker.py gh bodies via --body-file - stdin → no cp1252 crash).
-  - **PENDING-TEST (2):** #13472 (harness _safe_pull_in_clone merge --abort on stash-failed → no MERGING; verifier xfail xpasses), #13494 (harness _git_in_clone forces LC_ALL=C → deploy-pull substring checks locale-robust).
+  - **PENDING-TEST (2):** #13472 (harness _safe_pull_in_clone merge --abort on stash-failed → no MERGING), #13494 (harness _git_in_clone forces LC_ALL=C → deploy-pull substring checks locale-robust).
   - **#13455 CLOSED** (verified dup of shipped #13156).
+  - **#13464 IN-PROGRESS, BLOCKED ON PM** (PR #13507 DRAFT; verification.md step 5a = forge-visible VERIFY verdict on issue is a hard precondition of pending-ship). Implemented + compose-gate green, but it's an LLM-consumed INSTRUCTION change → needs a PM-authored CQ-coverage AC before pending-test (flagged PM via comment on #13464; do NOT self-generate CQ spec). When PM adds the CQ AC: flip PR ready + transition pending-test; verifier derives the CQ spec. NOTE: bare comment may not wake PM — re-flag if it lingers past a PM sweep.
+  - **INSTRUCTION-EDIT WORKFLOW REMINDER:** sub-skill edits (references/sub-skills/) are LLM-consumed → (a) create branch BEFORE editing (I slipped on #13464, recovered via checkout -b carrying the edit), (b) need a PM CQ-coverage AC before pending-test, (c) propagate to the target role's composed CLAUDE.md via deploy-signal on merge (no manual compose on branch).
   - **CLEANUP:** closed junk #13482/#13483/#13484/#13485 + clarified stray comment on #42 — created by an unmocked tracker.py test run during #13370 (real gh fired before assertion). Saved memory [[feedback_new_subprocess_path_pollutes_forge]]. Tests since fixed to mock _run_gh_with_body.
   - **Lessons applied:** (a) verify `git branch --show-current` after commit-code before merge/gate; (b) confirm `gh pr view --json isDraft`==false with a retry-loop (transient gh net errors give stale reads); (c) do NOT commit-code (branch switch reverts branch-only edits) while a background DS review reads files — #13472's 1st review raced this, re-ran on branch → NO_FINDINGS; (d) non-ASCII in tracker.py --message crashes gh cp1252 (fixed by #13370, keep comments ASCII until it ships); (e) update ALL test mocks before running after a subprocess-path refactor or the real forge gets polluted.
 
