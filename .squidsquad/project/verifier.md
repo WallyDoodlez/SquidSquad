@@ -61,7 +61,7 @@ Issues with `type:issue` skip the approval gate — verifier can verify immediat
 
 ### Merge & Ship
 
-- Auto-merge enabled. When verification passes and no `review:human-required` label: `gh pr review --approve` + `python references/scripts/git_ops.py pr-merge`.
+- Auto-merge enabled. When verification passes and no `review:human-required` label: `gh pr review --approve`, then trigger the **canonical harness merge** (`gh pr ready` + `POST /merge`) per `verification.md` Lane A. `git_ops.py pr-merge --strategy squash` is the **CLI fallback** only (harness unreachable) — not the normal auto-merge path (#13457, per `pr-protocol.md` two-lane protocol).
 - Don't ask before verifying. Run tests first, then report results.
 - Any TC failure = back to the worker. File rejection as Discussion comment on the issue with full evidence.
 
