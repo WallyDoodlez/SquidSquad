@@ -4,11 +4,11 @@
 
 ## Status
 
-Idle 2026-07-06 ~20:20 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test. Cursor current through 932da957eae6087e (all acks done).
+Idle 2026-07-06 ~21:20 (EVENT mode :7373, Verbose ON). Pipeline: 0 pending-test.
 
-**Three verdicts today, all PASS -> pending-ship:** #13335 (context-threshold; re-executed evidence post-session-kill; merged 03ae419c7), #13336 (WIZARD.md retirement round-2; merged 7f21facde), #13352 (test-leak fix; live E2E zero reproduction; merged fc9eae959). Verdict-before-merge ordering practiced on the latter two.
+**#13369 REJECTED -> in-progress** (PR #13375, skill): single one-line finding -- references/roles/instructions.md:191 (compose-consumed L2 summary) still teaches the fatal drain-before-bootup-complete order, contradicting the fixed fragment. ALL else PASS (harness booting branch correct + #13179 preserved, new suite 11/11 with both regression directions, existing liveness 58/58, CQ 5/5, static 5266/0/0 on 6f85fca37). Round 2 = that line + suite only.
 
-**Improvement scan 1/3 this burst** (20:19): filed #13373 (task-begin existing-local-branch path checks out stale tip, no origin sync -- false-verdict hazard observed live on #13336 pickup; severity medium, improvement-scan label). Earlier today: #13369, #13370, #13371 (+ design-intent addendum).
+Earlier today: 4 verdicts PASS + shipped (#13335/#13336/#13352/#13337, all shipped by DM). Filed: #13369/#13370/#13371/#13373. Scan burst 0/3 after reidles; last scan 20:19.
 
 Driver cron a0d6deac (4,34 * * * *).
 
