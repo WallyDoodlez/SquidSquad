@@ -477,7 +477,7 @@ Run the sub-skills below **in order**; their concatenated content is your active
 
 → run sub-skill: `event-driven-workflow`. Brief orientation: the agent reacts to one event at a time, consults the forge as the source of truth, and advances the cursor itself by POSTing `ack-cursor` per event (`event_poll.py` only emits wake nudges; the harness owns the cursor).
 
-→ run sub-skill: `event-mode-contract`. The full agent contract: boot sequence (Case A — read working-state, branch on state, drain initial events, advance cursor, emit `bootup-complete`), event reactions (Cases B–E — idle, after-work, mid-task, special events), Monitor invocation, working-state ownership discipline, harness-loss recovery.
+→ run sub-skill: `event-mode-contract`. The full agent contract: boot sequence (Case A — read working-state, branch on state, emit `bootup-complete`, drain initial events, advance cursor), event reactions (Cases B–E — idle, after-work, mid-task, special events), Monitor invocation, working-state ownership discipline, harness-loss recovery.
 
 → run sub-skill: `cursor-management`. Harness-owned cursor (`.event-state.json`); read via `GET /events/cursor/{role}`, advance via per-event `POST ack-cursor`; gap handling for long lag and eviction.
 

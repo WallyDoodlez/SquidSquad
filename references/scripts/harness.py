@@ -478,11 +478,13 @@ class AgentState:
         the silence. This catches the zombie PID-liveness cannot: an alive
         process doing zero work (#10855 / #10440).
 
-        SHADOW / OBSERVATIONAL this slice — computed and logged alongside the PID
-        decision to validate divergence; it does NOT yet drive the reboot. The
-        cutover (making this authoritative + demoting PID to teardown-only) is a
-        later, separately-reviewed step once the shadow data confirms no false
-        positives (killing a live agent) or false negatives (missing a death).
+        AUTHORITATIVE since the #12492 cutover (`_PROGRESS_LIVENESS_AUTHORITATIVE`):
+        a running agent whose PID is alive but whose progress verdict is dead is
+        killed by the zombie-kill step in ``update_health`` so the normal reboot
+        path respawns it. (This docstring previously described the pre-cutover
+        shadow/observational slice — stale since #12492, corrected in #13369
+        because the wedged-boot verdict now feeds a real kill and its precision
+        matters.)
 
         THREAD-SAFETY (DS-c1 F2): this reads several fields that other daemon
         threads write under ``state._lock`` (the EAD writes ``last_dispatch_at``;
@@ -495,17 +497,43 @@ class AgentState:
         # A not-yet-booted agent has no heartbeat baseline — within a generous
         # boot-grace it may legitimately be mid-boot, so treat it as alive. But
         # the escape is BOUNDED (#13179 / #12271 Slice A): a boot that never
-        # completes is a wedge, not a slow boot (the qa incident sat
-        # bootup_complete=False ~54m). Age it from the most recent spawn
-        # (last_spawn_at; fall back to boot_time) — past BOOT_GRACE_SECONDS with
-        # no bootup-complete it reads wedged. If we have no spawn reference we
+        # completes is a wedge, not a slow boot (the #13179 qa incident sat
+        # bootup_complete=False ~54m with NO activity). Age it from the most
+        # recent spawn (last_spawn_at; fall back to boot_time) — past
+        # BOOT_GRACE_SECONDS with no bootup-complete AND no sign of life
+        # (#13369: no ceiling-bounded active pause, no spawn-scoped fresh
+        # activity heartbeat) it reads wedged. If we have no spawn reference we
         # cannot age it, so stay conservative and report booting (never
-        # false-positive a death we cannot time). Shadow-only: this changes the
-        # logged verdict, not the reboot decision (cutover is #12492).
+        # false-positive a death we cannot time).
         if not self.bootup_complete:
             boot_ref = (self.last_spawn_at
                         if self.last_spawn_at is not None else self.boot_time)
             if boot_ref is not None and now - boot_ref > BOOT_GRACE_SECONDS:
+                # #13369: past the grace, distinguish a WEDGED boot from a
+                # boot doing REAL work (a heavy cared event in the boot drain
+                # — e.g. a full verification run — legitimately outlives the
+                # grace). Consult the same explained-silence + activity
+                # signals the post-boot path trusts, before declaring wedged:
+                # an active pause (in-flight tool call / compacting /
+                # waiting, each ceiling-bounded) or a fresh activity
+                # heartbeat that POSTDATES this spawn (a stale reading from
+                # the prior session must not excuse a wedge — same
+                # spawn-scoping as operator_force_death) reads alive. A
+                # truly-inert boot has neither, so it still reads wedged at
+                # the bound (#13179 preserved); a boot that worked then
+                # wedged reads wedged once its last heartbeat ages past
+                # ACTIVITY_GRACE_SECONDS — bounded, never wedge-forever.
+                # Worst-case wedge-detection delay: BOOT_GRACE plus the
+                # largest pause ceiling (WAITING_MAX = 30m) ≈ 40m — the
+                # accepted tradeoff vs killing a working boot (#13369).
+                pause = self.active_pause(now)
+                if pause is not None:
+                    return True, f"booting-{pause}"
+                if (self.last_activity_at is not None
+                        and self.last_activity_at >= boot_ref
+                        and now - self.last_activity_at
+                        <= ACTIVITY_GRACE_SECONDS):
+                    return True, "booting-active"
                 return False, "wedged-boot-timeout"
             return True, "booting"
         # An explained pause (in-flight tool call / compacting / waiting) means
@@ -1488,6 +1516,14 @@ class HarnessState:
           bootup_complete=False until it re-asserts ``bootup-complete``, so a
           leftover high value from the prior session cannot immediately re-trip
           the new process before its statusline writes a fresh reading.
+          NOTE (#13369): the contract now emits bootup-complete BEFORE the
+          boot drain, so this gate opens earlier than it used to — the
+          stale-file window is now the gap between the step-4 emission and
+          the session's first statusline write. A stale high reading landing
+          in that gap trips a graceful checkpoint-and-respawn (not a lost
+          session), so the narrowed defense is an accepted tradeoff vs the
+          drain-kill it replaces; a fresh-reading-before-enforcement
+          handshake would close it fully if it ever bites in practice.
         """
         if _NO_AUTO_REBOOT:
             return
