@@ -1958,7 +1958,7 @@ def _ensure_hooks_installed():
 
 def _parse_args():
     args = sys.argv[1:]
-    if not args or args[0] == "--help":
+    if not args or args[0] in ("--help", "-h"):
         print(__doc__)
         sys.exit(0)
     return args[0], args[1:]
@@ -2017,9 +2017,23 @@ def main():
         success = pr_ready(rest[0])
         sys.exit(0 if success else 1)
     elif cmd == "pr-merge":
-        if not rest:
-            print("Usage: git_ops.py pr-merge <pr-number> [--strategy squash|merge]", file=sys.stderr)
-            sys.exit(1)
+        _pr_merge_usage = "Usage: git_ops.py pr-merge <pr-number> [--strategy squash|merge]"
+        # Validate the PR number BEFORE any side effect. pr_merge() runs a real
+        # squash-merge + post-merge scope-audit/compose, so calling it with a bogus
+        # "PR number" (e.g. the literal "--help" from `pr-merge --help`, which
+        # `_parse_args` only catches in the SUBCOMMAND position) dirtied the tree
+        # and printed a false "PR #--help merged (squash)" (#13433). Treat a
+        # subcommand-position -h/--help as a help request (exit 0), a missing arg
+        # as a usage error (exit 1), and a non-numeric arg as invalid usage
+        # (exit 2 — distinct from a genuine merge failure, which returns exit 1).
+        if not rest or rest[0] in ("-h", "--help"):
+            print(_pr_merge_usage, file=sys.stderr)
+            sys.exit(0 if rest else 1)
+        if not rest[0].isdigit():
+            print(f"ERROR: invalid PR number {rest[0]!r} (expected a positive "
+                  f"integer); no merge attempted.", file=sys.stderr)
+            print(_pr_merge_usage, file=sys.stderr)
+            sys.exit(2)
         strategy = "squash"
         if "--strategy" in rest:
             idx = rest.index("--strategy")

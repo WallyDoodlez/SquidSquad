@@ -874,6 +874,13 @@ class TestParseArgs:
             with pytest.raises(SystemExit):
                 git_ops._parse_args()
 
+    def test_dash_h_exits(self):
+        # -h at the subcommand position prints usage and exits (#13433).
+        with patch.object(sys, "argv", ["git_ops.py", "-h"]):
+            with pytest.raises(SystemExit) as exc:
+                git_ops._parse_args()
+        assert exc.value.code == 0
+
     def test_no_args_exits(self):
         with patch.object(sys, "argv", ["git_ops.py"]):
             with pytest.raises(SystemExit):
@@ -890,6 +897,64 @@ class TestParseArgs:
             cmd, rest = git_ops._parse_args()
             assert cmd == "commit"
             assert rest == ["skill", "msg"]
+
+
+# ---------------------------------------------------------------------------
+# pr-merge dispatch arg guard (#13433)
+# ---------------------------------------------------------------------------
+
+class TestPrMergeArgGuard:
+    """`pr-merge` must validate the PR number BEFORE any side effect. Previously
+    `pr-merge --help` (and other non-numeric first args) reached pr_merge(), which
+    runs a real squash-merge + post-merge compose — dirtying the tree and printing
+    a false 'PR #--help merged (squash)'. These tests assert pr_merge is never
+    invoked with a bogus PR number."""
+
+    def _run_main(self, argv, monkeypatch):
+        spy = MagicMock(return_value=(True, "ok"))
+        monkeypatch.setattr(git_ops, "pr_merge", spy)
+        # Keep the dispatch hermetic — main() self-heals git hooks otherwise.
+        monkeypatch.setattr(git_ops, "_ensure_hooks_installed", lambda: None)
+        monkeypatch.setattr(sys, "argv", ["git_ops.py"] + argv)
+        with pytest.raises(SystemExit) as exc:
+            git_ops.main()
+        return spy, exc.value.code
+
+    def test_help_does_not_merge(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "--help"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 0  # help is a successful request
+
+    def test_dash_h_does_not_merge(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "-h"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 0
+
+    def test_missing_number_is_usage_error(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 1  # missing required arg
+
+    def test_non_numeric_is_rejected(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "notanumber"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 2  # invalid usage, distinct from a merge failure (1)
+
+    def test_flag_in_number_position_is_rejected(self, monkeypatch):
+        # `pr-merge --strategy squash` (forgot the number) must NOT merge.
+        spy, code = self._run_main(["pr-merge", "--strategy", "squash"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 2
+
+    def test_valid_number_merges(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "13523"], monkeypatch)
+        spy.assert_called_once_with("13523", "squash")
+        assert code == 0
+
+    def test_valid_number_honors_strategy(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "13523", "--strategy", "merge"], monkeypatch)
+        spy.assert_called_once_with("13523", "merge")
+        assert code == 0
 
 
 # ---------------------------------------------------------------------------
