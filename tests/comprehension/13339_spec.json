@@ -1,0 +1,35 @@
+{
+  "issue": 13339,
+  "title": "Project-maturity probe + workflow→roster mapping heuristic — INSTALLER-RUNTIME.md §4 empty-project + §9 Steps 3 & 5–6 comprehension",
+  "source_file": "docs/INSTALLER-RUNTIME.md",
+  "section": "§4 The flow (steps 3, 5, 6 + § Adapting to an empty project) + §9 Steps 3 & 5–6 — mapping the workflow to a team",
+  "method": "Fresh agent given ONLY the named sections (§4 steps 3/5/6, §4 § Adapting to an empty project, §9 Steps 2–3 + Steps 3 & 5–6), no other context. Answers must come from the text alone. Scenario framing: 'You are the installer agent understanding a project and shaping its team.' Pass = the maturity-branch and roster-mapping contract survives with zero drift: maturity is probed with detect-maturity into empty/scaffolded/established and CONFIRMED with the user (not announced); the empty path elicits intent + rosters from the intended type + treats reconcile as a no-op + ends the hand-off with a concrete first step; the roster heuristic varies ONLY the worker count/shape (FE+BE → two workers, one surface → one specialized, nothing decisive → one fullstack) while PM, DM and Verifier stay fixed singletons; and the verifier's verified-stage detail is understood as behavior customization, never a count. Any answer that proposes multiple verifiers by count, treats maturity as a silent verdict, invents step-4 findings for an empty repo, or scans a codeless repo instead of using --intended is a reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Before you dig into understanding a project, you want to know how much of it already exists. What do you run, what are the possible outcomes, and how do you use the result with the user?",
+      "expected": "Run python references/scripts/wizard.py detect-maturity [dir] — it reports where the project sits as one of three tiers, empty → scaffolded → established, plus the signals behind the call (recognized source-file count, whether a package manifest/framework is present, whether tests exist), as a JSON envelope. Use it to GROUND the call, then confirm your read in the user's terms — do not announce a verdict. The tier picks the matching path (analyze-what-exists for established; elicit-what's-intended for empty)."
+    },
+    {
+      "id": "CQ2",
+      "q": "detect-maturity comes back 'empty' — a fresh repo with nothing to analyze. How does the flow change across understanding, reconcile, roster, and hand-off?",
+      "expected": "Shift from analyzing what exists to eliciting what's intended. Step 2 leans on external references and the user's own description of what they're about to build (goal, type, stack) rather than code that isn't there. Step 3 has no existing workflow to discover — propose SquidSquad's default create → build → verify → deliver workflow and ask the user to confirm/adjust. Step 4 (reconcile) is a no-op — say so honestly, don't invent findings. Propose the roster from the *intended* project type. Everything from step 5 on is unchanged, and end the hand-off with a concrete first step (a new project's next move is unobvious): 'Your team's ready — just tell your PM what you'd like to build first.'"
+    },
+    {
+      "id": "CQ3",
+      "q": "You've understood a project that has a React frontend and a Django/Python backend. How do you turn that into a proposed team? Name the helper and the shape it proposes.",
+      "expected": "Run python references/scripts/wizard.py propose-roster [dir] — it reads the scan and proposes the engineering-team shape from the built stage (the detected stack). A frontend AND a backend surface → two workers (be + fe). PM, DM and Verifier are always singletons; only the worker roster varies. The proposal pre-fills the worker `variant` answer and is what you confirm in steps 5–6 (it doesn't replace the per-agent confirmation)."
+    },
+    {
+      "id": "CQ4",
+      "q": "This project has an unusually strict, multi-surface QA process (unit + E2E + security). Does that mean you propose more than one verifier? Explain what varies in the roster and what doesn't.",
+      "expected": "No — you do not propose multiple verifiers. PM, DM and Verifier are always singletons (the manifests mark all three always_installed / show_in_roster:false with no variant), so only the worker roster varies in count/specialization. The verifier's 'verified'-stage specifics (how strict the gate is, what 'done right' means, the multiple surfaces) shape its BEHAVIOR — a step-6 per-agent customization — never its count."
+    },
+    {
+      "id": "CQ5",
+      "q": "The repo is essentially empty — there's no code to scan — but the user tells you they're building a full-stack web app. How do you get a proposed roster, and what does it look like?",
+      "expected": "Since there's nothing to scan, pass the user's stated type to the heuristic: python references/scripts/wizard.py propose-roster --intended both|fullstack|backend|frontend (roster from the intended type). For a full-stack app the natural mapping is 'both' → two workers (be + fe), or 'fullstack' → a single fullstack worker — confirm which they mean. PM, DM and Verifier remain singletons. This is the empty-project adaptation: propose the roster from the intended project type rather than from code that isn't there."
+    }
+  ]
+}
