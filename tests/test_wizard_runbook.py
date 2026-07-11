@@ -53,6 +53,8 @@ _WIZARD_COMMANDS = {
     "merge-deny-list",
     # #13339 §4/§9 project-maturity probe + workflow→roster mapping heuristic.
     "detect-maturity", "propose-roster",
+    # #13329 §4 step 4 reconcile — scan existing Claude skills/commands/CLAUDE.md.
+    "scan-existing-assets",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}

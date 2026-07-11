@@ -1,0 +1,30 @@
+{
+  "issue": 13329,
+  "title": "Scan → confirm → incorporate existing Claude assets as L4 — INSTALLER-RUNTIME.md §4 step 4 + §9 Step 4 comprehension",
+  "source_file": "docs/INSTALLER-RUNTIME.md",
+  "section": "§4 step 4 (Reconcile what's already there) + §9 Step 4 — Reconcile existing agent assets (scan → confirm → incorporate)",
+  "method": "Fresh agent given ONLY the named sections (§4 step 4, §9 'Step 4 — Reconcile existing agent assets'), no other context. Answers must come from the text alone. Scenario framing: 'You are the installer agent reconciling the project's existing Claude tooling.' Pass = the scan→confirm→incorporate contract survives with zero drift: discover assets via scan-existing-assets; the user's per-asset confirmation GATES incorporation (declined/stale never imported); a confirmed asset becomes an L4 POINTER (name + path + trigger-bearing one-line intent) via l4-curation, NOT an inline copy; route to the NARROWEST applicable role(s) (fan-out only for genuinely universal conventions); MCP/other tooling is out of scope (flagged for awareness only, handled post-install). Any answer that imports assets without the confirm gate, inlines an asset's body into L4, fans a niche asset to all roles, or incorporates MCP config as an L4 asset is a reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You're reconciling the project's existing tooling. How do you discover what Claude assets it already has, and what does the helper report?",
+      "expected": "Run python references/scripts/wizard.py scan-existing-assets [dir] — it returns a JSON envelope listing skills (.claude/skills/*/SKILL.md), commands (.claude/commands/*.md) each with a name, path, and one-line intent, plus claude_md_files (convention files) and mcp_config_present. It's detection only — no import happens from the scan."
+    },
+    {
+      "id": "CQ2",
+      "q": "The scan finds three skills and two slash commands. Do you incorporate all of them into the squad? What gates it?",
+      "expected": "No — the user's confirmation gates everything. Present what was found in plain language and ask, per asset, whether it's actively used and whether the squad should know about it. Declined or stale assets are NOT imported. Only confirmed assets get incorporated."
+    },
+    {
+      "id": "CQ3",
+      "q": "The user confirms a frontend-only skill is actively used. How do you incorporate it, into whose instructions, and what must you NOT do?",
+      "expected": "Incorporate it as an L4 POINTER via l4-curation — write a short pointer (the asset's name + path + a one-line intent that captures its TRIGGER, i.e. when to reach for it) into the L4 file, NOT an inline copy of the asset's body (the asset file stays the source of truth; inlining drifts and bloats every composed CLAUDE.md). Route it to the NARROWEST applicable role — here the frontend worker's L4 file only. Do NOT fan a niche asset out to all role-class files; fan-out is reserved for genuinely universal conventions. The pointer then surfaces in that role's composed CLAUDE.md at recompose."
+    },
+    {
+      "id": "CQ4",
+      "q": "scan-existing-assets reports mcp_config_present: true. Do you incorporate the MCP config as an L4 customization?",
+      "expected": "No — MCP servers / other tooling are out of scope for this step. mcp_config_present is surfaced for awareness only: mention to the user that it's handled as post-install per-agent tool setup (so they aren't surprised it was skipped), but do not import it as an L4 asset."
+    }
+  ]
+}
