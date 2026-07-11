@@ -49,6 +49,19 @@
 - Scope = tests/run_tests.py (test-infra CLI) + test, **NOT compose source** → no recompose/reboot/harness-restart; live on next invocation.
 - Internal test-tooling hardening, not user-facing → no standalone CHANGELOG entry. Counter **33 → 34** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch **3.4× threshold**, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
 
+### #13454 SHIPPED 2026-07-11 ~19:1xZ ✅ (git_ops.py pr_merge self-heals a draft PR via gh pr ready instead of raw GraphQL draft error)
+- pending-ship surfaced during the merge-incident investigation (assigned-to arrived; forge-read confirmed pending-ship). role:skill, type:issue, sev:low (verifier-filed). PR **#13546** merged squash **57b8faa66** (base main, **verified ancestor of origin/main**, 2 files +67/-9, **0 file-deletions**).
+- qa VERIFY **PASS zero gaps** (AC1-6, re-verified after a branch merge-conflict resolution — independently confirmed pr_merge byte-identical pre/post; 17/17 tests; full static gate 5455/0). No delivery:skip.
+- Scope = references/scripts/git_ops.py (pr_merge draft self-heal) + test, **NOT compose source** → no recompose/reboot/harness-restart; live on next pr-merge invocation.
+- **This PR's own branch is the one whose merge triggered the [[learning-merge-driver-defeated-by-delete-not-modify]] incident above** (see the banner note near the top of this file + #13556). Not a defect in this PR's actual content — the branch carried unrelated stale state/vault churn.
+- Not user-facing → no standalone CHANGELOG entry. Counter **34 → 35** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
+### #13353 SHIPPED 2026-07-11 ~19:1xZ ✅ (harness EAD suppresses assigned-to re-emit for an alive+active target agent — kills the 18-duplicate-nudge storm)
+- pending-ship surfaced same walk (assigned-to arrived; forge-read confirmed pending-ship). role:skill, type:issue, sev:low (verifier self-filed after observing 18 duplicate re-nudges on #13335). PR **#13553** merged squash **73eacfaf8** (base main, **verified ancestor of origin/main**, 2 files +220/-0, **0 file-deletions**).
+- qa VERIFY **PASS zero gaps** (AC1-6 incl. independent repro of the exact #13335 real-world scenario beyond the PR's own suite; DeepSeek review NO_FINDINGS given EAD-dispatch blast radius; full static gate 5465/0). No delivery:skip.
+- Scope = references/scripts/harness.py (EAD dispatch) + test → NOT compose source (no agent CLAUDE.md recompose/reboot), but **⚠️ HARNESS restart needed** — running shared harness serves the old unbounded re-emit cadence until restarted; folds into the standing operator-paced restart window (now 3 deep this session: #13345, this one, and earlier-session items).
+- Not user-facing → no standalone CHANGELOG entry. Counter **35 → 36** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
 ### #13434 SHIPPED 2026-07-11 ~18:3xZ ✅ (build_config_md<->FIELD_MAP round-trip gate test — closes the #13328/#13355 dead-config-heading class at the static gate)
 - pending-ship, discovered via post-#13323-ship re-scan of `gh issue list --label status:pending-ship` (not in my boot drain — landed between drain and pickup). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13538** merged squash **d2561bd88** (base main, **verified ancestor of origin/main**, 1 file +125/-0, test-only, **0 file-deletions**).
 - qa VERIFY **PASS zero gaps** (AC1-4 incl. non-vacuous negative-control reproduction of both #13328 interval/threshold and #13355 PR-Flow dead-heading classes; full static gate 5409/0). No delivery:skip.
