@@ -167,18 +167,20 @@ class TestListAllOpen:
 
 class TestCreateIssue:
     def test_creates_with_correct_labels(self, monkeypatch):
+        # #13370: create_issue routes the body via _run_gh_with_body (stdin); the
+        # title/label stay in the cmd argv.
         calls = []
 
-        def fake_run(cmd, **kw):
-            calls.append(cmd)
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
             return _mock_result(stdout="https://github.com/org/repo/issues/99\n")
 
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
-        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
         number = tracker.create_issue("test bug", "body", "skill", "high", "pm-lead")
         assert number == 99
-        # Verify labels include type:issue, severity:high, role:skill
-        label_arg = calls[0][calls[0].index("--label") + 1]
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
         assert "type:issue" in label_arg
         assert "severity:high" in label_arg
         assert "role:skill" in label_arg
@@ -187,14 +189,15 @@ class TestCreateIssue:
     def test_strips_duplicate_prefix(self, monkeypatch):
         calls = []
 
-        def fake_run(cmd, **kw):
-            calls.append(cmd)
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
             return _mock_result(stdout="https://github.com/org/repo/issues/1\n")
 
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
-        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
         tracker.create_issue("ISSUE: already prefixed", "body", "skill", "low")
-        title_arg = calls[0][calls[0].index("--title") + 1]
+        cmd = calls[0][0]
+        title_arg = cmd[cmd.index("--title") + 1]
         assert title_arg == "ISSUE: already prefixed"
         assert not title_arg.startswith("ISSUE: ISSUE:")
 
@@ -203,15 +206,16 @@ class TestCreateTask:
     def test_creates_with_pending_status(self, monkeypatch):
         calls = []
 
-        def fake_run(cmd, **kw):
-            calls.append(cmd)
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
             return _mock_result(stdout="https://github.com/org/repo/issues/50\n")
 
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
-        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
         number = tracker.create_task("new feature", "body", "skill", "medium")
         assert number == 50
-        label_arg = calls[0][calls[0].index("--label") + 1]
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
         assert "type:task" in label_arg
         assert "status:pending" in label_arg
 
@@ -236,15 +240,15 @@ class TestCreateTask:
         """#6848: create_task should include reporter in body when provided."""
         calls = []
 
-        def fake_run(cmd, **kw):
-            calls.append(cmd)
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
             return _mock_result(stdout="https://github.com/org/repo/issues/51\n")
 
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
-        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
         tracker.create_task("feat", "body", "skill", "medium", reporter="skill-lead")
-        body_idx = calls[0].index("--body") + 1
-        assert "**Reported By**: skill-lead" in calls[0][body_idx]
+        # #13370: the reporter-annotated body is now passed as the stdin body arg.
+        assert "**Reported By**: skill-lead" in calls[0][1]
 
 
 class TestCommentNoRedundantImport:
@@ -260,19 +264,20 @@ class TestCommentNoRedundantImport:
 
 class TestComment:
     def test_adds_comment(self, monkeypatch):
+        # #13370: comment() routes the body via _run_gh_with_body (stdin).
         calls = []
 
-        def fake_run(cmd, **kw):
-            calls.append(cmd)
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
             return _mock_result()
 
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
-        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
         tracker.comment(42, "skill-lead", "test message")
-        assert any("comment" in c for c in calls)
-        body_idx = calls[0].index("--body") + 1
-        assert "**skill-lead**:" in calls[0][body_idx]
-        assert "test message" in calls[0][body_idx]
+        assert any("comment" in c for c, _ in calls)
+        body = calls[0][1]
+        assert "**skill-lead**:" in body
+        assert "test message" in body
 
 
 class TestGetLabels:
