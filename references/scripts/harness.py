@@ -5063,6 +5063,16 @@ def _safe_pull_in_clone(clone_path):
     pre_ref = _stash_ref()
     stash = _git_in_clone(clone_path, ["stash", "--include-untracked"])
     if stash.returncode != 0:
+        # #13472: a GENUINE committed conflict makes the FIRST pull start a merge
+        # that conflicts, leaving an unmerged index — on which `git stash` then
+        # fails ("could not write index"). Returning here without aborting would
+        # leave the clone MERGING (.git/MERGE_HEAD), wedging the NEXT deploy's
+        # `checkout main` ("you have not concluded your merge") — the exact state
+        # this function's docstring says it prevents. Abort the in-progress merge
+        # first; it is a harmless no-op when no merge is underway (the ordinary
+        # dirty-tree stash-failure). The pull still FAILED (origin not synced) →
+        # report failure so the caller routes to §11 recovery.
+        _git_in_clone(clone_path, ["merge", "--abort"])
         return False, f"stash-failed: {(stash.stderr or first.stderr).strip()[:200]}"
     # #13167: `git stash` on a CLEAN tree is a no-op that still exits 0 — only
     # pop a stash we actually created (ref changed), else a pop would splatter a
