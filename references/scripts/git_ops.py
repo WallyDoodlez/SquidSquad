@@ -749,6 +749,37 @@ def _pr_declared_files(pr_number):
         return None
 
 
+def _pr_state_scope_violations(pr_number):
+    """#13554 -- main-only state/vault paths the PR DECLARES that must never ride
+    a feature PR. Returns the sorted violating paths, or ``None`` if the PR's file
+    set can't be determined (fail-OPEN, matching ``_pr_behind_by`` -- a gh hiccup
+    must not wedge shipping; the #13285 post-merge audit backstops).
+
+    Reuses the exact ``_is_state_file`` predicate the #11511 commit-time guard uses
+    to strip these on feature-branch commits (``.squidsquad/`` + ``.claude/`` minus
+    the launcher-script allow-list), plus the ``_is_plan_body`` (#12750) exemption.
+
+    Why a MERGE-gate check is needed even with the #11511 commit-time guard: that
+    guard only unstages NEWLY-staged state on a branch commit -- it does not
+    restore a path already ABSENT/emptied in the branch tree (from the branch's own
+    prior merge-conflict resolution, or a fork point that predates a teammate's new
+    file), and it has a fork-point gap on paths created after the branch forked.
+    Such a path rides the PR as a DELETE/REVERT, and ``.gitattributes``
+    merge=ours/union does NOT protect a modify-vs-DELETE (it only fires
+    modify-vs-modify -- see the #13554 incident: a squash silently reverted 1328
+    lines of teammate state+vault on main with zero conflict signal). The #13271
+    behind-count guard misses it (the incident branch was only a few commits
+    behind, not >50) and the #13285 post-merge deletion-audit misses it (the
+    reversions ARE in the PR's declared set, so ``deleted - declared`` is empty).
+    This gate catches the whole class at the last safe point before main is
+    touched."""
+    declared = _pr_declared_files(pr_number)
+    if declared is None:
+        return None
+    return sorted(f for f in declared
+                  if _is_state_file(f) and not _is_plan_body(f))
+
+
 def _merge_commit_sha(pr_number):
     """The squash/merge commit SHA GitHub recorded for the PR, or ``None``."""
     res = _run_list(
@@ -993,6 +1024,34 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                    f"(run `gh pr ready {pr_number}` and retry)")
             print(f"ERROR: {msg}", file=sys.stderr)
             return False, "PR is a draft"
+
+    # #13554 (SEV prevention): refuse to merge a PR that DECLARES changes to
+    # main-only state/vault paths. These must never ride a feature PR -- the
+    # #11511 commit-time guard strips them, but has gaps (a path already
+    # ABSENT/emptied in the branch tree, or created after the branch's fork
+    # point), and merge=ours/union does NOT protect a modify-vs-DELETE, so the
+    # squash silently reverts teammate state+vault on main (#13554: 1328
+    # out-of-scope lines, dm working-state emptied, 10 vault notes deleted). The
+    # #13271 behind-count guard misses it (fires at LOW behind-counts too) and
+    # the #13285 post-merge deletion-audit misses it (the reversions ARE in the
+    # PR's declared set). Fail-SAFE: refuse BEFORE any damage; fail-OPEN when the
+    # file set is undeterminable (a gh hiccup must not wedge shipping -- the
+    # post-merge audit backstops). Applies to ALL strategies (state files belong
+    # in no PR, squash or merge-commit).
+    state_violations = _pr_state_scope_violations(pr_number)
+    if state_violations:
+        preview = ", ".join(state_violations[:8])
+        more = (f" (+{len(state_violations) - 8} more)"
+                if len(state_violations) > 8 else "")
+        msg = (f"PR #{pr_number} declares {len(state_violations)} main-only "
+               f"state/vault path(s) that must not ride a feature PR: {preview}"
+               f"{more}. Merging would silently revert teammate state on main "
+               f"(#13554). Restore these paths to origin/main on the branch "
+               f"(`git checkout origin/main -- <path>`; use `git commit "
+               f"--no-verify` to bypass the #11511 branch state-guard) and "
+               f"re-push, then retry.")
+        print(f"ERROR: {msg}", file=sys.stderr)
+        return False, "PR carries out-of-scope state/vault changes"
 
     # #13271 (SEV-1 prevention): refuse to squash-merge a branch that is FAR
     # behind base — a stale-tree squash from a deeply-behind clone mass-reverts

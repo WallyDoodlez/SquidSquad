@@ -22,8 +22,13 @@ def _safe_behind_guard():
     """#13271: the pre-merge behind-count guard adds two gh calls before the
     squash. These pre-existing pr_merge tests mock _run_list sequences that
     predate the guard, so default the behind-count to 0 (current) — the guard's
-    own behavior is covered in test_git_ops.py::TestPrMerge/TestPrBehindBy."""
-    with patch("git_ops._pr_behind_by", return_value=0):
+    own behavior is covered in test_git_ops.py::TestPrMerge/TestPrBehindBy.
+    #13554: same rationale for the pre-merge state-scope guard — stub it to
+    "no violations" so its _pr_declared_files -> _run_list call stays out of
+    these predating mock sequences (guard behavior covered in test_git_ops.py::
+    TestPrMerge/TestPrStateScopeViolations13554)."""
+    with patch("git_ops._pr_behind_by", return_value=0), \
+            patch("git_ops._pr_state_scope_violations", return_value=[]):
         yield
 
 

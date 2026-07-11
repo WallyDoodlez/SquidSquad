@@ -542,7 +542,13 @@ class TestPrMerge:
         # #13285: stub the post-merge scope-audit to a no-op so it does not consume
         # the per-test _run_list mock sequence (the audit has its own tests in
         # TestScopeAudit13285).
+        # #13554: stub the pre-merge state-scope guard to "no violations" so the
+        # existing merge-flow tests exercise the merge path unchanged; the
+        # dedicated guard tests (TestPrMergeStateScopeGuard13554) re-patch it to
+        # assert the refusal. Stubbing it also keeps its _pr_declared_files ->
+        # _run_list call out of the per-test mock sequence.
         with patch("git_ops._pr_behind_by", return_value=0), \
+                patch("git_ops._pr_state_scope_violations", return_value=[]), \
                 patch("git_ops._post_merge_scope_audit"):
             yield
 
@@ -786,6 +792,104 @@ class TestPrMerge:
         assert git_ops._merge_max_behind() == 7
         monkeypatch.setenv("SQUIDSQUAD_MERGE_MAX_BEHIND", "bad")
         assert git_ops._merge_max_behind() == git_ops.MERGE_MAX_BEHIND_DEFAULT
+
+    # --- #13554: pre-merge state/vault scope guard (SEV prevention) ---
+
+    @patch("git_ops._run_list")
+    def test_state_violation_refuses_before_merge(self, mock_run):
+        """A PR declaring main-only state/vault paths is refused (fail-safe)
+        BEFORE any merge call — preventing the #13554 merge=ours-defeated revert."""
+        with patch("git_ops._pr_state_scope_violations",
+                   return_value=[".squidsquad/dm/working-state.md",
+                                 ".squidsquad/vault/galaxy/learning-x.md"]):
+            mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
+            success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert msg == "PR carries out-of-scope state/vault changes"
+        # state check only — NO merge attempt (call_count==1 proves no `gh pr merge`).
+        assert mock_run.call_count == 1
+
+    @patch("git_ops._run_list")
+    def test_state_violation_refuses_non_squash_too(self, mock_run):
+        """Unlike the behind-count guard, the state guard is NOT squash-specific —
+        state files belong in no PR, so a merge-commit strategy is refused too."""
+        with patch("git_ops._pr_state_scope_violations",
+                   return_value=[".claude/worktrees/agent-x"]):
+            mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
+            success, msg = git_ops.pr_merge(42, strategy="merge")
+        assert success is False
+        assert msg == "PR carries out-of-scope state/vault changes"
+        assert mock_run.call_count == 1
+
+    @patch("git_ops._run_list")
+    def test_no_state_violation_proceeds(self, mock_run):
+        """A code-only PR (no state/vault paths declared) merges normally."""
+        with patch("git_ops._pr_state_scope_violations", return_value=[]):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            ]
+            success, msg = git_ops.pr_merge(42)
+        assert success is True
+
+    @patch("git_ops._run_list")
+    def test_undeterminable_scope_fails_open(self, mock_run):
+        """If the PR file set can't be determined (gh hiccup → None), the guard
+        fails OPEN (merge proceeds) — it must not wedge all shipping."""
+        with patch("git_ops._pr_state_scope_violations", return_value=None):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            ]
+            success, msg = git_ops.pr_merge(42)
+        assert success is True
+
+
+class TestPrStateScopeViolations13554:
+    """#13554: _pr_state_scope_violations — reuses _is_state_file (the #11511
+    predicate) + the _is_plan_body/launcher exemptions to flag main-only paths a
+    PR must never carry. Kept OUT of TestPrMerge (whose fixture patches it)."""
+
+    def _violations(self, declared):
+        with patch("git_ops._pr_declared_files", return_value=declared):
+            return git_ops._pr_state_scope_violations(1)
+
+    def test_state_and_vault_paths_flagged(self):
+        v = self._violations({
+            ".squidsquad/dm/working-state.md",
+            ".squidsquad/vault/galaxy/learning-x.md",
+            ".squidsquad/.ship-counter",
+            "references/scripts/git_ops.py",  # code — not flagged
+        })
+        assert v == [
+            ".squidsquad/.ship-counter",
+            ".squidsquad/dm/working-state.md",
+            ".squidsquad/vault/galaxy/learning-x.md",
+        ]
+
+    def test_claude_paths_flagged(self):
+        assert self._violations({".claude/worktrees/agent-x"}) == \
+            [".claude/worktrees/agent-x"]
+
+    def test_plan_body_exempt(self):
+        # A PM plan body legitimately rides the branch (#12750) — not a violation.
+        assert self._violations({".squidsquad/pm/planning/13554-body.md"}) == []
+
+    def test_launcher_scripts_exempt(self):
+        # start.sh/start.ps1 are versioned code deliverables (#13318), not state.
+        assert self._violations({".squidsquad/start.sh",
+                                 ".squidsquad/start.ps1"}) == []
+
+    def test_code_only_pr_clean(self):
+        assert self._violations({"references/scripts/harness.py",
+                                 "tests/test_harness.py",
+                                 "docs/HARNESS-ARCH.md"}) == []
+
+    def test_undeterminable_declared_returns_none(self):
+        # _pr_declared_files None (gh/parse failure) → fail-open sentinel.
+        assert self._violations(None) is None
 
 
 class TestPrBehindBy:
@@ -2859,7 +2963,13 @@ class TestScopeAudit13285:
 class TestPrMergeDraftSelfHeal:
     @pytest.fixture(autouse=True)
     def _safe_behind(self):
+        # #13554: stub the pre-merge state-scope guard to "no violations" so the
+        # existing merge-flow tests exercise the merge path unchanged; the
+        # dedicated guard tests (TestPrMergeStateScopeGuard13554) re-patch it to
+        # assert the refusal. Stubbing it also keeps its _pr_declared_files ->
+        # _run_list call out of the per-test mock sequence.
         with patch("git_ops._pr_behind_by", return_value=0), \
+                patch("git_ops._pr_state_scope_violations", return_value=[]), \
                 patch("git_ops._post_merge_scope_audit"):
             yield
 
