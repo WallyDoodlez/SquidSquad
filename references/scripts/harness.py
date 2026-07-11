@@ -575,6 +575,30 @@ class AgentState:
         la = self.last_activity_at
         return ld is None or (la is not None and la >= ld)
 
+    def handoff_reemit_suppressed(self, now, interval):
+        """#13353 — whether a #12442 handoff RE-emit should be SUPPRESSED because
+        this agent is demonstrably alive and cycling, so the redundant nudge
+        would only waste a wake + drain + ack-cursor.
+
+        Suppress iff the agent is RUNNING and has produced an activity heartbeat
+        within the last ``interval`` seconds. An actively-working agent converges
+        on the handoff item via its own task-boundary ``work_queue()`` re-read
+        (event-mode Case C) without any nudge, so re-nudging it is pure waste —
+        the #13353 case: 18 re-nudges fired while the verifier verified #13335
+        for ~3h without transitioning (its path is pending-test → pending-ship/
+        reject, so the item stayed 'unclaimed' from the detector's view).
+
+        A silent (heartbeat older than ``interval``), stopped/stopping, or
+        never-active agent is NOT suppressed: the #12442 rescue re-emit still
+        fires for a genuinely missed nudge or a wedged agent. Bounded by design —
+        suppression lapses after ``interval`` of heartbeat silence, so it can
+        never permanently starve a handoff item.
+        """
+        if self.intent != self.INTENT_RUNNING:
+            return False
+        la = self.last_activity_at
+        return la is not None and (now - la) < interval
+
     def operator_force_death(self):
         """#12801 — True when this agent's death was an operator FORCE reboot.
 
@@ -5815,6 +5839,27 @@ class ExternalActivityDetector:
                 # built it); they route to the install's verifier/dm alias.
                 target_alias = self._alias_for_role_class(role_class)
                 if not target_alias:
+                    continue
+
+            # #13353 — suppress a #12442 handoff RE-emit (never a fresh
+            # transition — those must always reach the agent) when the target
+            # agent is alive and recently active: it will converge on the item
+            # via its own task-boundary work_queue() re-read (event-mode Case C),
+            # so the re-nudge is pure waste (18 redundant wakes observed while
+            # qa verified #13335 for ~3h). reemit_due is definitionally the
+            # re-emit path (mutually exclusive with fresh_transition). The
+            # #12442 rescue re-emit still fires for a silent/stopped/never-active
+            # agent, and suppression lapses after _HANDOFF_REEMIT_SECONDS of
+            # heartbeat silence, so it can never permanently starve the item.
+            if reemit_due:
+                with state._lock:
+                    _target_agent = state.agents.get(target_alias)
+                    _suppress = (
+                        _target_agent is not None
+                        and _target_agent.handoff_reemit_suppressed(
+                            check_time, self._HANDOFF_REEMIT_SECONDS)
+                    )
+                if _suppress:
                     continue
 
             # #12271 slice d — stamp the dispatch reference for progress-based
