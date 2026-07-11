@@ -1,16 +1,20 @@
 # Working State
 
-- **Task**: NEXT = #13465 (tracker.py create-issue --role qa stamps non-existent role, dm-filed) — about to task-begin. Session 2026-07-11, event mode, Verbose ON, fresh boot (harness sha 1d6234). Harness cursor 14d2e3f27b374fda. Idle-driver armed (cron 809b66e9 @ 8,38), Monitor listening.
+- **Task**: none in-flight (between items). NEXT = deterministic work-queue top actionable (likely #13472 harness _safe_pull_in_clone MERGING-on-conflict, or #13457/#13371/#13370). Session 2026-07-11, event mode, Verbose ON, fresh boot (harness sha 1d6234). Idle-driver armed (cron 809b66e9 @ 8,38), Monitor listening.
 
-- **This session progress (working the verifier/dm-filed bug queue):**
-  - **#13373 → SHIPPED ✅** (PR #13458 merged 978737a2f). git_ops task-begin local-branch path now syncs to origin (`_sync_local_branch_to_origin`: ff when behind, keep local ahead/absent, fail-loud both-SHAs on divergence). 7-case test. DeepSeek NO_FINDINGS. Fast skill→qa→dm cycle.
-  - **#13456 → PENDING-TEST** (verifier queue, PR #13466 READY not-draft). harness deploy-pull stashes --include-untracked + pop resolves untracked-restore pulled-wins. Real-git regression test (untracked-collision + #13215 dirty-tracked). Static gate 5336/0. DeepSeek NO_FINDINGS.
-  - **#13455 → CLOSED as verified DUPLICATE of shipped #13156.** Empirically confirmed already-fixed (receive_event guard commit 05e49de15; 47 failures predate it; test_13156 green). No code.
-  - **BRANCH-MGMT LESSON:** `commit-code` returns you to main; I once ran `git merge origin/main` + gate ON MAIN by mistake (fix was on the branch). **Always re-verify `git branch --show-current` after commit-code and before any merge/gate/commit.** Applied successfully on #13456 thereafter.
+- **This session SHIPPED/handed-off (4 fixes + 1 close, all verifier/dm/pm-filed):**
+  - **#13373 → SHIPPED ✅** (PR #13458). git_ops task-begin local-branch path syncs to origin (`_sync_local_branch_to_origin`).
+  - **#13456 → SHIPPED ✅** (PR #13466 merged f8afb81a3). harness deploy-pull stashes --include-untracked + pop resolves untracked-restore pulled-wins.
+  - **#13465 → PENDING-TEST** (PR #13474 READY). tracker.py create_issue/create_task filter dual-aware role labels to repo taxonomy (no non-existent role:verifier). 2 DS iterations (F1 error caught+fixed; iter-2 NO_FINDINGS).
+  - **#13455 → CLOSED** as verified DUPLICATE of shipped #13156 (empirically confirmed already-fixed; no code).
+  - Lessons applied: (a) **re-verify `git branch --show-current` after commit-code** before any merge/gate; (b) **ALWAYS confirm `gh pr view <pr> --json isDraft` == false before/after pending-test** — #13474's `gh pr ready` threw a transient network error; verified+retried (was actually ready; the isDraft=true reading was a stale graphql failure). Never trust a single isDraft read through a network error.
 
-- **QUEUE-CLASSIFICATION CORRECTION:** prior working-state wrongly listed #13373 in the PARKED improvement-scan set — it was VERIFIER-filed (actionable cross-role bug), NOT my scan finding. Lesson: verify issue `Reported By` from the forge before treating an open role:skill issue as a parked self-finding. #13456/#13455 are PM-filed (actionable). My actual parked SELF-findings (improvement-scan, do-not-auto-pick): #13454, #13447, #13434, #13433, #13371, #13370, #13357, #13356 — but VERIFY reporter before assuming.
+- **REMAINING QUEUE (all verifier/dm/pm-filed, actionable — VERIFY reporter before treating any as parked):**
+  - Bugs: #13457 (verifier — stale curl POST /merge flow in verification.md + delivery-packaging.md), #13464 (pm-routed — verification.md Step5 ordering fix), #13371 (verifier — PR closing-keywords bypass pending-ship/DM gate), #13370 (verifier — tracker.py comment cp1252 crash, class of shipped #13185), #13472 (verifier — harness _safe_pull_in_clone leaves clone MERGING on a genuine committed conflict; stash-failed early-return skips merge --abort — SAME FILE as shipped #13456, now baseable on main cleanly).
+  - Verifier improvement-scan findings: #13454, #13447, #13434, #13433, #13357, #13356, #13354, #13353.
+  - Same-file groups: sub-skill staleness {#13457,#13464,#13354}; harness _safe_pull_in_clone {#13472}; tracker.py {#13370}; git_ops pr-merge {#13447,#13433}.
 
-- **Boot idle assessment (facts):** 3 approved tasks (#12527 high / #10690 med / #10686 med) ALL operator-supervised/gated (not autonomous). Externally-filed actionable bugs this window: #13373 (done), #13455 (closed dup), #13456 (next).
+- **3 approved tasks** (#12527 high / #10690 med / #10686 med) ALL operator-supervised/gated — not autonomous.
 
 - **#13338 SHIPPED ✅ end-to-end (CLOSED, PR #13448 merged)** — the LAST item of the INSTALLER-RUNTIME.md implementation set. Resumed pre-restart WIP once blocker #13329 shipped. Added §9 "Step 8 — Verify with an independent sub-agent" executable playbook (fresh independent sub-agent; 3 checks compose/§3-invariant/end-to-end each w/ concrete pass-fail; self-solve loop, never asks user; only clean pass commits). Sonnet review 1 finding applied (check-1 command precision vs compose.py: plain `deploy-all` writes/fails-loud, `deploy <alias> --check --staged-l4 <path>` is the non-writing validator, bare `--check`/`deploy-all --check` invalid/retired). Merged origin/main (incl #13329) into branch — clean auto-merge. CQ 13338_spec (4 Qs, sonnet). Full static gate 5321/0/0.
 
