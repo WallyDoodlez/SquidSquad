@@ -25,6 +25,22 @@ def _mock_result(stdout="", stderr="", returncode=0):
     return r
 
 
+@pytest.fixture(autouse=True)
+def _stub_repo_labels(monkeypatch):
+    """#13465: create_issue/create_task now consult the repo label taxonomy via
+    _repo_labels() (a cached `gh label list`). Stub it to a stable default so the
+    create tests never hit real `gh`, stay order-independent (no leaked module
+    cache), and see no extra _run_list call — leaving calls[0] the create call."""
+    tracker._REPO_LABELS_CACHE = None
+    monkeypatch.setattr(
+        tracker, "_repo_labels",
+        lambda: {"role:skill", "role:dm", "role:pm", "role:qa", "role:designer",
+                 "role:verifier", "role:worker", "role:dev"},
+    )
+    yield
+    tracker._REPO_LABELS_CACHE = None
+
+
 class TestCheckGh:
     def test_success(self, monkeypatch):
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)

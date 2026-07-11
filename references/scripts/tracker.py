@@ -340,6 +340,56 @@ def _build_dual_role_labels_6274(role: str) -> str:
     return f"{primary},role:{alias}"
 
 
+_REPO_LABELS_CACHE = None
+
+
+def _repo_labels():
+    """Return the set of label names the repo taxonomy defines (cached per
+    process). Empty set on any failure — callers fail CLOSED (drop unknown
+    labels) so a degraded ``gh`` never blocks a create (#13465)."""
+    global _REPO_LABELS_CACHE
+    if _REPO_LABELS_CACHE is not None:
+        return _REPO_LABELS_CACHE
+    result = _run_list(
+        ["gh", "label", "list", "--limit", "200", "--json", "name"],
+        check=False,
+    )
+    labels = set()
+    if result.returncode == 0 and result.stdout.strip():
+        try:
+            labels = {x["name"] for x in json.loads(result.stdout)}
+        except (ValueError, KeyError, TypeError):
+            labels = set()
+    _REPO_LABELS_CACHE = labels
+    return labels
+
+
+def _filter_role_labels_to_existing(role_label_str, primary_role):
+    """Drop dual-aware alias ``role:*`` labels the repo taxonomy does not define
+    (#13465).
+
+    During the pre-#6274.3 window ``_build_dual_role_labels_6274`` emits both the
+    OLD-form label (``role:qa``) and the NEW-form alias (``role:verifier``), but
+    only the OLD-form labels exist as repo labels — ``gh issue create`` rejects
+    the unknown alias, so the whole ``create-issue --role qa`` failed non-zero
+    and blocked qa-lane filing via the canonical tool.
+
+    Keep every role label the repo positively defines; ALWAYS keep the primary
+    ``role:{primary_role}`` even when the existence lookup is empty/unavailable,
+    so a create never loses its assignee. Fails CLOSED on a lookup miss (an alias
+    is dropped unless positively confirmed) so a degraded ``gh label list`` can
+    never re-introduce the unknown-label failure. When #6274.3 creates the
+    NEW-form labels this filter lets the dual-emit resume automatically.
+    """
+    labels = [l for l in role_label_str.split(",") if l]
+    existing = _repo_labels()
+    primary = f"role:{primary_role}"
+    kept = [lbl for lbl in labels if lbl == primary or lbl in existing]
+    if primary not in kept:
+        kept.insert(0, primary)
+    return ",".join(kept)
+
+
 def _get_issue_role_labels(number):
     """Return the set of role prefixes from an issue's `role:*` labels.
 
@@ -859,7 +909,8 @@ def create_issue(title, body, role, severity, reporter=None):
     deletes the role:dev/role:qa label classes altogether).
     """
     sev_label = SEVERITY_LABELS.get(severity, f"severity:{severity}")
-    role_label = _build_dual_role_labels_6274(role)
+    role_label = _filter_role_labels_to_existing(
+        _build_dual_role_labels_6274(role), role)  # #13465
     # Issues start at `open` (immediately actionable by the assigned dev agent).
     # Tasks start at `pending` (awaiting human approval via PM intake).
     # This distinction matters: dev-agent Step 2 picks up all non-shipped
@@ -912,7 +963,8 @@ def create_task(title, body, role, priority, reporter=None):
     migration window — see create_issue.
     """
     pri_label = PRIORITY_LABELS.get(priority, f"priority:{priority}")
-    role_label = _build_dual_role_labels_6274(role)
+    role_label = _filter_role_labels_to_existing(
+        _build_dual_role_labels_6274(role), role)  # #13465
     labels = f"type:task,{pri_label},{role_label},squidsquad,status:pending"
 
     full_body = body
