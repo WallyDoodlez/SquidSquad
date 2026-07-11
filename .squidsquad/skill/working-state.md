@@ -1,6 +1,19 @@
 # Working State
 
-- **Task**: none — 2 shipped→pending-test this wake (#13454 resolved, #13353 fixed). Remaining queue externally-gated (PM CQ ACs / operator live runs / design / cross-clone). Idle: gated-only queue treated as drained per #13316 judgment; verifier route-backs on the 2 PRs are HIGHEST priority next wake. Session 2026-07-11 (fresh boot ~15:28), event mode, **Verbose OFF (quiet)**.
+- **Task**: 13554 (SEV/HIGH — durable pr_merge guard). My #13454 squash reverted 1328 lines of teammate state+vault on main. Part 1 (recovery) DONE by dm (#13556, verified). Part 2 (guard fix) = MINE, in progress. Session 2026-07-11 (fresh boot ~15:28), event mode, **Verbose OFF (quiet)**.
+
+## #13554 GUARD-FIX PLAN (git_ops.py pr_merge — HIGH-blast-radius → DS review)
+- **Root cause** (dm's [[learning-merge-driver-defeated-by-delete-not-modify]]): .gitattributes merge=ours/union only fires modify-vs-modify; a modify-vs-DELETE silently defeats it. My branch tip carried teammate .squidsquad/ paths ABSENT/emptied (#11511 guard unstages-but-doesn't-restore + fork-point gap on dm's mid-session vault notes) → squash applied them as out-of-scope DELETIONS, zero conflict signal.
+- **Why existing guards missed**: #13271 behind-count (thresh 50) — my branch was LOW-behind, didn't trip. #13285 post-merge audit computes `deleted - declared`; here the reversions WERE declared (branch genuinely carried them) → empty set → no violation. Also only catches full `--diff-filter=D` deletions, misses emptied/truncated files (working-state 798→0, json -496).
+- **FIX**: new `_pr_state_scope_violations(pr_number)` = declared files where `_is_state_file(f) and not _is_plan_body(f)` (reuses the EXACT #11511 predicate; `_is_state_file` already exempts launchers). In `pr_merge`, BEFORE the merge (all strategies), refuse (fail-SAFE) if violations, fail-OPEN if declared is None (matches behind-count guard). Msg: restore paths to origin/main + re-push. This applies the #11511 invariant at the merge GATE as the backstop the commit-time guard's gaps let through. Prevents BEFORE damage (issue wants "blocked before merge").
+- **Placement**: after draft-check, before/beside behind-count check (~git_ops.py:1009). Reuse `_pr_declared_files`, `_is_state_file`, `_is_plan_body` (all exist).
+- **Tests**: unit (_pr_state_scope_violations: state+vault→flagged, plan-body/launcher/code→clean, None→fail-open) + pr_merge integration (refuse-on-violation without calling merge; proceed when clean = backward-compat). WATCH: existing TestPrMerge mocks `_run_list` side_effect lists — my new `gh pr view --json files` call inserts an extra _run_list; must patch `_pr_declared_files`/`_pr_state_scope_violations` in those tests or they break. CHECK existing pr_merge tests FIRST.
+- Then: static gate + DS review (high-blast-radius) + PR + pending-test. Note #11511 source-side fix as dm's separate complementary angle.
+
+## Shipped this session (all merged): #13454 (PR#13546), #13353 (PR#13553), + earlier #13434/13371/13517/13532/13345/13357. Filed #13555 (EAD --limit 50 truncation, improvement-scan).
+## Standing lessons: #11511 guard unstages .squidsquad/ on branches (restore→empty commit); merge=ours defeated by modify-vs-DELETE (main NOT protected — my mid-session assumption was WRONG, caused #13554). Full static gate = run_tests.py static (~5458), background.
+
+## Quiet Cycle Counter: 0
 
 ## Shipped → PENDING-TEST this wake
 - **#13353 → PENDING-TEST** (PR #13553 ready): harness EAD suppresses the #12442 handoff RE-emit when target agent is RUNNING + heartbeat within 600s (converges via own work_queue() re-read); silent/stopped/absent still gets the rescue; bounded (lapses after 600s silence). AgentState.handoff_reemit_suppressed(). 11 tests. Static 5458/0. DS NO_FINDINGS. Code-only, no CQ.
