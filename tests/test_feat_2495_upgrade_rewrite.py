@@ -87,6 +87,35 @@ def test_tc_01_skill_md_rewritten():
 
 
 # ---------------------------------------------------------------------------
+# #13421: v1->v2 migration checklist must match the shipped config sections
+# ---------------------------------------------------------------------------
+
+def test_13421_migration_checklist_matches_shipped_config_sections():
+    """The v1->v2 migration checklist must not list 'PR Flow' under ## Flags —
+    config.py reads pr-flow from the dedicated ## PR Flow section since #13355,
+    so a migrated config would carry a dead line under ## Flags (same dead-
+    section class #13328 fixed for ## Loop). The checklist must instead include
+    the ## PR Flow and ## Auto Merge sections config.py actually reads."""
+    upgrade_text = _read_skill_upgrade_section()
+
+    flags_line = next(
+        (ln for ln in upgrade_text.splitlines()
+         if ln.lstrip().startswith("- `## Flags`")), None
+    )
+    assert flags_line is not None, "migration checklist ## Flags line missing"
+    assert "PR Flow" not in flags_line, (
+        "SKILL.md v1->v2 migration still lists 'PR Flow' under ## Flags — "
+        "config.py reads pr-flow from the dedicated ## PR Flow section (#13355)"
+    )
+    assert "`## PR Flow`" in upgrade_text, (
+        "migration checklist must add the ## PR Flow section (invariant, #13355)"
+    )
+    assert "`## Auto Merge`" in upgrade_text, (
+        "migration checklist must add the ## Auto Merge section (merge gate, #13355)"
+    )
+
+
+# ---------------------------------------------------------------------------
 # TC-2: Upgrade skill file rewritten — no obsolete references
 # ---------------------------------------------------------------------------
 
