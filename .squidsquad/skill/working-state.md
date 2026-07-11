@@ -1,13 +1,14 @@
 # Working State
 
-- **Task**: none in-flight (between items). NEXT = deterministic work-queue top actionable (likely #13472 harness _safe_pull_in_clone MERGING-on-conflict, or #13457/#13371/#13370). Session 2026-07-11, event mode, Verbose ON, fresh boot (harness sha 1d6234). Idle-driver armed (cron 809b66e9 @ 8,38), Monitor listening.
+- **Task**: NEXT = #13370 (tracker.py comment cp1252 crash on non-ASCII, verifier-filed; I HIT IT FIRSTHAND this session on an em-dash in a #13472 comment — direct repro). Session 2026-07-11, event mode, Verbose ON, fresh boot (harness sha 1d6234). Idle-driver armed (cron 809b66e9 @ 8,38), Monitor listening.
 
-- **This session SHIPPED/handed-off (4 fixes + 1 close, all verifier/dm/pm-filed):**
+- **This session SHIPPED/handed-off (5 items, all verifier/dm/pm-filed):**
   - **#13373 → SHIPPED ✅** (PR #13458). git_ops task-begin local-branch path syncs to origin (`_sync_local_branch_to_origin`).
-  - **#13456 → SHIPPED ✅** (PR #13466 merged f8afb81a3). harness deploy-pull stashes --include-untracked + pop resolves untracked-restore pulled-wins.
-  - **#13465 → PENDING-TEST** (PR #13474 READY). tracker.py create_issue/create_task filter dual-aware role labels to repo taxonomy (no non-existent role:verifier). 2 DS iterations (F1 error caught+fixed; iter-2 NO_FINDINGS).
-  - **#13455 → CLOSED** as verified DUPLICATE of shipped #13156 (empirically confirmed already-fixed; no code).
-  - Lessons applied: (a) **re-verify `git branch --show-current` after commit-code** before any merge/gate; (b) **ALWAYS confirm `gh pr view <pr> --json isDraft` == false before/after pending-test** — #13474's `gh pr ready` threw a transient network error; verified+retried (was actually ready; the isDraft=true reading was a stale graphql failure). Never trust a single isDraft read through a network error.
+  - **#13456 → SHIPPED ✅** (PR #13466). harness deploy-pull stashes --include-untracked + pop resolves untracked-restore pulled-wins.
+  - **#13465 → SHIPPED ✅** (PR #13474). tracker.py create_issue/create_task filter dual-aware role labels to repo taxonomy. 2 DS iterations (F1 error caught+fixed).
+  - **#13472 → PENDING-TEST** (PR #13481 READY). harness _safe_pull_in_clone runs git merge --abort on the stash-failed path so a committed-conflict deploy-pull never leaves clone MERGING. Verifier xfail test_tc_03b now XPASSes (theirs to flip).
+  - **#13455 → CLOSED** as verified DUPLICATE of shipped #13156 (no code).
+  - **Lessons applied this session:** (a) re-verify `git branch --show-current` after commit-code before any merge/gate; (b) confirm `gh pr view --json isDraft`==false with a retry-loop before trusting (transient gh net errors give stale isDraft reads); (c) **do NOT commit-code (branch switch reverts branch-only working-tree edits) while a background DS review reads the files** — #13472's first review raced this and false-flagged the fix as missing; re-ran on the branch → NO_FINDINGS; (d) non-ASCII (em-dash/arrows) in tracker.py --message crashes gh on Windows cp1252 (#13370) — keep comments ASCII-only until #13370 ships.
 
 - **REMAINING QUEUE (all verifier/dm/pm-filed, actionable — VERIFY reporter before treating any as parked):**
   - Bugs: #13457 (verifier — stale curl POST /merge flow in verification.md + delivery-packaging.md), #13464 (pm-routed — verification.md Step5 ordering fix), #13371 (verifier — PR closing-keywords bypass pending-ship/DM gate), #13370 (verifier — tracker.py comment cp1252 crash, class of shipped #13185), #13472 (verifier — harness _safe_pull_in_clone leaves clone MERGING on a genuine committed conflict; stash-failed early-return skips merge --abort — SAME FILE as shipped #13456, now baseable on main cleanly).
