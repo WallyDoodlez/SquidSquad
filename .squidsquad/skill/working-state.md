@@ -1,30 +1,38 @@
 # Working State
 
-- **Task**: none — 3 shipped→pending-test this session: #13514 (PR #13523), #13433 (PR #13529), #13323 (PR #13530). Session 2026-07-11, event mode, **Verbose OFF (quiet posture)** per config.
+- **Task**: 13454 (RESUME — verifier route-back: merge conflict, not AC gap). PR #13546 branch squidsquad/task/13454 conflicts with main: both this PR + #13371/PR#13544 appended a test class at the same anchor in tests/test_git_ops.py. Impl itself verifier-confirmed correct. Fix: merge origin/main into branch, keep BOTH class blocks, static gate, push, re-flag pending-test. Session 2026-07-11 (fresh boot ~15:28), event mode, **Verbose OFF (quiet)**.
 
-## Shipped / handed off this session (tail)
-- **#13323 → PENDING-TEST** (PR #13530): wizard.py 2 stale `./start.sh` docstrings (restart_agents, cmd_restart_agents) → `.squidsquad/start.sh` after #13318 launcher move. Doc-only, no behavior change, no test. Static 5381/0.
-- **#13433 → PENDING-TEST** (PR #13529 READY): `git_ops.py pr-merge --help` (and any non-numeric first arg) reached `pr_merge()` → ran a REAL squash-merge + post-merge compose, dirtying the tree with 8 composed CLAUDE.md + false "PR #--help merged". `_parse_args` only caught `--help` in the subcommand position. Fix: accept `-h` at top-level `_parse_args`; validate pr-merge PR number BEFORE side effects (`-h`/`--help`→usage exit 0; missing→exit 1; non-numeric→exit 2 "no merge attempted"; never call pr_merge with a bogus number). Scoped to pr-merge number position only (free-text args w/ `--help` unaffected). Tests: `TestPrMergeArgGuard` (7) + `TestParseArgs -h`. Static 5389/0. DS NO_FINDINGS. **#13447 is the sibling (post-merge scope-audit dirties clone + no local-main FF-sync) — heavier, left for follow-up.**
-- **#13514 → PENDING-TEST** (PR #13523 READY): `wizard.py setup-yes` reported "Created N agent(s)" + exit 0 even when every role's compose FAILED (broken install masquerading as success). Fix in `cmd_setup_yes`: count only agents with `claude_md != "FAILED"`; print `(K FAILED to compose)`; **suppress the "SquidSquad is installed" success banner when any role failed** (DS Finding 1 — banner otherwise contradicted the ERROR); non-zero exit + distinct ERROR summary naming failed role ids; defensive `.get('id','?')`. Regression test (3 cases: partial / every-role-failed / all-compose). Full static gate 5384/0. DS review clean (3 warnings all addressed). **PR body OMITS `Fixes #N`** per #13371 — DM closes via pending-ship→shipped, not GitHub auto-close (`gh pr edit` still fails on this repo, GraphQL projects-classic).
-- Resumed in-flight work from a prior session that had already branched (squidsquad/task/13514) + written the wizard.py fix + a first test but exited before committing. Reconciled: working-state on the branch was the pre-task-begin version (#11511 state-files-main-only guard), so it still read "#13515 in-progress" — verified against forge and dropped it.
+## Shipped → PENDING-TEST this wake (7 PRs, all ready, verifier's queue)
+- **#13434** (PR #13538): build_config_md↔FIELD_MAP round-trip GATE test (test-only; resumed prior untracked file). Static 5409/0.
+- **#13371** (PR #13544): `git_ops.pr_create` neutralizes closing keywords → 'Addresses' before adapter+gh. Code-only. 13 tests. Static 5418/0. PR body self-neutralized ('auto-closed'→'auto-Addresses') — guard working, flagged for verifier.
+- **#13454** (PR #13546): `git_ops.pr_merge` reads isDraft, self-heals via `pr_ready` before merge (else actionable refusal). Backward-compat. 4 tests. Static 5409/0.
+- **#13517** (PR #13547): `tracker.py._asciiize_title` — transliterate + encode('ascii','replace') backstop before gh `--title` argv; create_issue+create_task gh path. 12 tests. Static 5417/0.
+- **#13532** (PR #13548): one-line docstring fix (test_12825 L144). Doc-only. Static 5409/0.
+- **#13345** (PR #13549): /agents/{role}/health reads context-pressure via `_read_agent_pressure` (clone-relative, matches enforcement) not harness-root. 4 async tests. Static 5426/0.
+- **#13357** (PR #13550): argparse in run_tests.py — --help (exit 0), unknown-arg/typo rejection (exit 2), backward-compat modes preserved; main(argv=None). Self-verified (gate ran via modified `run_tests.py static`). 10 tests. Static 5444/0.
 
-## #13515 (BACK IN PM'S COURT — status:pending-human-review, PM AC6 review)
-- This session: PM woke me (assigned-to) saying the Phase-1 `SPEC-13515.md` was NOT on origin/main. Root cause: it was commit `266d4fa37` STRANDED unpushed in this clone (pre-#13473-restart session force-killed before harness push). My working-state pushes this session already carried it to origin/main. VERIFIED on origin (`git branch -r --contains 266d4fa37`→origin/main; `git ls-tree origin/main -- .../SPEC-13515.md`→blob 7bd5a2572, 5144B). Commented + woke PM via `work-assign --target-alias pm` (no status change per PM's instruction). **Now PM's action** (AC6 doc-first review + rule on: status name `blocked` vs `parked`; Soul-edit/tracker.py sequencing). **Phase-2 code (tracker _STATUS/_VALID_TRANSITIONS + sentinel + regression + CQ) is MINE only AFTER PM rules + operator signs off.** Do NOT touch Phase-2 until #13515 returns to role:skill + in-progress.
-- **LESSON (this session): a stranded local commit from a force-killed session rides your next boot's local main; your first push carries it to origin. When a teammate reports a "missing" pushed artifact, check `git branch -r --contains <sha>` — it may have just landed.**
+## #13447 — INVESTIGATED, root cause corrected, LEFT OPEN (do NOT implement the filed fix)
+- Filed cause ("audit's compose dirties composed CLAUDE.md") is WRONG: `_post_merge_scope_audit` has NO compose. Real cause = autocrlf=true + no `.gitattributes` eol rule for `.squidsquad/*/CLAUDE.md` → CRLF churn. Real fixes: (primary) `.gitattributes text eol=lf` + renormalize (own careful fleet PR); (secondary) FF local main after merge. Full analysis posted. Confirm CRLF hypothesis live in verifier/DM clone before the .gitattributes PR.
 
-## NEXT QUEUE (deterministic; forge is source of truth — re-run work_queue on wake)
-- Verifier improvement-scan bugs (role:skill, auto-approved): check `list-issues skill`.
-- **#13371** (PR closing-keywords bypass pending-ship/DM gate — hit live again on PR #13523; `gh pr edit --body` can't strip `Fixes #N` post-create). Candidate pickup if still role:skill + approved.
-- **3 approved tasks** #12527/#10690/#10686 = operator-supervised live runs, not cleanly autonomous.
+## Remaining open role:skill — EXTERNALLY GATED (design decision / PM CQ AC); pick up with fresh context
+- **#13531** (harness POST /restart relaunches on STALE primary clone; no staleness signal) — "for discussion" behavior report (PM-filed); harness.py; needs a DESIGN DECISION on the desired staleness-signal behavior (operator/PM) before implementing — don't rush it at saturation.
+- **#13353** (harness re-emits assigned-to ~18× for unclaimed pending-test) — harness.py emit path, "exact emit site not traced"; needs tracing + dedup/backoff design (a fresh-context job).
+- **#13354 / #13316 / #13317** — touch LLM-consumed instructions (verifier discussion-protocol / idle-cooldown-loop / stale PID-liveness sub-skills) → CQ gate; PM must author the comprehension-coverage AC first (skill-cq step). On pickup: comment/route to PM for the CQ AC before implementing.
+- **#13356** (boot-bootstrap harness probe port-file-first) — boot-bootstrap.md is an instruction file → likely CQ; assess on pickup.
+- NOTE: 7 PRs (#13538/#13544/#13546/#13547/#13548/#13549/#13550) now in the verifier's queue — expect route-backs; verifier-rejected items are HIGHEST priority on next wake (fix before new).
 
-## Standing lessons
-- State files (.squidsquad/) are main-only + reset on feature branches (#11511 guard) — working-state on a task branch shows the PRE-task-begin version (expected, not loss). Reconcile against the FORGE, not the branch's working-state, on resume.
-- commit-code returns to main after committing; pr-create needs you ON the branch (switch first); it creates a DRAFT → `gh pr ready <n>` to flip.
-- `gh pr edit --body` fails on this repo (GraphQL projects-classic) — compose PR body WITHOUT `Fixes #N` up front.
-- After PM feedback on an issue, #12475 unread-feedback guard blocks your transition until you comment/ack.
-- Full static gate = `run_tests.py static` (~5384 gated), not a subset — required before pending-test.
+## Approved tasks — OPERATOR-GATED (not autonomous): #12527 (foreign-repo smoke; local slice done), #10686 (manual by design), #10690 (gated on #10686).
+
+## Standing lessons (session-reinforced)
+- Heredoc `<<'EOF'` does NOT expand `$TS` — HIT 3× this session. Build `MSG=$(cat <<EOF ...)` with `$TS` OUTSIDE single quotes, or set MSG via a normal var first (as I did later this session — worked).
+- ASCII-only in git_ops.py `print()` (TestNoNonAsciiInPrintStatements) — use `--` not em-dash. (#13454 first-run fail.)
+- #13371 neutralizer rewrites closing-keyword+ref in ANY PR body incl. meta-prose → write 'closed issue #N' / '`Fixes`-style keyword targeting #N'. `gh pr edit --body` unreliable → get body right first time. [[learning-closing-keyword-in-state-commit-autocloses-issue]]
+- commit-code commits code to branch + returns to main; then branch-switch back ON the branch for pr-create (creates DRAFT → `gh pr ready`); task-end warns on uncommitted working-state (state file) but it correctly rides back to main for the harness to commit.
+- task-begin carries uncommitted CODE changes onto the branch; edit code on the branch (I slipped once on #13454 — edited on main first; recovered since code isn't a state file).
+- Full static gate = `run_tests.py static`, buffers to EOF (tail holds) — always run in background; count ~5409–5426 gated.
+- State/vault files main-only + reset on branches (#11511) — reconcile against FORGE on resume; vault writes land on main.
 
 ## Improvement Scan
-Status: idle-driver armed at boot; #13514 absorbed this wake — no scan yet.
+Status: idle-driver armed at boot; 6 productive items + 1 correction absorbed this wake — no scan yet.
 
 ## Quiet Cycle Counter: 0
