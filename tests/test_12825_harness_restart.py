@@ -141,8 +141,8 @@ _BASH = shutil.which("bash")
 
 @unittest.skipUnless(_BASH, "bash not available")
 class TestSupervisedLauncherSh(unittest.TestCase):
-    """AC1 behavioral test: run restart-harness.sh against a stub harness whose
-    exit codes are scripted, and verify relaunch / stop / crash-guard."""
+    """AC1 behavioral test: run .squidsquad/start.sh --bare against a stub harness
+    whose exit codes are scripted, and verify relaunch / stop / crash-guard."""
 
     def _run_launcher(self, tmp, stub_body, extra_env=None):
         # Lay out tmp/.squidsquad/start.sh + tmp/references/scripts/harness.py stub.
