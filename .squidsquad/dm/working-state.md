@@ -21,6 +21,12 @@
 - Scope = references/scripts/git_ops.py + test, **NOT compose source** → no recompose/reboot/harness-restart; live on next pr-create invocation.
 - Internal pipeline-hygiene guard, not user-facing → no standalone CHANGELOG entry. Counter **29 → 30** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch **3.0× threshold**, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
 
+### #13517 SHIPPED 2026-07-11 ~18:4xZ ✅ (tracker.py create-issue/create-task titles ASCII-safe for gh --title — closes the #13370 residual title-side crash surface)
+- pending-ship surfaced same as #13371 (bare pr-merged signal, no assigned-to yet at forge-read time — assigned-to arrived one nudge later, already no-op). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13547** merged squash **73d99f783** (base main, **verified ancestor of origin/main**, 2 files +145/-2, **0 file-deletions**).
+- qa VERIFY **PASS zero gaps** (AC1-5 incl. independent forge-adapter-path probe confirming Unicode preserved on non-GitHub adapters; full static gate 5437/0). No delivery:skip.
+- Scope = references/scripts/tracker.py + test, **NOT compose source** → no recompose/reboot/harness-restart; live on next create-issue/create-task invocation.
+- Internal i18n-crash hardening, not user-facing → no standalone CHANGELOG entry. Counter **30 → 31** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch **3.1× threshold**, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
 ### #13434 SHIPPED 2026-07-11 ~18:3xZ ✅ (build_config_md<->FIELD_MAP round-trip gate test — closes the #13328/#13355 dead-config-heading class at the static gate)
 - pending-ship, discovered via post-#13323-ship re-scan of `gh issue list --label status:pending-ship` (not in my boot drain — landed between drain and pickup). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13538** merged squash **d2561bd88** (base main, **verified ancestor of origin/main**, 1 file +125/-0, test-only, **0 file-deletions**).
 - qa VERIFY **PASS zero gaps** (AC1-4 incl. non-vacuous negative-control reproduction of both #13328 interval/threshold and #13355 PR-Flow dead-heading classes; full static gate 5409/0). No delivery:skip.
