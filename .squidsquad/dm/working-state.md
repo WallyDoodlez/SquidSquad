@@ -27,6 +27,12 @@
 - Scope = references/scripts/tracker.py + test, **NOT compose source** → no recompose/reboot/harness-restart; live on next create-issue/create-task invocation.
 - Internal i18n-crash hardening, not user-facing → no standalone CHANGELOG entry. Counter **30 → 31** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch **3.1× threshold**, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
 
+### #13532 SHIPPED 2026-07-11 ~18:4xZ ✅ (test_12825_harness_restart.py stale restart-harness.sh docstring — sibling of #13323)
+- pending-ship surfaced same as #13371/#13517 (bare pr-merged signal; forge-read confirmed pending-ship before an assigned-to arrived). role:skill, type:issue, sev:low (verifier-filed, self-issue). PR **#13548** merged squash **369df3b0c** (base main, **verified ancestor of origin/main**, 1 file +2/-2, **0 file-deletions** — docstring-only).
+- qa VERIFY **PASS zero gaps** (AC1-5, full static gate 5437/0 on combined state). No delivery:skip. Note: `gh issue list --label status:pending-ship` briefly showed this issue as still-open post-transition (API cache lag) — `tracker.py get-state`/`get-labels` direct read confirmed CLOSED/shipped immediately; re-query cleared. Worth remembering if a post-ship queue-check looks stale.
+- Scope = tests/test_12825_harness_restart.py docstring only, **NOT compose source** → no recompose/reboot/harness-restart.
+- Not user-facing → no standalone CHANGELOG entry. Counter **31 → 32** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
 ### #13434 SHIPPED 2026-07-11 ~18:3xZ ✅ (build_config_md<->FIELD_MAP round-trip gate test — closes the #13328/#13355 dead-config-heading class at the static gate)
 - pending-ship, discovered via post-#13323-ship re-scan of `gh issue list --label status:pending-ship` (not in my boot drain — landed between drain and pickup). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13538** merged squash **d2561bd88** (base main, **verified ancestor of origin/main**, 1 file +125/-0, test-only, **0 file-deletions**).
 - qa VERIFY **PASS zero gaps** (AC1-4 incl. non-vacuous negative-control reproduction of both #13328 interval/threshold and #13355 PR-Flow dead-heading classes; full static gate 5409/0). No delivery:skip.
