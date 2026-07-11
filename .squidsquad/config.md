@@ -66,7 +66,7 @@
 
 ## Verbose Mode
 
-- **Enabled**: yes
+- **Enabled**: no
 
 ## Vault Optimize
 
