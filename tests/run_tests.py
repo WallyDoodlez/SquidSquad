@@ -12,6 +12,7 @@ Teardown runs automatically after integration tests, even on failure.
 Static analysis tests do not require cleanup (no side effects).
 """
 
+import argparse
 import os
 import subprocess
 import sys
@@ -289,12 +290,50 @@ def run_integration_tests(targets):
     return result.wasSuccessful()
 
 
-def main():
-    if "--cleanup" in sys.argv:
+def _build_arg_parser():
+    """#13357: explicit argparse so ``--help`` prints usage (instead of silently
+    launching the full ~5400-test static suite) and an unknown arg / typo'd mode
+    (e.g. ``staitc``) is REJECTED with exit 2 instead of running the wrong thing.
+
+    Backward-compatible with every prior invocation:
+      run_tests.py               -> static gate + all integration (the default)
+      run_tests.py static        -> static gate only
+      run_tests.py <target>...   -> those integration target(s) only
+      run_tests.py --cleanup     -> cleanup only
+    Targets are restricted to the known set (``static`` + the integration
+    registry), so a mistyped mode is caught rather than silently no-op'd.
+    """
+    valid_targets = ["static", *INTEGRATION_TARGET_NAMES]
+    parser = argparse.ArgumentParser(
+        prog="run_tests.py",
+        description="SquidSquad test runner (static gate + integration suites).",
+        epilog=(
+            "modes: no args = static gate + all integration; "
+            "'static' = static gate only (~5400 gated tests, several minutes); "
+            "a target name runs that integration suite only "
+            f"(targets: {', '.join(INTEGRATION_TARGET_NAMES)}). "
+            "The config.md 'Tests' command uses the bare integration mode "
+            "(~53 tests, ~70s)."
+        ),
+    )
+    parser.add_argument(
+        "targets", nargs="*", choices=valid_targets, metavar="TARGET",
+        help="test target(s) to run; omit to run static + all integration",
+    )
+    parser.add_argument(
+        "--cleanup", action="store_true",
+        help="run test-artifact cleanup only, then exit",
+    )
+    return parser
+
+
+def main(argv=None):
+    args = _build_arg_parser().parse_args(sys.argv[1:] if argv is None else argv)
+    if args.cleanup:
         run_cleanup_only()
         return 0
 
-    targets = [a for a in sys.argv[1:] if not a.startswith("-")]
+    targets = args.targets
     static_only = targets == ["static"]
     # #12903: derive from the shared registry so the guard always matches the
     # set of targets run_integration_tests() actually dispatches.
