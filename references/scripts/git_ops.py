@@ -32,6 +32,7 @@ Usage:
 
 import io
 import json
+import re
 import subprocess
 import sys
 import threading
@@ -550,9 +551,53 @@ def current_branch():
     return name
 
 
+# #13371: A PR body carrying a GitHub closing keyword (Close/Fix/Resolve[sd] #N)
+# auto-closes the issue at squash-merge — BEFORE the verifier verdict is on the
+# record and bypassing pending-ship -> shipped (DM's gate + ship counter +
+# changelog). Issue closure must stay EXCLUSIVELY tracker.py's shipped-transition
+# auto-close. pr_create neutralizes closing keywords to a non-closing "Addresses"
+# form so the reference still cross-links but does not close. Deterministic guard
+# at the sanctioned PR-creation path, so correctness no longer rests on every
+# agent remembering to omit "Fixes #N" by hand.
+#
+# Reference forms GitHub honors for auto-close (all covered): "#123", "GH-123",
+# "owner/repo#123", and a full ".../issues/123" URL — each optionally preceded by
+# a colon. \b anchors keep sub-words safe ("prefix", "hotfixes", "affixes" never
+# match); the separator requires a colon or whitespace, so "fix#1" (which GitHub
+# also ignores) is left alone.
+_CLOSING_KEYWORD_RE = re.compile(
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b"          # closing keyword
+    r"(\s*:\s*|\s+)"                                          # separator (colon or space)
+    r"(#\d+|GH-\d+|https?://\S+?/issues/\d+|"                 # #N / GH-N / issue URL
+    r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#\d+)",                  # owner/repo#N
+    re.IGNORECASE,
+)
+
+
+def _neutralize_closing_keywords(body):
+    """Rewrite GitHub closing keywords in a PR body to a non-closing form (#13371).
+
+    "Fixes #12" -> "Addresses #12"; "Closes: #12" -> "Addresses: #12". The issue
+    reference (and any colon separator) is preserved verbatim so the cross-link
+    survives; only the closing verb is swapped. Non-keyword references
+    ("Cross-ref #12", "Addresses #12") pass through untouched. Returns the body
+    unchanged when it is empty/None.
+    """
+    if not body:
+        return body
+    return _CLOSING_KEYWORD_RE.sub(
+        lambda m: "Addresses" + m.group(1) + m.group(2), body
+    )
+
+
 def pr_create(title, body):
     """Create a draft PR. Uses forge adapter for non-GitHub backends,
-    gh CLI for GitHub. PRs start as drafts — QA converts to ready."""
+    gh CLI for GitHub. PRs start as drafts — QA converts to ready.
+
+    The body is passed through _neutralize_closing_keywords (#13371) so a stray
+    "Fixes #N" cannot auto-close the issue at merge and bypass the DM ship gate.
+    """
+    body = _neutralize_closing_keywords(body)
     try:
         from forge_adapter import get_adapter, _read_forge_config
         config = _read_forge_config()

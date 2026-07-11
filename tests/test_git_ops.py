@@ -2917,3 +2917,83 @@ class TestPrMergeDraftSelfHeal:
         success, msg = git_ops.pr_merge(42)
         assert success is True
         mock_ready.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# #13371 — pr_create neutralizes GitHub closing keywords in the PR body so a
+# stray "Fixes #N" cannot auto-close the issue at squash-merge and bypass the
+# pending-ship -> shipped DM gate (ship counter + changelog + recorded verdict).
+# ---------------------------------------------------------------------------
+
+class TestNeutralizeClosingKeywords:
+    def test_fixes_hash_rewritten(self):
+        assert git_ops._neutralize_closing_keywords("Fixes #123") == "Addresses #123"
+
+    def test_all_keyword_variants_rewritten(self):
+        for kw in ("close", "closes", "closed", "fix", "fixes", "fixed",
+                   "resolve", "resolves", "resolved"):
+            out = git_ops._neutralize_closing_keywords(f"{kw} #7")
+            assert out == "Addresses #7", f"{kw!r} not neutralized: {out!r}"
+
+    def test_case_insensitive(self):
+        assert git_ops._neutralize_closing_keywords("FIXES #1") == "Addresses #1"
+        assert git_ops._neutralize_closing_keywords("Resolves #2") == "Addresses #2"
+
+    def test_colon_separator_preserved(self):
+        assert git_ops._neutralize_closing_keywords("Closes: #45") == "Addresses: #45"
+
+    def test_cross_repo_reference(self):
+        assert (git_ops._neutralize_closing_keywords("Fixes owner/repo#12")
+                == "Addresses owner/repo#12")
+
+    def test_issue_url_reference(self):
+        body = "Fixes https://github.com/WallyDoodlez/SquidSquad/issues/34"
+        assert (git_ops._neutralize_closing_keywords(body)
+                == "Addresses https://github.com/WallyDoodlez/SquidSquad/issues/34")
+
+    def test_multiple_occurrences_all_rewritten(self):
+        assert (git_ops._neutralize_closing_keywords("Fixes #1, closes #2")
+                == "Addresses #1, Addresses #2")
+
+    def test_non_closing_reference_untouched(self):
+        for body in ("Cross-ref #12", "Addresses #12", "See #12", "Part of #12"):
+            assert git_ops._neutralize_closing_keywords(body) == body
+
+    def test_subword_keywords_not_matched(self):
+        # \b anchors: these contain a keyword as a substring but are not one.
+        for body in ("prefix #1", "hotfixes #2", "affixes #3", "postfixed #4"):
+            assert git_ops._neutralize_closing_keywords(body) == body, body
+
+    def test_keyword_without_immediate_reference_untouched(self):
+        # GitHub only closes when the ref directly follows the keyword.
+        body = "This fixes the bug described in #5 nicely."
+        assert git_ops._neutralize_closing_keywords(body) == body
+
+    def test_empty_and_none_passthrough(self):
+        assert git_ops._neutralize_closing_keywords("") == ""
+        assert git_ops._neutralize_closing_keywords(None) is None
+
+    def test_bare_reference_no_space_untouched(self):
+        # No separator -> GitHub does not close -> leave alone.
+        assert git_ops._neutralize_closing_keywords("fix#1") == "fix#1"
+
+
+class TestPrCreateNeutralizesBody:
+    def test_body_neutralized_before_gh(self):
+        captured = {}
+
+        def fake_run_list(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return _mock_result(stdout="https://github.com/o/r/pull/99")
+
+        with patch.object(git_ops, "_get_working_branch", return_value="main"), \
+             patch.object(git_ops, "_run_list", side_effect=fake_run_list), \
+             patch.object(git_ops, "_run",
+                          return_value=_mock_result(stdout="squidsquad/task/13371")), \
+             patch.object(git_ops, "_emit"):
+            git_ops.pr_create("skill: #13371 title", "Body text.\nFixes #13335")
+
+        cmd = captured["cmd"]
+        body_arg = cmd[cmd.index("--body") + 1]
+        assert "Fixes #13335" not in body_arg
+        assert "Addresses #13335" in body_arg
