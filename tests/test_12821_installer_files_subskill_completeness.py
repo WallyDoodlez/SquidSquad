@@ -66,6 +66,26 @@ def test_all_wizard_seed_stubs_in_manifest():
     )
 
 
+def test_catalog_file_itself_in_manifest():
+    """#13513 — docs/sub-skill-catalog.md must be SHIPPED, not just its contents.
+
+    The catalog is a git-committed file that compose's v2 catalog gate reads at
+    ``<target>/docs/sub-skill-catalog.md`` on every role deploy. The sibling
+    tests above ship everything the catalog *references* but never assert the
+    catalog *itself* is in the manifest — that gap let a faithful foreign-target
+    greenfield install (the #12527 smoke) produce ZERO CLAUDE.md: every role
+    failed with "catalog file not found". Self-hosted installs masked it because
+    the repo already carries the catalog on disk.
+    """
+    manifest = _manifest_paths()
+    assert CATALOG.exists(), "catalog source file must exist on disk"
+    rel = _rel(CATALOG)
+    assert rel in manifest, (
+        f"{rel} (compose v2 catalog-gate dependency) absent from "
+        f"installer-files.txt — greenfield compose fails for every role (#13513)"
+    )
+
+
 def test_manifest_count_header_matches_payload():
     """The `# Total: N files` header must equal the payload line count (the
     same invariant #12525 checks — re-asserted here so a bulk add can't drift)."""
