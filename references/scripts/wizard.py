@@ -1438,6 +1438,8 @@ _SECTION_ORDER = [
     "## Agents",
     "## Tools",
     "## Loop",
+    "## Auto Merge",  # #13355 — merge gate (the one surviving PR variable)
+    "## PR Flow",     # #13355 — §3 invariant, always Enabled: yes
     "## Flags",
 ]
 
@@ -1532,12 +1534,20 @@ def build_config_md(spec):
                 "context_threshold": 70,
             },
             "flags": {
-                "pr_flow": False,
+                "auto_merge": True,
                 "improvement_scan": True,
                 "vault_remember": True,
                 "diagnostics": True,
             },
         }
+
+    PR Flow is NOT a flag (#13355): every change lands through a reviewable
+    pull request (INSTALLER-RUNTIME.md §3 invariant; #9478 D2 — branch+PR is
+    the only mode), so the output always carries `## PR Flow / Enabled: yes`.
+    A legacy spec passing `flags.pr_flow` is ignored, never rendered. The one
+    surviving choice is the merge gate — `flags.auto_merge` (default yes)
+    renders as `## Auto Merge / Enabled` so `config.py get auto-merge` (the
+    verifier/DM merge-gate read) works on fresh installs.
 
     Returns the config.md text. Does NOT write to disk — callers persist
     the output themselves. Deterministic: same spec -> same bytes.
@@ -1615,14 +1625,37 @@ def build_config_md(spec):
     )
     lines.append("")
 
+    # --- ## Auto Merge + ## PR Flow (#13355) ---
+    # PR Flow is an INSTALLER-RUNTIME.md §3 invariant (every change lands
+    # through a reviewable PR; #9478 D2 — branch+PR is the only mode): always
+    # Enabled: yes, never spec-driven. The merge gate is the one surviving
+    # variable: flags.auto_merge (default yes — squad self-merges once
+    # verification passes; the installer asks per manual §9 and records the
+    # answer here). Both render as the dedicated sections config.py's
+    # FIELD_MAP reads (("Auto Merge","Enabled") / ("PR Flow","Enabled")) —
+    # a generic ## Flags line is invisible to those runtime reads.
+    flags = spec["flags"] or {}
+    lines.append("## Auto Merge")
+    lines.append("")
+    lines.append(f"- **Enabled**: {_render_bool(flags.get('auto_merge', True))}")
+    lines.append("")
+    lines.append("## PR Flow")
+    lines.append("")
+    lines.append("- **Enabled**: yes")
+    lines.append("")
+
     # --- ## Flags ---
     lines.append("## Flags")
     lines.append("")
-    flags = spec["flags"] or {}
-    # Emit in deterministic order regardless of dict insertion
-    for key in sorted(flags):
-        lines.append(f"- **{_flag_label(key)}**: {_render_bool(flags[key])}")
-    if not flags:
+    # Emit in deterministic order regardless of dict insertion. pr_flow and
+    # auto_merge never render here: pr_flow is retired (legacy specs may still
+    # carry it — ignored), auto_merge has its dedicated section above.
+    render_flags = {k: v for k, v in flags.items()
+                    if k not in ("pr_flow", "auto_merge")}
+    for key in sorted(render_flags):
+        lines.append(
+            f"- **{_flag_label(key)}**: {_render_bool(render_flags[key])}")
+    if not render_flags:
         lines.append("- (none)")
     lines.append("")
 
@@ -3428,20 +3461,11 @@ def cmd_merge_deny_list(args):
     return 0 if result.get("ok") else 1
 
 
-def pr_flow_prompt():
-    """Return the PR Flow question text and options for the setup agent."""
-    return {
-        "question": (
-            "Do you want Pull Request review flow enabled?\n\n"
-            "**PR Flow OFF** (default): Agents commit directly to the working branch. "
-            "Code lands immediately. Faster iteration, less overhead per change.\n\n"
-            "**PR Flow ON**: Agents create feature branches and open Pull Requests. "
-            "Code only lands after you review and merge each PR. "
-            "Gives you a review gate on every change."
-        ),
-        "options": ["Off (default — direct commits)", "On (PRs for every change)"],
-        "default": False,
-    }
+# pr_flow_prompt removed in #13355 — PR flow is an INSTALLER-RUNTIME.md §3
+# invariant (every change lands through a reviewable PR; #9478 D2: branch+PR
+# is the only mode), so the installer never offers an on/off choice. The one
+# surviving question is the merge gate — see build_config_md's Auto Merge
+# section and the manual's §9 merge-gate framing.
 
 
 def post_setup_summary(spec):
@@ -3673,7 +3697,10 @@ def generate_default_spec(scan_data=None, repo_info=None):
             "context_threshold": 70,
         },
         "flags": {
-            "pr_flow": False,
+            # #13355: pr_flow retired — PR flow is a §3 invariant, not a
+            # spec choice. auto_merge is the surviving merge-gate variable
+            # (default yes: squad self-merges once verification passes).
+            "auto_merge": True,
             "improvement_scan": True,
             "vault_remember": True,
             "diagnostics": True,
@@ -3907,10 +3934,7 @@ def cmd_setup_yes(args):
     return 0
 
 
-def cmd_pr_flow_prompt(_args):
-    """Print the PR Flow question and options as JSON."""
-    _print_json(pr_flow_prompt())
-    return 0
+# cmd_pr_flow_prompt removed in #13355 (see pr_flow_prompt tombstone above).
 
 
 def cmd_post_setup_summary(args):
@@ -3996,7 +4020,6 @@ def main():
         "list-issues-by-label": cmd_list_issues_by_label,
         "migrate-label": cmd_migrate_label,
         "migrate-labels-staged": cmd_migrate_labels_staged,
-        "pr-flow-prompt": cmd_pr_flow_prompt,
         "post-setup-summary": cmd_post_setup_summary,
         "load-spec": cmd_load_spec,
         "save-spec": cmd_save_spec,

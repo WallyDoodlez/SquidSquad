@@ -218,6 +218,16 @@ _FIELD_DEFAULTS = {
     # SystemExit is a BaseException, so it would escape the harness health
     # poller's except-Exception and silently kill the whole poller on first tick.
     "context-threshold": "70",
+    # #13355 — PR flow is an INSTALLER-RUNTIME.md §3 invariant (branch+PR is
+    # the only mode, #9478 D2): a config.md missing the `## PR Flow` section
+    # reads `yes`, never sys.exit(1)s and never silently flips the runtime
+    # into a direct-commit mode that no longer exists.
+    "pr-flow": "yes",
+    # #13355 — the merge gate is the one surviving PR variable. Fresh installs
+    # always carry an explicit `## Auto Merge` section (build_config_md); for
+    # a legacy/hand-rolled config.md missing it, default to the conservative
+    # direction — a human approves each merge — rather than self-merging.
+    "auto-merge": "no",
 }
 
 

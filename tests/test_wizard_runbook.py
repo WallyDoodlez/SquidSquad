@@ -38,7 +38,9 @@ _WIZARD_COMMANDS = {
     "check-gh", "check-existing", "repo-info", "project-name-default",
     "validate-name", "validate-rerun-action", "build-config-md",
     "scaffold", "ensure-labels", "list-issues-by-label", "migrate-label",
-    "pr-flow-prompt",
+    # pr-flow-prompt retired in #13355 (PR flow is a §3 invariant, never a
+    # choice) — the command no longer exists, so a manual mention of it now
+    # fails this suite's exists-check instead of passing an allowlist.
     # #11613 §4.1 Phase 0 gather-all dependency provisioning.
     "gather-deps", "provision-deps",
     # #12419 §10 existing-install migration walk.
@@ -193,8 +195,8 @@ class TestManualStructure:
     def test_pr_flow_is_invariant_not_a_choice(self, manual):
         """PR flow is a §3 invariant (change lands through review); the manual
         must never offer a PR-flow on/off choice — only the merge gate is a
-        variable. `pr-flow-prompt` is drifted wizard.py surface (#9478 D2);
-        its retirement is a sibling task — the manual must not carry it."""
+        variable. `pr-flow-prompt` was drifted wizard.py surface (#9478 D2),
+        retired in #13355 — the manual must not carry it."""
         assert "pr-flow-prompt" not in manual, (
             "Manual offers the retired 'PR flow on/off' choice — PR flow is "
             "an invariant; only the merge gate (Auto Merge) is a variable"

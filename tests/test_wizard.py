@@ -599,6 +599,8 @@ class TestBuildConfigMdStructure:
             "## Agents",
             "## Tools",
             "## Loop",
+            "## Auto Merge",  # #13355
+            "## PR Flow",  # #13355
             "## Flags",
             "## Improvement Scanning",  # #11091
             "## Verbose Mode",  # #13162
@@ -848,9 +850,9 @@ class TestBuildConfigMdLoopAndFlags:
 
     def test_bool_flags_rendered_as_yes_no(self):
         spec = _minimal_spec()
-        spec["flags"] = {"pr_flow": True, "diagnostics": False}
+        spec["flags"] = {"vault_remember": True, "diagnostics": False}
         text = wizard.build_config_md(spec)
-        assert "**Pr Flow**: yes" in text
+        assert "**Vault Remember**: yes" in text
         assert "**Diagnostics**: no" in text
 
     def test_no_flags_emits_none_marker(self):
@@ -2237,28 +2239,10 @@ class TestSoulMdSeeding:
 # ---------------------------------------------------------------------------
 
 
-class TestPrFlowPrompt:
-    """PR Flow question returns structured data for agent to present."""
-
-    def test_returns_question_and_options(self):
-        result = wizard.pr_flow_prompt()
-        assert "question" in result
-        assert "options" in result
-        assert "default" in result
-        assert result["default"] is False
-
-    def test_question_uses_plain_language(self):
-        result = wizard.pr_flow_prompt()
-        q = result["question"]
-        assert "PR Flow OFF" in q
-        assert "PR Flow ON" in q
-        # No internal jargon
-        assert "Ralph Loop" not in q
-        assert "tracker.py" not in q
-
-    def test_has_two_options(self):
-        result = wizard.pr_flow_prompt()
-        assert len(result["options"]) == 2
+# TestPrFlowPrompt removed in #13355 — pr_flow_prompt was deleted from
+# wizard.py because PR flow is an INSTALLER-RUNTIME.md §3 invariant (never
+# an on/off question); the merge gate (Auto Merge) is the surviving
+# variable. See tests/test_wizard_13355_pr_flow_invariant.py.
 
 
 # TestBranchWorkflowPrompt removed in #9478 — branch_workflow_prompt
