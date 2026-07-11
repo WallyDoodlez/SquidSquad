@@ -85,61 +85,50 @@ class TestRepoLabelsCaching:
 
 
 class TestCreateIssueExcludesUnknownRoleLabel:
-    def test_create_issue_label_arg_omits_nonexistent_verifier(self):
-        tracker._REPO_LABELS_CACHE = None
+    def _run_create_capturing_label(self, role, label_list_json, issue_url):
+        """Drive create_issue with _repo_labels' `gh label list` mocked on
+        _run_list and the create routed through _run_gh_with_body (#13370, stdin
+        body). Returns (issue_number, captured_label_arg)."""
         captured = {}
 
         def fake_run_list(cmd, check=True, timeout=None):
             r = MagicMock()
-            if "label" in cmd and "list" in cmd:
-                r.returncode = 0
-                r.stdout = ('[{"name":"role:qa"},{"name":"type:issue"},'
-                            '{"name":"severity:low"},{"name":"squidsquad"},'
-                            '{"name":"status:open"}]')
-                return r
-            if "issue" in cmd and "create" in cmd:
-                captured["label"] = cmd[cmd.index("--label") + 1]
-                r.returncode = 0
-                r.stdout = "https://github.com/o/r/issues/999"
-                return r
             r.returncode = 0
-            r.stdout = ""
+            r.stdout = label_list_json if ("label" in cmd and "list" in cmd) else ""
             return r
 
-        with patch("tracker._get_forge_adapter", return_value=None), \
-             patch("tracker._run_list", side_effect=fake_run_list):
-            num = tracker.create_issue("x", "y", "qa", "low", reporter="dm-lead")
-        assert num == 999
-        assert "role:qa" in captured["label"]
-        assert "role:verifier" not in captured["label"]
+        def fake_gwb(cmd, body, check=True):
+            captured["label"] = cmd[cmd.index("--label") + 1]
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = issue_url
+            return r
+
         tracker._REPO_LABELS_CACHE = None
+        with patch("tracker._get_forge_adapter", return_value=None), \
+             patch("tracker._run_list", side_effect=fake_run_list), \
+             patch("tracker._run_gh_with_body", side_effect=fake_gwb):
+            num = tracker.create_issue("x", "y", role, "low", reporter="dm-lead")
+        tracker._REPO_LABELS_CACHE = None
+        return num, captured["label"]
+
+    def test_create_issue_label_arg_omits_nonexistent_verifier(self):
+        num, label = self._run_create_capturing_label(
+            "qa",
+            '[{"name":"role:qa"},{"name":"type:issue"},{"name":"severity:low"},'
+            '{"name":"squidsquad"},{"name":"status:open"}]',
+            "https://github.com/o/r/issues/999")
+        assert num == 999
+        assert "role:qa" in label
+        assert "role:verifier" not in label
 
     def test_create_issue_new_form_role_verifier_also_omits_unknown_label(self):
         # #13465 Finding 1: create_issue with the NEW-form --role verifier must
         # still emit only the existing role:qa label, never the non-existent
         # role:verifier (which would fail the gh create the same way).
-        tracker._REPO_LABELS_CACHE = None
-        captured = {}
-
-        def fake_run_list(cmd, check=True, timeout=None):
-            r = MagicMock()
-            if "label" in cmd and "list" in cmd:
-                r.returncode = 0
-                r.stdout = '[{"name":"role:qa"}]'
-                return r
-            if "issue" in cmd and "create" in cmd:
-                captured["label"] = cmd[cmd.index("--label") + 1]
-                r.returncode = 0
-                r.stdout = "https://github.com/o/r/issues/1000"
-                return r
-            r.returncode = 0
-            r.stdout = ""
-            return r
-
-        with patch("tracker._get_forge_adapter", return_value=None), \
-             patch("tracker._run_list", side_effect=fake_run_list):
-            num = tracker.create_issue("x", "y", "verifier", "low", reporter="dm-lead")
+        num, label = self._run_create_capturing_label(
+            "verifier", '[{"name":"role:qa"}]',
+            "https://github.com/o/r/issues/1000")
         assert num == 1000
-        assert "role:qa" in captured["label"]
-        assert "role:verifier" not in captured["label"]
-        tracker._REPO_LABELS_CACHE = None
+        assert "role:qa" in label
+        assert "role:verifier" not in label
