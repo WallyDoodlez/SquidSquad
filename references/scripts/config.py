@@ -218,6 +218,12 @@ _FIELD_DEFAULTS = {
     # SystemExit is a BaseException, so it would escape the harness health
     # poller's except-Exception and silently kill the whole poller on first tick.
     "context-threshold": "70",
+    # #13328 — polling-fallback cadence. Event mode is the always-on default and
+    # the loop is a boot-time fallback, so the interval is never prompted; a
+    # config.md missing the `## Iteration Interval` section reads 30 minutes
+    # rather than sys.exit(1)ing (the section used to be mis-written under a dead
+    # `## Loop` heading — same drift class as PR Flow, #13355).
+    "interval": "30",
     # #13355 — PR flow is an INSTALLER-RUNTIME.md §3 invariant (branch+PR is
     # the only mode, #9478 D2): a config.md missing the `## PR Flow` section
     # reads `yes`, never sys.exit(1)s and never silently flips the runtime

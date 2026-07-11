@@ -306,66 +306,12 @@ class TestValidateRerunAction:
         assert wizard.validate_rerun_action(raw) is None
 
 
-# ===========================================================================
-# validate_interval (#7947, TC-49..TC-52)
-# ===========================================================================
-
-
-class TestValidateInterval:
-    """Tests for validate_interval — Ralph Loop interval validation."""
-
-    @pytest.mark.parametrize("value,expected_minutes", [
-        ("10", 10),
-        ("1", 1),
-        ("30", 30),
-        ("120", 120),
-        (" 15 ", 15),  # whitespace trimmed
-    ])
-    def test_valid_integers(self, value, expected_minutes):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is True
-        assert result["minutes"] == expected_minutes
-        assert result["reason"] is None
-
-    @pytest.mark.parametrize("value", [
-        "", "  ", None,
-    ])
-    def test_empty_input_returns_default(self, value):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is True
-        assert result["minutes"] == 10  # default
-
-    def test_empty_input_custom_default(self):
-        result = wizard.validate_interval("", default=30)
-        assert result["ok"] is True
-        assert result["minutes"] == 30
-
-    @pytest.mark.parametrize("value", [
-        "10.5", "3.0", "1,5", "0.1",
-    ])
-    def test_float_rejected(self, value):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is False
-        assert result["minutes"] is None
-        assert "whole number" in result["reason"]
-
-    @pytest.mark.parametrize("value", [
-        "0", "-1", "-100",
-    ])
-    def test_zero_and_negative_rejected(self, value):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is False
-        assert result["minutes"] is None
-        assert "at least 1" in result["reason"]
-
-    @pytest.mark.parametrize("value", [
-        "abc", "ten", "!@#", "5m",
-    ])
-    def test_non_numeric_rejected(self, value):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is False
-        assert result["minutes"] is None
-        assert "not a number" in result["reason"]
+# TestValidateInterval (TC-49..TC-52) removed in #13328 — validate_interval and
+# the loop-interval prompt were retired from wizard.py because the polling
+# interval is not a setup question (event mode is the default; the loop is a
+# boot-time fallback). The interval now lands as a silent 30-minute default via
+# build_config_md's ## Iteration Interval section; see
+# tests/test_wizard_13328_interval_silent_default.py.
 
 
 # ===========================================================================
@@ -598,7 +544,8 @@ class TestBuildConfigMdStructure:
             "## Preset",
             "## Agents",
             "## Tools",
-            "## Loop",
+            "## Iteration Interval",  # #13328
+            "## Context Pressure",  # #13328
             "## Auto Merge",  # #13355
             "## PR Flow",  # #13355
             "## Flags",
@@ -828,12 +775,15 @@ class TestBuildConfigMdToolsSection:
 
 
 class TestBuildConfigMdLoopAndFlags:
-    def test_loop_interval_and_threshold(self):
+    def test_iteration_interval_and_context_pressure(self):
+        # #13328 — interval + threshold render under the sections config.py's
+        # FIELD_MAP actually reads (## Iteration Interval / ## Context Pressure),
+        # not the dead ## Loop heading.
         spec = _minimal_spec()
         spec["loop"] = {"interval_minutes": 5, "context_threshold": 75}
         text = wizard.build_config_md(spec)
-        assert "- **Interval Minutes**: 5" in text
-        assert "- **Context Threshold**: 75" in text
+        assert "## Iteration Interval\n\n- **Minutes**: 5" in text
+        assert "## Context Pressure\n\n- **Threshold**: 75" in text
 
     def test_flags_sorted_alphabetically(self):
         spec = _minimal_spec()
@@ -863,11 +813,12 @@ class TestBuildConfigMdLoopAndFlags:
         assert "(none)" in flags_block
 
     def test_loop_defaults_when_fields_missing(self):
+        # #13328 — silent defaults: interval 30 (polling fallback), threshold 70.
         spec = _minimal_spec()
         spec["loop"] = {}
         text = wizard.build_config_md(spec)
-        assert "- **Interval Minutes**: 10" in text
-        assert "- **Context Threshold**: 70" in text
+        assert "- **Minutes**: 30" in text
+        assert "- **Threshold**: 70" in text
 
 
 class TestBuildConfigMdValidation:
