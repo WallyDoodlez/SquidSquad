@@ -127,9 +127,36 @@ class TestManualStructure:
             "### Steps 2–3",
             "### Steps 3 & 5–6",
             "### Step 7 — Apply",
+            "### Step 8 — Verify with an independent sub-agent",  # #13338
             "### Step 9 — Commit & hand off",
             "### When something breaks",
         ], "playbook section")
+
+    def test_step8_playbook_defines_executable_verification(self, manual):
+        """§9 Step 8 must be an executable protocol (#13338): a fresh objective
+        sub-agent, a compose-clean check via compose.py, the §3 invariant
+        assertions, an end-to-end carry check, and a self-solve loop that never
+        asks the user and only lets a clean pass proceed."""
+        start = manual.find("### Step 8 — Verify with an independent sub-agent")
+        assert start != -1, "§9 must carry a Step 8 verification playbook entry"
+        step8 = manual[start:manual.find("### Step 9 — Commit & hand off")]
+        assert "sub-agent" in step8 and "objective" in step8, (
+            "Step 8 must spawn a fresh, independent (objective) sub-agent"
+        )
+        assert "compose.py" in step8, (
+            "Step 8 must run compose to prove the customized team composes cleanly"
+        )
+        for inv in ("four role classes", "forge", "verification gate",
+                    "event-driven", "create→build→verify→deliver", "PR"):
+            assert inv in step8, f"Step 8 invariant check must reference: {inv!r}"
+        assert "end-to-end" in step8, (
+            "Step 8 must check the roster carries a piece of work end-to-end"
+        )
+        assert "self-solve" in step8, "Step 8 must self-solve failures, not ask the user"
+        assert "re-run" in step8, "Step 8 must re-run the sub-agent until a clean pass"
+        assert "clean pass proceeds" in step8, (
+            "only a clean pass proceeds to commit (Step 9)"
+        )
 
     def test_step0_playbook_binds_deny_list_helper(self, manual):
         """§9 Step 0 binds the consent conversation to the deterministic

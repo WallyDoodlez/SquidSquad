@@ -229,6 +229,18 @@ Then, in this order:
 
 Step 8's independent verification sub-agent (§4 step 8) then runs against this applied-but-uncommitted state.
 
+### Step 8 — Verify with an independent sub-agent
+
+Before you commit, prove the customized team actually works — with a **fresh sub-agent** (your subagent tool), never yourself: you made the choices, so an independent agent is what makes the check objective. Spawn it against the applied-but-uncommitted `.squidsquad/` from step 7.
+
+- **Inputs you hand it:** the proposed customizations (the `.squidsquad/project/<role-class>.md` L4 files just written), the project context (`.squidsquad/.repo-scan.json` + the confirmed roster and the create→build→verify→deliver workflow from step 3), and this protocol. Tell it to return a structured verdict: `{pass: bool, failures: [{check, what_broke, which_customization}]}`.
+- **The three checks — each with a concrete pass/fail:**
+  1. **Composes cleanly.** Run `python references/scripts/compose.py deploy-all` against the applied state — it re-composes every alias from the just-written L4 files. **PASS** = every alias composes with zero exit and no `failed` entry in the output. **FAIL** = any compose error, or an L4 op-block that doesn't apply (e.g. a `replace step:<id>` whose target step doesn't exist). For a non-writing, per-role pre-commit check instead, use the staged-L4 validator `python references/scripts/compose.py deploy <alias> --check --staged-l4 .squidsquad/project/<role-class>.md`, which validates the staged L4 against the L1–L3 sources without composing (a bare `--check` without `--staged-l4` is not a valid invocation, and `deploy-all --check` is retired).
+  2. **No invariant breached (§3).** The sub-agent reads the composed `CLAUDE.md` set + `config.md` and asserts every §3 invariant holds: all **four role classes present** (PM, Worker, Verifier, DM — none removed by a whole-slot replace); the **forge** is the single tracker; a **verification gate** exists before delivery; the **event-driven runtime** + harness-owned lifecycle; the **create→build→verify→deliver** lifecycle; and **change lands through a reviewable PR** (PR-flow). **PASS** = all hold. **FAIL** = a customization removed or contradicted any invariant.
+  3. **Roster carries work end-to-end.** The sub-agent traces one representative piece of work through the full workflow with the proposed roster + customizations: PM can intake and shape it, a worker of the right specialization can build it, the verifier can verify it, the DM can deliver it — no stage orphaned, no handoff broken by a customization. **PASS** = a clean end-to-end path exists. **FAIL** = a stage the roster can't cover, or a customization that breaks a handoff.
+- **On any FAIL, you self-solve — never the user.** Revise the offending customization to fit the user's intent *into* the model: soften a whole-slot `replace` to an `append`, re-scope an over-fanned pointer to the narrowest role, reframe a request that breached an invariant as a variable that doesn't (or, if it genuinely can't map, drop it and tell the user in their terms what you did instead). Then **re-run the sub-agent** — loop until a clean pass. Never ask the user to adjudicate an internal or technical fix; they don't speak SquidSquad, so always produce a working solution and only ever talk to them in their terms.
+- **Only a clean pass proceeds to Step 9.** An applied-but-unverified install is never committed.
+
 ### Step 9 — Commit & hand off
 
 1. **Forge labels**: `python references/scripts/wizard.py ensure-labels`. Failures don't roll anything back — the on-disk install is valid; say exactly which labels failed and how to retry.
