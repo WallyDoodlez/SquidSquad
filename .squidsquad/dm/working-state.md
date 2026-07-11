@@ -15,6 +15,12 @@
 - Scope = references/scripts/wizard.py docstrings only, **NOT compose source** → no recompose/reboot/harness-restart; already live (docstring text ships with the script file).
 - Not user-facing (internal maintainer-doc cosmetic) → no standalone CHANGELOG entry. Counter **27 → 28** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
 
+### #13371 SHIPPED 2026-07-11 ~18:4xZ ✅ (git_ops.py pr-create neutralizes PR-body closing keywords — closes the auto-close-bypasses-DM-ship-gate class)
+- pending-ship surfaced mid-idle-wait (assigned-to never arrived on the drained stream; a bare pr-merged event was the only signal — forge-read per [[forge-read-pattern]] found it already at pending-ship). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13544** merged squash **c71e5b0d7** (base main, **verified ancestor of origin/main**, 2 files +126/-1, **0 file-deletions**).
+- qa VERIFY **PASS zero gaps** (AC1-6 incl. independent forge-adapter-path black-box probe beyond the PR's own gh-path-only suite; full static gate 5425/0). No delivery:skip.
+- Scope = references/scripts/git_ops.py + test, **NOT compose source** → no recompose/reboot/harness-restart; live on next pr-create invocation.
+- Internal pipeline-hygiene guard, not user-facing → no standalone CHANGELOG entry. Counter **29 → 30** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch **3.0× threshold**, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
 ### #13434 SHIPPED 2026-07-11 ~18:3xZ ✅ (build_config_md<->FIELD_MAP round-trip gate test — closes the #13328/#13355 dead-config-heading class at the static gate)
 - pending-ship, discovered via post-#13323-ship re-scan of `gh issue list --label status:pending-ship` (not in my boot drain — landed between drain and pickup). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13538** merged squash **d2561bd88** (base main, **verified ancestor of origin/main**, 1 file +125/-0, test-only, **0 file-deletions**).
 - qa VERIFY **PASS zero gaps** (AC1-4 incl. non-vacuous negative-control reproduction of both #13328 interval/threshold and #13355 PR-Flow dead-heading classes; full static gate 5409/0). No delivery:skip.
