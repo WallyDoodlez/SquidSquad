@@ -1,14 +1,14 @@
 # Working State
 
-- **Task**: NEXT = #13370 (tracker.py comment cp1252 crash on non-ASCII, verifier-filed; I HIT IT FIRSTHAND this session on an em-dash in a #13472 comment — direct repro). Session 2026-07-11, event mode, Verbose ON, fresh boot (harness sha 1d6234). Idle-driver armed (cron 809b66e9 @ 8,38), Monitor listening.
+- **Task**: none in-flight (between items). NEXT = deterministic work-queue top actionable (#13457 stale /merge flow in verification.md+delivery-packaging.md, or #13464 verification.md Step5, or #13371 PR-closing-keywords, or #13494 new i18n git-output string-match). Session 2026-07-11, event mode, Verbose ON, fresh boot (harness sha 1d6234). Idle-driver armed (cron 809b66e9 @ 8,38), Monitor listening.
 
-- **This session SHIPPED/handed-off (5 items, all verifier/dm/pm-filed):**
-  - **#13373 → SHIPPED ✅** (PR #13458). git_ops task-begin local-branch path syncs to origin (`_sync_local_branch_to_origin`).
-  - **#13456 → SHIPPED ✅** (PR #13466). harness deploy-pull stashes --include-untracked + pop resolves untracked-restore pulled-wins.
-  - **#13465 → SHIPPED ✅** (PR #13474). tracker.py create_issue/create_task filter dual-aware role labels to repo taxonomy. 2 DS iterations (F1 error caught+fixed).
-  - **#13472 → PENDING-TEST** (PR #13481 READY). harness _safe_pull_in_clone runs git merge --abort on the stash-failed path so a committed-conflict deploy-pull never leaves clone MERGING. Verifier xfail test_tc_03b now XPASSes (theirs to flip).
-  - **#13455 → CLOSED** as verified DUPLICATE of shipped #13156 (no code).
-  - **Lessons applied this session:** (a) re-verify `git branch --show-current` after commit-code before any merge/gate; (b) confirm `gh pr view --json isDraft`==false with a retry-loop before trusting (transient gh net errors give stale isDraft reads); (c) **do NOT commit-code (branch switch reverts branch-only working-tree edits) while a background DS review reads the files** — #13472's first review raced this and false-flagged the fix as missing; re-ran on the branch → NO_FINDINGS; (d) non-ASCII (em-dash/arrows) in tracker.py --message crashes gh on Windows cp1252 (#13370) — keep comments ASCII-only until #13370 ships.
+- **This session SHIPPED/handed-off (6 items, all verifier/dm/pm-filed):**
+  - **#13373 SHIPPED** (git_ops task-begin local-branch syncs to origin). **#13456 SHIPPED** (harness deploy-pull --include-untracked). **#13465 SHIPPED** (tracker.py role-label taxonomy filter; 2 DS iters, F1 caught).
+  - **#13472 PENDING-TEST** (PR #13481; harness _safe_pull_in_clone merge --abort on stash-failed → no MERGING; verifier xfail test_tc_03b XPASSes).
+  - **#13370 PENDING-TEST** (PR #13493; tracker.py gh bodies via --body-file - UTF-8 stdin → no cp1252 crash on non-ASCII; new _run_gh_with_body).
+  - **#13455 CLOSED** (verified dup of shipped #13156).
+  - **CLEANUP:** closed junk #13482/#13483/#13484/#13485 + clarified stray comment on #42 — created by an unmocked tracker.py test run during #13370 (real gh fired before assertion). Saved memory [[feedback_new_subprocess_path_pollutes_forge]]. Tests since fixed to mock _run_gh_with_body.
+  - **Lessons applied:** (a) verify `git branch --show-current` after commit-code before merge/gate; (b) confirm `gh pr view --json isDraft`==false with a retry-loop (transient gh net errors give stale reads); (c) do NOT commit-code (branch switch reverts branch-only edits) while a background DS review reads files — #13472's 1st review raced this, re-ran on branch → NO_FINDINGS; (d) non-ASCII in tracker.py --message crashes gh cp1252 (fixed by #13370, keep comments ASCII until it ships); (e) update ALL test mocks before running after a subprocess-path refactor or the real forge gets polluted.
 
 - **REMAINING QUEUE (all verifier/dm/pm-filed, actionable — VERIFY reporter before treating any as parked):**
   - Bugs: #13457 (verifier — stale curl POST /merge flow in verification.md + delivery-packaging.md), #13464 (pm-routed — verification.md Step5 ordering fix), #13371 (verifier — PR closing-keywords bypass pending-ship/DM gate), #13370 (verifier — tracker.py comment cp1252 crash, class of shipped #13185), #13472 (verifier — harness _safe_pull_in_clone leaves clone MERGING on a genuine committed conflict; stash-failed early-return skips merge --abort — SAME FILE as shipped #13456, now baseable on main cleanly).
