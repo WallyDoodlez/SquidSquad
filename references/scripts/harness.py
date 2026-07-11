@@ -3090,12 +3090,14 @@ async def get_agent_health(role: str):
     except (OSError, FileNotFoundError):
         pass
 
-    # Read context-pressure file
-    ctx_file = SQUIDSQUAD_DIR / role / "context-pressure"
-    try:
-        result["context_pressure"] = int(ctx_file.read_text(encoding="utf-8").strip())
-    except (OSError, FileNotFoundError, ValueError):
-        pass
+    # Read context-pressure from the agent's OWN clone (#13345). Sibling-clone
+    # agents (skill/qa/dm) write context-pressure to
+    # <clone>/.squidsquad/<role>/context-pressure, NOT the harness-root
+    # .squidsquad/, so reading SQUIDSQUAD_DIR/role here returned a stale/absent
+    # value for them. Reuse _read_agent_pressure — the same clone-relative read
+    # the #13335 enforcement path uses — so the reported number matches what is
+    # actually enforced (and it fails-safe to None on absent/unreadable/non-int).
+    result["context_pressure"] = state._read_agent_pressure(role, agent)
 
     return result
 
