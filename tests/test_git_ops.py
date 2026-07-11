@@ -2850,6 +2850,76 @@ class TestScopeAudit13285:
 
 
 # ---------------------------------------------------------------------------
+# #13454 — a DRAFT PR reaching pending-test hit the verifier auto-merge lane
+# with a raw GraphQL "Pull Request is still a draft" error (and gh's mergeable
+# probe reports MERGEABLE/CLEAN, so nothing warned first). pr_merge now reads
+# isDraft and self-heals via pr_ready before merging.
+# ---------------------------------------------------------------------------
+
+class TestPrMergeDraftSelfHeal:
+    @pytest.fixture(autouse=True)
+    def _safe_behind(self):
+        with patch("git_ops._pr_behind_by", return_value=0), \
+                patch("git_ops._post_merge_scope_audit"):
+            yield
+
+    @patch("git_ops.pr_ready", return_value=True)
+    @patch("git_ops._run_list")
+    def test_draft_pr_readied_then_merged(self, mock_run, mock_ready):
+        # state probe reports a draft; pr_ready succeeds; merge proceeds.
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN", "isDraft": true}'),
+            _mock_result(stdout=""),  # merge succeeds
+            _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+        ]
+        success, msg = git_ops.pr_merge(42)
+        assert success is True
+        assert msg == "merged"
+        mock_ready.assert_called_once_with(42)
+        # The state probe requests isDraft.
+        assert "state,isDraft" in mock_run.call_args_list[0][0][0]
+
+    @patch("git_ops.pr_ready", return_value=False)
+    @patch("git_ops._run_list")
+    def test_draft_ready_failure_refuses_without_merge(self, mock_run, mock_ready):
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN", "isDraft": true}'),
+        ]
+        success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert msg == "PR is a draft"
+        mock_ready.assert_called_once_with(42)
+        # Merge must NOT be attempted — only the state probe ran.
+        assert mock_run.call_count == 1
+
+    @patch("git_ops.pr_ready")
+    @patch("git_ops._run_list")
+    def test_non_draft_pr_does_not_call_ready(self, mock_run, mock_ready):
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN", "isDraft": false}'),
+            _mock_result(stdout=""),
+            _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+        ]
+        success, msg = git_ops.pr_merge(42)
+        assert success is True
+        mock_ready.assert_not_called()
+
+    @patch("git_ops.pr_ready")
+    @patch("git_ops._run_list")
+    def test_absent_isdraft_field_treated_as_non_draft(self, mock_run, mock_ready):
+        # Backward-compat: a state probe response without isDraft (older gh /
+        # existing test fixtures) must not trip the self-heal.
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stdout=""),
+            _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+        ]
+        success, msg = git_ops.pr_merge(42)
+        assert success is True
+        mock_ready.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
 # #13371 — pr_create neutralizes GitHub closing keywords in the PR body so a
 # stray "Fixes #N" cannot auto-close the issue at squash-merge and bypass the
 # pending-ship -> shipped DM gate (ship counter + changelog + recorded verdict).

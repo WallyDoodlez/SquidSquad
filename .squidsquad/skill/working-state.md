@@ -1,30 +1,30 @@
 # Working State
 
-- **Task**: none — 3 shipped→pending-test this session: #13514 (PR #13523), #13433 (PR #13529), #13323 (PR #13530). Session 2026-07-11, event mode, **Verbose OFF (quiet posture)** per config.
+- **Task**: none — 2 shipped→pending-test this wake (#13454 resolved, #13353 fixed). Remaining queue externally-gated (PM CQ ACs / operator live runs / design / cross-clone). Idle: gated-only queue treated as drained per #13316 judgment; verifier route-backs on the 2 PRs are HIGHEST priority next wake. Session 2026-07-11 (fresh boot ~15:28), event mode, **Verbose OFF (quiet)**.
 
-## Shipped / handed off this session (tail)
-- **#13323 → PENDING-TEST** (PR #13530): wizard.py 2 stale `./start.sh` docstrings (restart_agents, cmd_restart_agents) → `.squidsquad/start.sh` after #13318 launcher move. Doc-only, no behavior change, no test. Static 5381/0.
-- **#13433 → PENDING-TEST** (PR #13529 READY): `git_ops.py pr-merge --help` (and any non-numeric first arg) reached `pr_merge()` → ran a REAL squash-merge + post-merge compose, dirtying the tree with 8 composed CLAUDE.md + false "PR #--help merged". `_parse_args` only caught `--help` in the subcommand position. Fix: accept `-h` at top-level `_parse_args`; validate pr-merge PR number BEFORE side effects (`-h`/`--help`→usage exit 0; missing→exit 1; non-numeric→exit 2 "no merge attempted"; never call pr_merge with a bogus number). Scoped to pr-merge number position only (free-text args w/ `--help` unaffected). Tests: `TestPrMergeArgGuard` (7) + `TestParseArgs -h`. Static 5389/0. DS NO_FINDINGS. **#13447 is the sibling (post-merge scope-audit dirties clone + no local-main FF-sync) — heavier, left for follow-up.**
-- **#13514 → PENDING-TEST** (PR #13523 READY): `wizard.py setup-yes` reported "Created N agent(s)" + exit 0 even when every role's compose FAILED (broken install masquerading as success). Fix in `cmd_setup_yes`: count only agents with `claude_md != "FAILED"`; print `(K FAILED to compose)`; **suppress the "SquidSquad is installed" success banner when any role failed** (DS Finding 1 — banner otherwise contradicted the ERROR); non-zero exit + distinct ERROR summary naming failed role ids; defensive `.get('id','?')`. Regression test (3 cases: partial / every-role-failed / all-compose). Full static gate 5384/0. DS review clean (3 warnings all addressed). **PR body OMITS `Fixes #N`** per #13371 — DM closes via pending-ship→shipped, not GitHub auto-close (`gh pr edit` still fails on this repo, GraphQL projects-classic).
-- Resumed in-flight work from a prior session that had already branched (squidsquad/task/13514) + written the wizard.py fix + a first test but exited before committing. Reconciled: working-state on the branch was the pre-task-begin version (#11511 state-files-main-only guard), so it still read "#13515 in-progress" — verified against forge and dropped it.
+## Shipped → PENDING-TEST this wake
+- **#13353 → PENDING-TEST** (PR #13553 ready): harness EAD suppresses the #12442 handoff RE-emit when target agent is RUNNING + heartbeat within 600s (converges via own work_queue() re-read); silent/stopped/absent still gets the rescue; bounded (lapses after 600s silence). AgentState.handoff_reemit_suppressed(). 11 tests. Static 5458/0. DS NO_FINDINGS. Code-only, no CQ.
+- **#13454 → PENDING-TEST** (PR #13546, route-back RESOLVED): merged origin/main; kept BOTH test classes (mine + #13371's) at the conflicting anchor. 17 tests, static 5452/0. Pushed 56f215441.
 
-## #13515 (BACK IN PM'S COURT — status:pending-human-review, PM AC6 review)
-- This session: PM woke me (assigned-to) saying the Phase-1 `SPEC-13515.md` was NOT on origin/main. Root cause: it was commit `266d4fa37` STRANDED unpushed in this clone (pre-#13473-restart session force-killed before harness push). My working-state pushes this session already carried it to origin/main. VERIFIED on origin (`git branch -r --contains 266d4fa37`→origin/main; `git ls-tree origin/main -- .../SPEC-13515.md`→blob 7bd5a2572, 5144B). Commented + woke PM via `work-assign --target-alias pm` (no status change per PM's instruction). **Now PM's action** (AC6 doc-first review + rule on: status name `blocked` vs `parked`; Soul-edit/tracker.py sequencing). **Phase-2 code (tracker _STATUS/_VALID_TRANSITIONS + sentinel + regression + CQ) is MINE only AFTER PM rules + operator signs off.** Do NOT touch Phase-2 until #13515 returns to role:skill + in-progress.
-- **LESSON (this session): a stranded local commit from a force-killed session rides your next boot's local main; your first push carries it to origin. When a teammate reports a "missing" pushed artifact, check `git branch -r --contains <sha>` — it may have just landed.**
+## In-flight this wake
+- **#13454 → PENDING-TEST** (PR #13546, verifier route-back RESOLVED): merged origin/main into squidsquad/task/13454; resolved tests/test_git_ops.py conflict (my TestPrMergeDraftSelfHeal vs #13371's TestNeutralizeClosingKeywords/TestPrCreateNeutralizesBody appended at same anchor) — kept BOTH class blocks. 17 tests pass, static 5452/0. Pushed merge 56f215441. Dropped an empty restore commit (the #11511 guard silently unstages .squidsquad/ on branches — main is protected by .gitattributes merge=ours/union, PR is code-only). Back in verifier's queue.
+- **#13353 → IN PROGRESS** (harness.py EAD, code-only, no CQ): EAD re-emits assigned-to for pending-test/pending-ship every 600s (#12442 anti-starvation) until status changes; verifier verifying #13335 ~3h without transitioning → 18 wasted re-nudges. Fix: new AgentState.handoff_reemit_suppressed() — suppress the RE-emit (never fresh transitions) when target agent is RUNNING + heartbeat within 600s (converges via own work_queue() re-read); silent/stopped/absent agent still gets the rescue re-emit; bounded (lapses after 600s silence). 11 new tests (5 unit truth-table + 6 EAD-integration incl. backward-compat absent-agent). Existing 12442/12342 EAD suite still green. GATES RUNNING: static (bo25x8j0k) + DS review (b2ybp1n6x, high-blast-radius). On green+DS-clean: task-begin, commit, PR, pending-test.
 
-## NEXT QUEUE (deterministic; forge is source of truth — re-run work_queue on wake)
-- Verifier improvement-scan bugs (role:skill, auto-approved): check `list-issues skill`.
-- **#13371** (PR closing-keywords bypass pending-ship/DM gate — hit live again on PR #13523; `gh pr edit --body` can't strip `Fixes #N` post-create). Candidate pickup if still role:skill + approved.
-- **3 approved tasks** #12527/#10690/#10686 = operator-supervised live runs, not cleanly autonomous.
+## Remaining open role:skill — EXTERNALLY GATED (triaged this wake)
+- **#12527/#10686/#10690** — approved tasks, operator-supervised live runs (12527 live install run needs operator; 10686 manual by design; 10690 gated on 10686). Not autonomous.
+- **#13447** — my prior root-cause correction (autocrlf/.gitattributes, NOT the filed compose cause). CRLF hypothesis NOT confirmable from my clone: composed CLAUDE.md is LF-clean in blob+worktree here (only working-state.md tripped the LF→CRLF warning). Needs cross-clone confirmation before any fleet .gitattributes renormalize PR. Do NOT rush.
+- **#13551** (recurring same-anchor test-append conflicts — the exact cause of #13454's route-back). Best fixes are authoring-convention/instruction changes → CQ gate (PM must author CQ AC first).
+- **#13552 / #13354 / #13356 / #13316 / #13317** — touch LLM-consumed instructions → CQ gate; route to PM for the comprehension-coverage AC before implementing.
+- **#13531** — harness POST /restart on stale clone; needs a DESIGN DECISION (operator/PM).
 
-## Standing lessons
-- State files (.squidsquad/) are main-only + reset on feature branches (#11511 guard) — working-state on a task branch shows the PRE-task-begin version (expected, not loss). Reconcile against the FORGE, not the branch's working-state, on resume.
-- commit-code returns to main after committing; pr-create needs you ON the branch (switch first); it creates a DRAFT → `gh pr ready <n>` to flip.
-- `gh pr edit --body` fails on this repo (GraphQL projects-classic) — compose PR body WITHOUT `Fixes #N` up front.
-- After PM feedback on an issue, #12475 unread-feedback guard blocks your transition until you comment/ack.
-- Full static gate = `run_tests.py static` (~5384 gated), not a subset — required before pending-test.
+## Standing lessons (session-reinforced)
+- #11511 guard: task-begin silently unstages/resets .squidsquad/ state+vault on branches. Restoring origin/main's versions on a branch does NOT stick (guard re-unstages → empty commit). Main is protected by .gitattributes merge=ours (state) / merge=union (vault). Keep PR content code-only; don't fight the branch-side gutting.
+- Verifier-rejected merge conflict = code-conflict (worker's), resolve via `git merge origin/main` (never rebase), keep both blocks, re-flag. #12475 unread-feedback guard blocks the pending-test transition until you comment addressing the reject.
+- task-end aborts if untracked .squidsquad/ files (branch-gutted, present on main) block checkout → `git clean -f .squidsquad/...` then `git checkout -f main` (safe: main owns them, restores full versions).
+- Full static gate = `run_tests.py static` (~5452 gated), buffers to EOF — run in background.
+- Heredoc `<<'EOF'` doesn't expand `$TS`; build MSG via a normal var with `$TS` outside single quotes.
 
 ## Improvement Scan
-Status: idle-driver armed at boot; #13514 absorbed this wake — no scan yet.
+Status: idle-driver not armed (productive work all wake — #13454 resolved + #13353 in progress).
 
 ## Quiet Cycle Counter: 0
