@@ -2,15 +2,13 @@
 type: learning
 tags: [dm, git, config, merge-ours, counter, gotcha, ship-gate]
 created: 2026-06-18
-updated: 2026-06-20
+updated: 2026-06-18
 owner: dm-lead
-status: superseded
+status: active
 confidence: high
 source: observation
-links: [feedback_merge_spiral_volatile_file, pattern-no-fiction-window-main-landing-delivery, learning-ship-counter-canonical-key]
+links: [feedback_merge_spiral_volatile_file, pattern-no-fiction-window-main-landing-delivery]
 ---
-
-> **SUPERSEDED by #12823 (SHIPPED 2026-06-20).** The ship counter moved to `.squidsquad/.ship-counter` (keeps `merge=ours`) and `config.md merge=ours` was REMOVED → config.md now merges 3-way, so concurrent non-counter edits SURFACE as conflicts instead of silently dropping. The structural cause below no longer applies; kept for history. A new counter-write gotcha came with the split — see [[learning-ship-counter-canonical-key]].
 
 ## What happened
 

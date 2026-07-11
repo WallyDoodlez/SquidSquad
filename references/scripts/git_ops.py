@@ -956,14 +956,17 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
         pass
 
     # Default: gh CLI
-    # Check PR state first
+    # Check PR state first (isDraft too, for the #13454 self-heal below)
     state_result = _run_list(
-        ["gh", "pr", "view", str(pr_number), "--json", "state"],
+        ["gh", "pr", "view", str(pr_number), "--json", "state,isDraft"],
         check=False,
     )
+    is_draft = False
     if state_result.returncode == 0:
         try:
-            state = json.loads(state_result.stdout.strip()).get("state", "")
+            state_data = json.loads(state_result.stdout.strip())
+            state = state_data.get("state", "")
+            is_draft = bool(state_data.get("isDraft", False))
             if state == "MERGED":
                 print(f"PR #{pr_number} already merged")
                 return True, "already merged"
@@ -972,6 +975,24 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                 return False, "PR closed without merge"
         except (json.JSONDecodeError, AttributeError):
             pass
+
+    # #13454: a DRAFT PR reaching the merge step fails `gh pr merge` with a raw
+    # GraphQL "Pull Request is still a draft" error — and the mergeable /
+    # mergeStateStatus probe reports MERGEABLE / CLEAN (gh's mergeable fields do
+    # NOT reflect draft state), so nothing warns before the attempt. By the time
+    # pr_merge is invoked the verifier has already decided to merge, so a lingering
+    # draft flag is a ship-discipline slip, not a signal to halt: self-heal by
+    # marking the PR ready, then proceed. Deterministic, in the sanctioned merge
+    # path, so a draft PR reaching the queue no longer surfaces an opaque error or
+    # silently blocks the auto-merge lane. If the ready step itself fails, refuse
+    # with an actionable message rather than the raw draft error.
+    if is_draft:
+        print(f"PR #{pr_number} is a draft -- marking ready before merge (#13454)")
+        if not pr_ready(pr_number):
+            msg = (f"PR #{pr_number} is a draft and could not be marked ready "
+                   f"(run `gh pr ready {pr_number}` and retry)")
+            print(f"ERROR: {msg}", file=sys.stderr)
+            return False, "PR is a draft"
 
     # #13271 (SEV-1 prevention): refuse to squash-merge a branch that is FAR
     # behind base — a stale-tree squash from a deeply-behind clone mass-reverts
