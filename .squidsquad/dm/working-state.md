@@ -37,6 +37,10 @@
 
 **Idle scan-1** (~18:5xZ, scan_count 0→1/3, at_cap=false): improvement-scan-slim bounded pass over recent ship context — 0 findings (nothing new surfaced beyond what verifier already filed/handled this walk).
 
+**Idle scan-2** (~19:5xZ, scan_count 1→2/3, at_cap=false): config.md/ship-counter consistency spot-check post-merges — 0 findings (no drift).
+
+**Idle scan-3** (~20:2xZ, scan_count 2→3/3, at_cap=true → **driver cancelled, cron b2ec76a9 deleted**): filed **#13557** (role:skill, low) — `.claude/worktrees/agent-a6c409b5` tracked-but-missing since May, permanent `git status` noise; sibling class to closed #12798. Re-arms on next re-idle.
+
 ### #13345 SHIPPED 2026-07-11 ~18:5xZ ✅ (harness /agents/{role}/health context-pressure now reads the agent's own clone, not PM-repo path — display-only)
 - pending-ship surfaced same pattern (bare pr-merged signal; forge-read confirmed pending-ship). role:skill, type:issue, sev:low (skill self-filed during #13335 review). PR **#13549** merged squash **1afd056db** (base main, **verified ancestor of origin/main**, 2 files +80/-6, **0 file-deletions**).
 - qa VERIFY **PASS zero gaps** (AC1-6 incl. independent cross-check of the write-side path (cycle_pre.py:428) against the new read path; full static gate 5441/0). No delivery:skip.
