@@ -551,6 +551,35 @@ def _run_list(cmd_list, check=True):
     )
 
 
+def _run_gh_with_body(cmd_list, body, check=True):
+    """Run a ``gh`` command whose body/message is agent-authored prose, passing
+    the body via ``--body-file -`` (UTF-8 stdin) instead of as a command-line
+    argument (#13370).
+
+    On Windows with a cp1252 default locale, a non-ASCII body (em-dash U+2014,
+    arrows, smart quotes) passed as a ``--body``/``--message`` ARGV argument is
+    mangled in the command line and ``gh`` exits non-zero (observed live; a
+    verifier comment and an in-session pickup comment both crashed on em-dashes).
+    Reading the body from stdin bypasses the argv-encoding path entirely, so any
+    Unicode body round-trips. Sibling of #13185, which crash-proofed the
+    stdout/stderr PRINT surface — a different call surface that did not cover this
+    argv path.
+
+    ``cmd_list`` is the gh command WITHOUT the body flag (e.g.
+    ``["gh", "issue", "comment", "123"]``); this helper appends
+    ``["--body-file", "-"]`` and feeds ``body`` on stdin as UTF-8.
+    """
+    if cmd_list and cmd_list[0] == "gh":
+        cmd_list = [_resolve_gh_bin()] + list(cmd_list[1:])
+    return subprocess.run(
+        cmd_list + ["--body-file", "-"],
+        input=body,
+        capture_output=True, text=True,
+        encoding="utf-8", errors="replace",
+        check=check, cwd=str(REPO_ROOT),
+    )
+
+
 def _resolve_status(name):
     """Resolve a status name to its full label."""
     if name.startswith("status:"):
@@ -942,12 +971,11 @@ def create_issue(title, body, role, severity, reporter=None):
         print(json.dumps(result))
         return result.get("number", -1)
 
-    result = _run_list([
+    result = _run_gh_with_body([  # #13370: body via stdin, not argv --body
         "gh", "issue", "create",
         "--title", full_title,
-        "--body", full_body,
         "--label", labels,
-    ])
+    ], full_body)
     url = result.stdout.strip()
     try:
         number = int(url.rstrip("/").split("/")[-1])
@@ -991,12 +1019,11 @@ def create_task(title, body, role, priority, reporter=None):
         print(json.dumps(result))
         return result.get("number", -1)
 
-    result = _run_list([
+    result = _run_gh_with_body([  # #13370: body via stdin, not argv --body
         "gh", "issue", "create",
         "--title", full_title,
-        "--body", full_body,
         "--label", labels,
-    ])
+    ], full_body)
     url = result.stdout.strip()
     try:
         number = int(url.rstrip("/").split("/")[-1])
@@ -1627,7 +1654,9 @@ def comment(number, role, message, _suppress_event=False):
     if adapter:
         adapter.add_comment(number, body)
     else:
-        _run_list(["gh", "issue", "comment", str(number), "--body", body])
+        # #13370: body via stdin (--body-file -), not an argv --body, so a
+        # non-ASCII body (em-dash etc.) does not crash gh on a cp1252 console.
+        _run_gh_with_body(["gh", "issue", "comment", str(number)], body)
     print(f"Commented on #{number}")
 
     # Emit tracker-comment event (#4709) — suppressed for auto-comments from transition()
