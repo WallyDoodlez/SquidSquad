@@ -580,6 +580,42 @@ def _run_gh_with_body(cmd_list, body, check=True):
     )
 
 
+# #13517: issue/PR TITLES are passed as a ``--title`` ARGV argument (gh has no
+# ``--title-file``), so #13370's stdin technique — which fixed non-ASCII BODIES —
+# cannot cover them. A non-ASCII title (em-dash U+2014, arrow, smart quote) still
+# crashes gh on a cp1252 Windows console, the exact class #13370 closed for
+# bodies. Titles are short and ASCII-by-convention, so we transliterate the common
+# offenders to readable ASCII rather than hard-blocking the create; the
+# ``encode("ascii", "replace")`` backstop then guarantees the result is pure ASCII
+# (any residual codepoint becomes ``?``) so ``gh`` can never crash on the argv.
+_TITLE_TRANSLIT = {
+    "—": "--",   # em dash
+    "–": "-",    # en dash
+    "‘": "'", "’": "'",       # smart single quotes / apostrophe
+    "“": '"', "”": '"',       # smart double quotes
+    "…": "...",  # ellipsis
+    "→": "->", "←": "<-", "↔": "<->",  # arrows
+    " ": " ",    # non-breaking space
+    "•": "*",    # bullet
+}
+
+
+def _asciiize_title(title):
+    """Return an ASCII-safe form of ``title`` for a gh ``--title`` argv (#13517).
+
+    Common Unicode punctuation is transliterated to a readable ASCII equivalent
+    (see ``_TITLE_TRANSLIT``); any remaining non-ASCII codepoint is replaced with
+    ``?`` via ``encode("ascii", "replace")`` so the result is guaranteed pure
+    ASCII and cannot crash gh on a cp1252 console. Returns the input unchanged
+    when it is already ASCII.
+    """
+    if title is None:
+        return title
+    for uni, asc in _TITLE_TRANSLIT.items():
+        title = title.replace(uni, asc)
+    return title.encode("ascii", "replace").decode("ascii")
+
+
 def _resolve_status(name):
     """Resolve a status name to its full label."""
     if name.startswith("status:"):
@@ -971,9 +1007,13 @@ def create_issue(title, body, role, severity, reporter=None):
         print(json.dumps(result))
         return result.get("number", -1)
 
+    gh_title = _asciiize_title(full_title)  # #13517: gh --title argv is cp1252-fragile
+    if gh_title != full_title:
+        print(f"NOTE: title transliterated to ASCII for gh --title (#13517): "
+              f"{gh_title!r}", file=sys.stderr)
     result = _run_gh_with_body([  # #13370: body via stdin, not argv --body
         "gh", "issue", "create",
-        "--title", full_title,
+        "--title", gh_title,
         "--label", labels,
     ], full_body)
     url = result.stdout.strip()
@@ -1019,9 +1059,13 @@ def create_task(title, body, role, priority, reporter=None):
         print(json.dumps(result))
         return result.get("number", -1)
 
+    gh_title = _asciiize_title(full_title)  # #13517: gh --title argv is cp1252-fragile
+    if gh_title != full_title:
+        print(f"NOTE: title transliterated to ASCII for gh --title (#13517): "
+              f"{gh_title!r}", file=sys.stderr)
     result = _run_gh_with_body([  # #13370: body via stdin, not argv --body
         "gh", "issue", "create",
-        "--title", full_title,
+        "--title", gh_title,
         "--label", labels,
     ], full_body)
     url = result.stdout.strip()
