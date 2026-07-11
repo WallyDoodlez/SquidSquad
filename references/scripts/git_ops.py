@@ -1456,6 +1456,77 @@ def get_branch_name(role, number):
     return pattern.format(role=role, number=number)
 
 
+def _sync_local_branch_to_origin(branch):
+    """Fast-forward an existing local task branch to origin/<branch> (#13373).
+
+    Called on task_begin's local-branch-exists path, which previously checked
+    out the local ref with NO fetch/compare — so a stale local ref (the normal
+    re-verification case: the worker pushed the fix commit after a round-1
+    bounce, and this clone's ref lags origin) got verified as-is, without the
+    fix commit. The remote path below already fetches for this reason (#5013);
+    the local path must too.
+
+    Cases:
+      - origin/<branch> absent (never pushed) -> keep local (no-op).
+      - local == origin -> already in sync (no-op).
+      - local strictly behind origin -> fast-forward (git merge --ff-only).
+      - local strictly ahead of origin -> keep local unpushed work (no-op).
+      - diverged (neither is an ancestor of the other) -> FAIL LOUDLY with both
+        SHAs (sys.exit 1); never silently check out an unsynced/diverged tip.
+        Manual resolution is merge-not-rebase per the project's standing rule.
+    """
+    _run_list(["git", "fetch", "origin", branch], check=False)
+    origin = _run_list(
+        ["git", "rev-parse", "--verify", f"refs/remotes/origin/{branch}"],
+        check=False,
+    )
+    if origin.returncode != 0:
+        # Never pushed to origin — nothing to sync against.
+        return
+    origin_sha = origin.stdout.strip()
+    local_sha = _run_list(
+        ["git", "rev-parse", f"refs/heads/{branch}"], check=False
+    ).stdout.strip()
+    if not local_sha or local_sha == origin_sha:
+        return
+    # local behind origin? (local is an ancestor of origin)
+    behind = _run_list(
+        ["git", "merge-base", "--is-ancestor", local_sha, origin_sha], check=False
+    ).returncode == 0
+    if behind:
+        ff = _run_list(["git", "merge", "--ff-only", f"origin/{branch}"], check=False)
+        if ff.returncode != 0:
+            print(
+                f"ERROR: task-begin could not fast-forward {branch} to origin/"
+                f"{branch} (local {local_sha[:9]}, origin {origin_sha[:9]}): "
+                f"{ff.stderr.strip()}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(
+            f"task-begin: fast-forwarded {branch} {local_sha[:9]} -> "
+            f"{origin_sha[:9]} (origin was ahead) (#13373)"
+        )
+        return
+    # origin behind local? (origin is an ancestor of local) -> unpushed local
+    # work; keep it.
+    ahead = _run_list(
+        ["git", "merge-base", "--is-ancestor", origin_sha, local_sha], check=False
+    ).returncode == 0
+    if ahead:
+        return
+    # Neither is an ancestor of the other -> diverged. Never verify an unsynced
+    # tip (#13373); surface both SHAs and stop.
+    print(
+        f"ERROR: task-begin: local {branch} ({local_sha[:9]}) and origin/"
+        f"{branch} ({origin_sha[:9]}) have DIVERGED. Resolve manually (merge "
+        f"origin, never rebase) before retrying — refusing to check out an "
+        f"unsynced tip (#13373).",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def task_begin(role, number):
     """Check out the task's feature branch (#3296, #9478).
 
@@ -1487,6 +1558,11 @@ def task_begin(role, number):
         if not _safe_checkout(branch):
             print(f"ERROR: task-begin failed to checkout {branch}", file=sys.stderr)
             sys.exit(1)
+        # Sync the existing local ref to origin before returning (#13373). A
+        # stale local ref (the normal re-verification case) would otherwise be
+        # checked out as-is, letting a verifier verify a tree without the fix
+        # commit. Fast-forward when behind; fail loudly on divergence.
+        _sync_local_branch_to_origin(branch)
         _emit("branch-checkout", {"branch": branch, "task_number": str(number)})
         print(branch)
         return
