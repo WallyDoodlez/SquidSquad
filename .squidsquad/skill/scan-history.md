@@ -1887,3 +1887,9 @@
 - **Files scanned**: tests/test_harness.py (test-quality/coverage triage)
 - **Findings**: none — 305 tests, 5213 lines, zero skip/xfail/TODO/FIXME markers; healthy comprehensive suite, no disabled tests or coverage-gap markers.
 - **Items rejected by human**: none
+
+## Scan — 2026-07-11 08:50
+
+- **Files scanned**: sub-skill marker integrity (all `→ run sub-skill:` refs across references/)
+- **Findings**: none — all 49 referenced markers resolve to source files; the one flag (`security-smoke` in l4-curation.md:243) is a documented illustrative-example marker, a known false-positive per v2_catalog_gate.py:52 / #13052, verified before filing.
+- **Items rejected by human**: none
