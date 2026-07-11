@@ -8,9 +8,390 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "docs/INSTALLER-ARCH.md:6 (Runtime-shipped components)",
-  "rotation_count": 76,
+  "last_scanned": "post-5-ship-burst delivery-integrity self-QA + deploy-fragility cluster durability (origin/main 2ba0b1054)",
+  "rotation_count": 92,
   "scan_history": [
+    {
+      "file": "post-5-ship-burst delivery-integrity self-QA + deploy-fragility cluster durability (origin/main 2ba0b1054)",
+      "date": "2026-07-11",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan (~15:21Z, scan_count->1/3, at_cap=false). #12895-class self-QA of ALL 5 ships this session (#13338 installer step-8 + #13373 git_ops sync + #13456 deploy-pull untracked + #13465 tracker create-issue fix + #13472 deploy-pull committed-conflict). VERIFIED from forge: all 5 = CLOSED + exactly ONE status:shipped label (zero dual-label drift, no orphan pending-ship). Counter consistent config=21 == .ship-counter=21 (16 boot + 5 ships; v0.46.0 batch 2.1x threshold, bump HELD per [[feedback_bump_requires_pm_signal]]). DEPLOY-FRAGILITY CLUSTER durability: both #13456 (f8afb81a3) + #13472 (f73bdb28d) merges are ancestors of origin/main 2ba0b1054 (intact, not reverted) -- the untracked-collision + committed-conflict-MERGING deploy-pull class is fully closed on main. 0 findings. Session also: 2 findings filed (#13464 qa-verdict-off-forge OPEN role:qa; #13465 tracker-bug SHIPPED same-session) + vault [[learning-verifier-verdict-may-be-off-forge-confirm-before-routeback]]. ⚠️ Standing owed (operator-paced): HARNESS restart (#13456+#13472 harness.py) + prior pm/skill reboots (#13327/#13369) fold into next operator-directed restart window."
+    },
+    {
+      "file": "post-2-ship delivery-integrity self-QA + version triple-consistency + counter/batch discipline (origin/main 9ac9f6e2e)",
+      "date": "2026-07-11",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (~14:20Z, scan_count->1/3, at_cap=false). #12895-class self-QA of MY 2 ships this session (#13338 installer step-8 playbook + #13373 git_ops task-begin sync). VERIFIED from forge: both = CLOSED + exactly ONE status:shipped label (zero dual-label drift, no orphan pending-ship). Counter consistent config=18 == .ship-counter=18 (v0.46.0 batch, 1.8x threshold, bump HELD per [[feedback_bump_requires_pm_signal]]). Version TRIPLE-consistent on origin/main 9ac9f6e2e (SHA form, clone behind): config Version=0.45.0 == SKILL.md=0.45.0 == CHANGELOG head=[0.45.0] 2026-06-30. Batch discipline intact: ZERO premature v0.46.0/Unreleased CHANGELOG entries (all 18 held ships batched in issue discussions). 0 findings. Also filed this session (ship-gate vantage): #13464 (qa verdict-off-forge) + #13465 (tracker create-issue --role qa broken); vault [[learning-verifier-verdict-may-be-off-forge-confirm-before-routeback]]. origin/main advancing on qa/team state pushes (978737a2f->9ac9f6e2e, no user-facing doc drift in-range)."
+    },
+    {
+      "file": "user-facing doc-drift sweep of advanced origin/main range 7de44912d..2dc53e8fd (fresh-session idle-driver scan-1)",
+      "date": "2026-07-11",
+      "findings": 1,
+      "fixes": [],
+      "note": "Fresh-boot idle-driver scan-1 of new burst (~13:4xZ, this session booted 13:2xZ). Instead of a filing, the scan surfaced REAL delivery work: origin/main advanced 7de44912d->2dc53e8fd (clone 317-behind) and the ONLY user-facing doc change in-range was docs/INSTALLER-RUNTIME.md (+12, a #13338 landing). Traced to #13338 = CLOSED + stale status:pending-ship (PR #13448 merged 1d4b62348 auto-closed it, but DM publish never ran -- [[learning-pending-ship-query-includes-closed]]; my --state open work_queue is blind to closed-but-pending-ship). DELIVERED publish-only: qa PASS 5/5+CQ 4/4, 0 file-deletions, ancestor-of-main, scope=installer doc+tests (NOT compose source -> no recompose/reboot/harness-restart). Transitioned pending-ship->shipped (label corrected), counter 16->17. So this 'scan' = 1 delivery-integrity finding RESOLVED (shipped), not a filing. No other user-facing drift in-range (rest of the 25-file range = vault learnings + tests + state churn). Bump still HELD."
+    },
+    {
+      "file": "README installer/setup feature-accuracy + internal-link integrity (origin/main 7de44912d)",
+      "date": "2026-07-11",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 / BURST CAP (~10:42Z, scan_count->3/3, at_cap=true -> driver cancelled + CronDelete 597ae468, quiesces until next forge activity re-idles). Motivated by this session's 8 installer ships that changed the setup flow (#13328 loop-interval prompt REMOVED, #13355 PR-flow on/off prompt REMOVED, #13339 roster-from-workflow, #13329 asset-scan). Scanned README §'Quick Start' on origin/main 7de44912d (140 lines). CLEAN: ZERO stale installer-prompt refs (loop-interval/how-often=0, PR-flow on/off/toggle=0); the setup prose is already OUTCOME-level accurate -- 'the one choice you make is the merge gate -- whether you approve each merge yourself, or the squad self-merges' matches #13355 (PR-flow retired, merge-gate is the surviving question); 'PM, QA, DM always installed; dev agents by project type' matches #13339. All 9 internal .md links resolve (0 dead). NON-findings (carried, not filed -- dedup): 'dev agents' terminology = deferred dev->worker rename (#10355/#6274/#10839); #13329 asset-scan feature not enumerated in README = absence not inaccuracy (README stays outcome-level, doesn't list every wizard sub-behavior); docs/sub-skill-guide.md link = #11400-retirement watch. 0 findings -- the 8 installer ships introduced no README drift."
+    },
+    {
+      "file": "v0.46.0 bump-readiness: defer-gate + version consistency + CHANGELOG batch discipline (origin/main 7de44912d)",
+      "date": "2026-07-11",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 (~09:42Z, scan_count->2/3, at_cap=false). Bump-readiness after 8 ships pushed the v0.46.0 batch to counter 16 (1.6x threshold). VERIFIED on origin/main 7de44912d: (1) version-bumps DEFER-GATE — 0 open severity:high + 0 severity:critical squad-wide => no release-blocking bugs; the 16 open type:issue are low-sev improvement-scan backlog + 1 medium (#13373), non-blocking per [[feedback_bug_gate_interpretation]] + prior-session precedent (note: literal version-bumps.md gate reads 'any open type:issue -> defer'; operational interpretation narrows to high/critical). (2) version TRIPLE-consistent: config Version=0.45.0 == SKILL.md=0.45.0 == CHANGELOG head=[0.45.0]. (3) ZERO premature v0.46.0/Unreleased CHANGELOG entries -> batch discipline intact across 8 held ships; entries batched in issue discussions per version-bumps. So v0.46.0 release doc-pass is READY whenever operator green-lights. STILL HELD per [[feedback_bump_requires_pm_signal]] -- gate-technically-clear does NOT mean auto-fire. config.md field 'Shipped Since Last Bump'=0 (committed release value) vs canonical .ship-counter=16 (live) = expected [[learning-ship-counter-canonical-key]] divergence. 0 findings."
+    },
+    {
+      "file": "8-ship-session delivery-integrity + dual-recompose durability (origin/main 7de44912d)",
+      "date": "2026-07-11",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (~08:43Z, scan_count->1/3, at_cap=false). #12895-class self-QA covering the 4 LATER ships this session (#13328/#13327/#13421/#13329) after the earlier scan covered the first 4. VERIFIED from forge: all 4 = CLOSED + exactly ONE status:shipped label (no drift/orphan). Counter consistent .ship-counter=16 == config=16 (v0.46.0 batch, bump HELD). DUAL-RECOMPOSE DURABILITY on current origin/main 7de44912d: #13369 announce-before-drain boot-order still FIXED on ALL 4 composed CLAUDE.md; #13327 generic-customization-invitation affordance still present on pm+skill — neither clobbered by the 4 subsequent installer wizard.py/SKILL.md ships. Full session chain intact + linear (fd81->...->7de4, 0 file-deletions across every merge; each behind-clone squash independently verified disjoint/non-reverting). Issue gate: 0 open DM. Session total: 8 ships (#13369 boot-drain-race + 7-issue installer-alignment/discoverability set). ⚠️ Standing owed (operator-paced): harness restart (#13369 harness.py) + agent reboots (2 recomposes: all-4 for #13369, pm+skill for #13327) fold into pending operator-directed restart window."
+    },
+    {
+      "file": "4-ship-burst delivery-integrity self-QA + #13369-recompose durability (origin/main 018ebdb8e)",
+      "date": "2026-07-11",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (~07:42Z, scan_count->1/3, at_cap=false). #12895-class historian self-QA after delivering 4 items this session (#13369 boot-drain-race + #13355/#13339/#13397 installer set). VERIFIED from forge: all 4 = CLOSED + exactly ONE status:shipped label (zero dual-status-label drift, no orphan pending-ship). Counter consistent: .ship-counter=12 == config shipped-since-bump=12 (v0.46.0 batch, past threshold(10), bump HELD per [[feedback_bump_requires_pm_signal]]). Chain intact + linear on origin/main 018ebdb8e: fd8189889->c85b(#13369)->1f82(recompose)->1175(#13355)->4adc(#13339)->018e(#13397), 0 file-deletions across all merges. RECOMPOSE DURABILITY: all 4 composed CLAUDE.md still carry the FIXED announce-before-drain boot-order (my #13369 recompose 1f82bf0ba NOT clobbered by the 3 subsequent installer wizard.py ships). config.md present (96 lines), version 0.45.0. 0 findings. Issue gate: 0 open DM. ⚠️ Standing owed (operator-paced): harness restart (#13369 harness.py) + agent reboots (#13369 recompose) fold into pending operator-directed restart window."
+    },
+    {
+      "file": "v0.46.0 batch-discipline + version triple-consistency + counter integrity (origin/main fd8189889)",
+      "date": "2026-07-11",
+      "findings": 0,
+      "fixes": [],
+      "note": "Fresh-boot idle-driver scan-1 of new burst (~06:42Z 2026-07-11, scan_count->1/3, at_cap=false). First scan since 2026-07-02 (~9-day gap); clone 296-behind origin/main fd8189889 -> all checks via SHA/PowerShell form per [[learning-git-show-ref-path-mangled-on-windows-bash]]. VERIFIED: version TRIPLE-consistent (config SquidSquad Version=0.45.0 == SKILL.md version=0.45.0 == CHANGELOG head=[0.45.0] 2026-06-30); ZERO premature v0.46.0/Unreleased entry -> batch-CHANGELOG discipline intact. Counter consistent: local .ship-counter=8 == config shipped-since-bump=8 (v0.46.0 batch at 8/10, matches prior-session working-state; no ships landed 07-06..07-11). Bump defer-gate: 1 open severity:high + 0 critical squad-wide -> below threshold(10) AND v0.46.0 bump HELD per operator [[feedback_bump_requires_pm_signal]] regardless. .ship-counter untracked in git (local-canonical, expected [[learning-ship-counter-canonical-key]]). 0 findings. Issue gate: 0 open DM issues."
+    },
+    {
+      "file": "5-way version consistency (repo+npm) + durability closing sweep (origin/main 907459f9d)",
+      "date": "2026-07-02",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 / BURST CAP (~16:15Z, scan_count→3/3, at_cap=true → driver cancelled + CronDelete e202fff1, quiesces until next forge activity re-idles). FULL 5-way version consistency: config 0.45.0 == SKILL 0.45.0 == CHANGELOG [0.45.0] == packages/cli 0.45.0 == published npm 0.45.0. counter: config.md field=0 (committed release value) vs local .ship-counter=1 (live canonical, reflects #13325 this batch) — EXPECTED divergence ([[learning-ship-counter-canonical-key]]; config field only rewrites at bump time). Tag v0.45.0 present. Mass-revert sweep = clean (1 commit since release = my CLI bump, no >50-deletion). Pipeline quiet (no team commits since release). 0 findings."
+    },
+    {
+      "file": "docs/ARCHITECTURE.md PID-liveness drift check (completes README+SKILL.md liveness-doc sweep) (origin/main 907459f9d)",
+      "date": "2026-07-02",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 (~15:16Z, scan_count→2/3, at_cap=false). Completing the liveness-doc-drift sweep across the 3 core user-facing docs after v0.45.0 shipped #12271. docs/ARCHITECTURE.md CLEAN: its PID refs (L79-93 .claude-pid convention) are all TEARDOWN/reboot (taskkill /T, orphan cleanup) — which #12271 explicitly PRESERVED (PID demoted TO teardown-only); it does NOT carry the stale 'PID-primary liveness detection' claim. L57 'health monitoring / auto-recomposition' is generic-accurate. No deleted-launcher refs. CONFIRMS liveness-doc drift is scoped to README + SKILL.md (both on #13289) — ARCHITECTURE.md needs no correction. Sweep complete. 0 findings."
+    },
+    {
+      "file": "CONTRIBUTING.md launcher-consolidation + command/link accuracy (origin/main 907459f9d)",
+      "date": "2026-07-02",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (~14:16Z, post-#13325-close re-idle, scan_count→1/3). CONTRIBUTING.md scan on origin/main (first since launcher consolidation). CLEAN: ZERO deleted-launcher refs; test cmd `python tests/run_tests.py` (+ `static`) ACCURATE (tests/run_tests.py exists); issue templates issue-report.yml + task-request.yml present; ./SKILL.md link OK; docs/sub-skill-guide.md link OK (known #11400-retirement watch, not a finding). SELF-CAUGHT FALSE ALARM: my first verify checked `references/scripts/run_tests.py` (wrong path) → DEAD; facts-recheck showed CONTRIBUTING.md correctly says `tests/run_tests.py` (verify-before-filing caught my own path error). 0 findings."
+    },
+    {
+      "file": "v0.45.0 four-artifact version consistency + durability closing sweep (origin/main 907459f9d)",
+      "date": "2026-07-02",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 / BURST CAP (~05:15Z, scan_count→3/3, at_cap=true → driver cancelled + CronDelete 5f4792b5, quiesces until next forge activity re-idles). Closing durability sweep: version now consistent across ALL FOUR artifacts on origin/main 907459f9d — config 0.45.0 == SKILL.md 0.45.0 == CHANGELOG [0.45.0] == packages/cli 0.45.0 (CLI synced by my #13325 fix, closing the drift). config.md sane (149 lines), tag v0.45.0 present. Mass-revert sweep since release = clean (1 commit = my CLI bump, no >50-deletion). 0 findings. #13325 still parked pending-human-setup (operator npm publish, npm=0.23.0 at check). Counter 0 (v0.46.0 batch)."
+    },
+    {
+      "file": "SKILL.md launcher-consolidation + version + PID-liveness feature-accuracy (origin/main 907459f9d)",
+      "date": "2026-07-02",
+      "findings": 1,
+      "fixes": [],
+      "note": "Idle-driver scan-2 (~04:15Z, scan_count→2/3, at_cap=false). SKILL.md scan on origin/main (first since pre-launcher-consolidation + v0.45.0). CLEAN: version frontmatter=0.45.0 (matches release); ZERO refs to deleted launchers (start-harness/restart-harness/root start.*). FOUND (1): SKILL.md L177 + L473 describe health monitoring as 'direct PID checks (primary)' — STALE now that v0.45.0 SHIPS the #12271 progress-based liveness redesign (#12492 made progress_liveness authoritative, PID→teardown-only). SAME correction class as README finding #13289 (OPEN/pending, role:dm, my filing). FOLDED into #13289 via scope-expansion comment (dedup — NOT a new issue): both README + SKILL.md liveness descriptions corrected together DM-direct-via-worktree when #13289 is approved/routed. 1 finding (folded, not fixed inline — pairs with README, #13289 pending approval, substantive re-description not a 1-word fix)."
+    },
+    {
+      "file": "#13325 packages/cli bump integrity + v0.45.0 release durability self-QA (origin/main 907459f9d)",
+      "date": "2026-07-02",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (~03:15Z, post-#13325 re-idle, scan_count→1/3). #12895-class self-QA of MY OWN #13325 fix. VERIFIED origin/main=907459f9d: packages/cli/package.json=0.45.0, bump commit intact (not reverted); v0.45.0 release intact (config 0.45.0, tag v0.45.0 present); mass-revert sweep since release = clean (only 1 commit = my package.json bump, no >50-deletion); #13326 follow-up well-formed (role:skill, priority:medium, status:pending). #13325 correctly parked pending-human-setup awaiting operator npm publish (npm still 0.23.0 at check — return-path close when operator publishes). 0 findings. Counter 0 (v0.46.0 batch)."
+    },
+    {
+      "file": "v0.45.0 release durability + batch-discipline closing sweep (origin/main b164fb2e2)",
+      "date": "2026-07-01",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 / BURST CAP (~00:41Z 07-01, scan_count→3/3, at_cap=true → driver cancelled + CronDelete 3a767267, quiesces until next forge activity re-idles). Closing v0.45.0 durability check: origin/main still b164fb2e2 (0 commits since release — pipeline quiet), version 0.45.0, CHANGELOG head [0.45.0], ZERO premature v0.46.0/Unreleased (batch discipline reset cleanly), tag v0.45.0 present, release commit intact (not reverted). Mass-revert sweep N/A (0 commits since). 0 findings. Counter 0 (fresh v0.46.0 batch)."
+    },
+    {
+      "file": "README §2 Quick-Start Launch fresh-install accuracy post-v0.45.0/#13318 launcher consolidation (origin/main b164fb2e2)",
+      "date": "2026-06-30",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 (~23:42Z, scan_count→2/3, at_cap=false). Motivated by operator's fresh-install goal (#13324 release). Scanned README §2 Quick Start on origin/main. ALL §2 commands VALID (not broken): squidsquad_cli.py exists w/ start handling (4 refs); .squidsquad/start.{ps1,sh} --bare present. CONFIRMED L94/L104 'Verbose Mode' is a FALSE dup (L104 inside config-snippet code fence, not a heading). references/tui/app.py valid (Harness Dashboard §). GAP (narrative, NOT factual, already tracked): README §2 still foregrounds squidsquad_cli.py start as primary + presents the consolidated .squidsquad/start.{ps1,sh} only under '--bare/just the harness' — but per #13318 that IS the single full-stack launcher a fresh installer should be pointed at. This is exactly #13322's scope (role:pm, status:pending, 'README §2 recommended-entrypoint rewrite'). NOT a DM-direct fix (narrative rewrite, judgment-heavy, #13322-owned, far-behind-clone SEV-1 hazard). 0 new findings. Added an ADVISORY comment to #13322 connecting its README portion to the post-v0.45.0 fresh-install relevance (prioritization signal for PM/operator; README portion is DM-lane to deliver when routed)."
+    },
+    {
+      "file": "v0.45.0 post-release integrity self-QA — version triple-consistency + tag durability + #13324 hygiene (origin/main b164fb2e2)",
+      "date": "2026-06-30",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (~22:42Z, post-#13324-release re-idle, scan_count→1/3). #12895-class historian self-QA of MY OWN v0.45.0 release (#13324, the bump-hold release). VERIFIED LIVE on origin/main b164fb2e2 (unchanged since release — no subsequent push regressed it): version TRIPLE-consistent (config SquidSquad Version=0.45.0 == SKILL.md version=0.45.0 == CHANGELOG head [0.45.0] 2026-06-30), counter reset=0; remote tag v0.45.0 intact (8b5b6095d); release commit b164fb2e2 still ancestor of HEAD (NOT reverted — behind-clone SEV-1 class did not recur). #13324 = CLOSED + exactly ONE status label (status:shipped), no drift. Release durable + coherent. 0 findings. Counter now 0 (fresh v0.46.0 batch). #12527 greenfield validation flagged to operator (separate gate)."
+    },
+    {
+      "file": "CHANGELOG batch-discipline + version-consistency + mass-revert micro-sweep (origin/main b65f61589)",
+      "date": "2026-06-29",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 / BURST CAP (~02:45Z, scan_count→3/3, at_cap=true → driver cancelled + CronDelete 98a75ae3, quiesces until next forge activity re-idles). Closing batch-discipline check after 2 ships this session (#13303 + #13318), counter 123. VERIFIED on origin/main b65f61589: CHANGELOG head=[0.44.0] 2026-06-12, ZERO premature v0.45.0/Unreleased (held entries correctly batched in issue discussions); SKILL.md 0.44.0 == config 0.44.0 (aligned). Mass-revert micro-sweep over the 3 commits since last check (c3046ae52..b65f61589) = NONE >50-deletion (#13318's intended 7-launcher deletion correctly below threshold → no behind-clone collateral). 0 findings. v0.45.0 BUMP HELD per operator [[feedback_bump_requires_pm_signal]]."
+    },
+    {
+      "file": "README #13277 Harness Dashboard launch-command validity post-#13318 + #13322 reconciliation status (origin/main b65f61589)",
+      "date": "2026-06-29",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 (~01:45Z, scan_count→2/3, at_cap=false). Post-#13318 launcher-consolidation feature-accuracy check of MY OWN #13277 README 'Harness Dashboard' section. VERIFIED on origin/main: README:117 `python references/tui/app.py` is STILL VALID — references/tui/app.py EXISTS and #13318 did NOT touch references/tui/ (direct-launch path intact, command not broken/stale). README:86 launcher repoint correct (.squidsquad/start.{sh,ps1} --bare). The only gap = section doesn't yet mention the dashboard now also auto-launches with the full .squidsquad/start.{ps1,sh} — but that NARRATIVE reconciliation is explicitly captured in #13322 (role:pm, status:pending, 'includes #13277 dashboard reconciliation'). NOT a DM-direct fix: command works (not a factual error), narrative is tracked, #13322 not yet approved/routed, and an isolated narrative edit on a ~250-behind clone is the #13271 SEV-1 hazard. 0 findings. Will action the README §2/#13277 narrative reconciliation DM-direct-via-worktree when #13322 is approved/routed."
+    },
+    {
+      "file": "#13318 post-ship delivery-integrity self-QA + launcher-consolidation coherence (origin/main b65f61589)",
+      "date": "2026-06-29",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (~00:45Z, post-#13318 re-idle, scan_count→1/3). #12895-class historian self-QA of MY OWN #13318 ship (launcher consolidation, PR #13320 b65f61589). VERIFIED from forge: #13318 = CLOSED + exactly ONE status label (status:shipped) — zero dual-status-label drift, no orphan pending-ship. Counter consistent: .ship-counter=123 == config 123. Consolidation COHERENT on origin/main: new .squidsquad/start.{ps1,sh} present, old root start.sh + start-harness.sh GONE (clean move, not collateral). 0 findings. v0.45.0 BUMP HELD per operator [[feedback_bump_requires_pm_signal]] (counter 12.3x threshold)."
+    },
+    {
+      "file": "SEV-1 restoration durability re-confirm + mass-revert micro-sweep (origin/main c3046ae52)",
+      "date": "2026-06-28",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 / BURST CAP (~07:45 EDT, scan_count→3/3, at_cap=true → driver cancelled + CronDelete b2f383b8, quiesces until next forge activity re-idles). Closing durability re-confirm on current origin/main c3046ae52: config.md EXISTS, dm composed Verbose=6 (fleet healthy). Mass-revert micro-sweep over the 1 commit since last durability check (d349b30f..c3046ae52) = NONE >50-deletion → my own #13303 merge introduced zero regression; behind-clone SEV-1 class stays contained. 0 findings. Counter 122, v0.45.0 BUMP HELD per operator [[feedback_bump_requires_pm_signal]]."
+    },
+    {
+      "file": "v0.45.0 bump-readiness verify: CHANGELOG batch-discipline + defer-gate (origin/main c3046ae52)",
+      "date": "2026-06-28",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 (~06:45 EDT, scan_count→2/3, at_cap=false). Counter 122 (12.2x threshold — largest held batch). origin/main now c3046ae52 (advanced by my #13303 ship). VERIFIED bump-readiness: (1) CHANGELOG head=[0.44.0] 2026-06-12, ZERO premature v0.45.0/Unreleased (held entries correctly batched in issue discussions, assembled at bump time per version-bumps) → batch discipline intact across high ship volume; (2) version-bumps OPEN-ISSUE DEFER-GATE CLEAN — 0 open severity:high + 0 open severity:critical squad-wide → nothing technically blocks a v0.45.0 bump. So the release doc-pass is READY whenever operator green-lights. STILL HOLDING per [[feedback_bump_requires_pm_signal]] — gate-technically-open does NOT mean auto-fire. 0 findings."
+    },
+    {
+      "file": "#13303 post-ship delivery-integrity self-QA (forge labels + closed-state + counter)",
+      "date": "2026-06-28",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (~05:44 EDT, post-#13303 re-idle, scan_count→1/3). #12895-class historian self-QA of MY OWN #13303 ship this session (L4 file-watcher restart-required no-op gate, PR #13314 c3046ae52). VERIFIED from forge: #13303 = CLOSED + exactly ONE status label (status:shipped) — zero #12914 dual-status-label drift, no orphan pending-ship. Counter consistent: .ship-counter=122 == config get shipped-since-bump=122 ([[learning-ship-counter-canonical-key]]). Clean single-ship delivery hygiene intact. 0 findings. v0.45.0 BUMP HELD per operator [[feedback_bump_requires_pm_signal]] (counter 12.2x threshold)."
+    },
+    {
+      "file": "README internal-link integrity + #13277 Harness Dashboard section self-QA (origin/main d349b30f)",
+      "date": "2026-06-28",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 (~04:45 EDT, scan_count→2/3, at_cap=false). Clone 251-behind → origin/main d349b30f via SHA form. (1) All 8 README internal .md links RESOLVE (CHANGELOG/CONTRIBUTING/SKILL.md + docs/AGENT-RUNTIME/ARCHITECTURE/CONFIGURATION/DM-ARCH/sub-skill-guide) — 0 dead links. WATCH unchanged: docs/sub-skill-guide.md link goes dead when #11400 retires it (covered by #11400 back-ref sweep, not a finding). (2) #12895-class self-QA of MY OWN #13277 delivery: '## Harness Dashboard' present (count=1, CLEAN single H2) + Verbose Mode section present (count=5) on origin/main → delivery intact, not clobbered. (3) Queued README doc tasks: #13277 CLOSED (shipped); #13289 (README liveness-mechanism correction) still OPEN/pending → awaiting approval, nothing to action (will deliver DM-direct-via-worktree when approved, like #13277). 0 findings."
+    },
+    {
+      "file": "SEV-1 restoration durability + 251-commit mass-revert sweep + version (origin/main d349b30f)",
+      "date": "2026-06-28",
+      "findings": 0,
+      "fixes": [],
+      "note": "Fresh-boot idle-driver scan-1 (~03:45 EDT). Clone 251-behind origin/main (HEAD abaa6e268) -> all checks on origin/main d349b30f via SHA form per [[learning-git-show-ref-path-mangled-on-windows-bash]]. (1) SEV-1 restoration STILL HOLDS: config.md EXISTS, dm composed CLAUDE.md Verbose Mode=6 (not reverted). (2) Version/batch discipline: SKILL.md 0.44.0 == config 0.44.0, CHANGELOG head=[0.44.0] 2026-06-12, ZERO premature v0.45.0/Unreleased (held entries correctly batched in issue discussions). (3) Mass-revert sweep over all 251 commits HEAD..origin/main: exactly ONE >50-deletion commit = f36155a60 (132 files) = the ALREADY-HANDLED #13271 SEV-1 (PR #13269), caught+reverted last session (revert 8d41aa881, since advanced); durability checks prove the revert took -> NOT a new incident. 0 new findings. Behind-clone class stays contained (#13271 guard + #13285 net + team clean-merge discipline). Counter .ship-counter=121 (config key 50 divergent, known [[learning-ship-counter-canonical-key]]). v0.45.0 BUMP HELD per operator [[feedback_bump_requires_pm_signal]] (counter 12.1x threshold)."
+    },
+    {
+      "file": "#13277 README 'Harness Dashboard' self-QA + #13289 check (origin/main c8ea3da08)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 (burst cap). Self-QA of MY OWN #13277 README section authored+pushed this stretch (c8ea3da08): '## Harness Dashboard' present as a CLEAN single H2 (count=1, no dup), launch cmd + action-bar keys intact on origin/main. #13289 (sibling README liveness-correction) still status:pending (NOT approved → nothing to pick up yet; will action when approved, like #13277). config.md EXISTS (fleet durable). 0 findings. Burst exhausted → cool-down."
+    },
+    {
+      "file": "origin/main durability re-check (0908a9de2, +9 commits)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1. Quick durability re-check: config.md EXISTS, dm Verbose=6 on origin/main 0908a9de2; mass-revert scan over 9 commits since f6b71b6b9 = CLEAN. SEV-1 restoration durable through the continued ship stream (now 21 ships this session, counter 119). Behind-clone class contained. 0 findings."
+    },
+    {
+      "file": "origin/main durability re-check (f6b71b6b9, +13 commits)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 (burst cap). Quick SEV-1-restoration durability re-check: config.md EXISTS, dm Verbose=6 on origin/main f6b71b6b9; mass-revert scan (>50 file-deletions) over the 13 commits since last check (3dbfb3c8e) = CLEAN. Behind-clone class stays contained (#13271 guard + #13285 net + team discipline holding). 0 findings. Burst exhausted → cool-down."
+    },
+    {
+      "file": "README feature-accuracy (health-monitoring claims) vs #12271 liveness redesign",
+      "date": "2026-06-27",
+      "findings": 1,
+      "fixes": [],
+      "note": "Idle-driver scan. doc-improvement-loop 'feature descriptions match actual behavior' check after the big feature session. FOUND: README L37 + L51 describe harness health monitoring as 'via PID tracking' / 'Dead agents auto-rebooted' — STALE after #12271 progress-liveness redesign (#12492 made progress_liveness authoritative, PID→teardown-only, #13283 wedged-start; now recovers stuck-but-RUNNING zombies not just dead procs). FILED #13289 (role:dm, low) with precise line refs + recommended outcome-level wording. NOT fixed inline: substantive feature re-description (not 1-word fix → doc-loop says file), activates on pending harness restart, pairs with v0.45.0 doc-pass + #13277 (README TUI section). 1 finding (filed). Two README operator-doc updates now queued for the v0.45.0 README pass: #13277 (TUI dashboard) + #13289 (liveness mechanism)."
+    },
+    {
+      "file": "finding + dm-queue hygiene (SEV-1 follow-ups)",
+      "date": "2026-06-27",
+      "findings": 1,
+      "fixes": [],
+      "note": "Idle-driver scan-2. Queue/finding hygiene: my #13263 (behind-clone-deletion class) now OPEN/pending-human-review (escalated to human as I recommended, severity bumped — no DM action); #13277 (README TUI doc task) OPEN/pending (awaiting PM approval — correct); zero role:dm items in approved/in-progress/pending-ship being missed. GAP FOUND: the robust-recovery follow-up skill flagged on #13271 (post-merge scope-audit + auto-revert, automating my manual recovery) was NEVER FILED — confirmed via title + #-ref search. FILED #13285 (role:skill, low) with a precise spec (diff-filter=D scope-audit → non-destructive auto-revert, fail-safe distinguishing file-deletions from line-deletions). Complements the shipped #13271 threshold-guard with a precise secondary net. 1 finding (filed)."
+    },
+    {
+      "file": "SEV-1 restoration durability + 15-commit mass-revert scan (origin/main 3dbfb3c8e)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan. Highest-value ongoing concern post-#13271: does the SEV-1 restoration HOLD as the pipeline churns? VERIFIED (SHA form) after ~6 more ships on top: config.md EXISTS, all 4 composed Verbose=6, #12450 skill directive live (1), #13213 hook live (1). Mass-revert scan over last 15 commits (>50-file-deletion check) = NONE → behind-clone class contained; team consistently applying #13271 clean-merge discipline (every recent commit notes '+additions-only'). The now-live #13271 merge guard + team discipline are working. 0 findings. Counter 116, v0.45.0 HELD per operator."
+    },
+    {
+      "file": "#12450 recompose-landing integrity self-QA (origin/main 2973c6c08)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (post-#12450 re-idle). #12895-class self-QA of MY OWN #12450 recompose main-landing (82306d170 skill CLAUDE.md test-strategy directive). VERIFIED via SHA form on origin/main 2973c6c08: skill directive count=1 (live, not clobbered); my recompose commit IS ancestor of HEAD; config.md EXISTS + all 4 composed Verbose Mode=6 (fleet healthy, no regression); only new commit since = skill working-state (#13282/#12492 cutover, no deletions/reverts → behind-clone guard + team #13271-discipline holding). 0 findings. NOTE: #12492 progress-liveness cutover (PR #13282) shipped per skill working-state — may surface as pending-ship soon."
+    },
+    {
+      "file": "v0.45.0 bump-readiness verify (defer-gate + held-entry capture)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3 (burst cap). Counter 113 (11.3x threshold). VERIFIED bump-readiness: (1) version-bumps OPEN-ISSUE DEFER-GATE CLEAN — 0 open severity:high + 0 critical squad-wide → nothing technically blocks a bump; (2) held CHANGELOG entries captured in issue discussions (spot-checked #13213/#13215/#13271/#12801 = 1 entry-comment each) → assembly source material present. So the v0.45.0 release doc-pass is READY whenever operator green-lights. STILL HOLDING per [[feedback_bump_requires_pm_signal]] — gate-technically-open does NOT mean auto-fire; wait for explicit PM/operator green-light. 0 findings (readiness confirmed)."
+    },
+    {
+      "file": "session-close delivery-integrity self-QA (10 later ships + origin/main health + counter)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2, closing an eventful session (15 ships + SEV-1 #13271 caught/recovered/prevented/re-delivered). VERIFIED from forge: 10 later ships (#13172/#13170/#13211/#13264/#13261/#13169/#13267/#13262/#13271/#12801) ALL CLOSED + exactly one status:shipped (no #12914 dual-label drift). origin/main fa88cf44b healthy (SHA form): config.md EXISTS, composed Verbose Mode=6 — SEV-1 restoration still holding through subsequent commits. Counter .ship-counter=113 == canonical shipped-since-bump=113 (consistent). Full-session delivery hygiene intact. 0 findings. v0.45.0 bump HELD per operator (counter 113 = 11.3x threshold; the largest accumulated batch I've carried — flag for operator green-light when ready)."
+    },
+    {
+      "file": "README TUI/dashboard discoverability vs shipped #12801 (origin/main 9d3898eae)",
+      "date": "2026-06-27",
+      "findings": 1,
+      "fixes": [],
+      "note": "Idle-driver scan after shipping #12801 (harness TUI reboot action bar, user-facing). Checked README on origin/main (SHA form per [[learning-git-show-ref-path-mangled-on-windows-bash]]): README has ZERO tui/dashboard/action-bar/app.py/reboot refs → operators can't discover the new control surface. HARNESS-ARCH covers it (~50 refs, architecture-level, AC8) but that's not the operator's how-to entry point. FILED #13277 (role:dm, low, pending) for an operator-facing 'Harness Dashboard (TUI)' README section — NOT fixed inline because (a) DM on far-behind clone (direct README push = the #13271 SEV-1 hazard; safe path is isolated-worktree-at-origin/main, deliberate not mid-scan), (b) more TUI stories planned (Wake/panels) so the section would churn. 1 finding (filed, not fixed)."
+    },
+    {
+      "file": "post-SEV-1 (#13271) recovery integrity verify (origin/main f17e8cca2)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan after the #13271 SEV-1 revert+restore (origin/main 8d41aa881, since advanced to f17e8cca2 via skill working-state + #13262 + qa-verify, all clean linear, no merges). VERIFIED restoration INTACT via reliable SHA form: config.md EXISTS, all 4 composed CLAUDE.md Verbose Mode=6, settings.json hook=1, vault restored, git_ops #13267+#13262 markers=8 live. 0 real findings — recovery held. ⚠️ SELF-INFLICTED FALSE ALARM mid-scan: my first pass used `git show origin/main:path` (bash) which MANGLES on Windows/MSYS ([[learning-git-show-ref-path-mangled-on-windows-bash]]) → false 'config GONE / Verbose 0 / re-reverted' readings. Cross-checked via exact-SHA form (git show <sha>:path) per facts-over-context → cleared, NO re-corruption, did NOT re-revert. LESSON REINFORCED: in bash use SHA form (or PowerShell) for ALL origin/main content checks incl recovery verification — the origin/main:path form is unreliable on this box."
+    },
+    {
+      "file": "self-QA 9-ship integrity (forge: status labels + closed state + counter)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick scan-1 of fresh burst. #12895-class historian self-QA of MY OWN 9 ships this session (#13213/#13236/#13212/#13255/#13215/#13172/#13170/#13211/#13264). VERIFIED from forge: ALL 9 = CLOSED + exactly ONE status:shipped label (zero #12914 dual-status-label drift, no orphan pending-ship, no stuck-open). Counter .ship-counter=107 == canonical config key shipped-since-bump=107 (consistent, [[learning-ship-counter-canonical-key]]). Delivery hygiene intact across the full burst. 0 findings. v0.45.0 bump HELD per operator [[feedback_bump_requires_pm_signal]] (counter 107 = 10.7x threshold, all batched)."
+    },
+    {
+      "file": "post-8-ship doc-drift sweep + version (origin/main 2d46739e3)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick scan-1 of fresh burst, after delivering 8 items this session (#13213/#13236/#13212/#13255/#13215/#13172/#13170/#13211 — all harness/compose/git_ops internals, NO user-facing doc-pairing for DM lane). Clone 177-behind (#13215 belt now SHIPPED but needs harness restart to reconverge me) → checked origin/main. SWEEP: README.md + SKILL.md last touched ONLY by DM doc-pass commits (006508eba/3a6f2bc50/32509631e/24e1ca35c — mine/prior-DM); NO worker/skill commit silently edited user-facing docs this stretch. Version consistency intact: SKILL 0.44.0==config 0.44.0==CHANGELOG [0.44.0], ZERO premature v0.45.0/Unreleased. The 8 ships correctly introduced no user-facing drift (internal infra). 0 findings. Counter 106, v0.45.0 HELD per operator [[feedback_bump_requires_pm_signal]].",
+      "note2": "Recent arch-doc changes (HARNESS-ARCH/AGENT-RUNTIME/COMPOSE/VAULT/INSTALLER) are PM-authored (e.g. HARNESS-ARCH v29 + AGENT-RUNTIME rev19 paired #13213) — PM lane, not DM doc-scan target. Pending harness-restart window now carries: #13236/#13255/#13170 (harness.py) + #13212/#13215/#13211 (git_ops/cycle_post deploy-fragility cluster) + #13213 settings.json hook re-emit."
+    },
+    {
+      "file": "CHANGELOG batch-discipline + version (origin/main 4e0f3f045)",
+      "date": "2026-06-27",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick scan-2 of burst. Clone 161-behind (#13215) → checked origin/main. High-value batch-discipline check after counter hit 101 (10x+ threshold): CHANGELOG head=[0.44.0] 2026-06-12, ZERO premature v0.45.0/Unreleased (regex match=0) — all held entries (incl this stretch's #13213/#13236/#13212) correctly remain in issue discussions, assembled at bump time per version-bumps. SKILL.md version=0.44.0==config 0.44.0. Batch discipline holding cleanly across high ship volume; v0.45.0 bump HELD per operator [[feedback_bump_requires_pm_signal]]. 0 findings."
+    },
+    {
+      "file": "README internal-link integrity (origin/main 9a15aebc4)",
+      "date": "2026-06-26",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick scan-1 of fresh burst (~23:5x EDT, after shipping #13213/#13236/#13212 this stretch — all code-only, no doc-pairing for DM lane). Clone 157-behind (#13215) → checked origin/main. All 9 unique README internal .md links resolve on origin/main (CHANGELOG/CONTRIBUTING/SKILL.md + docs/AGENT-RUNTIME/ARCHITECTURE/CONFIGURATION/DM-ARCH/sub-skill-guide). docs/CONFIGURATION.md (added this session) + DM-ARCH.md present. WATCH unchanged: sub-skill-guide.md link goes dead when #11400 retires it (covered by #11400 back-ref sweep, not a finding). 0 findings. The 3 ships this stretch were internal harness/compose infra (PM paired arch docs HARNESS-ARCH v29 / AGENT-RUNTIME rev19 for #13213) → no user-facing README/SKILL/CHANGELOG drift introduced.",
+      "note2": "Pending harness-restart window now carries: #13176/#13179/#13197/#13236 (harness.py) + #13212 (git_ops.py post-cycle) + #13213 settings.json hook re-emit. Counter at 101, v0.45.0 bump HELD per operator."
+    },
+    {
+      "file": "version-consistency SKILL.md/config/CHANGELOG (origin/main dec5d46b9)",
+      "date": "2026-06-26",
+      "findings": 0,
+      "fixes": [],
+      "note": "FRESH FULL-TEAM RESTART boot ~22:29 EDT, idle-driver tick scan-1. Clone 137-behind origin/main (#13215 dirty-tree deploy-pull-abort, role:skill) -> scanned origin/main refs (fetched dec5d46b9), NOT stale local tree, via PowerShell per [[learning-git-show-ref-path-mangled-on-windows-bash]]. VERIFIED: SKILL.md version=0.44.0 == config SquidSquad Version=0.44.0 == CHANGELOG head=[0.44.0] 2026-06-12; ZERO premature v0.45.0/Unreleased (correct — ~30+ ships since 0.44.0 all HELD per operator bump-hold [[feedback_bump_requires_pm_signal]], entries batched in issue discussions written at bump time). Batch-discipline intact across the high-volume 06-21 burst. 0 findings. KNOWN (not a finding): config 'Shipped Since Last Bump'=50 diverges from canonical .ship-counter=98 — internal counter-key divergence [[learning-ship-counter-canonical-key]], not user-facing doc drift. Issue gate: all 18 open role:dm are status:pending (human-approval gate) -> non-blocking per [[feedback_bug_gate_interpretation]]."
+    },
+    {
+      "file": "CHANGELOG.md + SKILL.md version (origin/main 44743a698)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick 00:41 UTC, scan-1 of fresh burst. Batch-discipline integrity check after 7 ships THIS boot (#13162/#13066/#13176/#13175/#13179/#13185/#13197), counter→98 (far past threshold 10, bump HELD per operator). VERIFIED on origin/main: CHANGELOG head=[0.44.0] 2026-06-12, ZERO premature v0.45.0/Unreleased — all 6 user-facing entries correctly HELD in issue discussions (#13066 was delivery:skip/internal = no entry). SKILL.md version=0.44.0==config 0.44.0 (aligned). Batch-CHANGELOG discipline intact through high ship volume. 0 findings. (README deploy-all staleness RESOLVED earlier this session at 006508eba — no longer a standing finding.)"
+    },
+    {
+      "file": "README.md harness recompose description (origin/main 006508eba)",
+      "date": "2026-06-21",
+      "findings": 1,
+      "fixes": ["FIXED the long-standing README deploy-all staleness (deferred ~10 sessions). Lines 39 (Auto-merge) + 51 (Harness) claimed harness 'automatically runs compose.py deploy-all' / 'auto-recomposes templates' on template merges — stale since #12912 per-clone deploy-signal model. Rephrased both at OUTCOME level ('has each affected agent recompose its own instructions from updated source on restart, a pull-first per-agent refresh') so it stays accurate across internal mechanism churn (#13176/#13175 this session). Pushed via PowerShell worktree at origin/main, commit 006508eba. Verified: deploy-all count 0 on origin/main."],
+      "note": "Idle-driver tick 23:49 UTC, scan-1 of fresh burst (post-4-ship). Decided to FIX rather than defer-again: bump is held indefinitely per operator, so deferring a user-facing inaccuracy to the v0.45.0 doc-pass no longer serves readers; doc-improvement-loop authorizes DM direct factual-correction fixes. README is not a compose source -> no recompose/reboot. README:51 deploy-all finding now RESOLVED (was the sole standing batched doc finding for ~10 sessions)."
+    },
+    {
+      "file": "#13162 verbose-mode landing integrity (origin/main ddf4ebdae)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick 23:11 UTC, scan-1 of fresh burst. #12895-class self-QA of MY OWN #13162 coupled-ship landing (recompose dm/qa/skill + README AC7, commit edeaafa7c) now that 7 skill commits (#13175/#13176 working-state+DS-review) landed AFTER it on a busy main. VERIFIED on origin/main: all 4 composed CLAUDE.md carry verbose selector (8 'Verbose Mode' + 1 'get verbose-mode' each) + 'Impossible' SOUL trait -> NO clobber/revert; README has ## Verbose Mode section + #verbose-mode anchor + config snippet; CHANGELOG head=[0.44.0], ZERO premature v0.45.0/Unreleased (my #13162 entry correctly held, batch discipline intact). 0 findings. README:51 deploy-all staleness still batched v0.45.0 (unchanged).",
+      "note2": "ALL-ROLES REBOOT still pending (all 4 composed CLAUDE.md changed this session; config Verbose=ON) -> operator-paced team-reboot."
+    },
+    {
+      "file": "docs/CONFIGURATION.md anchor integrity (origin/main)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick 19:38 UTC. Self-QA of the operator config catalog I shipped this session: verified all 17 Quick-map intra-doc anchor links resolve to the doc's 21 headings (GitHub slug rules). Navigation sound, 0 findings. (Catalog now also linked from README docs table per the 18:39 scan.) README:51 deploy-all staleness still batched v0.45.0."
+    },
+    {
+      "file": "README.md docs table (discoverability of new docs/CONFIGURATION.md)",
+      "date": "2026-06-21",
+      "findings": 1,
+      "fixes": ["Added 'Configuration Reference' row to README docs table linking docs/CONFIGURATION.md (commit 32509631e)"],
+      "note": "Idle-driver tick 18:39 UTC. After shipping the operator config catalog (docs/CONFIGURATION.md) this session at operator request, the 'publish/make-it-known' step was incomplete — README docs table (lines 153-159) did NOT link it (grep=0). FIXED: added a Configuration Reference row right after ARCHITECTURE.md (setup-oriented placement). Pushed via worktree at origin/main (32509631e). DM-lane discoverability fix. README:51 deploy-all staleness still batched v0.45.0 (separate, unchanged)."
+    },
+    {
+      "file": "composed CLAUDE.md integrity (origin/main 6021c4e2b) — my #13134+#13147 recompose landings",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick 17:20 UTC. High-value #12895-class integrity verify of MY OWN two recompose main-landings this boot (#13134 4fb3e9eb1 /quit-reconcile + #13147 109802375 Soul-trait), now that 5 harness PRs (#13113/#13156/#13148/#13158 + #13136) merged AFTER them on a busy main. VERIFIED on origin/main 6021c4e2b: the 2 most-recent composed-CLAUDE.md commits ARE my 109802375 + 4fb3e9eb1 (nothing later touched composed output → code-only ships correctly produced zero composed drift, no spurious-recompose clobber); both anchors present in all 4 composed CLAUDE.md ('Treat Impossible as a Hypothesis' = dm/pm/qa/skill; 'cannot terminate your own process' = dm/pm/qa/skill). NO revert. 0 findings. README:51 deploy-all staleness still batched v0.45.0."
+    },
+    {
+      "file": "docs/AGENT-RUNTIME.md §5.2/§8.1 stop+deploy-halt contract (vs #13134/#13136/#13148)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick 16:09 UTC, scan-3 of burst. Sibling check to the HARNESS-ARCH §7.4 finding (logged on #10837): does AGENT-RUNTIME carry the same /quit-load-bearing drift the #13134 ship fixed? VERIFIED CLEAN: AGENT-RUNTIME has ZERO '/quit' occurrences (grep=0); §5.2 ack-stop catalog + §8.1 deploy-halt correctly attribute termination/respawn to the HARNESS ('halt — harness runs deploy sequence and respawns; no ack-cursor posted'), and §7 state machine frames the 60s force-kill as the terminator for stopping. The /quit-load-bearing claim lived ONLY in sub-skills (event-mode-contract.md/self-restart.md), already fixed by #13134. 0 findings — confirms the HARNESS-ARCH §7.4 reaper drift is ISOLATED to that one TRD (useful scope-narrowing for the #10837 reconciliation). Minor pre-existing: §5.2 line ~334 lists 'stop-requested' as never-emitted-v1-deadweight while #13136 hardened a 'stop-requested handler' in the fragment — terminology (stopping-intent-via-assigned-to vs stop-requested-event), not a clear drift, not filed. README:51 deploy-all staleness still batched v0.45.0."
+    },
+    {
+      "file": "CHANGELOG.md + SKILL.md version (origin/main a5dbf4898)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick 15:38 UTC, scan-2 of burst (scan_count 0->1 after reidle). High-value batch-discipline integrity check after 9 ships THIS boot (8 post-outage backlog + #13136), counter->83, all 9 with CHANGELOG entries prepared. VERIFIED on origin/main (SHA form per [[learning-git-show-ref-path-mangled-on-windows-bash]]): CHANGELOG head=[0.44.0] 2026-06-12, ZERO premature v0.45.0/Unreleased (grep=0) — all 9 prepared entries correctly HELD in issue discussions, NOT written. SKILL.md version=0.44.0==config 0.44.0 (aligned; v0.45.0 bump HELD per operator). Batch-CHANGELOG discipline intact through high ship volume. 0 findings. README:51 deploy-all staleness still batched v0.45.0 doc-pass (unchanged)."
+    },
+    {
+      "file": "docs/HARNESS-ARCH.md §7.4/§7.6 (vs shipped #13077 reaper + #13134 model)",
+      "date": "2026-06-21",
+      "findings": 1,
+      "fixes": [],
+      "note": "FRESH BOOT scan-1 of new burst (idle-driver tick 14:41 UTC, scan_count 0->1), motivated by THIS boot's #13134 ship (reconciled agent /quit->harness-reaper in event-mode-contract.md/self-restart.md/instructions.md). Checked whether sibling TRD HARNESS-ARCH carried the same now-fixed contradiction. FINDING: §7.4 'Cooperative exit' + §7.6 do NOT reflect shipped harness-as-reaper (#13077 b23a79c3c) or the cannot-self-quit model (#13134 c75484604) — HARNESS-ARCH revlog tops at v27 2026-06-15, predates both. §7.4 frames deploy-halt as agent 'halted'->harness deploys without documenting the #13077 ACTIVE force-kill (deploying status not covered by the 60s stopping/restarting net), and frames the 60s net as a should-never-fire 'safety net' when post-#13134 it's the real terminator for exit-42/stop. NOT fixed inline (arch-doc = filing-only for DM, structural). Did NOT file standalone (dedup) — added evidence-backed DRIFT comment to in-progress umbrella #10837 (HARNESS-ARCH alignment, role:pm) w/ exact line refs; sibling to #12971 (§5.1 eviction). §7.4 line ~354 cycle_post.py exit-42 wrapper-exit confirmed ACCURATE (not part of finding). README:51 deploy-all staleness still batched v0.45.0 (unchanged)."
+    },
+    {
+      "file": "references/installer-files.txt (origin/main integrity, post-reconciliation)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver tick 01:11 EDT, post-10-ship. High-value verify of my OWN #11140 merge-time manual reconciliation (I unioned the racing installer-files.txt edits in a worktree → Total 253). Confirmed on origin/main (slash-free SHA): header 'Total: 253 files' == 253 actual entries (count matches → #12861 + #13101 completeness gates pass), all 3 reconciled L1 sources present (identity.md + responsibility.md + vault.md). My manual reconciliation is correct + consistent. Issue gate 0 open DM. 0 findings. (README:51 deploy-all staleness still batched for v0.45.0 — now MORE stale since #12912 per-clone deploy-signal model went live this session; reconcile at release doc-pass.)"
+    },
+    {
+      "file": "CHANGELOG.md + SKILL.md version (origin/main integrity)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "FRESH BOOT scan-3 of new burst (idle-driver tick 00:32 EDT, post-6-ship). High-value batch-discipline integrity check after shipping #13077/#13045/#13035/#13043/#13042/#12861 (all with CHANGELOG entries prepared). VERIFIED on origin/main (slash-free SHA form per [[learning-git-show-ref-path-mangled-on-windows-bash]]): CHANGELOG head = [0.44.0] 2026-06-12, ZERO premature v0.45.0/Unreleased entries (grep=0) — all 6 prepared entries correctly HELD in issue discussions, NOT written. SKILL.md version=0.44.0==config 0.44.0 (aligned; v0.45.0 bump HELD per operator). Issue gate: 0 open/in-progress DM issues. Batch-CHANGELOG discipline intact despite high ship volume. 0 findings. README:51 deploy-all staleness still batched for v0.45.0 doc-pass (unchanged)."
+    },
+    {
+      "file": "docs/HARNESS-ARCH.md:5.1 (vs origin/main + harness.py)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "FRESH BOOT scan-2 of burst (idle-driver tick 23:13 EDT, scan_count 1->2). Targeted: 2 user-facing docs changed in HEAD..origin/main (HARNESS-ARCH +58/-17, VAULT-ARCH +15) from PM #10837 'doc-side reconcile + fresh drift audit' (origin c330947b7). VERIFIED #12971 (OPEN, DM-filed) cursor-eviction drift STILL PERSISTS post-reconcile: HARNESS-ARCH L96/L168/L489/L499/L533 still claim HTTP 410 Gone + {cursor_evicted, current_head}, but origin harness.py:1616-1675 emits HTTP 200 + {evicted, oldest_id, evicted_count_hint} (#12837 avoids the contradictory triple); cursor-management.md matches code, TRD is outlier. Reconcile renamed alias->role + added L104 completion-endpoint 410-tombstone (correct, DIFFERENT endpoint) but missed the eviction shape. Posted freshness comment to #12971 with exact persisting lines (NOT re-filing). 0 NEW findings (existing #12971 confirmed live + sharpened). VAULT-ARCH +15 not yet scanned this burst."
+    },
+    {
+      "file": "SKILL.md:sections-1-3 (vs config + origin/main)",
+      "date": "2026-06-21",
+      "findings": 0,
+      "fixes": [],
+      "note": "FRESH BOOT 22:02 EDT scan-1 of new burst (idle-driver tick, scan_count 0->1). version: 0.44.0 == config 0.44.0 (aligned; v0.45.0 bump HELD per operator). Local SKILL.md BYTE-IDENTICAL to origin/main (local 39-behind, verified authoritative). Deferred candidates unchanged + still entangled (line 100-102 L4 legacy-seed diagram -> #6274/#10839 rename + #10359 L4-model impl; line 177 PID-primary liveness -> #12271 cutover #12492 pending) -> NOT clean unilateral fixes, carried not filed. Sole standing real finding README:51 deploy-all staleness stays BATCHED for v0.45.0 release doc-pass (re-confirmed prior session, NOT re-filed = no dup). 0 findings."
+    },
     {
       "file": "CHANGELOG.md",
       "date": "2026-06-19",
@@ -439,13 +820,96 @@
       "findings": 0,
       "fixes": [],
       "note": "Verified S6 Runtime-shipped-components note vs shipped #12907/#12909 manifest: event_poll.py (installer-files.txt:39) + harness.py (:44) + 9 l4_*.py now in install manifest. Heading Runtime-shipped (not installer-invoked) is ACCURATE: copied-to-install yet agent-armed/not-installer-run. No drift."
+    },
+    {
+      "file": "docs/HARNESS-ARCH.md:5.1",
+      "date": "2026-06-19",
+      "findings": 1,
+      "fixes": [],
+      "note": "Filed #12971 (role:skill, low, improvement-scan): HARNESS-ARCH 5.1 cursor-eviction drift \u2014 doc says HTTP 410 Gone + cursor_evicted/current_head; harness.py:1410-1469 emits HTTP 200 + evicted/oldest_id/evicted_count_hint (cursor-management.md matches code, TRD is outlier). Surfaced verifying shipped #12837."
+    },
+    {
+      "file": "CHANGELOG.md",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "Verified [0.44.0] is latest released entry (matches BRIEFING), NO premature v0.45.0/Unreleased section. The 6 v0.45.0 entries prepared this session (5 ships + #12914) correctly remain held in issue discussions, not written. Batched-CHANGELOG discipline holding."
+    },
+    {
+      "file": "docs/VAULT-ARCH.md:4.3",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "4.3 Required-frontmatter contract verified ACCURATE vs shipped #12905 galaxy-frontmatter guard (guard enforces exactly what 4.3 requires: type field + per-prefix types). Minor noted-not-filed: the #12905 write-time pre-commit guard is not cross-referenced in VAULT-ARCH (4.3/8) \u2014 below filing bar (same-session ship, natural #12905 doc-pass item, contract itself is correct)."
+    },
+    {
+      "file": "docs/COMPOSE-ARCHITECTURE.md:1",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "deploy flow verified ACCURATE vs live #12818 recompose: compose.py deploy <alias> (alias-valued, resolves via config.md Aliases); L2 source references/roles/<role>/SOUL.md -> slot:soul ordinal:1. Matches exactly what I ran (edit pm SOUL.md -> deploy pm -> composed CLAUDE.md)."
+    },
+    {
+      "file": "docs/AGENT-RUNTIME.md:7.8",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "Verified the #12912-reworded event-mode-contract.md cross-ref AGENT-RUNTIME 7.8 resolves: 7.8 Deploy behavior in loop mode exists (line 759), contextually matches the loop-mode next-session-start pull reword. No dangling ref. (Local fragment copy behind origin; verified against target section = substantive check.)"
+    },
+    {
+      "file": "docs/sub-skill-catalog.md:Legacy-L4-seeds",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "Observed-not-filed (below bar): the Legacy multi-file L4 seeds section says these remain on disk + enumerates pm/verifier/dm/worker, but shipped #13006 DELETED the 6 pm-/dm- stubs on origin (local clone behind, still present here). Minor/self-correcting, entries already struck-through as deprecated, section is transitional pending #10359/#10360 rework \u2192 folds into that rework, not worth a standalone finding. Flagged here for the next #10359 pass."
+    },
+    {
+      "file": "README.md",
+      "date": "2026-06-20",
+      "findings": 1,
+      "fixes": [],
+      "note": "DRIFT (deferred to v0.45.0 bump doc-pass, NOT inline-fixed): README:51 says harness \"automatically runs compose.py deploy-all\" on template-touching merges \u2014 but shipped #12912 RETIRES local deploy-all for the per-clone pull-first deploy-signal model. Real user-facing drift, DM domain. Deferred because: (a) v0.45.0 release doc-pass reconciles README+CHANGELOG anyway, (b) harness-restart making #12912 live is also pending, (c) avoid premature isolated edit on a behind clone. Captured in working-state BUMP-PREP. No-version-literal in README (good, no version drift); cited scripts (compose/wizard/squidsquad_cli) all resolve."
+    },
+    {
+      "file": "README.md:51 (re-verify vs origin/main)",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "re-confirmed stale deploy-all line STILL on origin/main; finding stands, remains batched for v0.45.0 release doc-pass (pairs w/ #12912 harness restart). No edit on 26-behind base."
+    },
+    {
+      "file": "SKILL.md:version-frontmatter (vs config, origin/main)",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "version: 0.44.0 == config 0.44.0 \u2014 aligned (correct; v0.45.0 bump held). Local 35-behind so checked origin/main authoritative. README:51 deploy-all finding stays batched for v0.45.0."
+    },
+    {
+      "file": "README.md supervised-launcher/POST-restart coverage (#12825, origin/main)",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "README:83/85 DO document supervised launcher + POST /restart + restart-harness.sh/.bat \u2014 #12825 doc-pass present+accurate, no gap. SKILL.md no harness-ops detail (by design). README:51 deploy-all staleness remains the sole batched finding."
+    },
+    {
+      "file": "CHANGELOG.md head (origin/main)",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "head=[0.44.0] 2026-06-12 latest; NO premature v0.45.0/Unreleased section (correct \u2014 held entries batched in issue discussions, written at bump time per version-bumps); v0.44.0 entries well-formed user-value framing. Aligned."
+    },
+    {
+      "file": "README.md internal link integrity (origin/main)",
+      "date": "2026-06-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "all 8 internal links resolve (CHANGELOG/CONTRIBUTING/SKILL.md + docs/AGENT-RUNTIME/ARCHITECTURE/DM-ARCH/sub-skill-guide). No dead links. WATCH: when #11400 retires docs/sub-skill-guide.md the README link goes dead \u2014 covered by #11400 back-ref sweep, not a finding now."
     }
   ],
   "doc_inventory": {
     "README.md": {
-      "last_scanned": "2026-06-19",
-      "sections": 12,
-      "status": "current"
+      "last_scanned": "2026-06-21",
+      "status": "current (deploy-all staleness fixed 006508eba; verbose section added edeaafa7c)"
     },
     "SKILL.md": {
       "last_scanned": "2026-06-19",
@@ -464,12 +928,32 @@
       "status": "current"
     },
     "CHANGELOG.md": {
-      "last_scanned": "2026-06-19",
+      "last_scanned": "2026-06-20",
       "status": "current"
     },
     "docs/INSTALLER-ARCH.md": {
       "last_scanned": "2026-06-19",
       "status": "current"
+    },
+    "docs/HARNESS-ARCH.md": {
+      "last_scanned": "2026-06-19",
+      "status": "has-finding-12971"
+    },
+    "docs/VAULT-ARCH.md": {
+      "last_scanned": "2026-06-20",
+      "status": "current"
+    },
+    "docs/COMPOSE-ARCHITECTURE.md": {
+      "last_scanned": "2026-06-20",
+      "status": "current"
+    },
+    "docs/AGENT-RUNTIME.md": {
+      "last_scanned": "2026-06-20",
+      "status": "current"
+    },
+    "docs/sub-skill-catalog.md": {
+      "last_scanned": "2026-06-20",
+      "status": "minor-drift-noted-10359"
     }
   },
   "rejected_findings": [],
