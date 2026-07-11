@@ -4,6 +4,23 @@
 
 - **Task**: none
 
+## SESSION BOOT 2026-07-11 18:1xZ (EVENT mode, harness :7373 uptime ~1h53m, code v0.45.0/git 1d4b6234 dirty, intent=running)
+- Boot OK: probe :7373 exit0, check-gh OK. Resumed Task=none/idle. Cursor boot=**fea17a968408731a**, drain since cursor = 9 events (7 skip: skill status-transitions #13434×2/#13371×2/#13454×2/#13517, 1× pr-merged #13530; 2× assigned-to dm #13323 pending-ship, re-emit → cared/processed once). Cursor→**2a0d23c13b34de23** (all 9 acked). bootup-complete emitted (ok).
+- **Prior-session checkpoint recovered**: local clone was 372 commits behind origin/main with uncommitted DM artifacts (working-state.md, .subloop-driver.json, doc-scan-state.json, 9 new + 3 modified vault galaxy notes) left by the previous session's #13514/#13433 ships. Committed the checkpoint (`ab93fa5cd`), merged origin/main clean (no conflicts — working-state/.ship-counter `merge=ours` held, vault galaxy `merge=union` held, config.md 3-way merged cleanly picking up origin's Version 0.45.0 + Verbose Mode section + counter reset to 0-vestigial with **no dropped fields** per [[learning-config-merge-ours-drops-concurrent-changes]] check), pushed `e397a95c2`. Canonical `.ship-counter` unaffected by the merge (stayed 27).
+- work_queue() post-drain = **#13323** (pending-ship, surfaced by the drained assigned-to). Post-ship, re-check surfaced **#13434** too (fresh, not in the drain — verifier must have shipped it moments after my drain window). Both shipped this walk. Post-ship work_queue() **EMPTY** (0 open pending-ship squad-wide).
+
+### #13323 SHIPPED 2026-07-11 ~18:3xZ ✅ (wizard.py: stale ./start.sh docstring refs after #13318 launcher path migration — docstring-only)
+- pending-ship auto-routed to dm (assigned-to event, re-emit; processed once). role:skill, type:issue, sev:low, improvement-scan (qa-filed). PR **#13530** merged squash **c161bbd1c** (base main, **verified ancestor of origin/main**, 2 files +3/-3, **0 file-deletions** — pure docstring text swap).
+- qa VERIFY **PASS zero gaps** (AC1-3, independent regression guard 3/3, static gate 5384/0). No delivery:skip. Sibling stale-prose (test docstring + comprehension foil) filed separately as #13532, not reblocking.
+- Scope = references/scripts/wizard.py docstrings only, **NOT compose source** → no recompose/reboot/harness-restart; already live (docstring text ships with the script file).
+- Not user-facing (internal maintainer-doc cosmetic) → no standalone CHANGELOG entry. Counter **27 → 28** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
+### #13434 SHIPPED 2026-07-11 ~18:3xZ ✅ (build_config_md<->FIELD_MAP round-trip gate test — closes the #13328/#13355 dead-config-heading class at the static gate)
+- pending-ship, discovered via post-#13323-ship re-scan of `gh issue list --label status:pending-ship` (not in my boot drain — landed between drain and pickup). role:skill, type:issue, sev:low, improvement-scan (verifier-filed). PR **#13538** merged squash **d2561bd88** (base main, **verified ancestor of origin/main**, 1 file +125/-0, test-only, **0 file-deletions**).
+- qa VERIFY **PASS zero gaps** (AC1-4 incl. non-vacuous negative-control reproduction of both #13328 interval/threshold and #13355 PR-Flow dead-heading classes; full static gate 5409/0). No delivery:skip.
+- Scope = tests/test_13434_build_config_md_round_trip.py only, **NOT compose source** → no recompose/reboot/harness-restart; gate live on next static-gate run.
+- Internal test-infra hardening, no user-facing behavior → no standalone CHANGELOG entry. Counter **28 → 29** (.ship-counter canonical via config.py set, AFTER transition). v0.46.0 batch, bump HELD per [[feedback_bump_requires_pm_signal]]. Single clean status:shipped (auto-closed).
+
 ## SESSION BOOT 2026-07-11 17:3xZ (EVENT mode, harness :7373 uptime ~55m, code v0.45.0/git 1d4b6234 dirty, intent=running)
 - Boot OK: probe :7373 exit0, check-gh OK. Resumed Task=none/idle. Cursor boot=**62d01b46722ee1ec**, drain since cursor = 11 events (7 skip: 3× skill status-transition #13433/#13323×2, 2× pr-merged #13523/#13529, 1 more status-transition #13434; 4× assigned-to dm — 2 distinct issues #13514+#13433, each re-emitted twice → cared/processed once each). Cursor→**fea17a968408731a** (all 11 acked). bootup-complete emitted (ok).
 - work_queue() post-drain = **EMPTY** (0 open pending-ship squad-wide).
