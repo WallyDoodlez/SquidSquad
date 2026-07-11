@@ -1,6 +1,10 @@
 # Working State
 
-- **Task**: 13353 (harness EAD handoff re-emit activity-gate). Session 2026-07-11 (fresh boot ~15:28), event mode, **Verbose OFF (quiet)**.
+- **Task**: none — 2 shipped→pending-test this wake (#13454 resolved, #13353 fixed). Remaining queue externally-gated (PM CQ ACs / operator live runs / design / cross-clone). Idle: gated-only queue treated as drained per #13316 judgment; verifier route-backs on the 2 PRs are HIGHEST priority next wake. Session 2026-07-11 (fresh boot ~15:28), event mode, **Verbose OFF (quiet)**.
+
+## Shipped → PENDING-TEST this wake
+- **#13353 → PENDING-TEST** (PR #13553 ready): harness EAD suppresses the #12442 handoff RE-emit when target agent is RUNNING + heartbeat within 600s (converges via own work_queue() re-read); silent/stopped/absent still gets the rescue; bounded (lapses after 600s silence). AgentState.handoff_reemit_suppressed(). 11 tests. Static 5458/0. DS NO_FINDINGS. Code-only, no CQ.
+- **#13454 → PENDING-TEST** (PR #13546, route-back RESOLVED): merged origin/main; kept BOTH test classes (mine + #13371's) at the conflicting anchor. 17 tests, static 5452/0. Pushed 56f215441.
 
 ## In-flight this wake
 - **#13454 → PENDING-TEST** (PR #13546, verifier route-back RESOLVED): merged origin/main into squidsquad/task/13454; resolved tests/test_git_ops.py conflict (my TestPrMergeDraftSelfHeal vs #13371's TestNeutralizeClosingKeywords/TestPrCreateNeutralizesBody appended at same anchor) — kept BOTH class blocks. 17 tests pass, static 5452/0. Pushed merge 56f215441. Dropped an empty restore commit (the #11511 guard silently unstages .squidsquad/ on branches — main is protected by .gitattributes merge=ours/union, PR is code-only). Back in verifier's queue.
