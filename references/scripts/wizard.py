@@ -1177,8 +1177,8 @@ def restart_agents(base_dir=None, timeout=HARNESS_PROBE_TIMEOUT):
       and boot the refreshed CLAUDE.md (AC2: no stale-instruction agents).
     - **Unreachable** — the wizard is ephemeral (Q-new21); it does NOT spawn a
       detached harness. Report the user-driven cold-start command and let the
-      runbook surface ``./start.sh`` to the user (AC1 "falls through to
-      start.sh").
+      runbook surface ``.squidsquad/start.sh`` to the user (AC1 "falls through
+      to start.sh").
 
     ``ok`` is False only when the harness was reachable AND a restart failed (or
     no aliases were found); an unreachable harness is a normal branch, not an
@@ -3244,7 +3244,7 @@ def cmd_restart_agents(args):
 
     Usage: wizard.py restart-agents [base_dir]
     Exit 0 on a clean restart OR an unreachable harness (a normal branch — the
-    runbook surfaces ./start.sh); exit 1 when the harness was reachable but a
+    runbook surfaces .squidsquad/start.sh); exit 1 when the harness was reachable but a
     restart failed, so the runbook can show the operator which aliases failed.
     """
     base_dir = args[0] if args else None
