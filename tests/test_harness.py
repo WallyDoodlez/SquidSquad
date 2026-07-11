@@ -4045,6 +4045,181 @@ class TestEADHandoffReemit12442(unittest.TestCase):
                          "re-entry must re-emit at once, not wait the interval")
 
 
+class TestHandoffReemitSuppressedUnit13353(unittest.TestCase):
+    """#13353: AgentState.handoff_reemit_suppressed truth table — suppress a
+    handoff re-emit only for a RUNNING agent with a heartbeat inside the
+    interval; never for a stopped, never-active, or long-silent agent."""
+
+    _INTERVAL = 600
+
+    def _agent(self, intent, last_activity):
+        from harness import AgentState
+        a = AgentState("verifier", "/clone")
+        a.intent = intent
+        a.last_activity_at = last_activity
+        return a
+
+    def test_running_recently_active_is_suppressed(self):
+        from harness import AgentState
+        now = 2_000_000_000
+        a = self._agent(AgentState.INTENT_RUNNING, now - 100)  # 100s ago < 600
+        self.assertTrue(a.handoff_reemit_suppressed(now, self._INTERVAL))
+
+    def test_running_but_silent_not_suppressed(self):
+        from harness import AgentState
+        now = 2_000_000_000
+        a = self._agent(AgentState.INTENT_RUNNING, now - 700)  # 700s ago > 600
+        self.assertFalse(a.handoff_reemit_suppressed(now, self._INTERVAL))
+
+    def test_never_active_not_suppressed(self):
+        from harness import AgentState
+        now = 2_000_000_000
+        a = self._agent(AgentState.INTENT_RUNNING, None)
+        self.assertFalse(a.handoff_reemit_suppressed(now, self._INTERVAL))
+
+    def test_stopping_agent_not_suppressed_even_if_recent(self):
+        now = 2_000_000_000
+        a = self._agent("stopping", now - 10)  # recent, but not RUNNING
+        self.assertFalse(a.handoff_reemit_suppressed(now, self._INTERVAL))
+
+    def test_boundary_exactly_interval_not_suppressed(self):
+        from harness import AgentState
+        now = 2_000_000_000
+        a = self._agent(AgentState.INTENT_RUNNING, now - self._INTERVAL)  # == 600
+        self.assertFalse(a.handoff_reemit_suppressed(now, self._INTERVAL),
+                         "strict < interval: a heartbeat exactly one interval "
+                         "old must not suppress")
+
+
+class TestEADHandoffReemitActivityGate13353(unittest.TestCase):
+    """#13353: a #12442 handoff RE-emit is suppressed when the target agent is
+    alive and recently active (it converges via its own work_queue() re-read),
+    but the rescue re-emit still fires for a silent/stopped/absent agent, and a
+    fresh transition is never gated."""
+
+    _REGISTRY = {
+        "skill": ("worker", "skill"),
+        "verifier": ("verifier", None),
+        "dm": ("dm", None),
+    }
+    _START = 2_000_000_000
+
+    def setUp(self):
+        # The global harness `state` singleton is shared across the module;
+        # snapshot and restore its agents dict so registering test agents does
+        # not leak into other test classes.
+        from harness import state
+        self._state = state
+        self._saved_agents = dict(state.agents)
+
+    def tearDown(self):
+        self._state.agents.clear()
+        self._state.agents.update(self._saved_agents)
+
+    def _register_agent(self, alias, intent, last_activity):
+        from harness import AgentState
+        a = AgentState(alias, "/clone")
+        a.intent = intent
+        a.last_activity_at = last_activity
+        self._state.agents[alias] = a
+        return a
+
+    def _issue(self, num, status, role="skill", updated="2000-01-01T00:00:00Z"):
+        labels = [{"name": "squidsquad"}, {"name": f"status:{status}"}]
+        if role:
+            labels.append({"name": f"role:{role}"})
+        return {"number": num, "title": f"ISSUE: thing {num}",
+                "labels": labels, "updatedAt": updated}
+
+    def _run(self, issues, det, now):
+        import config as _cfg
+        gh_result = MagicMock(returncode=0, stdout=json.dumps(issues))
+        emitted = []
+
+        def fake_emit(event_type, role, payload=None, **extra):
+            if event_type == "assigned-to":
+                emitted.append(payload or {})
+
+        with patch("harness.subprocess.run", return_value=gh_result), \
+             patch("harness._emit_event", side_effect=fake_emit), \
+             patch("harness.time.time", return_value=now), \
+             patch.object(_cfg, "parse_aliases_registry",
+                          return_value=self._REGISTRY):
+            det._check_for_changes()
+        return emitted
+
+    def _stuck_detector(self):
+        from harness import ExternalActivityDetector
+        det = ExternalActivityDetector()
+        det._last_check_epoch = self._START
+        return det
+
+    def test_active_running_agent_suppresses_reemit(self):
+        """The #13353 fix: a running verifier with a recent heartbeat is NOT
+        re-nudged after the interval — it converges on its own."""
+        from harness import AgentState
+        det = self._stuck_detector()
+        issue = [self._issue(1, "pending-test", role="skill")]
+        e1 = self._run(issue, det, now=self._START + 50)  # fresh emit seeds timer
+        self.assertEqual([e["target_alias"] for e in e1], ["verifier"])
+        # verifier is running and heartbeated recently (500s into the window)
+        self._register_agent("verifier", AgentState.INTENT_RUNNING,
+                             last_activity=self._START + 700)
+        e2 = self._run(issue, det, now=self._START + 750)  # +700s > 600 interval
+        self.assertEqual(e2, [], "active running agent must not be re-nudged")
+
+    def test_silent_agent_still_reemitted(self):
+        """Rescue preserved: a running agent whose last heartbeat predates the
+        interval IS re-nudged (a possibly-missed nudge / going-quiet agent)."""
+        from harness import AgentState
+        det = self._stuck_detector()
+        issue = [self._issue(2, "pending-ship", role="skill")]
+        e1 = self._run(issue, det, now=self._START + 50)
+        self.assertEqual([e["target_alias"] for e in e1], ["dm"])
+        # dm last acted at +50; at +750 that is 700s ago > 600 → silent
+        self._register_agent("dm", AgentState.INTENT_RUNNING,
+                             last_activity=self._START + 50)
+        e2 = self._run(issue, det, now=self._START + 750)
+        self.assertEqual([e["target_alias"] for e in e2], ["dm"],
+                         "a long-silent agent must still get the rescue re-emit")
+
+    def test_stopped_agent_still_reemitted(self):
+        """A non-running (stopping/stopped) agent is never suppressed — the
+        re-emit stands so the item is not lost while the agent restarts."""
+        from harness import AgentState
+        det = self._stuck_detector()
+        issue = [self._issue(3, "pending-ship", role="skill")]
+        self._run(issue, det, now=self._START + 50)
+        self._register_agent("dm", "stopping",
+                             last_activity=self._START + 700)  # recent but stopping
+        e2 = self._run(issue, det, now=self._START + 750)
+        self.assertEqual([e["target_alias"] for e in e2], ["dm"])
+
+    def test_absent_agent_still_reemitted_backward_compat(self):
+        """No AgentState registered for the target alias → not suppressed. This
+        is the pre-#13353 behavior every existing re-emit test relies on."""
+        det = self._stuck_detector()
+        issue = [self._issue(4, "pending-ship", role="skill")]
+        self._run(issue, det, now=self._START + 50)
+        # no _register_agent call → state.agents has no "dm"
+        e2 = self._run(issue, det, now=self._START + 750)
+        self.assertEqual([e["target_alias"] for e in e2], ["dm"])
+
+    def test_fresh_transition_never_suppressed(self):
+        """Even with an active running agent, a FRESH transition always emits —
+        only the re-emit cadence is gated by activity."""
+        from harness import AgentState
+        det = self._stuck_detector()
+        self._register_agent("dm", AgentState.INTENT_RUNNING,
+                             last_activity=self._START + 40)
+        e1 = self._run([self._issue(5, "pending-ship", role="skill",
+                                    updated="2099-01-01T00:00:00Z")],
+                       det, now=self._START + 50)
+        self.assertEqual([e["target_alias"] for e in e1], ["dm"],
+                         "a fresh transition must reach the agent regardless of "
+                         "its recent activity")
+
+
 # ---------------------------------------------------------------------------
 # /human/queue endpoint — #8704
 # ---------------------------------------------------------------------------
