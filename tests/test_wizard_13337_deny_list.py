@@ -192,10 +192,14 @@ class TestDryRun:
 
 class TestCli:
     def _run(self, tmp_path, *flags):
+        # Explicit cwd + encoding (#13397): pin the subprocess environment so a
+        # cwd inherited from another test or a locale-dependent stdio encoding
+        # cannot perturb the asserted exit code. Matches test_cli_dispatch_registered.
         return subprocess.run(
             [sys.executable, str(SCRIPTS_DIR / "wizard.py"), "merge-deny-list",
              *flags, str(tmp_path)],
             capture_output=True, text=True, timeout=60,
+            cwd=str(REPO_ROOT), encoding="utf-8",
         )
 
     def test_cli_happy_path_envelope(self, tmp_path):
@@ -221,6 +225,37 @@ class TestCli:
     def test_cli_unknown_flag_exits_2(self, tmp_path):
         proc = self._run(tmp_path, "--bogus")
         assert proc.returncode == 2
+
+    def test_cli_unknown_flag_exit_2_is_deterministic(self, tmp_path):
+        """#13397 regression: the usage-error exit code must be 2 on EVERY run,
+        not just usually. A guarded stderr write (wizard._cli_usage_error)
+        keeps a transient pipe-write failure under load from turning the
+        deterministic exit(2) into a spurious exit(1)."""
+        for _ in range(6):
+            assert self._run(tmp_path, "--bogus").returncode == 2
+
+    def test_unknown_flag_returns_2_in_process(self):
+        """The exit-2 contract at the logic level (no subprocess) — for both
+        usage-error sites: an unknown flag and a flag missing its value."""
+        assert wizard.cmd_merge_deny_list(["--bogus", "."]) == 2
+        assert wizard.cmd_merge_deny_list(["--path"]) == 2  # missing value
+
+    def test_usage_error_returns_2_even_if_stderr_write_fails(self, monkeypatch):
+        """#13397 root-cause lock: an unhandled exception on the usage-error
+        stderr write would propagate through main()/sys.exit(main()) and exit
+        the process with Python's unhandled-exception code 1 instead of 2. The
+        guard in _cli_usage_error swallows the write failure so exit stays 2."""
+        import builtins
+        real_print = builtins.print
+
+        def boom(*a, **k):
+            if k.get("file") is sys.stderr:
+                raise OSError("simulated pipe write failure under load")
+            return real_print(*a, **k)
+
+        monkeypatch.setattr(builtins, "print", boom)
+        assert wizard._cli_usage_error("boom") == 2
+        assert wizard.cmd_merge_deny_list(["--bogus", "."]) == 2
 
     def test_cli_dispatch_registered(self):
         """merge-deny-list must be in wizard.py's dispatch table."""

@@ -3427,6 +3427,24 @@ def merge_deny_list(base_dir=None, paths=None, rules=None, dry_run=False):
     return result
 
 
+def _cli_usage_error(message):
+    """Emit a CLI usage error and return exit code 2.
+
+    The stderr write is guarded (#13397). A usage error is a deterministic
+    exit(2), but under heavy concurrent load in the full test suite a transient
+    failure writing to a captured stderr pipe would otherwise raise, propagate
+    unhandled through main()/`sys.exit(main())`, and terminate the process with
+    Python's unhandled-exception code 1 — flipping a deterministic exit(2) into
+    a spurious exit(1) and making the static gate flaky. The exit code is the
+    contract the caller asserts; the message is best-effort.
+    """
+    try:
+        print(message, file=sys.stderr)
+    except Exception:
+        pass
+    return 2
+
+
 def cmd_merge_deny_list(args):
     """CLI: merge consent deny rules into the target's settings.json (#13337).
 
@@ -3448,14 +3466,13 @@ def cmd_merge_deny_list(args):
         elif arg == "--dry-run":
             dry_run = True
         elif arg.startswith("--"):
-            print(f"Unknown flag: {arg}", file=sys.stderr)
-            return 2
+            return _cli_usage_error(f"Unknown flag: {arg}")
         else:
             base_dir = arg
     if "" in paths or "" in rules:
-        print("Usage: wizard.py merge-deny-list [--path <p>]... "
-              "[--rule <r>]... [--dry-run] [base_dir]", file=sys.stderr)
-        return 2
+        return _cli_usage_error(
+            "Usage: wizard.py merge-deny-list [--path <p>]... "
+            "[--rule <r>]... [--dry-run] [base_dir]")
     result = merge_deny_list(base_dir, paths=paths, rules=rules, dry_run=dry_run)
     _print_json(result, ok=result.get("ok", False))
     return 0 if result.get("ok") else 1
