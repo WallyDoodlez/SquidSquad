@@ -1,7 +1,14 @@
 # Working State
 
-- **Task**: none in-flight. NEXT PICKUP = #13328 (batch order).
-- **SESSION 2026-07-11 (event, Verbose ON) — 4 items handled:**
+- **Task**: none in-flight. NEXT PICKUP = #13327 (unblocked). #13329 needs PM design input FIRST (do not build blind).
+- **SESSION 2026-07-11 (event, Verbose ON) — 5 items, 4 SHIPPED end-to-end:**
+  - **#13369 SHIPPED ✅** (reject-fix: instructions.md:191 announce-before-drain).
+  - **#13355 SHIPPED ✅** (pr_flow retire, PR-flow §3 invariant).
+  - **#13339 SHIPPED ✅** (maturity probe detect-maturity + roster heuristic propose-roster; verifier/pm/dm singletons).
+  - **#13397 SHIPPED ✅** (flaky deny-list gate test: guarded stderr write in cmd_merge_deny_list usage-error path).
+  - **#13328 -> pending-test** (PR #13420): retired loop-interval prompt + fixed ## Loop->## Iteration Interval/## Context Pressure FIELD_MAP drift + config interval default 30 + SKILL.md migration repoint. gate 5281/0/0. Verifier has it. FLAGGED for verifier: FEAT-328-TEST-PLAN.md TC-06 stale ## Loop; SKILL.md:392 PR Flow under ## Flags = residual #13355 drift (worth #13355 follow-up).
+- **BATCH REMAINING:** #13327 (generic-customize-trigger, unblocked, NEXT) → #13329 (scan-repo-for-skills; OPEN DESIGN Qs -> route to PM/operator BEFORE building; confirm compose.py .squidsquad/project/ read key/path first) → #13338 (LAST, step-8 verify subagent; roster+customization now more stable post-#13339).
+- **SUPERSEDED (older session log below is historical):**
   - **#13369 (reject-fix) SHIPPED ✅** end-to-end (verifier passed + DM delivered). instructions.md:191 L2 summary reordered announce-before-drain (PR #13375).
   - **#13355 SHIPPED ✅** end-to-end (resumed prior session's bdeeb3ce8; verifier passed + DM delivered). pr_flow retire, PR flow §3 invariant (PR #13386).
   - **#13339 -> pending-test** (PR #13398): maturity probe (detect-maturity) + workflow->roster heuristic (propose-roster). Only WORKER varies; PM/DM/VERIFIER singletons (manifest: verifier==pm==dm always_installed/show_in_roster:false). CQ 13339_spec (5 Qs, self-checked clean). 24 tests, gate 5310/0/0, Sonnet SHIP. Verifier has it.
