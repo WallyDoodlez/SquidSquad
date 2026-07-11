@@ -1,7 +1,12 @@
 # Working State
 
-- **Task**: none in-flight. NEXT PICKUP = #13327 (unblocked). #13329 needs PM design input FIRST (do not build blind).
-- **SESSION 2026-07-11 (event, Verbose ON) — 5 items, 4 SHIPPED end-to-end:**
+- **Task**: none in-flight — IDLE (all remaining approved work gated). Cursor advanced to 8d01e7b7b3eac74f.
+- **IDLE-STATE MAP (what re-wakes me):** #13327 in verifier queue (may reject->me); #13329 routed to PM for design (PM answers->re-wake me to build); #13338 deferred (LAST — build AFTER #13327 customization surface ships, to avoid rework). #12527 human-supervised; #10690/#10686 gated E6+E7. Verifier/PM/DM nudges auto-resume me.
+- **SESSION 2026-07-11 (event, Verbose ON) — 7 items handled, 5 SHIPPED end-to-end + 1 in verification + 1 routed to PM:**
+  - **#13328 SHIPPED ✅** (retire loop-interval prompt + ## Loop->## Iteration Interval/## Context Pressure FIELD_MAP drift fix + config interval default 30 + SKILL.md migration repoint; PR #13420).
+  - **#13327 -> pending-test** (PR #13427): generic customize-trigger in pm+worker instructions.md + §7 discoverability. CQ 13327_spec self-checked clean. Verifier has it.
+  - **#13329 -> ROUTED TO PM** (comment + work-assign 03:50): 3 design Qs (skills-scope / incorporation-target / L4-representation) answered with my recs; stays approved/role:skill; build after PM confirms.
+  - **SUPERSEDED detail below (4 shipped this session):**
   - **#13369 SHIPPED ✅** (reject-fix: instructions.md:191 announce-before-drain).
   - **#13355 SHIPPED ✅** (pr_flow retire, PR-flow §3 invariant).
   - **#13339 SHIPPED ✅** (maturity probe detect-maturity + roster heuristic propose-roster; verifier/pm/dm singletons).
