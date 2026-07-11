@@ -1,6 +1,12 @@
 # Working State
 
-- **Task**: none in-flight (just shipped #13513 to pending-test). NEXT = #13514 (my filed, MEDIUM) or #13515 (new approved doc-first task). Session 2026-07-11, event mode, Verbose ON. Context DEEP — exit-42 may fire; this is the resume anchor.
+- **Task**: #13515 IN-PROGRESS — front-loaded STRATEGY PUBLISHED (work contract comment posted). NEXT CONCRETE STEP = author Phase-1 spec edits (see below), on a fresh branch, DS-review each. Deferred authoring here: Phase-1 = HIGH-BLAST-RADIUS L1 Soul + shared event-mode-contract instruction edits → begin with FRESH context, not at bottom of a deep window (stranded base-instruction edit = high-harm). #13513 shipped→pending-test just now. Session 2026-07-11, event mode, Verbose ON. Context DEEP — exit-42 may fire; this is the resume anchor.
+
+## #13515 (IN-PROGRESS, doc-first, high-blast-radius) — RESUME HERE
+Strategy published as tracker comment. Status model: `status:blocked` = assignee still OWNS but parked (blocked on another party); distinct from in-progress (active) and pending-* (ownership handed off). Legal `in-progress <-> blocked`, authority `_assignee`.
+- **Phase 1 (spec, GATE to PM before Phase 2 per AC6):** edit (branch first, DS-review each) — (1) L1 Soul "Never Stop While Work Is Pending" (references/roles source): park still-owned-blocked task as blocked, then continue [AC2]; (2) event-mode-contract Case D (references/sub-skills/common-events/event-mode-contract.md): same [AC2]; (3) SKILL.md label taxonomy + tracker.py header docstring: document status + semantics + transitions [AC1]. Then transition to a PM-review checkpoint (AC6 gate).
+- **Phase 2 (code, AFTER Phase-1 PM sign-off):** tracker.py `_STATUS`/`_VALID_TRANSITIONS`(in-progress<->blocked)/authority `_assignee` + regression test [AC3]; pipeline-sentinel flags role with >=2 in-progress as anomaly [AC4]. NON-GOAL: no hard "one in-progress per role" lock.
+- **AC5 CQ** = PM-authored (present), verifier-derives the spec — do NOT self-generate. Full static gate before pending-test.
 
 ## Shipped / handed off this session (tail)
 - **#13494 SHIPPED** (harness _git_in_clone LC_ALL=C). **#13464 SHIPPED** (verification.md verdict-before-transition; PR #13507 merged + qa CQ 13464_spec 4/4). Both closed.
