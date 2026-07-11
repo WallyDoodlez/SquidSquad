@@ -892,6 +892,148 @@ class TestPrStateScopeViolations13554:
         assert self._violations(None) is None
 
 
+class TestRestoreMergeDroppedState13556:
+    """#13556: the receiving-side last-line guard — after a merge silently drops
+    a protected state/vault path (merge=ours/union defeated by modify-vs-delete),
+    _restore_merge_dropped_state restores it from ORIG_HEAD. Real-git integration
+    so the no-conflict drop is genuinely reproduced, not mocked."""
+
+    def _git(self, cwd, *args):
+        import subprocess
+        return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
+                              text=True, check=True)
+
+    def _repo(self, tmp_path):
+        """A repo whose HEAD is a MERGE that silently deleted a protected vault
+        note (incoming deleted it; local left it untouched -> clean delete, no
+        conflict). Returns (repo_path, note_relpath, original_content)."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        self._git(repo, "init", "-b", "main")
+        self._git(repo, "config", "user.email", "t@t")
+        self._git(repo, "config", "user.name", "t")
+        note = ".squidsquad/vault/galaxy/learning-note.md"
+        (repo / ".squidsquad/vault/galaxy").mkdir(parents=True)
+        # merge=union declared (and honored) to prove the driver is DEFEATED by
+        # the delete — the whole point of #13556.
+        (repo / ".gitattributes").write_text(
+            ".squidsquad/vault/galaxy/*.md merge=union\n")
+        content = "# Note\n\nvaluable teammate learning\n"
+        (repo / note).write_text(content)
+        self._git(repo, "add", "-A")
+        self._git(repo, "commit", "-m", "base: note present")
+        # incoming branch: DELETE the note.
+        self._git(repo, "checkout", "-b", "incoming")
+        self._git(repo, "rm", note)
+        self._git(repo, "commit", "-m", "incoming: delete note")
+        # back on main: an unrelated divergent commit (forces a real merge, not ff).
+        self._git(repo, "checkout", "main")
+        (repo / "code.py").write_text("x = 1\n")
+        self._git(repo, "add", "code.py")
+        self._git(repo, "commit", "-m", "main: unrelated code")
+        # merge incoming -> note deleted with NO conflict (main never touched it).
+        self._git(repo, "merge", "incoming", "--no-edit")
+        return repo, note, content
+
+    def test_restores_silently_dropped_note(self, tmp_path, monkeypatch):
+        repo, note, content = self._repo(tmp_path)
+        # Precondition: the merge really dropped the note (bug reproduced).
+        assert not (repo / note).exists(), "setup failed to reproduce the drop"
+        monkeypatch.setattr(git_ops, "REPO_ROOT", repo)
+        with patch.object(git_ops, "_emit"):
+            restored = git_ops._restore_merge_dropped_state()
+        assert restored == [note]
+        assert (repo / note).exists()
+        assert (repo / note).read_text() == content
+        # A restore commit was created (working tree clean, not left staged).
+        status = self._git(repo, "status", "--porcelain").stdout.strip()
+        assert status == "", f"expected a committed restore, got: {status!r}"
+
+    def test_fast_forward_deletion_not_restored(self, tmp_path, monkeypatch):
+        """A fast-forward brings a LEGITIMATE incoming deletion — local had no
+        divergent commit, so the delete is intentional and must NOT be restored."""
+        repo = tmp_path / "ff"
+        repo.mkdir()
+        self._git(repo, "init", "-b", "main")
+        self._git(repo, "config", "user.email", "t@t")
+        self._git(repo, "config", "user.name", "t")
+        note = ".squidsquad/vault/galaxy/learning-ff.md"
+        (repo / ".squidsquad/vault/galaxy").mkdir(parents=True)
+        (repo / note).write_text("content\n")
+        self._git(repo, "add", "-A")
+        self._git(repo, "commit", "-m", "base")
+        self._git(repo, "checkout", "-b", "incoming")
+        self._git(repo, "rm", note)
+        self._git(repo, "commit", "-m", "delete")
+        self._git(repo, "checkout", "main")
+        # fast-forward merge (main has no divergent commit).
+        self._git(repo, "merge", "incoming", "--no-edit")
+        assert not (repo / note).exists()
+        monkeypatch.setattr(git_ops, "REPO_ROOT", repo)
+        with patch.object(git_ops, "_emit"):
+            restored = git_ops._restore_merge_dropped_state()
+        assert restored == []  # ff → no HEAD^2 → guard is a no-op
+        assert not (repo / note).exists()
+
+    def test_no_orig_head_is_noop(self, tmp_path, monkeypatch):
+        """A fresh repo with no merge (no ORIG_HEAD) → guard returns [] cleanly."""
+        repo = tmp_path / "fresh"
+        repo.mkdir()
+        self._git(repo, "init", "-b", "main")
+        self._git(repo, "config", "user.email", "t@t")
+        self._git(repo, "config", "user.name", "t")
+        (repo / "f").write_text("x")
+        self._git(repo, "add", "-A")
+        self._git(repo, "commit", "-m", "c1")
+        monkeypatch.setattr(git_ops, "REPO_ROOT", repo)
+        with patch.object(git_ops, "_emit"):
+            assert git_ops._restore_merge_dropped_state() == []
+
+    def test_dropped_paths_helper_ignores_already_empty(self):
+        """_merge_dropped_state_paths: a path already empty pre-merge is not a
+        'drop'; only present+non-empty -> absent/empty counts."""
+        before = {".squidsquad/vault/galaxy/a.md": 40,
+                  ".squidsquad/vault/galaxy/b.md": 0,   # already empty pre-merge
+                  ".squidsquad/skill/working-state.md": 800}
+        after = {".squidsquad/vault/galaxy/a.md": 0,     # emptied -> drop
+                 ".squidsquad/vault/galaxy/b.md": 0}     # still empty -> not a drop
+        # working-state.md absent in `after` -> dropped.
+        with patch.object(git_ops, "_state_blob_sizes",
+                          side_effect=[before, after]):
+            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
+                ".squidsquad/skill/working-state.md",
+                ".squidsquad/vault/galaxy/a.md",
+            ]
+
+    def test_dropped_paths_empty_baseline_fails_safe(self):
+        """No baseline (git failure -> None, or genuinely empty {}) → never a
+        spurious restore."""
+        for baseline in (None, {}):
+            with patch.object(git_ops, "_state_blob_sizes", return_value=baseline):
+                assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == []
+
+    def test_dropped_paths_after_git_failure_no_mass_restore(self):
+        """DS-13556 F2: if the HEAD ls-tree FAILS (None), do NOT treat every
+        pre-merge path as dropped — that would be a spurious mass-restore."""
+        before = {".squidsquad/vault/galaxy/a.md": 40,
+                  ".squidsquad/skill/working-state.md": 800}
+        with patch.object(git_ops, "_state_blob_sizes",
+                          side_effect=[before, None]):  # before ok, HEAD git-fails
+            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == []
+
+    def test_dropped_paths_genuine_empty_head_restores_all(self):
+        """A merge that deleted ALL protected files (HEAD genuinely empty {}, not
+        a git failure) IS a real mass-drop → all restored."""
+        before = {".squidsquad/vault/galaxy/a.md": 40,
+                  ".squidsquad/skill/working-state.md": 800}
+        with patch.object(git_ops, "_state_blob_sizes",
+                          side_effect=[before, {}]):  # HEAD genuinely has none
+            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
+                ".squidsquad/skill/working-state.md",
+                ".squidsquad/vault/galaxy/a.md",
+            ]
+
+
 class TestPrBehindBy:
     """#13271: _pr_behind_by — kept OUT of TestPrMerge (whose autouse fixture
     patches _pr_behind_by) so these exercise the real function."""
