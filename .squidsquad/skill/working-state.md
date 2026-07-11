@@ -1,34 +1,27 @@
 # Working State
 
-- **Task**: #13515 IN-PROGRESS — front-loaded STRATEGY PUBLISHED (work contract comment posted). NEXT CONCRETE STEP = author Phase-1 spec edits (see below), on a fresh branch, DS-review each. Deferred authoring here: Phase-1 = HIGH-BLAST-RADIUS L1 Soul + shared event-mode-contract instruction edits → begin with FRESH context, not at bottom of a deep window (stranded base-instruction edit = high-harm). #13513 shipped→pending-test just now. Session 2026-07-11, event mode, Verbose ON. Context DEEP — exit-42 may fire; this is the resume anchor.
-
-## #13515 (IN-PROGRESS, doc-first, high-blast-radius) — RESUME HERE
-Strategy published as tracker comment. Status model: `status:blocked` = assignee still OWNS but parked (blocked on another party); distinct from in-progress (active) and pending-* (ownership handed off). Legal `in-progress <-> blocked`, authority `_assignee`.
-- **Phase 1 (spec, GATE to PM before Phase 2 per AC6):** edit (branch first via `task-begin skill 13515`, DS-review each — SOUL.md is MAX blast radius, author with fresh context) — (1) **`references/roles/SOUL.md`** L1 shared Soul "Never Stop While Work Is Pending" (grep-confirmed sole source; note pm/checkin.md + pm/responsibility.md also reference the phrase — check if they need alignment): park still-owned-blocked task as `blocked`, then continue [AC2]; (2) **`references/sub-skills/common-events/event-mode-contract.md:83`** Case D "Mid-task, event arrives": same parking guidance [AC2]; (3) **SKILL.md** label taxonomy + **tracker.py** header docstring: document status + owned-but-not-active semantics + legal transitions [AC1]. Then transition to a PM-review checkpoint (AC6 gate). Strategy comment already posted on #13515.
-- **Phase 2 (code, AFTER Phase-1 PM sign-off):** tracker.py `_STATUS`/`_VALID_TRANSITIONS`(in-progress<->blocked)/authority `_assignee` + regression test [AC3]; pipeline-sentinel flags role with >=2 in-progress as anomaly [AC4]. NON-GOAL: no hard "one in-progress per role" lock.
-- **AC5 CQ** = PM-authored (present), verifier-derives the spec — do NOT self-generate. Full static gate before pending-test.
+- **Task**: none — #13514 shipped→pending-test (PR #13523). Session 2026-07-11, event mode, **Verbose OFF (quiet posture)** per config (operator flipped it via a qa commit; working-state header from prior session said ON — stale, config is authoritative).
 
 ## Shipped / handed off this session (tail)
-- **#13494 SHIPPED** (harness _git_in_clone LC_ALL=C). **#13464 SHIPPED** (verification.md verdict-before-transition; PR #13507 merged + qa CQ 13464_spec 4/4). Both closed.
-- **#13513 → PENDING-TEST** (PR #13516 READY + MERGEABLE): greenfield compose blocker. `docs/sub-skill-catalog.md` is git-committed + required by compose v2 catalog gate at `<target>/docs/sub-skill-catalog.md`, but was MISSING from `references/installer-files.txt` → fresh npx install composed ZERO CLAUDE.md. Added to manifest (header 254→255) + regression test in `test_12821` (asserts catalog FILE ITSELF shipped — sibling tests only checked what it references). Full static gate 5376/0. **DM CAVEAT: PR body has a `Fixes #13513` keyword I could NOT strip — `gh pr edit` fails on this repo (GraphQL projects-classic deprecation); close via tracker pending-ship→shipped, not GitHub auto-close, per open #13371.**
+- **#13514 → PENDING-TEST** (PR #13523 READY): `wizard.py setup-yes` reported "Created N agent(s)" + exit 0 even when every role's compose FAILED (broken install masquerading as success). Fix in `cmd_setup_yes`: count only agents with `claude_md != "FAILED"`; print `(K FAILED to compose)`; **suppress the "SquidSquad is installed" success banner when any role failed** (DS Finding 1 — banner otherwise contradicted the ERROR); non-zero exit + distinct ERROR summary naming failed role ids; defensive `.get('id','?')`. Regression test (3 cases: partial / every-role-failed / all-compose). Full static gate 5384/0. DS review clean (3 warnings all addressed). **PR body OMITS `Fixes #N`** per #13371 — DM closes via pending-ship→shipped, not GitHub auto-close (`gh pr edit` still fails on this repo, GraphQL projects-classic).
+- Resumed in-flight work from a prior session that had already branched (squidsquad/task/13514) + written the wizard.py fix + a first test but exited before committing. Reconciled: working-state on the branch was the pre-task-begin version (#11511 state-files-main-only guard), so it still read "#13515 in-progress" — verified against forge and dropped it.
 
-## #12527 greenfield smoke — AUTONOMOUS DYNAMIC SLICE DONE (live run still operator-gated)
-- Staged the EXACT 254-file `installer-files.txt` manifest into a clean throwaway repo + ran `wizard.py setup-yes` → greenfield compose BLOCKED, zero CLAUDE.md. Posted verdict comment on #12527, filed fix list as discrete bugs (#13513/#13514). Did NOT claim/close #12527 — the system-affecting live run (deps on clean box, interactive UX, harness start, agents-boot-to-ready, real-repo labels) stays operator-supervised (matches prior session's boundary). Prior static path/self-ref slice remains clean.
-- **METHOD LESSON**: `wizard.py setup-yes <dir>` is a non-interactive greenfield path (scan→spec→scaffold→compose→labels, NO dep-provision/agent-spawn) — lets a foreign-target scaffold+compose smoke run fully autonomously (local, no remote) without triggering any operator-gated step. Faithful test = stage EXACTLY installer-files.txt (strip CRLF!), not `cp -r references/`.
+## #13515 (PARKED — status:pending-human-review, NOT mine to act on)
+- Handed off to the human/PM AC6 Phase-1 gate last session (status:pending-human-review). Phase 1 = spec-only intro of `status:blocked`/parked (still-owned-but-not-active, vs pending-* = ownership handed off), HIGH blast radius (L1 SOUL.md + event-mode-contract.md:83). Do NOT resume until it returns to role:skill + in-progress via the PM/human path. Phase-1 source paths + strategy already published as a tracker comment on #13515.
 
-## NEXT QUEUE (deterministic; verify reporter before treating as parked)
-- **#13514 (MEDIUM, skill-filed):** `setup-yes` reports "Created N agent(s)" + exits 0 despite every role's compose failing → broken install masquerades as success. FIX = non-zero exit / FAILED summary when any role deploy fails (in `scaffold_install`/`cmd_setup_yes`); "Created" should reflect roles that produced a valid CLAUDE.md. Regression: stubbed failing deploy → non-zero exit.
-- **#13515 (MEDIUM, NEW approved task, PM from operator inline):** DOC-FIRST — introduce status:blocked/parked distinct from in-progress (still-owned-but-not-actively-worked, vs pending-* = ownership handed off). Phase 1 = spec only, PM-gated before code. Born from THIS session's #13464/#13457 both-in-progress. Front-load: read full body + gate before touching docs.
-- **#13371** (PR closing-keywords bypass pending-ship/DM gate — RELEVANT: just hit it live on PR #13516). Verifier improvement-scan: #13454, #13447, #13434, #13433, #13357, #13356, #13353.
+## NEXT QUEUE (deterministic; forge is source of truth — re-run work_queue on wake)
+- Verifier improvement-scan bugs (role:skill, auto-approved): check `list-issues skill`.
+- **#13371** (PR closing-keywords bypass pending-ship/DM gate — hit live again on PR #13523; `gh pr edit --body` can't strip `Fixes #N` post-create). Candidate pickup if still role:skill + approved.
 - **3 approved tasks** #12527/#10690/#10686 = operator-supervised live runs, not cleanly autonomous.
 
 ## Standing lessons
-- After PM feedback on an issue, #12475 unread-feedback guard blocks your transition until you comment/ack — post addressing-comment then retry (no --force).
-- commit-code returns to main after committing; re-verify `git branch --show-current` before any merge/gate; pr-create needs you ON the branch (arg = full branch name).
-- State files (.squidsquad/) are main-only + reset on feature branches (#11511 guard) — commit working-state to main BEFORE task-begin; branch shows old version (expected, not loss).
-- `gh pr edit --body` currently fails on this repo (GraphQL projects-classic) — cannot strip closing-keywords post-create; compose PR body WITHOUT `Fixes #N` up front.
+- State files (.squidsquad/) are main-only + reset on feature branches (#11511 guard) — working-state on a task branch shows the PRE-task-begin version (expected, not loss). Reconcile against the FORGE, not the branch's working-state, on resume.
+- commit-code returns to main after committing; pr-create needs you ON the branch (switch first); it creates a DRAFT → `gh pr ready <n>` to flip.
+- `gh pr edit --body` fails on this repo (GraphQL projects-classic) — compose PR body WITHOUT `Fixes #N` up front.
+- After PM feedback on an issue, #12475 unread-feedback guard blocks your transition until you comment/ack.
+- Full static gate = `run_tests.py static` (~5384 gated), not a subset — required before pending-test.
 
 ## Improvement Scan
-Status: idle-driver armed; busy this session (in-flight work absorbed idle ticks — no scan).
+Status: idle-driver armed at boot; #13514 absorbed this wake — no scan yet.
 
 ## Quiet Cycle Counter: 0

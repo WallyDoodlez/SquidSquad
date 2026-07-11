@@ -1,0 +1,130 @@
+=== wizard.py diff ===
+diff --git a/references/scripts/wizard.py b/references/scripts/wizard.py
+index a4c8eba4a..761c13e32 100644
+--- a/references/scripts/wizard.py
++++ b/references/scripts/wizard.py
+@@ -4274,11 +4274,24 @@ def cmd_setup_yes(args):
+     print("\nScaffolding...")
+     try:
+         result = scaffold_install(spec, target_path, overwrite_existing=True)
+-        print(f"  Created {len(result.get('agents', []))} agent(s)")
+     except (ValueError, FileExistsError) as e:
+         print(f"ERROR: scaffold failed: {e}", file=sys.stderr)
+         return 1
+ 
++    # scaffold_install records a per-role compose failure as claude_md == "FAILED"
++    # (see the deploy loop). Surface it here: a role that failed to compose has NO
++    # valid CLAUDE.md, so the install is not bootable for that agent. "Created N"
++    # must count only agents that actually produced a CLAUDE.md, not every
++    # scaffolded directory â€” otherwise a broken install reads as a successful one
++    # and the operator gets no signal (#13514).
++    agents = result.get("agents", [])
++    failed = [a for a in agents if a.get("claude_md") == "FAILED"]
++    succeeded = [a for a in agents if a.get("claude_md") != "FAILED"]
++    msg = f"  Created {len(succeeded)} agent(s)"
++    if failed:
++        msg += f" ({len(failed)} FAILED to compose)"
++    print(msg)
++
+     # 6. Ensure labels
+     print("Creating GitHub labels...")
+     try:
+@@ -4295,6 +4308,17 @@ def cmd_setup_yes(args):
+     print()
+     print(post_setup_summary(spec))
+ 
++    # A role that failed to compose leaves the install non-bootable. Fail loudly
++    # with a non-zero exit so the operator (or CI) is not misled by exit 0 (#13514).
++    if failed:
++        print(
++            f"\nERROR: {len(failed)} role(s) failed to compose a CLAUDE.md: "
++            f"{', '.join(a['id'] for a in failed)}. The install is NOT bootable "
++            f"for those agents â€” see the WARNING(s) above for the cause.",
++            file=sys.stderr,
++        )
++        return 1
++
+     return 0
+ 
+ 
+
+
+=== NEW test file ===
+"""#13514 — `wizard.py setup-yes` must NOT report success when a role fails to
+compose its CLAUDE.md.
+
+Regression for the greenfield failure surfaced by the #12527 smoke: with a role's
+compose failing (e.g. the #13513 missing-catalog condition), `setup-yes` printed
+"Created N agent(s)" and returned 0 — a broken, non-bootable install masquerading
+as a successful one. `scaffold_install` already records a per-role failure as
+``claude_md == "FAILED"``; `cmd_setup_yes` must surface it: count only composed
+agents and return non-zero when any role failed.
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "references", "scripts"))
+
+import wizard  # noqa: E402
+
+
+class _GhMiss:
+    """Fake `gh repo view` result — returns non-zero so repo_info falls back to
+    the target dir name (keeps the test off the network)."""
+    returncode = 1
+    stdout = ""
+    stderr = ""
+
+
+def _common_stubs(monkeypatch):
+    monkeypatch.setattr(wizard, "ensure_labels", lambda dry_run=False: {"created": 0})
+    monkeypatch.setattr(wizard, "_run", lambda *a, **k: _GhMiss())
+
+
+def test_setup_yes_returns_nonzero_when_a_role_fails_to_compose(tmp_path, monkeypatch, capsys):
+    def fake_scaffold(spec, target_root, overwrite_existing=False):
+        return {
+            "target": str(target_root),
+            "agents": [
+                {"id": "pm", "role": "pm", "claude_md": "FAILED",
+                 "soul_md": "FAILED", "working_state": "FAILED"},
+                {"id": "skill", "role": "worker", "claude_md": str(target_root),
+                 "soul_md": "s", "working_state": "w"},
+            ],
+        }
+    monkeypatch.setattr(wizard, "scaffold_install", fake_scaffold)
+    _common_stubs(monkeypatch)
+
+    rc = wizard.cmd_setup_yes([str(tmp_path)])
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+
+    assert rc != 0, "setup-yes must return non-zero when any role fails to compose"
+    assert "FAILED" in combined or "failed to compose" in combined.lower(), (
+        "the failure must be visible in output, not silently swallowed"
+    )
+    # "Created N" must reflect only the composed agent, not the failed one.
+    assert "Created 1 agent" in combined
+
+
+def test_setup_yes_returns_zero_when_all_roles_compose(tmp_path, monkeypatch, capsys):
+    def fake_scaffold(spec, target_root, overwrite_existing=False):
+        return {
+            "target": str(target_root),
+            "agents": [
+                {"id": "pm", "role": "pm", "claude_md": str(target_root),
+                 "soul_md": "s", "working_state": "w"},
+                {"id": "skill", "role": "worker", "claude_md": str(target_root),
+                 "soul_md": "s", "working_state": "w"},
+            ],
+        }
+    monkeypatch.setattr(wizard, "scaffold_install", fake_scaffold)
+    _common_stubs(monkeypatch)
+
+    rc = wizard.cmd_setup_yes([str(tmp_path)])
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+
+    assert rc == 0, "a fully-composed install must still return 0"
+    assert "Created 2 agent(s)" in combined
+    assert "FAILED" not in combined
