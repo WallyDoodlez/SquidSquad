@@ -51,6 +51,8 @@ _WIZARD_COMMANDS = {
     "scan-summary", "set-test-strategy",
     # #13337 §9 Step 0 consent deny-list merge-writer.
     "merge-deny-list",
+    # #13339 §4/§9 project-maturity probe + workflow→roster mapping heuristic.
+    "detect-maturity", "propose-roster",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}

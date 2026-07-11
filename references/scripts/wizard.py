@@ -3852,6 +3852,269 @@ def cmd_generate_defaults(args):
     return 0
 
 
+# ---------------------------------------------------------------------------
+# #13339 — project-maturity probe + workflow→roster mapping heuristic
+#
+# Two deterministic helpers under docs/INSTALLER-RUNTIME.md §4 (steps 3/5/6 +
+# "Adapting to an empty project") and §9 ("Steps 3 & 5–6 — mapping the workflow
+# to a team"). The installer AGENT keeps its judgment; these are the testable
+# floor under it: `detect-maturity` picks the empty/scaffolded/established path,
+# `propose-roster` turns the discovered stack (or the user's *intended* type for
+# an empty repo) into a proposed engineering-team shape.
+# ---------------------------------------------------------------------------
+
+# Frameworks (as repo_scan.FRAMEWORK_FILES / dependency detection names them)
+# that mark a project as having a frontend / backend surface. Used only as a
+# heuristic to shape the worker roster — never as a hard classification.
+_FE_FRAMEWORKS = {
+    "nextjs", "nuxt", "svelte", "angular", "vite", "webpack", "tailwind",
+    "react", "vue",
+}
+_BE_FRAMEWORKS = {
+    "django", "flask", "express", "fastapi", "rails", "spring", "gin",
+    "laravel",
+}
+# Languages that lean backend (typescript/javascript are excluded — they run on
+# both ends, so the frontend signal comes from an FE framework, not the lang).
+_BACKEND_LANGUAGES = {
+    "python", "go", "rust", "java", "ruby", "php", "csharp", "c", "cpp",
+}
+
+# Maturity thresholds — exposed as module constants so the boundaries are
+# testable and documented rather than magic numbers buried in a branch.
+# A project with at least this many recognized source files is "established"
+# on file-count alone; below it, structure (a package manifest / framework) or
+# a test suite still lifts it out of "empty".
+_ESTABLISHED_MIN_SOURCE_FILES = 8
+
+
+def _load_or_run_scan(target):
+    """Return repo-scan signals for ``target``.
+
+    Prefers the cached ``.squidsquad/.repo-scan.json`` (written by the scaffold),
+    falling back to a fresh ``repo_scan.scan`` when the cache is absent,
+    malformed, or unreadable — the same guarded pattern as cmd_scan_summary /
+    cmd_generate_defaults. Returns ``{}`` only if repo_scan itself is missing.
+    """
+    scan_path = Path(target) / ".squidsquad" / ".repo-scan.json"
+    if scan_path.exists():
+        try:
+            return json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from repo_scan import scan
+        return scan(target)
+    except ImportError:
+        return {}
+
+
+def _count_source_files(target):
+    """Count recognized source files under ``target`` (skip-dirs excluded).
+
+    Uses repo_scan's own extension counter + language map so the tally matches
+    what the scanner considers "code" and honors the same SKIP_DIRS. Returns 0
+    if repo_scan is unavailable (degrades to a structure/scan-only maturity call).
+    """
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from repo_scan import _count_extensions, LANGUAGE_EXTENSIONS
+    except ImportError:
+        return 0
+    counts = _count_extensions(target)
+    return sum(n for ext, n in counts.items() if ext in LANGUAGE_EXTENSIONS)
+
+
+def detect_maturity(target="."):
+    """Classify how much project already exists: empty / scaffolded / established.
+
+    Drives the §4 "Adapting to an empty project" branch — the installer leans on
+    external references and *intended* type for an empty repo, and analyzes what
+    exists for an established one. Deterministic and signal-transparent: the
+    returned ``signals`` block carries every input the classification used.
+
+    - **established** — a real, going codebase: at least
+      ``_ESTABLISHED_MIN_SOURCE_FILES`` recognized source files, OR a test suite
+      is present (tests imply a project worth analyzing even when small).
+    - **empty** — nothing to analyze: zero source files AND no package manifest
+      or framework scaffold.
+    - **scaffolded** — everything in between: some structure (a manifest /
+      framework) or a handful of source files, but below the established bar and
+      no tests. A skeleton to elicit intent against, not analyze.
+    """
+    scan_data = _load_or_run_scan(target)
+    languages = scan_data.get("languages", []) or []
+    frameworks = scan_data.get("frameworks", []) or []
+    package_managers = scan_data.get("package_managers", []) or []
+    test_frameworks = scan_data.get("test_frameworks", []) or []
+    test_strategy = scan_data.get("test_strategy", {}) or {}
+
+    source_file_count = _count_source_files(target)
+    has_tests = bool(test_frameworks) or bool(test_strategy.get("detected"))
+    has_structure = bool(package_managers) or bool(frameworks)
+
+    if source_file_count >= _ESTABLISHED_MIN_SOURCE_FILES or has_tests:
+        maturity = "established"
+        reason = (
+            f"{source_file_count} source file(s)"
+            + (" and a test suite" if has_tests else "")
+            + " — a real codebase to analyze."
+        )
+    elif source_file_count == 0 and not has_structure:
+        maturity = "empty"
+        reason = (
+            "no source files and no package manifest or framework scaffold — "
+            "nothing to analyze; elicit intent from the user and external refs."
+        )
+    else:
+        maturity = "scaffolded"
+        reason = (
+            f"{source_file_count} source file(s) with "
+            f"{'a package manifest/framework' if has_structure else 'no real structure'}"
+            " but no tests — a skeleton; propose the default workflow and "
+            "confirm the intended shape."
+        )
+
+    return {
+        "maturity": maturity,
+        "signals": {
+            "source_file_count": source_file_count,
+            "languages": languages,
+            "frameworks": frameworks,
+            "package_managers": package_managers,
+            "has_tests": has_tests,
+            "has_structure": has_structure,
+        },
+        "reason": reason,
+    }
+
+
+def propose_roster(scan_data=None, intended=None):
+    """Map the discovered workflow/stack → a proposed engineering-team shape.
+
+    Implements docs/INSTALLER-RUNTIME.md §9 "Steps 3 & 5–6". PM, DM and Verifier
+    are fixed singletons — the shipped manifests mark all three
+    ``always_installed: true`` / ``show_in_roster: false`` with no ``variant``
+    mechanism, so only the **worker** role carries a count + specialization
+    (its manifest is the one ``show_in_roster: true`` role with a ``variant``
+    setup requirement). The verifier's "verified"-stage specifics shape its
+    *behavior* (a step-6 per-agent customization), not its count.
+
+    Worker shape:
+      - ``intended`` (empty-project path — roster from the *intended* type,
+        since there is no code to scan): ``both`` → two workers (be + fe);
+        ``fullstack`` → one (worker); ``backend`` / ``frontend`` → one (be / fe).
+      - otherwise inferred from the scan: a frontend framework AND a backend
+        framework/language → be + fe; frontend only → fe; backend only → be;
+        nothing decisive → a single fullstack worker (the safe default).
+
+    Returns the proposal envelope (no side effects; the agent confirms it with
+    the user in §4 steps 5–6 before anything is written).
+    """
+    scan_data = scan_data or {}
+    frameworks = {f.lower() for f in (scan_data.get("frameworks") or [])}
+    languages = {l.lower() for l in (scan_data.get("languages") or [])}
+
+    def _worker(alias, shape):
+        return {
+            "alias": alias,
+            "shape": shape,
+            "stack_hint": " + ".join(sorted(frameworks | languages)) or "general",
+        }
+
+    intended_norm = (intended or "").strip().lower()
+    if intended_norm:
+        mapping = {
+            "both": [("be", "backend"), ("fe", "frontend")],
+            "fullstack": [("worker", "fullstack")],
+            "backend": [("be", "backend")],
+            "frontend": [("fe", "frontend")],
+        }
+        if intended_norm not in mapping:
+            return {
+                "ok": False,
+                "error": (
+                    f"unknown --intended '{intended}' "
+                    "(expected: both | fullstack | backend | frontend)"
+                ),
+            }
+        workers = [_worker(a, s) for a, s in mapping[intended_norm]]
+        source = "intended"
+        reason = f"roster from intended project type '{intended_norm}'."
+    else:
+        fe = bool(frameworks & _FE_FRAMEWORKS)
+        be = bool(frameworks & _BE_FRAMEWORKS) or bool(languages & _BACKEND_LANGUAGES)
+        if fe and be:
+            workers = [_worker("be", "backend"), _worker("fe", "frontend")]
+            reason = "frontend and backend surfaces detected — two workers (be + fe)."
+        elif fe:
+            workers = [_worker("fe", "frontend")]
+            reason = "frontend surface only — one frontend worker."
+        elif be:
+            workers = [_worker("be", "backend")]
+            reason = "backend surface only — one backend worker."
+        else:
+            workers = [_worker("worker", "fullstack")]
+            reason = (
+                "no decisive frontend/backend split detected — "
+                "one fullstack worker (confirm with the user)."
+            )
+        source = "scan"
+
+    return {
+        "roster": {
+            "pm": 1,
+            "dm": 1,
+            "verifier": 1,
+            "workers": workers,
+        },
+        "singletons": ["pm", "dm", "verifier"],
+        "source": source,
+        "reason": reason,
+    }
+
+
+def cmd_detect_maturity(args):
+    """Probe project maturity: empty / scaffolded / established.
+
+    Usage: wizard.py detect-maturity [target_dir]
+    """
+    target = args[0] if args and not args[0].startswith("--") else "."
+    _print_json(detect_maturity(target))
+    return 0
+
+
+def cmd_propose_roster(args):
+    """Propose the engineering-team roster from the scan (or an intended type).
+
+    Usage: wizard.py propose-roster [target_dir]
+           [--intended both|fullstack|backend|frontend]
+    """
+    target = "."
+    intended = None
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok == "--intended":
+            if i + 1 >= len(args):
+                print("ERROR: --intended requires a value", file=sys.stderr)
+                return 2
+            intended = args[i + 1]
+            i += 2
+        elif tok.startswith("--"):
+            print(f"ERROR: unknown flag {tok}", file=sys.stderr)
+            return 2
+        else:
+            target = tok
+            i += 1
+
+    scan_data = None if intended else _load_or_run_scan(target)
+    result = propose_roster(scan_data, intended=intended)
+    _print_json(result, ok=result.get("ok", True))
+    return 0 if result.get("ok", True) else 1
+
+
 def cmd_setup_yes(args):
     """Non-interactive setup: generate defaults, scaffold, ensure labels.
 
@@ -4026,6 +4289,8 @@ def main():
         "scan-summary": cmd_scan_summary,
         "set-test-strategy": cmd_set_test_strategy,
         "generate-defaults": cmd_generate_defaults,
+        "detect-maturity": cmd_detect_maturity,  # #13339
+        "propose-roster": cmd_propose_roster,  # #13339
         "setup-yes": cmd_setup_yes,
         "preflight": cmd_preflight,
         "gather-deps": cmd_gather_deps,
