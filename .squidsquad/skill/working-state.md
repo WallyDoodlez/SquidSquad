@@ -1,49 +1,30 @@
 # Working State
 
-- **Task**: **10 SHIPPED this continuation** (all pending-test/merged). #12493 was VERIFIER-REJECTED → FIXED → re-shipped. ALL in-flight items now FULL-static-gate-verified. Queue has no cleanly-actionable autonomous item → idle.
-- **Updated**: 2026-06-21 01:10 (skill — event-mode; #12493 rejection recovered + all items full-gate-verified)
-- **Quiet Cycle Counter**: 0
+- **Task**: none — 3 shipped→pending-test this session: #13514 (PR #13523), #13433 (PR #13529), #13323 (PR #13530). Session 2026-07-11, event mode, **Verbose OFF (quiet posture)** per config.
 
-## ⚠️ LESSON (saved [[feedback_full_static_gate_not_subset]]): pending-test needs `run_tests.py static` (FULL ~4800 fail-closed gate), NOT bare `run_tests.py` ("Ran 53/OK" = integration subset). #12493 bounced on 3 structure-test regressions the subset missed (section rename "Stall Detection"→"Halt Detection" broke test_feat_1228/test_feat_1363 anchors). After ANY heading/string rename in LLM-consumed source: `grep -rn "Old Anchor" tests/`.
+## Shipped / handed off this session (tail)
+- **#13323 → PENDING-TEST** (PR #13530): wizard.py 2 stale `./start.sh` docstrings (restart_agents, cmd_restart_agents) → `.squidsquad/start.sh` after #13318 launcher move. Doc-only, no behavior change, no test. Static 5381/0.
+- **#13433 → PENDING-TEST** (PR #13529 READY): `git_ops.py pr-merge --help` (and any non-numeric first arg) reached `pr_merge()` → ran a REAL squash-merge + post-merge compose, dirtying the tree with 8 composed CLAUDE.md + false "PR #--help merged". `_parse_args` only caught `--help` in the subcommand position. Fix: accept `-h` at top-level `_parse_args`; validate pr-merge PR number BEFORE side effects (`-h`/`--help`→usage exit 0; missing→exit 1; non-numeric→exit 2 "no merge attempted"; never call pr_merge with a bogus number). Scoped to pr-merge number position only (free-text args w/ `--help` unaffected). Tests: `TestPrMergeArgGuard` (7) + `TestParseArgs -h`. Static 5389/0. DS NO_FINDINGS. **#13447 is the sibling (post-merge scope-audit dirties clone + no local-main FF-sync) — heavier, left for follow-up.**
+- **#13514 → PENDING-TEST** (PR #13523 READY): `wizard.py setup-yes` reported "Created N agent(s)" + exit 0 even when every role's compose FAILED (broken install masquerading as success). Fix in `cmd_setup_yes`: count only agents with `claude_md != "FAILED"`; print `(K FAILED to compose)`; **suppress the "SquidSquad is installed" success banner when any role failed** (DS Finding 1 — banner otherwise contradicted the ERROR); non-zero exit + distinct ERROR summary naming failed role ids; defensive `.get('id','?')`. Regression test (3 cases: partial / every-role-failed / all-compose). Full static gate 5384/0. DS review clean (3 warnings all addressed). **PR body OMITS `Fixes #N`** per #13371 — DM closes via pending-ship→shipped, not GitHub auto-close (`gh pr edit` still fails on this repo, GraphQL projects-classic).
+- Resumed in-flight work from a prior session that had already branched (squidsquad/task/13514) + written the wizard.py fix + a first test but exited before committing. Reconciled: working-state on the branch was the pre-task-begin version (#11511 state-files-main-only guard), so it still read "#13515 in-progress" — verified against forge and dropped it.
 
-## Full-gate verification status (this continuation's in-flight items)
-- **#12493** (PR #12494) — rejection FIXED (3 test anchors → new headings); `run_tests.py static` → **4808 PASS**; re-shipped pending-test.
-- **#11140** (PR #13112) — `run_tests.py static` → **4807 PASS** (compose-goldens use fixture sources, not real SOUL.md — safe).
-- **#13101** (PR #13125) — `run_tests.py static` → **4787 PASS**. NOW MERGED to main.
-- **#12854** (PR #13131) — `run_tests.py static` → **4825 PASS**.
-- Pre-compaction items (#13035/#13042/#13045/#13077) all now **status:shipped** (verifier+DM merged) — no re-gate needed.
-- Fast-follow **#13119** filed (Step-B sentinel coupling, needs approval). RCA-narrowing posted on **#13113** (respawn telemetry; outbound role-wiring hypothesis; defer w/ #12271).
+## #13515 (BACK IN PM'S COURT — status:pending-human-review, PM AC6 review)
+- This session: PM woke me (assigned-to) saying the Phase-1 `SPEC-13515.md` was NOT on origin/main. Root cause: it was commit `266d4fa37` STRANDED unpushed in this clone (pre-#13473-restart session force-killed before harness push). My working-state pushes this session already carried it to origin/main. VERIFIED on origin (`git branch -r --contains 266d4fa37`→origin/main; `git ls-tree origin/main -- .../SPEC-13515.md`→blob 7bd5a2572, 5144B). Commented + woke PM via `work-assign --target-alias pm` (no status change per PM's instruction). **Now PM's action** (AC6 doc-first review + rule on: status name `blocked` vs `parked`; Soul-edit/tracker.py sequencing). **Phase-2 code (tracker _STATUS/_VALID_TRANSITIONS + sentinel + regression + CQ) is MINE only AFTER PM rules + operator signs off.** Do NOT touch Phase-2 until #13515 returns to role:skill + in-progress.
+- **LESSON (this session): a stranded local commit from a force-killed session rides your next boot's local main; your first push carries it to origin. When a teammate reports a "missing" pushed artifact, check `git branch -r --contains <sha>` — it may have just landed.**
 
-## #12854 DELIVERED (PR #13131, pending-test)
-current-state stale content misled PM (frozen "running full suite" → hung-suite theory). RCA: current-state gitignored (mtime reliable); cycle_post writes idle on CLEAN cycle end; gap = mid-cycle STOP (agent can't self-write). Fix (reader-side): health_check.check_agent_health exposes `current_state_stale` (mtime > threshold); format_table prefixes stale phase with `~`. 6-case test; health_check 41/41 no regression. Deterministic, no CQ/DS.
-- **Residual → #12271 dependency:** distinguishing "stopped mid-suite" from "running a suite" WITHIN the threshold window needs progress-liveness heartbeat (#12271, gated on #12492). This fix kills the past-window misread only.
-- **Sibling #13113** (harness in-memory telemetry frozen across respawn) = same meta-problem, harness-side surface. Recommend sequencing both with #12271.
+## NEXT QUEUE (deterministic; forge is source of truth — re-run work_queue on wake)
+- Verifier improvement-scan bugs (role:skill, auto-approved): check `list-issues skill`.
+- **#13371** (PR closing-keywords bypass pending-ship/DM gate — hit live again on PR #13523; `gh pr edit --body` can't strip `Fixes #N` post-create). Candidate pickup if still role:skill + approved.
+- **3 approved tasks** #12527/#10690/#10686 = operator-supervised live runs, not cleanly autonomous.
 
-## #13101 DELIVERED (PR #13125, pending-test)
-installer-files.txt omitted L1 slot-sources identity.md (slot: identity) + vault.md (slot: vault) → empty/degraded ## Identity/## Vault slots on fresh installs. Added both (Total 250→252) + tests/test_13101_... (every references/roles/*.md with slot: frontmatter must ship — L1-slot analogue of #12861's gate; + Total-header integrity check). Negative-verified. Static gate 4787/0; integration 53/53. Deterministic data+test, no CQ/DS. Merge note: #11140 also bumps Total (+responsibility.md → reconciles to 253; count test enforces).
-
-## #12493 DELIVERED (PR #12494, pending-test) — consolidated, deadlock resolved
-Pipeline-sentinel halt detection (progress-based, incl. failed-handoff) → 4-class investigate → event-effective unblock-or-escalate + PM-authority boundary + pending-human-review escalation + #12460 worked example. AC1-6 ✅, AC8 ✅ (runtime-loaded sub-skill — marker at PM Step 4.1 resolves to enhanced in-place source), AC9 ✅. **AC7 (comprehension) = verifier-authored per #9184.**
-- **Deadlock resolution (PM's #12507 disposition question):** was (b) — #12494 held pending §8.3 "landing on main first," but #12507 (arch-backstop) had no independent merge lane as a sub-PR of in-progress task. **Folded** §8.3 (AGENT-RUNTIME comment-only-handoff backstop, 13-line companion) onto `squidsquad/task/12493`; **closed #12507**, deleted its branch. One branch/PR/merge lane. Also refreshed sub-skill-catalog.md sentinel description.
-- **Branch consolidation mechanic:** task branch was 492 commits behind main but main NEVER touched pipeline-sentinel.md (blob still b2af2dc56) → `git merge origin/main` was CONFLICT-FREE (3-way only conflicts on files both sides changed; branch changed only that 1 file). §8.3 patch applied 3-way clean onto current main's AGENT-RUNTIME.md (which had §3.2 from #13035 — different section, no collision). Gate 53/0.
-- **Fast-follow filed #13119** (medium, skill, needs approval): couple sentinel halt-sweep to idle-cooldown-loop Step-B tick — event-mode periodic wake (a silently-stalled item emits no events, so PM's care-filtered cycle never wakes the sentinel). Beyond #12493 ACs.
-
-## #11140 DELIVERED (PR #13112, pending-test)
-Orientation prose for composed CLAUDE.md H2 sections. New L1 `references/roles/responsibility.md` (slot responsibility, ord 5) + SOUL.md orientation lede + installer-files.txt (250→251). DS Finding 1 folded (dropped redundant Soul override clause). Gate 53/0; compose clean 4 roles.
-- **For verifier (CQ):** LLM-consumed composed-instruction change → needs comprehension AC (verifier authors per #9184).
-- **Scoped OUT (PM):** project-context H2 orientation removed — slot is L4-exclusive per COMPOSE-ARCHITECTURE §3.3/[R3], shipped-source orientation architecturally blocked. **#13101** filed (identity.md/vault.md manifest nuance).
-
-## Earlier this session (pending-test)
-- **#13045** (PR #13095) conflict-safe stash pop. **#13077** (PR #13084) harness force-kills deploy-halted agent (LLM cannot self-/quit). **#13043** (PR #13078) vault doc-alignment — config.md Enabled-field removal = MAIN-LANDING SPEC for DM. **#13042** vault decay-timestamp. **#12861** (PR #13058) sub-skill manifest-completeness gate. **#13035** (PR #13051) relentless-autonomy reframe + inline 20-min auto-timeout.
-- KEY LEARNING (all agents): agent cannot self-/quit; exit-42/stop rely on 60s harness force-kill net.
-
-## NEXT actionable queue (forge-authoritative — re-run work-queue skill)
-HIGH approved: **#12527** (greenfield installer smoke on FOREIGN repo) — manifest prereq (#12861) DONE; LIVE run is system-affecting (2nd harness :7373 + dep provisioning) → needs human supervision; static foreign-repo-assumption audit portion safe to do autonomously. **#12492** (GATED on #12460 shadow window). **#12271** (umbrella — slices 1-3 shipped; cutover gated).
-Medium approved: #10690 (gated E6+E7), #10686 (PRD-E E7 manual migration smoke), #13119 (just filed — needs approval).
-Other in-progress (stranded, role:skill, unassigned): #12801 (Textual TUI — needs textual dep + interactive terminal), #12450 (installer unit-test — S3/S4 PM-gated), #12451 S2 (status-bar — check if still open).
-
-## Recurring meta-risk
-Clone chronically behind origin. `git pull --ff-only` before compose/commit. Push via `git -c credential.helper='!gh auth git-credential' push` (manager helper wedges silently). Feature work on `squidsquad/task/<n>` branch; working-state + planning commit direct-to-main (#11511 guard strips them from feature branches). Always `git switch -c squidsquad/task/<n>` BEFORE code edits ([[feedback_create_branch_before_code_edits]]). Stale feature branches: if main never touched the branch's sole source file, `git merge origin/main` is conflict-free regardless of commit-count-behind.
+## Standing lessons
+- State files (.squidsquad/) are main-only + reset on feature branches (#11511 guard) — working-state on a task branch shows the PRE-task-begin version (expected, not loss). Reconcile against the FORGE, not the branch's working-state, on resume.
+- commit-code returns to main after committing; pr-create needs you ON the branch (switch first); it creates a DRAFT → `gh pr ready <n>` to flip.
+- `gh pr edit --body` fails on this repo (GraphQL projects-classic) — compose PR body WITHOUT `Fixes #N` up front.
+- After PM feedback on an issue, #12475 unread-feedback guard blocks your transition until you comment/ack.
+- Full static gate = `run_tests.py static` (~5384 gated), not a subset — required before pending-test.
 
 ## Improvement Scan
-Status: eligible (idle). Last completed: (none — productive session).
+Status: idle-driver armed at boot; #13514 absorbed this wake — no scan yet.
+
+## Quiet Cycle Counter: 0

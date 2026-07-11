@@ -563,10 +563,10 @@ class TestEnsureSessionEndHook12418:
 
 
 class TestEnsureActivityHooks12443:
-    """#12443 AC1: the pipeline places PostToolUse + PostToolUseFailure
-    activity-heartbeat hooks in .claude/settings.json — async command hooks (NOT
-    blocking http), idempotently, preserving everything else (incl. slice-a's
-    SessionEnd hook)."""
+    """#12443/#13213 AC1: the pipeline places the activity-heartbeat hooks
+    (UserPromptSubmit + PreToolUse + PostToolUse + PostToolUseFailure) in
+    .claude/settings.json — async command hooks (NOT blocking http),
+    idempotently, preserving everything else (incl. slice-a's SessionEnd hook)."""
 
     def _load(self, p):
         import json
@@ -578,10 +578,12 @@ class TestEnsureActivityHooks12443:
         assert changed is True
         hooks = self._load(p)["hooks"]
         # #12458: PreToolUse joins the per-tool-call async command hooks.
-        for name in ("PreToolUse", "PostToolUse", "PostToolUseFailure"):
+        # #13213: UserPromptSubmit joins as the prompt-receipt heartbeat.
+        for name in ("UserPromptSubmit", "PreToolUse", "PostToolUse",
+                     "PostToolUseFailure"):
             assert name in hooks, f"{name} hook missing"
             hook = hooks[name][0]["hooks"][0]
-            # AC2: must be a non-blocking async COMMAND hook, not a blocking
+            # AC2/AC4: must be a non-blocking async COMMAND hook, not a blocking
             # native http hook.
             assert hook["type"] == "command"
             assert hook["async"] is True
@@ -590,6 +592,19 @@ class TestEnsureActivityHooks12443:
             assert hook["args"] == [
                 "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"]
             assert isinstance(hook["timeout"], int)
+
+    def test_user_prompt_submit_heartbeat_13213(self, tmp_path):
+        """#13213 AC1: UserPromptSubmit is emitted as an async command hook
+        invoking activity_hook.py — same group shape as the other heartbeats
+        (it is a PLAIN heartbeat; the in-flight distinction is harness-side, on
+        event name, not in the settings group)."""
+        p = tmp_path / ".claude" / "settings.json"
+        assert compose._ensure_activity_hooks(p) is True
+        hook = self._load(p)["hooks"]["UserPromptSubmit"][0]["hooks"][0]
+        assert hook["type"] == "command"
+        assert hook["async"] is True
+        assert hook["args"] == [
+            "${CLAUDE_PROJECT_DIR}/references/scripts/activity_hook.py"]
 
     def test_idempotent_no_rewrite(self, tmp_path):
         p = tmp_path / ".claude" / "settings.json"
@@ -659,9 +674,9 @@ class TestEnsurePauseHooks12458:
         assert compose._ensure_activity_hooks(p) is True
         assert compose._ensure_pause_hooks(p) is True
         hooks = self._load(p)["hooks"]
-        for name in ("SessionEnd", "PreToolUse", "PostToolUse",
-                     "PostToolUseFailure", "Notification", "PreCompact",
-                     "PostCompact", "StopFailure"):
+        for name in ("SessionEnd", "UserPromptSubmit", "PreToolUse",
+                     "PostToolUse", "PostToolUseFailure", "Notification",
+                     "PreCompact", "PostCompact", "StopFailure"):
             assert name in hooks, f"{name} missing"
 
 
@@ -692,6 +707,100 @@ class TestResolveVariant:
 
     def test_no_hyphen_returns_none(self):
         assert compose._resolve_variant("skill") is None
+
+
+class TestManifestV2TombstoneUnreachable13264:
+    """#13264: `_load_manifest_v2` / `_load_manifest_v2_from_file` are dead code
+    post-E6 (#10685) — the deploy path routes through `v2_link_stage.emit_v2_linked`,
+    not this loader. They are TOMBSTONED (retained for the schema reader + #13172
+    guard, in case the manifest path is ever re-wired), NOT removed. This guard
+    locks the tombstone: if a production script (re)wires `_load_manifest_v2`, this
+    fails → forcing a re-decision rather than silently reviving dead code."""
+
+    def test_symbol_only_referenced_within_compose(self):
+        scripts = Path(__file__).resolve().parent.parent / "references" / "scripts"
+        offenders = []
+        for py in scripts.glob("*.py"):
+            if py.name == "compose.py":
+                continue  # the def-site + own recursion live here, by design
+            if "_load_manifest_v2" in py.read_text(encoding="utf-8"):
+                offenders.append(py.name)
+        assert not offenders, (
+            "_load_manifest_v2 is tombstoned/unreachable (#13264) but is now "
+            f"referenced by production script(s): {offenders} — re-decide the "
+            "tombstone (remove it, or drop the dead-code marker) before wiring "
+            "a new caller"
+        )
+
+    def test_tombstone_marker_present(self):
+        """The tombstone rationale must stay in the source so a future reader
+        knows the function is intentionally-retained dead code, not live."""
+        src = (Path(__file__).resolve().parent.parent / "references" / "scripts"
+               / "compose.py").read_text(encoding="utf-8")
+        assert "TOMBSTONE (#13264)" in src
+
+
+class TestManifestV2AdditionalIncludesWrongType13172:
+    """#13172: a wrong-TYPE additional_includes (e.g. a bare string instead of
+    a list) must fail CLOSED — matching every sibling schema-error path in
+    _load_manifest_v2_from_file — not silently reset to [] (which dropped the
+    variant's sub-skills from the composed CLAUDE.md with zero diagnostic)."""
+
+    def _write(self, tmp_path, additional):
+        import yaml as _yaml
+        p = tmp_path / "includes.yml"
+        p.write_text(
+            _yaml.safe_dump({"base_role": "worker",
+                             "additional_includes": additional}),
+            encoding="utf-8",
+        )
+        return p
+
+    def test_string_additional_includes_exits(self, tmp_path, capsys):
+        """The exact typo from the report: a bare string -> sys.exit(1)."""
+        p = self._write(tmp_path, "common/cycle-runner")
+        # Base-role recursion is isolated — we only exercise the type guard.
+        with patch.object(compose, "_load_manifest_v2",
+                          return_value=["common/boot-bootstrap"]):
+            with pytest.raises(SystemExit) as exc:
+                compose._load_manifest_v2_from_file(p, "worker-skill")
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "additional_includes" in err
+        assert "expected list" in err
+
+    def test_dict_additional_includes_exits(self, tmp_path):
+        """Any non-list type fails closed, not just str."""
+        p = self._write(tmp_path, {"oops": 1})
+        with patch.object(compose, "_load_manifest_v2",
+                          return_value=["common/boot-bootstrap"]):
+            with pytest.raises(SystemExit):
+                compose._load_manifest_v2_from_file(p, "worker-skill")
+
+    def test_valid_list_additional_includes_still_resolves(self, tmp_path):
+        """Regression guard: a correctly-typed list is unaffected by the fix —
+        base + additional are concatenated. Isolated from the live sub-skill
+        tree (stub file + patched SUB_SKILLS_DIR) so a future rename of any real
+        sub-skill can't make this fail with a misleading missing-file exit."""
+        subskills = tmp_path / "sub-skills"
+        (subskills / "common").mkdir(parents=True)
+        (subskills / "common" / "cycle-runner.md").write_text("x", encoding="utf-8")
+        p = self._write(tmp_path, ["common/cycle-runner"])
+        with patch.object(compose, "_load_manifest_v2",
+                          return_value=["common/boot-bootstrap"]), \
+             patch.object(compose, "SUB_SKILLS_DIR", subskills):
+            result = compose._load_manifest_v2_from_file(p, "worker-skill")
+        assert result == ["common/boot-bootstrap", "common/cycle-runner"]
+
+    def test_null_additional_includes_is_valid(self, tmp_path):
+        """Regression guard for the `... or []` idiom: an explicit YAML null
+        (or absent key) normalizes to [] and must NOT fail closed — only a
+        wrong NON-empty type does (#13172)."""
+        p = self._write(tmp_path, None)
+        with patch.object(compose, "_load_manifest_v2",
+                          return_value=["common/boot-bootstrap"]):
+            result = compose._load_manifest_v2_from_file(p, "worker-skill")
+        assert result == ["common/boot-bootstrap"]
 
 
 class TestAssembleSoul:

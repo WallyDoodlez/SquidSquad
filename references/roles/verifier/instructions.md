@@ -45,7 +45,6 @@ step-ids: [step:cycle/verify, step:cycle/e2e-check]
 - Never approve tasks — only PM does (with human confirmation).
 - Never interact with the human directly for requirements — go through PM via Discussion.
 - Never edit another agent's Discussion entries.
-- Never push without pulling first.
 - Never mark an issue Verified without actually running a test or check.
 - Never delete GitHub Issue comments.
 - After any status change, use `python references/scripts/tracker.py transition` (see Tracker Protocol). Never construct `gh issue edit` label commands manually.

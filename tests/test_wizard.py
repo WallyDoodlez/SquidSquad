@@ -306,66 +306,12 @@ class TestValidateRerunAction:
         assert wizard.validate_rerun_action(raw) is None
 
 
-# ===========================================================================
-# validate_interval (#7947, TC-49..TC-52)
-# ===========================================================================
-
-
-class TestValidateInterval:
-    """Tests for validate_interval — Ralph Loop interval validation."""
-
-    @pytest.mark.parametrize("value,expected_minutes", [
-        ("10", 10),
-        ("1", 1),
-        ("30", 30),
-        ("120", 120),
-        (" 15 ", 15),  # whitespace trimmed
-    ])
-    def test_valid_integers(self, value, expected_minutes):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is True
-        assert result["minutes"] == expected_minutes
-        assert result["reason"] is None
-
-    @pytest.mark.parametrize("value", [
-        "", "  ", None,
-    ])
-    def test_empty_input_returns_default(self, value):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is True
-        assert result["minutes"] == 10  # default
-
-    def test_empty_input_custom_default(self):
-        result = wizard.validate_interval("", default=30)
-        assert result["ok"] is True
-        assert result["minutes"] == 30
-
-    @pytest.mark.parametrize("value", [
-        "10.5", "3.0", "1,5", "0.1",
-    ])
-    def test_float_rejected(self, value):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is False
-        assert result["minutes"] is None
-        assert "whole number" in result["reason"]
-
-    @pytest.mark.parametrize("value", [
-        "0", "-1", "-100",
-    ])
-    def test_zero_and_negative_rejected(self, value):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is False
-        assert result["minutes"] is None
-        assert "at least 1" in result["reason"]
-
-    @pytest.mark.parametrize("value", [
-        "abc", "ten", "!@#", "5m",
-    ])
-    def test_non_numeric_rejected(self, value):
-        result = wizard.validate_interval(value)
-        assert result["ok"] is False
-        assert result["minutes"] is None
-        assert "not a number" in result["reason"]
+# TestValidateInterval (TC-49..TC-52) removed in #13328 — validate_interval and
+# the loop-interval prompt were retired from wizard.py because the polling
+# interval is not a setup question (event mode is the default; the loop is a
+# boot-time fallback). The interval now lands as a silent 30-minute default via
+# build_config_md's ## Iteration Interval section; see
+# tests/test_wizard_13328_interval_silent_default.py.
 
 
 # ===========================================================================
@@ -598,9 +544,13 @@ class TestBuildConfigMdStructure:
             "## Preset",
             "## Agents",
             "## Tools",
-            "## Loop",
+            "## Iteration Interval",  # #13328
+            "## Context Pressure",  # #13328
+            "## Auto Merge",  # #13355
+            "## PR Flow",  # #13355
             "## Flags",
             "## Improvement Scanning",  # #11091
+            "## Verbose Mode",  # #13162
             "## Git Branches",
             "## Forge Backend",
             "## Model Routing",
@@ -611,6 +561,12 @@ class TestBuildConfigMdStructure:
         text = wizard.build_config_md(_minimal_spec())
         assert "## Improvement Scanning" in text
         assert "- **Improvement Scan Cool-Down**: 30" in text
+
+    def test_verbose_mode_section_defaults_off(self):
+        """#13162 — wizard emits Verbose Mode section, shipped default off."""
+        text = wizard.build_config_md(_minimal_spec())
+        assert "## Verbose Mode" in text
+        assert "- **Enabled**: no" in text
 
     def test_header_includes_version_and_architecture(self):
         text = wizard.build_config_md(_minimal_spec())
@@ -819,12 +775,15 @@ class TestBuildConfigMdToolsSection:
 
 
 class TestBuildConfigMdLoopAndFlags:
-    def test_loop_interval_and_threshold(self):
+    def test_iteration_interval_and_context_pressure(self):
+        # #13328 — interval + threshold render under the sections config.py's
+        # FIELD_MAP actually reads (## Iteration Interval / ## Context Pressure),
+        # not the dead ## Loop heading.
         spec = _minimal_spec()
         spec["loop"] = {"interval_minutes": 5, "context_threshold": 75}
         text = wizard.build_config_md(spec)
-        assert "- **Interval Minutes**: 5" in text
-        assert "- **Context Threshold**: 75" in text
+        assert "## Iteration Interval\n\n- **Minutes**: 5" in text
+        assert "## Context Pressure\n\n- **Threshold**: 75" in text
 
     def test_flags_sorted_alphabetically(self):
         spec = _minimal_spec()
@@ -841,9 +800,9 @@ class TestBuildConfigMdLoopAndFlags:
 
     def test_bool_flags_rendered_as_yes_no(self):
         spec = _minimal_spec()
-        spec["flags"] = {"pr_flow": True, "diagnostics": False}
+        spec["flags"] = {"vault_remember": True, "diagnostics": False}
         text = wizard.build_config_md(spec)
-        assert "**Pr Flow**: yes" in text
+        assert "**Vault Remember**: yes" in text
         assert "**Diagnostics**: no" in text
 
     def test_no_flags_emits_none_marker(self):
@@ -854,11 +813,12 @@ class TestBuildConfigMdLoopAndFlags:
         assert "(none)" in flags_block
 
     def test_loop_defaults_when_fields_missing(self):
+        # #13328 — silent defaults: interval 30 (polling fallback), threshold 70.
         spec = _minimal_spec()
         spec["loop"] = {}
         text = wizard.build_config_md(spec)
-        assert "- **Interval Minutes**: 10" in text
-        assert "- **Context Threshold**: 70" in text
+        assert "- **Minutes**: 30" in text
+        assert "- **Threshold**: 70" in text
 
 
 class TestBuildConfigMdValidation:
@@ -2230,28 +2190,10 @@ class TestSoulMdSeeding:
 # ---------------------------------------------------------------------------
 
 
-class TestPrFlowPrompt:
-    """PR Flow question returns structured data for agent to present."""
-
-    def test_returns_question_and_options(self):
-        result = wizard.pr_flow_prompt()
-        assert "question" in result
-        assert "options" in result
-        assert "default" in result
-        assert result["default"] is False
-
-    def test_question_uses_plain_language(self):
-        result = wizard.pr_flow_prompt()
-        q = result["question"]
-        assert "PR Flow OFF" in q
-        assert "PR Flow ON" in q
-        # No internal jargon
-        assert "Ralph Loop" not in q
-        assert "tracker.py" not in q
-
-    def test_has_two_options(self):
-        result = wizard.pr_flow_prompt()
-        assert len(result["options"]) == 2
+# TestPrFlowPrompt removed in #13355 — pr_flow_prompt was deleted from
+# wizard.py because PR flow is an INSTALLER-RUNTIME.md §3 invariant (never
+# an on/off question); the merge gate (Auto Merge) is the surviving
+# variable. See tests/test_wizard_13355_pr_flow_invariant.py.
 
 
 # TestBranchWorkflowPrompt removed in #9478 — branch_workflow_prompt
@@ -2409,6 +2351,41 @@ class TestScanSummary:
         result = wizard.format_scan_summary(scan)
         assert "rust" in result
         assert "Frameworks" not in result  # empty list not shown
+
+
+class TestCmdScanSummaryMalformed12846:
+    """#12846: a malformed/unreadable .repo-scan.json must NOT crash
+    cmd_scan_summary — it falls back to a fresh on-the-fly scan (matching the
+    guarded reads in cmd_generate_defaults / scaffold_install)."""
+
+    def test_malformed_cache_falls_back_not_crash(self, tmp_path, capsys, monkeypatch):
+        import repo_scan
+        monkeypatch.setattr(repo_scan, "scan", lambda target: {
+            "languages": ["python"], "frameworks": [], "test_frameworks": []})
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        (ss / ".repo-scan.json").write_text("{not valid json", encoding="utf-8")
+        # Pre-fix: uncaught JSONDecodeError. Post-fix: clean fallback, rc 0.
+        rc = wizard.cmd_scan_summary([str(tmp_path)])
+        assert rc == 0
+        assert "python" in capsys.readouterr().out  # fell back to fresh scan
+
+    def test_valid_cache_used_not_rescanned(self, tmp_path, capsys, monkeypatch):
+        import json as _json
+        import repo_scan
+        called = []
+        monkeypatch.setattr(repo_scan, "scan",
+                            lambda target: called.append(1) or {})
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        (ss / ".repo-scan.json").write_text(
+            _json.dumps({"languages": ["rust"], "frameworks": [],
+                         "test_frameworks": []}),
+            encoding="utf-8")
+        rc = wizard.cmd_scan_summary([str(tmp_path)])
+        assert rc == 0
+        assert "rust" in capsys.readouterr().out
+        assert not called  # valid cache used — no wasteful rescan
 
 
 # ---------------------------------------------------------------------------

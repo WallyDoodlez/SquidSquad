@@ -84,6 +84,15 @@ MAX_FILE_READ_BYTES = 500_000  # ~500KB
 # Minimum acceptable output length (chars) — below this triggers fallback
 MIN_OUTPUT_LENGTH = 200
 
+# Valid short-result sentinels: a response that begins with one of these is a
+# legitimate clean result, NOT degenerate output, so it bypasses the
+# MIN_OUTPUT_LENGTH gate (#13278). The code-review template (#5932) instructs
+# the model to emit exactly `NO_FINDINGS` for clean code (11 chars); without
+# this exemption the length gate misclassified every clean review as degenerate
+# and forced a needless Claude fallback, making the DeepSeek code-review path
+# look broken when it was working correctly.
+CLEAN_RESULT_SENTINELS = ("NO_FINDINGS",)
+
 
 # ---------------------------------------------------------------------------
 # Config parsing
@@ -682,7 +691,7 @@ def route(task_type, task_id, input_files, output_file, context):
             os.environ[auth_env] = api_key
     if auth_env and not os.environ.get(auth_env):
         print(
-            f"[model_router] {auth_env} not set (checked ~/.squidsquad/secrets and env) — "
+            f"[model_router] {auth_env} not set (checked ~/.squidsquad/secrets and env) -- "
             f"skipping {provider_name}, falling back to Claude for {task_type}.",
             file=sys.stderr,
         )
@@ -799,8 +808,17 @@ def route(task_type, task_id, input_files, output_file, context):
 
     elapsed = time.time() - start_time
 
+    # A recognized clean-result sentinel (e.g. code-review's `NO_FINDINGS`) is a
+    # VALID short response, not degenerate output — it must NOT trigger fallback
+    # (#13278). Match case-insensitively and allow trailing explanation text.
+    # `response or ""` guards an adapter that returns None on a non-raising path.
+    stripped_response = (response or "").strip()
+    is_clean_sentinel = any(
+        stripped_response.upper().startswith(s.upper()) for s in CLEAN_RESULT_SENTINELS
+    )
+
     # Quality gate: check minimum output length
-    if len(response.strip()) < MIN_OUTPUT_LENGTH:
+    if not is_clean_sentinel and len(stripped_response) < MIN_OUTPUT_LENGTH:
         _log_diagnostic({
             "timestamp": time.time(),
             "task_type": task_type,
@@ -808,18 +826,18 @@ def route(task_type, task_id, input_files, output_file, context):
             "model": model,
             "provider": provider_name,
             "action": "quality-gate-fail",
-            "response_length": len(response),
+            "response_length": len(stripped_response),
             "elapsed_seconds": round(elapsed, 1),
         })
         print(
             f"[model_router] Output below minimum length threshold "
-            f"({len(response)} < {MIN_OUTPUT_LENGTH}). Falling back to Claude.",
+            f"({len(stripped_response)} < {MIN_OUTPUT_LENGTH}). Falling back to Claude.",
             file=sys.stderr,
         )
         # Write error status instead of deleting (#5046)
         try:
             Path(output_file).write_text(
-                f"# STATUS: error -- output below minimum length ({len(response)} chars)\n",
+                f"# STATUS: error -- output below minimum length ({len(stripped_response)} chars)\n",
                 encoding="utf-8",
             )
         except Exception:
@@ -841,7 +859,9 @@ def route(task_type, task_id, input_files, output_file, context):
         "task_id": task_id,
         "model": model,
         "provider": provider_name,
-        "action": "success",
+        # #13278: distinguish a sentinel-exempted short clean result from a
+        # normal pass so the bypass is auditable in the diagnostics log.
+        "action": "success-sentinel" if is_clean_sentinel else "success",
         "response_length": len(response),
         "elapsed_seconds": round(elapsed, 1),
     })
@@ -906,7 +926,7 @@ def setup_provider(provider_name):
         print(f"\nTo configure, either:")
         print(f"  1. Set env var: export {env_var}=your-api-key-here")
         print(f"  2. Write to secrets: python references/scripts/shared_fs.py write-secret {env_var} your-api-key-here")
-        print(f"\nThe secrets file ({secrets_path}) is recommended — it persists across sessions")
+        print(f"\nThe secrets file ({secrets_path}) is recommended -- it persists across sessions")
         print(f"and is shared by all agents.")
 
     # Open manifest in editor
@@ -985,7 +1005,7 @@ def validate_provider(provider_name):
 
         # Fallback: try a minimal API call via the adapter's run function
         print(f"OK: API key is set ({len(api_key)} chars). "
-              f"No validation endpoint available — key format looks valid.")
+              f"No validation endpoint available -- key format looks valid.")
         return 0
     except Exception as e:
         print(f"FAIL: {e}", file=sys.stderr)
@@ -1012,6 +1032,8 @@ def _load_adapter(manifest):
 # ---------------------------------------------------------------------------
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     parser = argparse.ArgumentParser(
         description="SquidSquad model router — route subagent work to external models.",
         formatter_class=argparse.RawDescriptionHelpFormatter,

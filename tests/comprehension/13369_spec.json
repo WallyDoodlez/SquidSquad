@@ -1,0 +1,35 @@
+{
+  "issue": 13369,
+  "title": "Eager bootup-complete — boot drain must not run under bootup_complete=false",
+  "source_file": "references/sub-skills/common-events/event-mode-contract.md",
+  "section": "Boot Sequence (Case A) steps 4-5 + Case E deploy-signal boot-drain bullet",
+  "method": "Fresh agent given ONLY event-mode-contract.md, no other context. Answers must come from the file alone. Scenario framing: 'You are an event-mode agent at session boot.' Pass = the reordered boot sequence survives with zero drift: bootup-complete emitted after the cursor read / step-2 branch and BEFORE tending any boot-drain event, with the kill-hazard rationale intact; drain discipline (per-event ack, never jump-to-latest) unchanged; deploy-signal-in-drain behavior consistent with the new order. Any answer that drains before announcing, treats the emission order as stylistic, or invents a re-emit mid-session is a reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You have read working-state, branched on it, and read your cursor. Your GET shows 6 events queued from before your boot, one of which looks like a substantial task. What do you do FIRST — walk the events or something else — and exactly when in the sequence does bootup-complete get emitted?",
+      "expected": "Emit bootup-complete FIRST — as soon as the cursor read and the step-2 branch complete, BEFORE tending any boot-drain event (step 4 precedes the drain, step 5). Only then drain the 6 events through the canonical loop. The listener is genuinely active at that point and drain events are Case-B-equivalent work."
+    },
+    {
+      "id": "CQ2",
+      "q": "Why is emitting bootup-complete only AFTER the boot drain a hazard? Describe the failure chain and its observed consequence.",
+      "expected": "A heavy cared event in the drain (e.g. a verification run or resumed task) holds bootup_complete=false for its whole duration; past the harness's bounded booting grace (#13179) the health poller reads the session as a wedged boot and force-kills it mid-work. Completed side effects (merges, comments) land while their bookkeeping is lost — the #13369 incident."
+    },
+    {
+      "id": "CQ3",
+      "q": "Does the earlier bootup-complete change how you walk the boot-drain events themselves — care filter, acks, ordering?",
+      "expected": "No. The drain discipline is unchanged: walk each event through the canonical loop (care filter → cycle wrapper if cared → POST ack-cursor per event), never jump-to-latest, handle gap scenarios per cursor-management (eviction gap = forge-read + single ack-cursor(oldest_id) fast-forward, not a walk of the evicted range)."
+    },
+    {
+      "id": "CQ4",
+      "q": "Mid-drain you hit a deploy-signal (you are on main with a clean tree, no in-flight task). You already emitted bootup-complete at step 4. What do you do, and who emits bootup-complete for the events still left in the drain?",
+      "expected": "Honor it at that point in the drain: emit ack-stop with result deploy-halted, then halt (do NOT ack-cursor the deploy-signal — the harness advances the cursor as part of the deploy sequence). The rest of the drain happens on the respawned session, which re-emits bootup-complete at its own boot; the one already emitted this session described a session that is now ending and is harmless."
+    },
+    {
+      "id": "CQ5",
+      "q": "The session-boot diagram elsewhere in the agent's instructions shows 'POST booted event' before 'GET events queued before boot'. Does the Case A step order agree or conflict with that diagram?",
+      "expected": "It agrees — the contract states the session-boot diagram has always shown this order (booted → drain) and the step order now matches it (the pre-#13369 numbered steps were the surface that taught drain-then-announce)."
+    }
+  ]
+}

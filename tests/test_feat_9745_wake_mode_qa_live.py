@@ -1,9 +1,18 @@
 """Live-system pytest for #9745 — consolidate wake-mode resolution.
 
-AC:
-  - Single shared implementation
-  - All three Python callers import from the shared location
-  - Bootstrap prose verified against the code via test
+AC (original #9745):
+  - Single shared implementation (config.get_wake_mode is canonical)
+  - Live callers import from the shared location
+  - Dev suites green
+
+RECONCILED #13163 (2026-06-21): #9745 consolidated wake-mode under the
+config-field-driven model; #11401 then replaced that model with a HARNESS PROBE
+(AGENT-RUNTIME §9.3) — no `event-driven:` config field, `boot-bootstrap.md`
+removed, `get_wake_mode` no longer reads `config.get_field`. The config-field
+behavioral/prose tests (old TC-4/TC-5/TC-5b/TC-5c) asserted that retired model
+and failed unconditionally; they are retired here. Current probe behavior is
+covered by `test_feat_9745_wake_mode_canonical.py` (re-run by TC-6). TC-2/TC-3
+are narrowed to statusline_data.py, the sole remaining wake-mode delegator.
 """
 
 from __future__ import annotations
@@ -26,7 +35,6 @@ def _find_repo_root() -> Path:
 
 REPO_ROOT = _find_repo_root()
 SCRIPTS = REPO_ROOT / "references" / "scripts"
-SUB_SKILLS = REPO_ROOT / "references" / "sub-skills"
 
 sys.path.insert(0, str(SCRIPTS))
 import config  # noqa: E402
@@ -40,9 +48,10 @@ def test_tc_01_config_get_wake_mode_is_canonical():
 
 
 # TC-2
+# Post-#11401 only statusline_data.py still resolves wake mode (compose._get_wake_mode
+# was retired in E6/#10685; cycle_post.py no longer needs it). statusline_data.py
+# remains the single live delegator to the canonical config.get_wake_mode (#13163).
 @pytest.mark.parametrize("path", [
-    "compose.py",
-    "cycle_post.py",
     "statusline_data.py",
 ])
 def test_tc_02_caller_delegates_to_config_get_wake_mode(path):
@@ -56,8 +65,6 @@ def test_tc_02_caller_delegates_to_config_get_wake_mode(path):
 
 # TC-3
 @pytest.mark.parametrize("path", [
-    "compose.py",
-    "cycle_post.py",
     "statusline_data.py",
 ])
 def test_tc_03_caller_has_no_inline_field_probe(path):
@@ -86,62 +93,16 @@ def test_tc_03_caller_has_no_inline_field_probe(path):
         )
 
 
-# TC-4
-def test_tc_04_bootstrap_prose_matches_config_docstring():
-    """The bootstrap fragment describes the same resolution rules in prose.
-    Audit: ensure both the bootstrap and config.get_wake_mode mention the
-    same key facts (per-role override → global default → polling fallback).
-    """
-    boot = (SUB_SKILLS / "common" / "boot-bootstrap.md").read_text(encoding="utf-8")
-    cfg_src = (SCRIPTS / "config.py").read_text(encoding="utf-8")
-    cfg_fn_start = cfg_src.find("def get_wake_mode(")
-    assert cfg_fn_start != -1, "config.get_wake_mode missing"
-    # Slice the function body up to ~600 bytes — docstring + key logic.
-    cfg_excerpt = cfg_src[cfg_fn_start:cfg_fn_start + 2500]
-
-    # Key facts both must mention.
-    for fact, where in (
-        ("event-driven-", boot),   # per-role override mention in prose
-        ("event-driven-", cfg_excerpt),  # ditto in canonical code
-        ("event-driven", boot),
-        ("event-driven", cfg_excerpt),
-        ("polling", boot),
-        ("polling", cfg_excerpt),
-    ):
-        assert fact in where, (
-            f"Audit fail: {fact!r} not present in expected source — "
-            f"prose/code drift between bootstrap and config.get_wake_mode"
-        )
-
-
-# TC-5
-def test_tc_05_resolution_behavior_per_role_override(monkeypatch):
-    """Behavioral: per-role override takes precedence over global default."""
-    # Patch config.get_field to mimic config.md contents
-    def fake(field):
-        if field == "event-driven-skill":
-            return "yes"
-        if field == "event-driven":
-            return "no"
-        raise SystemExit(1)
-    monkeypatch.setattr(config, "get_field", fake)
-    assert config.get_wake_mode("skill") == "event-driven"
-
-
-def test_tc_05b_resolution_behavior_global_fallback(monkeypatch):
-    def fake(field):
-        if field == "event-driven":
-            return "yes"
-        raise SystemExit(1)
-    monkeypatch.setattr(config, "get_field", fake)
-    assert config.get_wake_mode("qa") == "event-driven"
-
-
-def test_tc_05c_resolution_behavior_default_polling(monkeypatch):
-    def fake(field):
-        raise SystemExit(1)
-    monkeypatch.setattr(config, "get_field", fake)
-    assert config.get_wake_mode("dm") == "polling"
+# TC-4, TC-5, TC-5b, TC-5c RETIRED (#13163): these asserted the PRE-#11401
+# config-field-driven resolution model — `config.get_wake_mode` reading
+# `event-driven[-<role>]` from config.md, and a `boot-bootstrap.md` fragment
+# documenting those rules. #11401 replaced that model entirely: wake mode is now
+# resolved by a HARNESS PROBE at agent boot (AGENT-RUNTIME §9.3) — there is no
+# `event-driven:` config field, `boot-bootstrap.md` was removed, and
+# `get_wake_mode` no longer reads `config.get_field`. The current probe behavior
+# is covered by `tests/test_feat_9745_wake_mode_canonical.py` (which TC-6 below
+# re-runs). The retired tests failed unconditionally (deleted-file read +
+# config-field assertions against a probe) — pure stale-test noise, not coverage.
 
 
 # TC-6

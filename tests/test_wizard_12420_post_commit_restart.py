@@ -4,7 +4,8 @@ Covers the wizard.py code half — port discovery, alias enumeration, and the
 `restart_agents` routing (reachable → per-alias stop+start; unreachable →
 user-driven cold-start). The single network touchpoint is `wizard._http_request`,
 monkeypatched here so the tests exercise both branches without a live harness.
-The LLM-driven runbook step (WIZARD.md Step 7.5c) is not unit-tested — these
+The LLM-driven manual step (docs/INSTALLER-RUNTIME.md §9, Step 9 — Commit &
+hand off; #13336 — was WIZARD.md Step 7.5c) is not unit-tested — these
 tests pin the deterministic *what happens*, not the prose.
 """
 
@@ -131,7 +132,7 @@ class TestUnreachable:
         result = wizard.restart_agents(tmp_path)
         assert result["reachable"] is False
         assert result["ok"] is True  # unreachable is a normal branch, not an error
-        assert result["cold_start_cmd"] == "./start.sh"
+        assert result["cold_start_cmd"] == ".squidsquad/start.sh"
         # No lifecycle calls were made — the wizard never spawns the harness.
         assert fake.posts() == []
 

@@ -305,32 +305,35 @@ function installFiles(gitRoot) {
   const commandsDir = path.join(gitRoot, ".claude", "commands");
   fs.mkdirSync(commandsDir, { recursive: true });
 
-  // The setup command tells Claude to read the wizard runbook and
-  // follow it exactly — not SKILL.md's Setup Instructions section,
-  // which is now just a pointer at the runbook.
+  // The setup command tells Claude to read the installer's operating
+  // manual and follow it — not SKILL.md's Setup Instructions section,
+  // which is now just a pointer at the manual.
   const setupCommand = [
     "---",
-    "description: Run the SquidSquad install wizard (intent-driven team setup)",
+    "description: Run the SquidSquad installer (adaptive, conversation-driven team setup)",
     "---",
     "",
-    "Read `references/wizard/WIZARD.md` in this repo and follow it exactly.",
-    "You are the **installer agent** (Q-new21) — ephemeral, single-session,",
-    "disposes after the install commits and pushes.",
+    "Read `docs/INSTALLER-RUNTIME.md` in this repo, top to bottom, and follow",
+    "it — it is your operating manual. You are the **installer agent** —",
+    "a reasoning setup agent, ephemeral, single-session; you hand off and",
+    "exit after the install commits and pushes.",
     "",
-    "The runbook is the single source of truth for the setup flow. Do not",
-    "reimplement any step from memory — call the helpers it points at",
-    "(`references/scripts/wizard.py`, `references/scripts/manifest.py`,",
-    "`references/scripts/compose.py`) and act on their JSON output.",
+    "The manual is the single source of truth for the setup flow. Do not",
+    "reimplement any mechanic from memory — its § helper playbook names the",
+    "exact helpers to call (`references/scripts/wizard.py`,",
+    "`references/scripts/manifest.py`, `references/scripts/compose.py`, …);",
+    "call them and act on their JSON output.",
     "",
-    "The wizard needs additional source files from the SquidSquad repo",
-    "(scripts, role/tool/preset manifests, sub-skill composition sources).",
+    "The installer needs additional source files from the SquidSquad repo",
+    "(scripts, role/preset manifests, sub-skill composition sources).",
     "Fetch them on demand using `gh api` or `curl` against",
     "`https://raw.githubusercontent.com/WallyDoodlez/SquidSquad/main/` when",
-    "the runbook instructs you to call a helper that is not yet in the",
+    "the manual tells you to call a helper that is not yet in the",
     "target repo.",
     "",
-    "Before Step 7 nothing touches disk — the user can abort at any review",
-    "step with zero trace. After Step 7.6 you must exit the conversation.",
+    "Before step 7 (Apply) nothing touches the project — the user can abort",
+    "at any point up to there with zero trace. After step 9's hand-off you",
+    "must exit the conversation.",
     "",
   ].join("\n");
 
@@ -351,12 +354,13 @@ function installFiles(gitRoot) {
   }
 
   // 4. Commit ALL fetched files + the slash command so /squidsquad-setup
-  //    doesn't abort on a dirty worktree. This stages references/, SKILL.md,
-  //    and .claude/commands/ in a single commit.
+  //    doesn't abort on a dirty worktree. This stages references/, docs/
+  //    (the installer's operating manual), SKILL.md, and .claude/commands/
+  //    in a single commit.
   info("Committing SquidSquad files...");
   try {
     execSync(
-      "git add SKILL.md start.sh start.ps1 references/ .claude/commands/",
+      "git add SKILL.md .squidsquad/start.sh .squidsquad/start.ps1 references/ docs/INSTALLER-RUNTIME.md .claude/commands/",
       { cwd: gitRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
     );
     execSync(

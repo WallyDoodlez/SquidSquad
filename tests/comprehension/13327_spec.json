@@ -1,0 +1,30 @@
+{
+  "issue": 13327,
+  "title": "Generic customize-invitation trigger + L4 affordance discoverability — PM 'Project customization' comprehension",
+  "source_file": "references/roles/pm/instructions.md",
+  "section": "### Project customization (project-specific durable directives)",
+  "method": "Fresh agent given ONLY the named section (references/roles/pm/instructions.md '### Project customization'), no other context. Answers must come from the text alone. Scenario framing: 'You are the PM agent talking to the human.' Pass = both triggers are recognized with zero drift: a fully-formed durable directive routes straight into l4-curation; a GENERIC open-ended invitation ('I want to customize the workflow') is ALSO recognized — the PM does NOT answer with re-running setup / the upgrade path, but asks one short plain-language question to draw out the concrete directive and then invokes l4-curation; the trigger is conversational (no slash command) and is an entry-point change only (l4-curation's dialog + safety gates are unchanged); one-off/feature requests still do not route through l4-curation. Any answer that points a generic customize ask at re-running setup, treats the generic invitation as out of scope, or claims the gates change is a reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "The human says 'from now on, always write tests before implementation on this project.' What do you do?",
+      "expected": "Recognize a project-specific durable customization directive and invoke the l4-curation sub-skill BEFORE any implementation work. l4-curation runs the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the safety-gate pipeline, and the project-customization commit. (Do not just start writing tests-first as a one-off — this is a durable rule.)"
+    },
+    {
+      "id": "CQ2",
+      "q": "Mid-conversation the human says 'I want to customize the workflow' — nothing more specific. How do you respond, and what must you NOT do?",
+      "expected": "Recognize this generic customization invitation as a trigger too — not just fully-formed directives. Do NOT answer by pointing at re-running setup or the upgrade path. Ask one short, plain-language question — e.g. 'Sure — what would you like the team to do differently?' — to draw out the concrete durable directive, then invoke l4-curation with it exactly as for a specific directive. Reshaping the team is conversational: the human tells you and it's saved as a durable project customization automatically, no command or re-install needed."
+    },
+    {
+      "id": "CQ3",
+      "q": "Does the generic customize invitation require the human to type a special command? And does handling it change how l4-curation validates the customization?",
+      "expected": "No special command — the trigger is conversational; the human simply tells the PM in plain language. And no, handling the generic invitation is only the entry point: l4-curation's elicitation dialog and safety gates are unchanged. The generic-recognition + one short clarifying question happens before l4-curation is invoked; once invoked, l4-curation runs exactly as always."
+    },
+    {
+      "id": "CQ4",
+      "q": "The human says 'for this next task, skip the changelog.' Is that a customization you route into l4-curation? How is it different from the generic invitation?",
+      "expected": "No — that is a one-off task request ('for this next task'), not a durable customization, so it does NOT route through l4-curation (one-off requests and feature requests are explicitly excluded). The difference: a customization — whether a specific 'from now on…' directive or a generic 'I want to customize the workflow' invitation — is about a durable, across-cycles rule; a one-off is scoped to the current task. When unsure whether an ask is durable, ask a short clarifying question rather than assuming."
+    }
+  ]
+}

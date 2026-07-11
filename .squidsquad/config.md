@@ -1,6 +1,6 @@
 # SquidSquad Config
 
-- **SquidSquad Version**: 0.44.0
+- **SquidSquad Version**: 0.45.0
 - **Tracker**: github-issues
 - **Architecture Version**: 1
 
@@ -64,6 +64,10 @@
 - **Improvement Scan Cool-Down**: 30m
 - **Idle Scan Burst**: 3
 
+## Verbose Mode
+
+- **Enabled**: no
+
 ## Vault Optimize
 
 - **Threshold**: 20
@@ -112,7 +116,7 @@
 ## Auto Versioning
 
 - **Ship Threshold**: 10
-- **Shipped Since Last Bump**: 50
+- **Shipped Since Last Bump**: 0
 
 ## Agent Effort
 

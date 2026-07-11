@@ -109,6 +109,17 @@ All PR merges land as squash-merges, regardless of which mechanism performs them
 
 For chain-merge task branches (e.g. polish-bundle siblings PR'd against `squidsquad/skill/compose-polish-session`), the same squash default applies — when the bundle eventually PRs against `main`, that bundle PR also squashes. The intermediate squash on the bundle branch does NOT lose history; the bundle PR description names every sibling PR by number.
 
+### Branch sync — stay current with base (#13286)
+
+The owning worker keeps the feature branch **current with its base** at two moments, so a stale tree never reaches `main`. This is the behavioral root-cause prevention for the #13271 SEV-1 (a PR squashed from a ~154-commit-behind clone reverted ~155 commits of fleet work); the mechanical guards — the pre-merge behind-count refusal (#13271) and the post-merge scope-audit (#13285) — are the **backstop**, not the primary defense. Syncing keeps the branch from ever getting far enough behind to trip them.
+
+1. **On START or RESUME of code work** — before the first code change, bring the branch up to the latest base and **resolve conflicts first**. Never begin or continue implementation on a stale tree; a stale base is exactly what produces an out-of-scope squash later.
+2. **On COMPLETION, before the work is merged** — sync again so the PR reflects current `main` at merge time. New commits land on `main` constantly, so a branch that was current at start can be behind by completion; this sync is also where a contract/gate test that landed on `main` after you branched gets caught before the verifier does (the `feedback_full_static_gate_not_subset` lesson).
+
+`<BASE>` is `main` for a standard task branch; for a chain-merge task branch (the polish-bundle pattern) it is the explicit `--base` the branch was created against — the same base `git_ops.py pr-create` resolves. Never `git merge origin/main` on a chain-merge branch, or you corrupt the chain.
+
+Both syncs use the **merge-not-rebase** mechanic in the *Conflict on the PR* section of this `pr-protocol` file — `git merge origin/<BASE>` (NEVER `git rebase`), resolve, run tests, push. Sync **proactively**, even when `gh pr view --json mergeable` does not yet report `CONFLICTING`: the goal is a *current* tree, not merely a conflict-free one.
+
 ### Conflict on the PR
 
 When `gh pr view <NUMBER> --json mergeable` returns `CONFLICTING`, the owning worker resolves by **merging the base branch INTO the feature branch** (never rebase). This rule comes from the operator's standing "always merge, never rebase" instruction applied at the *commit level*:

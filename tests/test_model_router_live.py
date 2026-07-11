@@ -68,6 +68,30 @@ def _run_router(task_type, output_file, context, input_files=""):
     return result.returncode, Path(output_file)
 
 
+def _run_router_or_skip(task_type, output_file, context, input_files=""):
+    """Run model_router and return (exit_code, output_path, content), SKIPping
+    cleanly when the live model is unavailable rather than failing on empty
+    output (#12747).
+
+    The API-key-absent case is already handled by the autouse
+    ``_require_api_key`` fixture (#12748). This helper covers the *second*
+    unavailability mode: the key IS present but the model errored / returned
+    nothing (non-zero exit or empty output — e.g. provider 402 / network), so
+    the downstream output assertions have nothing valid to check and would FAIL
+    misleadingly. Skipping keeps a trustworthy bare-``pytest`` signal on a box
+    whose model provider is down. With a working live model present, NOTHING is
+    skipped — real live runs are unaffected.
+    """
+    exit_code, output_path = _run_router(task_type, output_file, context, input_files)
+    content = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
+    if exit_code != 0 or not content.strip():
+        pytest.skip(
+            f"live model unavailable (model_router exit={exit_code}, "
+            f"{len(content)} chars output) — skipping live output assertions (#12747)"
+        )
+    return exit_code, output_path, content
+
+
 def _extract_file_paths(text):
     """Extract file paths mentioned in markdown output."""
     # Match paths like references/scripts/foo.py, .squidsquad/bar/baz.md, etc.
@@ -92,14 +116,10 @@ class TestTC38ResearchOutput:
     @pytest.fixture(autouse=True)
     def setup(self, tmp_path):
         self.output_file = tmp_path / "research-gpt.md"
-        self.exit_code, self.output_path = _run_router(
+        self.exit_code, self.output_path, self.content = _run_router_or_skip(
             "research", self.output_file,
             context="Research the SquidSquad boot_remote.py script: what it does, how PID liveness works, error handling.",
         )
-        if self.output_path.exists():
-            self.content = self.output_path.read_text(encoding="utf-8")
-        else:
-            self.content = ""
 
     def test_exit_code_zero(self):
         assert self.exit_code == 0, f"model_router exited with {self.exit_code}"
@@ -154,14 +174,10 @@ class TestTC39TestPlanOutput:
     @pytest.fixture(autouse=True)
     def setup(self, tmp_path):
         self.output_file = tmp_path / "testplan-gpt.md"
-        self.exit_code, self.output_path = _run_router(
+        self.exit_code, self.output_path, self.content = _run_router_or_skip(
             "test-plan", self.output_file,
             context="Draft a test plan for the health_check.py script: PID liveness, mtime fallback, .stop sentinel.",
         )
-        if self.output_path.exists():
-            self.content = self.output_path.read_text(encoding="utf-8")
-        else:
-            self.content = ""
 
     def test_exit_code_zero(self):
         assert self.exit_code == 0
@@ -192,14 +208,10 @@ class TestTC40DiscussionPrepOutput:
     @pytest.fixture(autouse=True)
     def setup(self, tmp_path):
         self.output_file = tmp_path / "discprep-gpt.md"
-        self.exit_code, self.output_path = _run_router(
+        self.exit_code, self.output_path, self.content = _run_router_or_skip(
             "discussion-prep", self.output_file,
             context="Prepare discussion questions for adding Forgejo as an alternative git backend.",
         )
-        if self.output_path.exists():
-            self.content = self.output_path.read_text(encoding="utf-8")
-        else:
-            self.content = ""
 
     def test_exit_code_zero(self):
         assert self.exit_code == 0

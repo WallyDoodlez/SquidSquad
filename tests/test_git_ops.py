@@ -27,6 +27,115 @@ def _mock_result(stdout="", stderr="", returncode=0):
 
 
 # ---------------------------------------------------------------------------
+# _run / _run_list subprocess timeout (#13262)
+# ---------------------------------------------------------------------------
+
+class TestRunTimeout:
+    def test_run_passes_default_timeout(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run("git status", check=False)
+        assert sp.call_args.kwargs["timeout"] == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_run_list_passes_default_timeout(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run_list(["git", "status"], check=False)
+        assert sp.call_args.kwargs["timeout"] == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_per_call_timeout_override(self):
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._run("git status", check=False, timeout=7)
+        assert sp.call_args.kwargs["timeout"] == 7
+
+    def test_env_override_respected(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "42")
+        assert git_ops._git_timeout() == 42
+
+    def test_env_override_ignored_when_invalid(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "not-an-int")
+        assert git_ops._git_timeout() == git_ops.DEFAULT_GIT_TIMEOUT
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "0")  # non-positive → ignore
+        assert git_ops._git_timeout() == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_timeout_check_false_returns_nonzero_result(self):
+        """A hung git with check=False must fail fast into the existing
+        non-zero recovery path, NOT raise (#13262)."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("git pull", 300)):
+            res = git_ops._run("git pull", check=False)
+        assert res.returncode == 124
+        assert "timed out" in res.stderr
+
+    def test_timeout_check_true_raises_called_process_error(self):
+        """With check=True the timeout mirrors subprocess's check-failure
+        contract (raises CalledProcessError) so check=True callers' expectations
+        hold."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("git pull", 300)):
+            with pytest.raises(subprocess.CalledProcessError) as ei:
+                git_ops._run("git pull", check=True)
+        assert ei.value.returncode == 124
+
+    def test_run_list_timeout_check_false_returns_nonzero(self):
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(["git", "pull"], 300)):
+            res = git_ops._run_list(["git", "pull"], check=False)
+        assert res.returncode == 124
+        assert "timed out" in res.stderr
+
+    def test_run_list_timeout_check_true_raises(self):
+        """Symmetry with _run: _run_list + check=True + timeout raises."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired(["git", "fetch"], 300)):
+            with pytest.raises(subprocess.CalledProcessError) as ei:
+                git_ops._run_list(["git", "fetch"], check=True)
+        assert ei.value.returncode == 124
+
+    def test_commit_routes_through_run_list_with_timeout(self):
+        """#13262: commit() must go through the timeout-protected _run_list (not a
+        raw subprocess.run), so a hung commit / pre-commit hook fails fast."""
+        with patch("git_ops._run_list") as rl, patch("git_ops._get_alias",
+                                                      return_value="skill"):
+            rl.return_value = _mock_result(returncode=0)
+            git_ops.commit("skill", "msg")
+        assert rl.called
+        assert rl.call_args[0][0][:2] == ["git", "commit"]
+
+
+# ---------------------------------------------------------------------------
+# _log_diagnostic subprocess timeout (#13279 — last unguarded git_ops subprocess)
+# ---------------------------------------------------------------------------
+
+class TestLogDiagnosticTimeout:
+    def test_log_diagnostic_passes_default_timeout(self):
+        """#13279: the fire-and-forget _log_diagnostic subprocess.run must carry a
+        timeout= so a hung diagnostics.py can't block the calling thread (some
+        callers run under the #13211 _ENSURE_MAIN_LOCK). Completes #13262."""
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._log_diagnostic("warning", "boom")
+        assert sp.call_args.kwargs["timeout"] == git_ops.DEFAULT_GIT_TIMEOUT
+
+    def test_log_diagnostic_honors_env_timeout_override(self, monkeypatch):
+        """The timeout resolves through _git_timeout(), so the env override applies."""
+        monkeypatch.setenv("SQUIDSQUAD_GIT_TIMEOUT", "11")
+        with patch("git_ops.subprocess.run") as sp:
+            sp.return_value = _mock_result()
+            git_ops._log_diagnostic("error", "boom")
+        assert sp.call_args.kwargs["timeout"] == 11
+
+    def test_log_diagnostic_swallows_timeout_expired(self):
+        """A hung diagnostics.py (TimeoutExpired) must be swallowed by the existing
+        except — _log_diagnostic stays fire-and-forget and never crashes the caller."""
+        with patch("git_ops.subprocess.run",
+                   side_effect=subprocess.TimeoutExpired("diagnostics.py", 300)):
+            # must not raise
+            git_ops._log_diagnostic("error", "boom")
+
+
+# ---------------------------------------------------------------------------
 # pull()
 # ---------------------------------------------------------------------------
 
@@ -38,16 +147,90 @@ class TestPull:
         mock_run.assert_called_once()
 
     @patch("git_ops._run")
+    def test_first_pull_is_no_rebase(self, mock_run):
+        """#13267: the FIRST pull must be pinned to `git pull --no-rebase` (never
+        a bare pull that could rebase under pull.rebase=true and leave a REBASE
+        state the #13261 recovery can't clear)."""
+        mock_run.return_value = _mock_result()
+        git_ops.pull()
+        assert mock_run.call_args_list[0][0][0] == "git pull --no-rebase"
+
+    @patch("git_ops._run")
     def test_pull_stash_pop(self, mock_run):
-        """Dirty tree → stash, pull, pop succeeds."""
+        """Dirty tree → stash CREATES an entry (refs/stash changes), pull, pop."""
         mock_run.side_effect = [
-            _mock_result(returncode=1),  # pull fails
-            _mock_result(),              # stash
-            _mock_result(),              # pull (retry)
-            _mock_result(),              # stash pop
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(returncode=1),          # _stash_top_ref pre: no refs/stash → ""
+            _mock_result(),                      # git stash
+            _mock_result(stdout="newsha"),       # _stash_top_ref post: new stash → "newsha"
+            _mock_result(),                      # pull (retry)
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
         ]
         assert git_ops.pull() is True
-        assert mock_run.call_count == 4
+        assert mock_run.call_count == 6
+        assert any(c[0][0] == "git stash pop" for c in mock_run.call_args_list)
+
+    @patch("git_ops._run")
+    def test_pull_clean_tree_does_not_pop_preexisting_stash(self, mock_run):
+        """#13167 ROOT-CAUSE: on a clean tree `git stash` is a no-op (refs/stash
+        UNCHANGED). The pop MUST be skipped — otherwise a PRE-EXISTING ancient
+        stash is applied, writing conflict markers tree-wide and breaking
+        compose. Asserts NO `git stash pop` (and no `_safe_stash_pop` machinery)
+        runs when the stash created nothing."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(stdout="oldsha"),       # _stash_top_ref pre: pre-existing stash
+            _mock_result(),                      # git stash (no-op on clean tree)
+            _mock_result(stdout="oldsha"),       # _stash_top_ref post: UNCHANGED → stashed=False
+            _mock_result(),                      # pull (retry) succeeds
+        ]
+        assert git_ops.pull() is True
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git stash pop" not in calls, "must NOT pop a pre-existing stash on a clean tree"
+        assert mock_run.call_count == 5  # no pop call
+
+    @patch("git_ops._run")
+    def test_pull_clean_tree_pull_fail_does_not_pop_preexisting(self, mock_run):
+        """#13167: even on the pull-fail branch, a no-op stash must not pop a
+        pre-existing stash (the raw-pop-on-failure path was a culprit too)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(stdout="oldsha"),       # pre
+            _mock_result(),                      # git stash (no-op)
+            _mock_result(stdout="oldsha"),       # post: unchanged → stashed=False
+            _mock_result(returncode=1),          # pull retry ALSO fails
+            _mock_result(returncode=1),          # #13261: git merge --abort (no merge → no-op)
+        ]
+        assert git_ops.pull() is False
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git stash pop" not in calls
+
+    @patch("git_ops._run")
+    def test_pull_retry_fail_aborts_merge_before_pop(self, mock_run):
+        """#13261: a genuine-divergence conflict on the retry pull leaves the
+        clone MERGING (MERGE_HEAD + conflict markers). pull() MUST `git merge
+        --abort` BEFORE restoring our stash — otherwise _safe_stash_pop misreads
+        the merge's unmerged paths as a stash-pop conflict and DROPS our stash,
+        and a lingering MERGE_HEAD breaks the next clean-tree op. Mirrors the
+        deploy-path fix in _safe_pull_in_clone (#13215)."""
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # pull fails
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
+            _mock_result(),                      # git stash (creates entry)
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
+            _mock_result(returncode=1),          # pull retry FAILS (left MERGING)
+            _mock_result(),                      # git merge --abort
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
+        ]
+        assert git_ops.pull() is False
+        calls = [c[0][0] for c in mock_run.call_args_list]
+        assert "git merge --abort" in calls, "must abort the in-progress merge"
+        assert "git stash pop" in calls, "must restore our genuinely-created stash"
+        assert calls.index("git merge --abort") < calls.index("git stash pop"), \
+            "merge --abort MUST precede stash pop so the pop sees a clean tree"
+        # #13261: the retry must be a MERGE pull so `git merge --abort` is the
+        # correct cleanup verb (never a rebase, which the abort cannot clear).
+        assert "git pull --no-rebase" in calls, "retry pull must be pinned to merge"
 
     @patch("git_ops._run_list")
     @patch("git_ops._run")
@@ -56,7 +239,9 @@ class TestPull:
         dropped, still returns True (#4829 + #13045)."""
         mock_run.side_effect = [
             _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre → ""
             _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post → stashed
             _mock_result(),                                   # pull (retry)
             _mock_result(returncode=1),                       # stash pop conflict
             _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
@@ -72,7 +257,9 @@ class TestPull:
         drop (no stash-entry leak)."""
         mock_run.side_effect = [
             _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre
             _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post
             _mock_result(),                                   # pull (retry)
             _mock_result(returncode=1),                       # stash pop conflict
             _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
@@ -93,7 +280,9 @@ class TestPull:
         conflicted config.md so compose never sees a corrupt file."""
         mock_run.side_effect = [
             _mock_result(returncode=1),                       # pull fails
+            _mock_result(returncode=1),                       # _stash_top_ref pre
             _mock_result(),                                   # stash
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post
             _mock_result(),                                   # pull (retry)
             _mock_result(returncode=1),                       # stash pop conflict
             _mock_result(stdout=".squidsquad/config.md\nreferences/x.py\n"),  # diff -U
@@ -104,6 +293,20 @@ class TestPull:
         checkouts = [c[0][0] for c in mock_run_list.call_args_list]
         assert ["git", "checkout", "HEAD", "--", ".squidsquad/config.md"] in checkouts
         assert ["git", "checkout", "HEAD", "--", "references/x.py"] in checkouts
+
+
+class TestStashTopRef:
+    @patch("git_ops._run")
+    def test_returns_sha_when_stash_exists(self, mock_run):
+        mock_run.return_value = _mock_result(stdout="abc123\n", returncode=0)
+        assert git_ops._stash_top_ref() == "abc123"
+
+    @patch("git_ops._run")
+    def test_returns_empty_when_no_stash(self, mock_run):
+        # `git rev-parse --quiet --verify refs/stash` exits non-zero when there
+        # is no stash ref — must map to "" (not a spurious ref).
+        mock_run.return_value = _mock_result(stdout="", returncode=1)
+        assert git_ops._stash_top_ref() == ""
 
 
 # ---------------------------------------------------------------------------
@@ -331,6 +534,18 @@ class TestPrCreate:
 # ---------------------------------------------------------------------------
 
 class TestPrMerge:
+    @pytest.fixture(autouse=True)
+    def _safe_behind(self):
+        # #13271: default the behind-count guard to "current" (0) so the existing
+        # merge-flow tests below exercise the merge path unchanged; the dedicated
+        # guard tests re-patch _pr_behind_by to a high value to assert the refusal.
+        # #13285: stub the post-merge scope-audit to a no-op so it does not consume
+        # the per-test _run_list mock sequence (the audit has its own tests in
+        # TestScopeAudit13285).
+        with patch("git_ops._pr_behind_by", return_value=0), \
+                patch("git_ops._post_merge_scope_audit"):
+            yield
+
     @patch("git_ops._run_list")
     def test_successful_squash_merge(self, mock_run):
         # Calls: 1) check state, 2) merge, 3) branch name lookup, 4) ship transition
@@ -410,6 +625,70 @@ class TestPrMerge:
         merge_call = mock_run.call_args_list[1]
         assert "--rebase" in merge_call[0][0]
 
+    # --- #10540: "Base branch was modified" batch-ship race retry ---
+
+    @patch("git_ops._run_list")
+    def test_base_modified_retries_then_succeeds(self, mock_run):
+        """The transient batch-ship race is retried and succeeds once the base
+        settles — distinct from a terminal failure."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),                       # state check
+            _mock_result(stderr="GraphQL: Base branch was modified. Review and try the merge again.", returncode=1),  # attempt 1
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1),  # attempt 2
+            _mock_result(stdout=""),                                        # attempt 3 — success
+            _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),  # branch lookup
+        ]
+        success, msg = git_ops.pr_merge(42, _base_retry_delay=0)
+        assert success is True
+        assert msg == "merged"
+        # 1 state check + 3 merge attempts + 1 branch lookup = 5 calls
+        assert mock_run.call_count == 5
+
+    @patch("git_ops._run_list")
+    def test_base_modified_exhausts_retries(self, mock_run):
+        """If the race never clears within the retry budget, it fails as a
+        merge-failed (not silently, not as a conflict)."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+        ] + [
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1)
+            for _ in range(4)  # _max_base_retries=3 → 4 attempts (initial + 3 retries)
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert "merge failed" in msg
+        assert "Base branch was modified" in msg
+        # 1 state check + 4 merge attempts = 5 calls (no branch lookup on failure)
+        assert mock_run.call_count == 5
+
+    @patch("git_ops._run_list")
+    def test_real_conflict_is_terminal_not_retried(self, mock_run):
+        """A real merge conflict must NOT be retried (it routes back for rebase)
+        — only ONE merge attempt, even though retries are available."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stderr="failed to merge: merge conflict between base and head", returncode=1),
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert msg == "merge conflict"
+        # 1 state check + exactly 1 merge attempt (no retry)
+        assert mock_run.call_count == 2
+
+    @patch("git_ops._run_list")
+    def test_base_modified_then_real_conflict(self, mock_run):
+        """A retry can surface a real conflict (base moved into a true conflict)
+        — once it does, it's terminal, not retried further."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"state": "OPEN"}'),
+            _mock_result(stderr="GraphQL: Base branch was modified.", returncode=1),  # race
+            _mock_result(stderr="not mergeable: merge conflict", returncode=1),        # now a real conflict
+        ]
+        success, msg = git_ops.pr_merge(42, _max_base_retries=3, _base_retry_delay=0)
+        assert success is False
+        assert msg == "merge conflict"
+        assert mock_run.call_count == 3  # state + race attempt + conflict attempt
+
     @patch("git_ops._run_list")
     def test_state_check_fails_still_attempts_merge(self, mock_run):
         # State check fails (non-zero), merge succeeds, branch lookup
@@ -447,6 +726,109 @@ class TestPrMerge:
         mock_adapter.merge_pr.assert_called_once_with(42, "squash")
         # gh CLI should NOT be called when adapter handles it
         mock_run.assert_not_called()
+
+    # --- #13271: behind-count merge guard (SEV-1 stale-tree prevention) ---
+
+    @patch("git_ops._run_list")
+    def test_far_behind_squash_is_refused(self, mock_run):
+        """A squash of a branch FAR behind base is refused (fail-safe) BEFORE any
+        merge call — preventing the #13271 stale-tree mass-revert."""
+        with patch("git_ops._pr_behind_by", return_value=154), \
+             patch("git_ops._merge_max_behind", return_value=50):
+            mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
+            success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert "behind" in msg
+        # state check only — NO merge attempt (call_count==1 proves no `gh pr merge`).
+        assert mock_run.call_count == 1
+
+    @patch("git_ops._run_list")
+    def test_within_threshold_proceeds(self, mock_run):
+        """A branch within the behind threshold merges normally."""
+        with patch("git_ops._pr_behind_by", return_value=3), \
+             patch("git_ops._merge_max_behind", return_value=50):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            ]
+            success, msg = git_ops.pr_merge(42)
+        assert success is True
+
+    @patch("git_ops._run_list")
+    def test_undeterminable_behind_fails_open(self, mock_run):
+        """If the behind-count can't be determined (gh/API hiccup → None), the
+        guard fails OPEN (merge proceeds) — it must not wedge all shipping."""
+        with patch("git_ops._pr_behind_by", return_value=None):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "squidsquad/skill/42"}'),
+            ]
+            success, msg = git_ops.pr_merge(42)
+        assert success is True
+
+    @patch("git_ops._run_list")
+    def test_far_behind_non_squash_not_guarded(self, mock_run):
+        """The guard is squash-specific — a real merge commit preserves base
+        history, so a behind branch is not refused for strategy=merge."""
+        with patch("git_ops._pr_behind_by", return_value=999):
+            mock_run.side_effect = [
+                _mock_result(stdout='{"state": "OPEN"}'),
+                _mock_result(stdout=""),  # merge
+                _mock_result(stdout='{"headRefName": "feature"}'),
+            ]
+            success, _ = git_ops.pr_merge(42, strategy="merge")
+        assert success is True
+
+    def test_merge_max_behind_env_override(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_MAX_BEHIND", "7")
+        assert git_ops._merge_max_behind() == 7
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_MAX_BEHIND", "bad")
+        assert git_ops._merge_max_behind() == git_ops.MERGE_MAX_BEHIND_DEFAULT
+
+
+class TestPrBehindBy:
+    """#13271: _pr_behind_by — kept OUT of TestPrMerge (whose autouse fixture
+    patches _pr_behind_by) so these exercise the real function."""
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_parses_compare_api(self, mock_run):
+        """_pr_behind_by reads behind_by from the compare API after resolving the
+        PR's base/head refs."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "squidsquad/task/42"}'),
+            _mock_result(stdout="154\n"),  # gh api .behind_by
+        ]
+        assert git_ops._pr_behind_by(42) == 154
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_api_failure(self, mock_run):
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "x"}'),
+            _mock_result(returncode=1, stderr="api error"),
+        ]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_bad_refs_json(self, mock_run):
+        mock_run.side_effect = [_mock_result(stdout="not json", returncode=0)]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_when_refs_view_fails(self, mock_run):
+        """First `gh pr view` call non-zero (refs lookup failed) → None (fail-open)."""
+        mock_run.side_effect = [_mock_result(returncode=1, stderr="not found")]
+        assert git_ops._pr_behind_by(42) is None
+
+    @patch("git_ops._run_list")
+    def test_pr_behind_by_none_on_non_integer_behind(self, mock_run):
+        """A malformed compare response (e.g. `null`) → ValueError → None."""
+        mock_run.side_effect = [
+            _mock_result(stdout='{"baseRefName": "main", "headRefName": "x"}'),
+            _mock_result(stdout="null\n"),  # not an int
+        ]
+        assert git_ops._pr_behind_by(42) is None
 
 
 class TestNoNonAsciiInPrintStatements:
@@ -492,6 +874,13 @@ class TestParseArgs:
             with pytest.raises(SystemExit):
                 git_ops._parse_args()
 
+    def test_dash_h_exits(self):
+        # -h at the subcommand position prints usage and exits (#13433).
+        with patch.object(sys, "argv", ["git_ops.py", "-h"]):
+            with pytest.raises(SystemExit) as exc:
+                git_ops._parse_args()
+        assert exc.value.code == 0
+
     def test_no_args_exits(self):
         with patch.object(sys, "argv", ["git_ops.py"]):
             with pytest.raises(SystemExit):
@@ -508,6 +897,64 @@ class TestParseArgs:
             cmd, rest = git_ops._parse_args()
             assert cmd == "commit"
             assert rest == ["skill", "msg"]
+
+
+# ---------------------------------------------------------------------------
+# pr-merge dispatch arg guard (#13433)
+# ---------------------------------------------------------------------------
+
+class TestPrMergeArgGuard:
+    """`pr-merge` must validate the PR number BEFORE any side effect. Previously
+    `pr-merge --help` (and other non-numeric first args) reached pr_merge(), which
+    runs a real squash-merge + post-merge compose — dirtying the tree and printing
+    a false 'PR #--help merged (squash)'. These tests assert pr_merge is never
+    invoked with a bogus PR number."""
+
+    def _run_main(self, argv, monkeypatch):
+        spy = MagicMock(return_value=(True, "ok"))
+        monkeypatch.setattr(git_ops, "pr_merge", spy)
+        # Keep the dispatch hermetic — main() self-heals git hooks otherwise.
+        monkeypatch.setattr(git_ops, "_ensure_hooks_installed", lambda: None)
+        monkeypatch.setattr(sys, "argv", ["git_ops.py"] + argv)
+        with pytest.raises(SystemExit) as exc:
+            git_ops.main()
+        return spy, exc.value.code
+
+    def test_help_does_not_merge(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "--help"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 0  # help is a successful request
+
+    def test_dash_h_does_not_merge(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "-h"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 0
+
+    def test_missing_number_is_usage_error(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 1  # missing required arg
+
+    def test_non_numeric_is_rejected(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "notanumber"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 2  # invalid usage, distinct from a merge failure (1)
+
+    def test_flag_in_number_position_is_rejected(self, monkeypatch):
+        # `pr-merge --strategy squash` (forgot the number) must NOT merge.
+        spy, code = self._run_main(["pr-merge", "--strategy", "squash"], monkeypatch)
+        spy.assert_not_called()
+        assert code == 2
+
+    def test_valid_number_merges(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "13523"], monkeypatch)
+        spy.assert_called_once_with("13523", "squash")
+        assert code == 0
+
+    def test_valid_number_honors_strategy(self, monkeypatch):
+        spy, code = self._run_main(["pr-merge", "13523", "--strategy", "merge"], monkeypatch)
+        spy.assert_called_once_with("13523", "merge")
+        assert code == 0
 
 
 # ---------------------------------------------------------------------------
@@ -702,14 +1149,27 @@ class TestRoleOwnedPatterns:
         assert "SKILL.md" in pats
         assert ".squidsquad/config.md" in pats
 
-    def test_qa_has_no_extras_beyond_common(self):
+    def test_qa_extras(self):
+        """#13212: qa (verifier) owns tests/comprehension/ — it authors the
+        comprehension regression specs (#9184) and must be able to stage them
+        in its own post-cycle commit (they live outside .squidsquad/, so they
+        matched no pattern before and were left untracked as 'foreign')."""
         pats = git_ops._role_owned_patterns("qa")
-        # QA must NOT pick up config or delivery docs
+        assert "tests/comprehension/" in pats
+        # QA must still NOT pick up config or delivery docs / SKILL.md —
+        # the new extra does not loosen the rest of the boundary.
         assert ".squidsquad/config.md" not in pats
         assert "README.md" not in pats
-        # #9474 sanity check: QA also must NOT pick up SKILL.md —
-        # the DM-extras additions don't bleed into other roles.
         assert "SKILL.md" not in pats
+
+    def test_comprehension_specs_are_qa_only(self):
+        """#13212: only the verifier authors comprehension specs — the
+        tests/comprehension/ ownership must NOT bleed into other roles (else a
+        non-verifier cycle could stage a half-written spec)."""
+        for role in ("pm", "dm", "skill"):
+            assert "tests/comprehension/" not in git_ops._role_owned_patterns(role), (
+                f"{role} must not own tests/comprehension/ (#13212 — verifier-only)"
+            )
 
     def test_pm_does_not_pick_up_dm_extras(self):
         """#9474: PM and DM co-own .squidsquad/config.md, but PM must
@@ -930,6 +1390,41 @@ class TestCommitRoleScoped:
         assert ".squidsquad/config.md" not in staged
         assert ".squidsquad/config.md" in capsys.readouterr().err
 
+    @patch("git_ops.commit", return_value=True)
+    @patch("git_ops.push", return_value=True)
+    @patch("git_ops._get_working_branch", return_value="main")
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_qa_stages_untracked_comprehension_spec_13212(
+        self, mock_run, mock_run_list, mock_working_branch,
+        mock_push, mock_commit, capsys,
+    ):
+        """#13212: the exact bug — an UNTRACKED comprehension spec (porcelain
+        '??') authored by the verifier must be staged by its post-cycle commit,
+        not classified foreign and left to rot until a manual recovery commit."""
+        def _run_side(cmd, *a, **kw):
+            if "branch --show-current" in cmd:
+                return _mock_result(stdout="main\n")
+            return _mock_result(stdout=(
+                " M .squidsquad/qa/working-state.md\n"
+                "?? tests/comprehension/13250_spec.json\n"
+            ))
+        mock_run.side_effect = _run_side
+        mock_run_list.return_value = _mock_result()
+
+        result = git_ops.commit_role_scoped("qa", "qa cycle")
+
+        staged = [c[0][0][-1] for c in mock_run_list.call_args_list
+                  if c[0][0][:2] == ["git", "add"]]
+        assert "tests/comprehension/13250_spec.json" in staged, (
+            "qa post-cycle must stage untracked comprehension specs (#13212) — "
+            "they were silently left foreign before this fix"
+        )
+        assert ".squidsquad/qa/working-state.md" in staged
+        # not left in the foreign-skip warning
+        assert "tests/comprehension/13250_spec.json" not in capsys.readouterr().err
+        assert result is True
+
     @patch("git_ops._run")
     def test_returns_false_when_no_own_files(self, mock_run, capsys):
         """Only foreign files → nothing to commit, push not attempted."""
@@ -1064,11 +1559,10 @@ class TestCommitCodePushFailure:
             _mock_result(stdout=" M src/app.py\n"),  # status --porcelain
             _mock_result(stdout="squidsquad/task/100\n"),  # branch --show-current
         ]
-        mock_subproc.return_value = _mock_result()  # git commit succeeds
-        mock_run_list.side_effect = [
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        mock_subproc.return_value = _mock_result()  # (legacy: commit no longer here)
+        # #13262: the commit now routes through _run_list too — use return_value
+        # so the add / config-revert / commit calls all succeed regardless of count.
+        mock_run_list.return_value = _mock_result()
         # push now routed through _git_push (#9890) and FAILS here
         mock_git_push.return_value = _mock_result(returncode=1, stderr="push rejected")
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
@@ -1089,11 +1583,9 @@ class TestCommitCodePushFailure:
             _mock_result(stdout=" M src/app.py\n"),  # status
             _mock_result(stdout="squidsquad/task/100\n"),  # branch
         ]
-        mock_subproc.return_value = _mock_result()  # commit
-        mock_run_list.side_effect = [
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        mock_subproc.return_value = _mock_result()  # (legacy: commit no longer here)
+        # #13262: commit routes through _run_list now → any-count success.
+        mock_run_list.return_value = _mock_result()
         mock_git_push.return_value = _mock_result()  # push succeeds (#9890)
         result = git_ops.commit_code("skill", "squidsquad/task/100", "test")
         assert result is True
@@ -1119,12 +1611,9 @@ class TestCommitCodeUsesWorkingBranch:
             _mock_result(stdout=" M src/app.py\n"),  # git status --porcelain
             _mock_result(stdout="develop\n"),  # current branch
         ]
-        mock_run_list.side_effect = [
-            _mock_result(returncode=0),  # rev-parse (branch exists)
-            _mock_result(),  # git checkout
-            _mock_result(),  # git add
-            _mock_result(),  # git checkout config.md revert (#7491)
-        ]
+        # #13262: commit routes through _run_list now (one more call); use
+        # return_value so add / checkout / rev-parse / commit all succeed (rc0).
+        mock_run_list.return_value = _mock_result(returncode=0)
         mock_git_push.return_value = _mock_result()  # push (#9890)
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
@@ -1192,7 +1681,9 @@ class TestSafeCheckout:
         """On checkout failure after stash, pop restores original branch (#4362)."""
         mock_run.side_effect = [
             _mock_result(stdout="main\n"),      # git branch --show-current
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
             _mock_result(),                      # git stash -q
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
             _mock_result(),                      # git stash pop -q (restore)
         ]
         # First checkout fails, second (after stash) also fails
@@ -1210,11 +1701,34 @@ class TestSafeCheckout:
 
     @patch("git_ops._run_list")
     @patch("git_ops._run")
+    def test_clean_checkout_failure_does_not_pop_preexisting(self, mock_run, mock_run_list):
+        """#13167: if checkout fails for a NON-dirty reason, `git stash -q` is a
+        no-op (refs/stash unchanged) and the recovery pop MUST be skipped — never
+        pop a pre-existing ancient stash."""
+        mock_run.side_effect = [
+            _mock_result(stdout="main\n"),      # branch --show-current
+            _mock_result(stdout="oldsha"),       # _stash_top_ref pre: pre-existing stash
+            _mock_result(),                      # git stash -q (no-op)
+            _mock_result(stdout="oldsha"),       # _stash_top_ref post: UNCHANGED → stashed=False
+        ]
+        mock_run_list.side_effect = [
+            _mock_result(returncode=1, stderr="no such branch"),  # direct checkout fails
+            _mock_result(returncode=1, stderr="no such branch"),  # stash+checkout fails
+        ]
+        result = git_ops._safe_checkout("feature-branch")
+        assert result is False
+        pop_calls = [c for c in mock_run.call_args_list if "stash pop" in str(c)]
+        assert not pop_calls, "must NOT pop a pre-existing stash when our stash was a no-op"
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
     def test_stash_pop_on_success_applies_to_target(self, mock_run, mock_run_list):
         """On checkout success after stash, pop applies on target branch."""
         mock_run.side_effect = [
             _mock_result(stdout="main\n"),      # git branch --show-current
+            _mock_result(returncode=1),          # _stash_top_ref pre → ""
             _mock_result(),                      # git stash -q
+            _mock_result(stdout="newsha"),       # _stash_top_ref post → stashed=True
             _mock_result(),                      # git stash pop -q
         ]
         mock_run_list.side_effect = [
@@ -1234,7 +1748,9 @@ class TestSafeCheckout:
         HEAD and the stash dropped (via _safe_stash_pop)."""
         mock_run.side_effect = [
             _mock_result(stdout="main\n"),                    # branch --show-current
+            _mock_result(returncode=1),                       # _stash_top_ref pre → ""
             _mock_result(),                                   # git stash -q
+            _mock_result(stdout="newsha"),                    # _stash_top_ref post → stashed=True
             _mock_result(returncode=1),                       # stash pop conflict
             _mock_result(stdout=".squidsquad/config.md\n"),   # diff --diff-filter=U
             _mock_result(),                                   # stash drop
@@ -2100,3 +2616,234 @@ class TestEnsureHooksDispatch11511:
         monkeypatch.setattr(sys, "argv", ["git_ops.py", "has-changes"])
         git_ops.main()
         mock_ensure.assert_called_once()
+
+
+class TestEnsureMainAndPullSerialized13211:
+    """#13211: ensure_main_and_pull single-flights its checkout+pull via the
+    module-level _ENSURE_MAIN_LOCK so concurrent in-process callers (the L4
+    watcher freshen bursts AND the post-merge deploy-all path) cannot collide on
+    `.git/index.lock`. #13197 first added this serialization in the watcher; this
+    hoists it to the shared implementation so every caller is covered."""
+
+    def test_lock_is_a_threading_lock(self):
+        import threading
+        assert isinstance(git_ops._ENSURE_MAIN_LOCK, type(threading.Lock()))
+
+    def test_contract_preserved_on_main_synced(self):
+        """Behaviour unchanged for the happy path: on main + pull ok -> (True,
+        'on-main-synced'). The lock wrap must not alter the return contract."""
+        with patch.object(git_ops, "_run") as mrun, \
+             patch.object(git_ops, "pull", return_value=True):
+            mrun.return_value = MagicMock(returncode=0, stdout="main\n", stderr="")
+            ok, detail = git_ops.ensure_main_and_pull(role="harness")
+        assert ok is True
+        assert detail == "on-main-synced"
+
+    def test_pull_failure_still_reported(self):
+        """The lock must not swallow a pull failure."""
+        with patch.object(git_ops, "_run") as mrun, \
+             patch.object(git_ops, "pull", return_value=False):
+            mrun.return_value = MagicMock(returncode=0, stdout="main\n", stderr="")
+            ok, detail = git_ops.ensure_main_and_pull(role="harness")
+        assert ok is False
+        assert detail == "pull-failed"
+
+    def test_concurrent_calls_are_serialized(self):
+        """N threads calling ensure_main_and_pull directly must never run the
+        underlying git op concurrently — max in-flight stays 1."""
+        import threading
+        import time as _time
+        state = {"now": 0, "max": 0}
+        guard = threading.Lock()
+        N = 11
+        barrier = threading.Barrier(N)
+
+        def fake_pull(role=None):
+            try:
+                barrier.wait(timeout=0.5)  # serialized -> never fills -> times out
+            except threading.BrokenBarrierError:
+                pass
+            with guard:
+                state["now"] += 1
+                state["max"] = max(state["max"], state["now"])
+            _time.sleep(0.02)
+            with guard:
+                state["now"] -= 1
+            return True
+
+        def fake_run(cmd, check=False):
+            return MagicMock(returncode=0, stdout="main\n", stderr="")
+
+        with patch.object(git_ops, "_run", side_effect=fake_run), \
+             patch.object(git_ops, "pull", side_effect=fake_pull):
+            threads = [threading.Thread(
+                target=lambda: git_ops.ensure_main_and_pull("harness"))
+                for _ in range(N)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+        assert state["max"] == 1, (
+            f"ensure_main_and_pull ran {state['max']}-way concurrent — "
+            f"_ENSURE_MAIN_LOCK is not serializing (#13211)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# #13285 — post-merge scope-audit + (opt-in) auto-revert
+# ---------------------------------------------------------------------------
+
+class TestScopeAudit13285:
+    def test_violations_are_deleted_minus_declared(self):
+        with patch.object(git_ops, "_pr_declared_files",
+                          return_value={"a.py", "b.py"}), \
+             patch.object(git_ops, "_merge_deleted_files",
+                          return_value={"a.py", "config.md",
+                                        ".squidsquad/pm/CLAUDE.md"}):
+            v = git_ops._scope_audit_violations(1, "sha")
+        # a.py was declared (a legit deletion); the other two are out-of-scope.
+        assert v == [".squidsquad/pm/CLAUDE.md", "config.md"]
+
+    def test_clean_merge_no_violations(self):
+        with patch.object(git_ops, "_pr_declared_files",
+                          return_value={"a.py", "b.py"}), \
+             patch.object(git_ops, "_merge_deleted_files",
+                          return_value={"a.py"}):  # only a declared deletion
+            assert git_ops._scope_audit_violations(1, "sha") == []
+
+    def test_fail_safe_when_declared_unknown(self):
+        """gh failure → declared None → audit returns None (caller won't revert)."""
+        with patch.object(git_ops, "_pr_declared_files", return_value=None), \
+             patch.object(git_ops, "_merge_deleted_files", return_value={"x"}):
+            assert git_ops._scope_audit_violations(1, "sha") is None
+
+    def test_fail_safe_when_deleted_unknown(self):
+        with patch.object(git_ops, "_pr_declared_files", return_value={"a"}), \
+             patch.object(git_ops, "_merge_deleted_files", return_value=None):
+            assert git_ops._scope_audit_violations(1, "sha") is None
+
+    def test_auto_revert_flag_default_off(self, monkeypatch):
+        monkeypatch.delenv("SQUIDSQUAD_MERGE_AUTO_REVERT", raising=False)
+        assert git_ops._merge_auto_revert_enabled() is False
+
+    def test_auto_revert_flag_on(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_AUTO_REVERT", "1")
+        assert git_ops._merge_auto_revert_enabled() is True
+
+    def test_audit_clean_merge_emits_nothing(self):
+        with patch.object(git_ops, "_run_list", return_value=_mock_result()), \
+             patch.object(git_ops, "_merge_commit_sha", return_value="sha123"), \
+             patch.object(git_ops, "_scope_audit_violations", return_value=[]), \
+             patch.object(git_ops, "_emit_scope_incident") as emit, \
+             patch.object(git_ops, "_auto_revert_merge") as revert:
+            git_ops._post_merge_scope_audit(1, "42")
+        emit.assert_not_called()
+        revert.assert_not_called()
+
+    def test_audit_violation_emits_incident_no_revert_when_off(self, monkeypatch):
+        monkeypatch.delenv("SQUIDSQUAD_MERGE_AUTO_REVERT", raising=False)
+        with patch.object(git_ops, "_run_list", return_value=_mock_result()), \
+             patch.object(git_ops, "_merge_commit_sha", return_value="sha123"), \
+             patch.object(git_ops, "_scope_audit_violations",
+                          return_value=["config.md", ".squidsquad/pm/CLAUDE.md"]), \
+             patch.object(git_ops, "_emit_scope_incident") as emit, \
+             patch.object(git_ops, "_auto_revert_merge") as revert:
+            git_ops._post_merge_scope_audit(1, "42")
+        emit.assert_called_once()
+        revert.assert_not_called()  # default OFF → detect+alert only
+
+    def test_audit_violation_auto_reverts_when_on(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_AUTO_REVERT", "1")
+        with patch.object(git_ops, "_run_list", return_value=_mock_result()), \
+             patch.object(git_ops, "_merge_commit_sha", return_value="sha123"), \
+             patch.object(git_ops, "_scope_audit_violations",
+                          return_value=["config.md"]), \
+             patch.object(git_ops, "_emit_scope_incident"), \
+             patch.object(git_ops, "_auto_revert_merge") as revert:
+            git_ops._post_merge_scope_audit(1, "42")
+        revert.assert_called_once_with("sha123", 1)
+
+    def test_audit_fail_safe_no_revert_on_inconclusive(self, monkeypatch):
+        monkeypatch.setenv("SQUIDSQUAD_MERGE_AUTO_REVERT", "1")
+        with patch.object(git_ops, "_run_list", return_value=_mock_result()), \
+             patch.object(git_ops, "_merge_commit_sha", return_value="sha123"), \
+             patch.object(git_ops, "_scope_audit_violations", return_value=None), \
+             patch.object(git_ops, "_emit_scope_incident") as emit, \
+             patch.object(git_ops, "_auto_revert_merge") as revert:
+            git_ops._post_merge_scope_audit(1, "42")
+        emit.assert_not_called()
+        revert.assert_not_called()  # None = uncertainty → never revert
+
+    def test_audit_never_raises(self):
+        """A fault anywhere in the audit must not break the merge flow."""
+        with patch.object(git_ops, "_run_list",
+                          side_effect=RuntimeError("boom")):
+            # must not raise
+            git_ops._post_merge_scope_audit(1, "42")
+
+    def test_auto_revert_is_non_destructive_revert_then_push(self):
+        calls = []
+
+        def rec(args, **kw):
+            calls.append(args)
+            return _mock_result()
+
+        with patch.object(git_ops, "_safe_checkout", return_value=True), \
+             patch.object(git_ops, "_run_list", side_effect=rec):
+            git_ops._auto_revert_merge("sha123", 1)
+        # git revert --no-edit (NOT reset/force), then push.
+        assert ["git", "revert", "--no-edit", "sha123"] in calls
+        assert any(c[:3] == ["git", "push", "origin"] for c in calls)
+        assert not any("--force" in c or "reset" in c for c in calls)
+
+    def test_rename_old_path_not_a_violation(self):
+        """A dissimilar rename shows as D(old)+A(new); gh declares BOTH paths, so
+        the deleted old path is in `declared` and is NOT a false violation."""
+        with patch.object(git_ops, "_pr_declared_files",
+                          return_value={"old_name.py", "new_name.py"}), \
+             patch.object(git_ops, "_merge_deleted_files",
+                          return_value={"old_name.py"}):
+            assert git_ops._scope_audit_violations(1, "sha") == []
+
+    def test_merge_commit_sha_null_is_unresolved(self):
+        """gh prints literal 'null' before the merge commit is recorded -> None
+        (fail-safe), not the string 'null'."""
+        with patch.object(git_ops, "_run_list",
+                          return_value=_mock_result(stdout="null\n")):
+            assert git_ops._merge_commit_sha(1) is None
+
+    def test_auto_revert_aborts_when_checkout_fails(self):
+        """_safe_checkout False -> no revert, no push (cannot safely act)."""
+        with patch.object(git_ops, "_safe_checkout", return_value=False), \
+             patch.object(git_ops, "_run_list") as rl:
+            git_ops._auto_revert_merge("sha123", 1)
+        rl.assert_not_called()
+
+    def test_auto_revert_push_failure_undoes_local_revert(self):
+        """A failed push must reset the local revert commit so the next pull can't
+        silently fuse it into main without review."""
+        def rl(args, **kw):
+            if args[:2] == ["git", "push"]:
+                return _mock_result(returncode=1, stderr="non-fast-forward")
+            return _mock_result()
+
+        with patch.object(git_ops, "_safe_checkout", return_value=True), \
+             patch.object(git_ops, "_run_list", side_effect=rl) as rl_mock:
+            git_ops._auto_revert_merge("sha123", 1)
+        called = [c.args[0] for c in rl_mock.call_args_list]
+        assert ["git", "reset", "--keep", "HEAD~1"] in called
+
+    def test_auto_revert_aborts_on_revert_failure(self):
+        def rl(args, **kw):
+            if args[:2] == ["git", "revert"] and "--abort" not in args:
+                return _mock_result(returncode=1, stderr="conflict")
+            return _mock_result()
+
+        with patch.object(git_ops, "_safe_checkout", return_value=True), \
+             patch.object(git_ops, "_run_list", side_effect=rl) as rl_mock:
+            git_ops._auto_revert_merge("sha123", 1)
+        # On a failed revert it must `git revert --abort` and NOT push.
+        called = [c.args[0] for c in rl_mock.call_args_list]
+        assert ["git", "revert", "--abort"] in called
+        assert not any(c[:2] == ["git", "push"] for c in called)

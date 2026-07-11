@@ -53,6 +53,10 @@ EXPECTED_CALLERS = {
     ("GET",  "/agents/{role}/config"):          _EXTERNAL,
     ("POST", "/agents/all/start"):              ["squidsquad_cli"],
     ("POST", "/agents/all/stop"):               ["squidsquad_cli"],
+    # #12801 — "reboot all" from the TUI action bar. The caller is the TUI
+    # (references/tui/harness_client.py), NOT a references/scripts/ module, so it
+    # has no in-scope Python caller to grep → _EXTERNAL (operator/TUI-triggered).
+    ("POST", "/agents/all/restart"):            _EXTERNAL,
     ("POST", "/agents/{role}/start"):           ["squidsquad_cli"],
     ("POST", "/agents/{role}/stop"):            ["squidsquad_cli"],
     ("POST", "/agents/{role}/restart"):         ["cycle_post", "squidsquad_cli"],
@@ -81,6 +85,10 @@ EXPECTED_CALLERS = {
     # PostCompact / StopFailure): POSTed only by Claude Code's native type:http
     # hooks in settings.json (no in-repo Python caller).
     ("POST", "/hooks/pause"):                   _EXTERNAL,
+    # #12495 — manual wake-injection primitive: POSTed by tracker.py's
+    # work-assign CLI (the X-Squidsquad-Alias-bearing client). Operators may
+    # also curl it for babysitting, but the canonical in-repo caller is tracker.
+    ("POST", "/work/assign"):                   ["tracker"],
 }
 
 

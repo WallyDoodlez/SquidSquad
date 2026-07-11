@@ -1,20 +1,23 @@
-"""Static analysis for the install wizard runbook (#328 Phase G.3).
+"""Static analysis for the installer's operating manual (#328 G.3 → #13336).
 
-The runbook at `references/wizard/WIZARD.md` is prose that Claude
-follows during setup. Because it's prose, not code, most of its
-correctness comes from structural invariants we can enforce cheaply:
+The manual at `docs/INSTALLER-RUNTIME.md` is prose that the installer Claude
+session follows during setup. It replaced the step-by-step runbook at
+`references/wizard/WIZARD.md` (retired in #13336); the runbook's surviving
+mechanics live in the manual's §9 helper playbook. Because the manual is
+prose, not code, most of its correctness comes from structural invariants we
+can enforce cheaply:
 
-1. Every wizard.py / manifest.py / compose.py command it tells Claude
-   to run must actually exist as a subcommand in that script.
-2. Every role/tool/preset it references must exist in the registry.
-3. It must cover all 8 wizard steps (0, 0b, 1..7) in order.
-4. It must reference every locked decision whose identifier appears
-   in CONTEXT.md (Q-new11..22) — drift-proofing against spec updates.
-5. Installer-agent lifecycle invariants (ephemeral, no self-loop,
-   no writes before Step 7).
+1. Every wizard.py / manifest.py / compose.py / model_router.py /
+   forgejo_setup.py / shared_fs.py command it tells the installer to run
+   must actually exist as a subcommand of that script.
+2. Every preset/role it references must exist in the registry.
+3. Its behavioral spine must be present in order — the top-level sections,
+   the §4 flow steps 0–9, and the §9 playbook step sections.
+4. Installer-agent lifecycle invariants (ephemeral, no self-loop, no writes
+   before step 7 / Apply, no --force, verbatim consent).
 
-These tests fail fast if the runbook drifts from reality — e.g. a
-helper is renamed but the runbook still mentions the old name.
+These tests fail fast if the manual drifts from reality — e.g. a helper is
+renamed but the manual still mentions the old name.
 """
 
 import re
@@ -26,82 +29,220 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
 
-RUNBOOK = REPO_ROOT / "references" / "wizard" / "WIZARD.md"
+MANUAL = REPO_ROOT / "docs" / "INSTALLER-RUNTIME.md"
 
-# Script -> command name regex (matches the dispatch table keys each
-# script ships).
+# Script -> command name allowlists (matching the dispatch table keys each
+# script ships). A mention outside these sets means the manual references a
+# subcommand that does not exist.
 _WIZARD_COMMANDS = {
     "check-gh", "check-existing", "repo-info", "project-name-default",
     "validate-name", "validate-rerun-action", "build-config-md",
     "scaffold", "ensure-labels", "list-issues-by-label", "migrate-label",
-    "pr-flow-prompt",
+    # pr-flow-prompt retired in #13355 (PR flow is a §3 invariant, never a
+    # choice) — the command no longer exists, so a manual mention of it now
+    # fails this suite's exists-check instead of passing an allowlist.
     # #11613 §4.1 Phase 0 gather-all dependency provisioning.
     "gather-deps", "provision-deps",
     # #12419 §10 existing-install migration walk.
     "migration-plan", "stamp-version",
     # #12420 §10.3 post-commit harness restart.
     "restart-agents",
+    # #12450 test-strategy detection + undetectable ask-human.
+    "scan-summary", "set-test-strategy",
+    # #13337 §9 Step 0 consent deny-list merge-writer.
+    "merge-deny-list",
+    # #13339 §4/§9 project-maturity probe + workflow→roster mapping heuristic.
+    "detect-maturity", "propose-roster",
+    # #13329 §4 step 4 reconcile — scan existing Claude skills/commands/CLAUDE.md.
+    "scan-existing-assets",
 }
 _MANIFEST_COMMANDS = {"validate", "list", "load", "resolve"}
 _COMPOSE_COMMANDS = {"all", "deploy", "deploy-all", "boot", "boot-all"}
+_MODEL_ROUTER_COMMANDS = {"list-providers", "setup-provider", "validate"}
+_FORGEJO_COMMANDS = {"check-docker", "deploy", "create-token"}
+_SHARED_FS_COMMANDS = {"init", "write-secret"}
 
 
 @pytest.fixture(scope="module")
-def runbook():
-    assert RUNBOOK.exists(), f"Missing runbook: {RUNBOOK}"
-    return RUNBOOK.read_text(encoding="utf-8")
+def manual():
+    assert MANUAL.exists(), f"Missing installer manual: {MANUAL}"
+    return MANUAL.read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
-# Structure
+# Structure — the manual's behavioral spine
 # ---------------------------------------------------------------------------
 
 
-class TestRunbookStructure:
-    def test_runbook_file_exists(self, runbook):
-        assert runbook  # non-empty
+def _assert_in_order(text, markers, what):
+    last_idx = -1
+    for marker in markers:
+        idx = text.find(marker)
+        assert idx != -1, f"Missing {what}: {marker!r}"
+        assert idx > last_idx, (
+            f"{what} {marker!r} appears out of order "
+            f"(index {idx}, last was {last_idx})"
+        )
+        last_idx = idx
 
-    def test_all_steps_present_in_order(self, runbook):
-        """Every required step must appear in the runbook, in order."""
-        required_steps = [
-            "## Step 0 — Prerequisite detection",
-            "## Step 0b — Re-run detection",
-            "## Step 1 — Project details",
-            "## Step 2 — Intent",
-            "## Step 3 — Preset confirmation",
-            "## Step 4 — Walk setup_requirements",
-            "## Step 5 — Loop interval",
-            "## Step 6 — Review screen",
-            "## Step 7 — Commit and write",
-        ]
-        last_idx = -1
-        for heading in required_steps:
-            idx = runbook.find(heading)
-            assert idx != -1, f"Missing step heading: {heading!r}"
-            assert idx > last_idx, (
-                f"Step {heading!r} appears before a previous step "
-                f"(index {idx}, last was {last_idx})"
+
+class TestManualStructure:
+    def test_manual_non_empty(self, manual):
+        assert manual  # non-empty
+
+    def test_top_level_sections_present_in_order(self, manual):
+        _assert_in_order(manual, [
+            "## 1. You are an agent, not a wizard",
+            "## 2. Your soul",
+            "## 3. Know both worlds, then bridge them",
+            "## 4. The flow",
+            "## 5. The runtime model — convey it correctly",
+            "## 6. What an installed SquidSquad looks like",
+            "## 7. Customization is an everyday affordance",
+            "## 8. Do / don't",
+            "## 9. The helper playbook",
+            "## 10. Cross-references",
+        ], "section heading")
+
+    def test_flow_steps_present_in_order(self, manual):
+        """The §4 flow must carry steps 0-9, in order."""
+        _assert_in_order(manual, [
+            "**0. Consent & guardrails",
+            "**1. Basics.**",
+            "**2. Understand the project",
+            "**3. Understand how they work.**",
+            "**4. Reconcile what's already there.**",
+            "**5. Introduce the team.**",
+            "**6. Confirm each agent, one at a time.**",
+            "**7. Apply.**",
+            "**8. Verify",
+            "**9. Commit & hand off.**",
+        ], "flow step")
+
+    def test_playbook_sections_present_in_order(self, manual):
+        """§9 must map every flow stage to its helper mechanics."""
+        _assert_in_order(manual, [
+            "### The helper contract",
+            "### Write discipline",
+            "### Step 0 — Consent & deny list",
+            "### Step 1 — Basics",
+            "### Steps 2–3",
+            "### Steps 3 & 5–6",
+            "### Step 7 — Apply",
+            "### Step 8 — Verify with an independent sub-agent",  # #13338
+            "### Step 9 — Commit & hand off",
+            "### When something breaks",
+        ], "playbook section")
+
+    def test_step8_playbook_defines_executable_verification(self, manual):
+        """§9 Step 8 must be an executable protocol (#13338): a fresh objective
+        sub-agent, a compose-clean check via compose.py, the §3 invariant
+        assertions, an end-to-end carry check, and a self-solve loop that never
+        asks the user and only lets a clean pass proceed."""
+        start = manual.find("### Step 8 — Verify with an independent sub-agent")
+        assert start != -1, "§9 must carry a Step 8 verification playbook entry"
+        step8 = manual[start:manual.find("### Step 9 — Commit & hand off")]
+        assert "sub-agent" in step8 and "objective" in step8, (
+            "Step 8 must spawn a fresh, independent (objective) sub-agent"
+        )
+        assert "compose.py" in step8, (
+            "Step 8 must run compose to prove the customized team composes cleanly"
+        )
+        for inv in ("four role classes", "forge", "verification gate",
+                    "event-driven", "create→build→verify→deliver", "PR"):
+            assert inv in step8, f"Step 8 invariant check must reference: {inv!r}"
+        assert "end-to-end" in step8, (
+            "Step 8 must check the roster carries a piece of work end-to-end"
+        )
+        assert "self-solve" in step8, "Step 8 must self-solve failures, not ask the user"
+        assert "re-run" in step8, "Step 8 must re-run the sub-agent until a clean pass"
+        assert "clean pass proceeds" in step8, (
+            "only a clean pass proceeds to commit (Step 9)"
+        )
+
+    def test_step0_playbook_binds_deny_list_helper(self, manual):
+        """§9 Step 0 binds the consent conversation to the deterministic
+        merge-writer (#13337): preview via --dry-run BEFORE any write,
+        write on confirmation, deny rules only — never ask."""
+        start = manual.find("### Step 0 — Consent & deny list")
+        assert start != -1, "§9 must carry a Step 0 playbook entry"
+        step0 = manual[start:manual.find("### Step 1 — Basics")]
+        assert "merge-deny-list" in step0, (
+            "Step 0 playbook must name the wizard.py merge-deny-list helper"
+        )
+        assert "--dry-run" in step0, (
+            "Step 0 playbook must show the --dry-run preview (inform-"
+            "before-write is deterministic, not narrated)"
+        )
+        assert step0.find("--dry-run") < step0.find("without `--dry-run`"), (
+            "the preview must come before the write in the documented "
+            "sequence"
+        )
+        assert "deny" in step0 and "`ask`" in step0, (
+            "Step 0 playbook must state the deny-vs-ask rule (deny rules "
+            "only, never ask)"
+        )
+
+    def test_consent_wording_is_verbatim_scripted(self, manual):
+        """Consent moments are fixed scripts — the one place phrasing is
+        not adaptive (operator carve-out on #13336: bucket-3 UX artifacts
+        retired, consent stays VERBATIM). Locks the exact script."""
+        assert "### Consent wording — verbatim" in manual
+        # Step 0 must bind to the script explicitly, before the flow moves on.
+        step0 = manual[manual.find("**0. Consent & guardrails"):manual.find("**1. Basics.**")]
+        assert "verbatim from § Consent wording" in step0, (
+            "Step 0 must direct the installer to present the consent text "
+            "verbatim from § Consent wording"
+        )
+        # The exact consent script — any rewording is a consent-drift reject.
+        for line in (
+            "> Before we begin, one important thing about how your team works.",
+            "> So the agents can get on with the work without stopping to ask "
+            "you about every little step, they run with broad access to this "
+            "project. I want to be upfront about that.",
+            '> You stay in control of the limits. I\'ll always honor a "please '
+            "don't touch this\" list — for **every** agent, permanently. If "
+            "there's anything you'd rather they never read or change — "
+            "passwords, API keys, `.env` files, private notes, a whole folder "
+            "— tell me now and I'll lock it off.",
+            "> How would you like to go ahead?",
+            "> - **Yes** — I'm good with this. *(List any files or folders to "
+            'keep off-limits, or say "nothing for now.")*',
+            "> - **No** — I'd rather not. *(That's completely fine — we'll "
+            "stop here, nothing is changed.)*",
+        ):
+            assert line in manual, (
+                f"Verbatim consent script line missing or reworded: {line!r}"
             )
-            last_idx = idx
 
-    def test_runbook_has_installer_agent_framing(self, runbook):
-        """Installer agent lifecycle (Q-new21) must be stated up front."""
-        # The "installer agent" phrase must appear in the first 2000 chars
-        head = runbook[:2000]
-        assert "installer agent" in head.lower()
-        assert "ephemeral" in head.lower()
-        assert "Q-new21" in head
+    def test_event_driven_model_is_the_default(self, manual):
+        """§5: event-driven is the reality; the loop is only a fallback."""
+        assert "The loop is a fallback" in manual
+        assert re.search(r"woken by events", manual)
 
-    def test_runbook_references_domain_only_rule(self, runbook):
-        assert "Q-new14" in runbook
-        assert re.search(r"domain\s+terms\s+only", runbook, re.IGNORECASE)
+    def test_roster_invariant_names_all_four_role_types(self, manual):
+        assert "PM, Worker, Verifier, DM — none missing" in manual
 
-    def test_runbook_references_intent_classifier_rule(self, runbook):
-        assert "Q-new18" in runbook
-        # The classifier prompt must be present (not paraphrased)
-        assert "software-dev" in runbook
-        assert "design" in runbook
-        assert "unclear" in runbook
+    def test_pr_flow_is_invariant_not_a_choice(self, manual):
+        """PR flow is a §3 invariant (change lands through review); the manual
+        must never offer a PR-flow on/off choice — only the merge gate is a
+        variable. `pr-flow-prompt` was drifted wizard.py surface (#9478 D2),
+        retired in #13355 — the manual must not carry it."""
+        assert "pr-flow-prompt" not in manual, (
+            "Manual offers the retired 'PR flow on/off' choice — PR flow is "
+            "an invariant; only the merge gate (Auto Merge) is a variable"
+        )
+        assert "Change lands through review" in manual
+
+    def test_silent_config_defaults_match_code(self, manual):
+        """The silent defaults must match wizard.py's (30m interval / 70
+        context threshold) — a doc-vs-code contradiction here misleads the
+        installer into writing wrong config."""
+        assert "context-pressure threshold (default 70)" in manual, (
+            "Context-threshold silent default must read 70 (wizard.py "
+            "context_threshold) — not 80 or any other value"
+        )
+        assert "default 30 minutes" in manual
 
 
 # ---------------------------------------------------------------------------
@@ -109,52 +250,59 @@ class TestRunbookStructure:
 # ---------------------------------------------------------------------------
 
 
+def _mentions(manual, script):
+    return re.findall(rf"{script}\s+([a-z][a-z0-9-]*)", manual)
+
+
 class TestHelperCommandReferences:
-    def test_every_wizard_command_mentioned_exists(self, runbook):
+    def test_every_wizard_command_mentioned_exists(self, manual):
         """Every `wizard.py <cmd>` mention must be a real subcommand."""
-        mentions = re.findall(
-            r"wizard\.py\s+([a-z][a-z0-9-]*)",
-            runbook,
-        )
+        mentions = _mentions(manual, r"wizard\.py")
         assert mentions, "Expected at least one wizard.py command reference"
         unknown = set(mentions) - _WIZARD_COMMANDS
-        assert not unknown, f"Runbook references unknown wizard commands: {unknown}"
+        assert not unknown, f"Manual references unknown wizard commands: {unknown}"
 
-    def test_every_manifest_command_mentioned_exists(self, runbook):
-        mentions = re.findall(
-            r"manifest\.py\s+([a-z][a-z0-9-]*)",
-            runbook,
-        )
-        unknown = set(mentions) - _MANIFEST_COMMANDS
-        assert not unknown, f"Runbook references unknown manifest commands: {unknown}"
+    def test_every_manifest_command_mentioned_exists(self, manual):
+        unknown = set(_mentions(manual, r"manifest\.py")) - _MANIFEST_COMMANDS
+        assert not unknown, f"Manual references unknown manifest commands: {unknown}"
 
-    def test_every_compose_command_mentioned_exists(self, runbook):
-        mentions = re.findall(
-            r"compose\.py\s+([a-z][a-z0-9-]*)",
-            runbook,
-        )
-        unknown = set(mentions) - _COMPOSE_COMMANDS
-        assert not unknown, f"Runbook references unknown compose commands: {unknown}"
+    def test_every_compose_command_mentioned_exists(self, manual):
+        unknown = set(_mentions(manual, r"compose\.py")) - _COMPOSE_COMMANDS
+        assert not unknown, f"Manual references unknown compose commands: {unknown}"
 
-    def test_critical_helpers_are_mentioned(self, runbook):
-        """Key commands that MUST be part of the flow."""
+    def test_every_model_router_command_mentioned_exists(self, manual):
+        unknown = set(_mentions(manual, r"model_router\.py")) - _MODEL_ROUTER_COMMANDS
+        assert not unknown, f"Manual references unknown model_router commands: {unknown}"
+
+    def test_every_forgejo_command_mentioned_exists(self, manual):
+        unknown = set(_mentions(manual, r"forgejo_setup\.py")) - _FORGEJO_COMMANDS
+        assert not unknown, f"Manual references unknown forgejo_setup commands: {unknown}"
+
+    def test_every_shared_fs_command_mentioned_exists(self, manual):
+        unknown = set(_mentions(manual, r"shared_fs\.py")) - _SHARED_FS_COMMANDS
+        assert not unknown, f"Manual references unknown shared_fs commands: {unknown}"
+
+    def test_critical_helpers_are_mentioned(self, manual):
+        """Key commands that MUST be part of the playbook."""
         for cmd in (
             "wizard.py gather-deps",
             "wizard.py provision-deps",
             "wizard.py check-existing",
             "wizard.py repo-info",
-            # #12419: the §10 migration walk replaced the flat re-run prompt;
-            # validate-rerun-action is no longer part of the Step 0b flow.
             "wizard.py migration-plan",
             "wizard.py stamp-version",
             "wizard.py validate-name",
+            "wizard.py scan-summary",
+            "wizard.py set-test-strategy",
             "wizard.py build-config-md",
             "wizard.py scaffold",
             "wizard.py ensure-labels",
+            "wizard.py restart-agents",
             "manifest.py list",
             "manifest.py load",
+            "shared_fs.py init",
         ):
-            assert cmd in runbook, f"Runbook missing critical helper call: {cmd}"
+            assert cmd in manual, f"Manual missing critical helper call: {cmd}"
 
 
 # ---------------------------------------------------------------------------
@@ -163,190 +311,100 @@ class TestHelperCommandReferences:
 
 
 class TestRegistryCrossReferences:
-    def test_referenced_preset_ids_exist(self, runbook):
+    def test_referenced_preset_ids_exist(self, manual):
         presets = {
             d.name for d in (REPO_ROOT / "references" / "presets").iterdir()
             if d.is_dir() and (d / "manifest.yaml").exists()
         }
         mentioned = {"software-dev", "design"}
         assert mentioned.issubset(presets), (
-            f"Runbook references presets not in registry: {mentioned - presets}"
+            f"Manual references presets not in registry: {mentioned - presets}"
         )
-        # Runbook must mention every shipped preset at least once
+        # Manual must mention every shipped preset at least once
         for p in presets:
-            assert p in runbook, f"Runbook never mentions shipped preset: {p}"
+            assert p in manual, f"Manual never mentions shipped preset: {p}"
 
-    def test_referenced_roles_exist(self, runbook):
+    def test_referenced_roles_exist(self, manual):
         roles = {
             d.name for d in (REPO_ROOT / "references" / "roles").iterdir()
             if d.is_dir() and (d / "manifest.yaml").exists()
         }
-        # The runbook must at least name every specialist role whose
-        # manifest has show_in_roster: true, plus pm and dm.
-        # #6274.2 AC2.2 phase 9: `dev`/`qa` renamed to `worker`/`verifier`
-        # on disk; the runbook prose-references the new canonical names.
+        # #6274.2: canonical role names are worker/verifier (not dev/qa).
         for role in ("pm", "dm", "worker", "verifier"):
             assert role in roles, f"Shipped role missing: {role}"
 
-        body_lower = runbook.lower()
+        body_lower = manual.lower()
         for role in ("pm", "dm", "worker", "verifier"):
             assert role in body_lower, (
-                f"Runbook never mentions shipped role: {role}"
+                f"Manual never mentions shipped role: {role}"
             )
 
-    def test_runbook_roster_uses_new_canonical_role_names_6274(self, runbook):
-        """#6274.2 AC2.2 phase 9: roster/pipeline displays use new names.
-
-        Locks two things against accidental revert during the AC2.4-2.7
-        wizard.py work:
-
-        1. The post-6274.2 canonical `display_name` values (`Worker`,
-           `Verifier`) appear where they should — Worker as a specialist
-           in the Step 2 roster block, Verifier in Step 3/6 pipelines
-           and the Step 7.6 boot line.
-
-        2. The pre-rename display tokens (`Dev`/`QA`) do NOT reappear in
-           any roster, pipeline arrow, or boot line.
-
-        Per `references/roles/verifier/manifest.yaml` (`show_in_roster:
-        false`, `always_installed: true`), Verifier is infrastructure —
-        not a specialist — so it does NOT appear in the Step 2 roster
-        block alongside Designer/Worker. It is named in the boot line
-        (alongside PM/DM/workers) and in every pipeline (`→ Verifier →
-        DM`).
-        """
-        # Roster block (Step 2) — render as conversational lines.
-        # Worker is a specialist (show_in_roster: true) so it MUST appear.
-        assert "Worker    — Writes code" in runbook, (
-            "Step 2 roster must render Worker line (post-6274.2 display_name)"
-        )
-        # Verifier is infrastructure (show_in_roster: false) per #6261 —
-        # it must NOT appear as a roster-block bullet (DS 9965-3c F2).
-        assert "Verifier  — Verifies" not in runbook, (
-            "Verifier is infrastructure (show_in_roster: false) — must "
-            "not be listed in the Step 2 specialist roster block"
-        )
-
-        # Pipeline arrow strings (Step 3 + Step 6 preview).
-        assert "PM → Designer ↻ → [Worker] → Verifier → DM" in runbook, (
-            "software-dev pipeline must use Worker/Verifier (Step 3)"
-        )
-        assert "Verifier → DM" in runbook, (
-            "Pipeline must route through Verifier, not QA"
-        )
-
-        # Final boot announcement (Step 7.6) names the running agents —
-        # all three infrastructure roles (PM/Verifier/DM) plus workers.
-        assert "PM, Verifier, DM, workers" in runbook, (
-            "Step 7.6 boot line must name Verifier alongside PM/DM/workers"
-        )
-
-        # Old display tokens must not reappear in prose (excluding
-        # legitimate substrings like 'Designer', 'devtools', etc.).
-        # Whole-word check on the exact display tokens we replaced.
-        # `→ QA →` catches any pipeline arrow where QA was not removed —
-        # the `[Dev] → QA` token alone misses partial reverts in the
-        # `design` and `Minimal` pipelines (DS 9965-3c F5).
-        forbidden_displays = (
-            "Dev       — Writes code",
-            "QA        — Verifies dev work",
-            "[Dev] → QA",
-            "→ QA →",
-            "PM, QA, DM, workers",
-        )
-        for token in forbidden_displays:
-            assert token not in runbook, (
-                f"Stale pre-6274.2 display token still in runbook: {token!r}"
+    def test_no_stale_pre_6274_role_tokens(self, manual):
+        """The pre-rename display tokens (`Dev`/`QA`) must not appear as
+        roster/pipeline vocabulary in the manual."""
+        for token in ("→ QA →", "[Dev] → QA", "PM, QA, DM"):
+            assert token not in manual, (
+                f"Stale pre-6274.2 display token in manual: {token!r}"
             )
 
 
 # ---------------------------------------------------------------------------
-# Installer-agent lifecycle invariants (Q-new21)
+# Installer-agent lifecycle invariants
 # ---------------------------------------------------------------------------
 
 
 class TestInstallerAgentInvariants:
-    def test_no_writes_before_step_7_is_documented(self, runbook):
-        """Runbook must explicitly prohibit disk writes before Step 7."""
-        head = runbook.split("## Step 7")[0]
+    def test_no_writes_before_apply_is_documented(self, manual):
+        """The manual must explicitly prohibit project writes before step 7."""
         assert re.search(
-            r"never\s+writ(e|es|ten)|not\s+written|do\s+not\s+write|"
-            r"nothing\s+.*(disk|written)",
-            head,
-            re.IGNORECASE,
+            r"Nothing is written to the target project before step 7",
+            manual,
+        ), "Manual missing the no-writes-before-Apply write-discipline rule"
+
+    def test_full_rebuild_requires_typed_confirmation(self, manual):
+        assert "delete and rebuild" in manual, (
+            "Full rebuild must require the typed `delete and rebuild` confirmation"
         )
 
-    def test_ephemeral_exit_after_step_7(self, runbook):
-        """Step 7.6 must explicitly say 'exit' and not loop."""
-        idx = runbook.find("### 7.6")
-        assert idx != -1, "Runbook missing Step 7.6 exit instruction"
-        tail = runbook[idx:]
-        assert re.search(r"exit\s+the\s+conversation", tail, re.IGNORECASE)
-        assert "ephemeral" in tail.lower()
-
-    def test_no_self_loop_directive(self, runbook):
-        """The runbook must not tell the installer to run /loop itself."""
-        # It's OK to mention /loop in the context of what the boot scripts
-        # do, but the installer itself must not be told to invoke /loop
-        # or to persist beyond Step 7.
-        dont_block = runbook.split("## What NOT to do")[-1]
-        assert "do not keep the session alive" in dont_block.lower()
-
-    def test_force_flag_not_documented_for_installer(self, runbook):
-        """Installer must not use --force anywhere — it's a human override."""
-        # --force on tracker.py transition is a human-only escape hatch;
-        # the installer has no legitimate reason to pass it.
-        installer_body = runbook.split("## What NOT to do")[0]
-        assert "--force" not in installer_body, (
-            "Runbook uses --force in the installer flow — that flag is "
-            "for human overrides only, not for the install wizard."
+    def test_one_consent_question_for_provisioning(self, manual):
+        assert re.search(r"\*\*one\*\* permission question", manual), (
+            "Dependency provisioning must ask exactly ONE permission question"
         )
 
+    def test_ephemeral_exit_documented(self, manual):
+        """The installer must hand off and exit — never persist or cycle."""
+        assert "hand off and exit" in manual
+        assert re.search(r"ephemeral", manual, re.IGNORECASE)
+        assert re.search(r"end the session", manual, re.IGNORECASE)
 
-# ---------------------------------------------------------------------------
-# Review screen (P/V/E/A) invariants
-# ---------------------------------------------------------------------------
+    def test_no_self_loop_or_squad_work(self, manual):
+        assert "Persist, cycle, or pick up squad work" in manual, (
+            "The Don't list must forbid persisting/cycling/picking up squad work"
+        )
 
+    def test_force_flag_not_documented_for_installer(self, manual):
+        """--force is a human override — the installer must never use it.
 
-class TestReviewScreen:
-    def test_review_screen_has_four_actions(self, runbook):
-        idx = runbook.find("## Step 6")
-        assert idx != -1
-        step6 = runbook[idx: runbook.find("## Step 7", idx)]
-        for action in ("[P] Proceed", "[V] View", "[E] Edit", "[A] Abort"):
-            assert action in step6, (
-                f"Step 6 review screen missing action: {action}"
-            )
+        The helper contract's own prohibition sentence ("--force flags are
+        human escape hatches, never yours") is the one sanctioned mention;
+        any other occurrence means an instruction actually uses the flag.
+        """
+        offending = [
+            line for line in manual.splitlines()
+            if "--force" in line and "human escape hatch" not in line
+        ]
+        assert not offending, (
+            "Manual uses --force in the installer flow — that flag is "
+            f"for human overrides only, not for the installer: {offending}"
+        )
 
-    def test_view_action_uses_dry_run_helpers(self, runbook):
-        idx = runbook.find("## Step 6")
-        step6 = runbook[idx: runbook.find("## Step 7", idx)]
-        # Preview must not touch the real .squidsquad/ directory
-        assert "build-config-md" in step6
+    def test_preview_never_touches_real_install(self, manual):
         assert re.search(
-            r"(tmp|scratch|temp|dry[- ]run|do not overwrite)",
-            step6,
-            re.IGNORECASE,
+            r"[Nn]ever write the real `\.squidsquad/` during a preview",
+            manual,
+        ), "Preview mechanics must forbid writing the real .squidsquad/"
+
+    def test_never_auto_spawn_the_team(self, manual):
+        assert re.search(r"\*\*Never start the team yourself\*\*", manual), (
+            "Hand-off mechanics must forbid the installer booting the squad"
         )
-
-
-# ---------------------------------------------------------------------------
-# Q-new locks are referenced where it matters
-# ---------------------------------------------------------------------------
-
-
-class TestLockCoverage:
-    @pytest.mark.parametrize("lock,section_hint", [
-        ("Q-new14", "domain terms"),       # domain-only language
-        ("Q-new15", "roster"),             # specialist roster
-        ("Q-new17", None),                 # config.md schema (can appear anywhere)
-        ("Q-new18", "classifier"),         # hardcoded classifier prompt
-        ("Q-new19", "per-agent"),          # per-agent requirements in single exchange
-        ("Q-new21", "ephemeral"),          # installer ephemeral
-    ])
-    def test_locked_decision_referenced(self, runbook, lock, section_hint):
-        assert lock in runbook, f"Runbook missing reference to locked decision {lock}"
-        if section_hint is not None:
-            assert section_hint.lower() in runbook.lower(), (
-                f"{lock} should appear near the word {section_hint!r}"
-            )

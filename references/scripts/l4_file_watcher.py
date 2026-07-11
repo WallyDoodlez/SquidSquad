@@ -8,9 +8,17 @@ file (e.g. ``.squidsquad/project/pm.md``):
    ``.squidsquad/config.md`` ``## Aliases`` registry.
 2. For each affected alias, run ``compose.py deploy <alias>``.
 3. Per-alias outcome:
-   - **Success** -> emit ``assigned-to(target_alias=<alias>,
+   - **Success (output changed)** -> emit ``assigned-to(target_alias=<alias>,
      event_context="restart-required", payload={reason:"l4-recompose"})``
      per AGENT-RUNTIME §8.5 catalog-trim translators.
+   - **Success (output unchanged, #13303)** -> no event. A recompose whose
+     composed ``CLAUDE.md`` is byte-identical to what is already deployed is
+     a no-op; emitting ``restart-required`` would force a wasteful agent
+     restart. A spurious filesystem touch on an L4 file (the freshen-pull's
+     own mtime rewrite, or a teammate-merge propagation into the harness
+     clone) drives exactly this no-op recompose. The content-change gate
+     reads the deployed file before/after compose and suppresses the event
+     when nothing changed.
    - **Failure** -> emit ``assigned-to(target_alias=<alias>,
      event_context="compose-failed", payload={reason:"l4-recompose",
      stderr:<truncated>})``. Agents stay on their existing CLAUDE.md
@@ -70,6 +78,12 @@ class RecomposeResult:
     event_type: str = "assigned-to"
     event_context: str = ""
     payload: dict = field(default_factory=dict)
+    # #13303: a successful recompose whose composed CLAUDE.md is byte-
+    # identical to what was already deployed is a no-op — the agent has
+    # nothing new to pick up, so emitting ``restart-required`` would force
+    # a wasteful restart. ``noop`` results are produced (so callers can log
+    # them) but ``emit_results`` skips emitting any event for them.
+    noop: bool = False
 
 
 def role_class_from_path(path, *, repo_root):
@@ -127,6 +141,7 @@ def recompose_for_role_class(
     registry,
     *,
     run_compose,
+    read_deployed=None,
 ):
     """Run compose for every affected alias and return one result per alias.
 
@@ -138,22 +153,71 @@ def recompose_for_role_class(
     NOT emit ``restart-required`` for that alias and does NOT halt
     iteration over the remaining aliases. Each alias's outcome is
     independent.
+
+    #13303 content-change gate: ``read_deployed(alias)`` (optional,
+    injected) returns the alias's currently-deployed ``CLAUDE.md`` text
+    (or ``None`` if absent). When supplied, the deployed content is
+    captured BEFORE and AFTER a successful ``run_compose`` and the
+    ``restart-required`` event is emitted ONLY if the composed output
+    actually changed; a byte-identical recompose yields a ``noop`` result
+    that ``emit_results`` does not emit. When ``read_deployed`` is ``None``
+    the gate is disabled and every success emits ``restart-required`` (the
+    pre-#13303 behavior — kept so direct callers/tests need no reader).
+    A spurious filesystem touch on an L4 file (the watcher's own
+    freshen-pull mtime rewrite, or a teammate-merge propagation) drives a
+    no-op recompose; without this gate that produced a needless agent
+    restart.
     """
     results = []
     for alias in compute_affected_aliases(role_class, registry):
+        before = None
+        before_ok = True
+        if read_deployed is not None:
+            try:
+                before = read_deployed(alias)
+            except Exception:  # noqa: BLE001 — reader must never crash the watch
+                before_ok = False
         try:
             outcome = run_compose(alias)
         except Exception as exc:  # noqa: BLE001 — any unexpected raise is a failure
             outcome = (False, "", f"compose runner raised: {exc!r}")
         ok, _stdout, stderr = outcome
         if ok:
-            results.append(RecomposeResult(
-                alias=alias,
-                role_class=role_class,
-                succeeded=True,
-                event_context="restart-required",
-                payload={"reason": "l4-recompose"},
-            ))
+            # Gate off (no reader) -> always emit (pre-#13303 behavior).
+            # Gate on -> emit only on a real content change; but if EITHER
+            # read failed we cannot prove no-change, so fail safe and emit
+            # (a needless restart beats silently dropping a real update).
+            changed = True
+            if read_deployed is not None:
+                after_ok = True
+                try:
+                    after = read_deployed(alias)
+                except Exception:  # noqa: BLE001 — reader must never crash the watch
+                    after_ok = False
+                if before_ok and after_ok:
+                    changed = before != after
+                else:
+                    changed = True
+            if changed:
+                results.append(RecomposeResult(
+                    alias=alias,
+                    role_class=role_class,
+                    succeeded=True,
+                    event_context="restart-required",
+                    payload={"reason": "l4-recompose"},
+                ))
+            else:
+                # No-op recompose: composed output byte-identical to the
+                # deployed CLAUDE.md. Record the outcome (for logging) but
+                # emit no restart-required — nothing changed for the agent.
+                results.append(RecomposeResult(
+                    alias=alias,
+                    role_class=role_class,
+                    succeeded=True,
+                    event_context="",
+                    payload={"reason": "l4-recompose-noop"},
+                    noop=True,
+                ))
         else:
             truncated = (stderr or "")[:_COMPOSE_FAILED_STDERR_MAX]
             results.append(RecomposeResult(
@@ -181,6 +245,10 @@ def emit_results(results, *, emit_event):
     that the harness uses for the alias-care filter).
     """
     for r in results:
+        if r.noop:
+            # #13303: no-op recompose (output unchanged) — nothing for the
+            # agent to pick up, so emit no restart-required event.
+            continue
         emit_event(
             r.event_type,
             "harness",
@@ -190,6 +258,19 @@ def emit_results(results, *, emit_event):
                 "event_context": r.event_context,
             },
         )
+
+
+# #13197/#13211: the freshen must be single-flighted — each role-class debounce
+# callback fires on its OWN threading.Timer thread (see _Debouncer), so a burst
+# touching N role-classes runs N concurrent git freshens against the SAME harness
+# clone and collides on `.git/index.lock` (an N-way compose-failed storm to PM).
+# #13197 originally added a watcher-local lock here, but the post-merge deploy-all
+# path called git_ops.ensure_main_and_pull OUTSIDE it, so a watcher burst could
+# still race the deploy. #13211 HOISTED the serialization into
+# git_ops.ensure_main_and_pull (git_ops._ENSURE_MAIN_LOCK) so EVERY in-process
+# caller — this freshen AND the deploy path — shares one lock. The watcher-local
+# lock is therefore retired; serialization now lives at the single shared
+# implementation, not at each call site.
 
 
 def _default_ensure_fresh_source(*, repo_root):
@@ -207,6 +288,14 @@ def _default_ensure_fresh_source(*, repo_root):
     Lives behind ``ensure_fresh_source=`` injection (same pattern as
     ``run_compose=``) so unit tests never shell out to git. Returns
     ``(ok, detail)``.
+
+    #13197/#13211: a burst of per-role-class debounce callbacks (each on its own
+    Timer thread) must not fire concurrent ``git`` against the shared clone and
+    collide on ``.git/index.lock``. Serialization now lives inside
+    ``git_ops.ensure_main_and_pull`` (``git_ops._ENSURE_MAIN_LOCK``, #13211) so it
+    covers this freshen AND the post-merge deploy-all path from one place — no
+    watcher-local lock needed here. Serialized, the first call does the real pull
+    and the rest are fast no-ops.
     """
     try:
         import git_ops
@@ -287,6 +376,24 @@ def _default_run_compose(alias, *, repo_root):
     return proc.returncode == 0, proc.stdout, proc.stderr
 
 
+def _default_read_deployed(alias, *, repo_root):
+    """Return the alias's currently-deployed ``CLAUDE.md`` text, or ``None``.
+
+    Backs the #13303 content-change gate: the deployed file at
+    ``<repo_root>/.squidsquad/<alias>/CLAUDE.md`` is read before and after
+    a recompose so a byte-identical (no-op) recompose suppresses the
+    spurious ``restart-required``. A missing file returns ``None`` (treated
+    as "changed" once compose writes it — a genuine first deploy). Lives
+    behind ``read_deployed=`` injection (same pattern as ``run_compose=``)
+    so unit tests can stub it without touching disk.
+    """
+    p = Path(repo_root) / ".squidsquad" / alias / "CLAUDE.md"
+    try:
+        return p.read_text(encoding="utf-8")
+    except (FileNotFoundError, OSError):
+        return None
+
+
 def recompose_path(
     path,
     *,
@@ -295,6 +402,7 @@ def recompose_path(
     emit_event,
     run_compose=None,
     ensure_fresh_source=None,
+    read_deployed=None,
 ):
     """Handle a single L4 file change end-to-end.
 
@@ -320,8 +428,15 @@ def recompose_path(
     if run_compose is None:
         def run_compose(alias):
             return _default_run_compose(alias, repo_root=repo_root)
+    # #13303: default to the real deployed-file reader so the content-change
+    # gate is active for this end-to-end entry (file-watch + post-commit
+    # hook). Tests inject a stub (or rely on the in-tree CLAUDE.md files).
+    if read_deployed is None:
+        def read_deployed(alias):
+            return _default_read_deployed(alias, repo_root=repo_root)
     results = recompose_for_role_class(
         role_class, registry, run_compose=run_compose,
+        read_deployed=read_deployed,
     )
     emit_results(results, emit_event=emit_event)
     return results
@@ -410,6 +525,7 @@ def make_change_callback(
     emit_event,
     run_compose=None,
     ensure_fresh_source=None,
+    read_deployed=None,
 ):
     """Build the callback the watcher/debouncer hands a role-class to.
 
@@ -455,8 +571,13 @@ def make_change_callback(
         if resolved_compose is None:
             def resolved_compose(alias):
                 return _default_run_compose(alias, repo_root=repo_root)
+        # #13303: ``read_deployed`` passes straight through to the
+        # content-change gate. It defaults to ``None`` here (gate off) so
+        # direct unit-test callers keep the pre-#13303 always-emit behavior;
+        # production wires the real reader via ``start_watcher`` below.
         results = recompose_for_role_class(
             role_class, registry, run_compose=resolved_compose,
+            read_deployed=read_deployed,
         )
         emit_results(results, emit_event=emit_event)
     return _on_change
@@ -469,6 +590,7 @@ def start_watcher(
     emit_event,
     run_compose=None,
     ensure_fresh_source=None,
+    read_deployed=None,
     debounce_seconds=DEFAULT_DEBOUNCE_SECONDS,
 ):
     """Start a ``watchdog.Observer`` watching ``.squidsquad/project/``.
@@ -495,12 +617,21 @@ def start_watcher(
     watch_path = repo_root / WATCH_SUBDIR
     watch_path.mkdir(parents=True, exist_ok=True)
 
+    # #13303: default to the real deployed-file reader so the production
+    # file-watch path gates restart-required on actual composed-output
+    # change. A benign FS touch (freshen-pull mtime rewrite, teammate-merge
+    # propagation) drives a no-op recompose that must NOT restart agents.
+    if read_deployed is None:
+        def read_deployed(alias):
+            return _default_read_deployed(alias, repo_root=repo_root)
+
     on_change = make_change_callback(
         repo_root=repo_root,
         registry_provider=registry_provider,
         emit_event=emit_event,
         run_compose=run_compose,
         ensure_fresh_source=ensure_fresh_source,
+        read_deployed=read_deployed,
     )
     debouncer = _Debouncer(debounce_seconds, on_change)
 

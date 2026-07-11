@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """SquidSquad install wizard — mechanical helpers for the installer agent.
 
-The wizard is a prose runbook that a Claude session (the "installer agent",
-Q-new21) follows interactively. This script owns the *mechanical* pieces:
-prerequisite checks, re-run detection, repo metadata probing, etc. Anything
-that should be testable without talking to an LLM lives here. The intent
-classifier, the setup_requirements walker, and the natural conversation
-live in the prose runbook and use Claude's judgement.
+The installer is a Claude session that follows the operating manual at
+docs/INSTALLER-RUNTIME.md interactively. This script owns the *mechanical*
+pieces: prerequisite checks, re-run detection, repo metadata probing, etc.
+Anything that should be testable without talking to an LLM lives here. The
+setup_requirements walker guidance and the natural conversation live in the
+manual (its §9 helper playbook) and use Claude's judgement.
 
 Commands:
     python scripts/wizard.py check-gh              # Step 0
@@ -270,9 +270,10 @@ def preflight(base_dir=None):
 # (it never fails fast on the first missing dependency, unlike check_gh above
 # which is kept for the legacy fail-fast preflight path). Detection and the
 # per-platform install dispatch are deterministic Python here; the consent
-# prompt itself lives in the WIZARD.md runbook (the installer agent presents
-# the missing-set the gather pass returns and asks the human once). The agent
-# acts on this helper JSON and never invents environment checks.
+# prompt itself lives in the installer manual (docs/INSTALLER-RUNTIME.md §9
+# helper playbook — the installer agent presents the missing-set the gather
+# pass returns and asks the human once). The agent acts on this helper JSON
+# and never invents environment checks.
 # ---------------------------------------------------------------------------
 
 # requirements.txt dist name -> import (module) name where they differ.
@@ -739,7 +740,7 @@ def detect_existing_install(base_dir=None):
         default_action: str — "abort" — the safe default on the 3-way prompt
 
     This helper intentionally does NOT prompt the user — it reports state
-    and lets the prose runbook drive the interactive 3-way prompt.
+    and lets the installer manual drive the interactive 3-way prompt.
     """
     if base_dir is None:
         base_dir = REPO_ROOT
@@ -815,9 +816,10 @@ def validate_rerun_action(action):
 # migration markdowns to apply, and stamp the version after a successful walk.
 # They do NOT apply migration prose — that is the LLM's job under the §10
 # three-gate model (DeepSeek audit → mini-CQ → compose dry-run), driven by the
-# WIZARD.md Step 0b runbook. These helpers only compute *what* to apply; the
-# runbook drives *how*, gated. Keeping the seam here is the point: version math
-# and chain selection are testable code; prose application is probabilistic.
+# installer manual's migration-walk playbook (docs/INSTALLER-RUNTIME.md §9).
+# These helpers only compute *what* to apply; the manual drives *how*, gated.
+# Keeping the seam here is the point: version math and chain selection are
+# testable code; prose application is probabilistic.
 # ---------------------------------------------------------------------------
 
 MIGRATIONS_DIRNAME = "migrations"
@@ -1029,9 +1031,10 @@ def stamp_version(version, base_dir=None):
 def migration_walk_plan(base_dir=None):
     """Aggregate the deterministic walk inputs into one JSON-able plan.
 
-    This is what the WIZARD.md Step 0b runbook consumes to decide whether to
-    walk and which files to apply (it then drives the §10 three-gate model per
-    file). Pure read — computes nothing on disk. Shape:
+    This is what the installer's migration walk (docs/INSTALLER-RUNTIME.md §9,
+    Step 1 — Basics) consumes to decide whether to walk and which files to
+    apply (it then drives the §10 three-gate model per file). Pure read —
+    computes nothing on disk. Shape:
 
         {
           "is_fresh": bool,            # no .squidsquad/ — skip the walk entirely
@@ -1069,10 +1072,11 @@ def migration_walk_plan(base_dir=None):
 # Step 7.5c — post-commit harness restart (INSTALLER-ARCH §10.3, #12420)
 # ---------------------------------------------------------------------------
 #
-# After Phase 8's commit (WIZARD.md Step 7.5) the runbook calls `restart-agents`
-# so a *running* squad picks up the freshly-composed CLAUDE.md. The probe +
-# routing + per-alias HTTP are deterministic and belong here, not in runbook
-# prose. The HTTP touchpoint is isolated in `_http_request` so the unit tests
+# After Phase 8's commit the installer calls `restart-agents` (per
+# docs/INSTALLER-RUNTIME.md §9, Step 9 — Commit & hand off) so a *running*
+# squad picks up the freshly-composed CLAUDE.md. The probe + routing +
+# per-alias HTTP are deterministic and belong here, not in manual prose.
+# The HTTP touchpoint is isolated in `_http_request` so the unit tests
 # can monkeypatch it and never open a socket.
 
 HARNESS_DEFAULT_PORT = 7373       # harness.py default; mirrors cycle_post._HARNESS_DEFAULT_PORT
@@ -1084,7 +1088,7 @@ def _read_harness_port(base_dir=None):
 
     Defaults to ``HARNESS_DEFAULT_PORT`` when the file is missing, empty, or not
     a valid integer — same fail-safe the agent boot probe uses
-    (cycle_post._discover_harness_port / WIZARD step:cycle/boot).
+    (cycle_post._discover_harness_port / the boot-bootstrap step:cycle/boot).
     """
     if base_dir is None:
         base_dir = REPO_ROOT
@@ -1173,8 +1177,8 @@ def restart_agents(base_dir=None, timeout=HARNESS_PROBE_TIMEOUT):
       and boot the refreshed CLAUDE.md (AC2: no stale-instruction agents).
     - **Unreachable** — the wizard is ephemeral (Q-new21); it does NOT spawn a
       detached harness. Report the user-driven cold-start command and let the
-      runbook surface ``./start.sh`` to the user (AC1 "falls through to
-      start.sh").
+      runbook surface ``.squidsquad/start.sh`` to the user (AC1 "falls through
+      to start.sh").
 
     ``ok`` is False only when the harness was reachable AND a restart failed (or
     no aliases were found); an unreachable harness is a normal branch, not an
@@ -1186,12 +1190,12 @@ def restart_agents(base_dir=None, timeout=HARNESS_PROBE_TIMEOUT):
             "ok": True,
             "reachable": False,
             "port": port,
-            "cold_start_cmd": "./start.sh",
+            "cold_start_cmd": ".squidsquad/start.sh",
             "detail": (
                 f"Harness not reachable on port {port} within {timeout}s — "
                 f"no running squad to refresh. Cold start is user-driven "
-                f"(run ./start.sh); the wizard is ephemeral and never spawns "
-                f"the harness itself (Q-new21)."
+                f"(run .squidsquad/start.sh); the wizard is ephemeral and never "
+                f"spawns the harness itself (Q-new21)."
             ),
         }
     aliases = _install_aliases(base_dir)
@@ -1247,49 +1251,13 @@ def is_valid_project_name(name):
     return bool(_PROJECT_NAME_ALLOWED.match(name))
 
 
-def validate_interval(value, default=10):
-    """Parse and validate the Ralph Loop interval (Step 5, TC-49..TC-52).
-
-    Accepts any string-ish value the user might type. Returns a dict:
-
-        {"ok": bool, "minutes": int | None, "reason": str | None}
-
-    Rules:
-      - Empty string or None -> ok with minutes=default
-      - Whole integer >= 1 -> ok
-      - Zero, negative, float-ish, or non-numeric -> not ok, with a
-        user-facing reason the runbook can surface as a re-prompt
-    """
-    if value is None or (isinstance(value, str) and value.strip() == ""):
-        return {
-            "ok": True,
-            "minutes": int(default),
-            "reason": f"empty input — defaulting to {default} minutes",
-        }
-
-    raw = str(value).strip()
-    # Reject float-looking input explicitly so "10.5" doesn't silently truncate
-    if "." in raw or "," in raw:
-        return {
-            "ok": False,
-            "minutes": None,
-            "reason": f"{raw!r} must be a whole number of minutes",
-        }
-    try:
-        minutes = int(raw)
-    except ValueError:
-        return {
-            "ok": False,
-            "minutes": None,
-            "reason": f"{raw!r} is not a number — enter an integer minute count",
-        }
-    if minutes < 1:
-        return {
-            "ok": False,
-            "minutes": None,
-            "reason": f"interval must be at least 1 minute (got {minutes})",
-        }
-    return {"ok": True, "minutes": minutes, "reason": None}
+# validate_interval + the loop-interval prompt removed in #13328 — the polling
+# interval is NOT a setup question. Event mode is the always-on default and the
+# loop is an automatic boot-time fallback (INSTALLER-RUNTIME.md §5); prompting
+# the user to tune a fallback's cadence was stale and its "how often should each
+# agent run its cycle?" framing was misleading. build_config_md now writes the
+# ## Iteration Interval / Minutes field with a silent 30-minute default, and
+# config.py carries a matching graceful default.
 
 
 def project_name_default(base_dir=None):
@@ -1433,7 +1401,10 @@ _SECTION_ORDER = [
     "## Preset",
     "## Agents",
     "## Tools",
-    "## Loop",
+    "## Iteration Interval",  # #13328 — polling-fallback cadence (silent 30m default)
+    "## Context Pressure",    # #13328 — moved from the dead ## Loop section
+    "## Auto Merge",  # #13355 — merge gate (the one surviving PR variable)
+    "## PR Flow",     # #13355 — §3 invariant, always Enabled: yes
     "## Flags",
 ]
 
@@ -1524,16 +1495,24 @@ def build_config_md(spec):
                 "dm.tool": "local_delivery",
             },
             "loop": {
-                "interval_minutes": 10,
+                "interval_minutes": 30,
                 "context_threshold": 70,
             },
             "flags": {
-                "pr_flow": False,
+                "auto_merge": True,
                 "improvement_scan": True,
                 "vault_remember": True,
                 "diagnostics": True,
             },
         }
+
+    PR Flow is NOT a flag (#13355): every change lands through a reviewable
+    pull request (INSTALLER-RUNTIME.md §3 invariant; #9478 D2 — branch+PR is
+    the only mode), so the output always carries `## PR Flow / Enabled: yes`.
+    A legacy spec passing `flags.pr_flow` is ignored, never rendered. The one
+    surviving choice is the merge gate — `flags.auto_merge` (default yes)
+    renders as `## Auto Merge / Enabled` so `config.py get auto-merge` (the
+    verifier/DM merge-gate read) works on fresh installs.
 
     Returns the config.md text. Does NOT write to disk — callers persist
     the output themselves. Deterministic: same spec -> same bytes.
@@ -1601,24 +1580,57 @@ def build_config_md(spec):
         lines.append("- (none)")
     lines.append("")
 
-    # --- ## Loop ---
-    lines.append("## Loop")
-    lines.append("")
+    # --- ## Iteration Interval + ## Context Pressure (#13328) ---
+    # These are the section/field names config.py's FIELD_MAP actually reads
+    # (("Iteration Interval","Minutes") / ("Context Pressure","Threshold")).
+    # The former ## Loop section wrote both fields under a heading nobody read,
+    # so config get interval / context-threshold saw them as absent and fell
+    # back to defaults (#13328 — same drift class as #13355's PR Flow mismatch).
+    # The interval is the polling-fallback cadence ONLY: event mode is the
+    # always-on default and the loop is an automatic boot-time fallback
+    # (INSTALLER-RUNTIME.md §5), so it is never a setup question — a silent
+    # 30-minute default, raised only if the user explicitly asks.
     loop = spec["loop"] or {}
-    lines.append(f"- **Interval Minutes**: {loop.get('interval_minutes', 10)}")
-    lines.append(
-        f"- **Context Threshold**: {loop.get('context_threshold', 70)}"
-    )
+    lines.append("## Iteration Interval")
+    lines.append("")
+    lines.append(f"- **Minutes**: {loop.get('interval_minutes', 30)}")
+    lines.append("")
+    lines.append("## Context Pressure")
+    lines.append("")
+    lines.append(f"- **Threshold**: {loop.get('context_threshold', 70)}")
+    lines.append("")
+
+    # --- ## Auto Merge + ## PR Flow (#13355) ---
+    # PR Flow is an INSTALLER-RUNTIME.md §3 invariant (every change lands
+    # through a reviewable PR; #9478 D2 — branch+PR is the only mode): always
+    # Enabled: yes, never spec-driven. The merge gate is the one surviving
+    # variable: flags.auto_merge (default yes — squad self-merges once
+    # verification passes; the installer asks per manual §9 and records the
+    # answer here). Both render as the dedicated sections config.py's
+    # FIELD_MAP reads (("Auto Merge","Enabled") / ("PR Flow","Enabled")) —
+    # a generic ## Flags line is invisible to those runtime reads.
+    flags = spec["flags"] or {}
+    lines.append("## Auto Merge")
+    lines.append("")
+    lines.append(f"- **Enabled**: {_render_bool(flags.get('auto_merge', True))}")
+    lines.append("")
+    lines.append("## PR Flow")
+    lines.append("")
+    lines.append("- **Enabled**: yes")
     lines.append("")
 
     # --- ## Flags ---
     lines.append("## Flags")
     lines.append("")
-    flags = spec["flags"] or {}
-    # Emit in deterministic order regardless of dict insertion
-    for key in sorted(flags):
-        lines.append(f"- **{_flag_label(key)}**: {_render_bool(flags[key])}")
-    if not flags:
+    # Emit in deterministic order regardless of dict insertion. pr_flow and
+    # auto_merge never render here: pr_flow is retired (legacy specs may still
+    # carry it — ignored), auto_merge has its dedicated section above.
+    render_flags = {k: v for k, v in flags.items()
+                    if k not in ("pr_flow", "auto_merge")}
+    for key in sorted(render_flags):
+        lines.append(
+            f"- **{_flag_label(key)}**: {_render_bool(render_flags[key])}")
+    if not render_flags:
         lines.append("- (none)")
     lines.append("")
 
@@ -1633,6 +1645,17 @@ def build_config_md(spec):
     lines.append("")
     lines.append("- **Improvement Scan Cool-Down**: 30m")
     lines.append("- **Idle Scan Burst**: 3")
+    lines.append("")
+
+    # --- ## Verbose Mode ---
+    # #13162 — boot-read, session-sticky narration toggle. Shipped default OFF
+    # (quiet, jargon-free operator output). When ON, every agent narrates each
+    # cycle step + event with full internal detail (operator's accepted token
+    # tradeoff). Read once at boot via config.py is_verbose(); sticky for the
+    # session — toggling needs an edit + restart, no recompose.
+    lines.append("## Verbose Mode")
+    lines.append("")
+    lines.append("- **Enabled**: no")
     lines.append("")
 
     # --- ## Git Branches ---
@@ -1806,8 +1829,9 @@ def _write_l4_project_files(spec, project_dir, summary):
     """Write structured L4 project files from scan data in the spec (#6581).
 
     This is the mechanical half of the hybrid L4 writer. Writes stack details,
-    test commands, and detected config as structured markdown. The WIZARD.md
-    runbook adds qualitative content (conventions, patterns) afterward.
+    test commands, and detected config as structured markdown. The installer
+    adds qualitative content (conventions, patterns) afterward, per
+    docs/INSTALLER-RUNTIME.md §9 (Step 7 — Apply).
 
     Respects overwrite guards: existing files are preserved and recorded in
     summary["preserved"].
@@ -1822,24 +1846,86 @@ def _write_l4_project_files(spec, project_dir, summary):
 
     project_info = spec.get("project", {})
 
+    # Read the detected test strategy specifics (framework / location) from the
+    # persisted scan artifact (#12450, design call X). The agent spec only
+    # carries the run_command string; the richer test_strategy dict lives in
+    # .repo-scan.json (written by the scaffold), which is the source of truth
+    # that survives both --yes and interactive installs. Graceful: any
+    # absence/parse-failure leaves test_strategy empty and we fall back to the
+    # per-agent test_command below.
+    test_strategy = {}
+    scan_file = project_dir.parent / ".repo-scan.json"
+    if scan_file.exists():
+        try:
+            test_strategy = (
+                json.loads(scan_file.read_text(encoding="utf-8")).get(
+                    "test_strategy"
+                )
+                or {}
+            )
+        except (OSError, ValueError):
+            test_strategy = {}
+
     # shared-stack-details.md — detected tech stack and test commands
     stack_file = project_dir / "shared-stack-details.md"
     if stack_file.exists():
         summary.setdefault("preserved", []).append(str(stack_file))
     else:
         stack = scan_data.get("stack", "Not detected")
-        test_cmd = scan_data.get("test_command", "Not detected")
         name = project_info.get("name", "Unknown")
+        test_section = _format_test_strategy_section(
+            test_strategy, scan_data.get("test_command")
+        )
         stack_file.write_text(
             f"## Project Stack Details — {name}\n\n"
             f"These details apply to all agents on this project.\n\n"
             f"### Stack\n\n- **Detected stack**: {stack}\n\n"
-            f"### Test Command\n\n- **Test command**: `{test_cmd}`\n\n"
+            f"{test_section}"
             f"### Conventions\n\n"
             f"_To be populated by the installer agent or human with "
             f"project-specific conventions, patterns, and preferences._\n",
             encoding="utf-8",
         )
+
+
+def _md_inline_code(value):
+    """Sanitize a value for an inline-code (backtick) span (#12450 DS-F1).
+
+    A literal backtick in a detected run command would break out of the code
+    span and corrupt the generated markdown. Backticks are illegal inside a
+    single-backtick span anyway, so replacing them with apostrophes is lossless
+    for any realistic test command.
+    """
+    return str(value).replace("`", "'")
+
+
+def _format_test_strategy_section(test_strategy, fallback_command):
+    """Render the L4 '### Testing Strategy' markdown block for #12450.
+
+    When the scan detected a strategy, emit run command + framework + location
+    + coverage so workers reference the detected strategy rather than inventing
+    one. Otherwise emit a single 'Not detected' test-command line (legacy shape),
+    using ``fallback_command`` if the spec carried one.
+    """
+    if test_strategy.get("detected"):
+        run_command = test_strategy.get("run_command") or "Not detected"
+        framework = test_strategy.get("framework") or "Not detected"
+        location = test_strategy.get("location") or "Not detected"
+        lines = [
+            "### Testing Strategy\n",
+            f"- **Run command**: `{_md_inline_code(run_command)}`",
+            f"- **Framework**: {framework}",
+            f"- **Test location**: {location}",
+        ]
+        if test_strategy.get("coverage"):
+            lines.append(f"- **Coverage tool**: {test_strategy['coverage']}")
+        lines.append(
+            "\n_Auto-detected at install (task #12450). Run the project's existing "
+            "tests with the run command above — do not invent a new test setup._\n"
+        )
+        return "\n".join(lines) + "\n"
+    test_cmd = fallback_command or "Not detected"
+    return f"### Test Command\n\n- **Test command**: `{_md_inline_code(test_cmd)}`\n\n"
 
 
 def _copy_l4_seed_stubs(project_dir, summary):
@@ -1908,9 +1994,9 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             build_config_md) or if an agent references a role identity
             that does not exist under `references/roles/`.
         FileExistsError — if `.squidsquad/` exists and `overwrite_existing`
-            is False. The caller (the prose runbook) is responsible for
-            the re-run detection + 3-way prompt, so this should only fire
-            as a safety net.
+            is False. The caller (the installer, per its manual) is
+            responsible for the re-run detection + 3-way prompt, so this
+            should only fire as a safety net.
     """
     # Delegate validation of spec shape to build_config_md so we have
     # a single source of truth for required sections.
@@ -1959,8 +2045,9 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
     project_dir.mkdir(parents=True, exist_ok=True)
 
     # 1c. L4 structured files — write mechanically-detected project data (#6581).
-    # These are the "structured" half of the hybrid L4 writer. The WIZARD.md
-    # runbook adds qualitative notes (conventions, patterns) after scaffold.
+    # These are the "structured" half of the hybrid L4 writer. The installer
+    # adds qualitative notes (conventions, patterns) after scaffold, per
+    # docs/INSTALLER-RUNTIME.md §9 (Step 7 — Apply).
     _write_l4_project_files(spec, project_dir, summary)
 
     # 1d. L4 seed stubs — copy worker-*/verifier-* stubs from
@@ -2964,27 +3051,8 @@ def cmd_validate_name(args):
     return 0 if valid else 1
 
 
-def cmd_validate_interval(args):
-    """Usage: wizard.py validate-interval <value> [--default N]"""
-    if not args:
-        print(
-            "Usage: wizard.py validate-interval <value> [--default N]",
-            file=sys.stderr,
-        )
-        return 2
-    value = args[0]
-    default = 10
-    if "--default" in args:
-        idx = args.index("--default")
-        if idx + 1 < len(args):
-            try:
-                default = int(args[idx + 1])
-            except ValueError:
-                print(f"ERROR: --default must be an integer", file=sys.stderr)
-                return 2
-    result = validate_interval(value, default=default)
-    _print_json(result, ok=result["ok"])
-    return 0 if result["ok"] else 1
+# cmd_validate_interval removed in #13328 (see the validate_interval tombstone
+# above) — there is no loop-interval prompt for it to back.
 
 
 def cmd_build_config_md(args):
@@ -3176,7 +3244,7 @@ def cmd_restart_agents(args):
 
     Usage: wizard.py restart-agents [base_dir]
     Exit 0 on a clean restart OR an unreachable harness (a normal branch — the
-    runbook surfaces ./start.sh); exit 1 when the harness was reachable but a
+    runbook surfaces .squidsquad/start.sh); exit 1 when the harness was reachable but a
     restart failed, so the runbook can show the operator which aliases failed.
     """
     base_dir = args[0] if args else None
@@ -3185,20 +3253,192 @@ def cmd_restart_agents(args):
     return 0 if result.get("ok") else 1
 
 
-def pr_flow_prompt():
-    """Return the PR Flow question text and options for the setup agent."""
-    return {
-        "question": (
-            "Do you want Pull Request review flow enabled?\n\n"
-            "**PR Flow OFF** (default): Agents commit directly to the working branch. "
-            "Code lands immediately. Faster iteration, less overhead per change.\n\n"
-            "**PR Flow ON**: Agents create feature branches and open Pull Requests. "
-            "Code only lands after you review and merge each PR. "
-            "Gives you a review gate on every change."
-        ),
-        "options": ["Off (default — direct commits)", "On (PRs for every change)"],
-        "default": False,
+# ---------------------------------------------------------------------------
+# Step 0 — consent deny-list writer (#13337, INSTALLER-RUNTIME §4 step 0 + §9)
+# ---------------------------------------------------------------------------
+#
+# The consent conversation itself (verbatim script, capture of user deny
+# paths, inform-before-write) lives in the installer manual; this helper owns
+# the deterministic half: merging deny rules into the TARGET project's
+# .claude/settings.json under permissions.deny — create-if-absent, merge and
+# dedupe (never clobber), every unrelated key preserved, malformed JSON
+# fail-closed. `--dry-run` returns exactly what would be added so the
+# installer can show the user before anything is written.
+
+# Minimal cross-platform default deny-list — the most catastrophic operations
+# only (recursive force-deletes of the filesystem root and the home directory,
+# plus their Windows equivalents). The user's deny paths ADD to these.
+DEFAULT_DENY_RULES = (
+    "Bash(rm -rf /)",
+    "Bash(rm -rf /*)",
+    "Bash(rm -rf ~)",
+    "Bash(rm -rf ~/*)",
+    "Bash(rm -rf $HOME)",
+    "Bash(rm -rf $HOME/*)",
+    "Bash(rd /s /q C:\\)",
+    "Bash(Remove-Item -Recurse -Force C:\\)",
+    "Bash(Remove-Item -Recurse -Force $env:USERPROFILE)",
+)
+
+# Each user-named path is locked against reading AND changing (the consent
+# script's promise: "never read or change"). The installer passes paths
+# already shaped (globs where the user means a folder, e.g. `secrets/**`).
+_DENY_TOOLS_PER_PATH = ("Read", "Edit", "Write")
+
+
+def _expand_deny_paths(paths):
+    """Expand user deny paths into per-tool deny rules, order-preserving."""
+    rules = []
+    for p in paths or ():
+        for tool in _DENY_TOOLS_PER_PATH:
+            rules.append(f"{tool}({p})")
+    return rules
+
+
+def merge_deny_list(base_dir=None, paths=None, rules=None, dry_run=False):
+    """Merge deny rules into ``<base_dir>/.claude/settings.json``.
+
+    Returns a JSON-able dict: ``ok``, ``settings_path``, ``created`` (file
+    did not exist), ``added`` (rules newly appended, in order), ``skipped``
+    (candidates already present), ``total_deny`` (deny count after merge),
+    ``dry_run``. Fail-closed (``ok: False`` + ``error``, no write) when the
+    existing file is malformed JSON, not a JSON object, or has a
+    ``permissions.deny`` that is not a list — never clobber a file we can't
+    faithfully preserve.
+    """
+    if base_dir is None:
+        base_dir = REPO_ROOT
+    settings_path = Path(base_dir) / ".claude" / "settings.json"
+    result = {
+        "settings_path": str(settings_path),
+        "created": not settings_path.exists(),
+        "dry_run": bool(dry_run),
     }
+
+    settings = {}
+    if settings_path.exists():
+        raw = settings_path.read_text(encoding="utf-8")
+        if raw.strip():
+            try:
+                settings = json.loads(raw)
+            except (json.JSONDecodeError, ValueError):
+                result.update(ok=False, error=(
+                    "malformed JSON in .claude/settings.json — refusing to "
+                    "write; fix or move the file and re-run"))
+                return result
+            if not isinstance(settings, dict):
+                result.update(ok=False, error=(
+                    ".claude/settings.json is not a JSON object — refusing "
+                    "to write"))
+                return result
+
+    permissions = settings.get("permissions")
+    if permissions is None:
+        permissions = {}
+    if not isinstance(permissions, dict):
+        result.update(ok=False, error=(
+            "settings.json `permissions` is not an object — refusing to "
+            "write"))
+        return result
+    existing_deny = permissions.get("deny")
+    if existing_deny is None:
+        existing_deny = []
+    if not isinstance(existing_deny, list):
+        result.update(ok=False, error=(
+            "settings.json `permissions.deny` is not a list — refusing to "
+            "write"))
+        return result
+
+    candidates = list(DEFAULT_DENY_RULES) + _expand_deny_paths(paths) + list(rules or ())
+    seen = set(existing_deny)
+    added, skipped = [], []
+    for rule in candidates:
+        if rule in seen:
+            skipped.append(rule)
+        else:
+            seen.add(rule)
+            added.append(rule)
+
+    result.update(ok=True, added=added, skipped=skipped,
+                  total_deny=len(existing_deny) + len(added))
+    if dry_run or not added:
+        # Nothing to write (dry-run preview, or every rule already present).
+        return result
+
+    # MERGE: append the new rules; every existing entry and every unrelated
+    # key survives untouched.
+    permissions = dict(permissions)
+    permissions["deny"] = list(existing_deny) + added
+    settings = dict(settings)
+    settings["permissions"] = permissions
+
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    # Atomic write: settings.json is read by Claude Code sessions.
+    tmp_path = settings_path.with_suffix(".json.tmp")
+    tmp_path.write_text(
+        json.dumps(settings, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    tmp_path.replace(settings_path)
+    return result
+
+
+def _cli_usage_error(message):
+    """Emit a CLI usage error and return exit code 2.
+
+    The stderr write is guarded (#13397). A usage error is a deterministic
+    exit(2), but under heavy concurrent load in the full test suite a transient
+    failure writing to a captured stderr pipe would otherwise raise, propagate
+    unhandled through main()/`sys.exit(main())`, and terminate the process with
+    Python's unhandled-exception code 1 — flipping a deterministic exit(2) into
+    a spurious exit(1) and making the static gate flaky. The exit code is the
+    contract the caller asserts; the message is best-effort.
+    """
+    try:
+        print(message, file=sys.stderr)
+    except Exception:
+        pass
+    return 2
+
+
+def cmd_merge_deny_list(args):
+    """CLI: merge consent deny rules into the target's settings.json (#13337).
+
+    Usage: wizard.py merge-deny-list [--path <p>]... [--rule <r>]...
+           [--dry-run] [base_dir]
+
+    `--path` entries expand to Read/Edit/Write deny rules; `--rule` entries
+    are taken verbatim. The cross-platform default deny-list is always
+    included. `--dry-run` reports what would be added without writing —
+    the installer shows that to the user before the real run.
+    """
+    paths, rules, dry_run, base_dir = [], [], False, None
+    it = iter(args)
+    for arg in it:
+        if arg == "--path":
+            paths.append(next(it, "") or "")
+        elif arg == "--rule":
+            rules.append(next(it, "") or "")
+        elif arg == "--dry-run":
+            dry_run = True
+        elif arg.startswith("--"):
+            return _cli_usage_error(f"Unknown flag: {arg}")
+        else:
+            base_dir = arg
+    if "" in paths or "" in rules:
+        return _cli_usage_error(
+            "Usage: wizard.py merge-deny-list [--path <p>]... "
+            "[--rule <r>]... [--dry-run] [base_dir]")
+    result = merge_deny_list(base_dir, paths=paths, rules=rules, dry_run=dry_run)
+    _print_json(result, ok=result.get("ok", False))
+    return 0 if result.get("ok") else 1
+
+
+# pr_flow_prompt removed in #13355 — PR flow is an INSTALLER-RUNTIME.md §3
+# invariant (every change lands through a reviewable PR; #9478 D2: branch+PR
+# is the only mode), so the installer never offers an on/off choice. The one
+# surviving question is the merge gate — see build_config_md's Auto Merge
+# section and the manual's §9 merge-gate framing.
 
 
 def post_setup_summary(spec):
@@ -3304,6 +3544,22 @@ def format_scan_summary(scan_data):
     if tests:
         sections.append(f"**Test Tools**: {', '.join(tests)}")
 
+    # #12450 S3: surface the richer detected test strategy (the S1 detection
+    # ladder — run command / location / coverage) so the wizard can show the
+    # operator what the agents will follow, and detect the undetectable case
+    # (ask-human path in docs/INSTALLER-RUNTIME.md §9, test-strategy mechanics).
+    test_strategy = scan_data.get("test_strategy") or {}
+    if test_strategy.get("detected"):
+        ts_parts = []
+        if test_strategy.get("run_command"):
+            ts_parts.append(f"runs `{test_strategy['run_command']}`")
+        if test_strategy.get("location"):
+            ts_parts.append(f"tests in `{test_strategy['location']}`")
+        if test_strategy.get("coverage"):
+            ts_parts.append(f"coverage via `{test_strategy['coverage']}`")
+        if ts_parts:
+            sections.append(f"**Test Strategy**: {', '.join(ts_parts)}")
+
     ci = scan_data.get("ci_cd", [])
     if ci:
         sections.append(f"**CI/CD**: {', '.join(ci)}")
@@ -3339,17 +3595,25 @@ def generate_default_spec(scan_data=None, repo_info=None):
     project_name = info.get("name", "")
     project_repo = info.get("repo", "")
 
-    # Detect test command from scan
-    test_frameworks = scan.get("test_frameworks", [])
+    # Detect test command from scan. Prefer the richer test_strategy run_command
+    # (#12450 — a detection ladder over package.json scripts / pytest / go / cargo
+    # / mvn / gradle / rspec / make, far beyond the four-framework heuristic);
+    # fall back to the legacy test_frameworks heuristic when test_strategy is
+    # absent (older scan artifacts) or detected nothing.
+    test_strategy = scan.get("test_strategy") or {}
     test_command = ""
-    if "pytest" in test_frameworks:
-        test_command = "pytest"
-    elif "jest" in test_frameworks:
-        test_command = "npx jest"
-    elif "vitest" in test_frameworks:
-        test_command = "npx vitest"
-    elif "mocha" in test_frameworks:
-        test_command = "npx mocha"
+    if test_strategy.get("detected") and test_strategy.get("run_command"):
+        test_command = test_strategy["run_command"]
+    else:
+        test_frameworks = scan.get("test_frameworks", [])
+        if "pytest" in test_frameworks:
+            test_command = "pytest"
+        elif "jest" in test_frameworks:
+            test_command = "npx jest"
+        elif "vitest" in test_frameworks:
+            test_command = "npx vitest"
+        elif "mocha" in test_frameworks:
+            test_command = "npx mocha"
 
     # Detect stack from scan
     langs = scan.get("languages", [])
@@ -3406,7 +3670,10 @@ def generate_default_spec(scan_data=None, repo_info=None):
             "context_threshold": 70,
         },
         "flags": {
-            "pr_flow": False,
+            # #13355: pr_flow retired — PR flow is a §3 invariant, not a
+            # spec choice. auto_merge is the surviving merge-gate variable
+            # (default yes: squad self-merges once verification passes).
+            "auto_merge": True,
             "improvement_scan": True,
             "vault_remember": True,
             "diagnostics": True,
@@ -3432,10 +3699,17 @@ def cmd_scan_summary(args):
     """
     target = args[0] if args else "."
     scan_path = Path(target) / ".squidsquad" / ".repo-scan.json"
+    scan_data = None
     if scan_path.exists():
-        scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
-    else:
-        # Run scan on the fly
+        # #12846: a malformed/unreadable cache must NOT crash the command —
+        # fall back to a fresh scan below (matches the guarded reads in
+        # cmd_generate_defaults / scaffold_install).
+        try:
+            scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            scan_data = None
+    if scan_data is None:
+        # No usable cached scan (absent, malformed, or unreadable) — run on the fly.
         try:
             sys.path.insert(0, str(SCRIPT_DIR))
             from repo_scan import scan
@@ -3444,6 +3718,74 @@ def cmd_scan_summary(args):
             print("ERROR: repo_scan.py not available", file=sys.stderr)
             return 1
     print(format_scan_summary(scan_data))
+    return 0
+
+
+def cmd_set_test_strategy(args):
+    """Persist a human-provided test strategy into ``.repo-scan.json`` (#12450 S3).
+
+    Usage: wizard.py set-test-strategy --run-command <cmd> [--framework <f>]
+           [--location <l>] [--coverage <c>] [target_dir]
+
+    The undetectable path in docs/INSTALLER-RUNTIME.md §9 (test-strategy
+    mechanics): when the repo scan could not detect how the project runs its
+    unit tests, the installer asks the operator and records the answer here. ``.repo-scan.json`` is the single source of
+    truth every downstream consumer reads (the L4 seed writer, generate-defaults),
+    so writing it here makes the human answer flow through uniformly — marked
+    ``detected: true`` with ``source: "human"`` so it is no longer "undetected".
+    """
+    opts = {}
+    target = "."
+    i = 0
+    flag_map = {
+        "--run-command": "run_command",
+        "--framework": "framework",
+        "--location": "location",
+        "--coverage": "coverage",
+    }
+    while i < len(args):
+        tok = args[i]
+        if tok in flag_map:
+            if i + 1 >= len(args):
+                print(f"ERROR: {tok} requires a value", file=sys.stderr)
+                return 2
+            opts[flag_map[tok]] = args[i + 1]
+            i += 2
+        elif tok.startswith("--"):
+            # An unknown flag (e.g. a typo like --run-comand) must error, not be
+            # silently swallowed as a target path — that would write the strategy
+            # to the wrong directory.
+            print(f"ERROR: unknown flag {tok}", file=sys.stderr)
+            return 2
+        else:
+            target = tok
+            i += 1
+    if not opts.get("run_command"):
+        print("ERROR: --run-command is required", file=sys.stderr)
+        return 2
+
+    scan_path = Path(target) / ".squidsquad" / ".repo-scan.json"
+    scan_data = {}
+    if scan_path.exists():
+        try:
+            scan_data = json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            scan_data = {}
+
+    test_strategy = scan_data.get("test_strategy") or {}
+    test_strategy.update({k: v for k, v in opts.items() if v})
+    test_strategy["detected"] = True
+    test_strategy["source"] = "human"
+    scan_data["test_strategy"] = test_strategy
+    # Keep the legacy flat test_command in sync so older consumers also see it.
+    scan_data["test_command"] = opts["run_command"]
+
+    scan_path.parent.mkdir(parents=True, exist_ok=True)
+    scan_path.write_text(
+        json.dumps(scan_data, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps({"ok": True, "test_strategy": test_strategy}, indent=2))
     return 0
 
 
@@ -3480,6 +3822,397 @@ def cmd_generate_defaults(args):
 
     spec = generate_default_spec(scan_data, repo_info)
     _print_json(spec)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# #13339 — project-maturity probe + workflow→roster mapping heuristic
+#
+# Two deterministic helpers under docs/INSTALLER-RUNTIME.md §4 (steps 3/5/6 +
+# "Adapting to an empty project") and §9 ("Steps 3 & 5–6 — mapping the workflow
+# to a team"). The installer AGENT keeps its judgment; these are the testable
+# floor under it: `detect-maturity` picks the empty/scaffolded/established path,
+# `propose-roster` turns the discovered stack (or the user's *intended* type for
+# an empty repo) into a proposed engineering-team shape.
+# ---------------------------------------------------------------------------
+
+# Frameworks (as repo_scan.FRAMEWORK_FILES / dependency detection names them)
+# that mark a project as having a frontend / backend surface. Used only as a
+# heuristic to shape the worker roster — never as a hard classification.
+_FE_FRAMEWORKS = {
+    "nextjs", "nuxt", "svelte", "angular", "vite", "webpack", "tailwind",
+    "react", "vue",
+}
+_BE_FRAMEWORKS = {
+    "django", "flask", "express", "fastapi", "rails", "spring", "gin",
+    "laravel",
+}
+# Languages that lean backend (typescript/javascript are excluded — they run on
+# both ends, so the frontend signal comes from an FE framework, not the lang).
+_BACKEND_LANGUAGES = {
+    "python", "go", "rust", "java", "ruby", "php", "csharp", "c", "cpp",
+}
+
+# Maturity thresholds — exposed as module constants so the boundaries are
+# testable and documented rather than magic numbers buried in a branch.
+# A project with at least this many recognized source files is "established"
+# on file-count alone; below it, structure (a package manifest / framework) or
+# a test suite still lifts it out of "empty".
+_ESTABLISHED_MIN_SOURCE_FILES = 8
+
+
+def _load_or_run_scan(target):
+    """Return repo-scan signals for ``target``.
+
+    Prefers the cached ``.squidsquad/.repo-scan.json`` (written by the scaffold),
+    falling back to a fresh ``repo_scan.scan`` when the cache is absent,
+    malformed, or unreadable — the same guarded pattern as cmd_scan_summary /
+    cmd_generate_defaults. Returns ``{}`` only if repo_scan itself is missing.
+    """
+    scan_path = Path(target) / ".squidsquad" / ".repo-scan.json"
+    if scan_path.exists():
+        try:
+            return json.loads(scan_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from repo_scan import scan
+        return scan(target)
+    except ImportError:
+        return {}
+
+
+def _count_source_files(target):
+    """Count recognized source files under ``target`` (skip-dirs excluded).
+
+    Uses repo_scan's own extension counter + language map so the tally matches
+    what the scanner considers "code" and honors the same SKIP_DIRS. Returns 0
+    if repo_scan is unavailable (degrades to a structure/scan-only maturity call).
+    """
+    try:
+        sys.path.insert(0, str(SCRIPT_DIR))
+        from repo_scan import _count_extensions, LANGUAGE_EXTENSIONS
+    except ImportError:
+        return 0
+    counts = _count_extensions(target)
+    return sum(n for ext, n in counts.items() if ext in LANGUAGE_EXTENSIONS)
+
+
+def detect_maturity(target="."):
+    """Classify how much project already exists: empty / scaffolded / established.
+
+    Drives the §4 "Adapting to an empty project" branch — the installer leans on
+    external references and *intended* type for an empty repo, and analyzes what
+    exists for an established one. Deterministic and signal-transparent: the
+    returned ``signals`` block carries every input the classification used.
+
+    - **established** — a real, going codebase: at least
+      ``_ESTABLISHED_MIN_SOURCE_FILES`` recognized source files, OR a test suite
+      is present (tests imply a project worth analyzing even when small).
+    - **empty** — nothing to analyze: zero source files AND no package manifest
+      or framework scaffold.
+    - **scaffolded** — everything in between: some structure (a manifest /
+      framework) or a handful of source files, but below the established bar and
+      no tests. A skeleton to elicit intent against, not analyze.
+    """
+    scan_data = _load_or_run_scan(target)
+    languages = scan_data.get("languages", []) or []
+    frameworks = scan_data.get("frameworks", []) or []
+    package_managers = scan_data.get("package_managers", []) or []
+    test_frameworks = scan_data.get("test_frameworks", []) or []
+    test_strategy = scan_data.get("test_strategy", {}) or {}
+
+    source_file_count = _count_source_files(target)
+    has_tests = bool(test_frameworks) or bool(test_strategy.get("detected"))
+    has_structure = bool(package_managers) or bool(frameworks)
+
+    if source_file_count >= _ESTABLISHED_MIN_SOURCE_FILES or has_tests:
+        maturity = "established"
+        reason = (
+            f"{source_file_count} source file(s)"
+            + (" and a test suite" if has_tests else "")
+            + " — a real codebase to analyze."
+        )
+    elif source_file_count == 0 and not has_structure:
+        maturity = "empty"
+        reason = (
+            "no source files and no package manifest or framework scaffold — "
+            "nothing to analyze; elicit intent from the user and external refs."
+        )
+    else:
+        maturity = "scaffolded"
+        reason = (
+            f"{source_file_count} source file(s) with "
+            f"{'a package manifest/framework' if has_structure else 'no real structure'}"
+            " but no tests — a skeleton; propose the default workflow and "
+            "confirm the intended shape."
+        )
+
+    return {
+        "maturity": maturity,
+        "signals": {
+            "source_file_count": source_file_count,
+            "languages": languages,
+            "frameworks": frameworks,
+            "package_managers": package_managers,
+            "has_tests": has_tests,
+            "has_structure": has_structure,
+        },
+        "reason": reason,
+    }
+
+
+def propose_roster(scan_data=None, intended=None):
+    """Map the discovered workflow/stack → a proposed engineering-team shape.
+
+    Implements docs/INSTALLER-RUNTIME.md §9 "Steps 3 & 5–6". PM, DM and Verifier
+    are fixed singletons — the shipped manifests mark all three
+    ``always_installed: true`` / ``show_in_roster: false`` with no ``variant``
+    mechanism, so only the **worker** role carries a count + specialization
+    (its manifest is the one ``show_in_roster: true`` role with a ``variant``
+    setup requirement). The verifier's "verified"-stage specifics shape its
+    *behavior* (a step-6 per-agent customization), not its count.
+
+    Worker shape:
+      - ``intended`` (empty-project path — roster from the *intended* type,
+        since there is no code to scan): ``both`` → two workers (be + fe);
+        ``fullstack`` → one (worker); ``backend`` / ``frontend`` → one (be / fe).
+      - otherwise inferred from the scan: a frontend framework AND a backend
+        framework/language → be + fe; frontend only → fe; backend only → be;
+        nothing decisive → a single fullstack worker (the safe default).
+
+    Returns the proposal envelope (no side effects; the agent confirms it with
+    the user in §4 steps 5–6 before anything is written).
+    """
+    scan_data = scan_data or {}
+    frameworks = {f.lower() for f in (scan_data.get("frameworks") or [])}
+    languages = {l.lower() for l in (scan_data.get("languages") or [])}
+
+    def _worker(alias, shape):
+        return {
+            "alias": alias,
+            "shape": shape,
+            "stack_hint": " + ".join(sorted(frameworks | languages)) or "general",
+        }
+
+    intended_norm = (intended or "").strip().lower()
+    if intended_norm:
+        mapping = {
+            "both": [("be", "backend"), ("fe", "frontend")],
+            "fullstack": [("worker", "fullstack")],
+            "backend": [("be", "backend")],
+            "frontend": [("fe", "frontend")],
+        }
+        if intended_norm not in mapping:
+            return {
+                "ok": False,
+                "error": (
+                    f"unknown --intended '{intended}' "
+                    "(expected: both | fullstack | backend | frontend)"
+                ),
+            }
+        workers = [_worker(a, s) for a, s in mapping[intended_norm]]
+        source = "intended"
+        reason = f"roster from intended project type '{intended_norm}'."
+    else:
+        fe = bool(frameworks & _FE_FRAMEWORKS)
+        be = bool(frameworks & _BE_FRAMEWORKS) or bool(languages & _BACKEND_LANGUAGES)
+        if fe and be:
+            workers = [_worker("be", "backend"), _worker("fe", "frontend")]
+            reason = "frontend and backend surfaces detected — two workers (be + fe)."
+        elif fe:
+            workers = [_worker("fe", "frontend")]
+            reason = "frontend surface only — one frontend worker."
+        elif be:
+            workers = [_worker("be", "backend")]
+            reason = "backend surface only — one backend worker."
+        else:
+            workers = [_worker("worker", "fullstack")]
+            reason = (
+                "no decisive frontend/backend split detected — "
+                "one fullstack worker (confirm with the user)."
+            )
+        source = "scan"
+
+    return {
+        "roster": {
+            "pm": 1,
+            "dm": 1,
+            "verifier": 1,
+            "workers": workers,
+        },
+        "singletons": ["pm", "dm", "verifier"],
+        "source": source,
+        "reason": reason,
+    }
+
+
+def cmd_detect_maturity(args):
+    """Probe project maturity: empty / scaffolded / established.
+
+    Usage: wizard.py detect-maturity [target_dir]
+    """
+    target = args[0] if args and not args[0].startswith("--") else "."
+    _print_json(detect_maturity(target))
+    return 0
+
+
+def cmd_propose_roster(args):
+    """Propose the engineering-team roster from the scan (or an intended type).
+
+    Usage: wizard.py propose-roster [target_dir]
+           [--intended both|fullstack|backend|frontend]
+    """
+    target = "."
+    intended = None
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok == "--intended":
+            if i + 1 >= len(args):
+                print("ERROR: --intended requires a value", file=sys.stderr)
+                return 2
+            intended = args[i + 1]
+            i += 2
+        elif tok.startswith("--"):
+            print(f"ERROR: unknown flag {tok}", file=sys.stderr)
+            return 2
+        else:
+            target = tok
+            i += 1
+
+    scan_data = None if intended else _load_or_run_scan(target)
+    result = propose_roster(scan_data, intended=intended)
+    _print_json(result, ok=result.get("ok", True))
+    return 0 if result.get("ok", True) else 1
+
+
+# ---------------------------------------------------------------------------
+# #13329 — scan the target repo for existing agent-facing assets so the
+# installer can confirm them with the user and incorporate the confirmed ones
+# as L4 customizations (pointer + trigger). Deterministic detection only; the
+# confirm gate and the L4 pointer-writes are the installer agent's job via
+# l4-curation (docs/INSTALLER-RUNTIME.md §4 step 4 + §9).
+# ---------------------------------------------------------------------------
+
+# Directories that are never a target project's own agent assets.
+_ASSET_SKIP_DIRS = {".squidsquad", "node_modules", ".git", "vendor", ".venv",
+                    "venv", "dist", "build", ".next"}
+
+
+def _parse_asset_frontmatter(path, default_name):
+    """Extract (name, intent) from a skill/command markdown file.
+
+    Prefers YAML frontmatter `name` + `description` — a skill's description
+    usually carries its trigger (WHEN to use it), which is exactly the one-line
+    intent the L4 pointer should record (#13329 Q3). Falls back to the first
+    markdown heading / first non-empty body line. Never raises — an unreadable
+    file yields (default_name, "").
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return default_name, ""
+    # Normalize CRLF so the frontmatter fence matches on Windows-authored files
+    # (the closing `\n---` fence would otherwise miss a `\r\n`-terminated block
+    # and silently drop the description/intent).
+    text = text.replace("\r\n", "\n")
+    name, intent = default_name, ""
+    fm = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
+    if fm:
+        body = fm.group(1)
+        nm = re.search(r"^name:\s*(.+)$", body, re.MULTILINE)
+        ds = re.search(r"^description:\s*(.+)$", body, re.MULTILINE)
+        if nm:
+            name = nm.group(1).strip().strip('"\'')
+        if ds:
+            intent = ds.group(1).strip().strip('"\'')
+    if not intent:
+        after = text[fm.end():] if fm else text
+        for line in after.splitlines():
+            s = line.strip().lstrip("#").strip()
+            if s:
+                intent = s
+                break
+    return name, intent
+
+
+def scan_existing_assets(root="."):
+    """Scan the target repo for existing agent-facing assets (#13329).
+
+    Detects Claude Code skills (`.claude/skills/<name>/SKILL.md`), slash
+    commands (`.claude/commands/*.md`), and CLAUDE.md convention files, so the
+    installer can confirm which are actively used and incorporate the confirmed
+    ones as L4 pointers. MCP servers / other tooling are intentionally OUT of
+    v1 scope (post-install per-agent provisioning, INSTALLER-ARCH §8) — their
+    presence is only *flagged* (`mcp_config_present`) so the user isn't
+    surprised the installer skipped them.
+
+    Returns a dict with `skills`, `commands`, `claude_md_files`,
+    `mcp_config_present`. No side effects — the installer confirms with the user
+    before any L4 write.
+    """
+    root = Path(root)
+    claude_dir = root / ".claude"
+    result = {
+        "skills": [],
+        "commands": [],
+        "claude_md_files": [],
+        "mcp_config_present": False,
+    }
+
+    skills_dir = claude_dir / "skills"
+    if skills_dir.is_dir():
+        for skill_path in sorted(skills_dir.iterdir()):
+            skill_md = skill_path / "SKILL.md"
+            if skill_path.is_dir() and skill_md.is_file():
+                name, intent = _parse_asset_frontmatter(
+                    skill_md, default_name=skill_path.name)
+                result["skills"].append({
+                    "name": name,
+                    "path": str(skill_md.relative_to(root)).replace("\\", "/"),
+                    "intent": intent,
+                })
+
+    commands_dir = claude_dir / "commands"
+    if commands_dir.is_dir():
+        for cmd_file in sorted(commands_dir.glob("*.md")):
+            name, intent = _parse_asset_frontmatter(
+                cmd_file, default_name=cmd_file.stem)
+            result["commands"].append({
+                "name": name or cmd_file.stem,
+                "path": str(cmd_file.relative_to(root)).replace("\\", "/"),
+                "intent": intent,
+            })
+
+    # rglob can raise mid-walk on an unreadable subdirectory (restricted paths);
+    # a scan must degrade to what it could read, never crash the installer.
+    try:
+        claude_mds = sorted(root.rglob("CLAUDE.md"))
+    except OSError:
+        claude_mds = []
+    for claude_md in claude_mds:
+        rel = claude_md.relative_to(root)
+        if set(rel.parts) & _ASSET_SKIP_DIRS:
+            continue
+        result["claude_md_files"].append(str(rel).replace("\\", "/"))
+
+    for mcp_marker in (".mcp.json", ".claude/mcp.json"):
+        if (root / mcp_marker).is_file():
+            result["mcp_config_present"] = True
+            break
+
+    return result
+
+
+def cmd_scan_existing_assets(args):
+    """CLI: scan the target repo for existing Claude skills/commands/CLAUDE.md.
+
+    Usage: wizard.py scan-existing-assets [target_dir]
+    """
+    target = args[0] if args and not args[0].startswith("--") else "."
+    _print_json(scan_existing_assets(target))
     return 0
 
 
@@ -3541,10 +4274,23 @@ def cmd_setup_yes(args):
     print("\nScaffolding...")
     try:
         result = scaffold_install(spec, target_path, overwrite_existing=True)
-        print(f"  Created {len(result.get('agents', []))} agent(s)")
     except (ValueError, FileExistsError) as e:
         print(f"ERROR: scaffold failed: {e}", file=sys.stderr)
         return 1
+
+    # scaffold_install records a per-role compose failure as claude_md == "FAILED"
+    # (see the deploy loop). Surface it here: a role that failed to compose has NO
+    # valid CLAUDE.md, so the install is not bootable for that agent. "Created N"
+    # must count only agents that actually produced a CLAUDE.md, not every
+    # scaffolded directory — otherwise a broken install reads as a successful one
+    # and the operator gets no signal (#13514).
+    agents = result.get("agents", [])
+    failed = [a for a in agents if a.get("claude_md") == "FAILED"]
+    succeeded = [a for a in agents if a.get("claude_md") != "FAILED"]
+    msg = f"  Created {len(succeeded)} agent(s)"
+    if failed:
+        msg += f" ({len(failed)} FAILED to compose)"
+    print(msg)
 
     # 6. Ensure labels
     print("Creating GitHub labels...")
@@ -3558,17 +4304,29 @@ def cmd_setup_yes(args):
     except Exception as e:
         print(f"WARNING: label creation failed: {e}", file=sys.stderr)
 
-    # 7. Post-setup summary
-    print()
-    print(post_setup_summary(spec))
+    # 7. Post-setup summary — only on a bootable install. post_setup_summary()
+    # hardcodes "SquidSquad is installed for ..."; printing it when a role failed
+    # to compose contradicts the ERROR below and gives CI/operator a false success
+    # signal (#13514). Suppress it whenever any role failed.
+    if not failed:
+        print()
+        print(post_setup_summary(spec))
+
+    # A role that failed to compose leaves the install non-bootable. Fail loudly
+    # with a non-zero exit so the operator (or CI) is not misled by exit 0 (#13514).
+    if failed:
+        print(
+            f"\nERROR: {len(failed)} role(s) failed to compose a CLAUDE.md: "
+            f"{', '.join(a.get('id', '?') for a in failed)}. The install is NOT "
+            f"bootable for those agents — see the WARNING(s) above for the cause.",
+            file=sys.stderr,
+        )
+        return 1
 
     return 0
 
 
-def cmd_pr_flow_prompt(_args):
-    """Print the PR Flow question and options as JSON."""
-    _print_json(pr_flow_prompt())
-    return 0
+# cmd_pr_flow_prompt removed in #13355 (see pr_flow_prompt tombstone above).
 
 
 def cmd_post_setup_summary(args):
@@ -3646,7 +4404,6 @@ def main():
         "repo-info": cmd_repo_info,
         "project-name-default": cmd_project_name_default,
         "validate-name": cmd_validate_name,
-        "validate-interval": cmd_validate_interval,
         "validate-rerun-action": cmd_validate_rerun_action,
         "build-config-md": cmd_build_config_md,
         "scaffold": cmd_scaffold,
@@ -3654,12 +4411,15 @@ def main():
         "list-issues-by-label": cmd_list_issues_by_label,
         "migrate-label": cmd_migrate_label,
         "migrate-labels-staged": cmd_migrate_labels_staged,
-        "pr-flow-prompt": cmd_pr_flow_prompt,
         "post-setup-summary": cmd_post_setup_summary,
         "load-spec": cmd_load_spec,
         "save-spec": cmd_save_spec,
         "scan-summary": cmd_scan_summary,
+        "set-test-strategy": cmd_set_test_strategy,
         "generate-defaults": cmd_generate_defaults,
+        "detect-maturity": cmd_detect_maturity,  # #13339
+        "propose-roster": cmd_propose_roster,  # #13339
+        "scan-existing-assets": cmd_scan_existing_assets,  # #13329
         "setup-yes": cmd_setup_yes,
         "preflight": cmd_preflight,
         "gather-deps": cmd_gather_deps,
@@ -3668,6 +4428,7 @@ def main():
         "migration-plan": cmd_migration_plan,
         "stamp-version": cmd_stamp_version,
         "restart-agents": cmd_restart_agents,
+        "merge-deny-list": cmd_merge_deny_list,
     }
     if cmd not in dispatch:
         print(f"Unknown command: {cmd}", file=sys.stderr)

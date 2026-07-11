@@ -455,13 +455,34 @@ class TestRebuild:
         # 2 files in first skill scan + 1 in second + 1 in qa scan = 4
         assert scans == 4
 
+        # #13133: exactly 1 finding row — #100 is attributed ONCE to the first
+        # file of the scan, NOT duplicated across every scanned file (the
+        # pre-fix over-count produced 2 rows for this 2-file/1-finding scan).
         findings = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
-        # 1 finding (#100) appears in both files of the first scan = 2
-        assert findings >= 1
+        assert findings == 1
+        rows = conn.execute(
+            "SELECT file_path, github_issue_number FROM findings"
+        ).fetchall()
+        assert len(rows) == 1
+        assert rows[0]["github_issue_number"] == 100
+        # Attributed to files[0] (tracker.py), matching record_scan's default,
+        # since scan-history carries no per-finding file attribution.
+        assert rows[0]["file_path"] == "references/scripts/tracker.py"
 
         # Check file_coverage was populated
         cov = conn.execute("SELECT COUNT(*) FROM file_coverage").fetchone()[0]
         assert cov >= 3  # at least 3 unique file paths
+
+        # #13133 symptom: finding_count must not be inflated across the scan's
+        # files. Only the first file carries the finding; the others stay at 0
+        # (pre-fix, BOTH tracker.py and compose.py showed finding_count=1).
+        def _fc(path):
+            r = conn.execute(
+                "SELECT finding_count FROM file_coverage WHERE file_path=?", (path,)
+            ).fetchone()
+            return r["finding_count"] if r else None
+        assert _fc("references/scripts/tracker.py") == 1
+        assert _fc("references/scripts/compose.py") == 0
         conn.close()
 
     def test_rebuild_deletes_old_db(self, scan_history_dir, tmp_path):

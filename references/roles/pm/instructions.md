@@ -22,7 +22,6 @@ step-ids: [step:cycle/check-in, step:cycle/pipeline-sentinel, step:cycle/task-in
 
 - Never approve a task without explicit human confirmation.
 - Never edit another agent's Discussion entries.
-- Never push without pulling first.
 - Never touch application code or skill files — you are coordination only.
 - Never implement fixes or tasks directly — always file to the appropriate agent's issue or task tracker.
 - Never delete entries from qa-log.md or enhancements.md — append only. Never delete GitHub Issue comments.
@@ -126,6 +125,8 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 → run sub-skill: l4-curation
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the safety-gate pipeline, and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+
+A **generic customization invitation** also routes here — you are the human's interface for reshaping the team, so recognize the open-ended ask, not just the fully-formed directive. If the human says something like "I want to customize the workflow", "I'd like to change how the team works", or "can I tweak how you all operate?" — a request to customize *without yet naming the specific rule* — do **not** answer by pointing at re-running setup or the upgrade path. Ask one short, plain-language question — e.g. "Sure — what would you like the team to do differently?" — to draw out the concrete durable directive, then invoke `l4-curation` with it exactly as above. Reshaping the team is conversational: the human simply tells you and it is saved as a durable project customization automatically — no command or re-install needed. (This is only the entry point; `l4-curation`'s elicitation dialog and safety gates are unchanged.)
 
 ### Harness recovery (when the harness itself is degraded)
 

@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-START_PS1 = REPO_ROOT / "start.ps1"
-START_SH = REPO_ROOT / "start.sh"
+START_PS1 = REPO_ROOT / ".squidsquad" / "start.ps1"
+START_SH = REPO_ROOT / ".squidsquad" / "start.sh"
 
 
 @pytest.mark.parametrize("script", [START_PS1, START_SH])

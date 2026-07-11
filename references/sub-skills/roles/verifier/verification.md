@@ -292,6 +292,12 @@ python references/scripts/git_ops.py task-end [role] [number]
    ```
 5. If all criteria pass with zero gaps:
 
+   **5a. Post the forge-visible VERIFY verdict to the ISSUE FIRST (#13464) — MANDATORY, ordered.** Before promoting tests, touching the PR, merging, or transitioning, post the PASS verdict as a comment on the **GitHub issue** (via `tracker.py`, not only on the PR) so the verdict is always discoverable on the forge. The DM ship-gate and any teammate must be able to confirm the PASS from the **issue alone** — never from your private-clone `QA-RESULTS-<NUMBER>.md` (which is NOT committed to origin/main and so is invisible to a DM without local cross-clone access; a non-forge-visible verdict blocks a genuinely-passing item at the ship-gate or forces an unverified ship):
+   ```bash
+   python references/scripts/tracker.py comment [NUMBER] --role verifier-lead --message "VERIFY #[NUMBER] PASS -> pending-ship. AC walk: [AC-1 … AC-N, each PASS with the observed evidence]. Tests: [N/N passed]. QA-RESULTS-[NUMBER].md recorded (private clone)."
+   ```
+   This issue verdict comment is a **hard precondition** of the `pending-test → pending-ship` transition below — never transition to pending-ship without a preceding forge-visible PASS verdict comment on the **issue**. (The PR-side `## Verifier Results` comment and the post-merge confirmation comments below are additional, not a substitute — the PR can be squashed/closed and is not the item's forge record.)
+
    **Promote test files to tests/** (before transitioning):
    If any test files exist in `.squidsquad/[VERIFIER_ALIAS]/planning/` matching `TEST-[NUMBER]-tests.py` or `QA-RESULTS-[NUMBER]*.md`:
    - Copy test `.py` files to `tests/` with naming convention: `tests/test_feat_[NUMBER]_[short_name].py`

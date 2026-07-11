@@ -1,0 +1,30 @@
+{
+  "issue": 13338,
+  "title": "Independent install-verification sub-agent — INSTALLER-RUNTIME.md §4 step 8 + §9 Step 8 comprehension",
+  "source_file": "docs/INSTALLER-RUNTIME.md",
+  "section": "§4 step 8 (Verify — with an independent sub-agent) + §9 Step 8 — Verify with an independent sub-agent",
+  "method": "Fresh agent given ONLY the named sections (§4 step 8, §9 'Step 8 — Verify with an independent sub-agent'), no other context. Answers must come from the text alone. Scenario framing: 'You are the installer agent, just applied the install, about to commit.' Pass = the verification contract survives with zero drift: a FRESH, independent sub-agent (not the installer) runs the check for objectivity; the three checks are compose-clean (via compose.py), no §3 invariant breached (four role classes, forge, verification gate, event-driven runtime, create→build→verify→deliver, PR-flow), and roster-carries-work-end-to-end, each with a concrete pass/fail; on any FAIL the installer SELF-SOLVES (revise the customization to fit intent into the model, e.g. soften a whole-slot replace) and re-runs, never asking the user to adjudicate an internal fix; only a clean pass proceeds to commit. Any answer that lets the installer verify its own choices, asks the user to fix an internal problem, or commits an applied-but-unverified install is a reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You've applied the install and you're about to commit. Who runs the verification, and why isn't it you?",
+      "expected": "A fresh, independent sub-agent (spawned via your subagent tool), not you. You made the customization choices, so an independent agent is what makes the check objective — you'd be marking your own work. You hand it the proposed customizations (the .squidsquad/project/ L4 files), the project context (repo scan + confirmed roster + workflow), and the protocol, and it runs against the applied-but-uncommitted .squidsquad/."
+    },
+    {
+      "id": "CQ2",
+      "q": "What exactly does the sub-agent check, and how does each check pass or fail?",
+      "expected": "Three checks. (1) Composes cleanly: run compose.py (deploy-all / deploy) — PASS if every role composes with zero exit and no failed/error in the envelope; FAIL on any compose error or an L4 op-block that doesn't apply. (2) No §3 invariant breached: read the composed CLAUDE.md set + config and assert all four role classes present (PM/Worker/Verifier/DM), the forge as the single tracker, a verification gate before delivery, the event-driven runtime + harness lifecycle, the create→build→verify→deliver lifecycle, and change-lands-through-a-reviewable-PR — PASS if all hold, FAIL if a customization removed or contradicted any. (3) Roster carries work end-to-end: trace one representative piece of work through the workflow — PM intake → worker build → verifier verify → DM deliver — PASS if a clean end-to-end path exists, FAIL if a stage is orphaned or a customization breaks a handoff."
+    },
+    {
+      "id": "CQ3",
+      "q": "The sub-agent reports a FAIL: a customization used a whole-slot replace that dropped the DM role's contract, breaching an invariant. What do you do — and do you ask the user to decide?",
+      "expected": "You self-solve — never ask the user to adjudicate an internal/technical fix. Revise the offending customization to fit the user's intent into the model: soften the whole-slot replace to an append (or otherwise reframe it so it no longer breaches the four-role-classes / verification invariant); if it genuinely can't map, drop it and tell the user in their terms what you did instead. Then re-run the sub-agent — loop until a clean pass. The user doesn't speak SquidSquad, so you always produce a working solution and only talk to them in their terms."
+    },
+    {
+      "id": "CQ4",
+      "q": "Checks 1 and 2 pass, but the sub-agent finds the roster can't cover the 'verify' stage for this project's workflow. Do you commit and hand off?",
+      "expected": "No. That's a FAIL on check 3 (roster carries work end-to-end) — only a clean pass on all three proceeds to Step 9 (commit). You self-solve: revise the roster/customization so the verify stage is covered (e.g. adjust the verifier's behavior/specialization to the project's workflow), then re-run the sub-agent until it passes. An applied-but-unverified install is never committed."
+    }
+  ]
+}

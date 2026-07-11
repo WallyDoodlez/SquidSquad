@@ -1,0 +1,25 @@
+{
+  "issue": 13318,
+  "title": "Consolidated single launcher — harness-restart.md supervised-launcher comprehension",
+  "source_file": "references/sub-skills/common/harness-restart.md",
+  "section": "When POST /restart cannot help (harness fully dead) + 'Only the supervised launcher relaunches it'",
+  "method": "Fresh agent given ONLY the updated harness-restart.md prose, no other context. Answers must come from the text alone. Pass = correctly names the single consolidated launcher as the supervised relaunch path and the direct-harness.py case as the only unsupervised one; any reference to the deleted restart-harness.*/start-harness.* scripts, or claiming a separate one-shot launcher file still exists, is a drift/clarity gap -> reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "The harness is fully dead (not answering on its port). Can POST /restart recover it, and if not, what is the correct action and which launcher relaunches the harness?",
+      "expected": "No — POST /restart needs a live harness to receive it. This is an operator-restart / supervised-launcher relaunch situation; file it to the human alias via a tracked transition (Never Stop While Work Is Pending — human-handoff), do not self-serve. The supervised launcher is the single consolidated launcher .squidsquad/start.ps1 / .squidsquad/start.sh (#13318)."
+    },
+    {
+      "id": "CQ2",
+      "q": "POST /restart succeeds (harness alive). For the harness to actually come back up afterward, how must it have been started, and what is the case where /restart cleanly stops the harness but nothing relaunches it?",
+      "expected": "It must have been started under the supervised launcher: .squidsquad/start.{ps1,sh} (runs the harness under the supervised auto-relaunch loop) or squidsquad_cli.py start (which launches it via that launcher's --bare supervised path). The unsupervised case is invoking harness.py DIRECTLY (the _harness_launch_tail fallback when the launcher is absent, or a manual dev run) — then /restart stops the harness but nothing relaunches it (graceful degradation) until an operator relaunches."
+    },
+    {
+      "id": "CQ3",
+      "q": "Can you tell from inside your own agent session whether the harness was started supervised or not, and how do you confirm the restart actually worked?",
+      "expected": "No — you cannot tell from inside your session (there is no flag to read). Assume the documented default (supervised) and use the post-restart verification as the empirical check: if the agents do not come back, the harness was not supervised and an operator must relaunch it. Record the recovery on the forge before POSTing, since your own session ends on restart and the check happens in the respawned session."
+    }
+  ]
+}

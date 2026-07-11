@@ -591,3 +591,43 @@
 - **Auto-fixed**: BRIEFING.md refreshed (PM own-domain, Tier-1) — new 2026-06-20 ~17:20 top increment (2nd-restart + ship burst + #12896-approved/#13035 + #12451-S2 + deferred-restart + installer review + 4 pending operator decisions); Team-State version line → sha 253179a2 boot 14:35; Constraints auto-versioning → 50 (batched v0.45.0, operator-paced).
 - **Items rejected by human**: (none)
 - **Burst note**: 3rd scan of idle period → at_cap, driver cancelled + cron 707769b1 deleted (re-arms on next forge-work re-idle).
+
+## Scan — 2026-06-21 01:37 (idle-driver tick, 1st/burst scan — freshly-shipped PM sub-skill drift check)
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md (just shipped via #12493/#12494), references/sub-skills/roles/pm/improvement-scan.md (cross-ref)
+- **Findings**: 1 — residual loop-mode cadence FRAMING in pipeline-sentinel.md header (`### Step 6f` anchor [event-hydrated cycle puts it at Step 4.1], "runs **every cycle**" [event mode = per-cared-event; doesn't run during pure idle — the exact gap #13119 closes], "90 minutes (**3 cycles**)" cadence reasoning). The #12493 rewrite made the halt-detect/investigate/unblock/escalate BODY fully event-aware (EAD, [[comment-handling]], failed-handoff class) — excellent — but left the header framing loop-mode. 90-min WALL-CLOCK threshold itself is correct; only the cadence framing is stale. NOTE: the 2026-06-20 00:02 scan predicted #12493 would sweep this up; it did not — so I did NOT re-defer silently. **NOT separately filed (dedup): routed as an advisory scope-note onto #13119** (skill, open — couples pipeline-sentinel to the idle driver tick → it edits this file's cadence/idle model anyway → natural home for the framing fix). Cannot Tier-1 auto-fix (references/sub-skills/ = skill domain, PM-docs-only boundary).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+- **Context note**: operator signalled imminent harness restart (deferred #13077-reaper activation) once agents idle; pipeline fully drained (0 pending-test/ship/human). Scan kept bounded; chose advisory-on-#13119 over a new orphan task per quality-over-noise + dedup rules.
+
+## Scan — 2026-06-21 12:22 (idle-driver tick, 1st scan of burst — #13158 doc-pairing drift)
+
+- **Files scanned**: docs/HARNESS-ARCH.md §11 Failure Modes table (deploy-pull / deploy-push rows), grep deploy-pull/ff-only/git-pull across docs/*ARCH*.md — drift created by the in-flight #13158 deploy-pull merge fix
+- **Findings**: 1 — HARNESS-ARCH §11 rows L510 ('Deploy: git pull non-fast-forward or conflict') AND L512 ('Deploy: git push rejection') document the CURRENT --ff-only behavior (divergence → futile re-pull → deploy-error+respawn, 0 retries). #13158 (pending-test) changes harness deploy-pull to 'git pull --no-rebase' (merge) → benign divergence now MERGES through; both rows become inaccurate on ship. In-lane TRD drift (PM owns HARNESS-ARCH).
+- **Auto-fixed**: none (can't pre-edit to unshipped behavior; would describe code that isn't merged). Routed as advisory ON #13158 (couple doc edit to code ship, zero drift window) + tracked in working-state for action on #13158 shipped event. NOT a separate orphan task (dedup/quality — same pattern as #13119).
+- **Items rejected by human**: (none)
+- **Burst note**: 1st scan of burst (scan_count→2/3 after record), driver stays armed.
+
+## Scan — 2026-06-21 13:27 (idle-driver tick, 3rd/burst-cap scan — BRIEFING freshness)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this session's forge-verified ships)
+- **Findings**: BRIEFING 12:00 increment said #13158 'filed' — it SHIPPED this session (~15min cycle); #13148/#13147 also shipped; #13030 approved + arch-doc-scoped this session. Recently-Shipped had no 2026-06-21 entry.
+- **Auto-fixed**: BRIEFING refreshed (PM own-domain, Tier-1) — 12:00 increment updated (#13158 filed→SHIPPED + HARNESS-ARCH §11 doc-pairing e74fd590a + #13030 approved/scoped/open-question-to-skill); added 2026-06-21 Recently-Shipped entry (#13158/#13148/#13147 + #13030 approval).
+- **Items rejected by human**: (none)
+- **Burst note**: 3rd scan of idle period → at_cap expected; driver cancels + CronDelete after record-scan.
+
+## Scan — 2026-06-21 18:42 (idle-driver tick, 1st scan of burst — Verbose Mode #13162 post-ship drift check)
+
+- **Files scanned**: references/roles/SOUL.md (L1 postures), references/roles/instructions.md (boot-read selector §234 + no-action-wake §104), docs/AGENT-RUNTIME.md §9.7 (PM-owned TRD), + compose-drift check across all 4 deployed CLAUDE.md (pm/skill/qa/dm). Target chosen: freshest cross-cutting ship (#13162 Verbose Mode, shipped 18:35 this session) = highest drift risk.
+- **Findings**: NONE. (1) Three source authoring sites consistent — boot-read selector (`config.py get verbose-mode`, yes→verbose/no→quiet), session-sticky, no-recompose, graceful-default, both postures defined, "all agents + both wake modes" — no contradictions. Wording diffs are explicitly-adaptable example one-liners, not drift. (2) Compose-drift check CLEAN: all 4 deployed CLAUDE.md carry the boot-read selector (1×) + both quiet & verbose postures (2× each) — Verbose Mode correctly deployed fleet-wide.
+- **Auto-fixed**: none (clean verification — no drift to fix).
+- **Items rejected by human**: (none)
+- **Burst note**: 1st scan of this idle burst (scan_count→1 after record); driver stays armed.
+
+## Scan — 2026-06-21 19:5x (idle-driver tick, 2nd scan of burst — BRIEFING freshness)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this session's forge-verified events + /status).
+- **Findings**: BRIEFING stale — top Active-Priorities increment was ~12:00, missing the entire evening session: #13162 Verbose Mode SHIPPED, the qa verifier wedge + PM recovery, #12271 progress-liveness structuring (Slice A #13179 shipped, cutover #12492 at pending-human-review = operator), #13197 recompose-path-degraded, ships #13066/#13176/#13175, #13185 filed. Recently-Shipped had no evening entry.
+- **Auto-fixed**: BRIEFING refreshed (PM own-domain, Tier-1) — new 2026-06-21 ~19:50 top increment (Verbose Mode ship + qa wedge/recovery + #12271 cutover-pending + #13197 + ships + 2 operator advisories); added evening Recently-Shipped bullet (#13162/#13066/#13176/#13175/#13179).
+- **Items rejected by human**: (none)
+- **Burst note**: 2nd scan of idle burst (scan_count→2 after record); driver stays armed (not at cap).

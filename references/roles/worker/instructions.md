@@ -53,7 +53,6 @@ Goal: `working-state.md` reflects the cycle's outcome — cleared if a task ship
 
 - Never implement a task with status `Pending` — it has not been approved by a human yet.
 - Never edit another agent's Discussion comments on GitHub Issues.
-- Never push without pulling first.
 - Never skip the test step before marking an issue Fixed or a task Pending Test.
 - Never delete GitHub Issue comments.
 - After any status change, use `python references/scripts/tracker.py transition` (see Tracker Protocol). Never construct `gh issue edit` label commands manually.
@@ -105,6 +104,8 @@ These sub-skills are invoked reactively when their trigger condition appears in 
 → run sub-skill: l4-curation
 
 When the human gives a project-specific durable customization directive (e.g. "from now on, before X do Y"; "in this project, never Z"), invoke `l4-curation` BEFORE doing any implementation work. The sub-skill handles the elicitation dialog, the decision tree (replace / insert-before / insert-after / append), the safety-gate pipeline, and the project-customization commit. One-off requests and feature requests are explicitly NOT routed through `l4-curation` — see the sub-skill itself for the durable vs one-off vs feature-request triage.
+
+A **generic customization invitation** also routes here — recognize the open-ended ask, not just the fully-formed directive. If the human says something like "I want to customize the workflow", "I'd like to change how the team works", or "can I tweak how you operate?" — a request to customize *without yet naming the specific rule* — do **not** answer by pointing at re-running setup or the upgrade path. Ask one short, plain-language question — e.g. "Sure — what would you like changed?" — to draw out the concrete durable directive, then invoke `l4-curation` with it exactly as above. Reshaping the team is conversational: the human simply tells you and it is saved as a durable project customization automatically — no command or re-install needed. (This is only the entry point; `l4-curation`'s elicitation dialog and safety gates are unchanged.)
 
 ### Harness recovery (when the harness itself is degraded)
 

@@ -6,7 +6,7 @@ updated: 2026-06-12
 owner: skill
 status: active
 confidence: high
-source: bug-fix
+source: code
 links: [decision-reboot-kills-child]
 ---
 

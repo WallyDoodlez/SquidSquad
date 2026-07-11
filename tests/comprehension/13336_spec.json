@@ -1,0 +1,40 @@
+{
+  "issue": 13336,
+  "title": "WIZARD.md retirement — INSTALLER-RUNTIME.md §9 helper-playbook comprehension",
+  "source_file": "docs/INSTALLER-RUNTIME.md",
+  "section": "§9 The helper playbook (absorbed mechanics of the retired references/wizard/WIZARD.md runbook)",
+  "method": "Fresh agent given ONLY the §9 helper-playbook prose (plus the §4 flow-step list for step-number context), no other context. Answers must come from the text alone. Scenario framing: 'You are the installer agent mid-install.' Pass = the absorbed mechanics survive the move with zero semantic drift: write-discipline exceptions, one-consent provisioning, hard-vs-soft dependency gating, migration-walk gate order + failure semantics, full-rebuild typed confirmation + deferred deletion, restart-agents branching, ephemeral exit. Any answer that invents a helper, installs before consent, deletes at decision time, or keeps the session alive after hand-off is a reject.",
+  "model": "sonnet",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You are at step 3 (understanding the workflow). What, if anything, has been written so far — and name every sanctioned write that is allowed to happen before step 7.",
+      "expected": "Nothing has been written to the target project — the user can still stop with zero trace. The only sanctioned pre-step-7 writes, none of which touch the project's own files uninvited: (1) host-level tool provisioning in step 1, consent-gated and host-only; (2) the idempotent ~/.squidsquad/ shared-filesystem init (outside the repo); (3) the migration walk on an existing install, where each write is gated and reverted on failure. A full-rebuild deletion also does NOT happen at decision time — it waits until step 7."
+    },
+    {
+      "id": "CQ2",
+      "q": "wizard.py gather-deps returns ok:false with three missing items: gh auth, two Python packages, and the claude CLI. Walk me through what you present, how many permission questions you ask, and what you do (a) if the user declines, (b) if after provisioning only the claude CLI is still missing.",
+      "expected": "Present the FULL missing set in plain language (never bail on the first), split into auto-provisionable (action.auto: true — the Python packages) and guided items (gh auth login, claude via npm — show the action.instruct lines). Ask exactly ONE permission question for the whole set; install nothing before the yes. Then provision-deps, report each result, walk guided items with the user, and re-run gather-deps to verify. (a) Declined and hard requirements (gh installed+authenticated, Python, pip, runtime packages) are missing → explain plainly and stop cleanly; nothing has changed. (b) Only claude still missing → it is soft: prominent warning that the team can't be started until it's installed, but continue — never a hard stop."
+    },
+    {
+      "id": "CQ3",
+      "q": "check-existing returns exists:true. What choices do you offer, which is the default, what exact confirmation does the destructive path require, and when does its deletion actually execute?",
+      "expected": "Three choices: Upgrade (the default — walk pending migrations, refresh the team's instructions; config, shared memory, and working state preserved), Full rebuild, and stop (nothing changed). Full rebuild requires the user to type `delete and rebuild` exactly; the deletion itself is deferred to step 7 (Apply), not executed at decision time."
+    },
+    {
+      "id": "CQ4",
+      "q": "During the migration walk, the compose dry-run (compose.py deploy-all --check) fails for the second file in the chain. Name the gate order for each file and exactly what you do now — including what happens to the version stamp and to the first file's already-applied changes.",
+      "expected": "Per file, in order: (1) deepseek-class review of the PLANNED changes against the migration prose's intent, (2) one-line plain-language confirmation with the user, then the atomic write, then (3) compose.py deploy-all --check validation. On the dry-run failure: git restore the paths this file touched so nothing partial persists, and stop the walk cleanly — no version stamp (stamp-version does not run), no later files. The first file's gated-through changes persist; migrations are idempotent so a re-run converges."
+    },
+    {
+      "id": "CQ5",
+      "q": "At the end of the install you run wizard.py restart-agents. Describe the branches and what you must never do on the unreachable path.",
+      "expected": "Reachable + all restarted → tell the user their running team has been refreshed, nothing for them to do. Reachable + some failed → name the failures and point at .squidsquad/start.sh (Linux/macOS) / .squidsquad\\start.ps1 (Windows) to bring the team back up; no rollback. Unreachable → nothing is running; fall through to the cold-start hand-off. Never start the team yourself — the user boots it in their own terminal."
+    },
+    {
+      "id": "CQ6",
+      "q": "The commit is pushed and you've given the hand-off summary. What do you do next, and what are you forbidden from doing?",
+      "expected": "End the session — the installer is ephemeral. Forbidden: running loops or cycles, picking up the team's/squad's work, staying resident after hand-off."
+    }
+  ]
+}

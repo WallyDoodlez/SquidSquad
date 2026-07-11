@@ -239,12 +239,24 @@ class TestRecomposePath:
         target = tmp_path / ".squidsquad" / "project" / "pm.md"
         target.parent.mkdir(parents=True)
         target.write_text("# pm\n")
+
+        # #13303: the default read_deployed gate is now active in
+        # recompose_path, so the compose stub must actually CHANGE the
+        # deployed CLAUDE.md for restart-required to fire (AC6a intent:
+        # a real L4 write -> recompose -> event). A first deploy
+        # (no prior file) counts as a change.
+        def writing_compose(alias):
+            out = tmp_path / ".squidsquad" / alias / "CLAUDE.md"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(f"composed {alias} v2\n")
+            return True, f"deployed {alias}\n", ""
+
         results = lfw.recompose_path(
             target,
             repo_root=tmp_path,
             registry=_REGISTRY,
             emit_event=sink,
-            run_compose=_ok_compose,
+            run_compose=writing_compose,
             ensure_fresh_source=_fresh_ok,
         )
         assert [r.alias for r in results] == ["pm", "pm-mobile"]
@@ -807,6 +819,114 @@ class TestEnsureMainAndPull12906:
         assert "unexpected" in detail
 
 
+class TestFreshenSerialized13197And13211:
+    """#13197 + #13211: concurrent freshens against the same clone must be
+    single-flighted to avoid `.git/index.lock` collisions (an N-way
+    pull-failed/compose-failed storm). #13197 originally put a watcher-local
+    `_FRESHEN_LOCK` here; #13211 RELOCATED the serialization into
+    `git_ops.ensure_main_and_pull` (`git_ops._ENSURE_MAIN_LOCK`) so it also
+    covers the post-merge deploy-all path, which called ensure_main_and_pull
+    outside the watcher lock. These tests measure concurrency INSIDE the real
+    git_ops.ensure_main_and_pull (via a mocked git layer), validating the
+    relocated lock rather than a watcher-local one."""
+
+    def _make_measuring_git(self, state, guard, barrier):
+        """Return (fake_run, fake_pull): _run reports branch==main (so
+        ensure_main_and_pull skips checkout and goes straight to pull), and pull
+        measures max concurrency — it runs INSIDE _ENSURE_MAIN_LOCK."""
+        from types import SimpleNamespace
+
+        def fake_run(cmd, check=False):
+            return SimpleNamespace(returncode=0, stdout="main\n", stderr="")
+
+        def fake_pull(role=None):
+            try:
+                # Serialized → only one thread is ever inside the lock, so the
+                # barrier never fills and times out. The timeout IS the
+                # serialization proof (without the lock all N rendezvous → max==N).
+                barrier.wait(timeout=0.5)
+            except threading.BrokenBarrierError:
+                pass
+            with guard:
+                state["now"] += 1
+                state["max"] = max(state["max"], state["now"])
+            time.sleep(0.02)
+            with guard:
+                state["now"] -= 1
+            return True
+
+        return fake_run, fake_pull
+
+    def test_lock_relocated_to_git_ops_13211(self):
+        import git_ops
+        assert isinstance(git_ops._ENSURE_MAIN_LOCK, type(threading.Lock()))
+        # the watcher-local lock is retired (serialization now shared in git_ops)
+        assert not hasattr(lfw, "_FRESHEN_LOCK")
+
+    def test_concurrent_freshens_are_serialized(self, monkeypatch, tmp_path):
+        """11 threads through the watcher freshen never run the git op
+        concurrently — the relocated lock keeps max in-flight at 1."""
+        import git_ops
+        state = {"now": 0, "max": 0}
+        N = 11
+        fake_run, fake_pull = self._make_measuring_git(
+            state, threading.Lock(), threading.Barrier(N))
+        monkeypatch.setattr(git_ops, "_run", fake_run)
+        monkeypatch.setattr(git_ops, "pull", fake_pull)
+
+        results = []
+
+        def worker():
+            results.append(lfw._default_ensure_fresh_source(repo_root=tmp_path))
+
+        threads = [threading.Thread(target=worker) for _ in range(N)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == N
+        assert all(ok for ok, _ in results)  # all succeed (serialized no-ops)
+        assert state["max"] == 1, (
+            f"git freshen ran {state['max']}-way concurrent — _ENSURE_MAIN_LOCK "
+            f"is not serializing (the #13197/#13211 .git/index.lock regression)"
+        )
+
+    def test_watcher_and_deploy_paths_share_the_lock_13211(self, monkeypatch, tmp_path):
+        """The #13211 fix: the post-merge deploy path calls
+        git_ops.ensure_main_and_pull DIRECTLY (harness.py:4221), previously
+        outside the watcher lock. With the lock in git_ops, running the watcher
+        freshen AND the direct deploy call concurrently still keeps max
+        in-flight at 1 — both callers share one lock."""
+        import git_ops
+        state = {"now": 0, "max": 0}
+        N = 10
+        fake_run, fake_pull = self._make_measuring_git(
+            state, threading.Lock(), threading.Barrier(N))
+        monkeypatch.setattr(git_ops, "_run", fake_run)
+        monkeypatch.setattr(git_ops, "pull", fake_pull)
+
+        def watcher_worker():
+            lfw._default_ensure_fresh_source(repo_root=tmp_path)
+
+        def deploy_worker():
+            git_ops.ensure_main_and_pull("harness")  # the post-merge deploy path
+
+        threads = (
+            [threading.Thread(target=watcher_worker) for _ in range(N // 2)]
+            + [threading.Thread(target=deploy_worker) for _ in range(N - N // 2)]
+        )
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert state["max"] == 1, (
+            f"watcher + deploy paths ran {state['max']}-way concurrent — the "
+            f"relocated lock does not cover both callers (#13211)"
+        )
+
+
 class TestPostMergeDeployFreshness12906:
     """AC1 — the OTHER harness-side recompose path (post-merge
     deploy-all) must also ensure-main + pull before composing. Static
@@ -837,3 +957,199 @@ class TestHarnessLifespanWiring:
         assert "state.stop_l4_watcher()" in block, (
             "lifespan must call state.stop_l4_watcher() on shutdown"
         )
+
+
+# ---------------------------------------------------------------------------
+# #13303 — content-change gate: a no-op recompose (composed CLAUDE.md
+# byte-identical to what is already deployed) must NOT emit restart-required.
+# A benign FS touch on an L4 file (the watcher's own freshen-pull mtime
+# rewrite, or a teammate-merge propagation) drives such a no-op recompose;
+# without this gate it produced a spurious agent restart.
+# ---------------------------------------------------------------------------
+
+
+class TestContentChangeGate13303:
+
+    def _stateful(self, initial):
+        """Return (deployed_dict, read_deployed, make_compose) helpers.
+
+        ``read_deployed(alias)`` reads the simulated deployed CLAUDE.md;
+        ``make_compose(new_content)`` returns a run_compose stub that writes
+        ``new_content`` for the alias.
+        """
+        deployed = dict(initial)
+
+        def read_deployed(alias):
+            return deployed.get(alias)
+
+        def make_compose(new_content):
+            def compose(alias):
+                deployed[alias] = new_content
+                return True, f"deployed {alias}\n", ""
+            return compose
+
+        return deployed, read_deployed, make_compose
+
+    def test_noop_recompose_yields_noop_result_no_event(self):
+        _dep, read_deployed, make_compose = self._stateful(
+            {"dm-skill": "SAME\n"})
+        results = lfw.recompose_for_role_class(
+            "dm", _REGISTRY,
+            run_compose=make_compose("SAME\n"),  # idempotent: identical output
+            read_deployed=read_deployed,
+        )
+        assert len(results) == 1
+        r = results[0]
+        assert r.succeeded is True
+        assert r.noop is True
+        assert r.event_context == ""
+        assert r.payload["reason"] == "l4-recompose-noop"
+        sink = _EventSink()
+        lfw.emit_results(results, emit_event=sink)
+        assert sink.events == []
+
+    def test_changed_recompose_emits_restart_required(self):
+        _dep, read_deployed, make_compose = self._stateful(
+            {"dm-skill": "OLD\n"})
+        results = lfw.recompose_for_role_class(
+            "dm", _REGISTRY,
+            run_compose=make_compose("NEW\n"),
+            read_deployed=read_deployed,
+        )
+        assert results[0].noop is False
+        assert results[0].event_context == "restart-required"
+        sink = _EventSink()
+        lfw.emit_results(results, emit_event=sink)
+        assert len(sink.events) == 1
+        assert sink.events[0]["payload"]["event_context"] == "restart-required"
+        assert sink.events[0]["payload"]["reason"] == "l4-recompose"
+
+    def test_first_deploy_no_prior_file_counts_as_change(self):
+        _dep, read_deployed, make_compose = self._stateful({})
+        results = lfw.recompose_for_role_class(
+            "dm", _REGISTRY,
+            run_compose=make_compose("fresh\n"),
+            read_deployed=read_deployed,
+        )
+        assert results[0].noop is False
+        assert results[0].event_context == "restart-required"
+
+    def test_gate_off_when_no_reader_preserves_legacy_emit(self):
+        results = lfw.recompose_for_role_class(
+            "dm", _REGISTRY, run_compose=_ok_compose,
+        )
+        assert results[0].noop is False
+        assert results[0].event_context == "restart-required"
+
+    def test_reader_raises_fails_safe_to_emit(self):
+        def boom_reader(alias):
+            raise RuntimeError("deployed file unreadable")
+        results = lfw.recompose_for_role_class(
+            "dm", _REGISTRY, run_compose=_ok_compose,
+            read_deployed=boom_reader,
+        )
+        assert results[0].noop is False
+        assert results[0].event_context == "restart-required"
+
+    def test_after_read_raises_fails_safe_to_emit(self):
+        # Asymmetric failure: the BEFORE read succeeds but the AFTER read
+        # raises (e.g. file locked mid-write). The gate cannot prove
+        # no-change -> must emit, never silently suppress. Locks the
+        # fail-safe direction against a future "smarter" refactor.
+        calls = [0]
+
+        def partial_reader(alias):
+            calls[0] += 1
+            if calls[0] == 1:
+                return "existing content\n"   # before: succeeds
+            raise RuntimeError("deployed file locked")  # after: raises
+
+        results = lfw.recompose_for_role_class(
+            "dm", _REGISTRY, run_compose=_ok_compose,
+            read_deployed=partial_reader,
+        )
+        assert results[0].noop is False
+        assert results[0].event_context == "restart-required"
+
+    def test_compose_failure_unaffected_by_gate(self):
+        _dep, read_deployed, _mc = self._stateful({"dm-skill": "X\n"})
+        results = lfw.recompose_for_role_class(
+            "dm", _REGISTRY, run_compose=_fail_compose,
+            read_deployed=read_deployed,
+        )
+        assert results[0].succeeded is False
+        assert results[0].noop is False
+        assert results[0].event_context == "compose-failed"
+
+    def test_recompose_path_noop_emits_nothing_end_to_end(self, tmp_path):
+        sink = _EventSink()
+        target = tmp_path / ".squidsquad" / "project" / "pm.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("# pm\n")
+        for alias in ("pm", "pm-mobile"):
+            out = tmp_path / ".squidsquad" / alias / "CLAUDE.md"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(f"composed {alias} stable\n")
+
+        def identity_compose(alias):
+            out = tmp_path / ".squidsquad" / alias / "CLAUDE.md"
+            out.write_text(f"composed {alias} stable\n")  # identical bytes
+            return True, f"deployed {alias}\n", ""
+
+        results = lfw.recompose_path(
+            target, repo_root=tmp_path, registry=_REGISTRY,
+            emit_event=sink, run_compose=identity_compose,
+            ensure_fresh_source=_fresh_ok,
+        )
+        assert all(r.noop for r in results)
+        assert sink.events == []
+
+    def test_recompose_path_change_emits_end_to_end(self, tmp_path):
+        sink = _EventSink()
+        target = tmp_path / ".squidsquad" / "project" / "pm.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("# pm\n")
+        for alias in ("pm", "pm-mobile"):
+            out = tmp_path / ".squidsquad" / alias / "CLAUDE.md"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(f"composed {alias} v1\n")
+
+        def changing_compose(alias):
+            out = tmp_path / ".squidsquad" / alias / "CLAUDE.md"
+            out.write_text(f"composed {alias} v2\n")  # real change
+            return True, f"deployed {alias}\n", ""
+
+        results = lfw.recompose_path(
+            target, repo_root=tmp_path, registry=_REGISTRY,
+            emit_event=sink, run_compose=changing_compose,
+            ensure_fresh_source=_fresh_ok,
+        )
+        assert not any(r.noop for r in results)
+        assert {e["payload"]["target_alias"] for e in sink.events} == {
+            "pm", "pm-mobile",
+        }
+        assert {e["payload"]["event_context"] for e in sink.events} == {
+            "restart-required",
+        }
+
+    def test_make_change_callback_gate_suppresses_noop(self, tmp_path):
+        sink = _EventSink()
+        deployed = {"dm-skill": "SAME\n"}
+
+        def read_deployed(alias):
+            return deployed.get(alias)
+
+        def compose(alias):
+            deployed[alias] = "SAME\n"  # idempotent
+            return True, "", ""
+
+        cb = lfw.make_change_callback(
+            repo_root=tmp_path,
+            registry_provider=lambda: _REGISTRY,
+            emit_event=sink,
+            run_compose=compose,
+            ensure_fresh_source=_fresh_ok,
+            read_deployed=read_deployed,
+        )
+        cb("dm")
+        assert sink.events == []  # no-op suppressed through the callback

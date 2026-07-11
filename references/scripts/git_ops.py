@@ -34,7 +34,21 @@ import io
 import json
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
+
+# #13211 — serialize ensure_main_and_pull across ALL in-process callers (the
+# L4 watcher's per-role-class freshen bursts AND the post-merge deploy-all path,
+# both in the harness process). Concurrent main-checkout + pull on the SAME
+# clone collide on .git/index.lock (#13197 fixed this for the watcher-only case
+# via a watcher-local lock; the deploy path called ensure_main_and_pull outside
+# it). Hoisting the lock here covers every caller from one place. ensure_main_
+# and_pull never re-enters itself (it calls _run/pull only), so a plain
+# non-reentrant Lock cannot self-deadlock. Threading-scoped (not cross-process):
+# the racing callers are threads in the one harness process; the CLI caller is a
+# separate process not part of that race.
+_ENSURE_MAIN_LOCK = threading.Lock()
 
 # Ensure stdout/stderr can handle UTF-8 on Windows (cp1252 consoles choke on em dashes etc.)
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -57,22 +71,78 @@ def _get_working_branch():
         return "main"
 
 
-def _run(cmd, check=True):
+# #13262 — every git_ops subprocess gets a timeout so a hung `git` (network
+# stall, stuck index.lock, a credential-helper wedge — cf. the documented
+# `credential.helper=manager` silent hang) fails fast into the callers' existing
+# failure paths instead of blocking the thread (and, since #13211, the whole
+# in-process recompose surface behind `_ENSURE_MAIN_LOCK`) indefinitely. The
+# default is generous (git ops are normally sub-second; a slow network fetch/push
+# of a large pack is the worst legitimate case) so it fail-fasts a true hang
+# without false-tripping. Overridable per-call and fleet-wide via the
+# `SQUIDSQUAD_GIT_TIMEOUT` env var (no config-schema change → existing installs
+# keep the default).
+DEFAULT_GIT_TIMEOUT = 300
+
+
+def _git_timeout():
+    """Resolve the git subprocess timeout (seconds): ``SQUIDSQUAD_GIT_TIMEOUT``
+    env override if a positive int, else ``DEFAULT_GIT_TIMEOUT``.
+
+    Installs on very high-latency links or with very large packs (a `git pull`/
+    `git fetch` that legitimately runs minutes) can raise the cap via
+    ``SQUIDSQUAD_GIT_TIMEOUT=600`` without a code or config-schema change."""
+    import os
+    raw = os.environ.get("SQUIDSQUAD_GIT_TIMEOUT")
+    if raw:
+        try:
+            val = int(raw)
+            if val > 0:
+                return val
+        except (TypeError, ValueError):
+            pass
+    return DEFAULT_GIT_TIMEOUT
+
+
+def _timeout_failure(cmd, check, timeout):
+    """Translate a ``subprocess.TimeoutExpired`` into the failure shape the
+    caller already handles (#13262): raise ``CalledProcessError`` when
+    ``check=True`` (mirroring subprocess's own check-failure contract), else
+    return a synthetic non-zero ``CompletedProcess`` (rc=124, the conventional
+    timeout code) so ``check=False`` callers fall into their existing
+    ``returncode != 0`` / ``(False, ...)`` recovery."""
+    msg = f"git command timed out after {timeout}s: {cmd}"
+    print(f"WARNING: {msg}", file=sys.stderr)
+    if check:
+        raise subprocess.CalledProcessError(124, cmd, output=None, stderr=msg)
+    return subprocess.CompletedProcess(cmd, 124, stdout="", stderr=msg)
+
+
+def _run(cmd, check=True, timeout=None):
     """Run a shell command from repo root (only for static commands)."""
-    return subprocess.run(
-        cmd, shell=True, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        check=check, cwd=str(REPO_ROOT),
-    )
+    if timeout is None:
+        timeout = _git_timeout()
+    try:
+        return subprocess.run(
+            cmd, shell=True, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT), timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return _timeout_failure(cmd, check, timeout)
 
 
-def _run_list(cmd_list, check=True):
+def _run_list(cmd_list, check=True, timeout=None):
     """Run a command from repo root using list form (safe for variable args)."""
-    return subprocess.run(
-        cmd_list, capture_output=True, text=True,
-        encoding="utf-8", errors="replace",
-        check=check, cwd=str(REPO_ROOT),
-    )
+    if timeout is None:
+        timeout = _git_timeout()
+    try:
+        return subprocess.run(
+            cmd_list, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT), timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return _timeout_failure(cmd_list, check, timeout)
 
 
 _GH_AVAILABLE_CACHE = None
@@ -153,6 +223,7 @@ def _log_diagnostic(severity, message):
         subprocess.run(
             [sys.executable, str(SCRIPT_DIR / "diagnostics.py"), "log", severity, "git_ops", message],
             capture_output=True, check=False, encoding="utf-8", errors="replace", cwd=str(REPO_ROOT),
+            timeout=_git_timeout(),  # #13279: bound the wait so a hung diagnostics.py can't block the calling thread (TimeoutExpired is swallowed by the except below). Completes #13262 timeout-hardening.
         )
     except Exception:
         pass
@@ -190,6 +261,20 @@ def _emit(event_type, payload=None, cycle_number=None, role=None):
         emit(event_type, role, payload=payload, cycle_number=cycle_number)
     except (ImportError, Exception):
         pass
+
+
+def _stash_top_ref():
+    """SHA of the top stash entry (``refs/stash``), or ``""`` if no stash exists.
+
+    Used to detect whether a ``git stash`` actually created a NEW entry: on a
+    CLEAN working tree ``git stash`` is a no-op that still exits 0, so a
+    subsequent pop would apply a PRE-EXISTING (possibly ancient) stash —
+    splattering ``<<<<<<<`` conflict markers tree-wide and breaking compose
+    (#13167). Callers compare this before/after their stash and only pop when
+    the ref changed (i.e. they created the stash they are about to pop).
+    """
+    r = _run("git rev-parse --quiet --verify refs/stash", check=False)
+    return r.stdout.strip() if r.returncode == 0 else ""
 
 
 def _safe_stash_pop():
@@ -236,7 +321,13 @@ def pull(role=None):
 
     Returns True on success, False on failure. Never crashes.
     """
-    result = _run("git pull", check=False)
+    # #13267: pin to a MERGE pull (never rebase). Under a clone-local or global
+    # `pull.rebase=true` a bare `git pull` would REBASE; a first-pull rebase
+    # conflict leaves a REBASE-in-progress state that the subsequent `git stash`
+    # cannot work over and that the #13261 recovery (`git merge --abort`) cannot
+    # clear. `--no-rebase` keeps the first pull consistent with the pinned retry
+    # below and with the project's always-merge-never-rebase rule.
+    result = _run("git pull --no-rebase", check=False)
     if result.returncode == 0:
         print("Pulled")
         _emit("git-pull", {"result": "ok"}, role=role)
@@ -249,21 +340,49 @@ def pull(role=None):
         _emit("git-pull", {"result": "ok"}, role=role)
         return True
 
-    # Try stash + pull + pop
+    # Try stash + pull + pop. #13167: guard against `git stash` being a no-op
+    # on a clean tree (exits 0 but creates nothing) — popping then would apply a
+    # PRE-EXISTING ancient stash and write conflict markers tree-wide, breaking
+    # compose. Only pop when our stash actually created a new entry.
+    pre_stash_ref = _stash_top_ref()
     stash_result = _run("git stash", check=False)
     if stash_result.returncode != 0:
         print("WARNING: git stash failed -- skipping pull", file=sys.stderr)
         return False
+    stashed = _stash_top_ref() != pre_stash_ref
 
-    retry = _run("git pull", check=False)
+    # #13261: pin the retry to a MERGE pull (never rebase). The recovery below
+    # cleans up a failed retry with `git merge --abort`, which only clears a
+    # MERGING state — under a clone-local `pull.rebase=true` the retry would
+    # rebase and leave a REBASE state the abort cannot clear. `--no-rebase`
+    # guarantees the abort verb matches what a failed retry leaves behind, and
+    # matches the project's "always merge, never rebase" rule.
+    retry = _run("git pull --no-rebase", check=False)
     if retry.returncode != 0:
-        # Restore stashed changes and report failure
-        _run("git stash pop", check=False)
+        # #13261: the retry pull may have STARTED a merge and hit a
+        # committed-divergence conflict, leaving the clone MERGING (MERGE_HEAD +
+        # conflict markers). Abort that merge FIRST — otherwise (a) the markers
+        # break the next compose, (b) _safe_stash_pop below misreads the merge's
+        # unmerged paths as a stash-pop conflict and DROPS our stash, and (c) a
+        # lingering MERGE_HEAD makes the next op needing a clean tree fail. The
+        # abort is a harmless no-op (non-zero, ignored) when no merge is in
+        # progress (the pull failed before merging). Mirrors the same fix in the
+        # deploy path's _safe_pull_in_clone (#13215). The pull still FAILED →
+        # report failure after restoring our stash.
+        _run("git merge --abort", check=False)
+        # Restore OUR stashed changes (only if we actually created one) and
+        # report failure. Use the marker-safe pop (#13045), never a raw pop.
+        if stashed:
+            _safe_stash_pop()
         print(f"WARNING: git pull failed after stash -- {retry.stderr.strip()}",
               file=sys.stderr)
         return False
 
-    if _safe_stash_pop():
+    if not stashed:
+        # Clean tree — `git stash` stashed nothing, so there is nothing of ours
+        # to pop. Do NOT pop a pre-existing stash (#13167).
+        print("Pulled (no local changes to stash)")
+    elif _safe_stash_pop():
         print("Pulled (stashed and popped)")
     else:
         # #13045: a conflicted pop is resolved to the pulled HEAD (markers
@@ -298,21 +417,28 @@ def ensure_main_and_pull(role=None):
     until a later recompose succeeds.
     """
     try:
-        result = _run("git branch --show-current", check=False)
-        branch = result.stdout.strip() if result.returncode == 0 else ""
-        if branch != "main":
-            sw = _run_list(["git", "checkout", "main"], check=False)
-            if sw.returncode != 0:
-                detail = (sw.stderr or sw.stdout or "").strip()[:200]
-                print(
-                    f"WARNING: ensure_main_and_pull could not switch to main "
-                    f"from {branch!r}: {detail}",
-                    file=sys.stderr,
-                )
-                return False, f"checkout-main-failed (on {branch!r})"
-        if not pull(role=role):
-            return False, "pull-failed"
-        return True, "on-main-synced"
+        # #13211 — single-flight the checkout+pull across every in-process
+        # caller (watcher freshen bursts + post-merge deploy-all) so concurrent
+        # git on the shared clone can't collide on .git/index.lock. Held across
+        # the subprocess git calls below — exactly the serialization #13197
+        # established (it just lived in the watcher before, missing the deploy
+        # path). Inside the try so the "Never raises" contract still holds.
+        with _ENSURE_MAIN_LOCK:
+            result = _run("git branch --show-current", check=False)
+            branch = result.stdout.strip() if result.returncode == 0 else ""
+            if branch != "main":
+                sw = _run_list(["git", "checkout", "main"], check=False)
+                if sw.returncode != 0:
+                    detail = (sw.stderr or sw.stdout or "").strip()[:200]
+                    print(
+                        f"WARNING: ensure_main_and_pull could not switch to main "
+                        f"from {branch!r}: {detail}",
+                        file=sys.stderr,
+                    )
+                    return False, f"checkout-main-failed (on {branch!r})"
+            if not pull(role=role):
+                return False, "pull-failed"
+            return True, "on-main-synced"
     except Exception as exc:  # noqa: BLE001 — "Never raises" is the contract
         print(
             f"WARNING: ensure_main_and_pull raised unexpectedly: {exc!r}",
@@ -340,11 +466,9 @@ def commit(role, message):
     """Commit with role prefix and Co-Authored-By trailer."""
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit")
@@ -489,12 +613,277 @@ def pr_ready(pr_number):
     return True
 
 
-def pr_merge(pr_number, strategy="squash"):
+# #13271 (SEV-1 prevention): the GitHub server-side squash of a PR branch that is
+# far behind its base can record a STALE tree — mass-reverting/deleting shipped
+# fleet work the behind branch never had locally (the #13263 behind-clone
+# mechanism; it hit 194 files / ~155 commits at 154-behind). A clone merging
+# `origin/main` before push is NOT sufficient (the anomaly fired anyway), so the
+# guard lives at the MERGE step. This pre-merge behind-count check is the
+# fail-SAFE interim defense (it can only refuse — never mutate main); the robust
+# net is a post-merge scope audit + auto-revert (follow-up). The threshold sits
+# well above the #10540 batch-ship drain so it never false-blocks the normal
+# behind-by-a-few race; tune via SQUIDSQUAD_MERGE_MAX_BEHIND.
+# Default 50: comfortably above any realistic sequential batch-ship drain depth
+# (a queue of N PRs leaves the last ~N-1 behind), well below the 154-commit
+# SEV-1 event (#13271) — so it catches the catastrophe class without tripping
+# normal shipping.
+MERGE_MAX_BEHIND_DEFAULT = 50
+
+
+def _merge_max_behind():
+    """Resolve the max-behind merge threshold: ``SQUIDSQUAD_MERGE_MAX_BEHIND`` env
+    override if a non-negative int, else ``MERGE_MAX_BEHIND_DEFAULT`` (#13271)."""
+    import os
+    raw = os.environ.get("SQUIDSQUAD_MERGE_MAX_BEHIND")
+    if raw:
+        try:
+            v = int(raw)
+            if v >= 0:
+                return v
+        except (TypeError, ValueError):
+            pass
+    return MERGE_MAX_BEHIND_DEFAULT
+
+
+def _pr_behind_by(pr_number):
+    """Return how many commits the PR's base branch is AHEAD of the PR head (the
+    branch's 'behind' count), or ``None`` if it can't be determined (#13271).
+
+    Uses the GitHub compare API's ``behind_by`` field — authoritative about the
+    real divergence regardless of how GitHub later computes the squash. ``None``
+    on any gh/API/parse failure so the caller can fail-OPEN (a guard hiccup must
+    not wedge all shipping; the post-merge audit is the reliable net)."""
+    refs = _run_list(
+        ["gh", "pr", "view", str(pr_number),
+         "--json", "baseRefName,headRefName"], check=False)
+    if refs.returncode != 0:
+        return None
+    try:
+        data = json.loads(refs.stdout.strip())
+        base, head = data["baseRefName"], data["headRefName"]
+    except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
+        return None
+    cmp = _run_list(
+        ["gh", "api", f"repos/{{owner}}/{{repo}}/compare/{base}...{head}",
+         "--jq", ".behind_by"], check=False)
+    if cmp.returncode != 0:
+        return None
+    try:
+        return int(cmp.stdout.strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _merge_auto_revert_enabled():
+    """#13285 -- whether the post-merge scope-audit AUTO-REVERTS a violating merge
+    (vs detect+alert only). Default OFF (``SQUIDSQUAD_MERGE_AUTO_REVERT=1`` opts
+    in) -- the destructive `git revert + push` ships defused so detection runs in
+    production first; an operator flips it on once the audit is trusted. Detection
+    + the loud incident comment are ALWAYS on regardless of this flag."""
+    import os
+    raw = os.environ.get("SQUIDSQUAD_MERGE_AUTO_REVERT", "")
+    return raw.strip().lower() in ("1", "true", "yes")
+
+
+def _pr_declared_files(pr_number):
+    """The set of file paths the PR legitimately changed (added/modified/deleted),
+    per ``gh pr view --json files``. Returns ``None`` on any gh/parse failure so
+    the caller FAILS-SAFE (cannot determine scope -> do not guess at a violation).
+
+    A legitimate deletion (e.g. a refactor removing a file) appears here, so it is
+    never flagged; only a deletion the merge made that the PR never declared (the
+    stale-tree symptom, #13271) falls outside this set."""
+    res = _run_list(
+        ["gh", "pr", "view", str(pr_number), "--json", "files"], check=False)
+    if res.returncode != 0:
+        return None
+    try:
+        data = json.loads(res.stdout.strip())
+        return {f["path"] for f in data.get("files", [])}
+    except (json.JSONDecodeError, KeyError, AttributeError, TypeError):
+        return None
+
+
+def _merge_commit_sha(pr_number):
+    """The squash/merge commit SHA GitHub recorded for the PR, or ``None``."""
+    res = _run_list(
+        ["gh", "pr", "view", str(pr_number),
+         "--json", "mergeCommit", "--jq", ".mergeCommit.oid"], check=False)
+    if res.returncode != 0:
+        return None
+    sha = res.stdout.strip()
+    # `--jq .mergeCommit.oid` prints the literal "null" when GitHub has not yet
+    # recorded the merge commit (a real post-merge timing window) -- treat it as
+    # unresolved so the caller fails-safe with the correct "could not resolve
+    # SHA" message rather than a misleading "could not determine file set".
+    if not sha or sha == "null":
+        return None
+    return sha
+
+
+def _merge_deleted_files(sha):
+    """Files the merge commit ``sha`` DELETED relative to its parent --
+    ``git show --diff-filter=D``. File-deletions only (the #13271 incident was 194
+    FILE deletions); a line-level deletion inside a surviving file is NOT a
+    delete and is correctly excluded. Returns ``None`` on git failure (fail-safe).
+    Requires the commit to be local -- the caller fetches origin first."""
+    res = _run_list(
+        ["git", "show", "--diff-filter=D", "--name-only", "--format=", sha],
+        check=False)
+    if res.returncode != 0:
+        return None
+    return {line.strip() for line in res.stdout.splitlines() if line.strip()}
+
+
+def _scope_audit_violations(pr_number, sha):
+    """#13285 -- files the merge ``sha`` DELETED that the PR never declared
+    (``deleted - declared``): the behind-clone stale-tree mass-revert signature
+    (#13271). Returns a sorted list of violating paths, or ``None`` if the audit
+    could not be performed (gh/git uncertainty -> caller fails SAFE: flag-don't-
+    guess, never auto-revert on ``None``)."""
+    declared = _pr_declared_files(pr_number)
+    if declared is None:
+        return None
+    deleted = _merge_deleted_files(sha)
+    if deleted is None:
+        return None
+    return sorted(deleted - declared)
+
+
+def _post_merge_scope_audit(pr_number, issue_num):
+    """#13285 -- after a successful merge, audit the squash for an out-of-scope
+    mass file-deletion (the behind-clone stale-tree revert, #13271 SEV-1) and
+    raise a LOUD signal so it is caught at merge time instead of by luck hours
+    later. The complement to the #13271 pre-merge behind-count guard: that's a
+    >50-behind threshold heuristic; this checks what the merge ACTUALLY did.
+
+    Always: detect + (on violation) print + post an incident comment with the
+    evidence and the exact non-destructive remediation. Auto-revert (git revert
+    + push) only when ``_merge_auto_revert_enabled()`` (default OFF) -- shipped
+    defused so detection runs in production before the destructive action is
+    trusted. FAIL-SAFE: any audit uncertainty (gh/git error) -> warn + return
+    without reverting; a false revert of a legitimate merge is worse than a miss
+    (the #13271 guard still backstops). Never raises.
+
+    GitHub-only: uses ``gh`` + GitHub-specific fields. ``pr_merge`` returns early
+    on non-GitHub forge-adapter backends before this runs, so the audit does not
+    fire there (a non-GitHub merge path would need its own equivalent).
+
+    NOTE (scope): this is the file-DELETION net (the #13271 mass-revert class).
+    The ahead-DROP variant (#13280 -- a squash that omitted the branch's newest
+    ADDITIONS) is a missing-addition, not a deletion, so it is out of this audit's
+    scope; tracked separately.
+    """
+    try:
+        # The squash lives on the remote -- fetch so it is inspectable locally.
+        _run_list(["git", "fetch", "origin", "main"], check=False)
+        sha = _merge_commit_sha(pr_number)
+        if not sha:
+            print(f"WARN: #{pr_number} post-merge scope-audit skipped -- "
+                  f"could not resolve the merge commit SHA (fail-safe)",
+                  file=sys.stderr)
+            return
+        violations = _scope_audit_violations(pr_number, sha)
+        if violations is None:
+            print(f"WARN: #{pr_number} post-merge scope-audit inconclusive -- "
+                  f"could not determine the PR's declared file set (fail-safe; "
+                  f"NOT reverting)", file=sys.stderr)
+            return
+        if not violations:
+            return  # clean merge -- pass untouched
+        # Violation: out-of-scope file deletions = stale-tree mass-revert signature.
+        preview = ", ".join(violations[:8])
+        more = f" (+{len(violations) - 8} more)" if len(violations) > 8 else ""
+        print(f"SCOPE VIOLATION: merge {sha[:9]} for PR #{pr_number} DELETED "
+              f"{len(violations)} file(s) outside the PR's declared scope: "
+              f"{preview}{more} -- likely a behind-clone stale-tree revert "
+              f"(#13271 class).", file=sys.stderr)
+        _emit_scope_incident(issue_num, pr_number, sha, violations)
+        if _merge_auto_revert_enabled():
+            _auto_revert_merge(sha, pr_number)
+        else:
+            print(f"  [auto-revert OFF] set SQUIDSQUAD_MERGE_AUTO_REVERT=1 to "
+                  f"auto-revert; meanwhile a human runs: git revert --no-edit "
+                  f"{sha} && git push", file=sys.stderr)
+    except Exception as e:  # never let the audit break the merge flow
+        print(f"WARN: #{pr_number} post-merge scope-audit raised "
+              f"{type(e).__name__}: {e} (fail-safe -- merge stands)",
+              file=sys.stderr)
+
+
+def _emit_scope_incident(issue_num, pr_number, sha, violations):
+    """Post the loud incident comment (append-only) so a human/DM confirms +
+    reverts. Best-effort -- a comment failure must not break the merge flow."""
+    if not issue_num:
+        return
+    preview = "\n".join(f"- `{v}`" for v in violations[:30])
+    extra = (f"\n...and {len(violations) - 30} more"
+             if len(violations) > 30 else "")
+    body = (
+        f"[!] **POST-MERGE SCOPE VIOLATION (#13285 auto-detect)** -- merge "
+        f"`{sha[:9]}` (PR #{pr_number}) DELETED **{len(violations)} file(s) "
+        f"outside the PR's declared scope**. This is the behind-clone "
+        f"stale-tree mass-revert signature (#13271 SEV-1 class).\n\n"
+        f"Out-of-scope deletions:\n{preview}{extra}\n\n"
+        f"**Remediation (non-destructive):** `git revert --no-edit {sha} && "
+        f"git push` then route this issue back to in-progress. Verify the "
+        f"revert restores only the out-of-scope files."
+    )
+    res = _run_list(
+        ["gh", "issue", "comment", str(issue_num), "--body", body], check=False)
+    if res.returncode != 0:
+        print(f"WARN: could not post scope-violation incident comment to "
+              f"#{issue_num}: {res.stderr.strip()}", file=sys.stderr)
+
+
+def _auto_revert_merge(sha, pr_number):
+    """Non-destructive auto-revert of a scope-violating merge (#13285, opt-in via
+    SQUIDSQUAD_MERGE_AUTO_REVERT). ``git revert`` creates a NEW commit -- never a
+    force-push / history rewrite -- and is idempotent-enough (a second run no-ops
+    on 'nothing to commit'). Best-effort + fail-safe: a revert/push failure is
+    logged, never raised (the incident comment already alerted a human)."""
+    if not _safe_checkout("main"):
+        print(f"WARN: auto-revert of {sha[:9]} aborted -- could not checkout main",
+              file=sys.stderr)
+        return
+    rev = _run_list(["git", "revert", "--no-edit", sha], check=False)
+    if rev.returncode != 0:
+        print(f"WARN: auto-revert `git revert {sha[:9]}` failed: "
+              f"{rev.stderr.strip()} -- human must revert manually", file=sys.stderr)
+        _run_list(["git", "revert", "--abort"], check=False)
+        return
+    push = _run_list(["git", "push", "origin", "main"], check=False)
+    if push.returncode != 0:
+        # Undo the local revert commit so a diverged local main can't be silently
+        # fused into a noise merge by the next pull() (the revert content would
+        # reach origin with NO violation-review context, defeating the point).
+        # Safe: the commit was created by this function one step earlier, so there
+        # is no other local work to preserve. The incident comment already tells a
+        # human to revert + push manually.
+        print(f"WARN: auto-revert push FAILED for {sha[:9]}: "
+              f"{push.stderr.strip()} -- undoing the local revert to avoid "
+              f"divergence; human must revert + push manually", file=sys.stderr)
+        _run_list(["git", "reset", "--keep", "HEAD~1"], check=False)
+        return
+    print(f"AUTO-REVERTED scope-violating merge {sha[:9]} (PR #{pr_number}) -- "
+          f"non-destructive revert commit pushed to main (#13285).")
+
+
+def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
 
     Checks PR state first — if already merged, returns success.
     On merge conflict or unexpected failure, returns failure with details.
+
+    #10540: "Base branch was modified" is a TRANSIENT batch-ship race (not a
+    real conflict) — when DM drains a deep ship queue, each successful merge
+    moves main's SHA, so PRs dispatched against the old base are rejected until
+    GitHub recomputes mergeability; the same PR retried alone succeeds. The
+    gh-CLI path retries that specific error up to ``_max_base_retries`` times
+    (``_base_retry_delay`` seconds apart, to let GitHub settle), while a real
+    ``merge conflict`` stays terminal (routed back to in-progress for rebase,
+    never retried). The retry knobs are parameters for deterministic testing.
     """
     try:
         from forge_adapter import get_adapter, _read_forge_config
@@ -539,39 +928,104 @@ def pr_merge(pr_number, strategy="squash"):
         except (json.JSONDecodeError, AttributeError):
             pass
 
-    # Attempt merge
+    # #13271 (SEV-1 prevention): refuse to squash-merge a branch that is FAR
+    # behind base — a stale-tree squash from a deeply-behind clone mass-reverts
+    # shipped fleet work (194 files at 154-behind). Fail-SAFE: refuse (never
+    # mutate main) and route back to re-sync (merge base into the branch) before
+    # retry. Fail-OPEN when the count is undeterminable (don't wedge shipping on
+    # a gh/API hiccup). Only applies to the squash strategy (the stale-tree risk
+    # is squash-specific; a real merge commit preserves base's history).
+    # Fail-open scope (returns None → proceed): gh absent/unauthenticated, a
+    # non-GitHub/unresolved remote where `gh api {owner}/{repo}` can't infer the
+    # repo (e.g. a CI runner without `gh auth`), a rate-limited compare API, or a
+    # malformed response. Those are accepted for this INTERIM guard — the robust
+    # net is the planned post-merge scope-audit + auto-revert (#13271 follow-up).
+    if strategy == "squash":
+        behind = _pr_behind_by(pr_number)
+        max_behind = _merge_max_behind()
+        if behind is not None and behind > max_behind:
+            msg = (f"PR #{pr_number} branch is {behind} commits behind base "
+                   f"(> {max_behind}) - refusing the squash to avoid a "
+                   f"stale-tree mass-revert (#13271). Merge base into the branch "
+                   f"and retry.")
+            print(f"ERROR: {msg}", file=sys.stderr)
+            return False, "branch too far behind base"
+
+    # Attempt merge, retrying ONLY the transient "Base branch was modified"
+    # batch-ship race (#10540). A real merge conflict is terminal.
     merge_args = ["gh", "pr", "merge", str(pr_number), f"--{strategy}", "--delete-branch"]
-    result = _run_list(merge_args, check=False)
-    if result.returncode == 0:
-        # pr-merge event removed (#6126) — harness emits pr-merged instead
-        print(f"PR #{pr_number} merged ({strategy})")
-        # Extract linked issue number from branch name
-        branch_result = _run_list(
-            ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
-            check=False,
-        )
-        if branch_result.returncode == 0:
-            try:
-                branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
-                # Branch format: squidsquad/role/NUMBER
-                parts = branch_name.split("/")
-                if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
-                    issue_num = parts[-1]
-                    print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
-            except (json.JSONDecodeError, AttributeError, IndexError):
-                pass
-        return True, "merged"
-    else:
+    for attempt in range(_max_base_retries + 1):
+        result = _run_list(merge_args, check=False)
+        if result.returncode == 0:
+            # pr-merge event removed (#6126) — harness emits pr-merged instead
+            print(f"PR #{pr_number} merged ({strategy})")
+            # Extract linked issue number from branch name
+            branch_result = _run_list(
+                ["gh", "pr", "view", str(pr_number), "--json", "headRefName"],
+                check=False,
+            )
+            audit_issue = None
+            if branch_result.returncode == 0:
+                try:
+                    branch_name = json.loads(branch_result.stdout.strip()).get("headRefName", "")
+                    # Branch format: squidsquad/role/NUMBER
+                    parts = branch_name.split("/")
+                    if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
+                        issue_num = parts[-1]
+                        audit_issue = issue_num
+                        print(f"PR linked to #{issue_num} -- GitHub auto-close will handle issue state")
+                except (json.JSONDecodeError, AttributeError, IndexError):
+                    pass
+            # #13285 -- post-merge scope-audit: catch a behind-clone stale-tree
+            # mass-revert (the #13271 SEV-1 class) at merge time. Detection +
+            # incident comment always run; auto-revert is opt-in (default OFF).
+            # Fully fail-safe — never raises, never blocks the merge result.
+            _post_merge_scope_audit(pr_number, audit_issue)
+            return True, "merged"
+
         error = result.stderr.strip()
-        if "merge conflict" in error.lower() or "not mergeable" in error.lower():
+        error_lower = error.lower()
+        # Real conflict — terminal, never retried (routes back for rebase).
+        if "merge conflict" in error_lower or "not mergeable" in error_lower:
             print(f"PR #{pr_number} has merge conflicts", file=sys.stderr)
             return False, "merge conflict"
+        # Transient batch-ship race — an earlier merge moved main's SHA. Retry
+        # after a short settle so GitHub recomputes mergeability against the new
+        # base (#10540). Checked AFTER the conflict guard so a real conflict
+        # never masquerades as the race.
+        if "base branch was modified" in error_lower and attempt < _max_base_retries:
+            print(
+                f"PR #{pr_number}: base branch moved (batch-ship race) — "
+                f"retry {attempt + 1}/{_max_base_retries} after {_base_retry_delay}s",
+                file=sys.stderr,
+            )
+            time.sleep(_base_retry_delay)
+            continue
         print(f"ERROR: PR #{pr_number} merge failed: {error}", file=sys.stderr)
         return False, f"merge failed: {error}"
 
 
+def _is_launcher_script(path):
+    """The consolidated launchers (#13318) live under ``.squidsquad/`` per the
+    operator directive (``.squidsquad/start.ps1`` + ``.squidsquad/start.sh``), but
+    they are versioned CODE deliverables — not transient agent state. They must
+    ship through the normal feature-branch PR/verifier flow, so they are exempt
+    from the ``.squidsquad/`` state-strip.
+
+    Narrow, explicit allow-list (same spirit as ``_is_plan_body`` #12750): only
+    these two exact paths, never a prefix, so it can never re-open the #11511
+    state-leak for working-state / config.md / vault notes. Because the exemption
+    lives in ``_is_state_file`` itself, ALL three callers honor it — ``commit_code``
+    stages them as code, the ``guard_staged_state`` hook does not strip them, and
+    ``_auto_resolve_state_conflicts`` leaves a launcher conflict unresolved (a code
+    conflict the worker must resolve, never silently --theirs'd like state)."""
+    return path in (".squidsquad/start.sh", ".squidsquad/start.ps1")
+
+
 def _is_state_file(path):
     """Check if a path is a state/ephemeral file that should not appear in feature PRs."""
+    if _is_launcher_script(path):
+        return False
     STATE_PREFIXES = (".squidsquad/", ".claude/")
     return any(path.startswith(p) for p in STATE_PREFIXES)
 
@@ -653,17 +1107,25 @@ def _safe_checkout(target_branch):
     result = _run_list(["git", "checkout", target_branch], check=False)
     if result.returncode == 0:
         return True
-    # Unstaged changes blocking checkout — stash and retry
+    # Checkout failed (commonly unstaged changes, but possibly a non-dirty
+    # reason e.g. branch-not-found) — stash anything present and retry. #13167:
+    # guard the stash so a no-op stash (clean tree / non-dirty failure) never
+    # leads to popping a PRE-EXISTING ancient stash. Only pop what we stashed.
+    pre_stash_ref = _stash_top_ref()
     _run("git stash -q", check=False)
+    stashed = _stash_top_ref() != pre_stash_ref
     result = _run_list(["git", "checkout", target_branch], check=False)
     if result.returncode != 0:
         # Checkout failed — restore original branch state. Use the conflict-safe
         # pop so a conflict here never leaves `<<<<<<<` markers either (#13045).
-        _safe_stash_pop()
+        if stashed:
+            _safe_stash_pop()
         print(f"ERROR: could not switch to {target_branch}: {result.stderr}", file=sys.stderr)
         return False
-    # Checkout succeeded — pop stash on the target branch (conflict-safe, #13045).
-    _safe_stash_pop()
+    # Checkout succeeded — pop OUR stash on the target branch (conflict-safe,
+    # #13045) only if we created one (#13167).
+    if stashed:
+        _safe_stash_pop()
     return True
 
 
@@ -725,11 +1187,9 @@ def commit_code(role, branch, message):
     # Commit
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit on branch")
@@ -813,7 +1273,15 @@ def _role_owned_patterns(role):
             "SKILL.md",
             ".squidsquad/config.md",
         ],
-        # qa: nothing beyond common
+        # qa (verifier) authors comprehension specs under tests/comprehension/
+        # (#9184 — the verifier derives CQ specs; skill never self-authors them).
+        # These are permanent regression assets that MUST land in the repo, but
+        # tests/comprehension/ is outside .squidsquad/ so it matched no pattern
+        # and commit_role_scoped classified every new spec as "foreign" — leaving
+        # it untracked until a manual "recover N-behind" rescue commit (#13212).
+        # Adding it here lets the verifier's normal post-cycle commit stage its
+        # own specs. Scoped to qa only: no other role authors comprehension specs.
+        "qa": ["tests/comprehension/"],
     }
     return common + role_specific.get(role, [])
 
@@ -943,11 +1411,9 @@ def commit_state(role, message):
     # Commit
     alias = _get_alias(role)
     full_msg = f"{role}: {message}\n\nCo-Authored-By: {alias} <noreply@squidsquad>"
-    result = subprocess.run(
-        ["git", "commit", "-m", full_msg],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
-        check=False, cwd=str(REPO_ROOT),
-    )
+    # #13262: route through _run_list so the commit (and a hung pre-commit hook
+    # holding _ENSURE_MAIN_LOCK) is timeout-protected like every other git op.
+    result = _run_list(["git", "commit", "-m", full_msg], check=False)
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit")
@@ -990,6 +1456,77 @@ def get_branch_name(role, number):
     return pattern.format(role=role, number=number)
 
 
+def _sync_local_branch_to_origin(branch):
+    """Fast-forward an existing local task branch to origin/<branch> (#13373).
+
+    Called on task_begin's local-branch-exists path, which previously checked
+    out the local ref with NO fetch/compare — so a stale local ref (the normal
+    re-verification case: the worker pushed the fix commit after a round-1
+    bounce, and this clone's ref lags origin) got verified as-is, without the
+    fix commit. The remote path below already fetches for this reason (#5013);
+    the local path must too.
+
+    Cases:
+      - origin/<branch> absent (never pushed) -> keep local (no-op).
+      - local == origin -> already in sync (no-op).
+      - local strictly behind origin -> fast-forward (git merge --ff-only).
+      - local strictly ahead of origin -> keep local unpushed work (no-op).
+      - diverged (neither is an ancestor of the other) -> FAIL LOUDLY with both
+        SHAs (sys.exit 1); never silently check out an unsynced/diverged tip.
+        Manual resolution is merge-not-rebase per the project's standing rule.
+    """
+    _run_list(["git", "fetch", "origin", branch], check=False)
+    origin = _run_list(
+        ["git", "rev-parse", "--verify", f"refs/remotes/origin/{branch}"],
+        check=False,
+    )
+    if origin.returncode != 0:
+        # Never pushed to origin — nothing to sync against.
+        return
+    origin_sha = origin.stdout.strip()
+    local_sha = _run_list(
+        ["git", "rev-parse", f"refs/heads/{branch}"], check=False
+    ).stdout.strip()
+    if not local_sha or local_sha == origin_sha:
+        return
+    # local behind origin? (local is an ancestor of origin)
+    behind = _run_list(
+        ["git", "merge-base", "--is-ancestor", local_sha, origin_sha], check=False
+    ).returncode == 0
+    if behind:
+        ff = _run_list(["git", "merge", "--ff-only", f"origin/{branch}"], check=False)
+        if ff.returncode != 0:
+            print(
+                f"ERROR: task-begin could not fast-forward {branch} to origin/"
+                f"{branch} (local {local_sha[:9]}, origin {origin_sha[:9]}): "
+                f"{ff.stderr.strip()}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(
+            f"task-begin: fast-forwarded {branch} {local_sha[:9]} -> "
+            f"{origin_sha[:9]} (origin was ahead) (#13373)"
+        )
+        return
+    # origin behind local? (origin is an ancestor of local) -> unpushed local
+    # work; keep it.
+    ahead = _run_list(
+        ["git", "merge-base", "--is-ancestor", origin_sha, local_sha], check=False
+    ).returncode == 0
+    if ahead:
+        return
+    # Neither is an ancestor of the other -> diverged. Never verify an unsynced
+    # tip (#13373); surface both SHAs and stop.
+    print(
+        f"ERROR: task-begin: local {branch} ({local_sha[:9]}) and origin/"
+        f"{branch} ({origin_sha[:9]}) have DIVERGED. Resolve manually (merge "
+        f"origin, never rebase) before retrying — refusing to check out an "
+        f"unsynced tip (#13373).",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def task_begin(role, number):
     """Check out the task's feature branch (#3296, #9478).
 
@@ -1021,6 +1558,11 @@ def task_begin(role, number):
         if not _safe_checkout(branch):
             print(f"ERROR: task-begin failed to checkout {branch}", file=sys.stderr)
             sys.exit(1)
+        # Sync the existing local ref to origin before returning (#13373). A
+        # stale local ref (the normal re-verification case) would otherwise be
+        # checked out as-is, letting a verifier verify a tree without the fix
+        # commit. Fast-forward when behind; fail loudly on divergence.
+        _sync_local_branch_to_origin(branch)
         _emit("branch-checkout", {"branch": branch, "task_number": str(number)})
         print(branch)
         return
@@ -1416,7 +1958,7 @@ def _ensure_hooks_installed():
 
 def _parse_args():
     args = sys.argv[1:]
-    if not args or args[0] == "--help":
+    if not args or args[0] in ("--help", "-h"):
         print(__doc__)
         sys.exit(0)
     return args[0], args[1:]
@@ -1475,9 +2017,23 @@ def main():
         success = pr_ready(rest[0])
         sys.exit(0 if success else 1)
     elif cmd == "pr-merge":
-        if not rest:
-            print("Usage: git_ops.py pr-merge <pr-number> [--strategy squash|merge]", file=sys.stderr)
-            sys.exit(1)
+        _pr_merge_usage = "Usage: git_ops.py pr-merge <pr-number> [--strategy squash|merge]"
+        # Validate the PR number BEFORE any side effect. pr_merge() runs a real
+        # squash-merge + post-merge scope-audit/compose, so calling it with a bogus
+        # "PR number" (e.g. the literal "--help" from `pr-merge --help`, which
+        # `_parse_args` only catches in the SUBCOMMAND position) dirtied the tree
+        # and printed a false "PR #--help merged (squash)" (#13433). Treat a
+        # subcommand-position -h/--help as a help request (exit 0), a missing arg
+        # as a usage error (exit 1), and a non-numeric arg as invalid usage
+        # (exit 2 — distinct from a genuine merge failure, which returns exit 1).
+        if not rest or rest[0] in ("-h", "--help"):
+            print(_pr_merge_usage, file=sys.stderr)
+            sys.exit(0 if rest else 1)
+        if not rest[0].isdigit():
+            print(f"ERROR: invalid PR number {rest[0]!r} (expected a positive "
+                  f"integer); no merge attempted.", file=sys.stderr)
+            print(_pr_merge_usage, file=sys.stderr)
+            sys.exit(2)
         strategy = "squash"
         if "--strategy" in rest:
             idx = rest.index("--strategy")

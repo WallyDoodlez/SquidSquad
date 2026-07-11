@@ -95,7 +95,7 @@ EMITTED = {
         "payload_fields": ["event_id", "role"],
     },
     "ack-stop": {
-        "description": "Agent acknowledges a stop request — confirms the agent has accepted an intent=stopping transition. Result field carries the disposition (e.g. \"stop-confirmed\", or \"deploy-halted\" for a deploy-signal halt).",
+        "description": "Agent acknowledges a stop request — confirms the agent has accepted an intent=stopping transition. Result field carries the disposition: one of \"checkpointed\" / \"aborted\" / \"drained\" (the settled stop-path enum, AGENT-RUNTIME §10 Q11), or \"deploy-halted\" for a deploy-signal halt.",
         "source": "event_bus.py ack_stop()",
         "payload_fields": ["event_id", "result"],
     },

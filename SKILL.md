@@ -1,7 +1,7 @@
 ---
 name: squidsquad
 description: "Orchestrates a multi-agent AI development team — handles setup, workflow coordination, role management, and autonomous dev cycles."
-version: 0.44.0
+version: 0.45.0
 license: AGPL-3.0
 ---
 
@@ -306,18 +306,23 @@ When `Auto Merge: yes` is set in `config.md`, the harness automatically merges P
 ## Setup Instructions
 
 When this skill is invoked (via `npx squidsquad` or `/squidsquad-setup`), the
-**install wizard** walks the user through an interactive setup. The canonical,
-step-by-step runbook the installer agent follows is:
+**installer agent** walks the user through an adaptive, conversation-driven
+setup. The canonical operating manual the installer session follows, top to
+bottom, is:
 
-> **`references/wizard/WIZARD.md`**
+> **`docs/INSTALLER-RUNTIME.md`**
 
-That file covers every step (0 / 0b / 1..7), the intent classifier prompt, the
-manifest-driven setup_requirements walker, the review screen, the installer
-agent lifecycle, and error recovery. Do NOT reimplement the setup flow inline
-here — the runbook is the single source of truth. SKILL.md describes
-SquidSquad's architecture; WIZARD.md describes how to install it.
+That manual covers the installer's soul and flow (consent & guardrails,
+project understanding, workflow mapping, per-agent confirmation, apply,
+independent verification, commit & hand-off), the installer agent lifecycle
+(ephemeral — hand off and exit), and its § helper playbook carries the
+concrete helper invocation sequences, the manifest-driven setup_requirements
+walker, the migration walk, and error recovery. Do NOT reimplement the setup
+flow inline here — the manual is the single source of truth. SKILL.md
+describes SquidSquad's architecture; INSTALLER-RUNTIME.md describes how the
+installer behaves when installing it.
 
-The install wizard uses these mechanical helpers:
+The installer uses these mechanical helpers:
 
 - `references/scripts/wizard.py` — gh prerequisite check, re-run detection,
   repo metadata, project-name validation, config.md writer, filesystem
@@ -327,7 +332,7 @@ The install wizard uses these mechanical helpers:
 - `references/scripts/compose.py deploy <role>` — per-role CLAUDE.md
   composition (role template + shared sub-skills + placeholder substitution)
 
-All three expose JSON-output CLI commands so the prose runbook can call them
+All three expose JSON-output CLI commands so the installer agent can call them
 and act on structured results without parsing free text.
 
 The taxonomy the installer uses is **not** a hardcoded table. It lives in:
@@ -383,8 +388,11 @@ Check for and add these sections if missing (with defaults):
 
 - `## Preset` — `Id: software-dev`
 - `## Tools` — `(none)`
-- `## Loop` — `Interval Minutes: [existing interval value]`, `Context Threshold: [existing threshold value]`
-- `## Flags` — `Diagnostics: yes`, `Improvement Scan: [existing value]`, `PR Flow: [existing value]`, `Vault Remember: [existing value]`
+- `## Iteration Interval` — `Minutes: [existing interval value, or 30]` (the polling-fallback cadence; config.py reads it here, not under the old `## Loop` heading)
+- `## Context Pressure` — `Threshold: [existing threshold value, or 70]`
+- `## Auto Merge` — `Enabled: [existing auto-merge value, or yes]` (the merge gate — the one surviving PR variable, #13355)
+- `## PR Flow` — `Enabled: yes` (branch+PR is an invariant since #9478/#13355; config.py reads pr-flow from this section, not from `## Flags`)
+- `## Flags` — `Diagnostics: yes`, `Improvement Scan: [existing value]`, `Vault Remember: [existing value]`
 - `## Git Branches` — `Working Branch: [existing value or main]`, `State Branch: [existing value or squid-squad]`
 - `## Forge Backend` — `Provider: github`, `Endpoint: https://api.github.com`
 - `## Model Routing` — carry over existing values or use defaults (`Default Model: claude`, etc.)

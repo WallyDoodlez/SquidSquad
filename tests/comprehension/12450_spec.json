@@ -1,0 +1,26 @@
+{
+  "issue": 12450,
+  "title": "Installer auto-detect the project's unit-testing strategy (L3 software-dev behavior)",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-27 08:51",
+  "ac": "comprehension (AC2: a worker agent must FOLLOW the project's detected/recorded test strategy and NOT invent a mismatched framework or layout)",
+  "method": "Fresh agent (model: sonnet) given ONLY the new L3 test-strategy behavior line + a sample L4 Project Context '### Testing Strategy' block (framework jest / npm test / __tests__/), no other context. Confirms a fresh worker (a) derives the correct framework/command/location from the recorded strategy and (b) refuses to substitute a personally-preferred framework/layout. Verifier-authored per #9184.",
+  "target": "references/roles/worker/{skill,web,ios,android,fullstack}/instructions.md — the '**Test strategy** (#12450): follow the project's detected test strategy recorded in your L4 Project Context ... never invent a framework or test layout the repo doesn't use.' line; consumed against the L4 '### Testing Strategy' seed.",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Given the test-strategy rule and an L4 Project Context whose '### Testing Strategy' records Framework: jest, Run command: npm test, Test location: __tests__/ — you are about to add unit tests for new code. Which framework, run command, and location do you use?",
+      "expected": "jest, run with `npm test`, place tests in __tests__/ (the project's recorded strategy).",
+      "must_not": "Inventing/choosing a different framework (pytest/unittest/etc.) or a different layout (tests/, spec/) than the recorded jest/__tests__/."
+    },
+    {
+      "id": "CQ2",
+      "q": "You personally prefer pytest with tests in a spec/ folder over what this project uses. May you write pytest tests in spec/ for this new code because you prefer it? Why or why not?",
+      "expected": "No. Follow the project's detected/recorded strategy (jest, __tests__/); never invent a framework or layout the repo doesn't use. Personal preference does not override the project's convention.",
+      "must_not": "Permitting the switch to pytest/spec/ on the basis of personal preference."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-27 08:51",
+  "evidence": "Fresh sonnet agent (id a8b03a01c983ce908) given ONLY the L3 behavior line + a sample L4 '### Testing Strategy' (jest / npm test / __tests__/). 2/2 correct, zero must_not violations: CQ1 'Use Jest, run tests with npm test, place test files in the __tests__/ directory'; CQ2 'No. The instructions explicitly state to follow the project's detected test strategy and never invent a framework or test layout the repo doesn't use. Personal preference is irrelevant — the project uses Jest with tests in __tests__/, and that is what must be used.' The L3 behavior is comprehensible — a fresh worker follows the recorded strategy and refuses to invent."
+}

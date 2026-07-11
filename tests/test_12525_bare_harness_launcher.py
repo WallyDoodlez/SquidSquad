@@ -1,98 +1,95 @@
-"""Contract tests for the bare-harness launchers (#12525).
+"""Contract tests for the bare-harness path (#12525, consolidated into #13318).
 
-`start-harness.sh` / `start-harness.bat` bring up ONLY the harness, with no
-clone-sync and no dep-install (unlike the full start.sh / start.ps1). The
-visible-window / double-click behaviour (AC1/AC2) is OS-level and not
-unit-testable; these tests pin the deterministic contract: the right harness
-invocation, the absence of any git/pip step (AC3), manifest membership (AC4),
-and that the existing full launchers are untouched (AC5).
+The bare path used to be standalone files (start-harness.sh / start-harness.bat);
+#13318 folded it into a ``--bare`` / ``--no-setup`` flag on the single consolidated
+launchers ``.squidsquad/start.sh`` and ``.squidsquad/start.ps1``. In bare mode the
+launcher brings up ONLY the harness (under the supervised loop) with no clone-sync,
+no dep-install, and no TUI. The visible-window / double-click behaviour is OS-level
+and not unit-testable; these tests pin the deterministic contract: bare mode runs
+the harness via the supervised loop, the bare execution path carries no git/pip step
+(AC3), manifest membership (AC4), and that the full-mode dep+sync logic still lives
+in the consolidated scripts (AC5).
 """
 
 import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SH = REPO_ROOT / "start-harness.sh"
-BAT = REPO_ROOT / "start-harness.bat"
+START_SH = REPO_ROOT / ".squidsquad" / "start.sh"
+START_PS1 = REPO_ROOT / ".squidsquad" / "start.ps1"
 MANIFEST = REPO_ROOT / "references" / "installer-files.txt"
-
-# Any git/pip/clone-sync footprint that would betray the "bare" contract.
-_HEAVYWEIGHT = re.compile(
-    r"\bgit\b|\bpip\b|pip3|--rebase|requirements\.txt|ensurepip|apt\b|brew\b|"
-    r"\.local-config|Sync",
-    re.IGNORECASE,
-)
-
-
-def _exec_lines(text, comment_prefix):
-    """Executable (non-comment, non-blank) lines only. The header prose
-    legitimately names git/pip/start.ps1 to explain what the bare launcher
-    avoids — the contract checks must look at the COMMANDS, not the comments."""
-    out = []
-    for ln in text.splitlines():
-        s = ln.strip()
-        if not s or s.upper().startswith(comment_prefix.upper()):
-            continue
-        out.append(ln)
-    return "\n".join(out)
 
 
 class TestFilesExist:
-    def test_sh_present(self):
-        assert SH.is_file(), "start-harness.sh must exist at repo root"
+    def test_consolidated_sh_present(self):
+        assert START_SH.is_file(), ".squidsquad/start.sh must exist"
 
-    def test_bat_present(self):
-        assert BAT.is_file(), "start-harness.bat must exist at repo root"
+    def test_consolidated_ps1_present(self):
+        assert START_PS1.is_file(), ".squidsquad/start.ps1 must exist"
 
 
 class TestShContract:
     def text(self):
-        return SH.read_text(encoding="utf-8")
+        return START_SH.read_text(encoding="utf-8")
 
     def test_runs_harness_in_foreground(self):
-        # exec → foreground (AC2); targets references/scripts/harness.py.
+        # Bare mode runs the supervised loop, which invokes HARNESS_CMD
+        # (default: python3 references/scripts/harness.py) in the foreground.
         assert "references/scripts/harness.py" in self.text()
-        assert "exec python3" in self.text()
+        assert "run_supervised" in self.text()
 
-    def test_cds_to_script_dir(self):
-        assert 'cd "$(dirname "$0")"' in self.text()
+    def test_resolves_repo_root_from_script_dir(self):
+        # Script lives in .squidsquad/; it must resolve repo root from its own dir.
+        assert 'dirname "$0"' in self.text()
 
-    def test_no_git_or_pip(self):
-        # AC3 — no clone-sync, no dep-install (scan commands, not the header).
-        hits = _HEAVYWEIGHT.findall(_exec_lines(self.text(), "#"))
-        assert not hits, f"start-harness.sh must not git/pip/sync; found {hits}"
+    def test_bare_block_skips_deps_and_sync(self):
+        # AC3 — the --bare branch must not run deps/clone-sync (it only runs the
+        # supervised loop). Scan the bare-mode block, not the whole file (the file
+        # also contains the full-mode ensure_deps/sync_clones git/pip code).
+        m = re.search(
+            r'if \[ "\$BARE" -eq 1 \].*?^fi',
+            self.text(), re.DOTALL | re.MULTILINE,
+        )
+        assert m, "bare-mode block not found in start.sh"
+        bare_block = m.group(0)
+        assert "ensure_deps" not in bare_block
+        assert "sync_clones" not in bare_block
+        assert "git pull" not in bare_block
+        assert "pip" not in bare_block
 
     def test_documents_distinction(self):
-        # AC4 — header explains bare vs full launcher.
-        assert "BARE" in self.text() and "start.sh" in self.text()
+        # Header names the #12525 bare path on the consolidated script.
+        assert "bare mode (#12525)" in self.text()
 
 
-class TestBatContract:
+class TestPs1BareContract:
     def text(self):
-        return BAT.read_text(encoding="utf-8")
+        return START_PS1.read_text(encoding="utf-8")
 
     def test_runs_harness(self):
-        assert r"references\scripts\harness.py" in self.text()
+        # Harness path appears in the default HARNESS_CMD value.
+        assert "references/scripts/harness.py" in self.text()
 
-    def test_window_stays_open(self):
-        # AC1 — persistent visible window.
-        assert "pause" in self.text()
+    def test_bare_mode_calls_invoke_supervised(self):
+        # AC2 — bare mode runs the supervised loop in the foreground.
+        assert "Invoke-Supervised" in self.text()
 
-    def test_cds_to_script_dir(self):
-        assert "cd /d \"%~dp0\"" in self.text()
+    def test_resolves_repo_root(self):
+        # Script is in .squidsquad/; it must navigate up to repo root.
+        assert "Split-Path -Parent" in self.text()
 
-    def test_no_git_or_pip(self):
-        # AC3 — scan commands, not the REM header (which names what it avoids).
-        hits = _HEAVYWEIGHT.findall(_exec_lines(self.text(), "REM"))
-        assert not hits, f"start-harness.bat must not git/pip/sync; found {hits}"
-
-    def test_does_not_delegate_to_ps1(self):
-        # The bare launcher runs python directly, not via start.ps1 (the header
-        # may MENTION start.ps1 to explain the distinction — check commands only).
-        assert "start.ps1" not in _exec_lines(self.text(), "REM")
+    def test_bare_block_skips_deps_and_sync(self):
+        # AC3 — the if ($Bare) block must not run deps/clone-sync.
+        m = re.search(r'if \(\$Bare\)\s*\{.*?\n\}', self.text(), re.DOTALL)
+        assert m, "bare-mode block not found in start.ps1"
+        bare_block = m.group(0)
+        assert "Initialize-Deps" not in bare_block
+        assert "Sync-Clones" not in bare_block
+        assert "git pull" not in bare_block
+        assert "pip" not in bare_block
 
     def test_documents_distinction(self):
-        assert "BARE" in self.text() and "start.ps1" in self.text()
+        assert "bare mode (#12525)" in self.text()
 
 
 class TestManifest:
@@ -100,10 +97,17 @@ class TestManifest:
         return MANIFEST.read_text(encoding="utf-8")
 
     def test_both_listed(self):
-        # AC4 — ship with installs. One path per line.
+        # AC4 — the consolidated launchers ship with installs. One path per line.
         lines = {ln.strip() for ln in self.text().splitlines()}
-        assert "start-harness.sh" in lines
-        assert "start-harness.bat" in lines
+        assert ".squidsquad/start.sh" in lines
+        assert ".squidsquad/start.ps1" in lines
+
+    def test_deleted_launchers_not_listed(self):
+        # The consolidated scripts replaced these; the manifest must not ship them.
+        lines = {ln.strip() for ln in self.text().splitlines()}
+        for gone in ("start.sh", "start.ps1", "start-harness.sh",
+                     "start-harness.bat", "restart-harness.sh", "restart-harness.bat"):
+            assert gone not in lines, f"deleted launcher still in manifest: {gone}"
 
     def test_count_header_matches_payload(self):
         text = self.text()
@@ -120,18 +124,15 @@ class TestManifest:
 
 
 class TestFullLaunchersUntouched:
-    """AC5 — the existing full-setup launchers keep their sync + dep logic."""
+    """AC5 — the consolidated launchers still carry full-mode deps + sync logic."""
 
     def test_start_sh_still_full(self):
-        text = (REPO_ROOT / "start.sh").read_text(encoding="utf-8")
+        text = START_SH.read_text(encoding="utf-8")
         assert "requirements.txt" in text  # still installs deps
         assert "git pull --no-rebase" in text  # still syncs clones (#12526: merge, not rebase)
 
     def test_start_ps1_still_full(self):
-        # start.bat delegates to start.ps1, so a stripped start.ps1 would regress
-        # the full-setup path undetected — assert its sync+dep logic survives too.
-        ps1 = REPO_ROOT / "start.ps1"
-        assert ps1.is_file()
-        text = ps1.read_text(encoding="utf-8")
+        assert START_PS1.is_file()
+        text = START_PS1.read_text(encoding="utf-8")
         assert "requirements.txt" in text  # still installs deps
         assert "git pull --no-rebase" in text  # still syncs clones (#12526: merge, not rebase)

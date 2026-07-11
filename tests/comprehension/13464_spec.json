@@ -1,0 +1,36 @@
+{
+  "issue": 13464,
+  "title": "verifier verdict forge-discoverability: verdict comment is an ordered hard precondition of pending-ship",
+  "files": [
+    "references/sub-skills/roles/verifier/verification.md"
+  ],
+  "instructions": "Answer ONLY from the listed file(s). No outside knowledge. This is a comprehension gate for a prose-only (LLM-consumed) instruction change; the fresh-agent answers must be derivable from the file alone.",
+  "questions": [
+    {
+      "id": "CQ-1",
+      "covers": "AC2",
+      "question": "You are the verifier and have just verified a task PASS with zero gaps, about to move it pending-test -> pending-ship. What is the VERY FIRST action you must take (before promoting test files, before touching/merging the PR, before the transition), and WHERE is it recorded?",
+      "expected": "Post a forge-visible PASS VERIFY verdict as a comment on the GitHub ISSUE (via tracker.py), per step 5a — before promoting tests, touching/merging the PR, or transitioning."
+    },
+    {
+      "id": "CQ-2",
+      "covers": "AC2",
+      "question": "Is that first step optional or mandatory? Quote the wording.",
+      "expected": "Mandatory. Step 5a: 'Post the forge-visible VERIFY verdict to the ISSUE FIRST (#13464) - MANDATORY, ordered.'"
+    },
+    {
+      "id": "CQ-3",
+      "covers": "AC1/AC2",
+      "question": "Can you transition to pending-ship without having posted the issue verdict comment first?",
+      "expected": "No. The issue verdict comment is a HARD PRECONDITION of the pending-test -> pending-ship transition; never transition without a preceding forge-visible PASS verdict comment on the issue."
+    },
+    {
+      "id": "CQ-4",
+      "covers": "AC1",
+      "question": "Why is the verifier's private QA-RESULTS-<N>.md file NOT sufficient as the verdict record?",
+      "expected": "It is not committed to origin/main, so it is invisible to the DM/teammates on the forge; a non-forge-visible verdict blocks a genuinely-passing item at the ship-gate or forces an unverified ship."
+    }
+  ],
+  "result": "PASS",
+  "notes": "Verified 2026-07-11 by spawning a fresh general-purpose (sonnet) agent given ONLY verification.md. All 4 CQs answered correctly and unprompted, with exact quotes. Comprehension coverage (AC2) satisfied."
+}

@@ -71,8 +71,9 @@ HARNESS_PORT_FILE = SQUIDSQUAD_DIR / ".harness-port"
 
 DEFAULT_PORT = 7373
 # #12825: dedicated exit code that signals the supervised launcher
-# (restart-harness.bat / .sh) to RELAUNCH the harness, vs a clean exit 0 (do not
-# relaunch). Mirrors the agent self-restart exit-42 convention (HARNESS-ARCH
+# (.squidsquad/start.{ps1,sh} --bare, consolidated #13318) to RELAUNCH the
+# harness, vs a clean exit 0 (do not relaunch). Mirrors the agent self-restart
+# exit-42 convention (HARNESS-ARCH
 # §7.4) — the wrapper owns harness lifecycle the way the harness owns agent
 # lifecycle. POST /restart triggers this exit; the one-shot launcher ignores it
 # (harness simply ends) so the behavior degrades gracefully without the wrapper.
@@ -108,6 +109,10 @@ L4_WATCHER_SUPERVISE_INTERVAL = 5  # seconds
 # net catches the case where the agent never reaches a cycle boundary or
 # /quit hangs (CONTEXT-4792.md §3.3 Q7).
 FORCE_KILL_TIMEOUT_SECONDS = 60
+# #13335 — event-mode context-threshold enforcement. Fallback used only when
+# config.md's `Context Pressure / Threshold` is absent or unparseable; the
+# operator-facing default is the same 70 documented in context-pressure.md.
+CONTEXT_THRESHOLD_DEFAULT = 70
 HARNESS_STATE_FILE = SQUIDSQUAD_DIR / ".harness-state.json"
 
 # #12244 P2 — crash-loop / session-limit backoff. A spawn that dies within
@@ -174,6 +179,15 @@ STOP_FAILURE_RECENT_SECONDS = 180    # a StopFailure older than this is stale
 #     PreToolUse fires) or model latency never false-positives; tunable from the
 #     shadow-mode divergence data this slice gathers.
 ACTIVITY_GRACE_SECONDS = 600         # 10m
+#   #13179 (#12271 Slice A) — boot-completion grace. A not-yet-booted agent
+#     (bootup_complete=False) is legitimately mid-boot only for so long; past
+#     this window with no bootup-complete it is a wedged boot, not a slow one
+#     (the #12271 qa incident sat bootup_complete=False ~54m at intent=deploying).
+#     Bounds the otherwise-unbounded "booting" escape in progress_liveness so a
+#     never-completing boot reads wedged in the SHADOW verdict (does NOT drive
+#     reboot until the #12492 cutover). Generous so a slow first boot never
+#     false-positives; tunable from the same shadow-mode divergence data.
+BOOT_GRACE_SECONDS = 600             # 10m
 
 # #9242: Diagnostic escape hatch. When True (set by `main()` from
 # `--no-auto-start` or `SQUIDSQUAD_HARNESS_NO_AUTO_START=1`), the
@@ -205,6 +219,22 @@ _NO_AUTO_REBOOT = False
 # still honored. Operators bypassing the check are responsible for
 # verifying source freshness themselves.
 _NO_FRESHNESS_CHECK = False
+
+# #12492 (#12271 slice-4 pt2) — progress-liveness cutover. When True (the
+# shipped default after #12492), progress_liveness() (§15.3) is AUTHORITATIVE
+# for the reboot decision: a PID-alive agent the progress model deems dead — a
+# ZOMBIE (inert process; the #10855 false-positive PID-liveness cannot catch) —
+# is killed so the normal death/reboot path respawns it on the next poll. PID is
+# demoted to teardown-only: PID-aliveness no longer VETOES a reboot, though a
+# dead PID is still the instant crash signal (§15.4). The zombie kill respects
+# every existing guard: intent must be RUNNING, _NO_AUTO_REBOOT suppresses it
+# (a kill with no respawn is silent death — worse than churn), the booting grace
+# (#13179) and pause-aware guard (#12458) already keep progress_liveness alive
+# during a legitimate boot/explained pause so neither reads as a zombie.
+# Set SQUIDSQUAD_HARNESS_PROGRESS_LIVENESS_SHADOW_ONLY=1 to revert to the
+# pre-cutover shadow-only behaviour (divergence logged, never acted on) if the
+# authoritative path ever misbehaves in production.
+_PROGRESS_LIVENESS_AUTHORITATIVE = True
 
 import boot_remote
 import health_check
@@ -249,7 +279,9 @@ class AgentState:
                  "in_flight_until", "waiting_since", "compacting_since",
                  "last_stop_failure",
                  # #12271 slice d — dispatch reference for progress-liveness
-                 "last_dispatch_at")
+                 "last_dispatch_at",
+                 # #12801 — operator FORCE-reboot marker (non-crash death signal)
+                 "operator_force_at")
 
     # Intent values:
     #   "running"    — agent should be alive; auto-reboot on death (#4949)
@@ -344,6 +376,38 @@ class AgentState:
         # timer) so a legitimately idle agent — nothing dispatched — is never
         # judged dead. None until the first dispatch.
         self.last_dispatch_at = None
+        # #12801 — epoch a FORCE reboot (operator-initiated, TUI action bar) was
+        # issued for this agent. A force reboot kills the claude PID immediately,
+        # overriding the busy/graceful path; that death has NO SessionEnd, so it
+        # would otherwise read as a crash and wrongly accumulate the #12244
+        # crash-loop streak (AC6). When this stamp is >= last_spawn_at the death
+        # classifier treats the death as operator-initiated (not a crash). Cleared
+        # on respawn. Transient/harness-session-owned: reset to None on load.
+        self.operator_force_at = None
+
+    def reset_session_telemetry(self):
+        """Clear per-session activity + pause telemetry on a fresh (re)spawn.
+
+        #13113: the spawn paths already reset claude_pid / bootup_complete /
+        last_session_end / last_dispatch_at, but left these per-session fields
+        carrying the OLD session's values across the PID boundary. A respawned
+        record then showed the dead session's last_activity_at (frozen at the
+        pre-kill timestamp) until the new session landed its first heartbeat —
+        making a healthy fresh agent read as wedged, and (via a stale
+        in_flight_until) holding off death-detection in active_pause(). Reset
+        them to their fresh-AgentState defaults so a respawned record is
+        indistinguishable from a first boot.
+
+        Scope: only the per-session activity/pause telemetry. Crash-loop and
+        backoff bookkeeping (last_spawn_at, consecutive_fast_deaths,
+        reboot_history, reboot_blocked_until, last_stop_failure) is meant to
+        PERSIST across respawns by design and is deliberately not touched here.
+        """
+        self.last_activity_at = None
+        self.last_activity = None
+        self.in_flight_until = None
+        self.waiting_since = None
+        self.compacting_since = None
 
     def active_pause(self, now):
         """#12458 — return a short reason string if a hook currently explains
@@ -414,11 +478,13 @@ class AgentState:
         the silence. This catches the zombie PID-liveness cannot: an alive
         process doing zero work (#10855 / #10440).
 
-        SHADOW / OBSERVATIONAL this slice — computed and logged alongside the PID
-        decision to validate divergence; it does NOT yet drive the reboot. The
-        cutover (making this authoritative + demoting PID to teardown-only) is a
-        later, separately-reviewed step once the shadow data confirms no false
-        positives (killing a live agent) or false negatives (missing a death).
+        AUTHORITATIVE since the #12492 cutover (`_PROGRESS_LIVENESS_AUTHORITATIVE`):
+        a running agent whose PID is alive but whose progress verdict is dead is
+        killed by the zombie-kill step in ``update_health`` so the normal reboot
+        path respawns it. (This docstring previously described the pre-cutover
+        shadow/observational slice — stale since #12492, corrected in #13369
+        because the wedged-boot verdict now feeds a real kill and its precision
+        matters.)
 
         THREAD-SAFETY (DS-c1 F2): this reads several fields that other daemon
         threads write under ``state._lock`` (the EAD writes ``last_dispatch_at``;
@@ -428,9 +494,47 @@ class AgentState:
         (``update_health``) already holds it when it reads agent state for the
         PID check, so wiring this in there satisfies the contract for free.
         """
-        # A not-yet-booted agent has no heartbeat baseline — never judge it dead
-        # by activity silence (it may be mid-boot). Treat as alive.
+        # A not-yet-booted agent has no heartbeat baseline — within a generous
+        # boot-grace it may legitimately be mid-boot, so treat it as alive. But
+        # the escape is BOUNDED (#13179 / #12271 Slice A): a boot that never
+        # completes is a wedge, not a slow boot (the #13179 qa incident sat
+        # bootup_complete=False ~54m with NO activity). Age it from the most
+        # recent spawn (last_spawn_at; fall back to boot_time) — past
+        # BOOT_GRACE_SECONDS with no bootup-complete AND no sign of life
+        # (#13369: no ceiling-bounded active pause, no spawn-scoped fresh
+        # activity heartbeat) it reads wedged. If we have no spawn reference we
+        # cannot age it, so stay conservative and report booting (never
+        # false-positive a death we cannot time).
         if not self.bootup_complete:
+            boot_ref = (self.last_spawn_at
+                        if self.last_spawn_at is not None else self.boot_time)
+            if boot_ref is not None and now - boot_ref > BOOT_GRACE_SECONDS:
+                # #13369: past the grace, distinguish a WEDGED boot from a
+                # boot doing REAL work (a heavy cared event in the boot drain
+                # — e.g. a full verification run — legitimately outlives the
+                # grace). Consult the same explained-silence + activity
+                # signals the post-boot path trusts, before declaring wedged:
+                # an active pause (in-flight tool call / compacting /
+                # waiting, each ceiling-bounded) or a fresh activity
+                # heartbeat that POSTDATES this spawn (a stale reading from
+                # the prior session must not excuse a wedge — same
+                # spawn-scoping as operator_force_death) reads alive. A
+                # truly-inert boot has neither, so it still reads wedged at
+                # the bound (#13179 preserved); a boot that worked then
+                # wedged reads wedged once its last heartbeat ages past
+                # ACTIVITY_GRACE_SECONDS — bounded, never wedge-forever.
+                # Worst-case wedge-detection delay: BOOT_GRACE plus the
+                # largest pause ceiling (WAITING_MAX = 30m) ≈ 40m — the
+                # accepted tradeoff vs killing a working boot (#13369).
+                pause = self.active_pause(now)
+                if pause is not None:
+                    return True, f"booting-{pause}"
+                if (self.last_activity_at is not None
+                        and self.last_activity_at >= boot_ref
+                        and now - self.last_activity_at
+                        <= ACTIVITY_GRACE_SECONDS):
+                    return True, "booting-active"
+                return False, "wedged-boot-timeout"
             return True, "booting"
         # An explained pause (in-flight tool call / compacting / waiting) means
         # the silence is accounted for — alive. Reuses the slice-c guard so the
@@ -471,6 +575,23 @@ class AgentState:
         la = self.last_activity_at
         return ld is None or (la is not None and la >= ld)
 
+    def operator_force_death(self):
+        """#12801 — True when this agent's death was an operator FORCE reboot.
+
+        A force reboot (TUI action bar) kills the claude PID immediately, so the
+        death carries NO SessionEnd and would otherwise read as a crash. The
+        marker is stamped at force time and is authoritative only when it postdates
+        the current spawn (``>= last_spawn_at``) — a stale marker from a prior
+        session must not excuse a later natural crash. The death classifier treats
+        an operator-force death as non-crash (does NOT accumulate the #12244
+        streak, AC6) and clears the marker on consume."""
+        ofa = self.operator_force_at
+        return bool(
+            ofa is not None
+            and self.last_spawn_at is not None
+            and ofa >= self.last_spawn_at
+        )
+
     def to_dict(self):
         return {
             "role": self.role,
@@ -506,6 +627,8 @@ class AgentState:
             "last_stop_failure": self.last_stop_failure,
             # #12271 slice d — dispatch reference for progress-liveness
             "last_dispatch_at": self.last_dispatch_at,
+            # #12801 — operator FORCE-reboot marker (non-crash death signal)
+            "operator_force_at": self.operator_force_at,
         }
 
 
@@ -712,8 +835,44 @@ class HarnessState:
                         f"{role}: LIVENESS DIVERGENCE — PID says "
                         f"{'alive' if alive else 'dead'}, progress says "
                         f"{'alive' if prog_alive else 'dead'} ({prog_reason}) "
-                        f"[shadow #12271-d: {_kind}]"
+                        f"[#12271-d: {_kind}]"
                     )
+
+                # #12492 (#12271 slice-4 pt2) — progress-liveness CUTOVER.
+                # A zombie (PID-alive but progress-dead) is the case PID-liveness
+                # reports healthy forever (#10855). With the cutover active,
+                # progress is authoritative: kill the inert PID so the normal
+                # death/reboot path (below, next poll once the PID reads dead)
+                # respawns it — mirroring the §7.4 force-kill net's
+                # kill-this-poll / reboot-next-poll pattern rather than racing a
+                # same-poll respawn against a not-yet-reaped process. Guards:
+                # only a RUNNING agent (a stopping/deploying/restarting agent's
+                # silence is expected and handled elsewhere); never under
+                # _NO_AUTO_REBOOT (a kill with no respawn is silent death — worse
+                # than the zombie); skip when pid_changed (a fresh PID this poll
+                # is a just-rebooted agent, not a zombie). The booting-grace
+                # (#13179) and pause-aware (#12458) guards live inside
+                # progress_liveness(), so a legitimately booting or
+                # explained-paused agent returns prog_alive=True and is never
+                # seen here as a zombie (AC3).
+                if (_PROGRESS_LIVENESS_AUTHORITATIVE
+                        and alive and not prog_alive
+                        and not pid_changed
+                        and agent.intent == AgentState.INTENT_RUNNING
+                        and not _NO_AUTO_REBOOT):
+                    _log(
+                        f"{role}: PROGRESS-LIVENESS REBOOT — zombie "
+                        f"(PID {pid} alive but progress dead: {prog_reason}); "
+                        f"killing inert PID so the reboot path respawns it "
+                        f"(#12492 cutover)"
+                    )
+                    try:
+                        reboot_agent._kill_process(pid)
+                    except Exception as e:
+                        _log(
+                            f"{role}: zombie kill of PID {pid} raised "
+                            f"{type(e).__name__}: {e}"
+                        )
 
                 # #4792 Phase 1 (Q7) — 60s force-kill safety net.
                 # If the agent has been STOPPING/RESTARTING for longer than
@@ -901,7 +1060,35 @@ class HarnessState:
                 # the confirmed-death branch exactly as before #12458).
                 fresh_death = is_dead and was_alive
                 held = agent.status == "paused" and not alive
-                death_candidate = (fresh_death or held) and should_reboot
+                # #13283 — never-resolved-PID wedge. An agent stuck at
+                # status="starting" whose initial spawn never resolved a claude
+                # PID (claude_pid=None → alive=False) is invisible to every other
+                # reboot trigger: the #12492 cutover kill-step needs alive=True,
+                # the status block above only runs its death branch for
+                # status != "starting", and is_dead excludes "starting".
+                # progress_liveness() already returns DEAD for such an agent once
+                # it ages past BOOT_GRACE_SECONDS (#13179 "wedged-boot-timeout") —
+                # consume that verdict here so it auto-reboots through the normal
+                # death/backoff path (with #12244/#12409 breakers) instead of
+                # needing a manual operator reap. Gated on the cutover flag (the
+                # verdict is only authoritative post-#12492); within boot grace
+                # progress_liveness returns alive, so a legitimately-booting agent
+                # is never caught. Routed through death_candidate (not a bare
+                # reboot append) so the pause-aware guard + crash-loop backoff all
+                # apply uniformly. Orphan edge (pre-existing, surfaced not worsened):
+                # if the spawn DID start a claude that never wrote .claude-pid
+                # (thin_launcher crashed after exec, before the file write), the
+                # respawn cannot see it and boot_remote.boot_agent's singleton /
+                # .claude-pid-liveness check is the partial net — this fix
+                # auto-triggers that recovery instead of requiring a manual reap.
+                wedged_start = (
+                    _PROGRESS_LIVENESS_AUTHORITATIVE
+                    and agent.status == "starting"
+                    and not alive
+                    and not prog_alive
+                )
+                death_candidate = (
+                    (fresh_death or held or wedged_start) and should_reboot)
                 pause_reason = agent.active_pause(now) if death_candidate else None
 
                 if death_candidate and pause_reason is not None:
@@ -952,12 +1139,22 @@ class HarnessState:
                     # escalate the streak.
                     se = agent.last_session_end
                     se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
+                    # #12801: an operator FORCE reboot is non-crash too — it has
+                    # no SessionEnd but is operator-initiated, so it must not
+                    # escalate the streak (AC6).
+                    operator_forced = agent.operator_force_death()
                     graceful = bool(
                         agent.last_spawn_at is not None
                         and se_at >= agent.last_spawn_at
-                    )
+                    ) or operator_forced
                     if not graceful:
                         agent.consecutive_fast_deaths += 1
+                    if operator_forced:
+                        # Consume the one-shot marker here too (symmetry with the
+                        # non-throttle death path) so it can never excuse a later
+                        # crash even if a future branch lands between this path
+                        # and the respawn that would otherwise self-expire it.
+                        agent.operator_force_at = None
                     over = max(0, agent.consecutive_fast_deaths
                                - FAST_DEATH_THRESHOLD)
                     backoff = min(
@@ -1002,11 +1199,28 @@ class HarnessState:
                     # makes `.get("at", 0)` return None, and `None >= float`
                     # raises TypeError, aborting the whole health poll.
                     se_at = (se.get("at") or 0) if isinstance(se, dict) else 0
+                    # #12801: an operator FORCE reboot (TUI action bar) kills the
+                    # PID immediately, so there is NO SessionEnd — but it is
+                    # operator-initiated, not a fault, and must not accumulate the
+                    # #12244 crash streak (AC6). Consume the marker here.
+                    operator_forced = agent.operator_force_death()
                     graceful = bool(
                         agent.last_spawn_at is not None
                         and se_at >= agent.last_spawn_at
                     )
-                    if graceful:
+                    if operator_forced:
+                        # #12801 AC6: do NOT increment the streak. Like the
+                        # graceful branch we do NOT reset it to 0 either — a force
+                        # reboot must not let an agent ZERO a real accumulated
+                        # crash streak. Clear the one-shot marker on consume so a
+                        # later natural crash is classified normally.
+                        agent.operator_force_at = None
+                        _log(
+                            f"{role}: operator force reboot — not counted as a "
+                            f"crash (streak stays "
+                            f"{agent.consecutive_fast_deaths}) (#12801)"
+                        )
+                    elif graceful:
                         # #12418 AC4: a graceful exit is NOT a crash — do NOT
                         # increment the streak. We deliberately do NOT reset
                         # it to 0 either (DS-REVIEW-12418-C F2): a misbehaving
@@ -1175,6 +1389,11 @@ class HarnessState:
                             # baseline (a stale last_dispatch_at from before the
                             # death must not make the fresh agent read wedged).
                             agent.last_dispatch_at = None
+                            # #13113 — same rationale for the per-session activity
+                            # + pause telemetry: a stale last_activity_at / pause
+                            # flag from the dead session must not survive into the
+                            # fresh record (frozen-telemetry masquerade).
+                            agent.reset_session_telemetry()
                 elif result.get("action") == "error":
                     # #11640: boot_agent refused (e.g. unregistered/missing
                     # clone). Never spawned in REPO_ROOT — surface the refusal
@@ -1208,7 +1427,148 @@ class HarnessState:
                 self.update_health()
             except Exception:
                 pass  # Don't crash poller on transient errors
+            # #13335 — event-mode context-threshold enforcement. Kept in its
+            # own try so a pressure-read fault never blocks liveness polling.
+            try:
+                self._enforce_context_pressure()
+            except Exception:
+                pass
             time.sleep(HEALTH_POLL_INTERVAL)
+
+    def _read_context_threshold(self):
+        """#13335 — resolve the context-pressure threshold (int %) from
+        config.md's ``Context Pressure / Threshold``. Falls back to
+        CONTEXT_THRESHOLD_DEFAULT when the field is absent or non-integer, so a
+        malformed config never disables enforcement or crashes the poller.
+
+        The absent-section case is handled at the source: ``context-threshold``
+        is registered in config.py's ``_FIELD_DEFAULTS`` (QA TC-3 — an
+        unregistered field makes ``get_field`` ``sys.exit(1)``, and SystemExit
+        is a BaseException that escapes ``except Exception`` and silently kills
+        the whole health poller). The SystemExit catch below is defense in
+        depth for that same class, should a config.py regression ever
+        reintroduce an exit path."""
+        try:
+            import config as _cfg
+            raw = _cfg.get_field("context-threshold")
+            if raw is None:
+                return CONTEXT_THRESHOLD_DEFAULT
+            return int(str(raw).strip())
+        except (SystemExit, Exception):
+            return CONTEXT_THRESHOLD_DEFAULT
+
+    def _read_agent_pressure(self, role, agent):
+        """#13335 — read an agent's current context-pressure (int %) from its
+        own clone's ``.squidsquad/<role>/context-pressure`` (the file the
+        statusline writes each cycle). Returns ``None`` when the file is
+        absent, unreadable, or non-integer — treated as 'no signal', never
+        enforced against."""
+        clone_path = getattr(agent, "clone_path", None)
+        if not clone_path:
+            try:
+                clone_path = boot_remote._get_clone_path(role)
+            except Exception:
+                return None
+        try:
+            ctx_file = (
+                Path(clone_path) / ".squidsquad" / role / "context-pressure"
+            )
+            return int(ctx_file.read_text(encoding="utf-8").strip())
+        except (FileNotFoundError, OSError, ValueError):
+            return None
+
+    def _enforce_context_pressure(self):
+        """#13335 — the missing event-mode ACTOR for ``context-threshold``.
+
+        In event mode nothing runs ``cycle_post.py`` per event, so the
+        loop-mode exit-42 pressure path never fires and agents run unbounded
+        past the threshold until Claude Code's lossy auto-compact or a human
+        intervenes. This closes that gap: the 5s health poller reads each
+        running agent's context-pressure and, when it reaches the configured
+        threshold, flips ``intent=restarting`` — reusing the existing
+        graceful-restart machinery verbatim (the agent checkpoints
+        ``working-state.md`` at its next task boundary per event-mode-contract
+        Case E; the 60s force-kill net + auto-reboot then respawn it with a
+        fresh context window). This makes ``event-mode-contract.md``'s
+        long-claimed "the harness initiates a restart via the restarting
+        intent" behavior real.
+
+        Guards / fail-open:
+        - Skipped entirely under ``_NO_AUTO_REBOOT`` — with no respawn path a
+          restart would only tear down a working agent (mirrors
+          ``restart_agent``'s refusal under the same flag).
+        - Only a fully-booted, ``running`` agent whose intent is ``running`` is
+          a candidate; an agent already ``stopping``/``restarting`` is skipped
+          so a repeat trip never re-arms the 60s force-kill window.
+        - Every read is fail-open: a bad clone/threshold/pressure read for one
+          agent yields 'no signal' and is skipped, never crashing the poller or
+          affecting other agents.
+
+        Notes on the downstream restart (unchanged, pre-existing machinery):
+        - The respawn is subject to the #12244 crash-loop breaker. A pressure
+          trip on a long-lived agent (the normal case — context fills over
+          time) dies well past FAST_DEATH_WINDOW_SECONDS, so it never
+          accumulates the fast-death streak. Only a pathological agent that
+          re-fills context within the fast-death window would back off — which
+          is the correct guard against an infinite respawn loop.
+        - The ``not agent.bootup_complete`` gate also defends the
+          stale-context-pressure-file case: a freshly respawned agent stays
+          bootup_complete=False until it re-asserts ``bootup-complete``, so a
+          leftover high value from the prior session cannot immediately re-trip
+          the new process before its statusline writes a fresh reading.
+          NOTE (#13369): the contract now emits bootup-complete BEFORE the
+          boot drain, so this gate opens earlier than it used to — the
+          stale-file window is now the gap between the step-4 emission and
+          the session's first statusline write. A stale high reading landing
+          in that gap trips a graceful checkpoint-and-respawn (not a lost
+          session), so the narrowed defense is an accepted tradeoff vs the
+          drain-kill it replaces; a fresh-reading-before-enforcement
+          handshake would close it fully if it ever bites in practice.
+        """
+        if _NO_AUTO_REBOOT:
+            return
+        threshold = self._read_context_threshold()
+        try:
+            all_roles = boot_remote._get_all_roles()
+        except Exception:
+            return
+
+        changed = False
+        # Reads run under the lock, matching update_health()'s existing
+        # per-agent file-read pattern (context-pressure is a tiny local file);
+        # the poll cadence (5s) keeps this well off the hot path.
+        with self._lock:
+            for role in all_roles:
+                agent = self.agents.get(role)
+                if agent is None:
+                    continue
+                if agent.intent != AgentState.INTENT_RUNNING:
+                    continue
+                if not agent.bootup_complete or agent.status != "running":
+                    continue
+                pressure = self._read_agent_pressure(role, agent)
+                if pressure is None or pressure < threshold:
+                    continue
+                # Threshold reached — flip intent=restarting, mirroring
+                # restart_agent's internal transition. intent_set_at is stamped
+                # once here so the 60s force-kill window is measured from the
+                # trip. bootup_complete=False is set eagerly (as restart_agent
+                # does for a busy agent) to gate event dispatch to the doomed
+                # process until the respawn re-asserts it; the transient
+                # progress_liveness "wedged-boot-timeout" divergence this can
+                # log for up to 60s is harmless — the zombie-kill path is gated
+                # on intent==running, which no longer holds here.
+                agent.intent = AgentState.INTENT_RESTARTING
+                agent.intent_set_at = time.time()
+                agent.bootup_complete = False
+                _log(
+                    f"{role}: context pressure {pressure}% >= threshold "
+                    f"{threshold}% — intent=restarting "
+                    f"(checkpoint + respawn with fresh context, #13335)"
+                )
+                changed = True
+        if changed:
+            self.save_state()
 
     # ----- PRD-E E3 (#10682): L4-write file-watch lifecycle -------------
 
@@ -1550,6 +1910,11 @@ class HarnessState:
                 # #12271 slice d — restore dispatch reference (None for older
                 # state files / fresh agents).
                 agent.last_dispatch_at = agent_data.get("last_dispatch_at")
+                # #12801 — a FORCE reboot is owned by the harness session that
+                # issued it (like the RESTARTING intent reset above). Never
+                # resurrect a stale force marker across a harness restart: it
+                # would mis-classify the next natural crash as operator-initiated.
+                agent.operator_force_at = None
 
         _log(f"Restored state for {len(state_data.get('agents', {}))} agents from state file")
 
@@ -2041,6 +2406,49 @@ def _cleanup_legacy_sentinels(clone_paths):
     return removed, errors
 
 
+def _distribute_port_to_clones(port) -> int | None:
+    """Write ``port`` into each agent clone's ``.squidsquad/.harness-port``.
+
+    Production-only (#13352): distribution runs ONLY when this harness's
+    ``SQUIDSQUAD_DIR`` is the repo's live ``.squidsquad`` — i.e. the real
+    production singleton. An isolated harness (a test's ``real_harness``
+    with ``SQUIDSQUAD_DIR`` pointing at a tmpdir) must never write its
+    ephemeral port into live clones: ``boot_remote._parse_local_config()``
+    reads the repo-scoped ``.local-config`` regardless of isolation, so
+    without this guard a test harness on an ephemeral port poisons every
+    live clone's port file and strands those agents in polling fallback
+    (the observed ``.harness-port=8251`` leak; same failure family as
+    #12820's second-instance refusal).
+
+    Returns the clone count on distribution, or ``None`` when skipped
+    because this harness is isolated. Exceptions propagate to the caller
+    (which logs a warning), matching the previous inline behavior.
+    """
+    live_squid = REPO_ROOT / ".squidsquad"
+    try:
+        is_production = SQUIDSQUAD_DIR.resolve() == live_squid.resolve()
+    except OSError:
+        is_production = False
+    if not is_production:
+        _log(
+            "Isolated SQUIDSQUAD_DIR — skipping clone port distribution "
+            "(#13352: test harnesses must not poison live clone port files)"
+        )
+        return None
+    clone_paths = boot_remote._parse_local_config()
+    for role, clone_root in clone_paths.items():
+        clone_squid = Path(clone_root) / ".squidsquad"
+        if clone_squid.is_dir() and Path(clone_root).resolve() != REPO_ROOT.resolve():
+            clone_port_file = clone_squid / ".harness-port"
+            try:
+                clone_tmp = clone_port_file.with_suffix(".tmp")
+                clone_tmp.write_text(str(port), encoding="utf-8")
+                clone_tmp.replace(clone_port_file)
+            except OSError:
+                pass
+    return len(clone_paths)
+
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -2102,18 +2510,9 @@ async def lifespan(app: FastAPI):
     def _deferred_init():
         # Write port file to each agent clone's .squidsquad/ directory (#4709 TC-7)
         try:
-            clone_paths = boot_remote._parse_local_config()
-            for role, clone_root in clone_paths.items():
-                clone_squid = Path(clone_root) / ".squidsquad"
-                if clone_squid.is_dir() and Path(clone_root).resolve() != REPO_ROOT.resolve():
-                    clone_port_file = clone_squid / ".harness-port"
-                    try:
-                        clone_tmp = clone_port_file.with_suffix(".tmp")
-                        clone_tmp.write_text(str(state.port), encoding="utf-8")
-                        clone_tmp.replace(clone_port_file)
-                    except OSError:
-                        pass
-            _log(f"Port file distributed to {len(clone_paths)} clone(s)")
+            distributed = _distribute_port_to_clones(state.port)
+            if distributed is not None:
+                _log(f"Port file distributed to {distributed} clone(s)")
         except (SystemExit, Exception) as e:
             _log(f"WARNING: Could not distribute port to clones: {e}")
 
@@ -2166,6 +2565,7 @@ async def lifespan(app: FastAPI):
                         agent_state.last_spawn_at = time.time()  # #12244 P2
                         agent_state.last_session_end = None  # #12418 F3
                         agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+                        agent_state.reset_session_telemetry()  # #13113
                         agent_state.terminal_pid = result.get("terminal_pid")
                     state.set_agent(role, agent_state)
             state.save_state()
@@ -2496,6 +2896,7 @@ async def start_all():
                 agent_state.last_spawn_at = time.time()  # #12244 P2
                 agent_state.last_session_end = None  # #12418 F3
                 agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+                agent_state.reset_session_telemetry()  # #13113
                 agent_state.terminal_pid = result.get("terminal_pid")
             state.set_agent(role, agent_state)
 
@@ -2551,6 +2952,34 @@ async def stop_all():
 
     # #9242: disk write off the asyncio event loop.
     await asyncio.to_thread(state.save_state)
+    return {"results": results}
+
+
+@app.post("/agents/all/restart")
+async def restart_all(force: bool = False):
+    """#12801 — reboot every agent (TUI action-bar "reboot all"). Delegates to
+    the per-agent restart so the graceful-vs-force semantics, the operator-force
+    crash-streak exclusion (AC6), and the no-auto-reboot refusal are identical
+    for the bulk path. ``force=true`` kills each agent's PID immediately."""
+    roles = boot_remote._get_all_roles()
+    _log(f"Restarting all agents (force={force}): {', '.join(roles)}")
+    results = []
+    for role in roles:
+        try:
+            res = await restart_agent(role, force=force)
+            # restart_agent returns a dict (success) or a JSONResponse (clone
+            # resolution failure) — normalize to a per-role dict either way.
+            if isinstance(res, dict):
+                results.append({"role": role, **{k: v for k, v in res.items()
+                                                 if k != "role"}})
+            else:
+                results.append({"role": role, "action": "restart",
+                                "success": False,
+                                "message": "clone resolution failed"})
+        except Exception as e:  # never let one role 500 the whole bulk action
+            results.append({"role": role, "action": "restart", "success": False,
+                            "message": f"{type(e).__name__}: {e}"})
+            _log(f"  {role}: restart-all error — {type(e).__name__}: {e}")
     return {"results": results}
 
 
@@ -2610,6 +3039,7 @@ async def start_agent(role: str):
             agent_state.last_spawn_at = time.time()  # #12244 P2
             agent_state.last_session_end = None  # #12418 F3
             agent_state.last_dispatch_at = None  # #12271 slice d (DS-c1 F4)
+            agent_state.reset_session_telemetry()  # #13113
             agent_state.terminal_pid = result.get("terminal_pid")
             # #8695: spawning a fresh agent → bootup-complete must be re-asserted
             # by the new process before we'll dispatch any events to it.
@@ -3040,7 +3470,19 @@ async def receive_event(request: Request):
       auto-assigned (#11404 AC1) so the event cannot be silently skipped by
       id-tracking consumers (``event_poll`` skips id-less events).
     """
-    body = await request.json()
+    # #13156: fail CLOSED on a malformed body. stdlib json.loads (strict=True,
+    # used by Starlette's request.json()) raises JSONDecodeError on a raw
+    # (unescaped) control character in a string field — e.g. a hand-built /
+    # curl body or an emit path that serializes multi-line text without
+    # JSON-escaping. Unguarded, that propagated to the global handler as a 500
+    # (47x in harness-errors.log, a fixed-position retry loop). Reject cleanly
+    # with 400 instead so the bad event is dropped, not crashed-on. (ValueError
+    # covers JSONDecodeError + UnicodeDecodeError, both ValueError subclasses.)
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed event body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
 
     # Validate minimal fields
     event_type = body.get("event_type")
@@ -3166,14 +3608,30 @@ async def receive_event(request: Request):
             # §3.3 Q7). Also only fires when the agent is still in STOPPING:
             # any subsequent operator action (RUNNING / RESTARTING / STOPPED)
             # supersedes this ack, which is now stale.
-            if ack_payload.get("result") == "stop-confirmed":
+            #
+            # #13148: the stop-path ack-stop result enum is SETTLED to
+            # 'checkpointed' | 'aborted' | 'drained' (AGENT-RUNTIME §10 Q11,
+            # closed 2026-05-30). This branch previously keyed on the obsolete
+            # 'stop-confirmed' (NOT in the enum) — so a correctly-emitted stop
+            # ack would have silently missed it. Recognize the settled values:
+            # 'checkpointed'/'drained' = clean stop; 'aborted' = graceful stop
+            # FAILED → the existing 60s force-kill net is the escalation (logged
+            # for visibility). No agent-side emitter exists yet (event_bus
+            # .ack_stop has no callers); wiring one is the follow-on — this
+            # aligns the handler so it works correctly when that lands.
+            _stop_result = ack_payload.get("result")
+            if _stop_result in ("checkpointed", "aborted", "drained"):
+                if _stop_result == "aborted":
+                    _log(f"{role}: ack-stop result=aborted (graceful stop FAILED)"
+                         f" — 60s force-kill net will escalate")
                 with state._lock:
                     agent = state.agents.get(role)
                     if agent and agent.intent == AgentState.INTENT_STOPPING:
                         # Intent already STOPPING and intent_set_at already
-                        # recorded at request time — nothing to update here.
-                        # The save_state below is a no-op for these fields
-                        # but kept for parity with other ack paths.
+                        # recorded at request time — do NOT reset it (would
+                        # extend the 60s window). The save_state below is a
+                        # no-op for these fields but kept for parity with
+                        # other ack paths.
                         pass
                 # #9242: disk write off the asyncio event loop.
                 await asyncio.to_thread(state.save_state)
@@ -3257,6 +3715,112 @@ async def receive_event(request: Request):
         )
 
     return {"status": "ok"}
+
+
+@app.post("/work/assign")
+async def work_assign(request: Request):
+    """Manual wake-injection primitive (#12495).
+
+    Emits an ``assigned-to`` event to ``target_alias`` **without** a status
+    transition — the distinguishing feature versus ``tracker.py transition``.
+    This is the sanctioned BACKUP / babysitting path for waking a stuck-but-
+    alive agent (PM duty) or surfacing a process concern to PM, for when the
+    PRIMARY wake paths (self-wake #12506, never-stop #12853, EAD on forge-state
+    change) don't fire. It is NOT the default routing mechanism: transition-
+    driven handoffs are routed by the ExternalActivityDetector off forge state
+    (AGENT-RUNTIME §8.3), not through this endpoint.
+
+    Deliberately does **not** rewrite the ``role:*`` label: a manual re-nudge
+    targets work the agent already owns (or pings PM), so ownership is
+    unchanged. (The aspirational "universal router that rewrites labels on every
+    call" §8.3 design is NOT what this implements — see the #12495 changelog.)
+
+    Response contract (matches HARNESS-ARCH §4.3):
+    - ``200`` ``{"status": "ok", "event_id": ...}`` — assigned-to emitted.
+    - ``404`` — ``target_alias`` not in the install's registered aliases.
+    - ``400`` — malformed body, missing ``target_alias``, or self-assign
+      (``target_alias == X-Squidsquad-Alias``; structural anti-loop invariant).
+
+    Check order: malformed-body → missing-target → self-assign (400) →
+    alias-existence (404). Self-assign is checked before existence so a
+    self-targeted call returns the terse 400 rather than a 404 that would
+    echo the full known-alias registry. If the config is unreadable the
+    existence check falls OPEN (same posture as POST /events' unknown-role
+    guard — a broken-config wedge is worse than letting one event through).
+
+    Authority: the harness enforces only alias-existence + the self-assign
+    invariant — NOT class-from-class permissions (decision-class-vs-alias-
+    routing-model, 2026-05-25). Who *should* call it (PM babysitting; any agent
+    escalating a process concern to PM) is process discipline documented in
+    §8.3, not a harness gate.
+    """
+    # Fail CLOSED on a malformed body, same guard as POST /events (#13156).
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed /work/assign body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
+
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+
+    target_alias = body.get("target_alias")
+    if not target_alias:
+        raise HTTPException(status_code=400, detail="target_alias is required")
+
+    # Self-assign invariant: an agent may not assign work to itself (structural
+    # anti-loop, not a permission check). The caller's identity is the
+    # X-Squidsquad-Alias request header; absent header → caller unidentified,
+    # invariant un-checkable, so it is skipped (the tracker.py CLI always sets
+    # it). EAD does not use this HTTP path, so no __ead__ sentinel is needed.
+    emitter_alias = request.headers.get("X-Squidsquad-Alias")
+    if emitter_alias and emitter_alias == target_alias:
+        raise HTTPException(
+            status_code=400,
+            detail=f"self-assign forbidden: target_alias == emitter ({target_alias})",
+        )
+
+    # Alias-existence validation (the harness's one routing check).
+    try:
+        allowed_roles = set(boot_remote._get_all_roles()) | {"pm"}
+    except (SystemExit, Exception):
+        # Config unreadable — fall open rather than reject (same posture as
+        # POST /events' unknown-role guard).
+        allowed_roles = None
+    if allowed_roles is not None and target_alias not in allowed_roles:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "error": "unknown alias",
+                "target_alias": target_alias,
+                "known_aliases": sorted(allowed_roles),
+            },
+        )
+
+    # Build the assigned-to payload. issue_number / event_context / payload are
+    # all optional for a manual wake; event_context defaults to "work-assign".
+    issue_number = body.get("issue_number")
+    event_context = body.get("event_context") or "work-assign"
+    extra_payload = body.get("payload")
+    payload = {
+        "target_alias": target_alias,
+        "event_context": event_context,
+    }
+    if issue_number is not None:
+        payload["issue_number"] = str(issue_number)
+    if isinstance(extra_payload, dict):
+        # Caller-supplied payload fields ride through (e.g. title, concern).
+        # Reserved keys above win to keep the event shape coherent.
+        for k, v in extra_payload.items():
+            payload.setdefault(k, v)
+
+    event = _emit_event("assigned-to", "harness", payload=payload)
+    _log(
+        f"/work/assign → {target_alias}"
+        f"{f' (issue #{issue_number})' if issue_number is not None else ''}"
+        f" context={event_context!r} by={emitter_alias or '?'}"
+    )
+    return {"status": "ok", "event_id": event["id"]}
 
 
 @app.get("/events")
@@ -3355,14 +3919,24 @@ async def get_events_for_role(
     else:
         events = event_stream.get_recent(limit * 3)
 
-    # Filter: events targeted at this role OR matching the role's reaction types
+    # Filter: events targeted at this role OR matching the role's reaction types.
+    # #13255: a reacts-to match must EXCLUDE events the requesting role emitted
+    # itself — otherwise an agent's own git-commit / status-transition events
+    # come back through its own event_poll, wake it via Monitor, and drain to a
+    # guaranteed no-op (the care filter skips them: no target_alias). Explicit
+    # target_alias targeting still wins unconditionally (so a hypothetical
+    # self-assign via target_alias is preserved); only the broadcast reacts-to
+    # branch suppresses self-emitted events. Cross-agent awareness is unaffected:
+    # a verifier reject is qa-emitted, so the worker (different emitter) still
+    # sees it; assigned-to / deploy-signal are harness-emitted, never suppressed.
     filtered = []
     for e in events:
         target = e.get("payload", {}).get("target_alias", "")
         etype = e.get("event_type", "")
+        emitter = e.get("role", "")
         if target == role:
             filtered.append(e)
-        elif relevant_types and etype in relevant_types:
+        elif relevant_types and etype in relevant_types and emitter != role:
             filtered.append(e)
 
     # Same skim-then-advance rule as GET /events: oldest-first when the
@@ -3603,10 +4177,18 @@ async def stop_agent(role: str):
 
 
 @app.post("/agents/{role}/restart")
-async def restart_agent(role: str):
+async def restart_agent(role: str, force: bool = False):
     """Restart agent. If idle, kill immediately and let auto-reboot fire (#8689).
     If mid-cycle, just set intent=restarting and let the agent exit cleanly at
-    its next cycle boundary (#4966 graceful-restart behavior preserved)."""
+    its next cycle boundary (#4966 graceful-restart behavior preserved).
+
+    #12801 — ``force=true`` (TUI action bar FORCE reboot): kill the claude PID
+    IMMEDIATELY regardless of busy/in-flight state, overriding the graceful
+    next-boundary path. The death is stamped ``operator_force_at`` so the health
+    poller classifies it as operator-initiated (NOT a crash → does not accumulate
+    the #12244 crash streak, AC6). A graceful (non-force) restart of a BUSY agent
+    is unchanged: it queues intent=restarting and the agent checkpoints + exits at
+    its next cycle boundary."""
     _validate_role(role)
 
     # #10538 (gap-fix): when auto-reboot is disabled there is NO respawn path,
@@ -3658,6 +4240,12 @@ async def restart_agent(role: str):
     # #8695: restart will respawn the process → new boot must re-assert
     # bootup-complete before events flow again.
     agent_state.bootup_complete = False
+    # #12801: stamp the FORCE marker BEFORE the immediate kill below, so the
+    # health poller that detects the dead PID reads it and classifies the death
+    # as operator-initiated rather than a crash (AC6). Harmless on the graceful
+    # path (left None) — only a force kill produces a SessionEnd-less death.
+    if force:
+        agent_state.operator_force_at = time.time()
     state.set_agent(role, agent_state)
     # #9242: disk write off the asyncio event loop.
     await asyncio.to_thread(state.save_state)
@@ -3676,12 +4264,16 @@ async def restart_agent(role: str):
     except (FileNotFoundError, OSError):
         pass
 
-    immediate = current_state.startswith("idle")
+    # #12801: a FORCE reboot kills immediately regardless of busy/in-flight
+    # state (overriding the idle-only fast path); a graceful restart keeps the
+    # idle-only immediate kill and queues a busy agent for next-boundary exit.
+    immediate = force or current_state.startswith("idle")
     killed_pid = None
     if immediate:
         claude_pid, alive = reboot_agent._read_claude_pid(clone_path_p, role)
         if alive and claude_pid:
-            _log(f"  {role}: idle — killing PID {claude_pid} for immediate reboot")
+            _why = "force" if force else "idle"
+            _log(f"  {role}: {_why} — killing PID {claude_pid} for immediate reboot")
             try:
                 reboot_agent._kill_process(claude_pid)
                 killed_pid = claude_pid
@@ -3693,14 +4285,20 @@ async def restart_agent(role: str):
             immediate = False
 
     if immediate:
-        _log(f"  {role}: restart requested (idle path — killed PID {killed_pid})")
+        _kind = "force" if force else "idle"
+        _log(f"  {role}: restart requested ({_kind} path — killed PID {killed_pid})")
         return {
             "role": role,
             "action": "restart",
             "success": True,
             "immediate": True,
+            "forced": force,
             "killed_pid": killed_pid,
-            "message": "Restart requested — agent was idle, killed and will be auto-rebooted",
+            "message": (
+                "Force reboot — agent killed immediately and will be auto-rebooted"
+                if force else
+                "Restart requested — agent was idle, killed and will be auto-rebooted"
+            ),
         }
 
     _log(f"  {role}: restart requested (intent=restarting)")
@@ -3909,6 +4507,9 @@ def _emit_event(event_type, role, payload=None, **extra):
     event.update(extra)
     event_lifecycle.append(event)
     _log_event(event)
+    # #12495: return the emitted event so HTTP callers (e.g. POST /work/assign)
+    # can report the generated event_id. Existing callers ignore the return.
+    return event
 
 
 def _get_pr_files(pr_number):
@@ -3960,7 +4561,21 @@ async def merge_pr(request: Request):
 
     Request body: {"pr_number": int, "branch": str, "role": str}
     """
-    body = await request.json()
+    # #13170: fail CLOSED on a malformed/non-object body, mirroring the
+    # established guard on POST /events (#13156) and POST /work/assign (#12495).
+    # A bare request.json() raises JSONDecodeError/ValueError on a truncated or
+    # control-char body, and a valid-but-non-object body ([1,2], null, 42)
+    # raises AttributeError on .get() below — both propagate to the global
+    # handler as a 500 (traceback-to-disk) where a clean 400 is the contract.
+    # /merge was the last unguarded JSON-body POST handler.
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError) as e:
+        _log(f"DROPPED malformed /merge body (400): {e}")
+        raise HTTPException(status_code=400, detail=f"malformed JSON body: {e}")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+
     pr_number = body.get("pr_number")
     branch = body.get("branch", "")
     role = body.get("role", "unknown")
@@ -4296,6 +4911,7 @@ def _respawn_agent_process(role):
         agent.last_spawn_at = time.time()
         agent.last_session_end = None
         agent.last_dispatch_at = None
+        agent.reset_session_telemetry()  # #13113
         agent.terminal_pid = result.get("terminal_pid")
         state.set_agent(role, agent)
         state.save_state()
@@ -4354,12 +4970,152 @@ def _emit_boot_deploy_signals():
 
 def _git_in_clone(clone_path, args, timeout=120):
     """Run a git command inside a specific agent clone (the harness operating on
-    another clone is new machinery — design §0). Returns the CompletedProcess."""
+    another clone is new machinery — design §0). Returns the CompletedProcess.
+
+    #13494: force ``LC_ALL=C`` so git emits ENGLISH, stable messages. The
+    deploy-pull helpers branch on English message substrings ("untracked files
+    from stash" for the #13456 pulled-wins cleanup; "already up to date"; "would
+    be overwritten by merge") — under a non-English ``LANG``/``LC_MESSAGES`` on
+    the operator's machine those checks would silently fail. Forcing the locale
+    in this single choke point makes every message-substring check in the deploy
+    path locale-robust at once.
+    """
     return subprocess.run(
         ["git", *args],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         check=False, cwd=str(clone_path), timeout=timeout,
+        env={**os.environ, "LC_ALL": "C"},
     )
+
+
+def _safe_stash_pop_in_clone(clone_path):
+    """Clone-aware mirror of ``git_ops._safe_stash_pop`` (#13045): pop the top
+    stash leaving NO conflict markers. On a pop conflict, restore each unmerged
+    path to the pulled ``HEAD`` and drop the now-applied stash — the just-pulled
+    state is authoritative for the state files clone-sync touches (e.g.
+    config.md's ship counter). Returns True on a clean pop, False if it
+    conflicted and was force-resolved (or popped nothing)."""
+    pop = _git_in_clone(clone_path, ["stash", "pop"])
+    if pop.returncode == 0:
+        return True
+    conflicted = _git_in_clone(
+        clone_path, ["diff", "--name-only", "--diff-filter=U"])
+    unmerged = [p.strip() for p in conflicted.stdout.splitlines() if p.strip()]
+    if not unmerged:
+        # No tracked-file (diff-filter=U) merge conflict. Distinguish the #13456
+        # untracked-restore case — a ``--include-untracked`` stash whose path the
+        # pull now tracks, so ``git stash pop`` refuses to overwrite it ("Could
+        # not restore untracked files from stash") — from a genuine non-conflict
+        # pop error. In the untracked case the pulled/tracked version is
+        # authoritative and already on disk (the failed restore left it
+        # untouched), so DROP the now-redundant stash (same pulled-wins rule as
+        # the tracked-conflict path below). Otherwise the stash was NOT applied
+        # (no stash entry / unrelated git error) — leave it intact, since
+        # dropping would discard un-applied work.
+        if "untracked files from stash" in (pop.stdout + pop.stderr).lower():
+            _git_in_clone(clone_path, ["stash", "drop"])
+        return False
+    for path in unmerged:
+        _git_in_clone(clone_path, ["checkout", "HEAD", "--", path])
+    _git_in_clone(clone_path, ["stash", "drop"])
+    return False
+
+
+def _safe_pull_in_clone(clone_path):
+    """Merge-pull ``origin/main`` into a clone, surviving a DIRTY working tree.
+
+    Mirrors ``git_ops.pull``'s stash-around-merge (#13167/#13045) but operates
+    on an arbitrary clone via ``_git_in_clone`` (``git_ops.pull`` only knows the
+    harness process cwd, so the deploy sequence — which runs against another
+    agent's clone — cannot reuse it). #13215: a clone carrying an uncommitted
+    change to a file the incoming commit also touches makes a bare
+    ``git pull --no-rebase`` ABORT (``local changes would be overwritten by
+    merge``) → deploy-sync silently skipped, the clone drifts from shipped
+    source. Stashing the dirty change lets the merge land, then the change is
+    re-applied — or, if it conflicts with the pulled content, resolved to the
+    pulled ``HEAD`` and dropped (same authoritative-pulled-state rule as
+    ``_safe_stash_pop_in_clone``).
+
+    #13456: the sibling UNTRACKED case — an untracked local file at a path the
+    incoming commit now tracks makes the pull ABORT with ``untracked working
+    tree files would be overwritten by merge``. A plain ``git stash`` does NOT
+    stash untracked files, so the retry still aborted (recurring dm boot
+    deploy-error). The stash below uses ``--include-untracked`` so those files
+    are moved aside too; on pop, the pulled/tracked version wins.
+
+    A genuine MERGE conflict (committed divergence that truly conflicts) still
+    fails the retry pull → returns ``(False, …)`` so the caller routes to §11
+    recovery; only a DIRTY-TREE abort is newly survived.
+
+    Returns ``(ok: bool, detail: str)``.
+    """
+    pull_args = ["pull", "--no-rebase", "--no-edit", "origin", "main"]
+    first = _git_in_clone(clone_path, pull_args)
+    if first.returncode == 0:
+        return True, "pulled"
+    combined = (first.stdout + first.stderr).lower()
+    if "already up to date" in combined or "up to date" in combined:
+        return True, "already-up-to-date"
+
+    # First pull failed. Stash any local change and retry: a dirty-tree abort
+    # then merges cleanly; a genuine merge conflict fails the retry the same way
+    # and routes to recovery. #13456: use --include-untracked so an UNTRACKED
+    # local file colliding with an incoming tracked path ("untracked working tree
+    # files would be overwritten by merge") is also moved aside — a plain
+    # `git stash` leaves untracked files in place, so the retry pull still
+    # aborted (recurring dm boot deploy-error). On pop, the untracked-restore
+    # conflict is resolved pulled-wins by _safe_stash_pop_in_clone.
+    def _stash_ref():
+        r = _git_in_clone(
+            clone_path, ["rev-parse", "--quiet", "--verify", "refs/stash"])
+        return r.stdout.strip() if r.returncode == 0 else ""
+
+    pre_ref = _stash_ref()
+    stash = _git_in_clone(clone_path, ["stash", "--include-untracked"])
+    if stash.returncode != 0:
+        # #13472: a GENUINE committed conflict makes the FIRST pull start a merge
+        # that conflicts, leaving an unmerged index — on which `git stash` then
+        # fails ("could not write index"). Returning here without aborting would
+        # leave the clone MERGING (.git/MERGE_HEAD), wedging the NEXT deploy's
+        # `checkout main` ("you have not concluded your merge") — the exact state
+        # this function's docstring says it prevents. Abort the in-progress merge
+        # first; it is a harmless no-op when no merge is underway (the ordinary
+        # dirty-tree stash-failure). The pull still FAILED (origin not synced) →
+        # report failure so the caller routes to §11 recovery.
+        _git_in_clone(clone_path, ["merge", "--abort"])
+        return False, f"stash-failed: {(stash.stderr or first.stderr).strip()[:200]}"
+    # #13167: `git stash` on a CLEAN tree is a no-op that still exits 0 — only
+    # pop a stash we actually created (ref changed), else a pop would splatter a
+    # pre-existing/ancient stash tree-wide and break compose.
+    stashed = _stash_ref() != pre_ref
+
+    retry = _git_in_clone(clone_path, pull_args)
+    if retry.returncode != 0:
+        # Genuine merge conflict (committed divergence) or other failure. If the
+        # retry STARTED a merge and hit a conflict, the clone is now in MERGING
+        # state (.git/MERGE_HEAD + conflict markers in the tree). Abort that
+        # merge FIRST — otherwise (a) the markers break the next compose, (b)
+        # _safe_stash_pop_in_clone would misread the merge's unmerged paths as a
+        # stash-pop conflict and DROP our stash, and (c) a lingering MERGE_HEAD
+        # makes the NEXT deploy's `checkout main` fail ("you have not concluded
+        # your merge") → a recurring deploy-error loop until manually cleared.
+        # `git merge --abort` exits non-zero (harmlessly ignored) when no merge
+        # is in progress (the pre-merge dirty-tree-abort case). After the abort
+        # the tree is back at the post-stash clean state, so restoring our stash
+        # lands our dirty change correctly. The pull itself still FAILED (origin
+        # not synced) → report failure so the caller routes to §11 recovery.
+        _git_in_clone(clone_path, ["merge", "--abort"])
+        if stashed:
+            _safe_stash_pop_in_clone(clone_path)
+        return False, f"pull-failed: {retry.stderr.strip()[:200]}"
+
+    if not stashed:
+        # Clean tree — the first failure was transient and nothing of ours was
+        # stashed, so there is nothing to pop.
+        return True, "pulled (no local changes to stash)"
+    if _safe_stash_pop_in_clone(clone_path):
+        return True, "pulled (stashed and popped)"
+    return True, "pulled (stash pop conflict — resolved to pulled state)"
 
 
 def _bump_compose_checksum(clone_path):
@@ -4425,17 +5181,35 @@ def _deploy_recover_and_respawn(role, stage, detail):
 def _stage_composed_outputs(clone_path, alias):
     """Stage ONLY the alias's composed outputs (CLAUDE.md / SOUL.md /
     CLAUDE.linked.md) — never the whole .squidsquad/<alias>/ dir, which also
-    holds working-state and other per-cycle churn. Returns True if anything was
-    staged. NB: per-alias `compose.py deploy` does NOT write .claude/settings.json
-    (AC11 / #12519) — that stays an installer-managed artifact, out of scope."""
-    staged_any = False
+    holds working-state and other per-cycle churn. Returns True only if a real
+    staged DIFF resulted. NB: per-alias `compose.py deploy` does NOT write
+    .claude/settings.json (AC11 / #12519) — that stays an installer-managed
+    artifact, out of scope.
+
+    #13176: keying on `add.returncode == 0` was wrong — `git add` of an
+    UNCHANGED file exits 0 while staging nothing, so this returned True whenever
+    the composed output already matched HEAD (the common no-net-change deploy).
+    The caller then ran `git commit`, which failed benignly with 'nothing to
+    commit, working tree clean' (written to STDOUT, exit non-zero, empty stderr)
+    → an undiagnosable deploy-error with empty detail AND §11 recovery that left
+    the checksum unadvanced, re-firing the deploy on the next pass. Keying on the
+    actual staged diff (`git diff --cached --quiet`) routes the no-net-change case
+    to the caller's clean no-op success path (checksum advanced, no deploy-error)."""
+    staged_paths = []
     for fn in _DEPLOY_COMPOSED_FILES:
         rel = f".squidsquad/{alias}/{fn}"
         if (clone_path / rel).exists():
             add = _git_in_clone(clone_path, ["add", "--", rel])
             if add.returncode == 0:
-                staged_any = True
-    return staged_any
+                staged_paths.append(rel)
+    if not staged_paths:
+        return False
+    # `git diff --cached --quiet` exits 0 when there is NO staged diff, non-zero
+    # when there IS one. Scope to the paths we staged so unrelated index state
+    # (there should be none after a clean pull) can't mask the result.
+    diff = _git_in_clone(
+        clone_path, ["diff", "--cached", "--quiet", "--", *staged_paths])
+    return diff.returncode != 0
 
 
 def _run_deploy_sequence(role, deploy_signal_event_id=None):
@@ -4487,14 +5261,28 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
         scripts = clone_path / "references" / "scripts"
 
         try:
-            # 1. ensure-main + fast-forward-only pull. Non-ff / conflict → §11.
+            # 1. ensure-main + MERGE pull (never rebase). A prior deploy whose
+            #    push was rejected leaves this clone with an unpushed compose
+            #    commit; if origin/main has since advanced, the branch is
+            #    DIVERGED — `git pull --ff-only` would FATAL on every such deploy
+            #    (#13158, recurring `deploy-error stage=pull`). `--no-rebase`
+            #    merges the divergence instead (consistent with the team's
+            #    always-merge-never-rebase rule + the #12526 launcher fix);
+            #    `--no-edit` keeps it non-interactive. #13215: a DIRTY working
+            #    tree (uncommitted change to a file the incoming commit touches)
+            #    made even the merge-pull ABORT ("local changes would be
+            #    overwritten") → deploy-sync silently skipped; _safe_pull_in_clone
+            #    stashes-around-merge (mirroring git_ops.pull) so the dirty case
+            #    survives. A genuine merge CONFLICT still fails → §11 recovery
+            #    (the rare case the old --ff-only conflated with benign
+            #    divergence).
             co = _git_in_clone(clone_path, ["checkout", "main"])
             if co.returncode != 0:
                 _deploy_recover_and_respawn(role, "checkout-main", co.stderr.strip()[:300])
                 return
-            pull = _git_in_clone(clone_path, ["pull", "--ff-only", "origin", "main"])
-            if pull.returncode != 0:
-                _deploy_recover_and_respawn(role, "pull", pull.stderr.strip()[:300])
+            pull_ok, pull_detail = _safe_pull_in_clone(clone_path)
+            if not pull_ok:
+                _deploy_recover_and_respawn(role, "pull", pull_detail[:300])
                 return
 
             # 2. compose the alias using the CLONE's own compose.py (so its repo
@@ -4520,18 +5308,27 @@ def _run_deploy_sequence(role, deploy_signal_event_id=None):
                  f"deploy: recompose {alias} CLAUDE.md (#12912 deploy-signal)"],
             )
             if commit.returncode != 0:
-                _deploy_recover_and_respawn(role, "commit", commit.stderr.strip()[:300])
+                # #13176: `git commit` writes some failures to STDOUT (e.g.
+                # 'nothing to commit, working tree clean'), so stderr alone can be
+                # empty — combine both streams (stderr first) so the deploy-error
+                # detail is never empty/undiagnosable. With the staged-diff guard
+                # in _stage_composed_outputs above, the benign 'nothing to commit'
+                # case no longer reaches here, so this branch now means a GENUINE
+                # commit failure whose detail the operator needs.
+                detail = (commit.stderr.strip() or commit.stdout.strip()
+                          or "git commit failed with no stdout/stderr")
+                _deploy_recover_and_respawn(role, "commit", detail[:300])
                 return
             push = _git_in_clone(clone_path, ["push", "origin", "main"])
             if push.returncode != 0:
                 # DS-12912 iter-3 Finding 3: no retry loop. A rejected push means
-                # origin/main advanced (a concurrent clone pushed) — but this clone
-                # now holds a local compose commit, so `git pull --ff-only` cannot
-                # fast-forward the diverged branch, making a retry futile. The
-                # sequential _deploy_lock makes genuine concurrent pushes rare
-                # anyway. Go straight to §11 recovery: respawn on the existing
-                # CLAUDE.md + file deploy-error; the unadvanced checksum re-triggers
-                # a fresh deploy-signal on the next drift-check.
+                # origin/main advanced (a concurrent clone pushed) and this clone
+                # now holds an unpushed local compose commit (diverged). We do NOT
+                # retry-in-place; the sequential _deploy_lock makes genuine
+                # concurrent pushes rare, and §11 recovery handles it cleanly:
+                # respawn on the existing CLAUDE.md + file deploy-error; the
+                # unadvanced checksum re-triggers a fresh deploy-signal whose
+                # merge-pull (#13158, step 1) reconciles the divergence next pass.
                 _deploy_recover_and_respawn(role, "push", push.stderr.strip()[:300])
                 return
 
@@ -4998,8 +5795,9 @@ class ExternalActivityDetector:
                 # Worker statuses (approved/open) route to the issue's own
                 # role:* alias. In single-instance teams the value following
                 # `role:` is the alias; in multi-instance teams the `role:*`
-                # label always carries the routed alias per AGENT-RUNTIME.md
-                # §8.3 (the harness rewrites `role:*` on every `/work/assign`).
+                # label carries the routed alias (set by PM at planned→approved;
+                # the harness does NOT rewrite role:* — the "universal router"
+                # /work/assign label-rewrite design was never built, see #12495).
                 # Either way the extracted string IS the alias. NOTE (#12342 /
                 # DS Finding 3): a multi-role issue wakes only the alphabetically
                 # first role:* alias — single-worker-per-issue is the assumed
@@ -5172,6 +5970,19 @@ def _build_uvicorn_config(app_, host, port, log_level="warning"):
 
 
 def main():
+    # #13236 — crash-proof our own stdout/stderr first thing, before any print
+    # (banner, port-in-use notice, status lines). harness.py was named in the
+    # #13198 cp1252 crash-class list but left unwired: its banner is intentional
+    # box-drawing ASCII-art (U+2588 et al.) that cannot encode on a strict cp1252
+    # console, so a bare `python harness.py` launch (start.ps1:57, no PYTHONUTF8)
+    # would raise UnicodeEncodeError on the banner. harden_stdio() uses
+    # errors="backslashreplace" — the art degrades to escapes on a legacy console
+    # (no crash) and renders normally on UTF-8. In-process parity with the rest
+    # of the fleet (#13198); the banner literals are deliberately NOT ASCII-swept
+    # (unlike the agent-facing CLIs) — they are decorative art, not messages.
+    from cli_stdio import harden_stdio
+    harden_stdio()
+
     # On Windows, the default ProactorEventLoop's cleanup path
     # (_ProactorBasePipeTransport._call_connection_lost) does not handle
     # ConnectionResetError gracefully — when a client (uvicorn keepalive,
@@ -5234,10 +6045,16 @@ def main():
     # that don't go through argparse (e.g. test harnesses, restart
     # scripts) can opt in too.
     global _NO_AUTO_START, _NO_AUTO_REBOOT, _NO_FRESHNESS_CHECK
+    global _PROGRESS_LIVENESS_AUTHORITATIVE
     env_flag = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_START", "")
     _NO_AUTO_START = args.no_auto_start or env_flag.lower() in ("1", "true", "yes")
     env_reboot = os.environ.get("SQUIDSQUAD_HARNESS_NO_AUTO_REBOOT", "")
     _NO_AUTO_REBOOT = args.no_auto_reboot or env_reboot.lower() in ("1", "true", "yes")
+    # #12492 cutover escape hatch — revert to pre-cutover shadow-only liveness.
+    env_shadow = os.environ.get(
+        "SQUIDSQUAD_HARNESS_PROGRESS_LIVENESS_SHADOW_ONLY", "")
+    _PROGRESS_LIVENESS_AUTHORITATIVE = (
+        env_shadow.lower() not in ("1", "true", "yes"))
     env_freshness = os.environ.get("SQUIDSQUAD_HARNESS_NO_FRESHNESS_CHECK", "")
     _NO_FRESHNESS_CHECK = (
         args.no_freshness_check
