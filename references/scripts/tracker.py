@@ -365,28 +365,34 @@ def _repo_labels():
 
 
 def _filter_role_labels_to_existing(role_label_str, primary_role):
-    """Drop dual-aware alias ``role:*`` labels the repo taxonomy does not define
+    """Drop dual-aware ``role:*`` labels the repo taxonomy does not define
     (#13465).
 
-    During the pre-#6274.3 window ``_build_dual_role_labels_6274`` emits both the
-    OLD-form label (``role:qa``) and the NEW-form alias (``role:verifier``), but
-    only the OLD-form labels exist as repo labels — ``gh issue create`` rejects
-    the unknown alias, so the whole ``create-issue --role qa`` failed non-zero
-    and blocked qa-lane filing via the canonical tool.
+    During the pre-#6274.3 window ``_build_dual_role_labels_6274`` emits both an
+    OLD-form label (``role:qa``) and a NEW-form one (``role:verifier``), but only
+    the OLD-form labels exist as repo labels — ``gh issue create`` rejects the
+    unknown one, so a create with the affected role failed non-zero and blocked
+    filing via the canonical tool.
 
-    Keep every role label the repo positively defines; ALWAYS keep the primary
-    ``role:{primary_role}`` even when the existence lookup is empty/unavailable,
-    so a create never loses its assignee. Fails CLOSED on a lookup miss (an alias
-    is dropped unless positively confirmed) so a degraded ``gh label list`` can
-    never re-introduce the unknown-label failure. When #6274.3 creates the
-    NEW-form labels this filter lets the dual-emit resume automatically.
+    Keep every role label the repo positively defines. This handles BOTH input
+    directions: ``--role qa`` (primary ``role:qa`` exists, alias ``role:verifier``
+    dropped) AND ``--role verifier`` (primary ``role:verifier`` does not exist and
+    is dropped, alias ``role:qa`` kept) — the primary is NOT force-kept, because a
+    new-form primary is exactly the non-existent label (the #13465 Finding-1 case).
+
+    If NONE of the emitted role labels are repo-defined — an unknown role, or the
+    existence lookup was empty/unavailable (degraded ``gh label list``) — fall back
+    to the primary ``role:{primary_role}`` so the issue is never left without a
+    role label. When #6274.3 creates the NEW-form labels this filter lets the
+    dual-emit resume automatically.
     """
     labels = [l for l in role_label_str.split(",") if l]
     existing = _repo_labels()
-    primary = f"role:{primary_role}"
-    kept = [lbl for lbl in labels if lbl == primary or lbl in existing]
-    if primary not in kept:
-        kept.insert(0, primary)
+    kept = [lbl for lbl in labels if lbl in existing]
+    if not kept:
+        # Nothing positively confirmed (unknown role or lookup unavailable) —
+        # keep the primary so the create still carries a role label.
+        kept = [f"role:{primary_role}"]
     return ",".join(kept)
 
 

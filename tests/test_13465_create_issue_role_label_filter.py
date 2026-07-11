@@ -42,12 +42,22 @@ class TestFilterRoleLabelsToExisting:
             "role:qa,role:verifier", "qa") == "role:qa"
 
     @patch("tracker._repo_labels", return_value={"role:qa"})
-    def test_primary_always_kept_even_if_absent(self, _m):
-        # A create must never lose its assignee: the primary is never dropped,
-        # and unknown aliases are still filtered out.
+    def test_unknown_role_falls_back_to_primary(self, _m):
+        # When NONE of the emitted role labels exist (unknown role), fall back to
+        # the primary so the issue is never left without a role label.
         out = tracker._filter_role_labels_to_existing("role:foo,role:bar", "foo")
-        assert out.split(",")[0] == "role:foo"
+        assert out == "role:foo"
         assert "role:bar" not in out
+
+    @patch("tracker._repo_labels", return_value={"role:qa", "role:skill", "role:dm"})
+    def test_verifier_new_form_primary_dropped_keeps_existing_qa(self, _m):
+        # #13465 Finding 1: NEW-form input (--role verifier) makes role:verifier
+        # the PRIMARY, which does NOT exist pre-#6274.3. The filter must drop the
+        # non-existent primary and keep the existing alias role:qa — the same
+        # failure mode as --role qa but from the opposite direction.
+        out = tracker._filter_role_labels_to_existing("role:verifier,role:qa", "verifier")
+        assert out == "role:qa"
+        assert "role:verifier" not in out
 
 
 class TestRepoLabelsCaching:
@@ -100,6 +110,36 @@ class TestCreateIssueExcludesUnknownRoleLabel:
              patch("tracker._run_list", side_effect=fake_run_list):
             num = tracker.create_issue("x", "y", "qa", "low", reporter="dm-lead")
         assert num == 999
+        assert "role:qa" in captured["label"]
+        assert "role:verifier" not in captured["label"]
+        tracker._REPO_LABELS_CACHE = None
+
+    def test_create_issue_new_form_role_verifier_also_omits_unknown_label(self):
+        # #13465 Finding 1: create_issue with the NEW-form --role verifier must
+        # still emit only the existing role:qa label, never the non-existent
+        # role:verifier (which would fail the gh create the same way).
+        tracker._REPO_LABELS_CACHE = None
+        captured = {}
+
+        def fake_run_list(cmd, check=True, timeout=None):
+            r = MagicMock()
+            if "label" in cmd and "list" in cmd:
+                r.returncode = 0
+                r.stdout = '[{"name":"role:qa"}]'
+                return r
+            if "issue" in cmd and "create" in cmd:
+                captured["label"] = cmd[cmd.index("--label") + 1]
+                r.returncode = 0
+                r.stdout = "https://github.com/o/r/issues/1000"
+                return r
+            r.returncode = 0
+            r.stdout = ""
+            return r
+
+        with patch("tracker._get_forge_adapter", return_value=None), \
+             patch("tracker._run_list", side_effect=fake_run_list):
+            num = tracker.create_issue("x", "y", "verifier", "low", reporter="dm-lead")
+        assert num == 1000
         assert "role:qa" in captured["label"]
         assert "role:verifier" not in captured["label"]
         tracker._REPO_LABELS_CACHE = None

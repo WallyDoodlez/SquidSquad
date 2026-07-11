@@ -32,10 +32,12 @@ def _stub_repo_labels(monkeypatch):
     create tests never hit real `gh`, stay order-independent (no leaked module
     cache), and see no extra _run_list call — leaving calls[0] the create call."""
     tracker._REPO_LABELS_CACHE = None
+    # Pre-#6274.3 reality: the repo defines only the OLD-form role labels. The
+    # NEW-form labels (role:verifier/role:worker) do NOT exist yet — modelling
+    # them here would mask the #13465 drop path for any dual-role create test.
     monkeypatch.setattr(
         tracker, "_repo_labels",
-        lambda: {"role:skill", "role:dm", "role:pm", "role:qa", "role:designer",
-                 "role:verifier", "role:worker", "role:dev"},
+        lambda: {"role:skill", "role:dm", "role:pm", "role:qa", "role:designer"},
     )
     yield
     tracker._REPO_LABELS_CACHE = None
