@@ -4274,10 +4274,23 @@ def cmd_setup_yes(args):
     print("\nScaffolding...")
     try:
         result = scaffold_install(spec, target_path, overwrite_existing=True)
-        print(f"  Created {len(result.get('agents', []))} agent(s)")
     except (ValueError, FileExistsError) as e:
         print(f"ERROR: scaffold failed: {e}", file=sys.stderr)
         return 1
+
+    # scaffold_install records a per-role compose failure as claude_md == "FAILED"
+    # (see the deploy loop). Surface it here: a role that failed to compose has NO
+    # valid CLAUDE.md, so the install is not bootable for that agent. "Created N"
+    # must count only agents that actually produced a CLAUDE.md, not every
+    # scaffolded directory — otherwise a broken install reads as a successful one
+    # and the operator gets no signal (#13514).
+    agents = result.get("agents", [])
+    failed = [a for a in agents if a.get("claude_md") == "FAILED"]
+    succeeded = [a for a in agents if a.get("claude_md") != "FAILED"]
+    msg = f"  Created {len(succeeded)} agent(s)"
+    if failed:
+        msg += f" ({len(failed)} FAILED to compose)"
+    print(msg)
 
     # 6. Ensure labels
     print("Creating GitHub labels...")
@@ -4291,9 +4304,24 @@ def cmd_setup_yes(args):
     except Exception as e:
         print(f"WARNING: label creation failed: {e}", file=sys.stderr)
 
-    # 7. Post-setup summary
-    print()
-    print(post_setup_summary(spec))
+    # 7. Post-setup summary — only on a bootable install. post_setup_summary()
+    # hardcodes "SquidSquad is installed for ..."; printing it when a role failed
+    # to compose contradicts the ERROR below and gives CI/operator a false success
+    # signal (#13514). Suppress it whenever any role failed.
+    if not failed:
+        print()
+        print(post_setup_summary(spec))
+
+    # A role that failed to compose leaves the install non-bootable. Fail loudly
+    # with a non-zero exit so the operator (or CI) is not misled by exit 0 (#13514).
+    if failed:
+        print(
+            f"\nERROR: {len(failed)} role(s) failed to compose a CLAUDE.md: "
+            f"{', '.join(a.get('id', '?') for a in failed)}. The install is NOT "
+            f"bootable for those agents — see the WARNING(s) above for the cause.",
+            file=sys.stderr,
+        )
+        return 1
 
     return 0
 
