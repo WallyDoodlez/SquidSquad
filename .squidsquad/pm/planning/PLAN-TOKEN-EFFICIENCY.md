@@ -38,11 +38,13 @@ Not problems (checked): compose output has no timestamps (cache-stable prefix �
 2. Make the budget *corrective*, not just additive: the existing every-cycle BRIEFING staleness check (vault-remember step, not quiet-gated) also flags `briefing-budget` overage as a must-fix, so PM trims on contact instead of only being blocked from adding.
 3. Savings: ~4-5K tokens per boot/re-read, every role. (Also queued in the vault plan §9.2.3 — same fix, one implementation.)
 
-### T3 — Restart-cadence damping (protects the cache)
+### T3 — Restart hygiene (REVISED 2026-07-12 — automated batching rejected by operator)
 
-1. **Deploy batching:** debounce `references/`-merge deploy-signals into a deploy window (e.g. coalesce for 30-60 min, or N merges) instead of per-merge full-fleet restarts — 12 restarts/day is a cache-burning cadence.
-2. **Restart only changed roles:** post-merge recompose already computes per-alias output; only signal aliases whose composed CLAUDE.md checksum actually changed (the #13303 content-change gate exists on the L4 watcher — apply the same rule to the post-merge path if not already).
-3. Consider raising `Context Threshold` 70 → 75-80 *after* T1 lands (T1 itself slows context growth dramatically, so sessions naturally live longer).
+Operator decision: **no automated deploy batching.** Reboots are at human discretion, and the operator already batches naturally ("reboot when something important lands, along with the smaller stuff that accumulated"). Harness telemetry confirms it: one spawn per agent for the current harness session — the 12-merges/day figure was a theoretical worst case, not observed behavior. What remains of T3:
+
+1. ~~Deploy batching~~ — dropped. Manual discretion is the batching policy.
+2. **Raise `Context Threshold` 70 → 75-80 *after* T1 lands** (T1 slows context growth dramatically, so sessions naturally live longer) — folded into T1's follow-up, not a separate ticket.
+3. (Optional, unticketed) checksum-gated per-role restart on the post-merge path would make each *manual* reboot cheaper — revisit only if autonomous 24/7 operation later makes restart cadence a real cost.
 
 ### T4 — cycle-input diet
 
@@ -79,7 +81,7 @@ Today there is zero token telemetry. #13561 P3's statusline POST delivers per-tu
 | T1 working-state gate + cleanup | S | **~32-48K/cycle (dm)** — do first | — |
 | T2 BRIEFING diet | S | ~5-7K/boot/role | — |
 | T4 cycle-input diet | S | ~3-4K/PM-cycle | — |
-| T3 restart damping | M | cache preservation (multiplier) | — |
+| T3 restart hygiene (revised) | XS | threshold bump only, post-T1 | T1 |
 | T5 prompt re-diet + re-read rule | M | 15-20% of boot + 10-20K/cycle | CQ |
 | T6 effort/model tiering | S-M | multiplier | T8 to verify; web W4 for UI |
 | T7 scan-history | XS | latent-risk removal | — |
