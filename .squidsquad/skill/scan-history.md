@@ -1893,3 +1893,10 @@
 - **Files scanned**: sub-skill marker integrity (all `→ run sub-skill:` refs across references/)
 - **Findings**: none — all 49 referenced markers resolve to source files; the one flag (`security-smoke` in l4-curation.md:243) is a documented illustrative-example marker, a known false-positive per v2_catalog_gate.py:52 / #13052, verified before filing.
 - **Items rejected by human**: none
+
+## Scan — 2026-07-11 16:24:15
+
+- **Files scanned**: references/scripts/harness.py (ExternalActivityDetector — navigation-derived from this session's #13353 deep work on the EAD re-emit path; not in recent scan history)
+- **Findings**: 1 filed — #13555 (low — EAD `_check_for_changes` `gh issue list --limit 50` silently truncates a live 155-open-issue set; ~105 invisible per poll; a handoff item older than the newest 50 open issues starves silently — reintroduces the #12442 starvation class via the query cap. Dedup cap is 500, a 10x internal inconsistency.)
+- **Items rejected by human**: none
+- **Criteria note**: reinforces "scan the module you just exercised heavily" — reading the EAD for #13353 surfaced the --limit cap that a cold read would skim past. The fail-open/consistency lens extended to a *cap* consistency check (query limit 50 vs dedup cap 500) — mismatched bounds on the same data path are a productive finding shape.
