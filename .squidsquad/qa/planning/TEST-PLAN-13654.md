@@ -1,25 +1,25 @@
-# TEST-PLAN-13654
+# TEST-PLAN-13654 (round 2)
 
-Derived independently from the issue body (`ISSUE: PR closing-keyword auto-close bypassing DM ship gate has recurred at scale post-#13371 (12 closed issues stranded)`). Severity: high — this defect closed 12 issues (3 of them mine: #13531/#13551/#13652) outside DM's ship gate this session. DM's remediation half (repair-status-labels + ship-counter reconciliation) is out of scope here; this plan covers skill's root-cause fix only.
+Round 1 rejected `_neutralize_pr_body_before_merge()`'s use of `gh pr edit` (broken in this environment — see QA-RESULTS-13654.md round-1 record below, preserved as history). Round 2 switches to `gh api -X PATCH .../pulls/<N>` per my own confirmed-working alternative. Independently re-verified — not trusting skill's own live test, even though they mirrored my methodology correctly.
 
-## ACs derived from the issue
+## ACs (unchanged from round 1, restated)
 
-- **AC1**: `pr_merge()` calls a pre-merge neutralization checkpoint unconditionally, before the merge attempt, regardless of how the PR was created (covers the confirmed root cause: a bare `gh pr create` bypasses `pr_create()`'s own #13371 guard entirely).
-- **AC2**: The checkpoint correctly detects and neutralizes closing keywords (Fixes/Closes/Resolves) in the *live* PR body by actually patching it on GitHub before merge — an already-clean body triggers no unnecessary edit.
-- **AC3**: Fail-open: a `gh` hiccup at this checkpoint must never crash/block a merge that already passed every other gate — only warn.
-- **AC4**: The checkpoint runs even on a PR later refused by another gate (state/scope-violation), so a keyword never survives to a human's manual retry.
-- **AC5 (critical)**: This fix must actually reach — and work inside — the harness's canonical `/merge` endpoint path (the one every agent, including verifier, triggers via `POST /merge`), not just a standalone script invocation.
-- **AC6**: No regressions — full static gate passes; existing `pr_merge` tests correctly updated for the new pre-merge `gh pr view` call.
+- **AC1**: `pr_merge()` calls the neutralization checkpoint unconditionally, before the merge attempt.
+- **AC2 (the one that failed round 1)**: The checkpoint actually patches the live PR body on GitHub — not just calls a command that appears to, but genuinely succeeds against the real API in this environment.
+- **AC3**: Fail-open on a genuine `gh` hiccup.
+- **AC4**: Runs even on a PR later refused by another gate.
+- **AC5**: Reaches the harness's canonical `/merge` → `pr_merge()` path.
+- **AC6**: No regressions; `gh pr edit` must never be called again (round-1's exact failure mode).
 
-## Test cases
+## Test cases (round 2 additions)
 
 | TC | Maps to | Method |
 |----|---------|--------|
-| TC1 | AC1/AC6 | Read the `pr_merge()` diff — confirm `_neutralize_pr_body_before_merge(pr_number)` is called unconditionally near the top, before the merge attempt |
-| TC2 | AC2/AC3/AC4 | `tests/test_13654_pre_merge_body_neutralize.py` (8 cases) — mocked-plumbing coverage |
-| TC3 | AC2 (live, not mocked) | Create a real, disposable scratch PR in the actual repo with a literal "Fixes #999999" body, checkout the fix branch, call the real (unmocked) `_neutralize_pr_body_before_merge(pr_number)` against it via `gh` — confirm the body is actually patched on GitHub |
-| TC4 | AC5 | Read `harness.py`'s `POST /merge` handler (`_do_merge`) — confirm it calls `git_ops.pr_merge(pr_number)` directly, so the fix covers the exact path used every time an agent (including me) ships via the canonical harness merge |
-| TC5 | AC6 | `python tests/run_tests.py static` (canonical gate); `comprehension_staleness.py check` |
+| TC1 | AC2 (live, independent) | Created my OWN fresh scratch PR (#13659, `zz-verifier-scratch-13654r2-livetest` → `main`, different closing keyword — "Closes" vs skill's "Fixes" — for extra coverage), not reusing skill's own #13658 test. Checked out the round-2 branch, ran the real unmocked `_neutralize_pr_body_before_merge(13659)` — confirmed via `gh pr view --json body` that `Closes #999998` became `Addresses #999998` on real GitHub |
+| TC2 | AC2 (idempotency) | Re-ran the same function against the now-clean PR #13659 — confirmed silent no-op (no unnecessary `gh api` call, matching the "already-clean body" branch) |
+| TC3 | AC6 | `tests/test_13654_pre_merge_body_neutralize.py::test_never_calls_gh_pr_edit` (new) + full re-run of all 3 affected test files: 28/28 pass |
+| TC4 | AC1/AC3/AC4/AC5 | Unchanged from round 1 — re-confirmed via the same diff/handler reads |
+| TC5 | round-2 regression | `python tests/run_tests.py static` (canonical gate); `comprehension_staleness.py check` |
 
 ## Note
-This is the exact merge path I use every single verification cycle (`POST /merge` → `git_ops.pr_merge`). TC3's live test is the load-bearing check — the mocked tests only prove the code *calls* `gh pr edit`, not that the call actually *succeeds* against real GitHub in this environment.
+Scratch PR #13659 closed + branch deleted, never merged. My round-1 rejection is preserved in QA-RESULTS-13654.md as the historical record of what was wrong and why.

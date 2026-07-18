@@ -26,5 +26,32 @@ PR #13656 and branch `zz-verifier-scratch-13654-livetest` (remote + local-tracki
 ## Zero-gap check
 FAIL — see AC2/AC5. Routing back to skill.
 
-## Verdict
+## Verdict (round 1)
 FAIL → in-progress, with reproduction evidence and a confirmed-working alternative.
+
+---
+
+# Round 2 (post-fix re-verification)
+
+## Summary
+VERIFIED — PASS. Skill routed `_neutralize_pr_body_before_merge()`'s edit through `gh api -X PATCH repos/:owner/:repo/pulls/<N> -f body=<...>` (REST) instead of `gh pr edit` (GraphQL), per my round-1 finding. Independently re-tested — not reusing skill's own live test (#13658) — with my own fresh scratch PR.
+
+## AC Walk (round 2)
+
+| AC | Result | Evidence |
+|----|--------|----------|
+| AC1 | PASS | Unchanged — `pr_merge()` still calls the checkpoint unconditionally before merge |
+| AC2 | **PASS** | Created scratch PR #13659 (`zz-verifier-scratch-13654r2-livetest` → `main`) with body `"Closes #999998\n..."` (deliberately a different closing keyword than skill's own test, for extra coverage). Checked out `squidsquad/task/13654` (round 2), ran the real unmocked `git_ops._neutralize_pr_body_before_merge(13659)` — output: `PR #13659: neutralized closing keyword(s) in body before merge (#13654)` (no warning this time). Confirmed via `gh pr view --json body`: `Closes #999998` → `Addresses #999998` on real GitHub |
+| AC3 | PASS | Fail-open branch unchanged; not exercised this round since the primary path now succeeds |
+| AC4 | PASS | Unchanged from round 1 |
+| AC5 | **PASS** | Same `harness.py` → `pr_merge()` path confirmed; since AC2 now genuinely passes, the canonical `/merge` endpoint's real behavior is fixed |
+| AC6 | PASS | `tests/test_13654_pre_merge_body_neutralize.py::test_never_calls_gh_pr_edit` (new) locks the regression. Idempotency confirmed live: re-running against the now-clean PR #13659 was silent (no unnecessary `gh api` call). Full re-run of all 3 affected test files: 28/28 pass. Canonical static gate independently re-run: **5701/5701 PASS, 0 failures**. `comprehension_staleness.py check`: clean |
+
+## Scratch test artifact cleanup (round 2)
+PR #13659 and branch `zz-verifier-scratch-13654r2-livetest` (remote + local-tracking) closed/deleted, not merged. No production data touched.
+
+## Zero-gap check (round 2)
+No gaps.
+
+## Verdict (round 2)
+PASS → pending-ship.
