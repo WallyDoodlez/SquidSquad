@@ -5384,5 +5384,105 @@ class TestPauseHook12458(unittest.TestCase):
         self.assertIsNone(self._agent().waiting_since)
 
 
+# ---------------------------------------------------------------------------
+# /merge must reload git_ops from disk each merge (no stale module cache) — #13588
+# ---------------------------------------------------------------------------
+
+
+class TestMergeGitOpsReload13588(unittest.TestCase):
+    """#13588: the /merge handler runs inside the long-lived harness process, so
+    a first-import cache pinned stale merge-time scope logic for the whole
+    session — spuriously refusing correctly-sequenced PRs until a full restart
+    (the #13585 incident). The handler must reload git_ops from on-disk source
+    each merge, serialized by _MERGE_LOCK so the reload never mutates the module
+    out from under a concurrent merge (verifier auto-merge + DM ship can both
+    POST /merge)."""
+
+    def test_merge_lock_is_a_lock(self):
+        """_MERGE_LOCK must be a real lock — dropping serialization would let a
+        reload corrupt a concurrent merge's in-flight use of the module."""
+        import harness
+        self.assertTrue(hasattr(harness, "_MERGE_LOCK"))
+        self.assertTrue(hasattr(harness._MERGE_LOCK, "acquire"))
+        self.assertTrue(hasattr(harness._MERGE_LOCK, "release"))
+        acquired = harness._MERGE_LOCK.acquire(blocking=False)
+        self.assertTrue(acquired, "_MERGE_LOCK should be free at test time")
+        harness._MERGE_LOCK.release()
+
+    def test_reload_git_ops_reloads_from_disk(self):
+        """A value cached on the in-memory git_ops module (the #13588 failure
+        shape: module diverged from on-disk source) must be overwritten by the
+        reload with the real on-disk definition."""
+        import harness
+        import git_ops
+        real = git_ops.pr_merge
+        try:
+            git_ops.pr_merge = "STALE_CACHED_VALUE"
+            fresh = harness._reload_git_ops()
+            self.assertIs(fresh, git_ops,
+                          "reload is in-place — same module object")
+            self.assertTrue(callable(fresh.pr_merge),
+                            "reload must restore the real on-disk pr_merge, "
+                            "overwriting the stale cached value")
+        finally:
+            if not callable(git_ops.pr_merge):
+                git_ops.pr_merge = real
+
+    def test_reload_calls_importlib_reload_once(self):
+        """The freshness guarantee is importlib.reload, not a no-op accessor."""
+        import harness
+        with patch("harness.importlib.reload") as mrl:
+            mod = harness._reload_git_ops()
+        mrl.assert_called_once()
+        self.assertEqual(mrl.call_args.args[0].__name__, "git_ops")
+        self.assertEqual(mod.__name__, "git_ops")
+
+    def test_do_merge_goes_through_reload_seam_holding_lock(self):
+        """End-to-end wiring: POST /merge must drive the merge through
+        _reload_git_ops() (not a plain `import git_ops`) and hold _MERGE_LOCK
+        while the merge runs. Patching _reload_git_ops avoids a real reload
+        (which would clobber the mock) while proving the seam is used."""
+        import harness
+        from fastapi.testclient import TestClient
+
+        lock_held = {"during_merge": None}
+        fake_go = MagicMock(name="git_ops_module")
+
+        def _pr_merge(*a, **k):
+            lock_held["during_merge"] = harness._MERGE_LOCK.locked()
+            return (True, "merged")
+        fake_go.pr_merge.side_effect = _pr_merge
+        fake_go.ensure_main_and_pull.return_value = (True, "ok")
+
+        class _SyncThread:
+            # Run the merge body inline so assertions are deterministic — no
+            # daemon-thread join race (the flake class filed as #13589).
+            def __init__(self, target=None, daemon=None, name=None,
+                         args=(), kwargs=None):
+                self._t, self._a, self._k = target, args, kwargs or {}
+
+            def start(self):
+                self._t(*self._a, **self._k)
+
+        client = TestClient(harness.app, raise_server_exceptions=False)
+        with patch("harness._reload_git_ops", return_value=fake_go) as mrl, \
+             patch("harness._get_pr_files", return_value=[]), \
+             patch("harness.threading.Thread", _SyncThread), \
+             patch("harness._emit_event"):
+            resp = client.post(
+                "/merge",
+                json={"pr_number": 4242, "branch": "squidsquad/task/4242",
+                      "role": "dm"})
+
+        self.assertEqual(resp.status_code, 202)
+        mrl.assert_called_once()
+        fake_go.pr_merge.assert_called_once()
+        self.assertEqual(str(fake_go.pr_merge.call_args.args[0]), "4242")
+        self.assertTrue(lock_held["during_merge"],
+                        "_MERGE_LOCK must be held while the merge executes")
+        # Lock released after the merge finishes (finally clause).
+        self.assertFalse(harness._MERGE_LOCK.locked())
+
+
 if __name__ == "__main__":
     unittest.main()
