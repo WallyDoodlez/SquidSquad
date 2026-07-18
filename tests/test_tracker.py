@@ -61,6 +61,52 @@ class TestCheckGh:
         assert tracker.check_gh() is False
 
 
+class TestCheckGhWriteProbe13574:
+    """#13574: check_gh must also verify WRITE capability. A read-only auth
+    downgrade (#13570) passes the read check and boots the whole team clean
+    while every transition/label/push fails. Only a definitive
+    `.permissions.push == false` blocks boot; an inconclusive probe warns and
+    falls back to the read check (fail-open on uncertainty)."""
+
+    def _dispatch(self, push_result):
+        def fake(cmd, **kw):
+            if "api" in cmd:
+                return push_result
+            return _mock_result(stdout="ok")  # read check passes
+        return fake
+
+    def test_push_true_passes_silently(self, monkeypatch, capsys):
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            self._dispatch(_mock_result(stdout="true\n")))
+        assert tracker.check_gh() is True
+        assert "13574" not in capsys.readouterr().err
+
+    def test_push_false_fails_loudly_with_remediation(self, monkeypatch, capsys):
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            self._dispatch(_mock_result(stdout="false\n")))
+        assert tracker.check_gh() is False
+        err = capsys.readouterr().err
+        assert "WRITE" in err and "#13570" in err
+        assert "Remediation" in err
+
+    def test_probe_error_is_fail_open_with_warning(self, monkeypatch, capsys):
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            self._dispatch(_mock_result(returncode=1)))
+        assert tracker.check_gh() is True
+        assert "inconclusive" in capsys.readouterr().err
+
+    def test_unexpected_output_is_fail_open_with_warning(self, monkeypatch,
+                                                         capsys):
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            self._dispatch(_mock_result(stdout="null\n")))
+        assert tracker.check_gh() is True
+        assert "inconclusive" in capsys.readouterr().err
+
+
 class TestListIssues:
     def test_returns_issues(self, monkeypatch):
         issues = [{"number": 1, "title": "test", "labels": []}]
