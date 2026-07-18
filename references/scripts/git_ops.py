@@ -26,7 +26,8 @@ Usage:
     python scripts/git_ops.py check-real-conflict <base> <head>  # real conflict? exit 0=clean/1=conflict/2=err
     python scripts/git_ops.py guard-staged-state         # pre-commit hook: unstage state files on a feature branch (fail-open)
     python scripts/git_ops.py guard-galaxy-frontmatter   # pre-commit hook: block a staged galaxy note missing YAML frontmatter (fail-closed on violation, fail-open on error)
-    python scripts/git_ops.py install-hooks              # activate the pre-commit state guard (core.hooksPath)
+    python scripts/git_ops.py install-hooks              # activate the pre-commit + post-merge guards (core.hooksPath)
+    python scripts/git_ops.py restore-merge-dropped-state [role]  # post-merge hook: restore protected state/vault a merge silently dropped (#13556; fail-open)
     python scripts/git_ops.py --help
 """
 
@@ -331,6 +332,7 @@ def pull(role=None):
     result = _run("git pull --no-rebase", check=False)
     if result.returncode == 0:
         print("Pulled")
+        _restore_merge_dropped_state(role)  # #13556 last-line modify-vs-delete guard
         _emit("git-pull", {"result": "ok"}, role=role)
         return True
 
@@ -395,6 +397,7 @@ def pull(role=None):
         print("WARNING: stash pop conflict -- conflicts resolved to pulled "
               "state, stash dropped.", file=sys.stderr)
         print("Pulled (stash pop conflict -- resolved to pulled state)")
+    _restore_merge_dropped_state(role)  # #13556 last-line modify-vs-delete guard
     _emit("git-pull", {"result": "stash"}, role=role)
     return True
 
@@ -1219,6 +1222,153 @@ def _auto_resolve_state_conflicts():
     return resolved, unresolved
 
 
+def _state_blob_sizes(ref):
+    """#13556 -- {path: byte-size} for every protected state/vault path at ``ref``
+    (``_is_state_file`` and not ``_is_plan_body``). Uses ``git ls-tree -r -l`` so
+    the size is read straight from the tree (no working-tree dependency).
+
+    Returns ``None`` on any git failure (distinct from an empty ``{}``, which means
+    the tree genuinely has no matching paths). The caller MUST treat ``None`` as
+    "unknown -> do not act" -- conflating a git failure with "no protected files"
+    on the post-merge side would classify every pre-merge path as dropped and
+    trigger a spurious mass-restore (DS-13556 Finding 2)."""
+    res = _run_list(["git", "ls-tree", "-r", "-l", ref], check=False)
+    if res.returncode != 0:
+        return None
+    sizes = {}
+    for line in res.stdout.splitlines():
+        # Format: "<mode> <type> <sha> <size>\t<path>"; size is "-" for submodules.
+        if "\t" not in line:
+            continue
+        meta, path = line.split("\t", 1)
+        parts = meta.split()
+        if len(parts) < 4:
+            continue
+        path = path.strip()
+        if not (_is_state_file(path) and not _is_plan_body(path)):
+            continue
+        try:
+            sizes[path] = int(parts[3])
+        except ValueError:
+            # Gitlink/submodule (size "-"): NOT restorable content -- exclude on
+            # both sides. Worktree registrations (e.g. .claude/worktrees/*) are
+            # machine-managed and legitimately deleted; "restoring" a bare
+            # gitlink resurrects a dangling entry with no backing content
+            # (observed live 2026-07-17: the guard re-added a worktree gitlink
+            # main had deliberately removed).
+            continue
+    return sizes
+
+
+def _merge_dropped_state_paths(pre_ref):
+    """#13556 -- protected state/vault paths a just-completed merge silently
+    DROPPED: present + non-empty at ``pre_ref`` (our pre-merge tree) but now
+    absent OR emptied at ``HEAD``. This is the merge=ours/union modify-vs-delete
+    signature -- a delete on the incoming side is NOT protected by the content
+    merge driver (which only fires modify-vs-modify), so the merge takes the
+    delete with zero conflict signal (no unmerged path for
+    ``_auto_resolve_state_conflicts`` to catch). Returns a sorted list of dropped
+    paths (empty if none / on any git uncertainty -> fail-safe: never a spurious
+    restore)."""
+    before = _state_blob_sizes(pre_ref)
+    if not before:  # None (git failure) or {} (no protected paths) -> nothing to check
+        return []
+    after = _state_blob_sizes("HEAD")
+    if after is None:  # DS-13556 F2: git failure on HEAD -> unknown, never a mass-restore
+        return []
+    dropped = []
+    for path, size in before.items():
+        if size == 0:
+            continue  # was already empty pre-merge -> a later empty isn't a drop
+        now = after.get(path)
+        if now is None or now == 0:  # absent, or emptied
+            dropped.append(path)
+    return sorted(dropped)
+
+
+def _restore_merge_dropped_state(role=None):
+    """#13556 -- LAST-LINE receiving-side guard: after a completed merge/pull,
+    restore any protected state/vault path the merge silently dropped
+    (modify-vs-delete) from our pre-merge tree (``ORIG_HEAD``), commit the
+    restore, and raise a loud signal. Complements the #13554 incoming-side
+    ``pr_merge`` refusal (which prevents the poisoned squash from landing at all)
+    -- this catches whatever slips past it: the #13554 guard's fail-open path, a
+    direct-to-main state deletion, or any non-PR merge.
+
+    Wired TWO ways, and only together do they cover every merge: (1) called
+    directly from ``pull()``; (2) invoked by the tracked
+    ``references/git-hooks/post-merge`` hook (auto-active via the #11511
+    ``core.hooksPath``), which fires after ANY successful merge -- including a
+    bare ``git merge origin/main`` run outside git_ops entirely, the exact
+    vector of the original incident (the verifier proved wiring (1) alone did
+    NOT cover it). The two wirings are idempotent: after the hook's restore
+    commit, HEAD is no longer a first-parent-of-ORIG_HEAD merge commit, so the
+    second invocation is a no-op.
+
+    ``ORIG_HEAD`` is the commit HEAD pointed at before the merge (``git pull`` /
+    ``git merge`` set it). Fully fail-safe: any git uncertainty -> log + return
+    without touching the tree (a spurious restore is worse than a miss; the
+    incoming-side guard backstops). Never raises. Returns the restored paths."""
+    try:
+        pre = _run_list(["git", "rev-parse", "--verify", "ORIG_HEAD"], check=False)
+        if pre.returncode != 0 or not pre.stdout.strip():
+            return []  # no merge just happened -> nothing to check
+        orig = pre.stdout.strip()
+        # Only guard a REAL merge (HEAD is a 2-parent merge commit whose FIRST
+        # parent is ORIG_HEAD). A fast-forward brings incoming changes verbatim --
+        # an incoming deletion there is legitimate (local had no divergent commit),
+        # so restoring it would wrongly re-add a purposefully-deleted file. A
+        # stale ORIG_HEAD from an earlier merge is likewise excluded by the
+        # first-parent match.
+        p2 = _run_list(["git", "rev-parse", "--verify", "HEAD^2"], check=False)
+        p1 = _run_list(["git", "rev-parse", "--verify", "HEAD^1"], check=False)
+        if (p2.returncode != 0 or not p2.stdout.strip()
+                or p1.stdout.strip() != orig):
+            return []
+        dropped = _merge_dropped_state_paths("ORIG_HEAD")
+        if not dropped:
+            return []
+        restored = []
+        for path in dropped:
+            # Restore content + stage from our pre-merge tree.
+            r = _run_list(["git", "checkout", "ORIG_HEAD", "--", path], check=False)
+            if r.returncode == 0:
+                _run_list(["git", "add", "--", path], check=False)
+                restored.append(path)
+        if not restored:
+            return []
+        preview = ", ".join(restored[:8])
+        more = f" (+{len(restored) - 8} more)" if len(restored) > 8 else ""
+        print(f"MERGE DROPPED STATE (#13556): the last merge silently deleted/"
+              f"emptied {len(restored)} protected path(s) -- restored from "
+              f"ORIG_HEAD: {preview}{more}. (merge=ours/union does not protect a "
+              f"modify-vs-delete.)", file=sys.stderr)
+        # Persist to the diagnostic log too (DS-13556 F3) -- this is a SEV-class
+        # data-loss recovery; mirror the stash-pop-conflict incident's observability.
+        _log_diagnostic("warning",
+                        f"merge silently dropped {len(restored)} protected state/"
+                        f"vault path(s) -- restored from ORIG_HEAD (#13556): "
+                        f"{preview}{more}")
+        # DS-13556 F1: attribute the restore commit to the pulling agent, not a
+        # hardcoded "skill:" (any role's cycle can hit this on its own pull).
+        role_prefix = f"{role}: " if role else ""
+        commit = _run_list(
+            ["git", "commit", "--no-verify", "-m",
+             f"{role_prefix}#13556 restore {len(restored)} state/vault path(s) a "
+             f"merge silently dropped (merge=ours modify-vs-delete guard)"],
+            check=False)
+        if commit.returncode != 0:
+            print(f"WARN: #13556 restore commit failed: {commit.stderr.strip()} "
+                  f"-- paths staged, a human must commit", file=sys.stderr)
+        _emit("merge-dropped-state", {"restored": restored, "count": len(restored)},
+              role=role)
+        return restored
+    except Exception as e:
+        print(f"WARN: #13556 merge-dropped-state guard raised "
+              f"{type(e).__name__}: {e} (fail-safe -- no restore)", file=sys.stderr)
+        return []
+
+
 def _safe_checkout(target_branch):
     """Switch to target branch, stashing unstaged changes if needed.
 
@@ -2007,6 +2157,10 @@ def install_hooks():
         print(f"WARNING: hook not found at {hook}; skipping install-hooks",
               file=sys.stderr)
         return False
+    # #13556: the post-merge guard lives in the same hooksPath dir, so it is
+    # auto-active the moment core.hooksPath points here -- it just needs its exec
+    # bit set alongside pre-commit (below).
+    post_merge_hook = REPO_ROOT / _HOOKS_DIR_REL / "post-merge"
 
     current = _run("git config --get core.hooksPath", check=False).stdout.strip()
     if current and current != _HOOKS_DIR_REL:
@@ -2034,19 +2188,29 @@ def install_hooks():
     # Executable bit. On POSIX git only fires a hook whose exec bit is set, so a
     # chmod failure means the guard is installed but won't run -- report False
     # and warn. On Windows git ignores the exec bit (the shim runs via sh), so a
-    # chmod failure there is benign and the guard is still active.
-    try:
-        import os
-        import stat
-        os.chmod(hook, os.stat(hook).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-    except OSError as e:
-        if os.name == "posix":
-            print(
-                f"WARNING: core.hooksPath set but could not make {hook} "
-                f"executable ({e}); pre-commit state guard may not fire.",
-                file=sys.stderr,
-            )
-            return False
+    # chmod failure there is benign and the guard is still active. Chmod BOTH the
+    # pre-commit (#11511) and post-merge (#13556) hooks; a missing post-merge is
+    # tolerated (older installs) so it never regresses the pre-commit activation.
+    import os
+    import stat
+    for h in (hook, post_merge_hook):
+        if not h.exists():
+            continue
+        try:
+            os.chmod(h, os.stat(h).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        except OSError as e:
+            if os.name == "posix":
+                print(
+                    f"WARNING: core.hooksPath set but could not make {h} "
+                    f"executable ({e}); its guard may not fire.",
+                    file=sys.stderr,
+                )
+                # Only the pre-commit hook decides the return value -- it is
+                # the #11511 guard this function's contract reports on. A
+                # post-merge chmod failure is warned but must never mask a
+                # fully-active pre-commit (DS-13556-hook F1).
+                if h is hook:
+                    return False
     return True
 
 
@@ -2097,7 +2261,8 @@ def main():
     # install_hooks() explicitly in dispatch -- self-healing first would emit a
     # duplicate foreign-hooksPath WARNING). Keeps the commit path lean and
     # avoids re-checking what's already active (#11511).
-    if cmd not in ("guard-staged-state", "guard-galaxy-frontmatter", "install-hooks"):
+    if cmd not in ("guard-staged-state", "guard-galaxy-frontmatter",
+                   "install-hooks", "restore-merge-dropped-state"):
         _ensure_hooks_installed()
 
     if cmd == "pull":
@@ -2245,6 +2410,14 @@ def main():
     elif cmd == "install-hooks":
         ok = install_hooks()
         sys.exit(0 if ok else 1)
+    elif cmd == "restore-merge-dropped-state":
+        # #13556 post-merge hook entry point: restore any protected state/vault
+        # path the just-completed merge silently dropped (modify-vs-delete).
+        # FAIL-OPEN -- the guard never raises and must never fail a merge; a
+        # non-zero exit from a post-merge hook does not abort the merge (it is
+        # already done) but keying it 0 keeps logs clean.
+        _restore_merge_dropped_state(role=rest[0] if rest else None)
+        sys.exit(0)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(1)
