@@ -186,6 +186,29 @@ def test_commit_runs_git_add_then_commit(tmp_path):
     assert "pm: L4 write — instructions/insert-before/step:cycle/file-bug" in commit_argv
 
 
+def test_commit_is_pathspec_restricted_to_l4_file(tmp_path):
+    """#13664: `git commit` must restrict to the target path, exactly like
+    `git add` already does — otherwise any OTHER content already staged in
+    the index at entry rides this commit too (and reaches origin on push
+    success), silently bundled under a subject/body that only describe the
+    L4 write."""
+    run, calls = _make_runner()
+    l4_write_commit.write_and_commit_l4(
+        role_class="pm",
+        staged_l4_text=_STAGED_L4,
+        op_type="insert-before step:cycle/file-bug",
+        target="step:cycle/file-bug",
+        slot="instructions",
+        source_directive=_DIRECTIVE,
+        authored_by="pm-lead",
+        target_root=tmp_path,
+        generated_at=_GENERATED_AT,
+        runner=run,
+    )
+    commit_argv = next(c["argv"] for c in calls if c["argv"][:2] == ["git", "commit"])
+    assert commit_argv[-2:] == ["--", ".squidsquad/project/pm.md"]
+
+
 # ---------------------------------------------------------------------------
 # AC3: commit body + metadata trailer
 # ---------------------------------------------------------------------------
