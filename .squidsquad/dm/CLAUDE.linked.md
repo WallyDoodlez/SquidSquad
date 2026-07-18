@@ -472,9 +472,10 @@ The harness probe is the sole wake-mode decider (per AGENT-RUNTIME §2). Probe i
    curl -sf --max-time 5 http://127.0.0.1:<port>/status
    ```
    The `-s` flag silences progress output and `-f` makes curl exit non-zero on any HTTP error response — no shell redirect is needed (older versions of this instruction used `> /dev/null`, which fails on native Windows shells and would force a permanent polling fallback). Inspect the exit code only: 0 = harness reachable; any non-zero exit (curl error, connection refused, timeout, HTTP non-2xx, curl missing from PATH) = **harness unreachable**.
+3. **On failure, retry against the default port `7373`** — but only if step 1's resolved port was something else (a stale/leaked port file, e.g. `.harness-port` says `8251` while the harness is actually live on `7373`, would otherwise silently downgrade a healthy session to polling for its entire lifetime, #13356). Repeat the same `curl` probe against `7373`. If the port file's resolved port was already `7373`, skip this retry — there is nothing new to try.
 
-If the probe succeeds → **EVENT mode confirmed**, proceed to the EVENT-mode contract load.
-If the probe fails (for any reason — non-zero exit, network error, missing curl) → **fall through to polling** (jump to the POLLING mode block below). This fallback is intentional: until the harness is proven stable across all failure modes, agents fall back to `/loop` polling rather than the bespoke event-mode degraded path.
+If either probe succeeds → **EVENT mode confirmed**, proceed to the EVENT-mode contract load. If the fallback probe (step 3) was the one that succeeded, print a one-line diagnostic noting the port-file/live-port mismatch (`.squidsquad/.harness-port` is stale) so it can be cleaned up — this does not block booting into EVENT mode.
+If both probes fail (for any reason — non-zero exit, network error, missing curl) → **fall through to polling** (jump to the POLLING mode block below). This fallback is intentional: until the harness is proven stable across all failure modes, agents fall back to `/loop` polling rather than the bespoke event-mode degraded path.
 
 #### EVENT mode — load the event-mode contract
 
