@@ -113,6 +113,18 @@ class PreemptParseError(ConflictPreemptError):
     """Output present but does not match the expected ``decision: …`` shape."""
 
 
+class PreemptInvalidOpTypeError(ConflictPreemptError):
+    """``op_type`` was empty/``None`` — not a legal L4 grammar shape (#13669).
+
+    The sole caller is prose in ``l4-curation.md`` (LLM-driven, not a
+    deterministic Python call site), so a malformed invocation reaching this
+    function is a realistic path. Raised explicitly, before the replace-op
+    short-circuit, so this failure mode stays a typed ``ConflictPreemptError``
+    like every other unrecoverable path in this module — rather than an
+    unguarded ``op_type.split()[0]`` raising a raw ``IndexError``/
+    ``AttributeError`` the upstream dialog isn't designed to catch."""
+
+
 def preempt_conflict(
     *,
     op_type,
@@ -148,7 +160,13 @@ def preempt_conflict(
     ``model_router`` module (tests pass a stub). Default lazy-imports
     the real module.
     """
-    if op_type and _REPLACE_OP_RE.match(op_type):
+    if not op_type:
+        raise PreemptInvalidOpTypeError(
+            f"preempt_conflict() requires a non-empty op_type (legal L4 "
+            f"grammar shape); got {op_type!r}."
+        )
+
+    if _REPLACE_OP_RE.match(op_type):
         # AC5(c): replace ops supersede prior prose; no LLM dispatch.
         # Allowlist-match against the grammar so malformed shapes like
         # "replace foo" / "replace step:not-cycle/x" don't silently
