@@ -460,6 +460,106 @@ class TestPhaseECoverage:
 
 
 # ---------------------------------------------------------------------------
+# #13515 — status:blocked (owned-but-parked, assignee-only both directions)
+# ---------------------------------------------------------------------------
+
+
+class TestBlockedStatus:
+    """status:blocked: the assignee parks a still-owned task blocked on
+    another party, then resumes it — never a hand-off, so authority is
+    `_assignee` in both directions (unlike pending-* which transfers)."""
+
+    def test_blocked_in_status_labels(self):
+        assert "blocked" in tracker.STATUS_LABELS
+        assert tracker.STATUS_LABELS["blocked"] == "status:blocked"
+
+    def test_in_progress_to_blocked_is_legal(self):
+        assert "status:blocked" in tracker.LEGAL_TRANSITIONS["status:in-progress"]
+
+    def test_blocked_to_in_progress_is_legal(self):
+        assert "status:in-progress" in tracker.LEGAL_TRANSITIONS["status:blocked"]
+
+    def test_blocked_has_no_other_legal_targets(self):
+        """blocked only resumes to in-progress — it never hands off (not a
+        pending-* state) and never skips straight to ship/test."""
+        assert tracker.LEGAL_TRANSITIONS["status:blocked"] == {"status:in-progress"}
+
+    def test_assigned_worker_can_park(self, stub_role_labels):
+        stub_role_labels["labels"] = {"skill"}
+        ok, reason = tracker._check_authority(
+            1, "status:in-progress", "status:blocked", "skill-lead"
+        )
+        assert ok, reason
+
+    def test_unassigned_worker_cannot_park(self, stub_role_labels):
+        stub_role_labels["labels"] = {"skill"}
+        ok, reason = tracker._check_authority(
+            1, "status:in-progress", "status:blocked", "fe-lead"
+        )
+        assert not ok
+        assert "not assigned" in reason
+
+    def test_assigned_worker_can_resume(self, stub_role_labels):
+        stub_role_labels["labels"] = {"skill"}
+        ok, reason = tracker._check_authority(
+            1, "status:blocked", "status:in-progress", "skill-lead"
+        )
+        assert ok, reason
+
+    def test_unassigned_worker_cannot_resume(self, stub_role_labels):
+        stub_role_labels["labels"] = {"skill"}
+        ok, reason = tracker._check_authority(
+            1, "status:blocked", "status:in-progress", "fe-lead"
+        )
+        assert not ok
+        assert "not assigned" in reason
+
+    def test_pm_cannot_resume_someone_elses_blocked_task(self, stub_role_labels):
+        """Unlike pending-human-setup (PM completes and hands back), blocked
+        never transfers ownership — PM has no special authority here."""
+        stub_role_labels["labels"] = {"skill"}
+        ok, reason = tracker._check_authority(
+            1, "status:blocked", "status:in-progress", "pm-lead"
+        )
+        assert not ok
+        assert "not assigned" in reason
+
+    def test_existing_transitions_unaffected(self, stub_role_labels):
+        """Regression: adding blocked must not disturb pre-existing edges."""
+        stub_role_labels["labels"] = {"skill"}
+        ok, _ = tracker._check_authority(
+            1, "status:in-progress", "status:pending-test", "skill-lead"
+        )
+        assert ok
+        ok, _ = tracker._check_authority(
+            1, "status:approved", "status:in-progress", "skill-lead"
+        )
+        assert ok
+
+    def test_park_and_resume_end_to_end(self, monkeypatch):
+        """transition() end-to-end for the park then resume round trip."""
+        gh_calls = []
+
+        class FakeResult:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        def _fake_run_list(cmd, **kw):
+            gh_calls.append(cmd)
+            return FakeResult()
+
+        monkeypatch.setattr(tracker, "_run_list", _fake_run_list)
+        monkeypatch.setattr(tracker, "_get_issue_role_labels", lambda n: {"skill"})
+        monkeypatch.setattr(tracker, "_check_unread_feedback", lambda n, r: [])
+
+        tracker.transition(13515, "in-progress", "blocked", role="skill-lead")
+        tracker.transition(13515, "blocked", "in-progress", role="skill-lead")
+
+        assert any("status:blocked" in str(c) for c in gh_calls)
+
+
+# ---------------------------------------------------------------------------
 # end-to-end transition() behavior (without gh) — exit codes
 # ---------------------------------------------------------------------------
 

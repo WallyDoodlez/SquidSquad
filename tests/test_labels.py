@@ -26,6 +26,8 @@ EXPECTED_STATUS_LABELS = {
     "status:pending-human-approval",
     "status:pending-human-review",
     "status:pending-human-setup",
+    # #13515: owned-but-parked self-pause, distinct from in-progress/pending-*.
+    "status:blocked",
 }
 EXPECTED_ROLE_LABELS = {
     "role:skill", "role:fe", "role:be", "role:pm", "role:qa",
