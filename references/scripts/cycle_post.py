@@ -939,11 +939,26 @@ def _do_activity_heartbeat(role):
         pass
 
 
+# #13562: warn when an agent writes an oversized working-state (symmetric with
+# cycle_pre's embed cap — same value; keep in sync with cycle_pre.WS_RAW_CAP_BYTES).
+WS_WRITE_WARN_BYTES = 8 * 1024
+
+
 def _do_working_state_update(data, role):
     """Update working state file if agent provided update content."""
     update = data.get("working_state_update")
     if not update:
         return
+
+    size = len(update.encode("utf-8"))
+    if size > WS_WRITE_WARN_BYTES:
+        # Warn only — the file is agent-owned and git preserves history; the
+        # embed-side cap in cycle_pre is what bounds the token cost (#13562).
+        print(f"[🦑 {_timestamp_short()}] WARNING: {role} working-state.md "
+              f"write is {size // 1024} KB — spec shape is a lean ~10-line "
+              f"file; cycle_pre embeds at most "
+              f"{WS_WRITE_WARN_BYTES // 1024} KB of it (#13562). Rewrite it "
+              f"down to spec.", file=sys.stderr)
 
     ws_path = _state_path(f"{role}/working-state.md")
     ws_path.parent.mkdir(parents=True, exist_ok=True)

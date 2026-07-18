@@ -444,6 +444,39 @@ def _read_context_pressure(role):
     }
 
 
+# #13562: max bytes of working-state.md embedded verbatim in cycle-input.json.
+# The sub-skill spec is a lean Task/Status/Started/Decisions file (~10 lines);
+# drifted append-only journals (dm hit 188KB) cost every cycle 32-48K tokens of
+# dead context. Structured fields are still parsed from the FULL file; only the
+# raw_content embed is capped. cycle_post warns symmetrically on oversized
+# writes (same constant value there — keep in sync).
+WS_RAW_CAP_BYTES = 8 * 1024
+
+
+def _cap_working_state_raw(raw):
+    """#13562: bound ``raw`` to WS_RAW_CAP_BYTES for the cycle-input embed.
+
+    Keeps the TAIL — journals grow by appending, so the newest (actionable)
+    entries survive — and prepends an explicit marker so the agent self-corrects
+    the file back to spec shape on its next write. Returns ``raw`` unchanged
+    when it fits."""
+    raw_bytes = raw.encode("utf-8")
+    if len(raw_bytes) <= WS_RAW_CAP_BYTES:
+        return raw
+    tail = raw_bytes[-WS_RAW_CAP_BYTES:].decode("utf-8", errors="ignore")
+    # Start at a line boundary so the embed never opens mid-line.
+    nl = tail.find("\n")
+    if 0 <= nl < len(tail) - 1:
+        tail = tail[nl + 1:]
+    size_kb = len(raw_bytes) // 1024
+    return (
+        f"[TRUNCATED (#13562): working-state.md is {size_kb} KB; the spec shape "
+        f"is a lean ~10-line Task/Status/Started/Decisions file cleared on "
+        f"completion. Only the newest {WS_RAW_CAP_BYTES // 1024} KB is embedded "
+        f"below — rewrite this file down to spec on your next working-state "
+        f"update; full history is already preserved in git.]\n" + tail)
+
+
 def _read_working_state(role):
     """Parse working-state.md into structured data."""
     ws_path = _state_path(f"{role}/working-state.md")
@@ -497,7 +530,7 @@ def _read_working_state(role):
     result = {
         "task": task,
         "status": status,
-        "raw_content": raw,
+        "raw_content": _cap_working_state_raw(raw),  # #13562 size gate
     }
 
     # Role-specific fields
