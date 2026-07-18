@@ -16,7 +16,7 @@
   "references/scripts/v2_link_stage.py": "797f2794f6987178385d0ecb3d2b7834e5617210"
  },
  "11512_spec.json": {
-  "references/roles/instructions.md": "46c4ff6e2e495cb6ed95d4156aa33136e2a001b2",
+  "references/roles/instructions.md": "332e22d7a16aac2dfc05deefe10266b20008157b",
   "references/scripts/thin_launcher.py": "eec18f4a5032dd1634b121c36f1562403e8dcdf0"
  },
  "11613_spec.json": {},
@@ -66,11 +66,11 @@
  },
  "13035_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
-  "references/roles/instructions.md": "46c4ff6e2e495cb6ed95d4156aa33136e2a001b2"
+  "references/roles/instructions.md": "332e22d7a16aac2dfc05deefe10266b20008157b"
  },
  "13043_spec.json": {},
  "13134_spec.json": {
-  "references/roles/instructions.md": "46c4ff6e2e495cb6ed95d4156aa33136e2a001b2",
+  "references/roles/instructions.md": "332e22d7a16aac2dfc05deefe10266b20008157b",
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b",
   "references/sub-skills/common/self-restart.md": "c9a89c7c52e750bcda6b3db62699ce773af4cb33"
  },
@@ -83,7 +83,7 @@
  },
  "13162_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
-  "references/roles/instructions.md": "46c4ff6e2e495cb6ed95d4156aa33136e2a001b2"
+  "references/roles/instructions.md": "332e22d7a16aac2dfc05deefe10266b20008157b"
  },
  "13175_spec.json": {
   "references/sub-skills/common-events/event-mode-contract.md": "07d223fe9a9a0b6757c4908a32b47ee1dbfe25b9"
