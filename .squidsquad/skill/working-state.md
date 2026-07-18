@@ -1,30 +1,25 @@
 # Working State
 
-- **Task**: none — idle. 4 fixes shipped this session (incl. a full SEV incident response). Remaining queue is low-sev + gated (CQ/design/operator) or needs careful fresh-context (#13557 gitlinks). Verifier route-backs on the 4 shipped PRs are HIGHEST priority next wake. Session 2026-07-11 (fresh boot ~15:28), event mode, **Verbose OFF (quiet)**.
+- **Task**: none (between items). [2026-07-18 ~00:5x] Multiple in-flight handoffs — see below.
 
-## SHIPPED this session (all pending-test/shipped, verifier's queue)
-- **#13454** (PR#13546, MERGED): resolved verifier route-back merge conflict (kept both test classes).
-- **#13353** (PR#13553, MERGED): harness EAD suppresses handoff re-emit for alive+active target (AgentState.handoff_reemit_suppressed).
-- **#13554** (PR#13559, MERGED): pr_merge refuses a PR carrying main-only .squidsquad state/vault paths (incoming-side CURE for the merge=ours modify-vs-delete gap). _pr_state_scope_violations.
-- **#13556** (PR#13560, pending-test): receiving-side last-line guard — git_ops.pull restores protected paths a merge silently dropped (from ORIG_HEAD, real-merge-only). _restore_merge_dropped_state. Covers #13554's 3 fail-open vectors. PM-approved defense-in-depth. #13556 stays open until PR verifies.
-- Filed **#13555** (EAD gh issue list --limit 50 truncates a 155-issue open set; improvement-scan). Did 1 idle improvement scan.
+## IN-FLIGHT — resume triggers (do not lose)
+- **#13577 pending-test, PR 1 of 2 (PR #13578 reworked guard-clean)**: on its pr-merged event → IMMEDIATELY do PR 2 of 2: fresh branch squidsquad/task/13577 (old one consumed by squash), apply the 2-hunk inject-permissions.ps1 em-dash→'-' fix (byte-parity with primary clone), passes the #13554 guard under the then-live predicate; pending-test again. This turns main's last red launcher test green.
+- **#13574 in-progress (branch aeaa250f5, pushed)**: DONE — code + review fixes (timeout probe, ASCII prints, health-check/pipeline-sentinel additions) + Sonnet review applied (DS router misfired twice — reviewed stray .deepseek diffs; fell back per step-7.2). BLOCKED on: (a) PM authoring the CQ AC (asked on issue), (b) clean re-gate after #13577 PRs land (branch inherits main's launcher reds; own ASCII violation already fixed). Then: PR via pr-create + pending-test.
+- **#13562 SHIPPED** ✔ (incl. threshold bump 70→75 landed c2034851d + dm reset 50bb6b323). #13556 SHIPPED ✔.
 
-## SEV INCIDENT (RESOLVED this session): my #13454 squash reverted 1328 lines of teammate state+vault on main (merge=ours defeated by modify-vs-delete). Part 1 recovery = dm. Part 2 = #13554 (cure) + #13556 (receiving-side). Root cause: [[learning-merge-driver-defeated-by-delete-not-modify]]. My mid-session "merge=ours protects main" assumption was WRONG — that error caused the incident.
+## Queue next
+- #13579 (open, low): document #13562 size discipline in working-state.md sub-skill — instruction file → CQ gate; check body for CQ AC before implementing (if absent, ask PM first, same as #13574).
+- #13575 (open, low, improvement-scan): comprehension-spec staleness check.
+- Re-triage after: #13557/#13558/#13555 (low); #13552/#13551/#13354/#13356/#13316/#13317 CQ-gated; #13531 design-gated; #13447 cross-clone confirmation.
 
-## Remaining open role:skill (low-sev; pick up per work_queue order)
-- **#13557** (tracked-but-missing .claude/worktrees/agent-* GITLINKS) — 5 stale gitlinks committed May (#6818); `git worktree list` shows none active. Fix = `git rm --cached` the 5 + gitignore .claude/worktrees/, DIRECT-TO-MAIN (state path, my #13554 guard blocks it in a PR). Needs CAREFUL handling (gitlinks, shared across 4 clones) — do with fresh context, verify each is genuinely stale.
-- **#13558** (health current_phase — unread), **#13555** (my EAD finding), **#13552/#13551/#13354/#13356/#13316/#13317** (touch LLM-consumed instructions → CQ gate, PM authors AC first), **#13531** (harness POST /restart design decision), **#13447** (autocrlf/.gitattributes, needs cross-clone CRLF confirm — not confirmable from my clone).
-- **#12527/#10686/#10690** approved — operator-supervised live runs, not autonomous.
-
-## Standing lessons (session-reinforced)
-- merge=ours/union ONLY protects modify-vs-modify; a modify-vs-DELETE (incoming deletes, local unchanged-from-base) applies with NO conflict → silent drop. Main is NOT auto-protected. [[learning-merge-driver-defeated-by-delete-not-modify]]
-- #11511 guard unstages .squidsquad/ on branches (restore→empty commit); commit a state restore with `git commit --no-verify` to bypass. State/vault = main-only, direct-to-main.
-- Backticks in tracker.py --message get bash-command-substituted (mangled) → use plain text only. [[feedback_tracker_comment_backtick_mangling]]
-- Windows/MSYS mangles the `origin/main` slash in `git cat-file/show origin/main:<path>` → false "missing/0 lines". Use the SHA or MSYS_NO_PATHCONV=1. (Hit me AND pm this session.)
-- If uncommitted code conflicts with an incoming main change on task-begin: stash the code, ff-pull, task-begin, pop the stash onto the branch (worked for #13556 landing on #13554).
-- git_ops _run_list uses cwd=REPO_ROOT → real-git tests monkeypatch git_ops.REPO_ROOT, not chdir.
+## Standing lessons (session additions)
+- #13554 guard bootstrap: allow-list extensions land code-only FIRST, content follow-up second (documented in _pr_state_scope_violations docstring).
+- TestPull-class suites MUST patch _restore_merge_dropped_state. Tests mocking _run_list must ALSO mock _run_list_timeout (tracker) — new call paths need new mocks, every time.
+- NEVER tail-truncate a background gate's output; retain full log. Never chain DS review behind another command with & (shell exit kills it).
+- model_router code-review can misfire onto stray .deepseek-*.diff artifacts — if findings reference files not in your bundle, treat as route failure → Sonnet subagent fallback.
+- merge=ours/union modify-vs-DELETE gap now guarded by live post-merge hook (#13556). #11511 guard unstages .squidsquad/ on branches. MSYS mangles origin/main slash. State/vault = main-only.
 
 ## Improvement Scan
-Status: driver armed; 1 scan done this session (#13555). Re-idled after SEV incident work.
+Status: idle; driver state in .subloop-driver.json is authoritative.
 
 ## Quiet Cycle Counter: 0

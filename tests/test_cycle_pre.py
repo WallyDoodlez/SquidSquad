@@ -130,6 +130,93 @@ class TestReadWorkingState:
 # Cycle Number
 # ---------------------------------------------------------------------------
 
+class TestWorkingStateSizeGate13562:
+    """#13562: cycle-input must never embed an unbounded working-state.md.
+    Structured fields parse from the FULL file; raw_content is capped at
+    WS_RAW_CAP_BYTES keeping the TAIL (journals append — newest is actionable)
+    with an explicit self-correction marker. Synthetic fixtures only — never
+    live role state."""
+
+    def _journal(self, kb):
+        """A working-state journal of ~kb KB: header fields at TOP, then
+        append-only session blocks, newest LAST."""
+        head = ("# Working State\n\n"
+                "- **Task**: #99\n"
+                "- **Status**: in-progress\n\n")
+        blocks = []
+        i = 0
+        body = ""
+        while len(body.encode("utf-8")) < kb * 1024:
+            i += 1
+            blocks.append(f"## Session {i}\n" + (f"journal line {i} " * 40) + "\n")
+            body = "".join(blocks)
+        return head + body, f"## Session {i}"
+
+    def test_oversized_raw_is_capped_with_marker_and_tail(
+            self, patch_dirs, squid_dir):
+        content, newest_block = self._journal(200)
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text(content, encoding="utf-8")
+        result = cycle_pre._read_working_state("skill")
+        raw = result["raw_content"]
+        # Bounded: cap + marker line, nothing near the original 200KB.
+        assert len(raw.encode("utf-8")) <= cycle_pre.WS_RAW_CAP_BYTES + 400
+        assert raw.startswith("[TRUNCATED (#13562):")
+        # The self-correction instruction must be the marker's own text, not an
+        # accidental journal-content match (DS-13562 F4).
+        assert "rewrite this file down to spec" in raw
+        # TAIL kept: the newest journal block survives, the oldest does not.
+        assert newest_block in raw
+        assert "## Session 1\n" not in raw
+        # Embed starts at a line boundary after the marker.
+        after_marker = raw.split("]\n", 1)[1]
+        assert not after_marker.startswith(" ")
+
+    def test_structured_fields_parse_from_full_file_despite_cap(
+            self, patch_dirs, squid_dir):
+        # Header fields live at the TOP — outside the kept tail. Parsing must
+        # still see them (parse-full, embed-capped).
+        content, _ = self._journal(60)
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text(content, encoding="utf-8")
+        result = cycle_pre._read_working_state("skill")
+        assert result["task"] == "#99"
+        assert result["status"] == "in-progress"
+        assert result["raw_content"].startswith("[TRUNCATED (#13562):")
+
+    def test_small_file_embedded_verbatim_no_marker(self, patch_dirs, squid_dir):
+        content = ("# Working State\n\n- **Task**: #7\n"
+                   "- **Status**: in-progress\n")
+        ws = squid_dir / "skill" / "working-state.md"
+        ws.write_text(content, encoding="utf-8")
+        result = cycle_pre._read_working_state("skill")
+        assert result["raw_content"] == content
+
+    def test_tail_ending_partial_line_yields_marker_only(self):
+        # DS-13562 F1: when the tail's only newline is its final char, the
+        # fragment before it is mid-line content — drop it; the marker alone
+        # tells the agent the file needs pruning.
+        raw = ("a" * (cycle_pre.WS_RAW_CAP_BYTES * 3)) + "\n"
+        capped = cycle_pre._cap_working_state_raw(raw)
+        assert capped.startswith("[TRUNCATED (#13562):")
+        assert capped.split("]\n", 1)[1] == ""  # no partial-line leak
+
+    def test_cap_boundary_exact_size_not_truncated(self):
+        raw = "x" * cycle_pre.WS_RAW_CAP_BYTES
+        assert cycle_pre._cap_working_state_raw(raw) == raw
+
+    @pytest.mark.parametrize("char", ["é", "本", "😀"],
+                             ids=["2-byte", "3-byte", "4-byte"])
+    def test_multibyte_content_never_crashes(self, char):
+        # A multi-byte char split at the tail byte boundary must not raise
+        # (errors='ignore' on the decode). 2/3/4-byte sequences leave different
+        # orphan continuation-byte patterns at the slice point (DS-13562 F3).
+        raw = (char * (cycle_pre.WS_RAW_CAP_BYTES + 100)) + "\nnewest\n"
+        capped = cycle_pre._cap_working_state_raw(raw)
+        assert capped.startswith("[TRUNCATED (#13562):")
+        assert "newest" in capped
+
+
 class TestGetCycleNumber:
     def test_no_iterations(self, patch_dirs, squid_dir):
         assert cycle_pre._get_cycle_number("skill") == 1

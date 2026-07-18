@@ -48,7 +48,7 @@
 
 ## Context Pressure
 
-- **Threshold**: 70
+- **Threshold**: 75
 
 ## Auto Merge
 

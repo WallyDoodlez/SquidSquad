@@ -2,13 +2,15 @@
 type: decision
 tags: [boot, liveness, health-check, reliability]
 created: 2026-04-18
-updated: 2026-04-18
+updated: 2026-06-27
 owner: pm
-status: active
+status: archived
 confidence: high
 source: conversation
 links: [human-profile]
 ---
+
+> **ARCHIVED / SUPERSEDED (2026-06-27, #12492 SHIPPED).** PID-primary liveness is no longer the runtime model. #12271 (progress-based liveness — hooks + heartbeat + acks) shipped via cutover #12492: **progress signals are now authoritative for reboot decisions; PID is demoted to teardown-only (kill, never prove-alive).** Operator GO'd it this session and it landed clean (QA-verified: zombie caught within bounded window; busy agent not falsely rebooted; DM shipped). Real-world drivers that forced the change — repeated **wedge-alive** incidents PID-liveness could not catch: qa zombie (#10855), the dm/pm freeze, and two this session (skill never-resolved-a-PID at boot, qa frozen ~48min with dispatched work unprocessed; both required manual PM recovery). The PID-primary content below is **historical record only** — do not treat it as current behavior. See [[learning-graceful-restart-grace-timer-on-wedged-agent]].
 
 ## Context
 
@@ -35,3 +37,5 @@ OS-level process check (tasklist/kill -0) is ground truth that cannot go stale. 
 ### Changelog
 
 - 2026-04-18 — Created by pm. From #1301 discussion — all 3 agents (dm/qa/skill) were dead but .health said alive. Human confirmed PID-first approach.
+- 2026-06-27 — pm: status → superseded-in-progress. Operator GO on #12271 (progress-based liveness; PID → teardown-only). Content stays current until #12492 cutover ships, then archive. Driven by repeated wedge-alive incidents PID-liveness cannot detect.
+- 2026-06-27 (same session) — pm: status → archived. #12492 cutover SHIPPED (QA-verified, DM-shipped). Progress-liveness now authoritative; PID teardown-only. Content below is historical record only.

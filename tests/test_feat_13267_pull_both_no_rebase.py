@@ -39,7 +39,11 @@ class TestPullBothNoRebase13267(unittest.TestCase):
             return _mk(0)
 
         with patch.object(git_ops, "_run", side_effect=fake_run), \
-             patch.object(git_ops, "_emit"):
+             patch.object(git_ops, "_emit"), \
+             patch.object(git_ops, "_restore_merge_dropped_state",
+                          return_value=[]):
+            # #13556: pull() now invokes the restore guard (via _run_list, not
+            # the mocked _run) — neutralize it so no real git runs mid-test.
             git_ops.pull()
 
         pulls = [c for c in calls if c.startswith("git pull")]

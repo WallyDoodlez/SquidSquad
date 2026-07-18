@@ -2,7 +2,7 @@
 type: area
 tags: [human, preferences, profile]
 created: 2026-04-05
-updated: 2026-05-12
+updated: 2026-06-28
 owner: pm
 status: active
 confidence: medium
@@ -29,8 +29,8 @@ Profile of the human collaborator. Captures preferences, values, communication s
 - Primary platform: Windows 11
 - Uses Python for scripting, bash for shell operations
 - Repository: SquidSquad autonomous agent framework
-- Context pressure threshold: 70% (human considers 80% too high — agents degrade before hitting 80%)
-- Prefers direct/mechanical checks over indirect state files — "just use PID, it's more direct." OS-level truth (process exists?) beats application-level files (.health) that can go stale. Applies broadly: prefer the most direct verification method available.
+- Context pressure threshold: 70% (human considers 80% too high — agents degrade before hitting 80%) _(Update 2026-07-18: raised to **75** via #13562 (§T3 of the token-efficiency plan) after the working-state embed leak was fixed — sessions carry less dead context per cycle, so the same safety margin sits higher. The "80 too high" ceiling still stands; surfaced to operator for veto.)_
+- Prefers direct/mechanical checks over indirect state files — "just use PID, it's more direct." OS-level truth (process exists?) beats application-level files (.health) that can go stale. Applies broadly: prefer the most direct verification method available. _(Nuance, 2026-06-28: the **general principle stands**, but its original PID-as-liveness-authority application was operator-approved for supersession via #12492 — PID-alive cannot detect wedged-alive/zombie agents, so progress-liveness is now authoritative and PID is teardown-only. The lesson the human took: "most direct" must also mean "actually detects the failure mode." See [[decision-pid-primary-liveness]] (archived).)_
 - Cyclic/mechanical agent work must be programmatic, not LLM-interpreted prose — "any kind of cyclic work needs to be programmed deterministically." LLMs reliably drop steps when context compresses. Agents should react to events, not run multi-step cycles. Drives #7630 (event-driven architecture).
 
 ## Product Vision
@@ -68,3 +68,4 @@ _Wikilinks to related notes: [[code-conventions]]_
 - 2026-04-18 — Updated by pm. Added Product Vision section: general-purpose skill for all teams, self-healing systems, prefer existing OSS over custom builds.
 - 2026-04-26 — Updated by skill-lead. Added Design Philosophy section: source-agnostic vault reflection (human directive), inter-agent conversation system as prerequisite.
 - 2026-05-12 — Updated by pm. Added deterministic-cycle preference: mechanical agent work must be programmatic, not LLM prose. Drives #7630.
+- 2026-06-28 — Updated by pm. Nuanced the direct-checks/PID preference: general principle stands, but PID-as-liveness-authority was operator-approved for supersession (#12492 progress-liveness cutover; PID→teardown-only). Reconciles with archived [[decision-pid-primary-liveness]].
