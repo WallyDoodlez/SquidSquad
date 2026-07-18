@@ -551,6 +551,27 @@ def _run_list(cmd_list, check=True):
     )
 
 
+def _run_list_timeout(cmd_list, timeout, check=False):
+    """#13574: ``_run_list`` with a bounded timeout. A stalled TCP connection
+    (vs an immediate error) would otherwise hang the caller forever — for the
+    boot-gate write probe that would brick the boot, the exact opposite of its
+    fail-open-on-uncertainty contract. TimeoutExpired is converted to a fake
+    returncode=124 result (POSIX timeout convention) so callers' existing
+    non-zero handling treats it as inconclusive."""
+    if cmd_list and cmd_list[0] == "gh":
+        cmd_list = [_resolve_gh_bin()] + list(cmd_list[1:])
+    try:
+        return subprocess.run(
+            cmd_list, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT), timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=cmd_list, returncode=124, stdout="",
+            stderr=f"TIMEOUT after {timeout}s")
+
+
 def _run_gh_with_body(cmd_list, body, check=True):
     """Run a ``gh`` command whose body/message is agent-authored prose, passing
     the body via ``--body-file -`` (UTF-8 stdin) instead of as a command-line
@@ -647,8 +668,8 @@ def check_gh():
     # the whole pipeline was write-frozen (no transitions, no labels, no push)
     # — invisible until a write failed mid-cycle. Verify push permission
     # cheaply via the repo endpoint (gh resolves :owner/:repo from CWD).
-    perm = _run_list(["gh", "api", "repos/:owner/:repo",
-                      "-q", ".permissions.push"], check=False)
+    perm = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
+                              "-q", ".permissions.push"], timeout=15)
     verdict = (perm.stdout or "").strip().lower()
     if perm.returncode == 0 and verdict == "false":
         print("ERROR: forge WRITE access check failed (#13574): the gh "
