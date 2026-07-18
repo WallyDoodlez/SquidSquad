@@ -1819,11 +1819,25 @@ def commit_role_scoped(role, message):
     return push(role=role)
 
 
-def commit_state(role, message):
-    """Stage and commit only .squidsquad/ files to the working branch.
+def _is_verifier_comprehension_artifact(path):
+    """#13652 -- verifier's own CQ record: tests/comprehension/<N>_spec.json
+    (authored per #9184 -- verifier derives CQ specs, skill never self-authors
+    them) and the shared tests/comprehension/.staleness-baseline.json. Both
+    live outside .squidsquad/, so commit_state()'s plain prefix check missed
+    them entirely -- verifier had no fitting commit path (commit_code targets
+    a feature branch, the wrong destination for a main-committed verification
+    record) and fell back to the unsafe add-everything commit_push(). Scoped
+    to .json files under tests/comprehension/ only -- narrow, matches
+    _role_owned_patterns' existing qa-only tests/comprehension/ allowance for
+    commit_role_scoped, the sibling role-scoped commit path (#13212)."""
+    return path.startswith("tests/comprehension/") and path.endswith(".json")
 
-    Only stages files under .squidsquad/. Commits and pushes to the
-    configured working branch.
+
+def commit_state(role, message):
+    """Stage and commit only .squidsquad/ files (plus, for qa/verifier, its
+    own comprehension-spec artifacts) to the working branch.
+
+    Commits and pushes to the configured working branch.
     """
     result = _run("git status --porcelain", check=False)
     if not result.stdout.strip():
@@ -1837,6 +1851,8 @@ def commit_state(role, message):
         if " -> " in path:
             path = path.split(" -> ")[1]
         if path.startswith(".squidsquad/"):
+            state_files.append(path)
+        elif role == "qa" and _is_verifier_comprehension_artifact(path):
             state_files.append(path)
 
     if not state_files:
