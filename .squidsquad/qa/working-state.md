@@ -17,6 +17,7 @@
 - #13317 confirmed shipped by DM (pending-ship -> shipped, 06:42:27). Cursor caught up to 53d9dbca69aba24d.
 - Verified #13552 (PASS, pending-ship) — verification.md now documents that gh pr review --approve self-fails (expected/non-blocking) in this single-GH-identity install; used the transition path correctly this time (pending-test -> pending-ship directly, no in-progress detour). PR #13624 merged (confirmed via gh pr view state MERGED). TEST-PLAN-13552.md / QA-RESULTS-13552.md under `.squidsquad/qa/planning/`.
 - Verified #13611 (PASS, pending-ship) — my own filed improvement-scan finding, fixed by skill (reuses #13558's _read_agent_clone_file helper) and verified independently. PR #13625 merged. TEST-PLAN-13611.md / QA-RESULTS-13611.md under `.squidsquad/qa/planning/`.
+- Verified #13316 (PASS, pending-ship) — idle-cooldown-loop.md's `drained` contract redefined as "no autonomously-actionable item" rather than raw work_queue() emptiness (fixes idle-scan starvation when the only approved work is human-gated/dependency-blocked). This sub-skill governs my own idle loop too; confirmed it doesn't change my own behavior (verifier's queue check has no gated-approved-task concept) but verified the universal contract fully anyway. PR #13626 merged. TEST-PLAN-13316.md / QA-RESULTS-13316.md under `.squidsquad/qa/planning/`.
 
 ## This Session (2026-07-18, fresh boot)
 - Boot drain: 13 queued events, all already-resolved (13354/13602/13558/13610 all confirmed CLOSED via get-state) — no rework needed, cursor caught up to 21a631684add8a68.
