@@ -26,7 +26,7 @@ Usage:
     python scripts/git_ops.py check-real-conflict <base> <head>  # real conflict? exit 0=clean/1=conflict/2=err
     python scripts/git_ops.py guard-staged-state         # pre-commit hook: unstage state files on a feature branch (fail-open)
     python scripts/git_ops.py guard-galaxy-frontmatter   # pre-commit hook: block a staged galaxy note missing YAML frontmatter (fail-closed on violation, fail-open on error)
-    python scripts/git_ops.py install-hooks              # activate the pre-commit + post-merge guards (core.hooksPath)
+    python scripts/git_ops.py install-hooks              # activate the pre-commit + post-merge + post-commit guards (core.hooksPath)
     python scripts/git_ops.py restore-merge-dropped-state [role]  # post-merge hook: restore protected state/vault a merge silently dropped (#13556; fail-open)
     python scripts/git_ops.py --help
 """
@@ -1533,6 +1533,63 @@ def _restore_merge_dropped_state(role=None):
         return []
 
 
+def _recompose_committed_l4_files():
+    """#13672 -- post-commit hook entry point: recompose any L4 project files
+    (``.squidsquad/project/<role-class>.md``) touched by the just-created
+    commit, via ``l4_file_watcher.recompose_path()``.
+
+    ``l4_file_watcher.py``'s own module docstring documents this as the
+    "optional" redundancy trigger for human-driven L4 edits made outside the
+    agent dialog (PRD-E Q-E2) -- the primary trigger is the live
+    ``watchdog``-based file-watch running inside the harness process, which
+    covers most cases since a filesystem write fires regardless of a later
+    commit. This hook is the backstop for when that watcher isn't running
+    (harness down, bare mode, watcher crashed) at the moment of the commit --
+    the recompose still happens deterministically on the next commit, rather
+    than silently waiting for the watcher to notice on its own.
+
+    Fully fail-open: a post-commit hook cannot abort a commit that already
+    happened, but an unguarded crash would print a scary traceback on every
+    commit -- every step here is wrapped so a failure here degrades to "no
+    recompose this commit" rather than a broken git operation.
+    """
+    try:
+        result = _run_list(
+            ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"],
+            check=False)
+        if result.returncode != 0:
+            return
+        changed = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+        l4_files = [
+            f for f in changed
+            if f.startswith(".squidsquad/project/") and f.endswith(".md")
+        ]
+        if not l4_files:
+            return
+
+        import l4_file_watcher
+        import config as _cfg
+        from event_bus import emit as _emit_event
+
+        registry = _cfg.parse_aliases_registry()
+        for f in l4_files:
+            try:
+                l4_file_watcher.recompose_path(
+                    REPO_ROOT / f,
+                    repo_root=REPO_ROOT,
+                    registry=registry,
+                    emit_event=_emit_event,
+                )
+            except Exception as e:  # noqa: BLE001 -- one file's failure must
+                # not skip the rest, and must never propagate past this hook.
+                print(f"WARNING: post-commit L4 recompose failed for {f}: "
+                      f"{type(e).__name__}: {e}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001 -- fail-open, see docstring.
+        print(f"WARNING: post-commit L4 recompose hook raised: "
+              f"{type(e).__name__}: {e} (fail-open -- commit unaffected)",
+              file=sys.stderr)
+
+
 def _safe_checkout(target_branch):
     """Switch to target branch, stashing unstaged changes if needed.
 
@@ -2382,8 +2439,9 @@ def install_hooks():
     """Activate the tracked pre-commit guard by pointing core.hooksPath at it (#11511).
 
     Idempotent. Sets ``core.hooksPath`` to the in-repo ``references/git-hooks``
-    directory (tracked, version-controlled) and makes the ``pre-commit`` shim
-    executable. Because the hooks live in-repo, there is nothing to copy into
+    directory (tracked, version-controlled) and makes the ``pre-commit``,
+    ``post-merge`` (#13556), and ``post-commit`` (#13672) shims executable.
+    Because the hooks live in-repo, there is nothing to copy into
     ``.git/hooks`` and the activation survives a fresh clone the moment this
     runs.
 
@@ -2400,8 +2458,10 @@ def install_hooks():
         return False
     # #13556: the post-merge guard lives in the same hooksPath dir, so it is
     # auto-active the moment core.hooksPath points here -- it just needs its exec
-    # bit set alongside pre-commit (below).
+    # bit set alongside pre-commit (below). #13672: same for the post-commit
+    # L4-recompose hook.
     post_merge_hook = REPO_ROOT / _HOOKS_DIR_REL / "post-merge"
+    post_commit_hook = REPO_ROOT / _HOOKS_DIR_REL / "post-commit"
 
     current = _run("git config --get core.hooksPath", check=False).stdout.strip()
     if current and current != _HOOKS_DIR_REL:
@@ -2429,12 +2489,13 @@ def install_hooks():
     # Executable bit. On POSIX git only fires a hook whose exec bit is set, so a
     # chmod failure means the guard is installed but won't run -- report False
     # and warn. On Windows git ignores the exec bit (the shim runs via sh), so a
-    # chmod failure there is benign and the guard is still active. Chmod BOTH the
-    # pre-commit (#11511) and post-merge (#13556) hooks; a missing post-merge is
-    # tolerated (older installs) so it never regresses the pre-commit activation.
+    # chmod failure there is benign and the guard is still active. Chmod the
+    # pre-commit (#11511), post-merge (#13556), and post-commit (#13672) hooks;
+    # a missing post-merge/post-commit is tolerated (older installs) so it
+    # never regresses the pre-commit activation.
     import os
     import stat
-    for h in (hook, post_merge_hook):
+    for h in (hook, post_merge_hook, post_commit_hook):
         if not h.exists():
             continue
         try:
@@ -2658,6 +2719,13 @@ def main():
         # non-zero exit from a post-merge hook does not abort the merge (it is
         # already done) but keying it 0 keeps logs clean.
         _restore_merge_dropped_state(role=rest[0] if rest else None)
+        sys.exit(0)
+    elif cmd == "recompose-committed-l4-files":
+        # #13672 post-commit hook entry point: recompose any L4 project file
+        # touched by the just-created commit. FAIL-OPEN -- a post-commit hook
+        # cannot abort a commit that already happened; a non-zero exit here
+        # would only pollute logs, so this always exits 0.
+        _recompose_committed_l4_files()
         sys.exit(0)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
