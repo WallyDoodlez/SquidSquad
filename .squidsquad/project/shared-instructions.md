@@ -28,7 +28,7 @@ These instructions apply to ALL agents on this project.
 
 ### Agent Infrastructure
 
-- **Harness manages agent lifecycle**: PID monitoring via `.claude-pid` (sole liveness signal). Intent state machine via REST API (#4966).
+- **Harness manages agent lifecycle**: dual liveness model (#12492) — progress-liveness (activity-heartbeat + dispatch reference + pause guard) is authoritative for reboot decisions; `.claude-pid` PID monitoring remains the instant crash signal but no longer vetoes a reboot on its own. Intent state machine via REST API (#4966).
 - **Agent lifecycle via `squidsquad_cli.py`** (with `start_team.py` as a backward-compatible shim): Agents do not manage their own or other agents' processes.
 - **Context pressure restart**: mechanical detection at the end of each unit of work triggers respawn — same mechanism in both modes; the unit of work differs (a cycle in polling mode, a task in event mode).
 
