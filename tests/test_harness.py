@@ -5484,5 +5484,91 @@ class TestMergeGitOpsReload13588(unittest.TestCase):
         self.assertFalse(harness._MERGE_LOCK.locked())
 
 
+# ---------------------------------------------------------------------------
+# EAD issue-poll --limit must not silently truncate the open set — #13555
+# ---------------------------------------------------------------------------
+
+
+class TestEADPollLimit13555(unittest.TestCase):
+    """#13555: the EAD issue-poll `--limit` must exceed the realistic open-issue
+    ceiling so the OLDEST open work (stuck handoff items) is never truncated out
+    of the detector's view — a silent reintroduction of the #12442 starvation
+    the re-emit cadence was built to prevent. The scan must also WARN when the
+    returned count reaches the cap, so a silently-capped poll is visible."""
+
+    _REGISTRY = {
+        "skill": ("worker", "skill"),
+        "verifier": ("verifier", None),
+        "dm": ("dm", None),
+    }
+
+    def _issue(self, num):
+        return {"number": num, "title": f"ISSUE: thing {num}",
+                "labels": [{"name": "squidsquad"},
+                           {"name": "status:in-progress"},
+                           {"name": "role:skill"}],
+                "updatedAt": "2099-01-01T00:00:00Z"}
+
+    def _run_check(self, issues):
+        """Run _check_for_changes once against a faked `gh issue list`;
+        return (subprocess.run mock, captured stderr text)."""
+        import io
+        import contextlib
+        from harness import ExternalActivityDetector
+        import config as _cfg
+        det = ExternalActivityDetector()
+        gh_result = MagicMock()
+        gh_result.returncode = 0
+        gh_result.stdout = json.dumps(issues)
+        buf = io.StringIO()
+        with patch("harness.subprocess.run", return_value=gh_result) as mrun, \
+             patch("harness._emit_event"), \
+             patch.object(_cfg, "parse_aliases_registry",
+                          return_value=self._REGISTRY), \
+             contextlib.redirect_stderr(buf):
+            det._check_for_changes()
+        return mrun, buf.getvalue()
+
+    def _gh_list_argv(self, mrun):
+        for c in mrun.call_args_list:
+            argv = c.args[0] if c.args else c.kwargs.get("args")
+            if isinstance(argv, list) and argv[:3] == ["gh", "issue", "list"]:
+                return argv
+        self.fail("no `gh issue list` subprocess call was made")
+        return []  # unreachable; keeps linters quiet
+
+    def test_limit_constant_is_500(self):
+        from harness import ExternalActivityDetector
+        self.assertEqual(ExternalActivityDetector.ISSUE_POLL_LIMIT, 500)
+        self.assertGreater(
+            ExternalActivityDetector.ISSUE_POLL_LIMIT, 50,
+            "the old hard-coded 50 hid ~2/3 of a 155-issue open set (#13555)")
+
+    def test_poll_passes_limit_500_not_50(self):
+        from harness import ExternalActivityDetector
+        mrun, _ = self._run_check([])
+        argv = self._gh_list_argv(mrun)
+        self.assertIn("--limit", argv)
+        limit_val = argv[argv.index("--limit") + 1]
+        self.assertEqual(limit_val,
+                         str(ExternalActivityDetector.ISSUE_POLL_LIMIT))
+        self.assertNotEqual(limit_val, "50",
+                            "the truncating cap must be gone (#13555)")
+
+    def test_warns_when_count_reaches_cap(self):
+        from harness import ExternalActivityDetector
+        cap = ExternalActivityDetector.ISSUE_POLL_LIMIT
+        _, err = self._run_check([self._issue(n) for n in range(cap)])
+        self.assertIn("#13555", err,
+                      "a poll returning exactly the cap must WARN so the "
+                      "truncation is not silent")
+        self.assertIn("INVISIBLE", err)
+
+    def test_no_warning_below_cap(self):
+        _, err = self._run_check([self._issue(1)])
+        self.assertNotIn("#13555", err,
+                         "a normal (sub-cap) poll must not emit the warning")
+
+
 if __name__ == "__main__":
     unittest.main()

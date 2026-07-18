@@ -36,7 +36,7 @@
   "references/roles/SOUL.md": "2000ac4562179ee18ad7d54587cc42f7899d6213"
  },
  "12493_spec.json": {
-  "references/sub-skills/roles/pm/pipeline-sentinel.md": "b5fd5ca28daf3bb4706b9594a0fe34801c140d8a"
+  "references/sub-skills/roles/pm/pipeline-sentinel.md": "52c6782c35c6c1fffdaae10e75fb811408e54254"
  },
  "12506_spec.json": {},
  "12585_spec.json": {
@@ -143,7 +143,7 @@
  "2183_spec.json": {
   "references/sub-skills/common/agent-lifecycle.md": "cb8dcf9a5b8b5a630283da0c2f7b150c7c3d6b3d",
   "references/sub-skills/common/self-restart.md": "c9a89c7c52e750bcda6b3db62699ce773af4cb33",
-  "references/sub-skills/roles/pm/health-check.md": "117f4ec3c794cd59ea78cf814a2c15aad84f13fe"
+  "references/sub-skills/roles/pm/health-check.md": "98bd0de263f47a060eb10dc4b91c3405af42e1f5"
  },
  "2195_spec.json": {},
  "361_spec.json": {
@@ -153,7 +153,7 @@
  "4792_spec.json": {
   ".squidsquad/project/shared-instructions.md": "4609e83b47dba7fe4b751c15ff734bc4e76808df",
   "references/sub-skills/common/agent-lifecycle.md": "cb8dcf9a5b8b5a630283da0c2f7b150c7c3d6b3d",
-  "references/sub-skills/roles/pm/health-check.md": "117f4ec3c794cd59ea78cf814a2c15aad84f13fe"
+  "references/sub-skills/roles/pm/health-check.md": "98bd0de263f47a060eb10dc4b91c3405af42e1f5"
  },
  "8694_spec.json": {
   "references/sub-skills/common-events/comment-handling.md": "8d5a2a4ab4164fbdb3f5657f89ef08586bd5e254",
@@ -190,7 +190,7 @@
  },
  "9873_spec.json": {
   "references/scripts/event_catalog.py": "8577ca61909d3d93c1221ac1b984800581f228c5",
-  "references/scripts/harness.py": "531371a1562cdd7d733d01a0a86044128508810c"
+  "references/scripts/harness.py": "813261361570895a96cf5798fe2547272f061aea"
  },
  "_note": "Initialized 2026-07-18 (#13575), re-baselined same day after merging main (the gate's first live catch: the merge moved several fragments' shas). Pairs at initialization were grandfathered WITHOUT retroactive re-review \u2014 only 13175_spec.json had a known overrule (superseded_by:13569, annotation authored by verifier). From here on, any fragment change must refresh its dependent specs' entries in the same PR (comprehension_staleness.py refresh) or mark them superseded_by."
 }
