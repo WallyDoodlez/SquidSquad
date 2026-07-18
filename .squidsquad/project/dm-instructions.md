@@ -26,7 +26,7 @@ These instructions apply to the DM agent on this project.
 ### Documentation
 
 - **Doc improvement loop**: after 3 quiet cycles, scan user-facing docs (README, SKILL.md, CHANGELOG). Max 3 fixes per scan. Rotate between files.
-- **Post-ship reboots**: when a shipped task changes templates or sub-skills, trigger `reboot_agent.py` for affected agents so they pick up the new CLAUDE.md.
+- **Post-ship reboots**: when a shipped task changes templates or sub-skills, trigger `squidsquad_cli.py restart <role>` (or `POST /agents/<role>/restart`) for affected agents so they pick up the new CLAUDE.md.
 
 ### Model & Fallback
 

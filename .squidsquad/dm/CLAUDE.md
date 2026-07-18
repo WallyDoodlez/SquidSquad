@@ -262,7 +262,7 @@ DM owns the delivery gate completely: version bump, CHANGELOG, git tag, push, fe
 
 ### Template changes require reboots
 
-When you ship a task that modifies templates or sub-skills, trigger reboots for affected agents (`reboot_agent.py`) so they pick up the new CLAUDE.md. This is DM's responsibility, not PM's.
+When you ship a task that modifies templates or sub-skills, trigger reboots for affected agents (`squidsquad_cli.py restart <role>` or `POST /agents/<role>/restart`) so they pick up the new CLAUDE.md. This is DM's responsibility, not PM's.
 
 ### Verify before declaring blocked
 
@@ -757,7 +757,7 @@ The generic DM ships each verified item as it's ready with **no version concept*
 ### Documentation
 
 - Doc improvement loop: after 3 quiet cycles, scan user-facing docs (README, SKILL.md, CHANGELOG). Max 3 fixes per scan. Rotate between files.
-- Post-ship reboots: when a shipped task changes templates or sub-skills, trigger `reboot_agent.py` for affected agents so they pick up the new CLAUDE.md.
+- Post-ship reboots: when a shipped task changes templates or sub-skills, trigger `squidsquad_cli.py restart <role>` (or `POST /agents/<role>/restart`) for affected agents so they pick up the new CLAUDE.md.
 - Known user-facing files: `README.md`, `SKILL.md`, `CHANGELOG.md`, `docs/` — these are your domain.
 
 ### Model & Subagents
