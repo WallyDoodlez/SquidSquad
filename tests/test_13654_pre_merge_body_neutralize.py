@@ -41,7 +41,7 @@ class TestNeutralizePrBodyBeforeMerge:
         def side_effect(cmd, check=False):
             if cmd[:3] == ["gh", "pr", "view"]:
                 return _mk(0, json.dumps({"body": "Summary.\nFixes #13531"}))
-            if cmd[:3] == ["gh", "pr", "edit"]:
+            if cmd[:3] == ["gh", "api", "-X"]:
                 return _mk(0)
             return _mk(1)
         mock_rl.side_effect = side_effect
@@ -49,11 +49,33 @@ class TestNeutralizePrBodyBeforeMerge:
         git_ops._neutralize_pr_body_before_merge(13624)
 
         edit_calls = [c.args[0] for c in mock_rl.call_args_list
-                      if c.args[0][:3] == ["gh", "pr", "edit"]]
+                      if c.args[0][:3] == ["gh", "api", "-X"]]
         assert len(edit_calls) == 1
-        body_arg = edit_calls[0][edit_calls[0].index("--body") + 1]
+        # #13654 verifier round 2: gh pr edit unconditionally fails in this
+        # environment (old gh CLI querying a GraphQL field GitHub removed);
+        # the REST PATCH endpoint via `gh api` is the live-confirmed
+        # working path. Must never regress back to `gh pr edit`.
+        assert edit_calls[0][:4] == ["gh", "api", "-X", "PATCH"]
+        assert "pulls/13624" in edit_calls[0][4]
+        body_arg = edit_calls[0][edit_calls[0].index("-f") + 1]
         assert "Fixes #13531" not in body_arg
         assert "Addresses #13531" in body_arg
+
+    @patch("git_ops._run_list")
+    def test_never_calls_gh_pr_edit(self, mock_rl):
+        """The specific command whose live failure caused the #13654 round-2
+        rejection must never be invoked again."""
+        def side_effect(cmd, check=False):
+            if cmd[:3] == ["gh", "pr", "view"]:
+                return _mk(0, json.dumps({"body": "Fixes #1"}))
+            return _mk(0)
+        mock_rl.side_effect = side_effect
+
+        git_ops._neutralize_pr_body_before_merge(13624)
+
+        pr_edit_calls = [c.args[0] for c in mock_rl.call_args_list
+                          if c.args[0][:3] == ["gh", "pr", "edit"]]
+        assert not pr_edit_calls
 
     @patch("git_ops._run_list")
     def test_already_clean_body_no_edit_call(self, mock_rl):
@@ -66,7 +88,7 @@ class TestNeutralizePrBodyBeforeMerge:
         git_ops._neutralize_pr_body_before_merge(13624)
 
         edit_calls = [c.args[0] for c in mock_rl.call_args_list
-                      if c.args[0][:3] == ["gh", "pr", "edit"]]
+                      if c.args[0][:3] == ["gh", "api", "-X"]]
         assert not edit_calls
 
     @patch("git_ops._run_list")
@@ -74,7 +96,7 @@ class TestNeutralizePrBodyBeforeMerge:
         mock_rl.return_value = _mk(1, stderr="not found")
         git_ops._neutralize_pr_body_before_merge(13624)  # must not raise
         edit_calls = [c.args[0] for c in mock_rl.call_args_list
-                      if c.args[0][:3] == ["gh", "pr", "edit"]]
+                      if c.args[0][:3] == ["gh", "api", "-X"]]
         assert not edit_calls
 
     @patch("git_ops._run_list")
@@ -87,7 +109,7 @@ class TestNeutralizePrBodyBeforeMerge:
 
         git_ops._neutralize_pr_body_before_merge(13624)  # must not raise
         edit_calls = [c.args[0] for c in mock_rl.call_args_list
-                      if c.args[0][:3] == ["gh", "pr", "edit"]]
+                      if c.args[0][:3] == ["gh", "api", "-X"]]
         assert not edit_calls
 
     @patch("git_ops._run_list")
@@ -95,7 +117,7 @@ class TestNeutralizePrBodyBeforeMerge:
         def side_effect(cmd, check=False):
             if cmd[:3] == ["gh", "pr", "view"]:
                 return _mk(0, json.dumps({"body": "Fixes #1"}))
-            if cmd[:3] == ["gh", "pr", "edit"]:
+            if cmd[:3] == ["gh", "api", "-X"]:
                 return _mk(1, stderr="edit failed")
             return _mk(1)
         mock_rl.side_effect = side_effect

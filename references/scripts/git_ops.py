@@ -1032,9 +1032,16 @@ def _neutralize_pr_body_before_merge(pr_number):
     #13371 guard, a bare `gh pr create`, or a manual edit). This is the last
     sanctioned checkpoint before GitHub's own merge-time auto-close fires, so
     unlike pr_create()'s guard it cannot be bypassed by skipping the
-    "canonical" creation path. Fail-open throughout: a `gh pr view`/`gh pr
-    edit` hiccup must never wedge a merge that already passed every other
-    gate -- it only warns.
+    "canonical" creation path. Fail-open throughout: a `gh` hiccup must never
+    wedge a merge that already passed every other gate -- it only warns.
+
+    #13654 verifier round 2: `gh pr edit` (ANY field, not just --body)
+    unconditionally fails in this environment -- an old `gh` CLI (2.34.0)
+    still queries a GraphQL field GitHub removed with Projects (classic)'s
+    deprecation. Live-reproduced against a real scratch PR: `gh pr edit`
+    fails, `gh api -X PATCH repos/:owner/:repo/pulls/<N> -f body=<...>`
+    (the REST endpoint, not GraphQL) succeeds against the identical PR.
+    Route the patch through `gh api` instead.
     """
     view_result = _run_list(
         ["gh", "pr", "view", str(pr_number), "--json", "body"], check=False)
@@ -1048,7 +1055,8 @@ def _neutralize_pr_body_before_merge(pr_number):
     if neutralized_body == current_body:
         return
     edit_result = _run_list(
-        ["gh", "pr", "edit", str(pr_number), "--body", neutralized_body],
+        ["gh", "api", "-X", "PATCH", f"repos/:owner/:repo/pulls/{pr_number}",
+         "-f", f"body={neutralized_body}"],
         check=False)
     if edit_result.returncode == 0:
         print(f"PR #{pr_number}: neutralized closing keyword(s) in body "
