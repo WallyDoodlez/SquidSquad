@@ -121,8 +121,17 @@ def write_and_commit_l4(
     # Phase 2 — git commit. Stage just the L4 file (never -A or .).
     # Capture pre-commit SHA so the push-fail revert path targets an
     # explicit commit rather than relying on HEAD~1 — defends against the
-    # case where the working tree was dirty at entry and `git commit`
-    # accidentally included unrelated staged changes.
+    # case where the working tree was dirty at entry and `git reset --hard`
+    # needs to unwind exactly to this call's starting point.
+    #
+    # #13664: the commit itself is ALSO pathspec-restricted (`-- relative`,
+    # mirroring the `git add` restriction above) so a dirty index at entry
+    # can't get swept into this commit on the SUCCESS path -- `git commit
+    # -- <path>` commits only staged changes matching that path, leaving any
+    # other staged content still staged for its own future commit. Without
+    # this, an unrestricted `git commit` would commit the WHOLE index,
+    # silently bundling unrelated staged changes into a commit whose
+    # subject/body describe only the L4 write, and pushing them to origin.
     pre_commit_sha = _resolve_head_sha(runner, target_root)
     subject = _commit_subject(role_class, slot, op_type, target)
     body = _commit_body(source_directive)
@@ -138,7 +147,7 @@ def write_and_commit_l4(
             failure_detail=f"git add failed: {add_result.stderr.strip() or add_result.stdout.strip()}",
         )
     commit_result = runner(
-        ["git", "commit", "-m", subject, "-m", body],
+        ["git", "commit", "-m", subject, "-m", body, "--", relative],
         cwd=str(target_root), capture_output=True, text=True,
     )
     if commit_result.returncode != 0:
