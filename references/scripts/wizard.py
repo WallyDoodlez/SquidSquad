@@ -3615,14 +3615,29 @@ def _infer_project_type_from_scan(scan):
     return None
 
 
-def generate_default_spec(scan_data=None, repo_info=None):
+def generate_default_spec(scan_data=None, repo_info=None, target_dir=None):
     """Generate a default install spec from auto-detected data.
 
     Used by --yes mode and as pre-filled defaults for interactive mode.
     Returns a spec dict with smart defaults based on scan results.
+
+    Args:
+        target_dir: the repo being scaffolded, if known (#13592 REJECT fix).
+            When it already has an installed squad (``.squidsquad/config.md``
+            exists), stack inference is skipped outright — a repo whose
+            identity is already established must never have that identity
+            silently re-derived from scan noise on a re-run (repair script,
+            migration test, accidental re-scaffold). This is what SquidSquad's
+            own self-hosted repo hits: its harness.py depends on fastapi for
+            an HTTP server, which is an incidental tooling dependency, not
+            evidence this is a "backend" product repo — but nothing short of
+            "does a squad already live here" reliably tells the two apart.
     """
     scan = scan_data or {}
     info = repo_info or {}
+    already_installed = bool(
+        target_dir and (Path(target_dir) / ".squidsquad" / "config.md").exists()
+    )
 
     # Project info
     project_name = info.get("name", "")
@@ -3668,8 +3683,9 @@ def generate_default_spec(scan_data=None, repo_info=None):
     # stack-appropriate L3 variant and a generic "worker" id/alias; an
     # ambiguous/signal-less scan falls back to the original "skill"
     # id/alias/variant unchanged, since that's still the correct identity
-    # for SquidSquad's own self-dev installs.
-    inferred_type = _infer_project_type_from_scan(scan)
+    # for SquidSquad's own self-dev installs. Skipped entirely when
+    # already_installed (see target_dir docstring above).
+    inferred_type = None if already_installed else _infer_project_type_from_scan(scan)
     inferred_variant = PROJECT_TYPE_PRESETS.get(inferred_type) if inferred_type else None
 
     # Default agents — variants from manifest, not hardcoded.
@@ -3871,7 +3887,7 @@ def cmd_generate_defaults(args):
     except (json.JSONDecodeError, OSError):
         pass
 
-    spec = generate_default_spec(scan_data, repo_info)
+    spec = generate_default_spec(scan_data, repo_info, target_dir=target_path)
     _print_json(spec)
     return 0
 
@@ -4316,7 +4332,7 @@ def cmd_setup_yes(args):
         print(f"\nDetected:\n{summary}\n")
 
     # 4. Generate default spec
-    spec = generate_default_spec(scan_data, repo_info)
+    spec = generate_default_spec(scan_data, repo_info, target_dir=target_path)
     print(f"Project: {spec['project']['name']}")
     print(f"Agents: {', '.join(a['id'] for a in spec['agents'])}")
     print(f"Stack: {spec['agents'][-1].get('stack', 'general')}")

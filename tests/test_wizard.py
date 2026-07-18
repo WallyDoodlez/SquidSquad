@@ -2656,6 +2656,60 @@ class TestGenerateDefaultSpecForeignInstall:
         assert by_role["dm"].get("variant") == "ios"
 
 
+class TestGenerateDefaultSpecAlreadyInstalled:
+    """#13592 REJECT fix: a repo with an already-installed squad must never
+    have its worker identity silently re-derived from scan noise on a
+    re-run (repair script, migration test, accidental re-scaffold) — even
+    when the scan turns up a confident stack signal."""
+
+    def test_already_installed_skips_inference_despite_confident_signal(self, tmp_path):
+        (tmp_path / ".squidsquad").mkdir()
+        (tmp_path / ".squidsquad" / "config.md").write_text("# config", encoding="utf-8")
+        scan = {"languages": ["javascript"], "frameworks": ["react"]}
+        spec = wizard.generate_default_spec(scan, target_dir=tmp_path)
+        worker = [a for a in spec["agents"] if a["role"] == "worker"][0]
+        assert worker["id"] == "skill", (
+            "an already-installed repo must keep its 'skill' identity even "
+            "when the scan looks like a confident foreign-stack signal"
+        )
+
+    def test_fresh_target_dir_without_squidsquad_still_infers(self, tmp_path):
+        """No .squidsquad/config.md at target_dir -> inference still runs
+        normally (this is a genuinely fresh install, not a re-run)."""
+        scan = {"languages": ["javascript"], "frameworks": ["react"]}
+        spec = wizard.generate_default_spec(scan, target_dir=tmp_path)
+        worker = [a for a in spec["agents"] if a["role"] == "worker"][0]
+        assert worker["id"] != "skill"
+
+    def test_no_target_dir_still_infers(self):
+        """target_dir omitted entirely (unknown target) -> inference still
+        runs, matching the pre-fix / caller-agnostic default."""
+        scan = {"languages": ["javascript"], "frameworks": ["react"]}
+        spec = wizard.generate_default_spec(scan)
+        worker = [a for a in spec["agents"] if a["role"] == "worker"][0]
+        assert worker["id"] != "skill"
+
+    def test_real_repo_scan_against_self_hosted_repo_preserves_skill_identity(self):
+        """Reproduces the verifier's live REJECT finding directly: repo_scan
+        against THIS repo detects fastapi (harness.py's HTTP server dep, an
+        incidental tooling dependency, not evidence this is a 'backend'
+        product repo) and previously mis-inferred 'backend', silently
+        renaming the self-hosted worker off 'skill'. This repo already has
+        .squidsquad/config.md, so the already_installed guard must now
+        keep the worker as 'skill' regardless of what the scan detects."""
+        sys.path.insert(0, str(REPO_ROOT / "references" / "scripts"))
+        import repo_scan as _repo_scan
+        scan = _repo_scan.scan(str(REPO_ROOT))
+        assert "fastapi" in scan.get("frameworks", []), (
+            "test assumption stale: this repo no longer scans as depending "
+            "on fastapi — the reproduction no longer matches the reported bug"
+        )
+        spec = wizard.generate_default_spec(scan, target_dir=REPO_ROOT)
+        worker = [a for a in spec["agents"] if a["role"] == "worker"][0]
+        assert worker["id"] == "skill"
+        assert worker["alias"] == "skill"
+
+
 # ---------------------------------------------------------------------------
 # preflight (#4083)
 # ---------------------------------------------------------------------------
