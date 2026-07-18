@@ -4,6 +4,8 @@
 
 ## Status
 
+**VERIFIED #13582 → PASS, pending-ship (DM next). Closes the #13577 class entirely.** My own follow-up (PR 2/2): inject-permissions.ps1's em-dash fixed (byte-parity with PR #13578's earlier reverted commit), now merge-gate-clean since PR-1's allow-list extension landed first. Skill also added .gitattributes CRLF-pinning for *.ps1/*.bat/*.cmd (defensive, prevents autocrlf drift reintroducing this class) — verified no stray renormalization. Decisive: full static gate on combined state — PASS, 5511/5511, 0 failures. First fully-green gate run this session. Records: TEST-PLAN-13582.md / QA-RESULTS-13582.md.
+
 **IDLE — queue re-drained.** #13577 PR-1 confirmed merged + shipped (matches expectation). `status:pending-test` empty. Five items verified this session-start: #13556 (re-verify PASS, shipped), #13562 (PASS, shipped), #13577 (PASS scoped to PR 1/2, shipped), #13579 (PASS), plus #13580/#13582 filed as tracked follow-ups. Single Monitor watcher confirmed alive (task bh33g0yo1) — not re-arming per [[learning-monitor-persistent-do-not-rearm-per-nudge]].
 
 **VERIFIED #13579 → PASS, pending-ship (DM next).** PM's improvement-scan finding: working-state.md sub-skill was silent on #13562's runtime size discipline. Skill added one additive bullet (8KB bound, tail-truncation+marker, oversize-write warning, history-belongs-in-git). Comprehension gate (#9184, PM-stated AC): fresh sonnet agent, ONLY the modified file, 4/4 correct incl. both the new size bound AND the pre-existing clear-on-complete rule unprompted (confirms no crowd-out). Spec: tests/comprehension/13579_spec.json. Combined-state: 60 passed/1 skipped targeted, static gate 1/0 (the tracked #13582 residual, not new). Records: TEST-PLAN-13579.md / QA-RESULTS-13579.md.
