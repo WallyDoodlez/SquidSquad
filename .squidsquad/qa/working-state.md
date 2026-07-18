@@ -16,6 +16,7 @@
 - Idle / improvement-scan cool-down loop active (driver armed, cron 00fc745c, scan_count reset to 0/3 after #13317 work).
 - #13317 confirmed shipped by DM (pending-ship -> shipped, 06:42:27). Cursor caught up to 53d9dbca69aba24d.
 - Verified #13552 (PASS, pending-ship) — verification.md now documents that gh pr review --approve self-fails (expected/non-blocking) in this single-GH-identity install; used the transition path correctly this time (pending-test -> pending-ship directly, no in-progress detour). PR #13624 merged (confirmed via gh pr view state MERGED). TEST-PLAN-13552.md / QA-RESULTS-13552.md under `.squidsquad/qa/planning/`.
+- Verified #13611 (PASS, pending-ship) — my own filed improvement-scan finding, fixed by skill (reuses #13558's _read_agent_clone_file helper) and verified independently. PR #13625 merged. TEST-PLAN-13611.md / QA-RESULTS-13611.md under `.squidsquad/qa/planning/`.
 
 ## This Session (2026-07-18, fresh boot)
 - Boot drain: 13 queued events, all already-resolved (13354/13602/13558/13610 all confirmed CLOSED via get-state) — no rework needed, cursor caught up to 21a631684add8a68.
