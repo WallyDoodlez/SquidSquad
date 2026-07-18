@@ -1,5 +1,6 @@
 """Tests for references/scripts/git_ops.py — mocked subprocess, no real git."""
 
+import itertools
 import subprocess
 import sys
 from pathlib import Path
@@ -1481,13 +1482,17 @@ class TestCommitCode:
             _mock_result(stdout="main\n"),  # branch --show-current after switch back
         ]
         # rev-parse --verify (branch exists)
-        mock_run_list.side_effect = [
+        mock_run_list.side_effect = itertools.chain([
             _mock_result(returncode=0),  # branch exists
             _mock_result(),  # git checkout branch
             _mock_result(),  # git add (code file)
             _mock_result(),  # git checkout config.md revert (#7491)
-            _mock_result(),  # git checkout main
-        ]
+            _mock_result(),  # git commit
+        ], itertools.repeat(_mock_result()))
+        # #13613: the tail repeat() covers _checkout_and_sync_working's
+        # fast-forward-to-origin probe calls (fetch / rev-parse) beyond the
+        # fixed list above; empty stdout (local_sha == "") makes
+        # _sync_working_branch_to_origin no-op.
         # push now routes through _git_push (#9890)
         mock_git_push.return_value = _mock_result()
         # git commit
@@ -1512,13 +1517,14 @@ class TestCommitCode:
             _mock_result(stdout="squidsquad/task/7491\n"),
             _mock_result(stdout="main\n"),
         ]
-        mock_run_list.side_effect = [
+        mock_run_list.side_effect = itertools.chain([
             _mock_result(returncode=0),  # branch exists
             _mock_result(),  # git checkout branch
             _mock_result(),  # git add (code file)
             _mock_result(),  # git checkout config.md revert
-            _mock_result(),  # git checkout main
-        ]
+            _mock_result(),  # git commit
+        ], itertools.repeat(_mock_result()))
+        # #13613: tail repeat() covers _checkout_and_sync_working's sync probe
         mock_git_push.return_value = _mock_result()
         mock_subproc.return_value = _mock_result(stdout="1 file changed")
 
