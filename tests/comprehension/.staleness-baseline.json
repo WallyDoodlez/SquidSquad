@@ -49,7 +49,7 @@
  },
  "12800_spec.json": {},
  "12818_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "4f2a02b250038297aec6dd6b304601cd38a44f70"
+  ".squidsquad/pm/CLAUDE.md": "aaf4d632617252c91c3c304bcd01042b5f00f73a"
  },
  "12825_spec.json": {
   "references/sub-skills/common/harness-restart.md": "a43cf57124e8cb35406ae1d0c243f14671e8c5ea"
@@ -128,6 +128,9 @@
  "13464_spec.json": {
   "references/sub-skills/roles/verifier/verification.md": "060cc3b168d7feb4456c59201b82a0283df9cffb"
  },
+ "13551_spec.json": {
+  "references/sub-skills/common/git-commit.md": "b94d0036f84ebed790bc70f2b47db3bf22391253"
+ },
  "13569_spec.json": {
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
  },
@@ -173,9 +176,9 @@
   "tests/comprehension/8697_fixtures/skill_polling_CLAUDE.md": "b4c02ca4eaf7d3f370533052128c2eaea0d4e4af"
  },
  "9184_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "4f2a02b250038297aec6dd6b304601cd38a44f70",
-  ".squidsquad/qa/CLAUDE.md": "44dc673f25e8d7d7a39bba287707fb4f22eeb065",
-  ".squidsquad/skill/CLAUDE.md": "f482a37decf7d348258013e6f23c00bc534113b1",
+  ".squidsquad/pm/CLAUDE.md": "aaf4d632617252c91c3c304bcd01042b5f00f73a",
+  ".squidsquad/qa/CLAUDE.md": "5e280f67bf27c96071327d87702ad641e7870bc6",
+  ".squidsquad/skill/CLAUDE.md": "dae162488b92e6c6c7fe9fa9e57e741efca30ac1",
   "references/sub-skills/roles/pm/task-intake.md": "22dbd38d4796f7955075f30df3b5f5ff373d6fbd"
  },
  "9588_spec.json": {},
@@ -190,7 +193,7 @@
  },
  "9873_spec.json": {
   "references/scripts/event_catalog.py": "8577ca61909d3d93c1221ac1b984800581f228c5",
-  "references/scripts/harness.py": "2bc8575b1ad8411d6aecb6f70d614a73f5fe016f"
+  "references/scripts/harness.py": "e5451482b61de87deb907c95f149e4d05c863bbb"
  },
  "_note": "Initialized 2026-07-18 (#13575), re-baselined same day after merging main (the gate's first live catch: the merge moved several fragments' shas). Pairs at initialization were grandfathered WITHOUT retroactive re-review \u2014 only 13175_spec.json had a known overrule (superseded_by:13569, annotation authored by verifier). From here on, any fragment change must refresh its dependent specs' entries in the same PR (comprehension_staleness.py refresh) or mark them superseded_by."
 }

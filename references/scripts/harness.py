@@ -2402,6 +2402,30 @@ def _git_probe(args):
     return result.stdout.strip()
 
 
+def _git_behind_count(branch):
+    """#13531 -- how many commits HEAD is behind origin/<branch>, or None if
+    undeterminable (no branch, fetch failure, non-git environment). A stale
+    relaunch (e.g. POST /restart on a primary/harness-root clone that never
+    pulled) previously had NO staleness signal: /status reported git_dirty
+    and a sha, but nothing flagged that the running code was N commits
+    behind origin — so a restart whose entire purpose was to activate a
+    shipped fix could silently fail that purpose. Best-effort: fetches
+    origin/<branch> once (bounded by _git_probe's timeout) so the count
+    reflects the actual remote tip, not a stale cached ref; a fetch failure
+    (offline, no remote, slow network) degrades to None rather than
+    blocking or crashing boot."""
+    if not branch:
+        return None
+    _git_probe(["fetch", "origin", branch])  # best-effort; ignore result
+    count = _git_probe(["rev-list", "--count", f"HEAD..origin/{branch}"])
+    if count is None:
+        return None
+    try:
+        return int(count)
+    except ValueError:
+        return None
+
+
 def compute_code_version():
     """Probe squidsquad version + git state once at boot. All fields
     individually fall back to `None` on failure so a non-git environment or
@@ -2414,11 +2438,13 @@ def compute_code_version():
         dirty = None
     else:
         dirty = bool(porcelain)
+    behind_origin = _git_behind_count(branch)
     return {
         "squidsquad_version": version,
         "git_sha": sha,
         "git_branch": branch,
         "git_dirty": dirty,
+        "git_behind_origin": behind_origin,
     }
 
 
@@ -2534,8 +2560,18 @@ async def lifespan(app: FastAPI):
     _log(
         f"Code version: squidsquad={cv['squidsquad_version']} "
         f"git_sha={cv['git_sha']} branch={cv['git_branch']} "
-        f"dirty={cv['git_dirty']}"
+        f"dirty={cv['git_dirty']} behind_origin={cv['git_behind_origin']}"
     )
+    # #13531: a relaunch whose entire purpose was to activate shipped code
+    # can silently fail that purpose if the clone never pulled — surface it
+    # loudly at boot instead of only via a quiet /status field nobody polls
+    # right after a restart.
+    if cv["git_behind_origin"]:
+        _log(
+            f"WARNING: running {cv['git_behind_origin']} commit(s) behind "
+            f"origin/{cv['git_branch']} -- this relaunch may not include "
+            f"recently shipped fixes (#13531)"
+        )
 
     # --- Verify agent clones ---
     _log("Verifying agent clones...")
