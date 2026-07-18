@@ -1,5 +1,7 @@
 {
   "issue": 13175,
+  "superseded_by": 13569,
+  "superseded_note": "CQ1's expected answer below (HONOR a boot-drain deploy-signal the moment you reach it) is OVERRULED for the boot-drain case by #13569 (2026-07-17): a boot-drain deploy-signal is now DEFERRED (held, no ack-stop/ack-cursor) until the post-drain boundary, then honored -- honoring it on-reach mid-drain was itself the #13569 bug (agents reboot before boot completes). CQ2/CQ3's substance (loop-free honoring mechanics; finish-first for a boot-resumed feature-branch task) still holds, just relocated to fire at the post-drain boundary instead of on-reach. See tests/comprehension/13569_spec.json for the current, correct boot-drain contract. This file is left in place as a historical record (verifier owns comprehension specs; superseded, not deleted -- promoted test artifacts are never removed for planning-artifact churn) and must NOT be read as current guidance for the boot-drain case.",
   "title": "Case E deploy-signal in boot-drain after full-team restart is ambiguous (honor vs skip)",
   "authored_by": "verifier",
   "authored_at": "2026-06-21 19:31",
