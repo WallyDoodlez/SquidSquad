@@ -823,7 +823,7 @@ class TestBuildPmInputNewFields:
         """PM input includes approved_items field."""
         approved = [{
             "number": 100, "title": "Approved task",
-            "labels": [{"name": "squidsquad"}, {"name": "status:approved"}],
+            "labels": ["squidsquad", "status:approved"],
         }]
         self._make_mocks(monkeypatch, gh_fetch_responses={
             ("squidsquad", "open"): approved,
@@ -843,9 +843,9 @@ class TestBuildPmInputNewFields:
         """PM input includes human_blocked field with items from all three labels."""
         items = [
             {"number": 200, "title": "Needs human action",
-              "labels": [{"name": "squidsquad"}, {"name": "blocked:human-action"}]},
+              "labels": ["squidsquad", "blocked:human-action"]},
             {"number": 201, "title": "Needs human review",
-              "labels": [{"name": "squidsquad"}, {"name": "status:pending-human-review"}]},
+              "labels": ["squidsquad", "status:pending-human-review"]},
         ]
         self._make_mocks(monkeypatch, gh_fetch_responses={
             ("squidsquad", "open"): items,
@@ -867,9 +867,9 @@ class TestBuildPmInputNewFields:
         same_item = [{
             "number": 300, "title": "Same item",
             "labels": [
-                {"name": "squidsquad"},
-                {"name": "blocked:human-action"},
-                {"name": "status:pending-human-setup"},
+                "squidsquad",
+                "blocked:human-action",
+                "status:pending-human-setup",
             ],
         }]
         self._make_mocks(monkeypatch, gh_fetch_responses={
@@ -884,7 +884,7 @@ class TestBuildPmInputNewFields:
         now_iso = datetime.now(timezone.utc).isoformat()
         items = [{
             "number": 400, "title": "Recent",
-            "labels": [{"name": "squidsquad"}],
+            "labels": ["squidsquad"],
             "updatedAt": now_iso,
         }]
         self._make_mocks(monkeypatch, gh_fetch_responses={
@@ -898,7 +898,7 @@ class TestBuildPmInputNewFields:
         """Items updated more than 2x interval ago are excluded."""
         items = [{
             "number": 500, "title": "Old",
-            "labels": [{"name": "squidsquad"}],
+            "labels": ["squidsquad"],
             "updatedAt": "2020-01-01T00:00:00Z",
         }]
         self._make_mocks(monkeypatch, gh_fetch_responses={
@@ -923,10 +923,10 @@ class TestBuildPmInputNewFields:
 
         items = [
             {"number": 600, "title": "A",
-              "labels": [{"name": "squidsquad"}, {"name": "status:approved"}],
+              "labels": ["squidsquad", "status:approved"],
               "updatedAt": now_iso, "comments": comment_inline},
             {"number": 601, "title": "B",
-              "labels": [{"name": "squidsquad"}, {"name": "blocked:human-action"}],
+              "labels": ["squidsquad", "blocked:human-action"],
               "updatedAt": now_iso, "comments": comment_inline},
         ]
         self._make_mocks(monkeypatch, gh_fetch_responses={
@@ -1276,17 +1276,17 @@ class TestQAInputMultiRole:
         """Items from dm, skill, pm, qa all appear in the QA verification queue."""
         items = [
             {"number": 3969, "title": "DM task",
-              "labels": [{"name": "squidsquad"}, {"name": "role:dm"},
-                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+              "labels": ["squidsquad", "role:dm",
+                          "type:issue", "status:pending-test"]},
             {"number": 4000, "title": "Skill task",
-              "labels": [{"name": "squidsquad"}, {"name": "role:skill"},
-                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+              "labels": ["squidsquad", "role:skill",
+                          "type:issue", "status:pending-test"]},
             {"number": 4001, "title": "PM task",
-              "labels": [{"name": "squidsquad"}, {"name": "role:pm"},
-                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+              "labels": ["squidsquad", "role:pm",
+                          "type:issue", "status:pending-test"]},
             {"number": 4002, "title": "QA task",
-              "labels": [{"name": "squidsquad"}, {"name": "role:qa"},
-                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+              "labels": ["squidsquad", "role:qa",
+                          "type:issue", "status:pending-test"]},
         ]
         self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
@@ -1301,8 +1301,8 @@ class TestQAInputMultiRole:
         """Each item in QA verification queue is attributed by role label."""
         items = [{
             "number": 3969, "title": "DM task",
-            "labels": [{"name": "squidsquad"}, {"name": "role:dm"},
-                        {"name": "type:issue"}, {"name": "status:pending-test"}],
+            "labels": ["squidsquad", "role:dm",
+                        "type:issue", "status:pending-test"],
         }]
         self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
@@ -1320,8 +1320,8 @@ class TestQAInputMultiRole:
         still attributed by its source role label."""
         items = [{
             "number": 5000, "title": "QA task",
-            "labels": [{"name": "squidsquad"}, {"name": "role:qa"},
-                        {"name": "type:task"}, {"name": "status:pending-test"}],
+            "labels": ["squidsquad", "role:qa",
+                        "type:task", "status:pending-test"],
         }]
         self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
@@ -1363,11 +1363,11 @@ class TestPMInputMultiRole:
         """PM pending-test queue surfaces items from every verifiable role."""
         items = [
             {"number": 3969, "title": "DM issue",
-              "labels": [{"name": "squidsquad"}, {"name": "role:dm"},
-                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+              "labels": ["squidsquad", "role:dm",
+                          "type:issue", "status:pending-test"]},
             {"number": 3970, "title": "QA issue",
-              "labels": [{"name": "squidsquad"}, {"name": "role:qa"},
-                          {"name": "type:issue"}, {"name": "status:pending-test"}]},
+              "labels": ["squidsquad", "role:qa",
+                          "type:issue", "status:pending-test"]},
         ]
         self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
@@ -1380,8 +1380,8 @@ class TestPMInputMultiRole:
         """PM pending-test items include source_role attribution."""
         items = [{
             "number": 3969, "title": "DM issue",
-            "labels": [{"name": "squidsquad"}, {"name": "role:dm"},
-                        {"name": "type:issue"}, {"name": "status:pending-test"}],
+            "labels": ["squidsquad", "role:dm",
+                        "type:issue", "status:pending-test"],
         }]
         self._setup(monkeypatch, gh_fetch_responses={("squidsquad", "open"): items})
 
