@@ -49,11 +49,13 @@ class TestPrMergeSquashStrategy:
         """#1074: pr_merge defaults to squash strategy and passes --delete-branch."""
         # First call: gh pr view (state check)
         state_json = json.dumps({"state": "OPEN"})
-        # Second call: gh pr merge (success)
-        # Third call: gh pr view (branch name extraction)
+        # Second call: gh pr view (#13654 pre-merge closing-keyword neutralize)
+        # Third call: gh pr merge (success)
+        # Fourth call: gh pr view (branch name extraction)
         branch_json = json.dumps({"headRefName": "squidsquad/skill/42"})
         mock_run_list.side_effect = itertools.chain([
-            _mock_result(stdout=state_json),   # state check
+            _mock_result(stdout=state_json),                          # state check
+            _mock_result(stdout=json.dumps({"body": "no keyword"})),  # #13654 body view
             _mock_result(),                     # merge
             _mock_result(stdout=branch_json),   # branch name
             _mock_result(),                     # ship transition (#3747)
@@ -64,7 +66,7 @@ class TestPrMergeSquashStrategy:
         assert success is True
         assert msg == "merged"
         # Verify merge command includes --squash and --delete-branch
-        merge_call = mock_run_list.call_args_list[1]
+        merge_call = mock_run_list.call_args_list[2]
         merge_cmd = merge_call[0][0]
         assert "--squash" in merge_cmd
         assert "--delete-branch" in merge_cmd
@@ -77,6 +79,7 @@ class TestPrMergeSquashStrategy:
         branch_json = json.dumps({"headRefName": "squidsquad/skill/99"})
         mock_run_list.side_effect = itertools.chain([
             _mock_result(stdout=state_json),
+            _mock_result(stdout=json.dumps({"body": "no keyword"})),  # #13654 body view
             _mock_result(),
             _mock_result(stdout=branch_json),
             _mock_result(),                     # ship transition (#3747)
@@ -84,7 +87,7 @@ class TestPrMergeSquashStrategy:
         # #13447: tail repeat() covers the post-merge sync probe calls
         success, msg = git_ops.pr_merge(99, strategy="rebase")
         assert success is True
-        merge_call = mock_run_list.call_args_list[1]
+        merge_call = mock_run_list.call_args_list[2]
         merge_cmd = merge_call[0][0]
         assert "--rebase" in merge_cmd
 
@@ -126,6 +129,7 @@ class TestPrMergConflict:
         state_json = json.dumps({"state": "OPEN"})
         mock_run_list.side_effect = [
             _mock_result(stdout=state_json),
+            _mock_result(stdout=json.dumps({"body": "no keyword"})),  # #13654 body view
             _mock_result(returncode=1, stderr="Pull request is not mergeable: merge conflict"),
         ]
         success, msg = git_ops.pr_merge(20)
@@ -143,6 +147,7 @@ class TestPrMergeIssueExtraction:
         branch_json = json.dumps({"headRefName": "squidsquad/skill/475"})
         mock_run_list.side_effect = itertools.chain([
             _mock_result(stdout=state_json),
+            _mock_result(stdout=json.dumps({"body": "no keyword"})),  # #13654 body view
             _mock_result(),
             _mock_result(stdout=branch_json),
             _mock_result(),                     # ship transition (#3747)

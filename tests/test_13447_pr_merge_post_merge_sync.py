@@ -183,7 +183,8 @@ class TestPrMergePostMergeSync13447:
     def _safe_behind(self):
         with patch("git_ops._pr_behind_by", return_value=0), \
                 patch("git_ops._pr_state_scope_violations", return_value=[]), \
-                patch("git_ops._post_merge_scope_audit"):
+                patch("git_ops._post_merge_scope_audit"), \
+                patch("git_ops._neutralize_pr_body_before_merge"):
             yield
 
     @patch("git_ops._get_working_branch", return_value=WORKING)

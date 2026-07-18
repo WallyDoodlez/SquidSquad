@@ -1026,6 +1026,40 @@ def _auto_revert_merge(sha, pr_number):
           f"non-destructive revert commit pushed to main (#13285).")
 
 
+def _neutralize_pr_body_before_merge(pr_number):
+    """#13654 -- patch any live closing keyword out of the PR body right
+    before merge, regardless of how the PR was created (pr_create()'s own
+    #13371 guard, a bare `gh pr create`, or a manual edit). This is the last
+    sanctioned checkpoint before GitHub's own merge-time auto-close fires, so
+    unlike pr_create()'s guard it cannot be bypassed by skipping the
+    "canonical" creation path. Fail-open throughout: a `gh pr view`/`gh pr
+    edit` hiccup must never wedge a merge that already passed every other
+    gate -- it only warns.
+    """
+    view_result = _run_list(
+        ["gh", "pr", "view", str(pr_number), "--json", "body"], check=False)
+    if view_result.returncode != 0:
+        return
+    try:
+        current_body = json.loads(view_result.stdout).get("body", "") or ""
+    except (json.JSONDecodeError, AttributeError):
+        return
+    neutralized_body = _neutralize_closing_keywords(current_body)
+    if neutralized_body == current_body:
+        return
+    edit_result = _run_list(
+        ["gh", "pr", "edit", str(pr_number), "--body", neutralized_body],
+        check=False)
+    if edit_result.returncode == 0:
+        print(f"PR #{pr_number}: neutralized closing keyword(s) in body "
+              f"before merge (#13654)")
+    else:
+        print(f"WARNING: PR #{pr_number} body carries an unneutralized "
+              f"closing keyword and the pre-merge edit failed: "
+              f"{edit_result.stderr.strip()} -- merge proceeding anyway "
+              f"(#13654)", file=sys.stderr)
+
+
 def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
@@ -1105,6 +1139,18 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                    f"(run `gh pr ready {pr_number}` and retry)")
             print(f"ERROR: {msg}", file=sys.stderr)
             return False, "PR is a draft"
+
+    # #13654: neutralize any closing keyword still live in the PR body,
+    # regardless of how the PR was created. #13371 neutralizes at pr_create()
+    # time, but that guard is bypassed by a bare `gh pr create` (the
+    # documented-but-unenforced anti-pattern pr-protocol.md already warns
+    # against) -- proven live: 12 issues closed out from under DM's
+    # pending-ship gate this session alone, each via a hand-rolled `gh pr
+    # create` call that never routed through pr_create(). A prose rule a
+    # human/agent must remember to follow is not a guard; this is the last
+    # sanctioned checkpoint before GitHub's own merge-time auto-close fires,
+    # so it is where the guard must be unconditional and unbypassable.
+    _neutralize_pr_body_before_merge(pr_number)
 
     # #13554 (SEV prevention): refuse to merge a PR that DECLARES changes to
     # main-only state/vault paths. These must never ride a feature PR -- the
