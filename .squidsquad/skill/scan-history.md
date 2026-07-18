@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-18 14:24
+
+- **Files scanned**: references/scripts/l4_write_commit.py (261 lines, full read; first scan of this file per scan-history -- one of 18 references/scripts/*.py files with zero prior scan-history mentions, systematically identified via a name-vs-history diff)
+- **Findings**: 1 filed — #13664 (low — `write_and_commit_l4()`'s Phase 2 stages the L4 file with a pathspec-restricted `git add -- <relative>` but commits with a bare `git commit -m subject -m body`, no pathspec restriction. `git commit` without a trailing pathspec commits the WHOLE index, so any pre-existing staged-but-uncommitted content at entry silently rides the L4 write's commit and reaches origin under a misleading subject. The function's own code comment explicitly names this exact scenario but its described defense (`pre_commit_sha` capture) only protects the push-failure REVERT path, not the success path -- confirmed via the existing test suite, which asserts the revert-path SHA is correct but never asserts a pathspec restriction on the `git commit` call itself. Fix: `[\"git\", \"commit\", \"-m\", subject, \"-m\", body, \"--\", relative]`, mirroring the existing `git add` restriction.)
+- **Items rejected by human**: none
+- **Criteria note**: systematic script-name-vs-scan-history diffing (`ls references/scripts/*.py` vs grep-count-per-file) surfaced 18 never-scanned scripts in one pass -- cheaper and more targeted than relying on `scan_index.py suggest-targets`, which keeps resurfacing the same high-churn files (harness.py, tracker.py, docs/*-ARCH.md) already covered by recent scans. Worth repeating this systematic gap-find next time suggest-targets returns only repeats. Also: a code comment claiming a defense exists is not proof the defense is complete -- verify what specifically the cited mitigation covers (here: revert-path only, not the success path the comment's own scenario describes) before trusting it and moving on.
+
 ## Scan — 2026-07-18 13:22
 
 - **Files scanned**: references/sub-skills/common-events/event-mode-contract.md (stale-reference/documentation-drift check — first scan of this file per scan-history, despite it being the core event-mode wake contract every event-mode agent, including this session, operates under)
