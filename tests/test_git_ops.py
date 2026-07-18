@@ -815,30 +815,67 @@ class TestPrMerge:
     # --- #13554: pre-merge state/vault scope guard (SEV prevention) ---
 
     @patch("git_ops._run_list")
-    def test_state_violation_refuses_before_merge(self, mock_run):
+    def test_state_violation_refuses_before_merge(self, mock_run, capsys):
         """A PR declaring main-only state/vault paths is refused (fail-safe)
-        BEFORE any merge call — preventing the #13554 merge=ours-defeated revert."""
+        BEFORE any merge call — preventing the #13554 merge=ours-defeated revert.
+        (#13580: the refusal branch also calls _pr_declared_files for the
+        classifier hint — patch it or the real gh fires.)"""
         with patch("git_ops._pr_state_scope_violations",
                    return_value=[".squidsquad/dm/working-state.md",
-                                 ".squidsquad/vault/galaxy/learning-x.md"]):
+                                 ".squidsquad/vault/galaxy/learning-x.md"]), \
+                patch("git_ops._pr_declared_files",
+                      return_value=[".squidsquad/dm/working-state.md"]):
             mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
             success, msg = git_ops.pr_merge(42)
         assert success is False
         assert msg == "PR carries out-of-scope state/vault changes"
         # state check only — NO merge attempt (call_count==1 proves no `gh pr merge`).
         assert mock_run.call_count == 1
+        # No classifier touched -> no #13580 split-hint noise.
+        assert "#13580" not in capsys.readouterr().err
 
     @patch("git_ops._run_list")
     def test_state_violation_refuses_non_squash_too(self, mock_run):
         """Unlike the behind-count guard, the state guard is NOT squash-specific —
         state files belong in no PR, so a merge-commit strategy is refused too."""
         with patch("git_ops._pr_state_scope_violations",
-                   return_value=[".claude/worktrees/agent-x"]):
+                   return_value=[".claude/worktrees/agent-x"]), \
+                patch("git_ops._pr_declared_files",
+                      return_value=[".claude/worktrees/agent-x"]):
             mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
             success, msg = git_ops.pr_merge(42, strategy="merge")
         assert success is False
         assert msg == "PR carries out-of-scope state/vault changes"
         assert mock_run.call_count == 1
+
+    @patch("git_ops._run_list")
+    def test_state_violation_with_classifier_touch_gets_split_hint(
+            self, mock_run, capsys):
+        """#13580: when the refused PR's own diff also touches git_ops.py (the
+        classifier module), the error carries the two-PR split recipe — the
+        #13577 bootstrap case explained in the error itself."""
+        with patch("git_ops._pr_state_scope_violations",
+                   return_value=[".squidsquad/inject-permissions.ps1"]), \
+                patch("git_ops._pr_declared_files",
+                      return_value=[".squidsquad/inject-permissions.ps1",
+                                    "references/scripts/git_ops.py"]):
+            mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
+            success, msg = git_ops.pr_merge(42)
+        assert success is False
+        err = capsys.readouterr().err
+        assert "#13580" in err and "Split it" in err
+
+    @patch("git_ops._run_list")
+    def test_split_hint_fail_open_when_declared_none(self, mock_run, capsys):
+        """#13580: _pr_declared_files returning None (gh hiccup) skips the hint
+        but the refusal itself still fires."""
+        with patch("git_ops._pr_state_scope_violations",
+                   return_value=[".squidsquad/x.md"]), \
+                patch("git_ops._pr_declared_files", return_value=None):
+            mock_run.side_effect = [_mock_result(stdout='{"state": "OPEN"}')]
+            success, msg = git_ops.pr_merge(42)
+        assert success is False
+        assert "#13580" not in capsys.readouterr().err
 
     @patch("git_ops._run_list")
     def test_no_state_violation_proceeds(self, mock_run):

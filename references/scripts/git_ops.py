@@ -1061,6 +1061,20 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                f"(`git checkout origin/main -- <path>`; use `git commit "
                f"--no-verify` to bypass the #11511 branch state-guard) and "
                f"re-push, then retry.")
+        # #13580: if the same PR also touches the classifier module, the
+        # violation is probably the #13577 bootstrap case -- the PR extends the
+        # allow-list to exempt a path it also modifies, but this gate
+        # deliberately evaluates main's CURRENT predicate (a PR must never be
+        # able to exempt itself). Put the split recipe in the error itself.
+        declared = _pr_declared_files(pr_number)
+        if declared and "references/scripts/git_ops.py" in declared:
+            msg += (" NOTE (#13580): this PR also touches git_ops.py -- if it "
+                    "extends the _is_launcher_script/_is_state_file exemption "
+                    "for a path listed above, that can NEVER merge in one PR "
+                    "(the gate evaluates main's current predicate, by design). "
+                    "Split it: land the allow-list extension code-only first; "
+                    "the content fix for the newly exempted path rides a "
+                    "follow-up PR (see _pr_state_scope_violations docstring).")
         print(f"ERROR: {msg}", file=sys.stderr)
         return False, "PR carries out-of-scope state/vault changes"
 
