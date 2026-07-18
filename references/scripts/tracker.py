@@ -716,6 +716,27 @@ def check_gh():
     return True
 
 
+# #13660: shared bound for list_issues/list_by_labels/list_all_open, the same
+# gh --limit truncation class #13555 fixed for harness.py's EAD poll and #13602
+# fixed for pipeline-sentinel.md. list_all_open() was hard-capped at 50 while
+# the live open-issue count reached 150 (gh orders newest-first, so the
+# OLDEST 100 open issues -- mostly the status:pending backlog -- were silently
+# invisible). list_issues()/list_by_labels() carried the identical cap,
+# latent only because current role/status-filtered counts stay under 50. 500
+# gives headroom over today's count without pagination; the warning below
+# makes the cap self-diagnosing if the backlog outgrows it (no silent caps).
+_OPEN_ISSUE_LIST_LIMIT = 500
+
+
+def _warn_if_capped(issues, limit, caller):
+    """#13660: print a WARNING when a gh issue-list result hit its --limit
+    cap -- a silently-truncated result is otherwise invisible to the caller."""
+    if len(issues) >= limit:
+        print(f"WARNING: {caller} returned {len(issues)} = the --limit cap; "
+              f"older/additional issues may be INVISIBLE (#13660). Raise "
+              f"_OPEN_ISSUE_LIST_LIMIT.", file=sys.stderr)
+
+
 def list_issues(role, issue_type="bug", status=None):
     """List issues by role and optional type/status filter.
 
@@ -753,7 +774,9 @@ def list_issues(role, issue_type="bug", status=None):
 
     adapter = _get_forge_adapter()
     if adapter:
-        issues = adapter.list_issues(labels=label_list, state=gh_state, limit=50)
+        issues = adapter.list_issues(
+            labels=label_list, state=gh_state, limit=_OPEN_ISSUE_LIST_LIMIT)
+        _warn_if_capped(issues, _OPEN_ISSUE_LIST_LIMIT, "list_issues")
         print(json.dumps(issues, indent=2))
         return issues
 
@@ -761,13 +784,14 @@ def list_issues(role, issue_type="bug", status=None):
     labels = ",".join(label_list)
     result = _run_list(
         ["gh", "issue", "list", "--label", labels, "--state", gh_state,
-         "--json", "number,title,labels", "--limit", "50"],
+         "--json", "number,title,labels", "--limit", str(_OPEN_ISSUE_LIST_LIMIT)],
         check=False,
     )
     if result.returncode != 0:
         print(f"ERROR: gh failed: {result.stderr}", file=sys.stderr)
         return []
     issues = json.loads(result.stdout) if result.stdout.strip() else []
+    _warn_if_capped(issues, _OPEN_ISSUE_LIST_LIMIT, "list_issues")
     print(json.dumps(issues, indent=2))
     return issues
 
@@ -783,20 +807,23 @@ def list_by_labels(labels_str, state="open"):
 
     adapter = _get_forge_adapter()
     if adapter:
-        issues = adapter.list_issues(labels=label_list, state=state, limit=50)
+        issues = adapter.list_issues(
+            labels=label_list, state=state, limit=_OPEN_ISSUE_LIST_LIMIT)
+        _warn_if_capped(issues, _OPEN_ISSUE_LIST_LIMIT, "list_by_labels")
         print(json.dumps(issues, indent=2))
         return issues
 
     # Default: gh CLI
     result = _run_list(
         ["gh", "issue", "list", "--label", labels_str, "--state", state,
-         "--json", "number,title,labels", "--limit", "50"],
+         "--json", "number,title,labels", "--limit", str(_OPEN_ISSUE_LIST_LIMIT)],
         check=False,
     )
     if result.returncode != 0:
         print(f"ERROR: gh failed: {result.stderr}", file=sys.stderr)
         return []
     issues = json.loads(result.stdout) if result.stdout.strip() else []
+    _warn_if_capped(issues, _OPEN_ISSUE_LIST_LIMIT, "list_by_labels")
     print(json.dumps(issues, indent=2))
     return issues
 
@@ -937,20 +964,24 @@ def list_all_open():
     """List all open issues (for ingestion/triage of external issues)."""
     adapter = _get_forge_adapter()
     if adapter:
-        issues = adapter.list_issues(labels=None, state="open", limit=50)
+        issues = adapter.list_issues(
+            labels=None, state="open", limit=_OPEN_ISSUE_LIST_LIMIT)
+        _warn_if_capped(issues, _OPEN_ISSUE_LIST_LIMIT, "list_all_open")
         print(json.dumps(issues, indent=2))
         return issues
 
     # Default: gh CLI
     result = _run_list(
         ["gh", "issue", "list", "--state", "open",
-         "--json", "number,title,labels,body", "--limit", "50"],
+         "--json", "number,title,labels,body",
+         "--limit", str(_OPEN_ISSUE_LIST_LIMIT)],
         check=False,
     )
     if result.returncode != 0:
         print(f"ERROR: gh failed: {result.stderr}", file=sys.stderr)
         return []
     issues = json.loads(result.stdout) if result.stdout.strip() else []
+    _warn_if_capped(issues, _OPEN_ISSUE_LIST_LIMIT, "list_all_open")
     print(json.dumps(issues, indent=2))
     return issues
 
