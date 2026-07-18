@@ -1,3 +1,75 @@
+## Scan — 2026-07-17 (post-recovery)
+
+- **Files scanned**: `.squidsquad/config.md` (consistency lens, cross-checked vs live /status + boot facts)
+- **Findings**: none — config is fully consistent: version 0.45.0, roster pm/dm/qa/skill, aliases (incl. correct `dm: dm/skill`), verbose-mode `no`, cool-down 30m/burst 3, ctx-threshold 70, iteration 30m, port 7373 all match facts.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-17 ~02:55
+
+- **Files scanned**: `.squidsquad/vault/BRIEFING.md` (staleness lens)
+- **Findings**: none fileable (write access still down). BRIEFING's Team State + Constraints asserted now-WRONG facts (harness "44-behind/stale/DORMANT #13456/#13472/#13494") — resolved this boot (harness on HEAD a7c2b6ae). 
+- **Auto-fixed**: BRIEFING.md — prepended 2026-07-17 increment (fleet write-outage #13570 + harness-now-current + pipeline/HITL state); corrected the stale "Current version / harness STALE" Team State bullet to reflect the current-code + bare-mode reality. Own-domain (pm-owned vault). Local-only until write access restored (won't push under Naahtec read-only auth).
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-17 02:42
+
+- **Files scanned**: `references/scripts/tracker.py` (check_gh), `references/sub-skills/common/health-check.md`, `references/sub-skills/roles/pm/pipeline-sentinel.md` — lens: does the framework detect a forge WRITE-outage? (prompted by this session's live Naahtec read-only auth incident, #13570)
+- **Findings**: Tier-2 gap — boot gate + health checks verify forge READ only, never WRITE. `check_gh()` (tracker.py:640) runs `gh issue list` = read; health-check.md has zero push/label/write coverage (grep-confirmed); pipeline-sentinel.md has no forge-write-outage halt class. Result: a read-only auth downgrade leaves all liveness green while the pipeline is write-frozen, discovered only when a write fails mid-cycle. **NOT filed as a new task** (write access down → would create an unlabeled orphan); instead logged as a hardening follow-up COMMENT on #13570, to split into a proper role:skill task once auth is restored. Suggested fix: boot gate verifies `.permissions.push==true`, fail loud with remediation; health-check step for same; sentinel gains a 'forge write-outage' class.
+- **Auto-fixed**: none (finding targets skill lane — code + sub-skills)
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-11 13:14
+
+- **Files scanned**: harness restart/boot path behavior (POST /restart) vs primary-clone git state (observed live this session, #13473)
+- **Findings**: filed **#13531** (role:skill, low, improvement-scan) — POST /restart can silently relaunch the harness on STALE code when the primary/harness-root clone is behind+dirty; today's harness.py fixes (#13456/#13472/#13494) + a config.md change did not activate, with no staleness signal. Distinct from #13456/#13472/#13494 (those harden AGENT-clone deploy-pulls). Behavior-only report; remedy design left to assignee.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-28 17:21
+
+- **Files scanned**: .squidsquad/vault/areas/human-profile.md
+- **Findings**: none filed.
+- **Auto-fixed**: human-profile.md L33 PID-preference reconciled — added nuance that the "just use PID" direct-checks preference's PID-as-liveness-authority application was operator-approved for supersession (#12492 progress-liveness; PID→teardown-only) while the general direct-verification principle stands; changelog + `updated` bumped to 2026-06-28. Own-domain (pm-owned vault). Sibling of #13317/#13319 (#12492 doc-reconciliation).
+- **Items rejected by human**: (none)
+- _(Burst 3/3 → driver cancelled, cron b34273a4 deleted; quiesces until new forge work re-idles.)_
+
+## Scan — 2026-06-28 16:21
+
+- **Files scanned**: .squidsquad/config.md, .squidsquad/vault/BRIEFING.md
+- **Findings**: none — config.md consistent (roster pm/dm/qa/skill, `dm: dm/skill` correct, cool-down 30m/burst 3/verbose ON, Shipped-Since-Bump 50 DM-owned/held).
+- **Auto-fixed**: BRIEFING.md refreshed — prepended current 2026-06-28 increment (post-restart green, #13303 shipped, #13318 in flight, scan set #13315/#13317/#13319, #13263 HITL); top entry was 06-27 pre-dating the whole session (own-domain housekeeping).
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-28 15:21
+
+- **Files scanned**: docs/HARNESS-ARCH.md (§5.5/§13.7/§15 + failure-mode table L521), docs/AGENT-RUNTIME.md
+- **Findings**: #13319 (Tier 2, low, role:pm) — HARNESS-ARCH still frames progress-liveness as a §15 "proposal" and zombies as "NOT detected today / proposed fix" (L521, §13.7), and PID as "primary" (§5.5) — all stale post-#12492 (progress-liveness SHIPPED, authoritative; PID teardown-only). Arch-doc (TRD) slice; sibling of #13289 (dm/README) + #13317 (skill/sub-skills). DS-audit flagged. Filed to pm.
+- **Auto-fixed**: none (multi-section TRD reconciliation + DS-audit warranted → tracked task, not rushed mid-scan)
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-28 06:52
+
+- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md
+- **Findings**: none — clean and current (recent refs #12442/#12460/#12475, event-mode/comment-handling correct; verified `cycle.py status-bar <role> <phase> <desc>` form at L13 still valid, not stale).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+- _(Burst 3/3 reached → driver cancelled, cron e73a3b97 deleted; quiesces until new forge work re-idles.)_
+
+## Scan — 2026-06-28 05:53
+
+- **Files scanned**: .squidsquad/vault/galaxy/decision-pid-primary-liveness.md, references/sub-skills/roles/pm/health-check.md, references/sub-skills/common/agent-lifecycle.md
+- **Findings**: #13317 (defect, low, role:skill) — health-check.md L18 + agent-lifecycle.md L16 both call `.claude-pid` the "sole liveness signal", contradicting the now-live #12492 progress-liveness cutover (PID demoted to teardown-only). Decision file itself already correctly archived; the compose-consumed sub-skills were not updated. Filed to skill (sub-skills are skill's lane).
+- **Auto-fixed**: none (sub-skills are compose-consumed code, not PM lane)
+- **Items rejected by human**: (none)
+
+## Scan — 2026-06-28 04:55
+
+- **Files scanned**: docs/COMPOSE-ARCHITECTURE.md (§8.2 L4-write trigger), docs/AGENT-RUNTIME.md (§8.2/§8.5 restart-required), docs/prd/compose-freshness.md (E3)
+- **Findings**: #13315 (Tier 2, low) — #13303 shipped a content-change gate on the L4 file-watcher's restart-required emission (no-op recompose now suppressed) code-only, no paired arch-doc edit; COMPOSE-ARCH §8.2 / AGENT-RUNTIME §8.5 don't document the gate. Filed to pm.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-05-16 22:38
 
 - **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md, references/sub-skills/roles/pm/health-check.md, references/sub-skills/roles/pm/soul-shepherd.md, .squidsquad/vault/areas/human-profile.md
@@ -631,3 +703,54 @@
 - **Auto-fixed**: BRIEFING refreshed (PM own-domain, Tier-1) — new 2026-06-21 ~19:50 top increment (Verbose Mode ship + qa wedge/recovery + #12271 cutover-pending + #13197 + ships + 2 operator advisories); added evening Recently-Shipped bullet (#13162/#13066/#13176/#13175/#13179).
 - **Items rejected by human**: (none)
 - **Burst note**: 2nd scan of idle burst (scan_count→2 after record); driver stays armed (not at cap).
+
+## Scan — 2026-06-26 ~22:35 local / 03:12Z (idle-driver tick, fresh idle burst — operational gap from skill recovery)
+
+- **Files scanned**: operational — harness restart / auto-reboot path, observed live while recovering the skill agent on operator request this session (no process-file static scan this tick; the live operational finding outranked it).
+- **Findings**: TIER-2 (routed as corroboration, not a new file). Spawn-died-before-PID-resolution is a two-sided liveness blind spot: an agent whose initial spawn dies before resolving a claude-PID sits at `status=starting`/`claude_pid=None` forever — (a) PID-liveness poller has no PID to test → never sees "dead" → no auto-reboot; (b) `POST /agents/<role>/restart` sets intent=restarting but the 60s force-kill net has no PID to kill → respawn never fires. Required manual `boot_remote.py`.
+- **Dedup**: NOT a new issue — added as point-form corroboration to #12271 (progress-liveness umbrella, pending-human-review). Distinct from the prior alive-PID wedge corroborations there (those are zombie/false-positive); this is the never-resolved-a-PID branch, relevant to shipped Slice A #13179 ("bound the booting escape"). Flagged design data point: progress-liveness needs a never-started/bootup-timeout branch.
+- **Auto-fixed**: none (finding belongs to role:skill harness behavior — PM files/corroborates, does not fix code).
+- **Items rejected by human**: (none)
+- **Burst note**: 1st scan of this fresh idle burst (scan_count→1 after record); driver stays armed (not at cap). Live cron 464dc7c3.
+
+## Scan — 2026-06-27 ~04:11Z (idle-driver tick, 2nd scan of burst — BRIEFING freshness)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory PM-domain staleness check vs this session's forge-verified events).
+- **Findings**: BRIEFING stale — top Active-Priorities increment was 2026-06-22 (5 days), missing this entire session: new fleet restart, operator-requested skill kill+respawn, skill wedge-in-`starting` recovery via boot_remote, #12271 booting-escape corroboration, multiple clean build→verify→ship passes (#13236/#13213/#13212), pipeline now clean, 81-item pending backlog, and the still-live #12271 GO/NO-GO advisory.
+- **Auto-fixed**: BRIEFING refreshed (PM own-domain, Tier-1) — added 2026-06-27 top increment (concise; within token budget).
+- **Items rejected by human**: (none)
+- **Burst note**: 2nd scan of idle burst (scan_count→2 after record); driver stays armed (not at cap). Live cron 464dc7c3.
+
+## Scan — 2026-06-27 ~05:41Z (idle-driver tick, 3rd/final scan of burst — vault decision currency)
+
+- **Files scanned**: .squidsquad/vault/galaxy/decision-pid-primary-liveness.md (vault decision-currency check vs the operator GO on #12271 this session).
+- **Findings**: STALE decision — `decision-pid-primary-liveness` was status:active ("PID is primary for liveness"), but operator GO'd #12271 (progress-based liveness → PID demoted to teardown-only) this session. Active decision contradicted the locked direction; would mislead future agents.
+- **Auto-fixed**: PM own-domain (Tier-1, vault is PM-maintained institutional memory) — status → superseded-in-progress; added supersession banner (operator GO, cutover #12492 sequencing, wedge-incident drivers); changelog entry; linked to [[learning-graceful-restart-grace-timer-on-wedged-agent]]. Content kept as current-runtime-behavior until #12492 ships (then archive).
+- **Items rejected by human**: (none)
+- **Burst note**: 3rd/FINAL scan — record-scan returned at_cap:true → driver cancelled (`subloop_driver.py cancel pm`) + cron 464dc7c3 deleted (CronDelete). Burst exhausted; re-arms on next re-idle after forge work.
+
+## Scan — 2026-07-11 09:42 (idle-driver tick, 1st scan of burst — vault decision currency vs shipped #12492)
+
+- **Files scanned**: .squidsquad/vault/galaxy/decision-pid-primary-liveness.md (currency check: last scan 2026-06-27 parked it at superseded-in-progress "archive when #12492 ships"; #12492 has since shipped — verify reconciliation landed).
+- **Findings**: NONE. Decision is correctly finalized — status: archived; ARCHIVED/SUPERSEDED banner names #12492 SHIPPED; changelog carries the final "status -> archived" entry (progress-liveness authoritative, PID teardown-only). Content matches shipped runtime reality; no drift. (The working-tree ' M' on this file is a pre-commit state, not a content-drift finding.)
+- **Dedup note**: The arch-doc sibling drift (HARNESS-ARCH + AGENT-RUNTIME still frame progress-liveness as 'proposed/not-detected') is ALREADY tracked at #13319 (role:pm, pending) — not refiled.
+- **Auto-fixed**: none (clean verification — nothing to fix).
+- **Items rejected by human**: (none)
+- **Burst note**: 1st scan of this idle burst; driver record-scan next. Live cron 2955cb0a.
+
+## Scan — 2026-07-11 ~14:19 local / 18:19Z (idle-driver tick, 3rd/FINAL scan of burst — live operational gap)
+
+- **Files scanned**: references/sub-skills/common/boot-remote-agents.md (PM manual-boot trigger conditions), cross-ref health-check.md — driven by this session's live incident (harness in bare mode, qa+skill dead ~30min, no auto-reboot, manual boot_remote required).
+- **Findings**: TIER-2 → filed **#13545** (role:skill, low, improvement-scan). boot-remote-agents lists only "harness down" / "agent stayed dead" as manual-boot triggers; misses the "harness UP + /status responsive but auto-reboot structurally disabled (bare mode #12525)" case. A future PM could see /status respond and wrongly assume auto-reboot works. Sub-skill = compose-consumed → skill lane (precedent #13317).
+- **Dedup**: no existing open issue on bare-mode/auto-reboot-disabled (#13473 is the operator coordination hold for THIS restart, not a durable trigger-doc fix; #6787/#3496 unrelated).
+- **Auto-fixed**: none (sub-skill is skill-lane, not PM-editable; PM files, does not edit compose-consumed instructions).
+- **Items rejected by human**: (none)
+- **Burst note**: 3rd/FINAL scan — record-scan at_cap:true → driver cancelled + cron 8bb66e47 deleted. Burst exhausted; re-arms on next re-idle after forge work.
+
+## Scan — 2026-07-11 ~17:2x local (idle-driver tick, 1st scan of fresh burst — BRIEFING staleness)
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory PM own-domain staleness check vs this session's forge-verified events).
+- **Findings**: BRIEFING top increment was 09:31 (morning), missing the entire afternoon: 13:52 respawn, bare-mode harness + dormant #13456/#13472/#13494 fixes + qa/skill manual boot (#13545), primary-clone now-synced, the #13554 SEV data-loss (squash 57b8faa66) + dm recovery + merged fix PR#13559 + #13556 defense-in-depth, my Windows-path-mangle false-alarm + retraction, #13263 reversal (keep-open).
+- **Auto-fixed**: BRIEFING refreshed (Tier-1 PM own-domain) — new 2026-07-11 ~14:00-17:20 top increment (concise; SEV + recovery + bare-mode + operator actions).
+- **Items rejected by human**: (none)
+- **Burst note**: 1st scan of fresh re-idled burst (scan_count→1 after record); driver stays armed. Live cron c41f4c94.
