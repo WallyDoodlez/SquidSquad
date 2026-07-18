@@ -1402,13 +1402,14 @@ class TestCodeVersionProbe(unittest.TestCase):
     """#9243 — compute_code_version + boot probe + /status + / endpoint."""
 
     def test_compute_code_version_success_shape(self):
-        """All four fields present on a normal git checkout with config.md."""
+        """All five fields present on a normal git checkout with config.md."""
         from harness import compute_code_version
         cv = compute_code_version()
         self.assertIn("squidsquad_version", cv)
         self.assertIn("git_sha", cv)
         self.assertIn("git_branch", cv)
         self.assertIn("git_dirty", cv)
+        self.assertIn("git_behind_origin", cv)
         # On the actual repo, version + git fields should be populated.
         self.assertIsInstance(cv["squidsquad_version"], str)
         self.assertIsNotNone(cv["git_sha"])
@@ -1416,6 +1417,10 @@ class TestCodeVersionProbe(unittest.TestCase):
         int(cv["git_sha"], 16)
         self.assertIsInstance(cv["git_branch"], str)
         self.assertIsInstance(cv["git_dirty"], bool)
+        # #13531: best-effort network probe — either a real int (fetch
+        # succeeded) or None (offline/no origin/timeout); never crashes.
+        self.assertTrue(cv["git_behind_origin"] is None
+                         or isinstance(cv["git_behind_origin"], int))
 
     def test_compute_code_version_no_git(self):
         """When git fails (no repo / no git binary), all git fields are None
@@ -1426,6 +1431,7 @@ class TestCodeVersionProbe(unittest.TestCase):
         self.assertIsNone(cv["git_sha"])
         self.assertIsNone(cv["git_branch"])
         self.assertIsNone(cv["git_dirty"])
+        self.assertIsNone(cv["git_behind_origin"])
         # Version still comes from config.md regardless of git
         self.assertIn("squidsquad_version", cv)
 
@@ -1446,6 +1452,8 @@ class TestCodeVersionProbe(unittest.TestCase):
             cv = compute_code_version()
         self.assertTrue(cv["git_dirty"])
         self.assertEqual(cv["git_sha"], "deadbeef")
+        # fetch/rev-list are not stubbed above -> undeterminable -> None
+        self.assertIsNone(cv["git_behind_origin"])
 
     def test_compute_code_version_clean_tree(self):
         """`git status --porcelain` empty -> dirty=False."""
@@ -1463,6 +1471,62 @@ class TestCodeVersionProbe(unittest.TestCase):
         with patch("harness._git_probe", side_effect=fake_probe):
             cv = compute_code_version()
         self.assertFalse(cv["git_dirty"])
+
+
+class TestGitBehindCount13531(unittest.TestCase):
+    """#13531 -- staleness visibility: how far behind origin the running
+    clone is, surfaced on /status instead of discovered by accident."""
+
+    def test_behind_count_parsed(self):
+        from harness import _git_behind_count
+
+        def fake_probe(args):
+            if args[:1] == ["fetch"]:
+                return ""
+            if args[:1] == ["rev-list"]:
+                return "44"
+            return None
+
+        with patch("harness._git_probe", side_effect=fake_probe):
+            self.assertEqual(_git_behind_count("main"), 44)
+
+    def test_up_to_date_is_zero_not_none(self):
+        from harness import _git_behind_count
+
+        def fake_probe(args):
+            if args[:1] == ["fetch"]:
+                return ""
+            if args[:1] == ["rev-list"]:
+                return "0"
+            return None
+
+        with patch("harness._git_probe", side_effect=fake_probe):
+            self.assertEqual(_git_behind_count("main"), 0)
+
+    def test_no_branch_returns_none_without_probing(self):
+        from harness import _git_behind_count
+        with patch("harness._git_probe") as mock_probe:
+            self.assertIsNone(_git_behind_count(None))
+        mock_probe.assert_not_called()
+
+    def test_fetch_failure_returns_none(self):
+        """Offline / no remote / slow network -> undeterminable, never raises."""
+        from harness import _git_behind_count
+        with patch("harness._git_probe", return_value=None):
+            self.assertIsNone(_git_behind_count("main"))
+
+    def test_non_integer_output_returns_none(self):
+        from harness import _git_behind_count
+
+        def fake_probe(args):
+            if args[:1] == ["fetch"]:
+                return ""
+            if args[:1] == ["rev-list"]:
+                return "not-a-number"
+            return None
+
+        with patch("harness._git_probe", side_effect=fake_probe):
+            self.assertIsNone(_git_behind_count("main"))
 
     def test_read_squidsquad_version_missing_config(self):
         """Missing config.md returns None without crashing."""
@@ -1553,6 +1617,26 @@ class TestStatusEndpointCodeVersion(unittest.TestCase):
             self.assertIsNone(cv["git_branch"])
             self.assertIsNone(cv["git_dirty"])
             self.assertEqual(cv["squidsquad_version"], "v0.40.0")
+        finally:
+            self.state.code_version = prior
+
+    def test_status_surfaces_behind_origin_13531(self):
+        """#13531: git_behind_origin flows through to /status's code_version
+        block -- the staleness signal a stale relaunch previously lacked."""
+        prior = self.state.code_version
+        try:
+            self.state.code_version = {
+                "squidsquad_version": "v0.40.0",
+                "git_sha": "01a2b6f4",
+                "git_branch": "main",
+                "git_dirty": True,
+                "git_behind_origin": 44,
+            }
+            with patch.object(self.state, "update_health"):
+                resp = self.client.get("/status")
+            self.assertEqual(resp.status_code, 200)
+            cv = resp.json()["harness"]["code_version"]
+            self.assertEqual(cv["git_behind_origin"], 44)
         finally:
             self.state.code_version = prior
 

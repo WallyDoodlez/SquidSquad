@@ -1,0 +1,38 @@
+{
+  "issue": 13563,
+  "title": "BRIEFING.md diet: trim to budget and make the 2000-token budget corrective",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-18",
+  "ac": "comprehension (#9184 hard gate): a fresh agent reading ONLY the modified vault-remember.md must derive (1) a briefing-budget result of 0 means BRIEFING.md is at/over its ~2000-token budget and trimming is a must-fix THIS cycle, not deferrable; (2) fixing it does NOT consume write budget (same as other staleness fixes); (3) the concrete trim mechanism -- graduate oldest entries verbatim to a vault/archives/ note (citing the real precedent filenames), leave a one-line pointer, keep the freshest 1-2 entries inline, never delete operator-facing section headers outright; (4) the post-trim verification step -- re-run briefing-budget, expect > 0.",
+  "method": "Fresh agent (model: sonnet, general-purpose) given ONLY vault-remember.md from branch squidsquad/task/13563, explicitly instructed not to read any other file or use prior knowledge. Skill's own PR comment explicitly deferred CQ-spec authorship to the verifier per the #9184 workflow (worker doesn't self-generate CQ specs). CQ spec authored + executed by verifier per #9184.",
+  "target": "references/sub-skills/common/vault-remember.md -- BRIEFING.md staleness check's new token-budget bullet + the cross-referenced write-budget-gate wording fix (PR #13665, branch squidsquad/task/13563)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Given the budget check prints 0, what does that mean about BRIEFING.md's state, and what are you supposed to do about it THIS cycle? Is this deferrable, or a must-fix?",
+      "expected": "BRIEFING.md is at/over its ~2000-token budget; trimming is a must-fix this cycle, not deferrable -- same urgency tier as the other staleness fields.",
+      "must_not": "Treating the overage as optional, deferrable, or only relevant when adding new content."
+    },
+    {
+      "id": "CQ2",
+      "q": "Does fixing this consume your write budget for the cycle? Why or why not, per the file's own reasoning?",
+      "expected": "No -- it is a staleness fix, not new content, and staleness fixes do not consume write budget (explicitly not gated by write budget).",
+      "must_not": "Claiming the trim consumes or competes with the cycle's write-budget allowance."
+    },
+    {
+      "id": "CQ3",
+      "q": "Concretely, HOW do you trim BRIEFING.md when it's over budget -- where does the removed content go, and what precedent/example filename does the file cite? Do you delete anything outright?",
+      "expected": "Graduate the oldest dated entries verbatim (never delete) to a vault/archives/ note, citing archives/shipped-pre-2026-05-19.md and archives/briefing-active-priorities-2026-06-15-to-07-17.md as precedent; leave a one-line pointer; keep freshest 1-2 entries inline; operator-facing section headers survive, condensed, never dropped.",
+      "must_not": "Describing content as deleted rather than moved/archived; omitting the cited precedent filenames; claiming section headers get removed."
+    },
+    {
+      "id": "CQ4",
+      "q": "After you trim, what verification step does the file tell you to do, and what result should it produce if you trimmed correctly?",
+      "expected": "Re-run briefing-budget; a correctly-trimmed result reports > 0 (no longer 0).",
+      "must_not": "Omitting the re-verification step or giving the wrong expected post-trim result."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-18",
+  "evidence": "Fresh sonnet general-purpose agent (id a7495a7b0879a3e84), given ONLY the branch's vault-remember.md, explicitly told to use no other file/tool/prior knowledge. 4/4 correct with accurate supporting quotes, zero must_not violations. CQ1: 'trimming is a must-fix this cycle... it cannot be deferred.' CQ2: 'No, fixing it does not consume the write budget... This is a staleness fix, not new content... does NOT consume write budget.' CQ3: 'graduate the oldest dated increments/entries out to a vault/archives/ note, moving the content verbatim (not deleting it)... precedent: archives/shipped-pre-2026-05-19.md, archives/briefing-active-priorities-2026-06-15-to-07-17.md... Nothing is deleted outright.' CQ4: 're-run the briefing-budget check... should report a number greater than 0.'"
+}

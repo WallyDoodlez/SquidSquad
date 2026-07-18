@@ -1026,6 +1026,48 @@ def _auto_revert_merge(sha, pr_number):
           f"non-destructive revert commit pushed to main (#13285).")
 
 
+def _neutralize_pr_body_before_merge(pr_number):
+    """#13654 -- patch any live closing keyword out of the PR body right
+    before merge, regardless of how the PR was created (pr_create()'s own
+    #13371 guard, a bare `gh pr create`, or a manual edit). This is the last
+    sanctioned checkpoint before GitHub's own merge-time auto-close fires, so
+    unlike pr_create()'s guard it cannot be bypassed by skipping the
+    "canonical" creation path. Fail-open throughout: a `gh` hiccup must never
+    wedge a merge that already passed every other gate -- it only warns.
+
+    #13654 verifier round 2: `gh pr edit` (ANY field, not just --body)
+    unconditionally fails in this environment -- an old `gh` CLI (2.34.0)
+    still queries a GraphQL field GitHub removed with Projects (classic)'s
+    deprecation. Live-reproduced against a real scratch PR: `gh pr edit`
+    fails, `gh api -X PATCH repos/:owner/:repo/pulls/<N> -f body=<...>`
+    (the REST endpoint, not GraphQL) succeeds against the identical PR.
+    Route the patch through `gh api` instead.
+    """
+    view_result = _run_list(
+        ["gh", "pr", "view", str(pr_number), "--json", "body"], check=False)
+    if view_result.returncode != 0:
+        return
+    try:
+        current_body = json.loads(view_result.stdout).get("body", "") or ""
+    except (json.JSONDecodeError, AttributeError):
+        return
+    neutralized_body = _neutralize_closing_keywords(current_body)
+    if neutralized_body == current_body:
+        return
+    edit_result = _run_list(
+        ["gh", "api", "-X", "PATCH", f"repos/:owner/:repo/pulls/{pr_number}",
+         "-f", f"body={neutralized_body}"],
+        check=False)
+    if edit_result.returncode == 0:
+        print(f"PR #{pr_number}: neutralized closing keyword(s) in body "
+              f"before merge (#13654)")
+    else:
+        print(f"WARNING: PR #{pr_number} body carries an unneutralized "
+              f"closing keyword and the pre-merge edit failed: "
+              f"{edit_result.stderr.strip()} -- merge proceeding anyway "
+              f"(#13654)", file=sys.stderr)
+
+
 def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
     """Merge a PR. Uses forge adapter for non-GitHub backends,
     gh CLI for GitHub. Returns (success, message).
@@ -1105,6 +1147,18 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
                    f"(run `gh pr ready {pr_number}` and retry)")
             print(f"ERROR: {msg}", file=sys.stderr)
             return False, "PR is a draft"
+
+    # #13654: neutralize any closing keyword still live in the PR body,
+    # regardless of how the PR was created. #13371 neutralizes at pr_create()
+    # time, but that guard is bypassed by a bare `gh pr create` (the
+    # documented-but-unenforced anti-pattern pr-protocol.md already warns
+    # against) -- proven live: 12 issues closed out from under DM's
+    # pending-ship gate this session alone, each via a hand-rolled `gh pr
+    # create` call that never routed through pr_create(). A prose rule a
+    # human/agent must remember to follow is not a guard; this is the last
+    # sanctioned checkpoint before GitHub's own merge-time auto-close fires,
+    # so it is where the guard must be unconditional and unbypassable.
+    _neutralize_pr_body_before_merge(pr_number)
 
     # #13554 (SEV prevention): refuse to merge a PR that DECLARES changes to
     # main-only state/vault paths. These must never ride a feature PR -- the
@@ -1819,11 +1873,25 @@ def commit_role_scoped(role, message):
     return push(role=role)
 
 
-def commit_state(role, message):
-    """Stage and commit only .squidsquad/ files to the working branch.
+def _is_verifier_comprehension_artifact(path):
+    """#13652 -- verifier's own CQ record: tests/comprehension/<N>_spec.json
+    (authored per #9184 -- verifier derives CQ specs, skill never self-authors
+    them) and the shared tests/comprehension/.staleness-baseline.json. Both
+    live outside .squidsquad/, so commit_state()'s plain prefix check missed
+    them entirely -- verifier had no fitting commit path (commit_code targets
+    a feature branch, the wrong destination for a main-committed verification
+    record) and fell back to the unsafe add-everything commit_push(). Scoped
+    to .json files under tests/comprehension/ only -- narrow, matches
+    _role_owned_patterns' existing qa-only tests/comprehension/ allowance for
+    commit_role_scoped, the sibling role-scoped commit path (#13212)."""
+    return path.startswith("tests/comprehension/") and path.endswith(".json")
 
-    Only stages files under .squidsquad/. Commits and pushes to the
-    configured working branch.
+
+def commit_state(role, message):
+    """Stage and commit only .squidsquad/ files (plus, for qa/verifier, its
+    own comprehension-spec artifacts) to the working branch.
+
+    Commits and pushes to the configured working branch.
     """
     result = _run("git status --porcelain", check=False)
     if not result.stdout.strip():
@@ -1837,6 +1905,8 @@ def commit_state(role, message):
         if " -> " in path:
             path = path.split(" -> ")[1]
         if path.startswith(".squidsquad/"):
+            state_files.append(path)
+        elif role == "qa" and _is_verifier_comprehension_artifact(path):
             state_files.append(path)
 
     if not state_files:
