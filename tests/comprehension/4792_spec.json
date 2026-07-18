@@ -1,6 +1,6 @@
 {
   "issue": 4792,
-  "title": "Sentinel-file cleanup — sole liveness signal & operator entry point",
+  "title": "Sentinel-file cleanup — agent liveness model & operator entry point",
   "files": [
     "references/sub-skills/common/agent-lifecycle.md",
     "references/sub-skills/roles/pm/health-check.md",
@@ -9,8 +9,9 @@
   "questions": [
     {
       "id": "1",
-      "question": "What does the harness use as the sole liveness signal for monitoring agents?",
-      "expected": "The `.claude-pid` file. The harness polls every 5 seconds and checks whether the PID written to `.claude-pid` is alive. There is no `.health` file fallback any more — `.claude-pid` is the only liveness signal."
+      "question": "What signal(s) does the harness use to determine agent liveness, and which is authoritative for reboot decisions?",
+      "expected": "A dual model (#12492 progress-liveness cutover), polled every 5 seconds. Progress-liveness (activity-heartbeat + dispatch reference + pause guard) is AUTHORITATIVE for reboot decisions — it catches a PID-alive-but-inert \"zombie\" agent that PID monitoring alone would miss, while the pause guard recognizes a legitimate long tool call/compaction/wait so it is never misread as one. `.claude-pid` remains the instant crash signal (a dead PID is still detected immediately), but PID-aliveness alone no longer vetoes a reboot — it is demoted to teardown-only. There is still no `.health` file fallback.",
+      "must_not": "Answering that `.claude-pid`/PID is the sole or only liveness signal — that was the pre-#12492 model and is no longer accurate."
     },
     {
       "id": "2",
