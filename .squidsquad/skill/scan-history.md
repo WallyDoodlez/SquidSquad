@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-18 16:53
+
+- **Files scanned**: references/scripts/l4_file_watcher.py (653 lines, full read; another of the never-scanned references/scripts/*.py files, chosen because BRIEFING.md's own history references it as a repeat source of real production bugs — #13197, #13211, #13303)
+- **Findings**: 1 filed — #13672 (low — "shipped unwired" class. The module docstring documents `recompose_path()` as "the public entry point for both the file-watch handler AND the optional `.git/hooks/post-commit` script" (PRD-E Q-E2). Confirmed via grep across the whole repo (excluding the function's own definition and its 15-reference unit test file) and by listing `references/git-hooks/` directly (contains only `pre-commit` + `post-merge`, activated via `git_ops.install_hooks()`): no `post-commit` script exists at all, so `recompose_path()` — fully implemented and exhaustively tested in isolation — has zero production callers. The primary file-watch trigger covers the common case; the gap is specifically the redundancy path the docstring frames as a safety net for when the watcher isn't running.
+- **Items rejected by human**: none
+- **Notes**: the rest of the file is unusually well-hardened — every failure path (freshness-guard raise, registry-parse failure, compose-runner exception, debounce race) is caught, documented, and tied to a specific past incident (#12906/#13197/#13211/#13303/DS-E3-F1). No fail-open/fail-closed inconsistency found on a full read. This continues the "read the file BRIEFING.md's own incident history flags as hot" targeting heuristic — worth trying again next time a file with a documented incident trail comes up in the never-scanned list.
+
 ## Scan — 2026-07-18 15:53
 
 - **Files scanned**: references/scripts/l4_conflict_preempt.py (339 lines, full read; first scan of this file per scan-history — another of the 18 references/scripts/*.py files with zero prior scan-history mentions, same systematic gap-find as the 14:24 scan)
