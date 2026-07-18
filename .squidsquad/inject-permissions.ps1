@@ -1,4 +1,4 @@
-# inject-permissions.ps1 — Merge .squidsquad/permissions.template.json into .claude/settings.json
+# inject-permissions.ps1 -- Merge .squidsquad/permissions.template.json into .claude/settings.json
 # Called by startup scripts before launching Claude.
 #
 # Strategy: read the template (stripping comment lines), then replace
@@ -42,7 +42,7 @@ Move-Item -Path $tmp -Destination $settings -Force
 $count = $permsArray.Count
 Write-Host "[inject-permissions] Injected $count permission rules from template."
 
-# Ensure statusLine is set as an object (not a string) — #2008
+# Ensure statusLine is set as an object (not a string) -- #2008
 $settingsRaw2 = [System.IO.File]::ReadAllText($settings, [System.Text.Encoding]::UTF8)
 $settingsObj2 = $settingsRaw2 | ConvertFrom-Json
 if ($null -eq $settingsObj2.statusLine -or $settingsObj2.statusLine -is [string]) {

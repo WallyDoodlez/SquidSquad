@@ -1144,7 +1144,12 @@ def _is_launcher_script(path):
     stages them as code, the ``guard_staged_state`` hook does not strip them, and
     ``_auto_resolve_state_conflicts`` leaves a launcher conflict unresolved (a code
     conflict the worker must resolve, never silently --theirs'd like state)."""
-    return path in (".squidsquad/start.sh", ".squidsquad/start.ps1")
+    # #13577: inject-permissions.ps1 is start.ps1's helper (invoked by the
+    # launcher, listed in installer-files.txt, gated by
+    # test_launcher_ascii_safe) — versioned CODE, same as the launchers. Its
+    # omission here silently stripped its bug-fix commit from a feature branch.
+    return path in (".squidsquad/start.sh", ".squidsquad/start.ps1",
+                    ".squidsquad/inject-permissions.ps1")
 
 
 def _is_state_file(path):
