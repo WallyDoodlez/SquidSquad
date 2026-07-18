@@ -18,8 +18,9 @@ Read `.squidsquad/vault/BRIEFING.md` and `config.md`. Compare key fields:
 - **Version**: Does BRIEFING.md match `SquidSquad Version` in config.md?
 - **Active agents**: Does BRIEFING.md list the same agents as config.md `Workers` (6274.1 dual-aware shim also accepts the deprecated `Dev Agents:` key)?
 - **Current priorities**: Do listed priorities match open high/medium priority items in the tracker?
+- **Token budget** (#13563): run `python references/scripts/vault_remember.py briefing-budget`. If it prints `0`, BRIEFING.md is at or over its ~2000-token budget — trimming is a **must-fix this cycle**, same as the fields above (not gated by write budget; staleness fixes don't consume it). The budget check is corrective, not just a gate on new additions: BRIEFING.md's append-only sections (Active Priorities, Recently Shipped) grow every cycle by design, so this check exists to catch overage on contact rather than let it accumulate silently until someone notices the file is bloated (#13563 found it 3.3x over budget with no prior trim). Graduate the oldest dated increments/entries to a `vault/archives/` note (precedent: `archives/shipped-pre-2026-05-19.md`, `archives/briefing-active-priorities-2026-06-15-to-07-17.md`) — move content verbatim, never delete — leaving a one-line pointer in BRIEFING.md. Keep the freshest 1-2 entries inline per section. Target shape: the documented ~50-line summary; operator-facing sections (Active Priorities / Recent Decisions / Constraints / Team State) survive as section headers, condensed — never dropped outright. Re-run `briefing-budget` after trimming to confirm it now reports > 0.
 
-If any field is stale, update BRIEFING.md with current values. This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
+If any field is stale, update BRIEFING.md with current values (or trim, for the token-budget field above). This is a staleness fix, not new content — it does NOT consume write budget. Run vault-check Level 1 after updating.
 
 **Quiet-cycle gate**: Check if this cycle did real work:
 ```bash
@@ -89,6 +90,6 @@ Remaining candidates beyond the write budget are noted in the iteration log's No
 ```bash
 python references/scripts/vault_remember.py briefing-budget
 ```
-If remaining is 0, do not add to BRIEFING.md without trimming. Trimmed content moves to a galaxy note — never deleted.
+If remaining is 0, do not add to BRIEFING.md without trimming first (see the corrective token-budget check under BRIEFING.md staleness above). Trimmed content moves to a `vault/archives/` note — never deleted.
 
 **Scope reminder**: The vault stores project and environment facts (conventions, context, decisions, learnings). Human behavioral preferences are captured by soul shepherd (observed) and L4 directives (explicit) — not here.
