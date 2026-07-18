@@ -48,6 +48,7 @@ gh issue list --label squidsquad --state open --json number,title,labels,updated
 - **(b) dead-agent** — the owning agent's health is `stalled`/`stopped`/`unknown` (see check 4f).
 - **(c) blocked-on-decision** — the halt needs a **human/PM process choice**, or the only unblock is outside PM authority (e.g. #12460 needed the shadow-vs-split call). No purely mechanical, in-authority unblock exists.
 - **(d) genuine-no-progress** — agent alive and event-mode-reachable but not advancing (workload saturation, an unrecognised block, or a task larger than one cycle).
+- **(e) forge write-outage (#13574)** — the pipeline is frozen across MULTIPLE roles at once while agent health is all-green (the #13570 signature: a read-only auth downgrade fails every transition/label/push fleet-wide with no liveness symptom). Confirm before classifying: `gh api repos/:owner/:repo -q .permissions.push` returns `false`. This is infrastructure, never an agent fault — a fleet-wide simultaneous halt with green health must be tested for (e) BEFORE attributing (b)/(d) to individual agents.
 
 **PM-authority boundary for "unblock" — check BEFORE acting in 2.3 (load-bearing, do NOT cross).** Allowed: an authorized `tracker.py transition`; convert draft PR → ready (metadata); boot a dead/stalled agent via `boot_remote.py`; escalate to the human. **Prohibited** as "unblock": transitioning **another role's** task outside PM authority, merging/closing PRs, or touching git branches. If the only fix crosses this boundary, it is an escalation (2.4), not a PM unblock — so it is class (c), not (a).
 
@@ -57,6 +58,7 @@ gh issue list --label squidsquad --state open --json number,title,labels,updated
 - **(b) dead-agent** → `boot_remote.py` stall-recovery (check 4f Tier 0), or return to `approved` for re-pickup (4f Tier 1).
 - **(c) blocked-on-decision** → **escalate** (2.4) — there is no in-authority unblock.
 - **(d) genuine-no-progress** → one authorized re-wake transition if applicable; if already reachable and simply mid-work, leave it (not every slow item is a halt); if saturated/over-scope, escalate with that finding.
+- **(e) forge write-outage** → no agent-side unblock exists — do NOT boot agents or re-transition items (every write fails during the outage, including yours). Escalate (2.4) flagged as INFRASTRUCTURE with the remediation (restore the gh identity's repo write role / re-auth with push access). Expect the escalation **transition itself to fail** with a permission error — that failure further confirms (e); fall back to whatever human-reaching surface still works (inline session, operator channel) rather than retrying forge writes.
 
 **2.4 Escalate for a decision when you cannot unblock.** When no in-authority unblock exists, **surface to the human** — with (i) the investigation findings and (ii) **concrete options** — via a human-REACHING surface, **not** a bare comment and **not** a silent bug-file. Transition the item to `pending-human-review` (the harness emits this and it flags the item for the human) and put findings + options in the accompanying comment:
 ```bash

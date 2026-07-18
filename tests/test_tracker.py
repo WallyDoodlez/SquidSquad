@@ -61,6 +61,68 @@ class TestCheckGh:
         assert tracker.check_gh() is False
 
 
+class TestCheckGhWriteProbe13574:
+    """#13574: check_gh must also verify WRITE capability. A read-only auth
+    downgrade (#13570) passes the read check and boots the whole team clean
+    while every transition/label/push fails. Only a definitive
+    `.permissions.push == false` blocks boot; an inconclusive probe warns and
+    falls back to the read check (fail-open on uncertainty)."""
+
+    def _arm(self, monkeypatch, probe_result):
+        """Read check (via _run_list) passes; the write probe (via
+        _run_list_timeout — a DIFFERENT function, mock both or the real gh
+        runs) returns probe_result."""
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda cmd, **kw: _mock_result(stdout="ok"))
+        monkeypatch.setattr(tracker, "_run_list_timeout",
+                            lambda cmd, timeout, **kw: probe_result)
+
+    def test_push_true_passes_silently(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(stdout="true\n"))
+        assert tracker.check_gh() is True
+        assert "13574" not in capsys.readouterr().err
+
+    def test_push_false_fails_loudly_with_remediation(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(stdout="false\n"))
+        assert tracker.check_gh() is False
+        err = capsys.readouterr().err
+        assert "WRITE" in err and "#13570" in err
+        assert "Remediation" in err
+
+    def test_probe_timeout_is_fail_open_with_warning(self, monkeypatch, capsys):
+        # #13574 DS F1: a stalled connection must not hang or brick the boot —
+        # _run_list_timeout converts TimeoutExpired to rc=124, which lands in
+        # the inconclusive (warn + pass) branch.
+        self._arm(monkeypatch,
+                  _mock_result(returncode=124, stderr="TIMEOUT after 15s"))
+        assert tracker.check_gh() is True
+        assert "inconclusive" in capsys.readouterr().err
+
+    def test_probe_error_is_fail_open_with_warning(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(returncode=1))
+        assert tracker.check_gh() is True
+        assert "inconclusive" in capsys.readouterr().err
+
+    def test_unexpected_output_is_fail_open_with_warning(self, monkeypatch,
+                                                         capsys):
+        self._arm(monkeypatch, _mock_result(stdout="null\n"))
+        assert tracker.check_gh() is True
+        assert "inconclusive" in capsys.readouterr().err
+
+    def test_timeout_helper_converts_timeout_to_rc124(self, monkeypatch):
+        # The helper itself: TimeoutExpired -> fake rc=124 result, no raise.
+        import subprocess as sp
+
+        def boom(*a, **kw):
+            raise sp.TimeoutExpired(cmd=a[0], timeout=kw.get("timeout"))
+
+        monkeypatch.setattr(tracker.subprocess, "run", boom)
+        res = tracker._run_list_timeout(["gh", "api", "x"], timeout=1)
+        assert res.returncode == 124
+        assert "TIMEOUT" in res.stderr
+
+
 class TestListIssues:
     def test_returns_issues(self, monkeypatch):
         issues = [{"number": 1, "title": "test", "labels": []}]
