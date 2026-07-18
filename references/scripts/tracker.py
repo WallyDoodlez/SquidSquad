@@ -673,7 +673,7 @@ def check_gh():
     verdict = (perm.stdout or "").strip().lower()
     if perm.returncode == 0 and verdict == "false":
         print("ERROR: forge WRITE access check failed (#13574): the gh "
-              "identity has READ but not PUSH permission on this repo — the "
+              "identity has READ but not PUSH permission on this repo - the "
               "#13570 read-only-downgrade signature. Every transition, label "
               "write, and git push will fail while health stays green.",
               file=sys.stderr)
@@ -687,7 +687,7 @@ def check_gh():
         # already proved connectivity — warn, do not block boot (fail-open on
         # uncertainty; only a definitive 'false' is the outage signature).
         print(f"WARNING: forge write-permission probe inconclusive "
-              f"(exit={perm.returncode}, out={verdict!r}) — proceeding on the "
+              f"(exit={perm.returncode}, out={verdict!r}) - proceeding on the "
               f"read check alone (#13574).", file=sys.stderr)
     print("OK")
     return True
