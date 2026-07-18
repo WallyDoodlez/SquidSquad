@@ -262,6 +262,68 @@ class TestAc6M62ManifestWiring:
         )
 
 
+class TestBootDrainDeploySignalDeferral:
+    """#13569: a deploy-signal in the BOOT DRAIN must be DEFERRED until the
+    agent's boot completes (post-drain boundary), then honored — never honored
+    the moment it is reached mid-drain. Honoring mid-drain reboots the agent
+    before boot completes ("agents reboot before boot completes" symptom).
+
+    These assertions pin the behavioral contract in event-mode-contract.md so a
+    future edit that reverts to eager mid-drain honoring is caught. Prose is
+    matched on stable, load-bearing tokens (not full sentences) to stay robust
+    to wording changes that preserve the contract.
+    """
+
+    @pytest.fixture(scope="class")
+    def contract_text(self, fragment_texts):
+        return fragment_texts["common-events/event-mode-contract.md"]
+
+    def test_carries_issue_marker(self, contract_text):
+        assert "#13569" in contract_text, (
+            "event-mode-contract.md must cite #13569 at the boot-drain "
+            "deploy-signal deferral it introduced."
+        )
+
+    def test_boot_drain_signal_is_deferred_until_boot_completes(self, contract_text):
+        # The boot-drain sub-bullet must state the signal is DEFERRED and tie
+        # the deferral to boot COMPLETING (both tokens present in the contract).
+        assert "DEFERRED" in contract_text, (
+            "boot-drain deploy-signal must be marked DEFERRED, not honored "
+            "where reached mid-drain."
+        )
+        assert re.search(r"boot\s+drain", contract_text, re.IGNORECASE), (
+            "the deferral must be scoped to the boot drain."
+        )
+        assert re.search(r"until your boot completes|before your boot completes",
+                         contract_text, re.IGNORECASE), (
+            "the deferral must be anchored to boot completion (the #13569 "
+            "guarantee: boot always completes before the deploy-reboot)."
+        )
+
+    def test_defers_to_post_drain_boundary_before_new_work(self, contract_text):
+        # Honor happens at the post-drain boundary, BEFORE the idle loop and
+        # BEFORE picking up any new work_queue item.
+        assert "post-drain boundary" in contract_text, (
+            "the deferred signal must be honored at the post-drain boundary."
+        )
+        assert re.search(r"before[^.]*picking up[^.]*work_queue|before[^.]*"
+                         r"work_queue\(\)\s*item", contract_text, re.IGNORECASE), (
+            "the honor must precede any new work_queue() pickup so no fresh "
+            "post-boot work runs on possibly-stale instructions."
+        )
+
+    def test_steady_state_honor_still_requires_clean_main(self, contract_text):
+        # The steady-state (post-boot) path is unchanged: honor only on main
+        # with a clean tree at a between-task boundary.
+        assert re.search(r"Steady-state \(post-boot\)", contract_text), (
+            "the steady-state deploy-signal bullet must remain and stay "
+            "distinct from the boot-drain deferral."
+        )
+        assert re.search(r"clean working tree", contract_text), (
+            "steady-state honor must still require a clean working tree on main."
+        )
+
+
 class TestWikilinkResolution:
     """Wikilinks between the event-mode fragments must resolve to actual
     `.md` files in `common-events/` or any `roles/<role>/events/` subdir."""

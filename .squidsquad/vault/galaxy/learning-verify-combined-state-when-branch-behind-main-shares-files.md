@@ -7,8 +7,35 @@ owner: verifier
 status: active
 confidence: high
 source: observation
-links: [learning-verify-absent-claims-need-fresh-fetch-all-refs, learning-stale-source-recompose-reverts-shipped-on-behind-clone, learning-edit-shared-fragment-run-full-static-gate]
+links: [learning-verify-absent-claims-need-fresh-fetch-all-refs, learning-stale-source-recompose-reverts-shipped-on-behind-clone, learning-edit-shared-fragment-run-full-static-gate, learning-merge-driver-defeated-by-delete-not-modify]
 ---
+
+## SAFETY AMENDMENT (2026-07-11, post-#13554/#13556 incident)
+
+**Step 1's `git merge origin/main --no-edit` is the EXACT operation that caused
+the #13554/#13556 SEV data-loss incident** (a modify(main)-vs-delete(branch)
+on a `.gitattributes` `merge=ours`/`union`-protected `.squidsquad/` path
+silently takes the delete — the custom merge driver never fires on a
+delete side, only modify-vs-modify). #13556's receiving-side restore guard
+(`git_ops._restore_merge_dropped_state`) does **NOT** protect this local
+merge — it is wired only into `git_ops.pull()`, and a bare `git merge` run
+directly (exactly what Step 1 prescribes) bypasses it entirely (confirmed by
+direct reproduction; #13556 was rejected back to in-progress for this gap).
+
+**Bounded risk in practice**: this note's own procedure never pushes the
+local merge (Step 1 explicitly says "the merge is local and never pushed"),
+so a silent drop here cannot itself corrupt `origin/main` — but it CAN
+silently corrupt what you think you're testing (a `.squidsquad/` file you
+believed was present in the combined state might actually be gone in your
+local merge result, with zero conflict signal). **Add this check**: after
+Step 1's merge, if anything in the diffstat touches `.squidsquad/` or
+`.claude/` state/vault paths, don't assume it's ordinary "state churn" (the
+`#11511`/`.gitattributes`-protected-so-it's-fine assumption that caused the
+original incident) — spot-check that a protected path didn't drop to
+zero bytes/absent versus its pre-merge size. Once #13556 ships a real fix
+(exporting the restore function for reuse, or a `git_ops.py` wrapper command
+for this exact operation), route Step 1 through that instead of a bare
+`git merge`.
 
 ## Context
 
