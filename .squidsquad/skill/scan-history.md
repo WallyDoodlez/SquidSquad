@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-18 15:53
+
+- **Files scanned**: references/scripts/l4_conflict_preempt.py (339 lines, full read; first scan of this file per scan-history — another of the 18 references/scripts/*.py files with zero prior scan-history mentions, same systematic gap-find as the 14:24 scan)
+- **Findings**: 1 filed — #13669 (low — `preempt_conflict()`'s module docstring states an explicit design contract: "every unrecoverable path raises a typed `ConflictPreemptError` subclass". The replace-op short-circuit guard `if op_type and _REPLACE_OP_RE.match(op_type):` lets a falsy `op_type` fall through to `op_type.split()[0]` at task_id construction — empirically reproduced (unmocked call): `op_type=""` raises `IndexError`, `op_type=None` raises `AttributeError`, neither a `ConflictPreemptError`. The sole caller is prose in `l4-curation.md` (LLM-driven, not a deterministic Python call site), so a malformed invocation reaching this function is a realistic path, not hypothetical. Confirmed via the otherwise-thorough 480-line test suite: no test covers empty/None op_type.)
+- **Items rejected by human**: none
+- **Criteria note**: "does the code's actual failure-mode match its own documented failure-mode contract" is a productive lens distinct from generic fail-open/fail-closed consistency — this module explicitly promises a typed-exception-only failure surface, which makes an unguarded raw builtin exception a direct contract violation, not just a style nit. Verified the finding by executing the real (unmocked) function with the edge-case input before filing, per this session's "test before filing" discipline — turned a suspected gap into a confirmed, reproduced one.
+
 ## Scan — 2026-07-18 14:24
 
 - **Files scanned**: references/scripts/l4_write_commit.py (261 lines, full read; first scan of this file per scan-history -- one of 18 references/scripts/*.py files with zero prior scan-history mentions, systematically identified via a name-vs-history diff)

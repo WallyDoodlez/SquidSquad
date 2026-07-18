@@ -1,0 +1,38 @@
+{
+  "issue": 13666,
+  "title": "task-intake.md doesn't ensure CONTEXT.md is committed+pushed before Approved, so same-session worker pickup can race ahead of it",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-18",
+  "ac": "comprehension (#9184 hard gate): a fresh agent reading ONLY task-intake.md + task-approval.md must derive (1) task-intake's Phase 2 commits+pushes CONTEXT.md immediately after writing it, not deferring to the end-of-cycle wrapper; (2) task-approval's pre-approval sync check hard-gates on 'git log origin/main -- <CONTEXT path>' before allowing planned->approved; (3) an empty result means not-yet-pushed, and approval must not proceed until it's committed+pushed; (4) the race is event-mode-specific -- the Approved transition's nudge can wake the worker before the end-of-cycle commit wrapper fires.",
+  "method": "Fresh agent (model: sonnet, general-purpose) given ONLY task-intake.md + task-approval.md from branch squidsquad/task/13666, explicitly instructed to use no other file/tool/prior knowledge. Skill's own PR body explicitly notes this is a type:issue fix where 'the CQ spec is authored by the verifier during their own verification pass, not pre-arranged by skill' (#13551 precedent). CQ spec authored + executed by verifier per #9184.",
+  "target": "references/sub-skills/roles/pm/task-intake.md (Phase 2 immediate-commit step) + references/sub-skills/roles/pm/task-approval.md (step 6 origin/main gate) -- PR #13668, branch squidsquad/task/13666",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Right after writing CONTEXT.md in task-intake's Phase 2, what does the file say to do with it and why -- is it safe to let the normal end-of-cycle mechanism handle committing it?",
+      "expected": "Commit and push CONTEXT.md immediately, not deferring to the end-of-cycle wrapper -- NOT safe to rely on it, because the later Approved transition's nudge can wake the worker before that wrapper fires.",
+      "must_not": "Claiming the end-of-cycle wrapper is sufficient/safe to rely on for this file."
+    },
+    {
+      "id": "CQ2",
+      "q": "In task-approval, immediately before planned->approved, what additional check must run regarding the CONTEXT artifact beyond content comparison, and what exact command?",
+      "expected": "Confirm the CONTEXT artifact is present on origin/main via `git log origin/main -- <CONTEXT path>`.",
+      "must_not": "Omitting the exact command or claiming only local presence needs checking."
+    },
+    {
+      "id": "CQ3",
+      "q": "If that check comes back empty, what does that mean and what must happen before approval can proceed?",
+      "expected": "Empty means the artifact is NOT yet on origin/main; must commit and push it now, and never transition to Approved with the artifact still unpushed.",
+      "must_not": "Treating an empty result as acceptable to proceed anyway."
+    },
+    {
+      "id": "CQ4",
+      "q": "Why is this race specifically an event-mode issue rather than a general concern? What about event-mode timing creates the risk?",
+      "expected": "The end-of-cycle commit/push wrapper runs at cycle END, but the Approved transition (earlier in the same cycle) fires a nudge that can wake the worker before that wrapper commits -- the worker's wake races ahead of the artifact's push.",
+      "must_not": "Describing this as a generic/always-present risk unrelated to event-mode cycle timing."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-18",
+  "evidence": "Fresh sonnet general-purpose agent (id a19aae10a901a2054), given ONLY the branch's task-intake.md + task-approval.md, explicitly told to use no other file/tool/prior knowledge. 4/4 correct with accurate supporting quotes, zero must_not violations. CQ1: 'It is NOT safe to let the normal end-of-cycle mechanism handle it.' CQ2: 'git log origin/main -- .squidsquad/[PM_ALIAS]/planning/CONTEXT-<NUMBER>.md'. CQ3: 'Before proceeding with approval, you must commit and push it now, and you must never transition to Approved while it remains unpushed.' CQ4: 'That nudge can arrive before the end-of-cycle wrapper has committed/pushed CONTEXT.md, so the worker's wake-up races ahead of the artifact's push.'"
+}

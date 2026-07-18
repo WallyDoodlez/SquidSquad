@@ -140,6 +140,10 @@
  "13579_spec.json": {
   "references/sub-skills/common/working-state.md": "e9ce8698be69e59c8a76866ece1a5078c46fcb0c"
  },
+ "13666_spec.json": {
+  "references/sub-skills/roles/pm/task-approval.md": "2b68e0c9206f45edf772690dfa4ae8b0cf9fd98a",
+  "references/sub-skills/roles/pm/task-intake.md": "ab2151ff0a3d2918258c032567412cd8f92021f8"
+ },
  "1428_spec.json": {
   "references/sub-skills/roles/verifier/verification.md": "060cc3b168d7feb4456c59201b82a0283df9cffb"
  },
@@ -182,7 +186,7 @@
   ".squidsquad/pm/CLAUDE.md": "aaf4d632617252c91c3c304bcd01042b5f00f73a",
   ".squidsquad/qa/CLAUDE.md": "5e280f67bf27c96071327d87702ad641e7870bc6",
   ".squidsquad/skill/CLAUDE.md": "dae162488b92e6c6c7fe9fa9e57e741efca30ac1",
-  "references/sub-skills/roles/pm/task-intake.md": "22dbd38d4796f7955075f30df3b5f5ff373d6fbd"
+  "references/sub-skills/roles/pm/task-intake.md": "ab2151ff0a3d2918258c032567412cd8f92021f8"
  },
  "9588_spec.json": {},
  "9742_spec.json": {
