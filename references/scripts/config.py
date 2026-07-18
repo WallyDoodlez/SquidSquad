@@ -28,6 +28,8 @@ field. v1 files have `1`, v2 files have `2`. Readers that don't care
 about agents (e.g. `get interval`) work unchanged against either schema.
 """
 
+import contextlib
+import contextvars
 import json
 import re
 import sys
@@ -38,6 +40,29 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 CONFIG_PATH = REPO_ROOT / ".squidsquad" / "config.md"
+
+# #13595: CONFIG_PATH is fixed at import time to the INSTALLING clone's own
+# repo root — it has no awareness of a foreign `target_root` a compose call
+# is writing into. During a foreign compose (`deploy_role_v2`/`deploy_alias_v2`
+# with `target_root != REPO_ROOT`), every `get_field()` call must read the
+# TARGET's just-scaffolded config.md, not the installing clone's own. A
+# contextvar override — rather than threading a path parameter through every
+# `get_field()` call site across the whole codebase — keeps every existing
+# caller's default behavior (read the ambient CONFIG_PATH) unchanged; only
+# the compose call sites that know about `target_root` opt in.
+_config_path_override = contextvars.ContextVar("_config_path_override", default=None)
+
+
+@contextlib.contextmanager
+def config_path_override(path):
+    """Temporarily redirect every `get_field()` read to `path` instead of
+    `CONFIG_PATH`. Used by compose.py to read a foreign `target_root`'s
+    scaffolded config.md instead of the installing clone's own (#13595)."""
+    token = _config_path_override.set(Path(path))
+    try:
+        yield
+    finally:
+        _config_path_override.reset(token)
 
 # #12823: the ship counter lives in its OWN file with `merge=ours`, separate from
 # config.md. config.md previously carried `merge=ours` solely to protect this one
@@ -144,11 +169,17 @@ FIELD_MAP = {
 
 
 def _read_config():
-    """Read config.md and return raw text."""
-    if not CONFIG_PATH.exists():
-        print(f"ERROR: config.md not found at {CONFIG_PATH}", file=sys.stderr)
+    """Read config.md and return raw text.
+
+    Honors `_config_path_override` (#13595) when set, so a foreign-target
+    compose reads the target's own scaffolded config.md instead of the
+    installing clone's.
+    """
+    path = _config_path_override.get() or CONFIG_PATH
+    if not path.exists():
+        print(f"ERROR: config.md not found at {path}", file=sys.stderr)
         sys.exit(1)
-    return CONFIG_PATH.read_text(encoding="utf-8")
+    return path.read_text(encoding="utf-8")
 
 
 def _parse_sections(text):
