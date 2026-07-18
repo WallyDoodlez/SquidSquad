@@ -13,7 +13,7 @@ Agent lifecycle is managed by the harness (`harness.py`) via REST API (#4966). A
 2. **Graceful stop**: Harness sets intent=stopping via API. `cycle_post.py` queries `GET /agents/{role}` at cycle end, sees the intent, and exits with code 42. (Polling-mode wrapper. In event mode the per-event ack-cursor loop has no cycle boundary; the stop signal is observed at task boundaries per [[event-mode-contract]] Case E.)
 3. **Start correctly**: Harness spawns agents via thin launcher (`thin_launcher.py`) in visible terminal windows. `cycle_pre.py` handles git pull/branch per cycle. (Polling-mode wrapper. In event mode the harness owns git — pull, commit, and push are managed at boot and shutdown by the harness; agents do not run `cycle_pre.py` / `cycle_post.py` per event.)
 
-**Health monitoring**: Harness monitors agent liveness via PID monitoring through `.claude-pid` (sole liveness signal). The harness polls every 5 seconds.
+**Health monitoring**: Harness monitors agent liveness via a dual model (#12492 progress-liveness cutover), polled every 5 seconds. Progress-liveness (activity-heartbeat + dispatch reference + pause guard) is now AUTHORITATIVE for reboot decisions — it catches a PID-alive-but-inert "zombie" agent (a false-positive class PID monitoring alone cannot see) and kills it for respawn; the pause guard recognizes a legitimate long tool call, compaction, or wait so it is never misread as a zombie. `.claude-pid` remains the instant crash signal (a dead PID is still detected immediately), but PID-aliveness alone no longer VETOES a reboot — it is demoted to teardown-only, not proof the agent is truly alive.
 
 **Intent state machine** (per-agent, in harness memory + `.harness-state.json`):
 - `running` — agent should be alive; auto-reboot on death
