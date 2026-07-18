@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-18 18:23
+
+- **Files scanned**: references/scripts/l4_parser.py (283 lines, full read; first scan of this file per scan-history — continuing the L4-family vein, this time the upstream H2/H3 grammar parser that produces the `L4Op` records `l4_op_processor.py` consumes, verified clean at the 17:41 scan)
+- **Findings**: 1 filed — #13683 (low — `_OP_LIKE_RE`/`_OP_RE`, the H3 op-directive grammar, are case-sensitive against the five reserved op keywords, but the module's own docstring and #10987's design intent both promise malformed ops are rejected loudly ("that's the 'malformed H3 op' AC bullet"). A case-varied exact keyword — e.g. `### Replace step:cycle/boot` — matches neither the op-like check (case-sensitive, so it's routed to the prose path) nor the malformed-diagnostic path, and is silently absorbed as inert prose into the slot's implicit append body: the intended customization never applies, zero error is raised, and the malformed L4 syntax leaks verbatim into the composed agent CLAUDE.md. Empirically reproduced via unmocked `parse_l4_text` before filing. Cross-checked `tests/test_l4_parser.py`'s existing `test_non_op_like_h3_treated_as_prose` (deliberate-prose cases) and `test_malformed_h3_rejected` (near-miss cases that DO raise) parametrizations — neither includes a case-varied exact keyword, confirming this is a genuine untested gap, not an intentional design choice being mis-scanned.)
+- **Items rejected by human**: none
+- **Criteria note**: the "does the code's actual failure-mode match its own documented failure-mode contract" lens (first productive at #13669) struck again here — worth treating as a standing lens to re-apply on every file, not a one-off. Before concluding a suspected gap is real, cross-checked the file's OWN existing test parametrizations for the specific input shape (case variation) rather than just the general behavior category (prose-vs-op) — the general category is well-tested, the specific edge case wasn't, and that distinction is what separates a genuine gap from a redundant finding.
+
 ## Scan — 2026-07-18 17:41
 
 - **Files scanned**: references/scripts/l4_op_processor.py (496 lines, full read; first scan of this file per scan-history — continuing the productive L4-family vein from the 16:53 scan that found #13672, cross-referenced against the systematic script-name-vs-scan-history diff)
