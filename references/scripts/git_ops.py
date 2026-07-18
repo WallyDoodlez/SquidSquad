@@ -26,7 +26,8 @@ Usage:
     python scripts/git_ops.py check-real-conflict <base> <head>  # real conflict? exit 0=clean/1=conflict/2=err
     python scripts/git_ops.py guard-staged-state         # pre-commit hook: unstage state files on a feature branch (fail-open)
     python scripts/git_ops.py guard-galaxy-frontmatter   # pre-commit hook: block a staged galaxy note missing YAML frontmatter (fail-closed on violation, fail-open on error)
-    python scripts/git_ops.py install-hooks              # activate the pre-commit state guard (core.hooksPath)
+    python scripts/git_ops.py install-hooks              # activate the pre-commit + post-merge guards (core.hooksPath)
+    python scripts/git_ops.py restore-merge-dropped-state [role]  # post-merge hook: restore protected state/vault a merge silently dropped (#13556; fail-open)
     python scripts/git_ops.py --help
 """
 
@@ -1286,8 +1287,17 @@ def _restore_merge_dropped_state(role=None):
     restore, and raise a loud signal. Complements the #13554 incoming-side
     ``pr_merge`` refusal (which prevents the poisoned squash from landing at all)
     -- this catches whatever slips past it: the #13554 guard's fail-open path, a
-    direct-to-main state deletion, or any non-PR merge. It would have caught the
-    #13556 incident regardless of how the poisoned commit arrived.
+    direct-to-main state deletion, or any non-PR merge.
+
+    Wired TWO ways, and only together do they cover every merge: (1) called
+    directly from ``pull()``; (2) invoked by the tracked
+    ``references/git-hooks/post-merge`` hook (auto-active via the #11511
+    ``core.hooksPath``), which fires after ANY successful merge -- including a
+    bare ``git merge origin/main`` run outside git_ops entirely, the exact
+    vector of the original incident (the verifier proved wiring (1) alone did
+    NOT cover it). The two wirings are idempotent: after the hook's restore
+    commit, HEAD is no longer a first-parent-of-ORIG_HEAD merge commit, so the
+    second invocation is a no-op.
 
     ``ORIG_HEAD`` is the commit HEAD pointed at before the merge (``git pull`` /
     ``git merge`` set it). Fully fail-safe: any git uncertainty -> log + return
@@ -2141,6 +2151,10 @@ def install_hooks():
         print(f"WARNING: hook not found at {hook}; skipping install-hooks",
               file=sys.stderr)
         return False
+    # #13556: the post-merge guard lives in the same hooksPath dir, so it is
+    # auto-active the moment core.hooksPath points here -- it just needs its exec
+    # bit set alongside pre-commit (below).
+    post_merge_hook = REPO_ROOT / _HOOKS_DIR_REL / "post-merge"
 
     current = _run("git config --get core.hooksPath", check=False).stdout.strip()
     if current and current != _HOOKS_DIR_REL:
@@ -2168,19 +2182,29 @@ def install_hooks():
     # Executable bit. On POSIX git only fires a hook whose exec bit is set, so a
     # chmod failure means the guard is installed but won't run -- report False
     # and warn. On Windows git ignores the exec bit (the shim runs via sh), so a
-    # chmod failure there is benign and the guard is still active.
-    try:
-        import os
-        import stat
-        os.chmod(hook, os.stat(hook).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-    except OSError as e:
-        if os.name == "posix":
-            print(
-                f"WARNING: core.hooksPath set but could not make {hook} "
-                f"executable ({e}); pre-commit state guard may not fire.",
-                file=sys.stderr,
-            )
-            return False
+    # chmod failure there is benign and the guard is still active. Chmod BOTH the
+    # pre-commit (#11511) and post-merge (#13556) hooks; a missing post-merge is
+    # tolerated (older installs) so it never regresses the pre-commit activation.
+    import os
+    import stat
+    for h in (hook, post_merge_hook):
+        if not h.exists():
+            continue
+        try:
+            os.chmod(h, os.stat(h).st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        except OSError as e:
+            if os.name == "posix":
+                print(
+                    f"WARNING: core.hooksPath set but could not make {h} "
+                    f"executable ({e}); its guard may not fire.",
+                    file=sys.stderr,
+                )
+                # Only the pre-commit hook decides the return value -- it is
+                # the #11511 guard this function's contract reports on. A
+                # post-merge chmod failure is warned but must never mask a
+                # fully-active pre-commit (DS-13556-hook F1).
+                if h is hook:
+                    return False
     return True
 
 
@@ -2231,7 +2255,8 @@ def main():
     # install_hooks() explicitly in dispatch -- self-healing first would emit a
     # duplicate foreign-hooksPath WARNING). Keeps the commit path lean and
     # avoids re-checking what's already active (#11511).
-    if cmd not in ("guard-staged-state", "guard-galaxy-frontmatter", "install-hooks"):
+    if cmd not in ("guard-staged-state", "guard-galaxy-frontmatter",
+                   "install-hooks", "restore-merge-dropped-state"):
         _ensure_hooks_installed()
 
     if cmd == "pull":
@@ -2379,6 +2404,14 @@ def main():
     elif cmd == "install-hooks":
         ok = install_hooks()
         sys.exit(0 if ok else 1)
+    elif cmd == "restore-merge-dropped-state":
+        # #13556 post-merge hook entry point: restore any protected state/vault
+        # path the just-completed merge silently dropped (modify-vs-delete).
+        # FAIL-OPEN -- the guard never raises and must never fail a merge; a
+        # non-zero exit from a post-merge hook does not abort the merge (it is
+        # already done) but keying it 0 keeps logs clean.
+        _restore_merge_dropped_state(role=rest[0] if rest else None)
+        sys.exit(0)
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)
         sys.exit(1)

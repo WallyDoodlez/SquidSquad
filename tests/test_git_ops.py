@@ -949,6 +949,20 @@ class TestRestoreMergeDroppedState13556:
         status = self._git(repo, "status", "--porcelain").stdout.strip()
         assert status == "", f"expected a committed restore, got: {status!r}"
 
+    def test_second_invocation_is_noop(self, tmp_path, monkeypatch):
+        """DS-13556-hook F2: idempotence between the two wirings (post-merge
+        hook + pull()-direct call). After the first invocation's restore commit,
+        HEAD is no longer a first-parent-of-ORIG_HEAD merge commit, so the
+        second invocation returns [] and creates no duplicate restore commit."""
+        repo, note, content = self._repo(tmp_path)
+        monkeypatch.setattr(git_ops, "REPO_ROOT", repo)
+        with patch.object(git_ops, "_emit"):
+            assert git_ops._restore_merge_dropped_state() == [note]
+            head_after_first = self._git(repo, "rev-parse", "HEAD").stdout
+            assert git_ops._restore_merge_dropped_state() == []
+        assert self._git(repo, "rev-parse", "HEAD").stdout == head_after_first
+        assert (repo / note).read_text() == content
+
     def test_fast_forward_deletion_not_restored(self, tmp_path, monkeypatch):
         """A fast-forward brings a LEGITIMATE incoming deletion — local had no
         divergent commit, so the delete is intentional and must NOT be restored."""
@@ -1032,6 +1046,161 @@ class TestRestoreMergeDroppedState13556:
                 ".squidsquad/skill/working-state.md",
                 ".squidsquad/vault/galaxy/a.md",
             ]
+
+
+class TestPostMergeHookWiring13556:
+    """#13556 verifier-reject fix: the guard must fire on ANY merge — including
+    a bare `git merge origin/main` that never goes through git_ops (the
+    incident's actual trigger, and the verifier's own documented
+    conflict-resolution technique; wiring the guard only into git_ops.pull()
+    left that path uncovered). Wiring = a tracked post-merge hook in
+    references/git-hooks/ (auto-active via the same core.hooksPath the #11511
+    pre-commit guard already sets) invoking the restore-merge-dropped-state CLI.
+    These tests lock the wiring surfaces; the guard's own semantics are covered
+    by TestRestoreMergeDroppedState13556."""
+
+    def test_post_merge_hook_tracked_executable(self):
+        # Same repo invariant as TestHookShippedExecutable11511: tracked 100755
+        # or a checkout silently drops the exec bit and the hook stops firing.
+        import subprocess
+        out = subprocess.run(
+            ["git", "ls-files", "-s", "--", "references/git-hooks/post-merge"],
+            cwd=str(git_ops.REPO_ROOT), capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        line = out.stdout.strip()
+        assert line, "post-merge hook is not tracked in git"
+        mode = line.split()[0]
+        assert mode == "100755", (
+            f"post-merge hook tracked as mode {mode}, expected 100755 "
+            f"(POSIX needs the exec bit or git silently skips the hook)")
+
+    def test_post_merge_hook_in_installer_manifest(self):
+        # A hook that isn't in the manifest doesn't exist to the installer.
+        manifest = (git_ops.REPO_ROOT / "references" / "installer-files.txt")
+        lines = [l.strip() for l in manifest.read_text().splitlines()]
+        assert "references/git-hooks/post-merge" in lines
+
+    def test_cli_dispatch_with_role(self, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv", ["git_ops.py", "restore-merge-dropped-state", "qa"])
+        with patch.object(git_ops, "_restore_merge_dropped_state") as guard, \
+                patch.object(git_ops, "_ensure_hooks_installed") as heal:
+            with pytest.raises(SystemExit) as exc:
+                git_ops.main()
+        assert exc.value.code == 0
+        guard.assert_called_once_with(role="qa")
+        # In the self-heal exclusion list: the hook entry point must stay lean
+        # and never emit the foreign-hooksPath WARNING mid-merge.
+        heal.assert_not_called()
+
+    def test_cli_dispatch_without_role(self, monkeypatch):
+        monkeypatch.setattr(
+            sys, "argv", ["git_ops.py", "restore-merge-dropped-state"])
+        with patch.object(git_ops, "_restore_merge_dropped_state") as guard, \
+                patch.object(git_ops, "_ensure_hooks_installed"):
+            with pytest.raises(SystemExit) as exc:
+                git_ops.main()
+        assert exc.value.code == 0
+        guard.assert_called_once_with(role=None)
+
+    def test_install_hooks_chmods_post_merge_too(self, tmp_path, monkeypatch):
+        # install_hooks must set the exec bit on BOTH hooks; a missing
+        # post-merge (older install) is tolerated and never regresses the
+        # pre-commit activation.
+        import os
+        hook_dir = tmp_path / git_ops._HOOKS_DIR_REL
+        hook_dir.mkdir(parents=True)
+        (hook_dir / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+        (hook_dir / "post-merge").write_text("#!/bin/sh\nexit 0\n")
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)
+        chmodded = []
+        monkeypatch.setattr(os, "chmod",
+                            lambda p, m, *a, **k: chmodded.append(Path(p).name))
+        with patch.object(git_ops, "_run",
+                          return_value=_mock_result(stdout="\n")), \
+                patch.object(git_ops, "_run_list",
+                             return_value=_mock_result(returncode=0)):
+            assert git_ops.install_hooks() is True
+        assert set(chmodded) == {"pre-commit", "post-merge"}
+
+    def test_post_merge_chmod_failure_does_not_mask_precommit(
+            self, tmp_path, monkeypatch):
+        # DS-13556-hook F1: a post-merge chmod failure on POSIX is warned but
+        # returns True when the pre-commit chmod succeeded — False is reserved
+        # for the pre-commit (#11511) guard itself failing to activate.
+        import os
+        hook_dir = tmp_path / git_ops._HOOKS_DIR_REL
+        hook_dir.mkdir(parents=True)
+        (hook_dir / "pre-commit").write_text("#!/bin/sh\nexit 0\n")
+        (hook_dir / "post-merge").write_text("#!/bin/sh\nexit 0\n")
+        monkeypatch.setattr(git_ops, "REPO_ROOT", tmp_path)
+        monkeypatch.setattr(os, "name", "posix")
+        real_chmod = os.chmod
+
+        def chmod(p, m, *a, **k):
+            if Path(p).name == "post-merge":
+                raise OSError("noexec")
+            return real_chmod(p, m, *a, **k)
+
+        monkeypatch.setattr(os, "chmod", chmod)
+        with patch.object(git_ops, "_run",
+                          return_value=_mock_result(stdout="\n")), \
+                patch.object(git_ops, "_run_list",
+                             return_value=_mock_result(returncode=0)):
+            assert git_ops.install_hooks() is True
+
+    def test_bare_merge_fires_hook_end_to_end(self, tmp_path):
+        """The verifier's falsification scenario, replayed against the fix: a
+        BARE `git merge` (plain subprocess — git_ops never invoked by the test)
+        silently drops a protected vault note; the tracked post-merge hook fires
+        and restores it. Copies the real hook + the real git_ops.py into the
+        temp repo (git_ops is stdlib-only; its event_bus import fails there so
+        _emit no-ops — no live-bus pollution)."""
+        import shutil
+        import subprocess
+
+        def git(cwd, *args):
+            return subprocess.run(["git", *args], cwd=str(cwd),
+                                  capture_output=True, text=True, check=True)
+
+        repo = tmp_path / "repo"
+        (repo / ".squidsquad/vault/galaxy").mkdir(parents=True)
+        (repo / "references/scripts").mkdir(parents=True)
+        (repo / "references/git-hooks").mkdir(parents=True)
+        real = git_ops.REPO_ROOT
+        shutil.copy(str(real / "references/scripts/git_ops.py"),
+                    str(repo / "references/scripts/git_ops.py"))
+        shutil.copy(str(real / "references/git-hooks/post-merge"),
+                    str(repo / "references/git-hooks/post-merge"))
+        git(repo, "init", "-b", "main")
+        git(repo, "config", "user.email", "t@t")
+        git(repo, "config", "user.name", "t")
+        git(repo, "config", "core.hooksPath", "references/git-hooks")
+        note = ".squidsquad/vault/galaxy/learning-note.md"
+        (repo / ".gitattributes").write_text(
+            ".squidsquad/vault/galaxy/*.md merge=union\n")
+        content = "# Note\n\nvaluable teammate learning\n"
+        (repo / note).write_text(content)
+        git(repo, "add", "-A")
+        git(repo, "update-index", "--chmod=+x", "references/git-hooks/post-merge")
+        git(repo, "commit", "-m", "base: note present")
+        git(repo, "checkout", "-b", "incoming")
+        git(repo, "rm", note)
+        git(repo, "commit", "-m", "incoming: delete note")
+        git(repo, "checkout", "main")
+        (repo / "code.py").write_text("x = 1\n")
+        git(repo, "add", "code.py")
+        git(repo, "commit", "-m", "main: unrelated code")
+        # THE uncovered path from the verifier's reproduction: a bare merge.
+        git(repo, "merge", "incoming", "--no-edit")
+        # The hook restored the note and committed the restore.
+        assert (repo / note).exists(), (
+            "post-merge hook did not restore the silently-dropped note")
+        assert (repo / note).read_text() == content
+        status = git(repo, "status", "--porcelain").stdout.strip()
+        assert status == "", f"expected a committed restore, got: {status!r}"
+        subject = git(repo, "log", "-1", "--format=%s").stdout
+        assert "#13556" in subject
 
 
 class TestPrBehindBy:
