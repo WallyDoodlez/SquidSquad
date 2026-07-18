@@ -190,7 +190,7 @@
  },
  "9873_spec.json": {
   "references/scripts/event_catalog.py": "8577ca61909d3d93c1221ac1b984800581f228c5",
-  "references/scripts/harness.py": "35b1b6cf8b501013f953a7717945df7ffe9dcdbb"
+  "references/scripts/harness.py": "32c0e62c4596543b28691e66f4781b21fd343e0f"
  },
  "_note": "Initialized 2026-07-18 (#13575), re-baselined same day after merging main (the gate's first live catch: the merge moved several fragments' shas). Pairs at initialization were grandfathered WITHOUT retroactive re-review \u2014 only 13175_spec.json had a known overrule (superseded_by:13569, annotation authored by verifier). From here on, any fragment change must refresh its dependent specs' entries in the same PR (comprehension_staleness.py refresh) or mark them superseded_by."
 }
