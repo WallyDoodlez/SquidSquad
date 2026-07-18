@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-18 13:22
+
+- **Files scanned**: references/sub-skills/common-events/event-mode-contract.md (stale-reference/documentation-drift check — first scan of this file per scan-history, despite it being the core event-mode wake contract every event-mode agent, including this session, operates under)
+- **Findings**: none. Cross-referenced every concrete claim against the live implementation: `_emit_boot_deploy_signals()` exists (harness.py:5094, called from the boot-drift path at L2683); `event_poll.py`'s documented `--wait`/`--target` CLI flags exist (argparse at L370-378); all referenced harness endpoints exist (`POST /events`, `GET /events/for/{role}`, `GET /events/cursor/{role}`, `POST /events/{event_id}/complete`); the `ack-stop.result` enum the doc cites (`checkpointed`/`aborted`/`drained`) matches harness.py:3726 exactly, and the separately-documented `deploy-halted` result value is handled distinctly at L3741 as the doc describes. Case D's `status:blocked` semantics (#13515) match tracker.py's documented role-authority matrix. No stale references, no drift.
+- **Items rejected by human**: none
+- **Criteria note**: this file's active maintenance (cross-referenced with #13569/#13369/#12854/#13077/#9742 inline) likely explains the clean result — it reads as a living document teammates actively correct, not a write-once spec that silently rots. Worth returning to less-frequently-touched sub-skill docs next (e.g. ones with no recent issue-number citations) where drift is more likely to have accumulated unnoticed.
+
 ## Scan — 2026-07-18 12:23
 
 - **Files scanned**: tests/test_git_ops.py (test-quality/coverage triage, not scanned in recent history despite this session's heavy git_ops.py work), references/scripts/git_ops.py (#13554/#13285 scope-audit helpers: _pr_declared_files, _pr_state_scope_violations, _merge_commit_sha, _scope_audit_violations -- read for the first time this session)
