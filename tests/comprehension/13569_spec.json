@@ -1,0 +1,38 @@
+{
+  "issue": 13569,
+  "title": "Agents reboot before boot completes: boot-drain deploy-signal deferred (not honored on reach)",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-17",
+  "ac": "comprehension (#9184 hard gate): a fresh agent reading ONLY the modified event-mode-contract.md Case E section must derive (1) a deploy-signal reached during the boot drain is HELD, not honored immediately -- no ack-stop/ack-cursor at that point, and the drain stops there; (2) the held signal is honored only at the post-drain boundary (boot genuinely complete), before idle/cool-down and before any new work_queue() pickup; (3) the finish-first precondition still applies to a boot-resumed feature-branch task, and once that task completes, Case C's work_queue() pickup is skipped in favor of honoring the held signal; (4) steady-state (post-boot) deploy-signal handling is unchanged (no deferral) and a crash/restart during the deferral window never drops the deploy -- the signal simply re-delivers on the next boot drain.",
+  "method": "Fresh agent (model: sonnet, general-purpose) given ONLY event-mode-contract.md from branch squidsquad/task/13569, explicitly instructed not to read any other file or use prior knowledge. CQ spec authored + executed by verifier per #9184. Supersedes tests/comprehension/13175_spec.json's CQ1 expected answer for the boot-drain case (that spec predates #13569 and is now annotated as superseded; its steady-state guidance is unaffected).",
+  "target": "references/sub-skills/common-events/event-mode-contract.md -- Case E deploy-signal boot-drain deferral sub-bullet + Case C step 3 exception (PR #13573, branch squidsquad/task/13569)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "During boot drain you fetch a deploy-signal targeting your alias, on main with a clean tree, no in-flight task. What do you do right now, immediately at the point you reach it in the drain?",
+      "expected": "Do NOT honor it there. Hold it -- no ack-stop, no ack-cursor -- note the event id, leave the cursor unadvanced, and stop the boot drain at that point (do not process or ack-cursor further events from that GET response).",
+      "must_not": "Honoring/ack-stopping immediately upon reaching it mid-drain; continuing to walk and ack-cursor past it or past later events in the same GET response."
+    },
+    {
+      "id": "CQ2",
+      "q": "When do you actually honor that boot-drain deploy-signal, and what must happen before you do?",
+      "expected": "Only at the post-drain boundary -- bootup-complete already emitted, the drain complete, first steady-state decision point reached (work_queue() evaluated) -- before entering idle/cool-down and before picking up any new work_queue() item, provided still on main with a clean tree.",
+      "must_not": "Honoring before the drain fully stops; honoring after picking up a new work_queue() item."
+    },
+    {
+      "id": "CQ3",
+      "q": "If your boot instead resumed an in-progress task onto a feature branch before you reached the deploy-signal in the drain, what changes, and does Case C's work_queue() pickup run once that task finishes?",
+      "expected": "Finish-first takes precedence: complete/hand off the task, return to main, then honor the deferred halt. Case C's work_queue() pickup does NOT run -- the held signal outranks new work; only Task:none + idle marker are written before honoring.",
+      "must_not": "Running work_queue() and picking up a new item before honoring the held deploy-signal."
+    },
+    {
+      "id": "CQ4",
+      "q": "Contrast: does a steady-state (post-boot, mid-idle) deploy-signal get the same deferral? And is the deploy lost if a restart/crash happens while a boot-drain signal is being held?",
+      "expected": "No -- steady-state deploy-signals are honored immediately at the next on-main clean-tree between-task boundary, no deferral. Nothing is lost on restart: the cursor never advanced past the held signal, so it re-delivers on the next boot drain and is deferred-then-honored again -- worst case one extra boot cycle of latency.",
+      "must_not": "Claiming steady-state signals are also deferred; claiming a restart during the hold silently drops the deploy."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-17",
+  "evidence": "Fresh sonnet general-purpose agent (id a9b7dd5f61bf65ce0), given ONLY the branch's modified event-mode-contract.md, explicitly told to use no other file/tool/prior knowledge. 4/4 correct with accurate supporting quotes, zero must_not violations. CQ1: 'you do NOT honor it there... Stop the boot drain here.' CQ2: 'only once you reach the post-drain boundary... before entering idle/cool-down and before picking up any new work_queue() item.' CQ3: 'Case C's work_queue() pickup does NOT run -- the held deploy-signal outranks new work.' CQ4: 'the boot-drain deferral is a special-cased exception, not the general steady-state rule... nothing is lost... re-deliver in your next boot drain and be deferred-then-honored again.'"
+}
