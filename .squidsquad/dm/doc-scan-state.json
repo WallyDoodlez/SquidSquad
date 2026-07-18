@@ -12,6 +12,13 @@
   "rotation_count": 95,
   "scan_history": [
     {
+      "file": "3-ship-burst delivery-integrity self-QA (#13557/#13585/#13580)",
+      "date": "2026-07-18",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 of this burst (scan_count->2/3). Self-QA of the 3 items shipped this wake: all CLOSED + exactly ONE status:shipped label each (zero dual-status-label drift). Counter consistent: config shipped-since-bump=47 == .ship-counter=47. #13557 (git-hygiene, direct-to-main) + #13580 (merge-gate split-hint message, PR #13586) + #13585 (harness /merge module-cache diagnosis+restart-remedy, durable fix routed separately as #13588/skill, in-progress). 0 findings."
+    },
+    {
       "file": "4-ship-batch delivery-integrity self-QA (#13556/#13562/#13577/#13579) + local-clone sync durability",
       "date": "2026-07-18",
       "findings": 0,

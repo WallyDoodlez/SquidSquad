@@ -3,7 +3,7 @@
 - **Task**: none
 - **Status**: idle
 - **Started**: 2026-07-18
-- **Last**: shipped #13556/#13562/#13577/#13579/#13575/#13582 this session; counter at 44 (bump HELD, no PM/operator signal). #13582 (PR 2/2) retried and shipped after PM's harness restart resolved the git_ops.py module-cache staleness (#13585). #13577 class now fully closed, static gate green. Honoring a deferred boot-drain deploy-signal next — session ending for a coordinated recompose/respawn.
+- **Last**: shipped #13557/#13585/#13580/#13555/#13574 this wake (5 items). #13574 = PM forge-write-outage health-check probe (PR #13587) -- compose.py deploy pm ran clean with NO diff (health-check.md/pipeline-sentinel.md are runtime-Read markers, not inlined; no reboot needed). Counter 44->49 (bump HELD, no PM/operator signal).
 
 ## Improvement Scan
-- Status: idle, driver armed, scan 1/3 this burst (0 findings — #13569 self-QA clean). Cron ticking at :08/:38.
+- Status: idle, driver cancelled (burst cap 3/3 hit — post-ship self-QA of #13557/#13585/#13580, 0 findings). Quiesced until new forge activity re-idles + re-arms.
