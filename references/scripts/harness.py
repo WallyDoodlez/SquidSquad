@@ -5723,13 +5723,20 @@ class ExternalActivityDetector:
     # comment-bumped updatedAt is now handled correctly by the per-(issue,
     # status) dedup in `_check_for_changes`.
 
+    # #13555: the poll's issue-list bound. The old hard-coded 50 silently hid
+    # ~105 of 155 open issues from the detector (gh returns newest-first, so
+    # the OLDEST open work starved). 500 gives ~3x headroom over the current
+    # count; the truncation warning below makes the cap self-diagnosing if the
+    # backlog ever outgrows it (no silent caps).
+    ISSUE_POLL_LIMIT = 500
+
     def _check_for_changes(self):
         """Poll GitHub for actionable changes since last check."""
         result = subprocess.run(
             ["gh", "issue", "list", "--label", "squidsquad",
              "--state", "open", "--json",
              "number,title,labels,updatedAt",
-             "--limit", "50"],
+             "--limit", str(self.ISSUE_POLL_LIMIT)],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             check=False, cwd=str(REPO_ROOT),
         )
@@ -5740,6 +5747,12 @@ class ExternalActivityDetector:
             issues = json.loads(result.stdout)
         except json.JSONDecodeError:
             return
+
+        if len(issues) >= self.ISSUE_POLL_LIMIT:
+            print(f"[EAD] WARNING: issue poll returned {len(issues)} = the "
+                  f"--limit cap; older open issues may be INVISIBLE to the "
+                  f"detector (#13555). Raise ISSUE_POLL_LIMIT.",
+                  file=sys.stderr)
 
         check_time = time.time()
 
