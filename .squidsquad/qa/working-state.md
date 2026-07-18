@@ -13,7 +13,8 @@
 - `status:pending-test` confirmed empty as of last check.
 
 ## Remaining Steps
-- Idle / improvement-scan cool-down loop active (driver armed, cron 00fc745c, scan_count 1/3).
+- Idle / improvement-scan cool-down loop active (driver armed, cron 00fc745c, scan_count reset to 0/3 after #13317 work).
+- #13317 confirmed shipped by DM (pending-ship -> shipped, 06:42:27). Cursor caught up to 53d9dbca69aba24d.
 
 ## This Session (2026-07-18, fresh boot)
 - Boot drain: 13 queued events, all already-resolved (13354/13602/13558/13610 all confirmed CLOSED via get-state) — no rework needed, cursor caught up to 21a631684add8a68.
