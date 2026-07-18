@@ -1042,18 +1042,31 @@ def _neutralize_pr_body_before_merge(pr_number):
     fails, `gh api -X PATCH repos/:owner/:repo/pulls/<N> -f body=<...>`
     (the REST endpoint, not GraphQL) succeeds against the identical PR.
     Route the patch through `gh api` instead.
+
+    #13691 -- patching the PR body alone is not sufficient: for a
+    single-commit PR, GitHub's squash-merge defaults the squash commit's
+    message to that one commit's OWN message (not the PR body) when the
+    merge call passes no explicit subject/body, so a `Closes #N` sitting in
+    the commit message still reaches `main` verbatim. Returns
+    ``(title, neutralized_body)`` so ``pr_merge`` can pass BOTH explicitly
+    to `gh pr merge --squash`, bypassing GitHub's implicit default-selection
+    entirely (regardless of commit count). Returns ``(None, None)`` on any
+    fetch/parse failure -- fail-open, same as the rest of this function.
     """
     view_result = _run_list(
-        ["gh", "pr", "view", str(pr_number), "--json", "body"], check=False)
+        ["gh", "pr", "view", str(pr_number), "--json", "body,title"],
+        check=False)
     if view_result.returncode != 0:
-        return
+        return None, None
     try:
-        current_body = json.loads(view_result.stdout).get("body", "") or ""
+        pr_data = json.loads(view_result.stdout)
+        current_body = pr_data.get("body", "") or ""
+        title = pr_data.get("title", "") or ""
     except (json.JSONDecodeError, AttributeError):
-        return
+        return None, None
     neutralized_body = _neutralize_closing_keywords(current_body)
     if neutralized_body == current_body:
-        return
+        return title, neutralized_body
     edit_result = _run_list(
         ["gh", "api", "-X", "PATCH", f"repos/:owner/:repo/pulls/{pr_number}",
          "-f", f"body={neutralized_body}"],
@@ -1066,6 +1079,7 @@ def _neutralize_pr_body_before_merge(pr_number):
               f"closing keyword and the pre-merge edit failed: "
               f"{edit_result.stderr.strip()} -- merge proceeding anyway "
               f"(#13654)", file=sys.stderr)
+    return title, neutralized_body
 
 
 def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_delay=2.0):
@@ -1158,7 +1172,7 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
     # human/agent must remember to follow is not a guard; this is the last
     # sanctioned checkpoint before GitHub's own merge-time auto-close fires,
     # so it is where the guard must be unconditional and unbypassable.
-    _neutralize_pr_body_before_merge(pr_number)
+    neutralized_title, neutralized_body = _neutralize_pr_body_before_merge(pr_number)
 
     # #13554 (SEV prevention): refuse to merge a PR that DECLARES changes to
     # main-only state/vault paths. These must never ride a feature PR -- the
@@ -1228,6 +1242,21 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
     # Attempt merge, retrying ONLY the transient "Base branch was modified"
     # batch-ship race (#10540). A real merge conflict is terminal.
     merge_args = ["gh", "pr", "merge", str(pr_number), f"--{strategy}", "--delete-branch"]
+    # #13691: for squash, pass an EXPLICIT subject/body built from the
+    # (already-neutralized) PR title+body so GitHub never falls back to its
+    # own default squash-message selection -- which uses the sole commit's
+    # OWN (unneutralized) message for a single-commit PR, letting a stray
+    # "Closes #N" in a `git commit -m` call bypass the #13654 body guard
+    # entirely. Mirrors GitHub's own default subject convention (`<title>
+    # (#<pr_number>)`) so shipped history stays readable. Fail-open: only
+    # added when the pre-merge fetch succeeded (both values non-None) --
+    # otherwise falls through to the prior implicit-default behavior rather
+    # than blocking a merge that already passed every other gate.
+    if strategy == "squash" and neutralized_title is not None:
+        merge_args += [
+            "--subject", f"{neutralized_title} (#{pr_number})",
+            "--body", neutralized_body,
+        ]
     for attempt in range(_max_base_retries + 1):
         result = _run_list(merge_args, check=False)
         if result.returncode == 0:
