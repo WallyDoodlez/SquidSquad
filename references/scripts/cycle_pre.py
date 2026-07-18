@@ -800,6 +800,11 @@ def _gh_fetch(label_filter, state, with_comments=False, with_body=False, limit=2
                   triage fetch).
     state:        "open" | "closed" | "all".
     Returns parsed JSON list, or [] on any failure.
+
+    #13661: warns (once per distinct cache key) when a result hits `limit` --
+    the same silent-truncation class #13555/#13602/#13660 fixed elsewhere.
+    Centralized here so every caller gets the self-diagnosing behavior for
+    free, regardless of what `limit` it passes.
     """
     cache_key = (label_filter, state, with_comments, with_body, limit)
     if cache_key in _GH_FETCH_CACHE:
@@ -823,6 +828,11 @@ def _gh_fetch(label_filter, state, with_comments=False, with_body=False, limit=2
                 items = parsed
         except (json.JSONDecodeError, ValueError):
             pass
+    if len(items) >= limit:
+        print(f"WARNING: _gh_fetch(label_filter={label_filter!r}, "
+              f"state={state!r}) returned {len(items)} = the --limit cap "
+              f"({limit}); older/additional issues may be INVISIBLE (#13661).",
+              file=sys.stderr)
     _GH_FETCH_CACHE[cache_key] = items
     return items
 
@@ -997,7 +1007,7 @@ def _build_pm_input(role):
     # auto-close; the old tracker.list_by_labels path explicitly defaults to
     # state=open for exactly this reason.
     pending_ship_open = _gh_fetch(
-        "squidsquad,status:pending-ship", "open", with_comments=True, limit=50
+        "squidsquad,status:pending-ship", "open", with_comments=True, limit=500
     )
 
     pending_test_issues = []
@@ -1045,7 +1055,7 @@ def _build_pm_input(role):
     pending_ship_tasks = list(pending_ship_open)
 
     # External (non-squidsquad) issues — single broad query, then filter.
-    all_open = _gh_fetch(None, "open", with_body=True, limit=50)
+    all_open = _gh_fetch(None, "open", with_body=True, limit=500)
     external_issues = [
         i for i in all_open if "squidsquad" not in _item_label_names(i)
     ]
@@ -1243,7 +1253,7 @@ def _build_dm_input(role):
     # auto-close; the old tracker.list_by_labels path explicitly defaults to
     # state=open for exactly this reason.
     pending_ship_open = _gh_fetch(
-        "squidsquad,status:pending-ship", "open", with_comments=True, limit=50
+        "squidsquad,status:pending-ship", "open", with_comments=True, limit=500
     )
 
     # Bugs assigned to DM — type:issue (or legacy type:bug) + role:dm
