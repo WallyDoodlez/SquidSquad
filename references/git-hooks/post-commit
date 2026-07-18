@@ -1,0 +1,24 @@
+#!/bin/sh
+# SquidSquad post-commit L4-recompose hook (#13672) -- FAIL-OPEN.
+#
+# l4_file_watcher.py's own module docstring documents recompose_path() as the
+# "optional" redundancy trigger for human-driven L4 edits made outside the
+# agent dialog (PRD-E Q-E2): the primary trigger is the live watchdog-based
+# file-watch running inside the harness process, which covers most cases
+# since a filesystem write fires regardless of a later commit. This hook is
+# the backstop for when that watcher isn't running (harness down, bare mode,
+# watcher crashed) at the moment of the commit -- the recompose still happens
+# deterministically on the next commit instead of silently waiting for the
+# watcher to notice.
+#
+# recompose_path() existed and was fully unit-tested since PRD-E, but this
+# hook script -- its documented entry point -- never shipped (#13672: zero
+# callers anywhere in the repo). Fully fail-open: a post-commit hook cannot
+# abort a commit that already happened, so this always exits 0 regardless of
+# what the underlying recompose does.
+
+python references/scripts/git_ops.py recompose-committed-l4-files \
+  || python3 references/scripts/git_ops.py recompose-committed-l4-files \
+  || true
+
+exit 0
