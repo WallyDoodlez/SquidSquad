@@ -131,6 +131,9 @@
  "13551_spec.json": {
   "references/sub-skills/common/git-commit.md": "b94d0036f84ebed790bc70f2b47db3bf22391253"
  },
+ "13563_spec.json": {
+  "references/sub-skills/common/vault-remember.md": "54bc6fb99e537560fa8df7e1bc74f0761aa672bd"
+ },
  "13569_spec.json": {
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
  },
