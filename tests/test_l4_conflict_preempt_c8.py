@@ -403,7 +403,8 @@ class TestFailureModes:
         can catch the base in one except clause.
         """
         for sub in (cp.PreemptModelRouterError, cp.PreemptTimeoutError,
-                    cp.PreemptOutputMissingError, cp.PreemptParseError):
+                    cp.PreemptOutputMissingError, cp.PreemptParseError,
+                    cp.PreemptInvalidOpTypeError):
             assert issubclass(sub, cp.ConflictPreemptError)
 
 
