@@ -754,3 +754,12 @@
 - **Auto-fixed**: BRIEFING refreshed (Tier-1 PM own-domain) — new 2026-07-11 ~14:00-17:20 top increment (concise; SEV + recovery + bare-mode + operator actions).
 - **Items rejected by human**: (none)
 - **Burst note**: 1st scan of fresh re-idled burst (scan_count→1 after record); driver stays armed. Live cron c41f4c94.
+
+## Scan — 2026-07-18 00:43 (idle-driver tick, 2nd scan of burst — post-#13562 drift sweep)
+
+- **Files scanned**: references/sub-skills/common/working-state.md (drift vs shipped #13562 size gate), references/installer-files.txt (post-merge hook registration from #13556), .squidsquad/config.md (Context Threshold consistency).
+- **Findings**: TIER-2 → filed **#13579** (role:skill, low, improvement-scan): working-state.md sub-skill says nothing about the #13562 8KB embed cap / truncation marker / oversize warning — agents following it verbatim can still drift into append-only journals and only learn from runtime truncation. CQ specs required (LLM-consumed instruction change).
+- **Clean**: installer-files.txt correctly lists references/git-hooks/post-merge (#13556 AC held); config.md Context Pressure Threshold = 75 landed (c2034851d).
+- **Auto-fixed**: none.
+- **Items rejected by human**: (none)
+- **Burst note**: 2nd scan of burst (scan_count→2 after record); driver stays armed. Live cron 4f60462c.
