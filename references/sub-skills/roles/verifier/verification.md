@@ -316,6 +316,7 @@ python references/scripts/git_ops.py task-end [role] [number]
      ```bash
      gh pr review [PR_NUMBER] --approve --body "Verifier verified — zero gaps."
      ```
+     **Note (#13552)**: in a single-GH-identity install (every agent clone — pm/skill/verifier/dm — shares one `gh` auth, common for a solo-operator setup), this MAY fail with `Can not approve your own pull request (addPullRequestReview)` — GitHub sees the PR author and the reviewer as the same account. This is **expected and non-blocking**: the PR comment posted above is the durable approval record, and `gh pr ready` + the harness `/merge` below do not require an approved review. Treat the failure as a harmless no-op in this environment shape and proceed to the Auto Merge check regardless.
    - **Check Auto Merge**: `python references/scripts/config.py get auto-merge`
    - **Check per-ticket override**: `python references/scripts/tracker.py get-labels [NUMBER]` — look for `review:human-required` label.
 
