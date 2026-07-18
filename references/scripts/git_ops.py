@@ -1431,6 +1431,67 @@ def _safe_checkout(target_branch):
     return True
 
 
+def _sync_working_branch_to_origin(working):
+    """Fast-forward the local working branch (e.g. main) to origin (#13613).
+
+    commit_code()'s post-commit checkout back to `working` previously never
+    pulled, so local `working` silently drifted further behind origin/main
+    with every commit_code round-trip in a session — unnoticed until an
+    incidental symptom (e.g. a comprehension-staleness false-positive)
+    surfaced it. Unlike _sync_local_branch_to_origin (used for feature
+    branches in task_begin, which fails loudly on divergence because a
+    diverged base blocks further work on that branch), this runs AFTER a
+    feature-branch commit has already succeeded — so it never exits the
+    process. Fast-forward when behind; silently no-op on divergence, an
+    unpushed local commit, or a network hiccup (never force-overwrite local
+    main, never block the caller on a stale/unreachable remote).
+    """
+    _run_list(["git", "fetch", "origin", working], check=False)
+    origin = _run_list(
+        ["git", "rev-parse", "--verify", f"refs/remotes/origin/{working}"],
+        check=False,
+    )
+    if origin.returncode != 0:
+        return
+    origin_sha = origin.stdout.strip()
+    local_sha = _run_list(
+        ["git", "rev-parse", f"refs/heads/{working}"], check=False
+    ).stdout.strip()
+    if not local_sha or local_sha == origin_sha:
+        return
+    behind = _run_list(
+        ["git", "merge-base", "--is-ancestor", local_sha, origin_sha], check=False
+    ).returncode == 0
+    if not behind:
+        # Ahead (unpushed local commits) or diverged — only a fast-forward
+        # is safe here; leave it for a human/task-begin to reconcile.
+        return
+    current = _run("git branch --show-current", check=False).stdout.strip()
+    if current != working:
+        # Something switched us away between the caller's checkout and here
+        # — never merge onto the wrong branch.
+        return
+    ff = _run_list(["git", "merge", "--ff-only", f"origin/{working}"], check=False)
+    if ff.returncode != 0:
+        print(
+            f"WARNING: could not fast-forward local {working} to origin/"
+            f"{working} ({local_sha[:9]} -> {origin_sha[:9]}): "
+            f"{ff.stderr.strip()} (#13613)",
+            file=sys.stderr,
+        )
+        return
+    print(
+        f"commit-code: fast-forwarded local {working} {local_sha[:9]} -> "
+        f"{origin_sha[:9]} (#13613)"
+    )
+
+
+def _checkout_and_sync_working(working):
+    """Return to `working` and fast-forward it to origin (#13613)."""
+    _safe_checkout(working)
+    _sync_working_branch_to_origin(working)
+
+
 def commit_code(role, branch, message):
     """Stage and commit only code files to a feature branch.
 
@@ -1495,10 +1556,10 @@ def commit_code(role, branch, message):
     if result.returncode != 0:
         if "nothing to commit" in result.stdout + result.stderr:
             print("Nothing to commit on branch")
-            _safe_checkout(working)
+            _checkout_and_sync_working(working)
             return False
         print(f"ERROR: {result.stderr}", file=sys.stderr)
-        _safe_checkout(working)
+        _checkout_and_sync_working(working)
         return False
 
     # Push branch — failure is fatal for branch workflow (#5444)
@@ -1506,7 +1567,7 @@ def commit_code(role, branch, message):
     if push_result.returncode != 0:
         _log_diagnostic("error", f"branch push failed: {push_result.stderr.strip()[:200]}")
         print(f"ERROR: branch push failed: {push_result.stderr}", file=sys.stderr)
-        _safe_checkout(working)
+        _checkout_and_sync_working(working)
         return False
 
     # Emit git-commit (code) and git-push events (#4709)
@@ -1516,8 +1577,8 @@ def commit_code(role, branch, message):
 
     print(f"Committed code to {branch}: {message}")
 
-    # Switch back to working branch
-    _safe_checkout(working)
+    # Switch back to working branch and fast-forward it to origin (#13613)
+    _checkout_and_sync_working(working)
     return True
 
 

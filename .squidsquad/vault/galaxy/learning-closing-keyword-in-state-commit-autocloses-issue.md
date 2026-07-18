@@ -6,7 +6,7 @@ metadata:
 type: learning
 tags: [git, github, tracker, qa, pending-ship, gotcha]
 created: 2026-06-19
-updated: 2026-07-11
+updated: 2026-07-18
 owner: verifier
 status: active
 confidence: medium
@@ -83,3 +83,32 @@ get the body right the first time — you can't easily fix it post-create.
 Related: [[feedback_stacked_pr_auto_close]] (the DM-squash auto-close mechanics this
 guard protects), [[feedback_heredoc_timestamp_no_expand]] (sibling "get the text right
 before it's committed, editing after is costly" class).
+
+## Update 2026-07-18 — #13316: the #13371 guard only covers `git_ops.pr_create()`
+
+**Confirmed live on PR #13626** (dm, delivering #13316): the PR body read
+`Closes #13316` verbatim — unmangled — despite `_neutralize_closing_keywords`
+being present and correct in `git_ops.py` (confirmed by reading the function).
+GitHub auto-closed #13316 at merge, before DM's `pending-ship → shipped`
+transition ran (issue sat CLOSED but still labeled `status:pending-ship` until
+DM caught it and corrected via the normal transition — idempotent, no data
+loss, just a forge-hygiene gap).
+
+**Root cause**: the guard only wraps `pr_create()`'s body argument. This PR's
+branch was forked from another in-flight branch (`squidsquad/task/13317`) to
+avoid a stacked-PR conflict, and per the worker's own comment the PR was opened
+through a non-standard path for that scenario (`gh pr create`/`gh pr edit`
+directly, or an equivalent that never routes through `git_ops.pr_create`) — so
+the neutralization never ran on this body.
+
+**Practical implication**: `_neutralize_closing_keywords` is *not* a universal
+backstop — any PR body set outside `git_ops.pr_create()` (manual `gh pr create`,
+`gh pr edit --body`, stacked/forked-branch workarounds) is still exposed to the
+original commit-message-style hazard. The hand-discipline rule above ("never
+write a literal closing keyword + `#N`" in text that will land on GitHub)
+still applies in full even with the guard live — don't rely on the guard alone
+when a PR is created outside the normal `git_ops.pr_create` flow. DM's own
+mitigation: don't trust `state: CLOSED` as proof of a proper ship — always
+verify the status label actually reads `status:shipped` before treating an
+item as delivered (a closed-but-still-`pending-ship`-labeled issue is the
+tell).
