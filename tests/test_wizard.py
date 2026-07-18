@@ -2660,3 +2660,81 @@ class TestCmdSetupYes:
             assert "check" not in kw, (
                 f"_run called with check={kw['check']} — this causes TypeError"
             )
+
+
+# ---------------------------------------------------------------------------
+# cmd_setup_yes gh-scoping — #13593
+# ---------------------------------------------------------------------------
+
+
+class TestSetupYesGhScoping:
+    """#13593: setup-yes's gh operations must target target_dir's own
+    remote, not whatever repo the ambient process CWD happens to point at."""
+
+    def _tracking_run(self, calls):
+        from unittest.mock import MagicMock
+
+        def tracking_run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return MagicMock(returncode=1, stdout="", stderr="")
+        return tracking_run
+
+    def test_gh_repo_view_scoped_to_target_dir(self, tmp_path):
+        from unittest.mock import patch
+        calls = []
+        with patch.object(wizard, "_run", side_effect=self._tracking_run(calls)):
+            try:
+                wizard.cmd_setup_yes([str(tmp_path)])
+            except Exception:
+                pass
+        repo_view_calls = [
+            (cmd, kw) for cmd, kw in calls
+            if cmd[:3] == ["gh", "repo", "view"]
+        ]
+        assert repo_view_calls, "expected a 'gh repo view' call"
+        for cmd, kw in repo_view_calls:
+            assert kw.get("cwd") == str(tmp_path), (
+                f"'gh repo view' must be scoped to target_dir via cwd=, "
+                f"got cwd={kw.get('cwd')!r}"
+            )
+
+    def test_ensure_labels_scoped_to_target_dir(self, tmp_path):
+        from unittest.mock import patch
+        calls = []
+        with patch.object(wizard, "_run", side_effect=self._tracking_run(calls)):
+            try:
+                wizard.cmd_setup_yes([str(tmp_path)])
+            except Exception:
+                pass
+        label_calls = [
+            (cmd, kw) for cmd, kw in calls
+            if cmd[:2] == ["gh", "label"]
+        ]
+        assert label_calls, "expected at least one 'gh label ...' call"
+        for cmd, kw in label_calls:
+            assert kw.get("cwd") == str(tmp_path), (
+                f"'gh label ...' must be scoped to target_dir via cwd=, "
+                f"got cwd={kw.get('cwd')!r} for {cmd}"
+            )
+
+    def test_list_gh_labels_passes_cwd_through(self):
+        from unittest.mock import patch, MagicMock
+        with patch.object(wizard, "_run",
+                           return_value=MagicMock(returncode=0, stdout="[]")) as m:
+            wizard.list_gh_labels(cwd="/some/target")
+        assert m.call_args.kwargs.get("cwd") == "/some/target"
+
+    def test_list_gh_labels_default_cwd_is_none(self):
+        """Historical behavior (ambient CWD) is preserved when cwd is omitted."""
+        from unittest.mock import patch, MagicMock
+        with patch.object(wizard, "_run",
+                           return_value=MagicMock(returncode=0, stdout="[]")) as m:
+            wizard.list_gh_labels()
+        assert m.call_args.kwargs.get("cwd") is None
+
+    def test_ensure_labels_dry_run_passes_cwd_through(self):
+        from unittest.mock import patch, MagicMock
+        with patch.object(wizard, "_run",
+                           return_value=MagicMock(returncode=0, stdout="[]")) as m:
+            wizard.ensure_labels(dry_run=True, cwd="/some/target")
+        assert m.call_args.kwargs.get("cwd") == "/some/target"
