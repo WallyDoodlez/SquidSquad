@@ -29,7 +29,7 @@ Profile of the human collaborator. Captures preferences, values, communication s
 - Primary platform: Windows 11
 - Uses Python for scripting, bash for shell operations
 - Repository: SquidSquad autonomous agent framework
-- Context pressure threshold: 70% (human considers 80% too high — agents degrade before hitting 80%)
+- Context pressure threshold: 70% (human considers 80% too high — agents degrade before hitting 80%) _(Update 2026-07-18: raised to **75** via #13562 (§T3 of the token-efficiency plan) after the working-state embed leak was fixed — sessions carry less dead context per cycle, so the same safety margin sits higher. The "80 too high" ceiling still stands; surfaced to operator for veto.)_
 - Prefers direct/mechanical checks over indirect state files — "just use PID, it's more direct." OS-level truth (process exists?) beats application-level files (.health) that can go stale. Applies broadly: prefer the most direct verification method available. _(Nuance, 2026-06-28: the **general principle stands**, but its original PID-as-liveness-authority application was operator-approved for supersession via #12492 — PID-alive cannot detect wedged-alive/zombie agents, so progress-liveness is now authoritative and PID is teardown-only. The lesson the human took: "most direct" must also mean "actually detects the failure mode." See [[decision-pid-primary-liveness]] (archived).)_
 - Cyclic/mechanical agent work must be programmatic, not LLM-interpreted prose — "any kind of cyclic work needs to be programmed deterministically." LLMs reliably drop steps when context compresses. Agents should react to events, not run multi-step cycles. Drives #7630 (event-driven architecture).
 

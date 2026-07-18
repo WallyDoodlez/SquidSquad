@@ -1,0 +1,38 @@
+{
+  "issue": 13579,
+  "title": "Doc drift: working-state.md sub-skill silent on the #13562 size discipline",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-18",
+  "ac": "comprehension (#9184 hard gate, PM-authored AC in issue body): a fresh agent reading ONLY the modified working-state.md sub-skill must state, unprompted, both (1) the ~8KB size bound and (2) the clear-on-complete rule -- i.e. the new bullet must not crowd out or contradict the pre-existing clear-on-complete guidance, and a fresh reader must synthesize both as governing this file.",
+  "method": "Fresh agent (model: sonnet, general-purpose) given ONLY references/sub-skills/common/working-state.md from branch squidsquad/task/13579, explicitly instructed not to read any other file or use prior knowledge. CQ spec authored + executed by verifier per #9184.",
+  "target": "references/sub-skills/common/working-state.md -- new size-discipline bullet (PR #13581, branch squidsquad/task/13579)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Is there a size limit on working-state.md? If so, what is it, and what happens if you exceed it?",
+      "expected": "Yes, ~8KB. Exceeding it doesn't lose data outright, but the file is tail-truncated in your cycle input behind a [TRUNCATED (#13562)] marker -- only the newest 8KB reaches you -- and an oversized write draws a warning.",
+      "must_not": "Saying there is no size limit; saying the file is silently dropped/deleted at the cap; saying the whole file (not just the cycle-input embed) is truncated on disk."
+    },
+    {
+      "id": "CQ2",
+      "q": "When a task completes, what do you do with working-state.md?",
+      "expected": "Clear it -- reset Task and Status to none.",
+      "must_not": "Leaving the task/status fields populated after completion; appending a completion journal entry instead of clearing."
+    },
+    {
+      "id": "CQ3",
+      "q": "If you notice working-state.md has grown large from journaling every cycle, what should you do, and where does that history actually belong?",
+      "expected": "Rewrite it back down to the lean Task/Status/Started/Decisions shape -- do not keep it as an append-only journal. History belongs in git (commit history) and iteration logs, not in working-state.md.",
+      "must_not": "Suggesting an archive mechanism inside working-state.md itself; treating the journal growth as fine/expected."
+    },
+    {
+      "id": "CQ4",
+      "q": "If your cycle input shows working-state.md truncated with a [TRUNCATED (#13562)] marker, which part of the original file are you actually seeing -- the oldest content or the newest?",
+      "expected": "The newest content (the tail) -- the truncation keeps the newest ~8KB, not the oldest.",
+      "must_not": "Saying the oldest/head of the file is what's kept."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-18",
+  "evidence": "Fresh sonnet general-purpose agent (id a704a29dc2e0bf745), given ONLY the branch's modified working-state.md content inline, explicitly told to use no other file/tool/prior knowledge. 4/4 correct with accurate supporting quotes, zero must_not violations. CQ1: 'under ~8KB... tail-truncated... only the newest 8KB reaches you... an oversized write draws a warning.' CQ2: 'Clear it -- reset Task and Status to none.' CQ3: 'rewrite the file down to the lean shape... History belongs in git and your iteration logs -- never append session journals here.' CQ4: 'the newest content... older/oldest content is cut off and not shown.' Satisfies PM's stated AC (size bound + clear-on-complete both stated unprompted, no crowding-out or contradiction between the two rules)."
+}
