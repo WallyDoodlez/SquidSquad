@@ -141,9 +141,9 @@
   "references/sub-skills/roles/dm/delivery-packaging.md": "5a5ea484685a605aeffdbe9c93ad2e523473a1bd"
  },
  "2183_spec.json": {
-  "references/sub-skills/common/agent-lifecycle.md": "cb8dcf9a5b8b5a630283da0c2f7b150c7c3d6b3d",
+  "references/sub-skills/common/agent-lifecycle.md": "149b51503eb3d33b52a25f0d89615e19bedec5b8",
   "references/sub-skills/common/self-restart.md": "c9a89c7c52e750bcda6b3db62699ce773af4cb33",
-  "references/sub-skills/roles/pm/health-check.md": "98bd0de263f47a060eb10dc4b91c3405af42e1f5"
+  "references/sub-skills/roles/pm/health-check.md": "e5b5b164a2db265cbaf8f23a2fe7d1e2cf19469d"
  },
  "2195_spec.json": {},
  "361_spec.json": {
@@ -151,9 +151,9 @@
   "references/sub-skills/roles/pm/soul-shepherd.md": "f9432644cc7661ef1801c2a58a93510c73f274f7"
  },
  "4792_spec.json": {
-  ".squidsquad/project/shared-instructions.md": "4609e83b47dba7fe4b751c15ff734bc4e76808df",
-  "references/sub-skills/common/agent-lifecycle.md": "cb8dcf9a5b8b5a630283da0c2f7b150c7c3d6b3d",
-  "references/sub-skills/roles/pm/health-check.md": "98bd0de263f47a060eb10dc4b91c3405af42e1f5"
+  ".squidsquad/project/shared-instructions.md": "d684d6ee8b2f1fc39cb7e9a9625fdc422bcb8e8f",
+  "references/sub-skills/common/agent-lifecycle.md": "149b51503eb3d33b52a25f0d89615e19bedec5b8",
+  "references/sub-skills/roles/pm/health-check.md": "e5b5b164a2db265cbaf8f23a2fe7d1e2cf19469d"
  },
  "8694_spec.json": {
   "references/sub-skills/common-events/comment-handling.md": "8d5a2a4ab4164fbdb3f5657f89ef08586bd5e254",
