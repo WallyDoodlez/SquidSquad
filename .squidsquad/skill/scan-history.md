@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-18 12:23
+
+- **Files scanned**: tests/test_git_ops.py (test-quality/coverage triage, not scanned in recent history despite this session's heavy git_ops.py work), references/scripts/git_ops.py (#13554/#13285 scope-audit helpers: _pr_declared_files, _pr_state_scope_violations, _merge_commit_sha, _scope_audit_violations -- read for the first time this session)
+- **Findings**: none. Test-quality: 316 test functions/classes, zero skip/xfail/TODO/FIXME markers -- healthy, matching test_harness.py's 2026-07-11 result. Cross-referenced every top-level git_ops.py function name against test_git_ops.py + the rest of tests/ for zero-reference gaps; the one apparent hit (`_timeout_failure`, 0 direct literal references) turned out to be fully covered indirectly -- `test_timeout_check_{true,false}_raises/_returns_nonzero` (both `_run` and `_run_list` variants) exercise both its check=True/False branches end-to-end via `subprocess.TimeoutExpired` injection, just without naming the helper directly. The scope-audit helpers all fail-safe consistently (return `None` on gh/git uncertainty; callers flag-don't-guess, never auto-act on `None`).
+- **Items rejected by human**: none
+- **Criteria note**: a literal function-name cross-reference is a cheap first pass for "test gaps" but produces false positives for helpers only exercised indirectly through their sole caller's tests -- always read the flagged test file before concluding a gap is real, not just grep-absence. This is the third consecutive scan into git_ops.py's #13447/#13554/#13285/#13654 merge-guard surface (2026-07-18 10:57, this one) to return zero findings after a thorough read -- read as the area being genuinely stable post-heavy-audit, not scan fatigue; worth picking a different file next time this queue comes up.
+
 ## Scan — 2026-07-18 10:57
 
 - **Files scanned**: references/scripts/git_ops.py (focused: pr_merge()'s #13447/#13654 pre/post-merge guard functions — _neutralize_pr_body_before_merge, _revert_composed_state_contamination, _checkout_and_ff_working_after_merge — navigation-derived from this session's #13654 round-2 fix)
