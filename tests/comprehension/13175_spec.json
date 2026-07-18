@@ -1,34 +1,34 @@
 {
- "issue": 13175,
- "superseded_by": 13569,
- "superseded_note": "#13569 overruled CQ1's expected answer for the boot-drain case: a deploy-signal reached in the BOOT DRAIN is now DEFERRED until boot completes, then honored (never honored on-reach). Steady-state honor semantics unchanged. Kept as historical record.",
- "title": "Case E deploy-signal in boot-drain after full-team restart is ambiguous (honor vs skip)",
- "authored_by": "verifier",
- "authored_at": "2026-06-21 19:31",
- "ac": "comprehension (#9184 hard gate): a fresh agent reading the modified event-mode-contract.md Case E deploy-signal section must derive (1) a deploy-signal in the boot drain is legitimate and must be HONORED (ack-stop deploy-halted + halt), not dismissed as residual restart telemetry — local references/ drift is NOT authoritative, the harness stored-checksum is; (2) you must NOT manually ack-cursor past it — that is the one path that can leave a genuinely-stale CLAUDE.md in place, and honoring is loop-free because the deploy sequence advances the cursor up front; (3) the finish-first nuance still holds — if boot resumed an in-progress task onto a feature branch, complete/hand off + return to main before honoring the halt.",
- "method": "Fresh agent (model: sonnet) given ONLY the modified event-mode-contract.md from branch squidsquad/task/13175, no other context. CQ spec authored + executed by verifier per #9184 (skill suggested the scenario in PR #13177; verifier owns the CQ).",
- "target": "references/sub-skills/common-events/event-mode-contract.md — Case E deploy-signal new boot-drain liveness sub-bullet + 2 traps (PR #13177, branch squidsquad/task/13175)",
- "questions": [
-  {
-   "id": "CQ1",
-   "q": "During boot drain you fetch a deploy-signal targeting your alias; local clone shows no references/ drift and harness status is running. Correct action, and is it stale residual telemetry?",
-   "expected": "HONOR it (ack-stop deploy-halted, then halt) — do NOT dismiss as residual restart telemetry. Local 'no drift' does NOT prove CLAUDE.md is current (clone may be behind origin; pull-first deploy exists for this); the harness stored-checksum comparison is authoritative.",
-   "must_not": "Treating it as stale/residual and skipping; trusting the local references/ drift self-check; concluding status:running means no deploy needed."
-  },
-  {
-   "id": "CQ2",
-   "q": "Could you just ack-cursor past it to stop the re-NUDGE instead of honoring? Why/why not, and the specific risk?",
-   "expected": "No. Honoring is loop-free (the deploy sequence advances your cursor past the signal up front; a no-op recompose is a clean idempotent success). A manual ack-cursor skip is the ONE path that can leave a genuinely-stale CLAUDE.md in place.",
-   "must_not": "Claiming ack-cursor-past is acceptable to stop re-waking; missing the stale-CLAUDE.md risk."
-  },
-  {
-   "id": "CQ3",
-   "q": "If boot resumed an in-progress task onto a feature branch before you reached the deploy-signal, same action or different? What first?",
-   "expected": "Different — precondition (on main, clean tree) not met. Finish-first: complete and hand off (transition) the task, return to main, and only THEN emit ack-stop(deploy-halted) and halt.",
-   "must_not": "Honoring immediately while mid-task / on a feature branch; ignoring the on-main clean-tree precondition."
-  }
- ],
- "result": "PASS",
- "executed_at": "2026-06-21 19:32",
- "evidence": "Fresh sonnet agent (id a5ba24e5a5693bd5e) given ONLY the branch's modified event-mode-contract.md, no other context. 3/3 correct, zero must_not violations. CQ1: 'honor it; do NOT dismiss as stale residual restart telemetry... harness stored-checksum comparison is authoritative.' CQ2: 'No... A manual ack-cursor skip is the one path that can leave a genuinely-stale CLAUDE.md in place... Honoring is loop-free.' CQ3: 'different... precondition not met... finish and hand off that task, return to main, and only then honor the deploy halt.' Contract premises independently verified against harness.py: cursor advanced up-front in deploy seq (L4646), ack-stop deploy-halted establishes intent=DEPLOYING synchronously on boot-drift path (L3252-3263), boot deploy-signal emitted on checksum drift."
+  "issue": 13175,
+  "superseded_by": 13569,
+  "superseded_note": "CQ1's expected answer below (HONOR a boot-drain deploy-signal the moment you reach it) is OVERRULED for the boot-drain case by #13569 (2026-07-17): a boot-drain deploy-signal is now DEFERRED (held, no ack-stop/ack-cursor) until the post-drain boundary, then honored -- honoring it on-reach mid-drain was itself the #13569 bug (agents reboot before boot completes). CQ2/CQ3's substance (loop-free honoring mechanics; finish-first for a boot-resumed feature-branch task) still holds, just relocated to fire at the post-drain boundary instead of on-reach. See tests/comprehension/13569_spec.json for the current, correct boot-drain contract. This file is left in place as a historical record (verifier owns comprehension specs; superseded, not deleted -- promoted test artifacts are never removed for planning-artifact churn) and must NOT be read as current guidance for the boot-drain case.",
+  "title": "Case E deploy-signal in boot-drain after full-team restart is ambiguous (honor vs skip)",
+  "authored_by": "verifier",
+  "authored_at": "2026-06-21 19:31",
+  "ac": "comprehension (#9184 hard gate): a fresh agent reading the modified event-mode-contract.md Case E deploy-signal section must derive (1) a deploy-signal in the boot drain is legitimate and must be HONORED (ack-stop deploy-halted + halt), not dismissed as residual restart telemetry — local references/ drift is NOT authoritative, the harness stored-checksum is; (2) you must NOT manually ack-cursor past it — that is the one path that can leave a genuinely-stale CLAUDE.md in place, and honoring is loop-free because the deploy sequence advances the cursor up front; (3) the finish-first nuance still holds — if boot resumed an in-progress task onto a feature branch, complete/hand off + return to main before honoring the halt.",
+  "method": "Fresh agent (model: sonnet) given ONLY the modified event-mode-contract.md from branch squidsquad/task/13175, no other context. CQ spec authored + executed by verifier per #9184 (skill suggested the scenario in PR #13177; verifier owns the CQ).",
+  "target": "references/sub-skills/common-events/event-mode-contract.md — Case E deploy-signal new boot-drain liveness sub-bullet + 2 traps (PR #13177, branch squidsquad/task/13175)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "During boot drain you fetch a deploy-signal targeting your alias; local clone shows no references/ drift and harness status is running. Correct action, and is it stale residual telemetry?",
+      "expected": "HONOR it (ack-stop deploy-halted, then halt) — do NOT dismiss as residual restart telemetry. Local 'no drift' does NOT prove CLAUDE.md is current (clone may be behind origin; pull-first deploy exists for this); the harness stored-checksum comparison is authoritative.",
+      "must_not": "Treating it as stale/residual and skipping; trusting the local references/ drift self-check; concluding status:running means no deploy needed."
+    },
+    {
+      "id": "CQ2",
+      "q": "Could you just ack-cursor past it to stop the re-NUDGE instead of honoring? Why/why not, and the specific risk?",
+      "expected": "No. Honoring is loop-free (the deploy sequence advances your cursor past the signal up front; a no-op recompose is a clean idempotent success). A manual ack-cursor skip is the ONE path that can leave a genuinely-stale CLAUDE.md in place.",
+      "must_not": "Claiming ack-cursor-past is acceptable to stop re-waking; missing the stale-CLAUDE.md risk."
+    },
+    {
+      "id": "CQ3",
+      "q": "If boot resumed an in-progress task onto a feature branch before you reached the deploy-signal, same action or different? What first?",
+      "expected": "Different — precondition (on main, clean tree) not met. Finish-first: complete and hand off (transition) the task, return to main, and only THEN emit ack-stop(deploy-halted) and halt.",
+      "must_not": "Honoring immediately while mid-task / on a feature branch; ignoring the on-main clean-tree precondition."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-06-21 19:32",
+  "evidence": "Fresh sonnet agent (id a5ba24e5a5693bd5e) given ONLY the branch's modified event-mode-contract.md, no other context. 3/3 correct, zero must_not violations. CQ1: 'honor it; do NOT dismiss as stale residual restart telemetry... harness stored-checksum comparison is authoritative.' CQ2: 'No... A manual ack-cursor skip is the one path that can leave a genuinely-stale CLAUDE.md in place... Honoring is loop-free.' CQ3: 'different... precondition not met... finish and hand off that task, return to main, and only then honor the deploy halt.' Contract premises independently verified against harness.py: cursor advanced up-front in deploy seq (L4646), ack-stop deploy-halted establishes intent=DEPLOYING synchronously on boot-drift path (L3252-3263), boot deploy-signal emitted on checksum drift."
 }
