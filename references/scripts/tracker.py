@@ -26,11 +26,22 @@ Role authority (who may call `transition`):
                                      #6274 D11 dual-aware: old `qa`/`qa-lead` still accepted (deprecation warning).
   - Assigned worker role (--role <r>) : open -> in-progress, approved -> in-progress,
                                      in-progress <-> pending-test, open -> pending-test,
-                                     in-progress -> approved (must match issue's `role:*` label)
+                                     in-progress -> approved (must match issue's `role:*` label),
+                                     in-progress <-> blocked (#13515: owned-but-parked self-pause;
+                                     assignee only in both directions)
   - DM  (--role dm  or dm-lead)    : in-progress -> pending-ship, pending-ship -> shipped,
                                      pending-ship -> in-progress (merge conflict rollback)
   - Human override                 : --force bypasses legality + authority + unread-feedback
                                      guards (any status change); ship-integrity gates still apply
+
+`status:blocked` (#13515): the assignee still OWNS the item but has parked it
+because it is blocked on another party (a PM-authored AC, a dependency PR, a
+human decision) — NOT being actively worked right now. Contrast `in-progress`
+(actively working) and `pending-*` (ownership transfers to a new owner).
+Legal transitions: in-progress -> blocked (park), blocked -> in-progress
+(resume). Authority: _assignee only, both directions. `blocked` items are
+excluded from `work_queue()` (not actionable while parked) and from PM
+pipeline-sentinel's stall detection (they are intentionally idle).
 """
 
 import json
@@ -89,6 +100,7 @@ STATUS_LABELS = {
     "planned": "status:planned",
     "approved": "status:approved",
     "in-progress": "status:in-progress",
+    "blocked": "status:blocked",  # #13515: owned-but-parked, blocked on another party
     "pending-test": "status:pending-test",
     "pending-ship": "status:pending-ship",
     "shipped": "status:shipped",
@@ -135,7 +147,14 @@ LEGAL_TRANSITIONS = {
         # human-waiting state when it needs human input or environment work.
         "status:pending-human-review",
         "status:pending-human-setup",
+        # #13515: owned-but-parked self-pause — assignee is blocked on another
+        # party (PM-authored AC, dependency PR, human decision) but keeps
+        # ownership. Distinct from the pending-human-* edges above: those hand
+        # off to a human reviewer/setup step; `blocked` never leaves the
+        # assignee's ownership.
+        "status:blocked",
     },
+    "status:blocked": {"status:in-progress"},  # #13515: assignee resumes once unblocked
     "status:pending-test": {"status:in-progress", "status:pending-ship", "status:pending-human-review"},
     "status:pending-human-review": {"status:in-progress", "status:pending-ship"},
     "status:pending-ship": {"status:shipped", "status:in-progress"},
@@ -187,6 +206,10 @@ ROLE_AUTHORITY = {
     ("status:in-progress", "status:approved"): {"_assignee"},
     ("status:in-progress", "status:planning"): {"_assignee"},  # #6057 code review rejection
     ("status:in-progress", "status:pending-ship"): {"dm"},  # #6261: DM skips QA
+
+    # #13515: owned-but-parked self-pause — assignee only, both directions.
+    ("status:in-progress", "status:blocked"): {"_assignee"},
+    ("status:blocked", "status:in-progress"): {"_assignee"},
 
     # QA/PM owns verification. PM and QA are both authorized.
     ("status:pending-test", "status:in-progress"): {"qa", "pm"},
