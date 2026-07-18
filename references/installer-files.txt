@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 257 files
+# Total: 258 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -82,6 +82,7 @@ references/scripts/vault_remember.py
 references/scripts/wizard.py
 references/git-hooks/pre-commit
 references/git-hooks/post-merge
+references/git-hooks/post-commit
 references/roles/worker/android/includes.yml
 references/roles/worker/android/instructions.md
 references/roles/worker/android/SOUL.md
