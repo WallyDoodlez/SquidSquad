@@ -1,4 +1,4 @@
-# SquidSquad — THE single Windows launcher (#13318).
+# SquidSquad - THE single Windows launcher (#13318).
 #
 # Consolidates the former start.ps1 + start.bat + start-harness.bat +
 # restart-harness.bat into one script. Running it brings up ALL of SquidSquad:
@@ -15,7 +15,7 @@
 #
 # Behaviors folded in:
 #   - deps + clone-sync           (former start.ps1)
-#   - supervised auto-relaunch    (former restart-harness.bat, #12825 — exit-42
+#   - supervised auto-relaunch    (former restart-harness.bat, #12825 - exit-42
 #                                  relaunch / exit-0 stop / crash-loop guard)
 #   - bare/no-setup path          (former start-harness.bat, #12525)
 #   - TUI bundling                (references/tui/app.py, #12801/#13277)
@@ -82,7 +82,7 @@ function Invoke-Supervised {
         }
         if ($code -eq $RestartCode) {
             Write-Host "[start] restart requested (exit $code) - relaunching..."
-            $crashCount = 0   # intentional restart — reset crash accounting
+            $crashCount = 0   # intentional restart - reset crash accounting
             continue
         }
         # Abnormal exit -> crash-loop guard. A run that lasted at least
@@ -109,7 +109,7 @@ function Initialize-Deps {
     python -c "import fastapi, uvicorn, starlette, watchdog, yaml" 2>$null
     if ($LASTEXITCODE -ne 0) { pip install -r requirements.txt }
     # TUI dep (#12801/#13318): full mode launches references/tui/app.py, which
-    # imports `textual` — kept in requirements-tui.txt, separate from the harness
+    # imports `textual` - kept in requirements-tui.txt, separate from the harness
     # runtime set. Without this, full mode would pass the harness-dep probe then
     # crash at TUI launch on a fresh machine.
     python -c "import textual" 2>$null
@@ -163,7 +163,7 @@ Initialize-Deps
 Sync-Clones
 
 if (Test-HarnessUp) {
-    Write-Host "[start] harness already running on port $(Get-HarnessPort) — attaching TUI (singleton-safe)."
+    Write-Host "[start] harness already running on port $(Get-HarnessPort) - attaching TUI (singleton-safe)."
 } else {
     Write-Host "[start] launching harness (supervised, detached background)..."
     # Re-invoke self in --bare mode, detached, so the supervised loop (#12825)

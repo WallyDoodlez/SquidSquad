@@ -108,5 +108,11 @@ class TestGitOpsLauncherCarveOut:
         import git_ops
         assert git_ops._is_launcher_script(".squidsquad/start.sh") is True
         assert git_ops._is_launcher_script(".squidsquad/start.ps1") is True
+        # #13577: the launcher's permissions helper is versioned CODE too — its
+        # omission silently stripped a bug-fix commit from a feature branch.
+        assert git_ops._is_launcher_script(
+            ".squidsquad/inject-permissions.ps1") is True
         assert git_ops._is_launcher_script(".squidsquad/sub/start.sh") is False
         assert git_ops._is_launcher_script("start.sh") is False
+        assert git_ops._is_launcher_script(
+            ".squidsquad/inject-permissions.ps1.bak") is False
