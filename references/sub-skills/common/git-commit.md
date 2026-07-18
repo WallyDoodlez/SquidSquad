@@ -86,3 +86,7 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
      Log: `Merge of [WORKING_BRANCH] into [BRANCH_NAME] failed — manual conflict resolution needed.`
    - Only merge into branches for your own tasks — never touch other agents' PRs.
    - Skip this step when PR Flow is off or no open PRs exist.
+
+### Test-file placement (#13551)
+
+When a fix needs a regression test, **prefer a new dedicated file** — `tests/test_<issue-number>_<short-name>.py` — over appending a new test class to an existing shared file's tail (e.g. `test_git_ops.py`, `test_harness.py`). Two independent branches that each append a class after the same anchor point (commonly the last class in the file) cannot be auto-ordered by git: neither branch has seen the other's insertion, so the merge reports `mergeable=CONFLICTING/DIRTY` purely from insertion-position collision — not from any real code conflict. This has recurred across sibling branches worked in quick succession off the same file (e.g. the `git_ops.py` PR-lifecycle cluster). A dedicated per-issue file sidesteps the class of conflict entirely: two new files never collide at the git level. Only extend an existing shared test file (adding a class to it, not a new file) when the test is a direct, tightly-scoped addition to that file's own existing coverage of the same function — not merely "this fix happens to touch a function that file already tests."
