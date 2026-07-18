@@ -20,6 +20,7 @@ then were grandfathered at their current shas WITHOUT retroactive re-review
 (recorded in the baseline's ``_note``).
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -70,6 +71,41 @@ def test_fragment_extraction_handles_all_spec_shapes():
 def test_brace_expansion():
     assert cs._expand_braces("a/{x,y}/b.md") == ["a/x/b.md", "a/y/b.md"]
     assert cs._expand_braces("a/b.md") == ["a/b.md"]
+    # Sonnet-review F2: multiple groups expand cartesian; whitespace stripped.
+    assert cs._expand_braces("{a,b}/{x, y}.md") == [
+        "a/x.md", "a/y.md", "b/x.md", "b/y.md"]
+
+
+def test_committed_blob_sha_survives_git_absence(monkeypatch):
+    # Sonnet-review F1: a hung/absent git degrades to None (skip), never a
+    # crash/hang of the fleet-wide static gate.
+    import subprocess as sp
+
+    def boom(*a, **kw):
+        raise FileNotFoundError("git not on PATH")
+
+    monkeypatch.setattr(cs.subprocess, "run", boom)
+    assert cs.committed_blob_sha("references/roles/SOUL.md") is None
+
+
+def test_refresh_prunes_deleted_specs_and_keeps_note(tmp_path, monkeypatch):
+    # Sonnet-review F3: refresh prunes entries for deleted specs but the _note
+    # metadata key must always survive.
+    baseline_file = tmp_path / ".staleness-baseline.json"
+    baseline_file.write_text(json.dumps({
+        "_note": "keep me",
+        "gone_spec.json": {"references/roles/SOUL.md": "0" * 40},
+        "live_spec.json": {"references/roles/SOUL.md": "0" * 40},
+    }), encoding="utf-8")
+    monkeypatch.setattr(cs, "BASELINE", baseline_file)
+    monkeypatch.setattr(cs, "load_specs", lambda: {
+        "live_spec.json": {"files": ["references/roles/SOUL.md"]}})
+    monkeypatch.setattr(cs, "committed_blob_sha", lambda p: "1" * 40)
+    cs.refresh(["live_spec.json"])
+    after = json.loads(baseline_file.read_text(encoding="utf-8"))
+    assert after["_note"] == "keep me"
+    assert "gone_spec.json" not in after
+    assert after["live_spec.json"] == {"references/roles/SOUL.md": "1" * 40}
 
 
 def test_superseded_specs_are_ignored(monkeypatch):

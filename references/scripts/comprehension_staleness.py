@@ -43,11 +43,24 @@ _PATH_RE = re.compile(
 
 
 def _expand_braces(path):
-    m = re.search(r"\{([^{}]+)\}", path)
-    if not m:
-        return [path]
-    return [path[:m.start()] + alt + path[m.end():]
-            for alt in m.group(1).split(",")]
+    """Full {a,b}-set expansion — loops until no group remains (cartesian for
+    multiple groups) and strips whitespace in alternatives, so '{a, b}' or a
+    two-group token can never silently drop a fragment from coverage."""
+    out = [path]
+    while True:
+        nxt = []
+        changed = False
+        for p in out:
+            m = re.search(r"\{([^{}]+)\}", p)
+            if not m:
+                nxt.append(p)
+                continue
+            changed = True
+            nxt.extend(p[:m.start()] + alt.strip() + p[m.end():]
+                       for alt in m.group(1).split(","))
+        out = nxt
+        if not changed:
+            return out
 
 
 def spec_fragment_paths(spec):
@@ -69,9 +82,17 @@ def spec_fragment_paths(spec):
 
 
 def committed_blob_sha(rel_path):
-    """Blob sha of the path at HEAD; None if untracked."""
-    res = subprocess.run(["git", "rev-parse", f"HEAD:{rel_path}"],
-                         capture_output=True, text=True, cwd=str(REPO_ROOT))
+    """Blob sha of the path at HEAD; None if untracked OR git is unavailable/
+    hung. Bounded + exception-guarded per the repo's git-subprocess convention
+    (#9890/#13262 class): this runs inside the fleet-wide static gate, so a
+    single wedged git call must degrade to 'skip this fragment', never hang or
+    crash every agent's gate."""
+    try:
+        res = subprocess.run(["git", "rev-parse", f"HEAD:{rel_path}"],
+                             capture_output=True, text=True,
+                             cwd=str(REPO_ROOT), timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
     out = (res.stdout or "").strip()
     return out if res.returncode == 0 and len(out) == 40 else None
 
@@ -126,7 +147,11 @@ def refresh(names):
     baseline = load_baseline()
     specs = load_specs()
     live_names = set(specs)
-    # prune baseline entries for deleted specs
+    # Prune baseline entries for deleted specs — deliberately unconditional
+    # (fires on scoped refreshes too): specs live in one flat directory that is
+    # always fully present in a normal checkout, and a stale entry for a
+    # deleted spec is pure noise. Keys starting with '_' (e.g. _note) are
+    # metadata and always survive.
     for gone in [k for k in baseline if not k.startswith("_") and k not in live_names]:
         del baseline[gone]
     for name in names:
