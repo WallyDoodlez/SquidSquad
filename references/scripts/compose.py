@@ -12,6 +12,8 @@ Usage:
     python scripts/compose.py --help
 """
 
+import contextlib
+import io
 import json
 import re
 import subprocess
@@ -527,10 +529,18 @@ def _read_config_value(field: str) -> str:
     hard-exit the whole process just because the field is missing. Empty
     string is the correct fallback — downstream callers substitute a
     friendly default.
+
+    #13595: a missing field is EXPECTED and already handled here — swallow
+    the "Field not found" stderr `get_field` prints on its way to
+    `sys.exit(1)` so a normal fresh-scaffold compose (which reads
+    target_root's own, often-sparse, just-scaffolded config.md — see
+    `config.config_path_override`) doesn't spray scary-looking ERROR lines
+    for every optional placeholder the target hasn't set yet.
     """
     try:
         from config import get_field
-        return get_field(field)
+        with contextlib.redirect_stderr(io.StringIO()):
+            return get_field(field)
     except SystemExit:
         return ""
     except BaseException:  # noqa: BLE001 — genuinely want a last-resort fallback
@@ -1274,7 +1284,12 @@ def deploy_alias_v2(alias, registry=None, target_root=None):
     # these deterministic passes all three classes leak through every
     # operator ``deploy <alias>`` and every harness ``deploy-all``.
     body = _resolve_includes_v2(body)
-    body = _substitute_placeholders(body, alias, role)
+    # #13595: read config-value placeholders (workers/aliases/test-commands/
+    # project-name/...) from target_root's OWN config.md, never the installing
+    # clone's — a foreign target_root's just-scaffolded config.md is what a
+    # foreign compose must substitute from.
+    with _config_module.config_path_override(target_root / ".squidsquad" / "config.md"):
+        body = _substitute_placeholders(body, alias, role)
     body = _inject_role_roster(body, alias)
 
     output_dir = target_root / ".squidsquad" / alias
@@ -1488,7 +1503,11 @@ def deploy_role_v2(role_name: str, target_root: Path = None,
     # squidsquad install holding ``references/``), not from
     # ``target_root`` (the foreign project being installed into).
     body = _resolve_includes_v2(body, source_root=source_root)
-    body = _substitute_placeholders(body, output_name, role_class)
+    # #13595: same target_root config-value redirect as deploy_alias_v2 —
+    # read config-value placeholders from target_root's own config.md, not
+    # the installing/wizard clone's.
+    with _config_module.config_path_override(target_root / ".squidsquad" / "config.md"):
+        body = _substitute_placeholders(body, output_name, role_class)
     body = _inject_role_roster(body, output_name)
 
     output_dir = target_root / ".squidsquad" / output_name
