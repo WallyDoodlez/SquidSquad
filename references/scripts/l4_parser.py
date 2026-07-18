@@ -56,7 +56,19 @@ _OP_RE = re.compile(
 # under ``.squidsquad/project/`` cannot use H3 prose under ``## Soul`` /
 # ``## Instructions`` etc. — which is how every shipped L4 file in
 # production is structured.
-_OP_LIKE_RE = re.compile(r"^(append|replace|insert-before|insert-after)(\s|$)")
+#
+# #13683: matched case-insensitively so a case-varied keyword (e.g.
+# ``### Replace step:cycle/boot``, capitalized by an author used to
+# Title-Case headings) is still recognized as an op ATTEMPT and routed
+# into ``_OP_RE`` below — which stays case-SENSITIVE, so the mismatched
+# case fails loud via the malformed-op diagnostic instead of silently
+# vanishing into the implicit append body as inert prose. No production
+# L4 file under ``.squidsquad/project/`` uses a Title-Case prose H3
+# starting with one of these four words, so widening the op-like net
+# case-insensitively carries no known false-positive risk today.
+_OP_LIKE_RE = re.compile(
+    r"^(append|replace|insert-before|insert-after)(\s|$)", re.IGNORECASE
+)
 # HTML-comment metadata trailer: ``<!-- key: value\n... -->`` at the end
 # of an H3 body. Multiple key:value lines allowed. Both ``<!--`` and
 # ``-->`` must be on their own lines for the trailer to count; comments
