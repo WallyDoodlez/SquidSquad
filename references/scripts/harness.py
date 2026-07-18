@@ -1509,12 +1509,17 @@ class HarnessState:
         except (SystemExit, Exception):
             return CONTEXT_THRESHOLD_DEFAULT
 
-    def _read_agent_pressure(self, role, agent):
-        """#13335 — read an agent's current context-pressure (int %) from its
-        own clone's ``.squidsquad/<role>/context-pressure`` (the file the
-        statusline writes each cycle). Returns ``None`` when the file is
-        absent, unreadable, or non-integer — treated as 'no signal', never
-        enforced against."""
+    def _read_agent_clone_file(self, role, agent, filename):
+        """#13558 — read ``<agent's own clone>/.squidsquad/<role>/<filename>``
+        as text. Shared clone-resolution helper for the per-agent state
+        files the statusline/cycle machinery writes each cycle
+        (``context-pressure``, ``current-state``). Sibling-clone agents
+        (skill/qa/dm running in their own clones) write these to THEIR OWN
+        clone's ``.squidsquad/<role>/``, not the harness-root
+        ``SQUIDSQUAD_DIR`` — reading the harness-root path for them returns a
+        stale/absent value (the bug #13345 fixed for context-pressure).
+        Returns ``None`` (never raises) when the clone can't be resolved or
+        the file is absent/unreadable."""
         clone_path = getattr(agent, "clone_path", None)
         if not clone_path:
             try:
@@ -1522,11 +1527,23 @@ class HarnessState:
             except Exception:
                 return None
         try:
-            ctx_file = (
-                Path(clone_path) / ".squidsquad" / role / "context-pressure"
-            )
-            return int(ctx_file.read_text(encoding="utf-8").strip())
-        except (FileNotFoundError, OSError, ValueError):
+            f = Path(clone_path) / ".squidsquad" / role / filename
+            return f.read_text(encoding="utf-8").strip()
+        except (FileNotFoundError, OSError):
+            return None
+
+    def _read_agent_pressure(self, role, agent):
+        """#13335 — read an agent's current context-pressure (int %) from its
+        own clone's ``.squidsquad/<role>/context-pressure`` (the file the
+        statusline writes each cycle). Returns ``None`` when the file is
+        absent, unreadable, or non-integer — treated as 'no signal', never
+        enforced against."""
+        text = self._read_agent_clone_file(role, agent, "context-pressure")
+        if text is None:
+            return None
+        try:
+            return int(text)
+        except ValueError:
             return None
 
     def _enforce_context_pressure(self):
@@ -3135,20 +3152,16 @@ async def get_agent_health(role: str):
         result["alive"] = agent.status == "running"
         result["status"] = agent.status
 
-    # Read current-state file for phase
-    state_file = SQUIDSQUAD_DIR / role / "current-state"
-    try:
-        result["current_phase"] = state_file.read_text(encoding="utf-8").strip()
-    except (OSError, FileNotFoundError):
-        pass
-
-    # Read context-pressure from the agent's OWN clone (#13345). Sibling-clone
-    # agents (skill/qa/dm) write context-pressure to
-    # <clone>/.squidsquad/<role>/context-pressure, NOT the harness-root
-    # .squidsquad/, so reading SQUIDSQUAD_DIR/role here returned a stale/absent
-    # value for them. Reuse _read_agent_pressure — the same clone-relative read
-    # the #13335 enforcement path uses — so the reported number matches what is
-    # actually enforced (and it fails-safe to None on absent/unreadable/non-int).
+    # Read current-state (phase) and context-pressure from the agent's OWN
+    # clone (#13345 fixed context_pressure; #13558 mirrors the identical fix
+    # for current_phase — same root cause). Sibling-clone agents (skill/qa/dm)
+    # write BOTH files to <clone>/.squidsquad/<role>/, NOT the harness-root
+    # .squidsquad/, so reading SQUIDSQUAD_DIR/role here returned a
+    # stale/absent value for them. _read_agent_clone_file is the shared
+    # clone-relative read both this and the #13335 enforcement path use, so
+    # the reported values match what the agent's own clone actually holds
+    # (and both fail-safe to None on an unresolvable clone or missing file).
+    result["current_phase"] = state._read_agent_clone_file(role, agent, "current-state")
     result["context_pressure"] = state._read_agent_pressure(role, agent)
 
     return result

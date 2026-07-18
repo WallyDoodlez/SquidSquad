@@ -33,8 +33,10 @@ The sentinel monitors the *flow* of the pipeline: detect a halt, **investigate t
 
 Query all open SquidSquad items:
 ```bash
-gh issue list --label squidsquad --state open --json number,title,labels,updatedAt --limit 50
+gh issue list --label squidsquad --state open --json number,title,labels,updatedAt --limit 500
 ```
+
+> **Note (#13602):** if this returns exactly 500 items, the query is at its cap and older open issues may be **invisible to halt detection** — the same silent-truncation class #13555 fixed for the harness's own issue poller. Raise `--limit` further and re-run before concluding the pipeline is healthy.
 
 **2.1 Detect a halt — by lack of PROGRESS, not by absence of comments.** A **halt** is *no forward progress on a non-terminal item past **90 minutes*** (3 cycles). Forward progress means a **status/label change or a PR push** — **NOT** a new comment. Treat any non-terminal item past threshold with no status/label/PR movement as a halt candidate, **regardless of comment activity**.
 
@@ -168,8 +170,10 @@ Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, o
 
 From the open items query, group by `role:*` label and count `status:in-progress` items per role:
 ```bash
-gh issue list --label squidsquad --label status:in-progress --state open --json number,title,labels --limit 50
+gh issue list --label squidsquad --label status:in-progress --state open --json number,title,labels --limit 500
 ```
+
+> **Note (#13602):** if this returns exactly 500 items, the query is at its cap and some in-progress items may be **invisible to the double-pickup check** — the anomaly detector this section exists to run would then silently miss exactly the thing it's for. Raise `--limit` further before trusting a clean read.
 For each role with >=2 `status:in-progress` items:
 - **Tier 1**: Comment on each of that role's in-progress items — `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PM pipeline-sentinel: [role] holds N status:in-progress items simultaneously (#[other numbers]). If one is a parked block-and-continue, transition it to status:blocked; otherwise this may be a double-pickup — investigate."` This is advisory (not a halt/unblock) — the flagged agent reconciles at its next pickup.
 - **Tier 2**: Only file a bug if the same role still shows >=2 `status:in-progress` on the NEXT sentinel run after the Tier-1 nudge (i.e. it did not self-resolve to one active + one `blocked`) — `"Role [role] held >=2 status:in-progress items across 2 consecutive pipeline-sentinel runs (#[numbers]). Possible true double-pickup, or the agent is not using status:blocked for parked work."`
