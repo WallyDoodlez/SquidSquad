@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-18 10:57
+
+- **Files scanned**: references/scripts/git_ops.py (focused: pr_merge()'s #13447/#13654 pre/post-merge guard functions — _neutralize_pr_body_before_merge, _revert_composed_state_contamination, _checkout_and_ff_working_after_merge — navigation-derived from this session's #13654 round-2 fix)
+- **Findings**: none — grepped for other `gh pr edit` call sites (the exact defect class #13654 round 2 fixed: old `gh` 2.34.0 GraphQL-querying a removed `projectCards` field) and found none remaining in `references/scripts/`; independently confirms the same conclusion QA's own concurrent scan reached (commit 946e10a46, "confirmed gh pr edit bug is scoped correctly, no other call sites affected"). `_revert_composed_state_contamination`/`_checkout_and_ff_working_after_merge` fail-open consistently per their docstrings; `_get_working_branch()` fallback-to-"main" is safe. Sanity-checked `gh pr ready` against a real closed PR (#13655) — clean early "PR is closed" error, no GraphQL crash, so it does not appear to share the `gh pr edit` bug (not exhaustively proven on an open draft, but no evidence of the same failure mode).
+- **Items rejected by human**: none
+- **Notes**: this scan's driver tick coincided with #13654 shipping (verifier PASS, DM merged) and QA's own scan landing on the identical question — a useful cross-check that two independent scans (skill + qa) converged on the same "scoped correctly" conclusion via different methods (grep vs whatever QA's pass used).
+
 ## Scan — 2026-07-18 08:24
 
 - **Files scanned**: references/scripts/wizard.py (full exception-handling sweep, fail-open/fail-closed consistency lens per prior scans' productive criteria), docs/archive/EVENT-ARCHITECTURE.md (stale-claim spot-check, same lens that surfaced #13317's PID-sole-liveness fix this session)
