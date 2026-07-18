@@ -551,6 +551,27 @@ def _run_list(cmd_list, check=True):
     )
 
 
+def _run_list_timeout(cmd_list, timeout, check=False):
+    """#13574: ``_run_list`` with a bounded timeout. A stalled TCP connection
+    (vs an immediate error) would otherwise hang the caller forever — for the
+    boot-gate write probe that would brick the boot, the exact opposite of its
+    fail-open-on-uncertainty contract. TimeoutExpired is converted to a fake
+    returncode=124 result (POSIX timeout convention) so callers' existing
+    non-zero handling treats it as inconclusive."""
+    if cmd_list and cmd_list[0] == "gh":
+        cmd_list = [_resolve_gh_bin()] + list(cmd_list[1:])
+    try:
+        return subprocess.run(
+            cmd_list, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            check=check, cwd=str(REPO_ROOT), timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            args=cmd_list, returncode=124, stdout="",
+            stderr=f"TIMEOUT after {timeout}s")
+
+
 def _run_gh_with_body(cmd_list, body, check=True):
     """Run a ``gh`` command whose body/message is agent-authored prose, passing
     the body via ``--body-file -`` (UTF-8 stdin) instead of as a command-line
@@ -642,6 +663,32 @@ def check_gh():
         print("ERROR: GitHub Issues permission check failed.", file=sys.stderr)
         print("Run 'gh auth refresh' with 'repo' scope.", file=sys.stderr)
         return False
+    # #13574: a read succeeding proves nothing about WRITE capability. During
+    # the #13570 incident a read-only identity booted every agent clean while
+    # the whole pipeline was write-frozen (no transitions, no labels, no push)
+    # — invisible until a write failed mid-cycle. Verify push permission
+    # cheaply via the repo endpoint (gh resolves :owner/:repo from CWD).
+    perm = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
+                              "-q", ".permissions.push"], timeout=15)
+    verdict = (perm.stdout or "").strip().lower()
+    if perm.returncode == 0 and verdict == "false":
+        print("ERROR: forge WRITE access check failed (#13574): the gh "
+              "identity has READ but not PUSH permission on this repo - the "
+              "#13570 read-only-downgrade signature. Every transition, label "
+              "write, and git push will fail while health stays green.",
+              file=sys.stderr)
+        print("Remediation (operator): restore the identity's write role on "
+              "the repo (Settings > Collaborators), or 'gh auth login' as an "
+              "account with push access; confirm with 'git push' (403 = still "
+              "read-only).", file=sys.stderr)
+        return False
+    if perm.returncode != 0 or verdict not in ("true", "false"):
+        # Inconclusive (network blip, API shape change): the read check above
+        # already proved connectivity — warn, do not block boot (fail-open on
+        # uncertainty; only a definitive 'false' is the outage signature).
+        print(f"WARNING: forge write-permission probe inconclusive "
+              f"(exit={perm.returncode}, out={verdict!r}) - proceeding on the "
+              f"read check alone (#13574).", file=sys.stderr)
     print("OK")
     return True
 
