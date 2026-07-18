@@ -211,7 +211,8 @@ class TestListByLabels:
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
         tracker.list_by_labels("status:pending-ship", state="all")
         adapter.list_issues.assert_called_once_with(
-            labels=["status:pending-ship"], state="all", limit=50
+            labels=["status:pending-ship"], state="all",
+            limit=tracker._OPEN_ISSUE_LIST_LIMIT
         )
 
 
