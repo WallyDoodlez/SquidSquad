@@ -5484,6 +5484,123 @@ class TestMergeGitOpsReload13588(unittest.TestCase):
         self.assertFalse(harness._MERGE_LOCK.locked())
 
 
+class _SyncThread:
+    """Runs the merge body inline so assertions are deterministic — no daemon
+    -thread join race (the flake class filed as #13589)."""
+
+    def __init__(self, target=None, daemon=None, name=None, args=(), kwargs=None):
+        self._t, self._a, self._k = target, args, kwargs or {}
+
+    def start(self):
+        self._t(*self._a, **self._k)
+
+
+class TestMergeLockTimeout13596(unittest.TestCase):
+    """#13596: #13588's _MERGE_LOCK.acquire() had no timeout — one hung
+    subprocess call while holding the lock wedged every subsequent /merge
+    request forever (the harness's entire merge subsystem, not just the
+    hung thread). Two independent fixes: (1) a bounded acquire so a queued
+    /merge fails loud instead of hanging forever, (2) the compose.py
+    deploy-all subprocess.run() — the actual unbounded call inside the
+    locked section — now carries a timeout= of its own."""
+
+    def test_do_merge_lock_timeout_fails_loud_without_deadlock(self):
+        """A queued /merge must fail loud (not hang forever, not attempt the
+        merge) when _MERGE_LOCK is already held by a hung merge ahead of it."""
+        import harness
+        from fastapi.testclient import TestClient
+
+        fake_go = MagicMock(name="git_ops_module")
+        client = TestClient(harness.app, raise_server_exceptions=False)
+
+        harness._MERGE_LOCK.acquire()  # simulate a hung merge holding the lock
+        try:
+            with patch("harness.MERGE_LOCK_TIMEOUT", 0.05), \
+                 patch("harness._reload_git_ops", return_value=fake_go), \
+                 patch("harness._get_pr_files", return_value=[]), \
+                 patch("harness.threading.Thread", _SyncThread), \
+                 patch("harness._emit_event") as mock_emit:
+                resp = client.post(
+                    "/merge",
+                    json={"pr_number": 4343, "branch": "squidsquad/task/4343",
+                          "role": "dm"})
+            self.assertEqual(resp.status_code, 202)
+            fake_go.pr_merge.assert_not_called()
+            pr_merged_calls = [
+                c for c in mock_emit.call_args_list if c.args[0] == "pr-merged"
+            ]
+            self.assertEqual(len(pr_merged_calls), 1)
+            payload = pr_merged_calls[0].kwargs.get("payload")
+            self.assertFalse(payload["success"])
+            self.assertIn("lock", payload["error"].lower())
+        finally:
+            harness._MERGE_LOCK.release()
+
+    def test_compose_subprocess_run_uses_bounded_timeout(self):
+        """compose.py deploy-all previously ran via subprocess.run() with NO
+        timeout= at all — the one genuinely-unbounded call inside the
+        _MERGE_LOCK critical section. Must now pass timeout=COMPOSE_TIMEOUT."""
+        import harness
+        from fastapi.testclient import TestClient
+
+        fake_go = MagicMock(name="git_ops_module")
+        fake_go.pr_merge.return_value = (True, "merged")
+        fake_go.ensure_main_and_pull.return_value = (True, "ok")
+
+        client = TestClient(harness.app, raise_server_exceptions=False)
+        with patch("harness._reload_git_ops", return_value=fake_go), \
+             patch("harness._get_pr_files",
+                   return_value=["references/scripts/foo.py"]), \
+             patch("harness.threading.Thread", _SyncThread), \
+             patch("harness._emit_event"), \
+             patch("harness.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            resp = client.post(
+                "/merge",
+                json={"pr_number": 4344, "branch": "squidsquad/task/4344",
+                      "role": "dm"})
+        self.assertEqual(resp.status_code, 202)
+        mock_run.assert_called_once()
+        self.assertEqual(mock_run.call_args.kwargs.get("timeout"),
+                         harness.COMPOSE_TIMEOUT)
+
+    def test_compose_subprocess_timeout_handled_gracefully(self):
+        """A hung compose.py must not crash the merge thread or leave the
+        lock stuck — TimeoutExpired is caught and surfaced as a compose
+        failure, and _MERGE_LOCK is still released via the finally clause."""
+        import harness
+        import subprocess as _subprocess
+        from fastapi.testclient import TestClient
+
+        fake_go = MagicMock(name="git_ops_module")
+        fake_go.pr_merge.return_value = (True, "merged")
+        fake_go.ensure_main_and_pull.return_value = (True, "ok")
+
+        client = TestClient(harness.app, raise_server_exceptions=False)
+        with patch("harness._reload_git_ops", return_value=fake_go), \
+             patch("harness._get_pr_files",
+                   return_value=["references/scripts/foo.py"]), \
+             patch("harness.threading.Thread", _SyncThread), \
+             patch("harness._emit_event") as mock_emit, \
+             patch("harness.subprocess.run",
+                   side_effect=_subprocess.TimeoutExpired(
+                       cmd="compose.py", timeout=harness.COMPOSE_TIMEOUT)):
+            resp = client.post(
+                "/merge",
+                json={"pr_number": 4345, "branch": "squidsquad/task/4345",
+                      "role": "dm"})
+        self.assertEqual(resp.status_code, 202)
+        self.assertFalse(harness._MERGE_LOCK.locked(),
+                         "lock must be released even after a compose timeout")
+        compose_calls = [
+            c for c in mock_emit.call_args_list if c.args[0] == "compose-completed"
+        ]
+        self.assertEqual(len(compose_calls), 1)
+        payload = compose_calls[0].kwargs.get("payload")
+        self.assertFalse(payload["success"])
+        self.assertIn("timed out", payload["error"])
+
+
 # ---------------------------------------------------------------------------
 # EAD issue-poll --limit must not silently truncate the open set — #13555
 # ---------------------------------------------------------------------------

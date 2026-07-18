@@ -99,6 +99,21 @@ _teardown_in_progress = False
 # reset git_ops._ENSURE_MAIN_LOCK out from under a concurrent same-clone pull).
 _MERGE_LOCK = threading.Lock()
 
+# #13596: _do_merge() holds _MERGE_LOCK across the whole merge+compose sequence.
+# git_ops.pr_merge()'s own subprocess calls already bound themselves via
+# _run_list's _git_timeout() default (300s/call) -- but the compose.py
+# deploy-all subprocess.run() below this lock does NOT (a plain subprocess.run
+# with no timeout=, genuinely unbounded). Before this fix, one hung compose.py
+# call while holding the lock wedged every subsequent /merge request forever
+# (.acquire() with no args blocks indefinitely) -- the harness's entire merge
+# subsystem, not just the hung thread. MERGE_LOCK_TIMEOUT bounds the QUEUE
+# side (a queued /merge fails loud instead of hanging forever); COMPOSE_TIMEOUT
+# bounds the actual unbounded call so the lock gets released in the first place.
+# Both generous (a full merge can legitimately involve several 300s-capped git
+# ops back to back) so neither false-trips a slow-but-healthy merge.
+MERGE_LOCK_TIMEOUT = 900
+COMPOSE_TIMEOUT = 300
+
 
 def _begin_teardown() -> bool:
     """Atomically claim the single teardown slot. Returns True for the first
@@ -4650,7 +4665,25 @@ async def merge_pr(request: Request):
         # #13588: hold _MERGE_LOCK across the WHOLE merge so the reload below can
         # never mutate git_ops out from under a concurrent merge thread, and
         # merges never race ensure_main_and_pull on the shared clone.
-        _MERGE_LOCK.acquire()
+        # #13596: bounded acquire — a hung merge ahead in the queue must fail
+        # loud, not wedge every subsequent /merge request forever.
+        acquired = _MERGE_LOCK.acquire(timeout=MERGE_LOCK_TIMEOUT)
+        if not acquired:
+            msg = (
+                f"could not acquire merge lock within {MERGE_LOCK_TIMEOUT}s -- "
+                f"another merge is hung holding it (#13596)"
+            )
+            _log(f"ERROR: merge lock timeout for PR #{pr_number}: {msg}")
+            _emit_event("pr-merged", "harness", payload={
+                "pr_number": str(pr_number),
+                "branch": branch,
+                "issue_number": "",
+                "files_changed": [],
+                "success": False,
+                "error": msg,
+                "requesting_role": role,
+            })
+            return
         try:
             # #13588: reload git_ops from on-disk source each merge — the cached
             # module would otherwise pin merge-time scope logic at process start.
@@ -4712,13 +4745,21 @@ async def merge_pr(request: Request):
                         "trigger_pr": str(pr_number),
                     })
                     return
-                compose_result = subprocess.run(
-                    [sys.executable, str(SCRIPT_DIR / "compose.py"), "deploy-all"],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace",
-                    check=False, cwd=str(REPO_ROOT),
-                )
-                compose_success = compose_result.returncode == 0
-                compose_error = "" if compose_success else compose_result.stderr.strip()[:500]
+                # #13596: bounded — this ran with no timeout= before, the one
+                # genuinely-unbounded call inside the _MERGE_LOCK critical
+                # section (git_ops's own subprocess calls already self-bound
+                # via _run_list's _git_timeout() default).
+                try:
+                    compose_result = subprocess.run(
+                        [sys.executable, str(SCRIPT_DIR / "compose.py"), "deploy-all"],
+                        capture_output=True, text=True, encoding="utf-8", errors="replace",
+                        check=False, cwd=str(REPO_ROOT), timeout=COMPOSE_TIMEOUT,
+                    )
+                    compose_success = compose_result.returncode == 0
+                    compose_error = "" if compose_success else compose_result.stderr.strip()[:500]
+                except subprocess.TimeoutExpired:
+                    compose_success = False
+                    compose_error = f"compose.py deploy-all timed out after {COMPOSE_TIMEOUT}s (#13596)"
 
                 _emit_event("compose-completed", "harness", payload={
                     "success": compose_success,
