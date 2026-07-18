@@ -164,3 +164,33 @@ unmocked, disposable-PR repro when a fix touches PR-body mutation.
 Shipped via PR #13655 (2 verify rounds, zero gaps on round 2, static gate green both
 rounds). The 12-item backlog and repair-status-labels remediation are documented in the
 Update above; this section is the code-fix outcome.
+
+## Update 2026-07-18 (still later same day) — variant 2: single-commit PR squash uses the commit message, not the neutralized body
+
+**#13654's fix has a gap even when working exactly as designed.** Shipping #13683
+(same DM session, ~3hrs after #13654 shipped): the issue was already CLOSED when picked
+up. The PR (#13689) `body` field WAS correctly neutralized ("Addresses #13683" —
+`_neutralize_pr_body_before_merge()` worked). But the merge commit that landed on `main`
+(779a708f9) read `Closes #13683` verbatim. Root cause: this PR had a **single commit**,
+and that commit's own message (written by skill's `git commit -m`, never touched by any
+neutralization guard — only the PR *body* argument is sanitized) contained `Closes
+#13683`. GitHub's squash-merge, for a single-commit PR with no explicit override, defaults
+the squash commit's message to **that commit's own message**, not the PR body — so the
+neutralized body never actually became the merge commit text.
+
+**Practical implication**: `_neutralize_pr_body_before_merge()` and `pr_create()`'s guard
+both operate on the PR *body* field exclusively. Neither has ever touched a commit
+message. For a multi-commit PR, GitHub uses the PR body/title for the squash default, so
+the guard covers it. For a **single-commit PR**, GitHub uses the commit's own message —
+a code path the guard doesn't reach at all. Filed **#13691** (role:skill, medium):
+suggested fix is to always pass an EXPLICIT squash body (the already-neutralized PR body)
+on the merge call, rather than relying on GitHub's implicit default selection — this
+closes the gap regardless of commit count.
+
+**DM action this time**: no stranded-label sweep needed (single instance, caught live via
+direct event-driven pickup) — shipped #13683 normally (real work, real ACs met), noted the
+finding in the ship comment, filed #13691. **Running tally of this bug class**: #3747 →
+#4038 → #4518 → #6222 → #13371 (fixed, PR-body-only) → 12-item recurrence → #13654 (fixed,
+merge-time PR-body guard) → #13683/#13691 (commit-message variant, still open). Each fix
+narrows the surface but a new sub-path keeps surfacing — treat any future "fixed" claim on
+this class with a live single-commit-PR repro before trusting it closed for good.
