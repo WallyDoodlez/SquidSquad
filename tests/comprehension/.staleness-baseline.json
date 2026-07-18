@@ -128,6 +128,9 @@
  "13464_spec.json": {
   "references/sub-skills/roles/verifier/verification.md": "060cc3b168d7feb4456c59201b82a0283df9cffb"
  },
+ "13551_spec.json": {
+  "references/sub-skills/common/git-commit.md": "b94d0036f84ebed790bc70f2b47db3bf22391253"
+ },
  "13569_spec.json": {
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
  },

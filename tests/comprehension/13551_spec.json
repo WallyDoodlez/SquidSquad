@@ -1,0 +1,38 @@
+{
+  "issue": 13551,
+  "title": "IMPROVEMENT: worker branches routinely append to the same test-file anchor, causing recurring squash-blocking conflicts",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-18",
+  "ac": "comprehension (#9184 hard gate): a fresh agent reading ONLY the new \"### Test-file placement (#13551)\" section of git-commit.md must derive (1) a regression test should PREFER a new dedicated file (tests/test_<issue-number>_<short-name>.py) over appending a new class to a shared file's tail; (2) the actual mechanism -- two branches appending after the same anchor point cannot be auto-ordered by git, producing mergeable=CONFLICTING/DIRTY from insertion-position collision, not a real code conflict; (3) the narrow carve-out exception -- only extend an existing shared file when the test is a direct, tightly-scoped addition to that file's own existing coverage of the same function, not merely because the fix touches a function the file already tests; (4) the motivating history -- this recurred across sibling branches worked in quick succession off the same file (the git_ops.py PR-lifecycle cluster).",
+  "method": "Fresh agent (model: sonnet, general-purpose) given ONLY references/sub-skills/common/git-commit.md from branch squidsquad/task/13551, explicitly instructed to use no other file/tool/prior knowledge. CQ spec authored + executed by verifier per #9184.",
+  "target": "references/sub-skills/common/git-commit.md -- new \"### Test-file placement (#13551)\" section (PR #13636, branch squidsquad/task/13551)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "When a fix needs a regression test, what placement does the file say you should PREFER, and what is the recommended file-naming pattern for it?",
+      "expected": "Prefer a new dedicated file over appending to a shared file's tail; naming pattern tests/test_<issue-number>_<short-name>.py.",
+      "must_not": "Recommending appending to an existing shared file as the default/preferred approach."
+    },
+    {
+      "id": "CQ2",
+      "q": "Why does appending a new test class to an existing shared file's tail cause a merge problem? Explain the actual mechanism -- what does mergeable=CONFLICTING/DIRTY mean here, and why does it happen even with no real code conflict?",
+      "expected": "Two independent branches each append after the same anchor point (commonly the last class); neither has seen the other's insertion, so git cannot auto-order them -- a positional/structural collision at the text-diff level, not a semantic clash between the two tests' actual logic.",
+      "must_not": "Attributing the conflict to the tests' logic actually clashing or overlapping in behavior."
+    },
+    {
+      "id": "CQ3",
+      "q": "Is there a legitimate exception where you should still add a new test class to an existing shared file instead of a new dedicated file? What is the exact condition?",
+      "expected": "Yes -- only when the test is a direct, tightly-scoped addition to that file's own existing coverage of the same function, not merely because the fix happens to touch a function the file already tests.",
+      "must_not": "Claiming there is no exception, or stating the exception loosely as 'when it touches the same function' without the tightly-scoped/direct-extension qualifier."
+    },
+    {
+      "id": "CQ4",
+      "q": "Does the file explain WHY this guidance exists -- what prior real-world problem motivated it? Summarize based only on the file.",
+      "expected": "Yes -- this class of merge conflict recurred across sibling branches worked in quick succession off the same file, e.g. the git_ops.py PR-lifecycle cluster, each costing a verify-reject-rebase-reverify round trip.",
+      "must_not": "Inventing a motivation not stated in the file, or claiming no motivation is given."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-18",
+  "evidence": "Fresh sonnet general-purpose agent (id a75ffb609287ff360), given ONLY the branch's git-commit.md, explicitly told to use no other file/tool/prior knowledge. 4/4 correct with accurate supporting quotes, zero must_not violations. CQ1: 'prefer a new dedicated file... tests/test_<issue-number>_<short-name>.py.' CQ2: '...neither branch has seen the other's insertion, so the merge reports mergeable=CONFLICTING/DIRTY purely from insertion-position collision -- not from any real code conflict.' CQ3: 'the exception is when the test is a direct, tightly-scoped addition to that file's own existing coverage of the same function.' CQ4: 'this insertion-position merge-conflict problem had actually happened repeatedly in practice... the git_ops.py PR-lifecycle cluster.'"
+}
