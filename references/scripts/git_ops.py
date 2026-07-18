@@ -759,6 +759,14 @@ def _pr_state_scope_violations(pr_number):
     to strip these on feature-branch commits (``.squidsquad/`` + ``.claude/`` minus
     the launcher-script allow-list), plus the ``_is_plan_body`` (#12750) exemption.
 
+    BOOTSTRAP PROPERTY (#13577, discovered live): this check evaluates against
+    the merging clone's CURRENT predicate -- deliberately, since trusting the
+    PR's own tree would let any PR exempt itself. Consequence: a PR that EXTENDS
+    the launcher allow-list can never also carry content changes to the newly
+    exempted path -- the guard refuses it against the not-yet-updated predicate.
+    Sequencing rule: land the allow-list extension (code-only PR) first; the
+    content fix for the newly exempted path rides a follow-up PR.
+
     Why a MERGE-gate check is needed even with the #11511 commit-time guard: that
     guard only unstages NEWLY-staged state on a branch commit -- it does not
     restore a path already ABSENT/emptied in the branch tree (from the branch's own
