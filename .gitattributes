@@ -47,3 +47,13 @@
 # blob, which yields `/bin/sh^M: bad interpreter` and a silently dead state
 # guard on POSIX clones (#11511 Part 2).
 references/git-hooks/* text eol=lf
+
+# Windows shell scripts — pin CRLF so autocrlf settings never rewrite them.
+# These are consumed by Windows PowerShell / cmd; they must also stay pure ASCII
+# (or carry a UTF-8 BOM) so Windows PowerShell 5.1 — which decodes a BOM-less
+# file as the ANSI codepage — never mis-reads a multi-byte char (e.g. an em-dash
+# whose bytes decode to a smart-quote PowerShell treats as a string delimiter,
+# unbalancing every string after it). Enforced by tests/test_launcher_ascii_safe.py.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
