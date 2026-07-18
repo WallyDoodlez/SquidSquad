@@ -1,0 +1,26 @@
+#!/bin/sh
+# SquidSquad post-merge guard (#13556) -- FAIL-OPEN.
+#
+# Runs after EVERY successful merge (git merge, and the merge part of git pull),
+# regardless of how it was invoked -- including a bare `git merge origin/main`
+# an agent runs by hand (the exact vector that caused the #13554/#13556 SEV
+# incident, and the verifier's own documented conflict-resolution technique;
+# wiring the guard only into git_ops.pull() left this path uncovered).
+#
+# It restores any protected .squidsquad/.claude state/vault path the merge
+# SILENTLY DROPPED via the merge=ours/union modify-vs-delete gap (git applies an
+# incoming delete of a file the local side did not modify with NO conflict, so
+# the content merge driver never fires). The restore is content-from-ORIG_HEAD +
+# a follow-up commit, and only fires on a REAL merge that actually dropped a
+# protected path -- a clean merge is a no-op (no commit). Fully fail-safe: the
+# guard never raises and this hook always exits 0, so it can never abort or wedge
+# a merge (a blocking merge hook could stall every agent's cycle).
+#
+# post-merge does NOT run on a merge that hit conflicts; the modify-vs-delete
+# drop is a CLEAN (conflict-free) merge, so this fires exactly when it must.
+
+python references/scripts/git_ops.py restore-merge-dropped-state \
+  || python3 references/scripts/git_ops.py restore-merge-dropped-state \
+  || true
+
+exit 0
