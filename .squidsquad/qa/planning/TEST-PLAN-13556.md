@@ -65,3 +65,36 @@ pattern — also uncovered.
   merge, add a `git_ops.py` wrapper command for the merge-main-into-branch
   operation, or correct the "regardless of how it arrived" framing to name
   the residual gap explicitly.
+
+---
+
+## RE-VERIFICATION (resubmission, PR #13560 updated — post-merge hook)
+
+Worker's fix: a tracked `references/git-hooks/post-merge` hook (auto-active via
+the existing #11511 `core.hooksPath`) invokes a new
+`git_ops.py restore-merge-dropped-state` CLI after **any** successful merge —
+including a bare `git merge` outside `git_ops.py` entirely. Also fixed during
+this round: gitlink/submodule false-positive (the guard was resurrecting
+deliberately-deleted `.claude/worktrees/*` registrations) and a test-isolation
+leak the guard's own live-fire exposed.
+
+| TC | AC | Check | Result |
+|----|----|-------|--------|
+| TC5-retest | **AC5 — the decisive check, re-run** | **My own** independent live reproduction (fresh scratch repo, NOT the PR's own test): extracted `git_ops.py` + `references/git-hooks/post-merge` at the PR tip into an isolated repo, set `core.hooksPath`, reproduced the identical base→incoming(delete)→main(diverge)→bare-`git merge --no-edit` shape as the original FAIL. Result: hook fired, note restored byte-exact, working tree clean, dedicated restore commit created (`...#13556 restore 1 state/vault path(s)...`). **PASS — reverses the prior FAIL.** |
+| TC7 | AC6 (regression: does the fix break normal operation) | Full `tests/test_git_ops.py` on branch **freshly re-fetched** from `origin/squidsquad/task/13560` (caught and discarded a stale local branch from the prior verify pass that only had commit 1/5) merged with **current** `origin/main` (2 commits ahead at re-verify time) via local `git merge origin/main --no-edit` — itself now protected by the very fix under test; diffstat confirmed no protected path dropped, no restore fired (correct — nothing was dropped) | **259/259 PASS**, 0 regressions |
+| TC8 | All 16 `*13556*`-named tests incl. `test_bare_merge_fires_hook_end_to_end` (the PR's own replay of my exact falsification scenario) | `pytest -k 13556` on the combined state | **16/16 PASS** |
+| TC9 | install-hooks activates post-merge too | **My own** live call: fresh repo, no exec bit set, real `git_ops.py install-hooks` invocation (not mocked) | **PASS** — `core.hooksPath` set, both `pre-commit` and `post-merge` end up mode `755` |
+| TC10 | Hook tracked correctly | `git ls-files -s references/git-hooks/post-merge` on combined state | **100755** (exec bit preserved in git, not just working tree) |
+| TC11 | Manifest | `references/installer-files.txt` | contains `references/git-hooks/post-merge`, count 256 |
+| TC12 (out-of-scope finding) | — | Full static gate on combined state: 3 failures (non-ASCII em-dash in `.squidsquad/start.ps1` / `inject-permissions.ps1`, breaks Windows PowerShell 5.1 parsing) | **Confirmed pre-existing on clean `origin/main`** via disposable worktree with zero #13556 changes — same 3 failures reproduce identically. **Not caused by this PR.** Filed separately as **#13577** (skill, high), not blocking this verdict. |
+
+### Verdict: PASS
+
+The specific gap that produced the prior FAIL — `_restore_merge_dropped_state`
+being reachable only via `git_ops.pull()`, missing the bare-`git merge` vector
+that was the incident's actual trigger — is closed. Independently reproduced
+via my own from-scratch repro (not trusting the PR's own
+`test_bare_merge_fires_hook_end_to_end`), which now passes too. No regressions
+in the affected surface (259/259). The one static-gate finding surfaced during
+this verify (#13577) is proven disjoint from this PR's file set and routed
+separately.
