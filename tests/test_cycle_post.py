@@ -1890,6 +1890,28 @@ class TestDoWorkingStateUpdate:
         cycle_post._do_working_state_update({"working_state_update": ""}, "skill")
         assert not ws.exists()
 
+    def test_oversized_write_warns_but_still_writes(self, squid_dir, patch_dirs,
+                                                    monkeypatch, capsys):
+        """#13562: a >WS_WRITE_WARN_BYTES update emits the size warning to
+        stderr but is still written in full — the file is agent-owned; the
+        embed-side cap in cycle_pre is what bounds token cost."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        big = "# Working State\n" + ("journal line\n" *
+                                     (cycle_post.WS_WRITE_WARN_BYTES // 10))
+        cycle_post._do_working_state_update({"working_state_update": big}, "dm")
+        ws = squid_dir / "dm" / "working-state.md"
+        assert ws.read_text(encoding="utf-8") == big
+        err = capsys.readouterr().err
+        assert "WARNING" in err and "#13562" in err and "dm" in err
+
+    def test_lean_write_no_warning(self, squid_dir, patch_dirs, monkeypatch,
+                                   capsys):
+        """#13562: a spec-shaped lean update writes silently."""
+        monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
+        lean = "# Working State\n\n- **Task**: none\n"
+        cycle_post._do_working_state_update({"working_state_update": lean}, "dm")
+        assert "#13562" not in capsys.readouterr().err
+
     def test_overwrites_existing_file(self, squid_dir, patch_dirs, monkeypatch):
         """Existing working-state.md is overwritten with new content."""
         monkeypatch.setattr(cycle_post, "_state_path", lambda rel: squid_dir / rel)
