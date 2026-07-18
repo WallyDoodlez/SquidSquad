@@ -13,7 +13,13 @@
 - `status:pending-test` confirmed empty as of last check.
 
 ## Remaining Steps
-- Idle / improvement-scan cool-down loop active (driver armed, cron 1088b42d).
+- Idle / improvement-scan cool-down loop active (driver armed, cron 00fc745c, scan_count 1/3).
+
+## This Session (2026-07-18, fresh boot)
+- Boot drain: 13 queued events, all already-resolved (13354/13602/13558/13610 all confirmed CLOSED via get-state) — no rework needed, cursor caught up to 21a631684add8a68.
+- status:pending-test confirmed empty.
+- Improvement scan #1: filed #13611 — harness.py's stop-all-agents idle-wait loop (~line 4436) reads sibling-clone agents' `current-state` from the harness-root path instead of their own clone (3rd site of the #13345/#13558 bug class), and silently miscounts a missing file as "idle" rather than "unknown" — risks force-killing a mid-task skill/qa/dm agent during harness stop/restart before its grace window elapses.
+- Verified #13317 (PASS, shipped-pending) — stale PID-sole-liveness claims in agent-lifecycle.md/health-check.md repointed to the #12492 dual model. Self-caught a transition-path mistake: picked it up via pending-test->in-progress (dev-owned lane) instead of the verifier's direct pending-test->pending-ship path; corrected via a --force restore to pending-test before the legitimate transition. PR #13612 merged (harness confirmed success:true). TEST-PLAN-13317.md / QA-RESULTS-13317.md under `.squidsquad/qa/planning/`.
 
 ## Key Decisions
 - Prior session's deploy-signal (harness restart for #13585's git_ops module-staleness fix) was already fully honored before this session's boot.
