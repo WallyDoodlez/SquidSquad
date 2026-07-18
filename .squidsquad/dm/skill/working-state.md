@@ -3,7 +3,7 @@
 - **Task**: none
 - **Status**: idle
 - **Started**: 2026-07-18
-- **Last**: shipped #13556/#13562/#13577/#13579/#13575/#13582 this session; counter at 44 (bump HELD, no PM/operator signal). #13582 (PR 2/2) retried and shipped after PM's harness restart resolved the git_ops.py module-cache staleness (#13585). #13577 class now fully closed, static gate green. Honoring a deferred boot-drain deploy-signal next — session ending for a coordinated recompose/respawn.
+- **Last**: shipped #13557/#13585/#13580/#13555/#13574/#13515/#13588/#12527 this wake (8 items). #13588 = durable fix for the module-cache class (closes #13585 permanently). #12527 = greenfield installer smoke-test findings (no code diff, no CHANGELOG -- follow-up bugs #13592/#13593/#13595 carry the actual fixes). Counter 44->52 (bump HELD, no PM/operator signal).
 
 ## Improvement Scan
-- Status: idle, driver armed, scan 1/3 this burst (0 findings — #13569 self-QA clean). Cron ticking at :08/:38.
+- Status: idle, driver cancelled (burst cap 3/3 hit — post-ship self-QA of #13557/#13585/#13580, 0 findings). Quiesced until new forge activity re-idles + re-arms.

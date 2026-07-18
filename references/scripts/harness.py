@@ -22,6 +22,7 @@ Usage:
 
 import asyncio
 import collections
+import importlib
 import json
 import os
 import signal
@@ -85,6 +86,18 @@ HARNESS_RESTART_EXIT_CODE = 42
 # lock+flag makes "begin teardown" a single-winner gate; the loser gets 409.
 _teardown_lock = threading.Lock()
 _teardown_in_progress = False
+
+# #13588: /merge runs inside the long-lived harness process, so a plain
+# `import git_ops` pins the module object cached at first import — any git_ops.py
+# change that lands on main mid-session (e.g. a merge-time scope-gate allow-list
+# extension) stays invisible to later merges, spuriously refusing
+# correctly-sequenced PRs until a full harness restart (the #13585 incident).
+# `_reload_git_ops()` reloads from current on-disk source each merge so the
+# scope checks reflect the live git_ops.py. `_MERGE_LOCK` serializes merges
+# end-to-end: verifier auto-merge and DM ship can both POST /merge at once, and
+# the reload must never race another merge's in-flight use of the module (nor
+# reset git_ops._ENSURE_MAIN_LOCK out from under a concurrent same-clone pull).
+_MERGE_LOCK = threading.Lock()
 
 
 def _begin_teardown() -> bool:
@@ -4577,6 +4590,20 @@ def _parse_issue_from_branch(branch):
     return None
 
 
+def _reload_git_ops():
+    """Return the git_ops module reloaded from current on-disk source (#13588).
+
+    Callers MUST hold ``_MERGE_LOCK`` so the reload never races another merge's
+    in-flight use of the module. Reload re-executes git_ops.py top level, which
+    rebinds ``git_ops._ENSURE_MAIN_LOCK`` to a fresh lock; serializing merges is
+    what keeps that harmless (no concurrent user of that lock exists during a
+    reload). See the ``_MERGE_LOCK`` comment for the full rationale.
+    """
+    import git_ops
+    importlib.reload(git_ops)
+    return git_ops
+
+
 @app.post("/merge", status_code=202)
 async def merge_pr(request: Request):
     """Merge a PR asynchronously. Returns 202 Accepted immediately.
@@ -4620,9 +4647,14 @@ async def merge_pr(request: Request):
 
     def _do_merge():
         """Background thread: merge PR, detect references/ changes, compose."""
+        # #13588: hold _MERGE_LOCK across the WHOLE merge so the reload below can
+        # never mutate git_ops out from under a concurrent merge thread, and
+        # merges never race ensure_main_and_pull on the shared clone.
+        _MERGE_LOCK.acquire()
         try:
-            # Import git_ops for the merge function
-            import git_ops
+            # #13588: reload git_ops from on-disk source each merge — the cached
+            # module would otherwise pin merge-time scope logic at process start.
+            git_ops = _reload_git_ops()
 
             # Get files changed before merge (for compose detection)
             files_changed = _get_pr_files(pr_number) or []
@@ -4714,6 +4746,8 @@ async def merge_pr(request: Request):
                 "error": str(e),
                 "requesting_role": role,
             })
+        finally:
+            _MERGE_LOCK.release()
 
     threading.Thread(target=_do_merge, daemon=True, name=f"merge-{pr_number}").start()
 
