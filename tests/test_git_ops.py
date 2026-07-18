@@ -567,9 +567,14 @@ class TestPrMerge:
         # dedicated guard tests (TestPrMergeStateScopeGuard13554) re-patch it to
         # assert the refusal. Stubbing it also keeps its _pr_declared_files ->
         # _run_list call out of the per-test mock sequence.
+        # #13447: stub the post-merge dirty-tree revert + working-branch sync so
+        # they don't consume the per-test _run_list mock sequence (they have
+        # their own tests in TestPrMergePostMergeSync13447).
         with patch("git_ops._pr_behind_by", return_value=0), \
                 patch("git_ops._pr_state_scope_violations", return_value=[]), \
-                patch("git_ops._post_merge_scope_audit"):
+                patch("git_ops._post_merge_scope_audit"), \
+                patch("git_ops._revert_composed_state_contamination"), \
+                patch("git_ops._checkout_and_ff_working_after_merge"):
             yield
 
     @patch("git_ops._run_list")
@@ -3357,9 +3362,14 @@ class TestPrMergeDraftSelfHeal:
         # dedicated guard tests (TestPrMergeStateScopeGuard13554) re-patch it to
         # assert the refusal. Stubbing it also keeps its _pr_declared_files ->
         # _run_list call out of the per-test mock sequence.
+        # #13447: stub the post-merge dirty-tree revert + working-branch sync so
+        # they don't consume the per-test _run_list mock sequence (they have
+        # their own tests in TestPrMergePostMergeSync13447).
         with patch("git_ops._pr_behind_by", return_value=0), \
                 patch("git_ops._pr_state_scope_violations", return_value=[]), \
-                patch("git_ops._post_merge_scope_audit"):
+                patch("git_ops._post_merge_scope_audit"), \
+                patch("git_ops._revert_composed_state_contamination"), \
+                patch("git_ops._checkout_and_ff_working_after_merge"):
             yield
 
     @patch("git_ops.pr_ready", return_value=True)
