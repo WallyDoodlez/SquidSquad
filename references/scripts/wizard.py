@@ -3584,6 +3584,37 @@ def format_scan_summary(scan_data):
     return "\n".join(sections)
 
 
+def _infer_project_type_from_scan(scan):
+    """Best-effort PROJECT_TYPE_PRESETS key from repo_scan data (#13592).
+
+    Used by the `--yes` non-interactive path, which has no human to pick a
+    project_type. Only returns a type on a CONFIDENT positive signal (a
+    recognized framework, or a mobile-only language) — an ambiguous or
+    signal-less scan (a bare script repo, an unrecognized language) returns
+    None so the caller keeps the safe "skill" fallback rather than guessing
+    a stack-specific team shape for a repo we can't actually characterize.
+    """
+    langs = set(scan.get("languages") or [])
+    frameworks = set(scan.get("frameworks") or [])
+
+    if "swift" in langs:
+        return "ios"
+    if "kotlin" in langs or "gradle" in frameworks:
+        return "android"
+
+    frontend_frameworks = {"react", "vue", "svelte", "next", "nextjs", "nuxt", "angular"}
+    backend_frameworks = {"express", "fastify", "nestjs", "django", "flask", "fastapi"}
+    has_frontend = bool(frontend_frameworks & frameworks)
+    has_backend = bool(backend_frameworks & frameworks)
+    if has_frontend and has_backend:
+        return "fullstack"
+    if has_frontend:
+        return "web"
+    if has_backend:
+        return "backend"
+    return None
+
+
 def generate_default_spec(scan_data=None, repo_info=None):
     """Generate a default install spec from auto-detected data.
 
@@ -3631,23 +3662,41 @@ def generate_default_spec(scan_data=None, repo_info=None):
     default_preset = "software-dev"
     domain_variants = resolve_domain_variants(default_preset)
 
+    # #13592: infer the target repo's own stack instead of always assuming
+    # SquidSquad's self-dev "skill" identity. A confident signal (mobile
+    # language, recognized frontend/backend framework) resolves to a
+    # stack-appropriate L3 variant and a generic "worker" id/alias; an
+    # ambiguous/signal-less scan falls back to the original "skill"
+    # id/alias/variant unchanged, since that's still the correct identity
+    # for SquidSquad's own self-dev installs.
+    inferred_type = _infer_project_type_from_scan(scan)
+    inferred_variant = PROJECT_TYPE_PRESETS.get(inferred_type) if inferred_type else None
+
     # Default agents — variants from manifest, not hardcoded.
     # Use canonical new identity 'worker' (renamed from 'dev' in #6274.2);
     # `or domain_variants.get("dev")` keeps pre-rename manifests resolving
     # during the 6274.1 dual-aware window (deleted in 6274.3).
-    worker_variant = domain_variants.get("worker") or domain_variants.get("dev")
+    worker_variant = inferred_variant or domain_variants.get("worker") or domain_variants.get("dev")
     pm_variant = domain_variants.get("pm")
+    verifier_variant = inferred_variant or domain_variants.get("verifier") or domain_variants.get("qa")
+    dm_variant = inferred_variant or domain_variants.get("dm")
+    worker_id = "worker" if inferred_variant else "skill"
+
     agents = [
         {"id": "pm", "alias": "pm", "role": "pm",
          **({"variant": pm_variant} if pm_variant else {})},
         {
-            "id": "skill",
-            "alias": "skill",
+            "id": worker_id,
+            "alias": worker_id,
             "role": "worker",
             **({"variant": worker_variant} if worker_variant else {}),
             "stack": stack,
             "test_command": test_command,
         },
+        {"id": "verifier", "alias": "verifier", "role": "verifier",
+         **({"variant": verifier_variant} if verifier_variant else {})},
+        {"id": "dm", "alias": "dm", "role": "dm",
+         **({"variant": dm_variant} if dm_variant else {})},
     ]
 
     # Read version dynamically from config.md or fallback
