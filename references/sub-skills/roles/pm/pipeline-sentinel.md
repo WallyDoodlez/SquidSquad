@@ -38,6 +38,8 @@ gh issue list --label squidsquad --state open --json number,title,labels,updated
 
 **2.1 Detect a halt — by lack of PROGRESS, not by absence of comments.** A **halt** is *no forward progress on a non-terminal item past **90 minutes*** (3 cycles). Forward progress means a **status/label change or a PR push** — **NOT** a new comment. Treat any non-terminal item past threshold with no status/label/PR movement as a halt candidate, **regardless of comment activity**.
 
+> **`status:blocked` is excluded from halt detection (#13515).** An item at `status:blocked` is *intentionally* not moving — the assignee still owns it but has parked it because it is blocked on another party (a PM-authored AC, a dependency PR, a human decision). Sitting at `blocked` for a long time is expected, not a stall — do not treat it as a halt candidate and do not nudge it. (The blocking condition itself — e.g. the PM AC or dependency PR — may separately warrant its own halt check; that is tracked against whatever item embodies the blocker, not against the parked task.)
+
 > **Failed-handoff sub-rule (the case the old "no recent comments = stalled" test missed):** an item is halted **even when recent comments exist** if those comments carry an **unactioned ask/handoff while the owning agent is idle**. A recent comment is NOT progress.
 
 **2.2 Investigate — classify the cause before any remedy.** Read the latest comments + check agent health (`health_check.py --json`), then assign exactly one class:
@@ -161,6 +163,16 @@ Parse the JSON output. If the assigned agent's health is `stalled`, `stopped`, o
   python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "Agent [role] is [health status]. Returning task to approved for re-pickup."
   ```
 - **Tier 2**: File bug if agent has been unhealthy for >1 hour — `"Agent [role] health is [status] but task #[NUMBER] was in-progress. Harness may need investigation."`
+
+**4g. Double-pickup anomaly** — a role holding **>=2** `status:in-progress` items simultaneously (#13515 §5 observability payoff). This is now a genuine anomaly signal: legitimate block-and-continue parks its still-owned-but-not-active task at `status:blocked` (see 2.1's exclusion), so a role legitimately doing focused work on one item never shows 2+ `in-progress` at once. Two or more means either a true double-pickup bug or a legitimate park that was left at `in-progress` instead of transitioned to `blocked`.
+
+From the open items query, group by `role:*` label and count `status:in-progress` items per role:
+```bash
+gh issue list --label squidsquad --label status:in-progress --state open --json number,title,labels --limit 50
+```
+For each role with >=2 `status:in-progress` items:
+- **Tier 1**: Comment on each of that role's in-progress items — `python references/scripts/tracker.py comment [NUMBER] --role pm-lead --message "PM pipeline-sentinel: [role] holds N status:in-progress items simultaneously (#[other numbers]). If one is a parked block-and-continue, transition it to status:blocked; otherwise this may be a double-pickup — investigate."` This is advisory (not a halt/unblock) — the flagged agent reconciles at its next pickup.
+- **Tier 2**: Only file a bug if the same role still shows >=2 `status:in-progress` on the NEXT sentinel run after the Tier-1 nudge (i.e. it did not self-resolve to one active + one `blocked`) — `"Role [role] held >=2 status:in-progress items across 2 consecutive pipeline-sentinel runs (#[numbers]). Possible true double-pickup, or the agent is not using status:blocked for parked work."`
 
 <!-- #9478: branch+PR is the only mode; all checks above run unconditionally. -->
 

@@ -1474,6 +1474,18 @@ class TestBuildLabelInventory:
         assert "status:pending-human-review" in names
         assert "status:pending-human-setup" in names
 
+    def test_inventory_includes_status_blocked_with_explicit_color_and_desc(self):
+        """#13515 (QA-RESULTS-13515 AC3 fix): status:blocked must be an explicit
+        inventory entry with its own color/description, not just fall through
+        to the generic default — this is what ensure_labels() provisions on a
+        fresh install, and what a live gh label create call actually receives."""
+        inventory = wizard.build_label_inventory()
+        entry = next(e for e in inventory if e["name"] == "status:blocked")
+        assert entry["color"] == "d4c5f9"
+        assert entry["color"] != wizard._DEFAULT_LABEL_COLOR
+        assert "blocked" in entry["description"].lower()
+        assert "parked" in entry["description"].lower() or "owned" in entry["description"].lower()
+
     def test_inventory_is_sorted_for_determinism(self):
         inventory = wizard.build_label_inventory()
         names = [entry["name"] for entry in inventory]

@@ -83,7 +83,8 @@ Monitor tool invocation:
 ### Case D — Mid-task, event arrives
 
 1. A `NUDGE` arrived mid-task. You may leave it unread — the event sits past your cursor and your post-task `GET /events/for` (Case C) will surface it.
-2. **Note but do NOT act.** The current task runs atomically to completion.
+2. **Note but do NOT act on the event.** The current task runs atomically to completion — **unless you become blocked on another party while working it**, which step 2a covers. Becoming blocked is a distinct, event-independent condition (it can happen whether or not a `NUDGE` is present); step 2a documents it here only because Case D is the natural place a mid-task interruption is handled, not because it requires an event.
+2a. **If you become blocked on another party while working the task** (a PM-authored AC, a dependency PR, a human decision already routed elsewhere) — this is not "task completion," so do not fall through to step 3 or leave the item at `in-progress`. Transition it to `status:blocked` (owned-but-parked — see the Soul's *Never Stop While Work Is Pending*), then run the full Case C handoff on it: clear the Task field and write the `idle` marker (Case C step 2), then immediately run `work_queue()` and pick up your next item (Case C steps 3–4). A still-owned task blocked on another party is parked via `status:blocked`, never left at `in-progress` — this is the event-mode mirror of the Soul-level block-and-continue rule.
 3. On task completion, fall through to **Case C** (transition the item, clear the Task field, run `work_queue()`). Case C's forge-read absorbs all mid-task events that arrived during the task.
 
 ---
