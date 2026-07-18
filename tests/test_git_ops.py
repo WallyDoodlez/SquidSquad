@@ -140,6 +140,17 @@ class TestLogDiagnosticTimeout:
 # ---------------------------------------------------------------------------
 
 class TestPull:
+    @pytest.fixture(autouse=True)
+    def _no_real_restore_guard(self):
+        # #13556: pull() invokes _restore_merge_dropped_state, which runs git
+        # via _run_list — NOT mocked by these tests. Without this patch the real
+        # guard fires against the developer's repo mid-test (observed live: a
+        # real restore commit landed during a pytest run). Every test that
+        # reaches pull() must neutralize the guard.
+        with patch.object(git_ops, "_restore_merge_dropped_state",
+                          return_value=[]):
+            yield
+
     @patch("git_ops._run")
     def test_clean_pull(self, mock_run):
         mock_run.return_value = _mock_result()
@@ -378,6 +389,14 @@ class TestPush:
 # ---------------------------------------------------------------------------
 
 class TestPullEmitsRole:
+    @pytest.fixture(autouse=True)
+    def _no_real_restore_guard(self):
+        # #13556: same as TestPull — pull() reaches the real restore guard
+        # unless patched (guard uses _run_list, unmocked here).
+        with patch.object(git_ops, "_restore_merge_dropped_state",
+                          return_value=[]):
+            yield
+
     @patch("git_ops._emit")
     @patch("git_ops._run")
     def test_pull_emits_role(self, mock_run, mock_emit):
@@ -1002,6 +1021,22 @@ class TestRestoreMergeDroppedState13556:
         monkeypatch.setattr(git_ops, "REPO_ROOT", repo)
         with patch.object(git_ops, "_emit"):
             assert git_ops._restore_merge_dropped_state() == []
+
+    def test_blob_sizes_excludes_gitlinks(self):
+        """A gitlink/submodule entry (ls-tree size '-', e.g. a .claude/worktrees
+        registration) is machine-managed, has no restorable content, and its
+        deletion is legitimate — it must never appear in the protected set on
+        either side (observed live: the guard resurrected a worktree gitlink
+        main had deliberately removed)."""
+        out = (
+            "160000 commit 0123456789abcdef0123456789abcdef01234567       -\t"
+            ".claude/worktrees/agent-x\n"
+            "100644 blob fedcba9876543210fedcba9876543210fedcba98      42\t"
+            ".squidsquad/vault/galaxy/a.md\n")
+        with patch.object(git_ops, "_run_list",
+                          return_value=_mock_result(stdout=out)):
+            sizes = git_ops._state_blob_sizes("HEAD")
+        assert sizes == {".squidsquad/vault/galaxy/a.md": 42}
 
     def test_dropped_paths_helper_ignores_already_empty(self):
         """_merge_dropped_state_paths: a path already empty pre-merge is not a

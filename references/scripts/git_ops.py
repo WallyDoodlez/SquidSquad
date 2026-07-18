@@ -1250,7 +1250,13 @@ def _state_blob_sizes(ref):
         try:
             sizes[path] = int(parts[3])
         except ValueError:
-            sizes[path] = -1  # non-numeric (e.g. gitlink "-") -> treat as present
+            # Gitlink/submodule (size "-"): NOT restorable content -- exclude on
+            # both sides. Worktree registrations (e.g. .claude/worktrees/*) are
+            # machine-managed and legitimately deleted; "restoring" a bare
+            # gitlink resurrects a dangling entry with no backing content
+            # (observed live 2026-07-17: the guard re-added a worktree gitlink
+            # main had deliberately removed).
+            continue
     return sizes
 
 
