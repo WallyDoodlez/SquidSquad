@@ -162,8 +162,9 @@ class TestWorkingStateSizeGate13562:
         # Bounded: cap + marker line, nothing near the original 200KB.
         assert len(raw.encode("utf-8")) <= cycle_pre.WS_RAW_CAP_BYTES + 400
         assert raw.startswith("[TRUNCATED (#13562):")
-        assert "rewrite this file down to spec" in raw.lower() or \
-               "clean" in raw.lower() or "spec" in raw
+        # The self-correction instruction must be the marker's own text, not an
+        # accidental journal-content match (DS-13562 F4).
+        assert "rewrite this file down to spec" in raw
         # TAIL kept: the newest journal block survives, the oldest does not.
         assert newest_block in raw
         assert "## Session 1\n" not in raw
@@ -191,14 +192,26 @@ class TestWorkingStateSizeGate13562:
         result = cycle_pre._read_working_state("skill")
         assert result["raw_content"] == content
 
+    def test_tail_ending_partial_line_yields_marker_only(self):
+        # DS-13562 F1: when the tail's only newline is its final char, the
+        # fragment before it is mid-line content — drop it; the marker alone
+        # tells the agent the file needs pruning.
+        raw = ("a" * (cycle_pre.WS_RAW_CAP_BYTES * 3)) + "\n"
+        capped = cycle_pre._cap_working_state_raw(raw)
+        assert capped.startswith("[TRUNCATED (#13562):")
+        assert capped.split("]\n", 1)[1] == ""  # no partial-line leak
+
     def test_cap_boundary_exact_size_not_truncated(self):
         raw = "x" * cycle_pre.WS_RAW_CAP_BYTES
         assert cycle_pre._cap_working_state_raw(raw) == raw
 
-    def test_multibyte_content_never_crashes(self):
-        # A multi-byte char split at the tail boundary must not raise
-        # (errors='ignore' on the decode).
-        raw = ("é" * (cycle_pre.WS_RAW_CAP_BYTES + 100)) + "\nnewest\n"
+    @pytest.mark.parametrize("char", ["é", "本", "😀"],
+                             ids=["2-byte", "3-byte", "4-byte"])
+    def test_multibyte_content_never_crashes(self, char):
+        # A multi-byte char split at the tail byte boundary must not raise
+        # (errors='ignore' on the decode). 2/3/4-byte sequences leave different
+        # orphan continuation-byte patterns at the slice point (DS-13562 F3).
+        raw = (char * (cycle_pre.WS_RAW_CAP_BYTES + 100)) + "\nnewest\n"
         capped = cycle_pre._cap_working_state_raw(raw)
         assert capped.startswith("[TRUNCATED (#13562):")
         assert "newest" in capped

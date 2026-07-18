@@ -464,9 +464,12 @@ def _cap_working_state_raw(raw):
     if len(raw_bytes) <= WS_RAW_CAP_BYTES:
         return raw
     tail = raw_bytes[-WS_RAW_CAP_BYTES:].decode("utf-8", errors="ignore")
-    # Start at a line boundary so the embed never opens mid-line.
+    # Start at a line boundary so the embed never opens mid-line. An empty
+    # result (newline was the last char) is fine — the marker alone tells the
+    # agent the file needs pruning (DS-13562 F1). If the tail has no newline at
+    # all (one giant line) keep it whole — mid-line but nothing better exists.
     nl = tail.find("\n")
-    if 0 <= nl < len(tail) - 1:
+    if nl >= 0:
         tail = tail[nl + 1:]
     size_kb = len(raw_bytes) // 1024
     return (

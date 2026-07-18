@@ -939,9 +939,13 @@ def _do_activity_heartbeat(role):
         pass
 
 
-# #13562: warn when an agent writes an oversized working-state (symmetric with
-# cycle_pre's embed cap — same value; keep in sync with cycle_pre.WS_RAW_CAP_BYTES).
-WS_WRITE_WARN_BYTES = 8 * 1024
+# #13562: warn when an agent writes an oversized working-state — symmetric with
+# cycle_pre's embed cap. Imported so the two thresholds can never drift
+# (DS-13562 F2); fallback only if the sibling import breaks.
+try:
+    from cycle_pre import WS_RAW_CAP_BYTES as WS_WRITE_WARN_BYTES
+except ImportError:
+    WS_WRITE_WARN_BYTES = 8 * 1024
 
 
 def _do_working_state_update(data, role):
