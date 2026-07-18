@@ -760,13 +760,15 @@ def _enrich_with_comments(items):
     """Add latest_comment to each item in a list. Modifies items in place.
 
     Legacy path. The bulk-fetch helpers below set latest_comment from inline
-    `comments` without spawning a subprocess per item.
+    `comments` without spawning a subprocess per item. `body` is capped per
+    `_cap_comment_body` (#13564) for parity with the bulk path.
     """
     for item in items:
         num = item.get("number")
         if num:
             comment = _fetch_latest_comment(num)
             if comment:
+                comment["body"] = _cap_comment_body(comment.get("body", ""))
                 item["latest_comment"] = comment
 
 
@@ -805,6 +807,14 @@ def _gh_fetch(label_filter, state, with_comments=False, with_body=False, limit=2
     the same silent-truncation class #13555/#13602/#13660 fixed elsewhere.
     Centralized here so every caller gets the self-diagnosing behavior for
     free, regardless of what `limit` it passes.
+
+    #13564: `gh`'s raw `labels` field is a list of full objects
+    (id/name/description/color per label). Only the `name` is ever consumed
+    (see `_item_label_names`) and the id/description/color are pure ballast
+    that flows verbatim into every item this function returns -- and from
+    there into cycle-input.json, which agents read every cycle. Reduced to
+    a bare list of name strings here, once, so every caller/consumer gets
+    the slimmer shape for free.
     """
     cache_key = (label_filter, state, with_comments, with_body, limit)
     if cache_key in _GH_FETCH_CACHE:
@@ -833,12 +843,18 @@ def _gh_fetch(label_filter, state, with_comments=False, with_body=False, limit=2
               f"state={state!r}) returned {len(items)} = the --limit cap "
               f"({limit}); older/additional issues may be INVISIBLE (#13661).",
               file=sys.stderr)
+    for item in items:
+        raw_labels = item.get("labels")
+        if raw_labels:
+            item["labels"] = [l.get("name") for l in raw_labels]
     _GH_FETCH_CACHE[cache_key] = items
     return items
 
 
 def _item_label_names(item):
-    return {l.get("name") for l in item.get("labels", [])}
+    """Label names for `item`. Every caller sources items via `_gh_fetch`,
+    which normalizes `labels` to bare name strings (#13564)."""
+    return set(item.get("labels", []))
 
 
 def _item_has_label(item, name):
@@ -871,12 +887,30 @@ def _item_canonical_role(item, prefer_order):
     return None
 
 
+# #13564: max chars of a comment body embedded verbatim in cycle-input.json.
+# The forge-read pattern already mandates reading the issue before acting, so
+# a full comment body in cycle-input is redundant weight, not the source of
+# truth -- the cap just keeps enough for at-a-glance triage.
+COMMENT_BODY_CAP_CHARS = 500
+_COMMENT_TRUNCATION_SUFFIX = "…(read the issue)"
+
+
+def _cap_comment_body(body):
+    """#13564: bound `body` to COMMENT_BODY_CAP_CHARS, appending an explicit
+    truncation suffix so the agent knows to read the issue for the rest.
+    Returns `body` unchanged when it already fits."""
+    if len(body) <= COMMENT_BODY_CAP_CHARS:
+        return body
+    return body[:COMMENT_BODY_CAP_CHARS] + _COMMENT_TRUNCATION_SUFFIX
+
+
 def _item_latest_comment(item):
     """Extract latest comment from the inline `comments` field.
 
     Output shape matches what _fetch_latest_comment used to return so
     downstream consumers (agent prompts reading cycle-input.json) don't
-    break: `{author, body, createdAt}` or None.
+    break: `{author, body, createdAt}` or None. `body` is capped per
+    `_cap_comment_body` (#13564).
     """
     comments = item.get("comments") or []
     if not comments:
@@ -885,7 +919,7 @@ def _item_latest_comment(item):
     author = last.get("author") or {}
     return {
         "author": author.get("login", ""),
-        "body": last.get("body", ""),
+        "body": _cap_comment_body(last.get("body", "")),
         "createdAt": last.get("createdAt", ""),
     }
 
