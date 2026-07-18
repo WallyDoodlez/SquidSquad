@@ -15,7 +15,7 @@ Run the deterministic health check script:
 python references/scripts/health_check.py
 ```
 
-The script reads each agent's `.claude-pid` (sole liveness signal) and `current-state` mtime for offline diagnostics. The harness monitors PIDs directly every 5 seconds (#4966); prefer `squidsquad_cli.py status` when the harness is reachable.
+The script reads each agent's `.claude-pid` and `current-state` mtime as an offline-diagnostic proxy when the harness itself isn't reachable. The harness's own liveness model (polled every 5s, #4966) is a dual model since #12492: progress-liveness (activity-heartbeat + dispatch reference + pause guard) is AUTHORITATIVE for reboot decisions — it catches a PID-alive-but-inert "zombie" agent that PID alone would miss, while the pause guard recognizes a legitimate long tool call/compaction/wait so it's never misread as one — while `.claude-pid` remains the instant crash signal but no longer vetoes a reboot on its own. Prefer `squidsquad_cli.py status` when the harness is reachable — it reflects this authoritative model, not just PID.
 
 Log the script's output in `pm/qa-log.md`. For any agent reporting stalled (👻) or unknown (❓):
 

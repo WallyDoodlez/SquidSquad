@@ -32,8 +32,12 @@ class TestLifecycleFragment:
         )
 
     def test_canonical_liveness_phrase_present(self):
+        # #13317: "sole liveness signal" was the pre-#12492 model — replaced
+        # by the dual model where progress-liveness is authoritative for
+        # reboot decisions and .claude-pid is demoted to teardown-only.
         text = LIFECYCLE_FRAGMENT.read_text(encoding="utf-8")
-        assert "sole liveness signal" in text
+        assert "progress-liveness" in text.lower()
+        assert "authoritative" in text.lower()
         assert ".claude-pid" in text
 
     @pytest.mark.parametrize("removed", REMOVED_SENTINELS)
@@ -78,8 +82,10 @@ class TestSharedInstructions:
         assert ".health" not in text
 
     def test_canonical_liveness_phrase_present(self):
+        # #13317: see TestLifecycleFragment.test_canonical_liveness_phrase_present
         text = SHARED_INSTRUCTIONS.read_text(encoding="utf-8")
-        assert "sole liveness signal" in text
+        assert "progress-liveness" in text.lower()
+        assert "authoritative" in text.lower()
         assert ".claude-pid" in text
 
     def test_canonical_operator_entry_point(self):
@@ -92,10 +98,11 @@ class TestComposedClaudeMd:
 
     Post-v0.44.0 cutover: agent-lifecycle is no longer inlined into CLAUDE.md
     at compose time — it is invoked at runtime via ``→ run sub-skill:``.
-    The lifecycle phrases ("sole liveness signal", "squidsquad_cli.py start")
-    live in the sub-skill source and in shared-instructions.md (tested
-    separately by TestSharedInstructions).  What the composed CLAUDE.md MUST
-    do is reference the sub-skill so the agent picks it up at runtime.
+    The lifecycle phrases ("progress-liveness", "authoritative",
+    "squidsquad_cli.py start") live in the sub-skill source and in
+    shared-instructions.md (tested separately by TestSharedInstructions).
+    What the composed CLAUDE.md MUST do is reference the sub-skill so the
+    agent picks it up at runtime.
     """
 
     @pytest.mark.parametrize("composed", COMPOSED_CLAUDE_MD,
@@ -107,17 +114,19 @@ class TestComposedClaudeMd:
             "recompose pass is incomplete"
         )
 
-    def test_sole_liveness_signal_present(self):
+    def test_liveness_model_present(self):
         # v2: lifecycle info lives in shared-instructions.md (always merged
         # into agent context) and in the agent-lifecycle sub-skill source.
         # Verify that shared-instructions carries the canonical phrase so the
         # agent definitely reads it — the sub-skill itself is tested by
         # TestLifecycleFragment.test_canonical_liveness_phrase_present.
+        # #13317: "sole liveness signal" was the pre-#12492 model.
         shared = SHARED_INSTRUCTIONS.read_text(encoding="utf-8")
-        assert "sole liveness signal" in shared, (
-            "sole liveness signal must be present in shared-instructions.md "
-            "— agents read this file every cycle."
+        assert "progress-liveness" in shared.lower(), (
+            "the #12492 dual liveness model must be present in "
+            "shared-instructions.md — agents read this file every cycle."
         )
+        assert "authoritative" in shared.lower()
 
     @pytest.mark.parametrize("composed", COMPOSED_CLAUDE_MD,
                              ids=lambda p: p.parent.name)
@@ -145,6 +154,10 @@ class TestComprehensionSpecExists:
         assert spec["issue"] == 4792
         for rel in spec["files"]:
             assert (REPO / rel).exists(), f"spec references missing: {rel}"
-        assert any("sole liveness signal" in q["question"].lower()
-                   or "sole liveness signal" in q["expected"].lower()
-                   for q in spec["questions"])
+        # #13317: the CQ1 question/expected pair now covers the #12492 dual
+        # liveness model, not the retired "sole liveness signal" claim.
+        assert any(
+            ("liveness" in q["question"].lower()
+             and "authoritative" in q["expected"].lower())
+            for q in spec["questions"]
+        )

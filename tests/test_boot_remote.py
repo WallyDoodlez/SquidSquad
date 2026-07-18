@@ -23,8 +23,10 @@ class TestRemovedLegacySentinelHelpers:
 
     def test_read_pid_file_removed(self):
         assert not hasattr(boot_remote, "_read_pid_file"), (
-            "boot_remote._read_pid_file must stay removed — .claude-pid "
-            "is the sole liveness signal per CONTEXT-4792.md §5.2"
+            "boot_remote._read_pid_file must stay removed — this helper's "
+            "removal predates #4966/#12492, unrelated to the current "
+            "liveness model (see CONTEXT-4792.md §5.2 for the original "
+            "removal rationale)"
         )
 
     def test_read_health_file_removed(self):

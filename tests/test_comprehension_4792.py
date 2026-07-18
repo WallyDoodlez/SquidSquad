@@ -1,4 +1,4 @@
-"""Comprehension tests for #4792 — sentinel cleanup, sole liveness signal, operator entry point."""
+"""Comprehension tests for #4792 — sentinel cleanup, agent liveness model, operator entry point."""
 
 import json
 from pathlib import Path
@@ -35,7 +35,7 @@ class TestComprehension4792:
             str(r["id"]) for r in comprehension_results
         }
 
-    def test_q1_sole_liveness_signal(self, comprehension_results):
+    def test_q1_agent_liveness_model(self, comprehension_results):
         r = _get(comprehension_results, "1")
         assert r and r["pass"], f"Q-1: {r.get('reason')}"
 
