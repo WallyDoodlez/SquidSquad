@@ -837,6 +837,76 @@ def _scope_audit_violations(pr_number, sha):
     return sorted(deleted - declared)
 
 
+def _revert_composed_state_contamination(working):
+    """Revert locally-dirtied composed outputs after a merge (#13447).
+
+    compose.py's file-watcher regenerates ``.squidsquad/<role>/CLAUDE.md`` and
+    ``CLAUDE.linked.md`` from templates + config independently of the agent's
+    own commit flow. In a verifier/DM clone, that regeneration can leave these
+    TRACKED files locally MODIFIED right around merge time — the next
+    ``git checkout`` then aborts with "local changes would be overwritten".
+    Same pattern as the existing ``.squidsquad/config.md`` revert (#7491) used
+    by ``commit_code``/``task_end``: these are compose-owned outputs, never
+    hand-edited, so reverting to the committed ``working`` version is always
+    safe. Best-effort — a revert failure here must never block the merge
+    result the caller already has in hand.
+    """
+    status = _run("git status --porcelain", check=False)
+    if not status.stdout.strip():
+        return
+    for line in status.stdout.splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].strip().strip('"')
+        if " -> " in path:
+            path = path.split(" -> ")[1]
+        if path.endswith("/CLAUDE.md") or path.endswith("/CLAUDE.linked.md"):
+            _run_list(["git", "checkout", working, "--", path], check=False)
+
+
+def _checkout_and_ff_working_after_merge(working):
+    """Return to `working` and fast-forward it to origin after a merge (#13447).
+
+    ``pr_merge()`` never left the caller on any particular local branch, and
+    never synced `working` (main) to origin after the server-side merge — so
+    a verifier/DM clone's local main silently drifted behind origin/main with
+    every merge. Fail-open throughout: never force-overwrite local main
+    (fast-forward only), never exit the process on divergence or a network
+    hiccup (a merge that already succeeded on GitHub must not be reported as
+    a failure over a best-effort local sync step).
+    """
+    if not _safe_checkout(working):
+        return
+    _run_list(["git", "fetch", "origin", working], check=False)
+    origin = _run_list(
+        ["git", "rev-parse", "--verify", f"refs/remotes/origin/{working}"],
+        check=False,
+    )
+    if origin.returncode != 0:
+        return
+    origin_sha = origin.stdout.strip()
+    local_sha = _run_list(
+        ["git", "rev-parse", f"refs/heads/{working}"], check=False
+    ).stdout.strip()
+    if not local_sha or local_sha == origin_sha:
+        return
+    behind = _run_list(
+        ["git", "merge-base", "--is-ancestor", local_sha, origin_sha], check=False
+    ).returncode == 0
+    if not behind:
+        # Ahead (unpushed local commits) or diverged — only a fast-forward is
+        # safe here; leave it for a human/task-begin to reconcile.
+        return
+    ff = _run_list(["git", "merge", "--ff-only", f"origin/{working}"], check=False)
+    if ff.returncode != 0:
+        print(
+            f"WARNING: could not fast-forward local {working} to origin/"
+            f"{working} ({local_sha[:9]} -> {origin_sha[:9]}): "
+            f"{ff.stderr.strip()} (#13447)",
+            file=sys.stderr,
+        )
+
+
 def _post_merge_scope_audit(pr_number, issue_num):
     """#13285 -- after a successful merge, audit the squash for an out-of-scope
     mass file-deletion (the behind-clone stale-tree revert, #13271 SEV-1) and
@@ -1131,6 +1201,19 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
             # incident comment always run; auto-revert is opt-in (default OFF).
             # Fully fail-safe — never raises, never blocks the merge result.
             _post_merge_scope_audit(pr_number, audit_issue)
+            # #13447 -- a successful merge left two things dirty for the caller's
+            # clone: (1) compose.py's file-watcher can leave composed outputs
+            # (.squidsquad/<role>/CLAUDE.md, CLAUDE.linked.md) locally MODIFIED,
+            # which aborts the caller's next `git checkout` with "local changes
+            # would be overwritten"; (2) local `working` (main) was never
+            # fast-forwarded to origin after the server-side merge, so it drifts
+            # behind. Revert the composed-output contamination (same pattern as
+            # the existing config.md revert, #7491) before checking out +
+            # fast-forwarding `working` — reverting first avoids _safe_checkout's
+            # stash/pop carrying the dirty files onto `working`.
+            working = _get_working_branch()
+            _revert_composed_state_contamination(working)
+            _checkout_and_ff_working_after_merge(working)
             return True, "merged"
 
         error = result.stderr.strip()

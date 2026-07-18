@@ -4,6 +4,7 @@ Verifies that pr_merge() in git_ops.py calls the correct merge strategy,
 handles already-merged PRs, closed PRs, merge conflicts, and successful merges.
 """
 
+import itertools
 import json
 import sys
 from pathlib import Path
@@ -51,12 +52,14 @@ class TestPrMergeSquashStrategy:
         # Second call: gh pr merge (success)
         # Third call: gh pr view (branch name extraction)
         branch_json = json.dumps({"headRefName": "squidsquad/skill/42"})
-        mock_run_list.side_effect = [
+        mock_run_list.side_effect = itertools.chain([
             _mock_result(stdout=state_json),   # state check
             _mock_result(),                     # merge
             _mock_result(stdout=branch_json),   # branch name
             _mock_result(),                     # ship transition (#3747)
-        ]
+        ], itertools.repeat(_mock_result()))
+        # #13447: tail repeat() covers pr_merge's post-merge dirty-tree-revert
+        # + working-branch-sync probe calls beyond the fixed list above.
         success, msg = git_ops.pr_merge(42)
         assert success is True
         assert msg == "merged"
@@ -72,12 +75,13 @@ class TestPrMergeSquashStrategy:
         """#1074: pr_merge respects explicit rebase strategy."""
         state_json = json.dumps({"state": "OPEN"})
         branch_json = json.dumps({"headRefName": "squidsquad/skill/99"})
-        mock_run_list.side_effect = [
+        mock_run_list.side_effect = itertools.chain([
             _mock_result(stdout=state_json),
             _mock_result(),
             _mock_result(stdout=branch_json),
             _mock_result(),                     # ship transition (#3747)
-        ]
+        ], itertools.repeat(_mock_result()))
+        # #13447: tail repeat() covers the post-merge sync probe calls
         success, msg = git_ops.pr_merge(99, strategy="rebase")
         assert success is True
         merge_call = mock_run_list.call_args_list[1]
@@ -137,12 +141,13 @@ class TestPrMergeIssueExtraction:
         """#1074: After merge, parses squidsquad/role/NUMBER branch to find issue."""
         state_json = json.dumps({"state": "OPEN"})
         branch_json = json.dumps({"headRefName": "squidsquad/skill/475"})
-        mock_run_list.side_effect = [
+        mock_run_list.side_effect = itertools.chain([
             _mock_result(stdout=state_json),
             _mock_result(),
             _mock_result(stdout=branch_json),
             _mock_result(),                     # ship transition (#3747)
-        ]
+        ], itertools.repeat(_mock_result()))
+        # #13447: tail repeat() covers the post-merge sync probe calls
         success, _ = git_ops.pr_merge(30)
         assert success is True
         captured = capsys.readouterr()
