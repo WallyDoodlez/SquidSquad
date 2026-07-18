@@ -4433,14 +4433,20 @@ def _teardown_and_exit(exit_code, delete_port_file):
         for _ in range(6):
             all_idle = True
             for role in running_roles:
-                state_file = SQUIDSQUAD_DIR / role / "current-state"
-                try:
-                    content = state_file.read_text(encoding="utf-8").strip()
-                    if not content.startswith("idle"):
-                        all_idle = False
-                        break
-                except (OSError, FileNotFoundError):
-                    pass
+                # #13611 (3rd site of the #13345/#13558 bug class): sibling-
+                # clone agents (skill/qa/dm) write current-state to THEIR OWN
+                # clone's .squidsquad/<role>/, not the harness-root
+                # SQUIDSQUAD_DIR — read via the shared clone-relative helper
+                # instead. A None result (unresolvable clone, missing/
+                # unreadable file) must count as NOT confirmed idle, never as
+                # idle — the previous silent-swallow let a genuinely mid-task
+                # sibling-clone agent read as already-idle on the very first
+                # check and get force-killed without its up-to-30s grace window.
+                agent = state.get_agent(role)
+                content = state._read_agent_clone_file(role, agent, "current-state")
+                if content is None or not content.startswith("idle"):
+                    all_idle = False
+                    break
             if all_idle:
                 break
             time.sleep(5)
