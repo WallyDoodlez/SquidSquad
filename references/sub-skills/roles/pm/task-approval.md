@@ -27,7 +27,12 @@ To approve a task for planning:
    2. Read the GitHub issue body: `gh issue view <N> --json body`.
    3. Compare the body's scope bullets against those three CONTEXT sections (structured comparison, NOT a raw text diff — the body and CONTEXT intentionally have different formats). If any **locked decision** or **scope boundary** is missing, outdated, or contradicted in the body, update the body via `gh issue edit <N> --body-file <new-body>` BEFORE the transition.
    4. Confirmation: re-read `gh issue view <N> --json body`; the AUTHORITATIVE SCOPE banner is present AND the body bullets are consistent with the CONTEXT sections.
-7. Only after human explicitly approves execution AND the pre-approval body-vs-CONTEXT check is clean, update status to `Approved`.
+   5. **Confirm the CONTEXT artifact reached `origin/main`** (#13666): a CONTEXT.md/CONTEXT-<NUMBER>.md written earlier in this same cycle can still be uncommitted or unpushed in PM's own clone — in event mode the mechanical post-cycle commit/push runs at cycle END, but the `Approved` transition itself fires a nudge that wakes the worker on the very next cycle, which can race ahead of it. A worker that can't find the file the issue body's AUTHORITATIVE SCOPE banner points at bails immediately. Before the transition, run:
+      ```bash
+      git log origin/main -- .squidsquad/[PM_ALIAS]/planning/CONTEXT-<NUMBER>.md
+      ```
+      (or the bundle `CONTEXT.md` path). If the output is empty, the artifact is NOT yet on `origin/main` — commit and push it now (`git add <path> && git commit -m "..." && git push`) before proceeding. Never transition to `Approved` with the artifact still unpushed.
+7. Only after human explicitly approves execution AND the pre-approval body-vs-CONTEXT check is clean (including the origin/main artifact confirmation above), update status to `Approved`.
 
 Light mode (trivial tasks): PM can fast-track through planning with abbreviated research, but status still transitions through `Planning` → `Planned` → `Approved`.
 

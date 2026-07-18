@@ -213,6 +213,13 @@ Continue until all questions are resolved. Capture decisions in `.squidsquad/[RO
 - [Thing]: [explicitly excluded]
 ```
 
+**Commit and push CONTEXT.md immediately** (#13666): don't rely on the mechanical post-cycle commit/push to land this file on `origin/main` — in event mode that wrapper runs at cycle END, but Phase 3B's `Approved` transition (later in this same cycle) fires a nudge that can wake the worker before the wrapper commits, so a same-session CONTEXT.md write can race ahead of its own push and leave the worker unable to find the file the issue body points at. Commit it now, the same way Phase 3B already commits the plan body explicitly rather than trusting the wrapper:
+```bash
+git add .squidsquad/[PM_ALIAS]/planning/FEAT-[ROLE_UPPER]-XXX-CONTEXT.md  # or CONTEXT-<NUMBER>.md
+git commit -m "context(#<NUMBER>): [title]"
+git push
+```
+
 **Open in editor**: After CONTEXT.md is created, offer to open it (see "Open Artifacts in Editor" below).
 
 **Sync issue body when CONTEXT scope is (re)written** (#8917 Change 1): When Phase 2 (deepseek review, discussion locks, scope discussion) rewrites scope on `CONTEXT.md` (or per-task `CONTEXT-<NUMBER>.md`), the corresponding GitHub Issue body MUST be updated in the same PM step. Use `gh issue edit <N> --body-file <new-body>`. The issue body and CONTEXT.md must always agree at the time of the `planned → approved` transition.
