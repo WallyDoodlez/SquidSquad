@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-18 08:24
+
+- **Files scanned**: references/scripts/wizard.py (full exception-handling sweep, fail-open/fail-closed consistency lens per prior scans' productive criteria), docs/archive/EVENT-ARCHITECTURE.md (stale-claim spot-check, same lens that surfaced #13317's PID-sole-liveness fix this session)
+- **Findings**: none — wizard.py's ~30 exception handlers all consistent with their documented contracts (fail-open where the docstring promises it, e.g. `load_preset_manifest`/`_harness_reachable`/`_install_aliases`; fail-loud with a printed WARNING where correctness matters, e.g. `cmd_setup_yes`'s label-creation step). The one handler that looked suspicious on first read — `except (ImportError, SystemExit, Exception):` at line 3731 in `generate_default_spec`'s version-read — is deliberate, not a bug: `config.get_field()` → `_read_config()` calls `sys.exit(1)` when config.md is missing, which IS the normal greenfield-install case this function runs in; catching SystemExit here is required to avoid the wizard process dying on a version lookup before config.md exists. EVENT-ARCHITECTURE.md's `.claude-pid` references (thin_launcher writing the file, singleton enforcement) remain factually accurate post-#12492/#13317 — only which signal is *authoritative for reboot decisions* changed, not whether thin_launcher still writes the PID file.
+- **Items rejected by human**: none yet
+- **Criteria note**: the fail-open/fail-closed consistency lens (productive in three prior scans: #13170/#13172/#13261) this time correctly concluded "healthy" rather than forcing a finding — worth recording that a lens returning zero findings on a full sweep is itself useful signal, not scan failure. Also worth noting for future scans: an `except (X, SystemExit, ...)` combination is not automatically a code smell — check whether the wrapped call can itself call `sys.exit()` (as `config.py`'s `_read_config()` does) before flagging it.
+
 ## Scan — 2026-05-31 16:15
 
 - **Files scanned**: references/scripts/event_validator.py (full 261 lines; focus on the 4 validation checks, the CLI surface, and the Finding shape). Briefly compared with statusline_data.py (138 lines, deferred because the SQUIDSQUAD_DIR foot-gun there is the same family as already-filed #10516 — no fresh finding).
