@@ -195,12 +195,47 @@ class TestCli:
         # Explicit cwd + encoding (#13397): pin the subprocess environment so a
         # cwd inherited from another test or a locale-dependent stdio encoding
         # cannot perturb the asserted exit code. Matches test_cli_dispatch_registered.
-        return subprocess.run(
-            [sys.executable, str(SCRIPTS_DIR / "wizard.py"), "merge-deny-list",
-             *flags, str(tmp_path)],
-            capture_output=True, text=True, timeout=60,
+        cmd = [sys.executable, str(SCRIPTS_DIR / "wizard.py"), "merge-deny-list",
+               *flags, str(tmp_path)]
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=60,
             cwd=str(REPO_ROOT), encoding="utf-8",
         )
+        # #13589: a rare Windows full-suite-only flake exits nonzero with
+        # BOTH stdout and stderr empty (no envelope, no traceback) — not
+        # reproducible in isolation, self-clears on rerun. Signature points
+        # to transient subprocess-spawn contention under full-gate load, not
+        # a defect in the deny-list logic. A single bounded retry
+        # distinguishes that from a real regression that happens to also
+        # produce empty output; if the retry ALSO comes back empty, dump
+        # diagnostics so the next occurrence is actionable instead of a
+        # blank `returncode == 1`. Logged either way — never silently papers
+        # over a genuine failure.
+        if proc.returncode != 0 and not proc.stdout and not proc.stderr:
+            print(f"WARNING (#13589): {cmd} exited {proc.returncode} with "
+                  f"empty stdout+stderr — retrying once to check for the "
+                  f"known transient flake", file=sys.stderr)
+            retry = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=60,
+                cwd=str(REPO_ROOT), encoding="utf-8",
+            )
+            if retry.returncode == 0 or retry.stdout or retry.stderr:
+                print(f"INFO (#13589): retry returned returncode="
+                      f"{retry.returncode} with non-empty output — confirms "
+                      f"the known #13589 transient-spawn flake, not a real "
+                      f"regression", file=sys.stderr)
+                return retry
+            diag = (
+                f"#13589: BOTH the original and retry runs exited nonzero "
+                f"with empty stdout+stderr — this is NOT the known "
+                f"transient flake, investigate. cmd={cmd!r} "
+                f"cwd={str(REPO_ROOT)!r} sys.executable={sys.executable!r} "
+                f"script_exists={(SCRIPTS_DIR / 'wizard.py').exists()!r}"
+            )
+            print(diag, file=sys.stderr)
+            retry.stderr = (retry.stderr or "") + "\n" + diag
+            return retry
+        return proc
 
     def test_cli_happy_path_envelope(self, tmp_path):
         proc = self._run(tmp_path, "--path", ".env")
@@ -268,3 +303,81 @@ class TestCli:
         # --dry-run against the repo itself: reads only, must succeed.
         assert proc.returncode == 0, proc.stderr
         assert json.loads(proc.stdout)["dry_run"] is True
+
+
+class TestCliRunRetryDiagnostics13589:
+    """#13589: TestCli._run's single-bounded-retry on the empty-output
+    subprocess flake signature (returncode != 0, stdout AND stderr both
+    empty) — must retry exactly once, return the retry's result if it
+    produced real output, and attach actionable diagnostics if the retry
+    ALSO comes back empty (never silently swallow a real failure)."""
+
+    def _flake_result(self, cmd, returncode=1):
+        return subprocess.CompletedProcess(cmd, returncode, stdout="", stderr="")
+
+    def _ok_result(self, cmd):
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout=json.dumps({"ok": True, "added": ["Read(.env)"]}),
+            stderr="",
+        )
+
+    def test_retries_on_transient_empty_output_flake(self, tmp_path, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            if len(calls) == 1:
+                return self._flake_result(cmd)
+            return self._ok_result(cmd)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        proc = TestCli()._run(tmp_path, "--path", ".env")
+        assert len(calls) == 2, "must retry exactly once on the flake signature"
+        assert proc.returncode == 0
+        assert json.loads(proc.stdout)["ok"] is True
+
+    def test_does_not_retry_when_output_present(self, tmp_path, monkeypatch):
+        """A real failure (non-empty stderr) must NOT trigger a retry —
+        only the specific empty-stdout+empty-stderr signature does."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return subprocess.CompletedProcess(
+                cmd, 1, stdout="", stderr="a real error message"
+            )
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        proc = TestCli()._run(tmp_path, "--path", ".env")
+        assert len(calls) == 1, "a real (non-empty-output) failure must not retry"
+        assert proc.returncode == 1
+        assert proc.stderr == "a real error message"
+
+    def test_diagnostics_attached_when_retry_also_empty(self, tmp_path, monkeypatch):
+        """If the flake signature persists across the retry, it is NOT the
+        known transient flake — actionable diagnostics must be attached
+        instead of returning a blank empty-stderr failure."""
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return self._flake_result(cmd)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        proc = TestCli()._run(tmp_path, "--path", ".env")
+        assert len(calls) == 2, "must retry exactly once, not loop"
+        assert proc.returncode != 0
+        assert "#13589" in proc.stderr
+        assert "NOT the known" in proc.stderr
+
+    def test_success_on_first_try_does_not_retry(self, tmp_path, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append(cmd)
+            return self._ok_result(cmd)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        proc = TestCli()._run(tmp_path, "--path", ".env")
+        assert len(calls) == 1
+        assert proc.returncode == 0
