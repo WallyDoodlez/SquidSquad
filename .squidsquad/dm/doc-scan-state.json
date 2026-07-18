@@ -12,6 +12,20 @@
   "rotation_count": 95,
   "scan_history": [
     {
+      "file": "4-ship-batch delivery-integrity self-QA (#13556/#13562/#13577/#13579) + local-clone sync durability",
+      "date": "2026-07-18",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 of this burst (scan_count->2/3). Self-QA of the 4 items shipped this session so far: all CLOSED + exactly ONE status:shipped label each (zero dual-status-label drift). Counter consistent: config shipped-since-bump=42 == .ship-counter=42. Discovered + corrected a real gap this cycle: local clone was 2-3 commits behind origin/main TWICE after harness-mediated /merge calls (git status's cached 'up to date' line doesn't reflect it) — fetched+pulled both times, clean fast-forward, no conflicts (own state-file edits survived under merge=ours). Captured as [[learning-harness-pr-merge-does-not-sync-local-clone]]. Noted: #13582 (the #13577 residual inject-permissions.ps1 fix) now qa-verified PASS per pulled log — not yet in DM's queue at scan time. 0 findings."
+    },
+    {
+      "file": "#13569 post-ship delivery-integrity self-QA (forge labels + closed-state + counter + follow-up tasks)",
+      "date": "2026-07-18",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (post-restart re-idle, scan_count->1/3). Self-QA of MY OWN #13569 ship last session (agent-side boot-drain deploy-signal defer fix, PR #13573). VERIFIED from forge: #13569 = CLOSED + exactly ONE status:shipped label (zero dual-status-label drift). PR #13573 = MERGED (2026-07-18T03:38:07Z). Counter consistent: config shipped-since-bump=38 == .ship-counter=38. Filed follow-up tasks #13571 + #13572 (event-mode doc gaps, deferred last session) both confirmed OPEN — correctly left for their owning role, not DM's to action. 0 findings."
+    },
+    {
       "file": "post-5-ship-burst delivery-integrity self-QA + deploy-fragility cluster durability (origin/main 2ba0b1054)",
       "date": "2026-07-11",
       "findings": 0,
