@@ -2601,15 +2601,19 @@ def build_label_inventory():
     return inventory
 
 
-def list_gh_labels():
+def list_gh_labels(cwd=None):
     """Return the set of label names currently on the repo via `gh label list`.
+
+    Args:
+        cwd: directory whose git remote `gh` should resolve against. None
+            (default) uses the ambient process CWD — the historical behavior.
 
     Empty set on any error — caller decides whether to treat that as an
     API failure or an uninitialised repo.
     """
     result = _run([
         "gh", "label", "list", "--limit", "200", "--json", "name",
-    ])
+    ], cwd=cwd)
     if result.returncode != 0 or not result.stdout.strip():
         return set()
     try:
@@ -2619,11 +2623,15 @@ def list_gh_labels():
     return {item["name"] for item in data if isinstance(item, dict) and "name" in item}
 
 
-def ensure_labels(dry_run=False):
+def ensure_labels(dry_run=False, cwd=None):
     """Seed every required label. Idempotent — only creates what is missing.
 
     Args:
         dry_run: if True, reports what WOULD be created without calling gh.
+        cwd: directory whose git remote `gh` should resolve against (#13593
+            — setup-yes must create labels on the target repo, not whatever
+            repo the ambient process CWD happens to point at). None (default)
+            uses the ambient process CWD — the historical behavior.
 
     Returns a summary dict:
         {
@@ -2638,7 +2646,7 @@ def ensure_labels(dry_run=False):
     repo-side step. Safe to re-run at any time.
     """
     inventory = build_label_inventory()
-    existing = list_gh_labels()
+    existing = list_gh_labels(cwd=cwd)
 
     summary = {
         "total": len(inventory),
@@ -2660,7 +2668,7 @@ def ensure_labels(dry_run=False):
             "gh", "label", "create", name,
             "--description", spec["description"],
             "--color", spec["color"],
-        ])
+        ], cwd=cwd)
         if result.returncode == 0:
             summary["created"].append(name)
         else:
@@ -4313,9 +4321,12 @@ def cmd_setup_yes(args):
         except ImportError:
             pass
 
-    # 2. Load repo info
+    # 2. Load repo info — scoped to target_path's own remote (#13593), not
+    # the ambient process CWD. Without this, `setup-yes /path/to/foreign`
+    # invoked from a different CWD stamps the CWD repo's identity into the
+    # foreign install's config.md.
     repo_info = {}
-    result = _run(["gh", "repo", "view", "--json", "name,url"])
+    result = _run(["gh", "repo", "view", "--json", "name,url"], cwd=str(target_path))
     if result.returncode == 0:
         try:
             data = json.loads(result.stdout)
@@ -4359,10 +4370,12 @@ def cmd_setup_yes(args):
         msg += f" ({len(failed)} FAILED to compose)"
     print(msg)
 
-    # 6. Ensure labels
+    # 6. Ensure labels — scoped to target_path's own remote (#13593), not
+    # the ambient process CWD (which could be a different repo entirely,
+    # e.g. the SquidSquad self-hosted clone this command was launched from).
     print("Creating GitHub labels...")
     try:
-        label_result = ensure_labels(dry_run=False)
+        label_result = ensure_labels(dry_run=False, cwd=str(target_path))
         created = label_result.get("created", 0)
         if created:
             print(f"  Created {created} label(s)")
