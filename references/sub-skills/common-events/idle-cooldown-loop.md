@@ -5,7 +5,7 @@ ordinal: 16
 
 ## Idle = Improvement-Scan Cool-Down Loop
 
-When `work_queue(<role>)` returns empty, you are **not** finished — you enter the improvement-scan cool-down loop. Scanning during idle time turns dead clock into proactive process improvement.
+When `work_queue(<role>)` returns no **autonomously-actionable** item — either genuinely empty, or containing only `approved` tasks that are human-gated or blocked on an unmet dependency (#13316: "gated" is not a tracker status, so this is a judgment call you make by reading each returned item, not a raw emptiness check) — you are **not** finished — you enter the improvement-scan cool-down loop. Scanning during idle time turns dead clock into proactive process improvement.
 
 ### Two wake sources during idle
 
@@ -22,7 +22,7 @@ The cool-down accounting lives in the driver state file `.squidsquad/<alias>/.su
 
 ### Lifecycle
 
-**Step A — Enter idle (`work_queue()` returned empty).** Arm the driver:
+**Step A — Enter idle (`work_queue()` returned no autonomously-actionable item — see the actionability note above).** Arm the driver:
 
 1. Run `python references/scripts/subloop_driver.py arm <alias>`.
    - `action=schedule` → the driver just transitioned disarmed→armed (lazy first-idle enable). You must create the self-wake.
@@ -47,9 +47,9 @@ The cool-down accounting lives in the driver state file `.squidsquad/<alias>/.su
    The cron is **only a heartbeat** — `tick`'s `cooldown_elapsed` gate (Step B) enforces the real cool-down before any scan — so the exact minutes never cause an early or extra scan; approximation is safe.
 3. Re-enter Monitor idle-wait. A `NUDGE` (Step C) or a driver-tick prompt (Step B) will wake you.
 
-**Step B — Driver tick fires** (the cron-enqueued prompt re-enters you). Per §8.6.1 the driver **forge-reads `work_queue()` first** — so it doubles as a safety-net against a missed nudge. Then run `python references/scripts/subloop_driver.py tick <alias> --drained <true|false>` (`drained=true` iff `work_queue()` returned empty) and act on the `action`:
+**Step B — Driver tick fires** (the cron-enqueued prompt re-enters you). Per §8.6.1 the driver **forge-reads `work_queue()` first** — so it doubles as a safety-net against a missed nudge. Then run `python references/scripts/subloop_driver.py tick <alias> --drained <true|false>` and act on the `action`. **`drained` means "no autonomously-actionable item," not "queue is empty"** (#13316): compute it by reading each returned item — `drained=true` iff `work_queue()` is genuinely empty, **or** every item it returned is human-gated (e.g. flagged for human/manual execution) or blocked on an unmet dependency (e.g. gated on an unshipped story). A strict `work_queue() != []` reading is wrong here: an approved-but-unpickable queue forces `absorb-work` on an item you cannot actually pick up, starving idle-scan forever (the failure this note exists to prevent).
 
-- `absorb-work` → the queue is **not** drained (work arrived / a nudge was missed). Exit the cool-down loop: pick up the top item (transition it `in-progress`, write the Task field in `working-state.md`), do the work. On completion, re-idle via **Step D**.
+- `absorb-work` → the queue is **not** drained (an autonomously-actionable item arrived / a nudge was missed) — not merely "the queue is non-empty." Exit the cool-down loop: pick up the top **actionable** item (transition it `in-progress`, write the Task field in `working-state.md`), do the work. On completion, re-idle via **Step D**.
 - `scan` → drained **and** throttle elapsed. Run your role's scanning sub-skill — **one bounded task**:
   - **PM**: `→ run sub-skill: roles/pm/improvement-scan`
   - **Worker (skill / web / ios / android / fullstack)**: `→ run sub-skill: improvement-scan`

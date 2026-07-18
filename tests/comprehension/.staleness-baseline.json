@@ -160,7 +160,7 @@
   "references/sub-skills/common-events/cursor-management.md": "e70f63d8d81fa0889240e64d38fbf8a0c8f0735a",
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b",
   "references/sub-skills/common-events/forge-read-pattern.md": "682ba6f78e8f56c85a011ccbd3587a36224ce2c0",
-  "references/sub-skills/common-events/idle-cooldown-loop.md": "fdfcef549deca154ad4eed1290540c09634116bb"
+  "references/sub-skills/common-events/idle-cooldown-loop.md": "acc3cebbc3acaeeac8fa179ca352ff7f311bdaa9"
  },
  "8697_spec.json": {
   "tests/comprehension/8697_fixtures/dm_events_CLAUDE.md": "b23bfcae1d3bbf56940a1b2be8e6891d83f03f00",
@@ -183,7 +183,7 @@
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
  },
  "9743_spec.json": {
-  "references/sub-skills/common-events/idle-cooldown-loop.md": "fdfcef549deca154ad4eed1290540c09634116bb"
+  "references/sub-skills/common-events/idle-cooldown-loop.md": "acc3cebbc3acaeeac8fa179ca352ff7f311bdaa9"
  },
  "9744_spec.json": {
   "references/sub-skills/roles/dm/events/pr-merge-wait.md": "473e3275ef57a300429da2b4760383b3888b7fbf"
