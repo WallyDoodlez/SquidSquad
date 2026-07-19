@@ -7,4 +7,4 @@
 - **Session summary (2026-07-19, boot 06:43)**: 5 ships -- #13793 (wizard.py failed-clone stranding fix), #13801 (pm/instructions.md frontmatter, no-recompose verified), #13819+#13831 (git_ops.py stash-protection, 2 rounds), #13838 (TC-coverage gate doc-accuracy fix, runtime-loaded verified). All internal/install-tooling, zero CHANGELOG entries. 1 doc-improvement-loop fix (README Requirements: added Forgejo backend alternative). Counter 105->110 (.ship-counter canonical; config.md field stays 0 until bump). Bump still HELD per [[feedback_bump_requires_pm_signal]] -- no operator green-light. Clone fell behind origin/main repeatedly mid-session (unrelated agent pushes) -- always pulled/merged clean, no mass-deletion, re-pushed OK.
 
 ## Improvement Scan
-- Status: idle, driver armed, scan_count 1/3 this burst (cron e9496126, 4,34 * * * *, not yet at cap). Scan-1 = #13831 post-ship self-QA, 0 findings.
+- Status: idle, driver armed, scan_count 2/3 this burst (cron e9496126, 4,34 * * * *, not yet at cap). Scan-1 = #13831 self-QA, Scan-2 = #13838 self-QA, both 0 findings.
