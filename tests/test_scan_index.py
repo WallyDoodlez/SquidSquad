@@ -209,6 +209,79 @@ class TestSuggestTargets:
         assert targets == []
 
 
+class TestSuggestTargetsAutoPrune:
+    """#13566 follow-up: suggest_targets() is the only code path invoked
+    every improvement-scan cycle (rebuild() is CLI-only), so it must
+    auto-trigger pruning for existing installs to self-heal without a
+    separate manual migration step."""
+
+    def test_oversized_history_gets_pruned_as_a_side_effect(self, db, tmp_path):
+        history_file = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+        history_file.parent.mkdir(parents=True, exist_ok=True)
+        history_file.write_text(_make_oversized_history(150), encoding="utf-8")
+
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            scan_index.suggest_targets("skill", count=5, db_path=db)
+
+        kept_text = history_file.read_text(encoding="utf-8")
+        assert kept_text.count("## Scan —") == scan_index.SCAN_HISTORY_RETENTION
+        archive_file = tmp_path / ".squidsquad" / "skill" / "scan-history.archive.md"
+        assert archive_file.exists()
+        assert archive_file.read_text(encoding="utf-8").count("## Scan —") == 50
+
+    def test_under_cap_history_left_untouched(self, db, tmp_path):
+        history_file = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+        history_file.parent.mkdir(parents=True, exist_ok=True)
+        body = _make_oversized_history(10)
+        history_file.write_text(body, encoding="utf-8")
+
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            scan_index.suggest_targets("skill", count=5, db_path=db)
+
+        assert history_file.read_text(encoding="utf-8") == body
+        assert not (tmp_path / ".squidsquad" / "skill" / "scan-history.archive.md").exists()
+
+    def test_missing_history_does_not_crash(self, db, tmp_path):
+        """No scan-history.md yet (fresh role, never scanned) — auto-prune
+        must no-op silently, not raise."""
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            targets = scan_index.suggest_targets("skill", count=5, db_path=db)
+        assert isinstance(targets, list)
+
+    def test_other_roles_history_untouched(self, db, tmp_path):
+        """Auto-prune only touches the role passed to suggest_targets()."""
+        skill_history = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+        skill_history.parent.mkdir(parents=True, exist_ok=True)
+        skill_history.write_text(_make_oversized_history(150), encoding="utf-8")
+
+        qa_history = tmp_path / ".squidsquad" / "qa" / "scan-history.md"
+        qa_history.parent.mkdir(parents=True, exist_ok=True)
+        qa_body = _make_oversized_history(150)
+        qa_history.write_text(qa_body, encoding="utf-8")
+
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            scan_index.suggest_targets("skill", count=5, db_path=db)
+
+        assert qa_history.read_text(encoding="utf-8") == qa_body
+
+
+class TestResolveScanHistoryPath:
+    def test_prefers_state_worktree_when_present(self, tmp_path):
+        state_file = tmp_path / ".squidsquad-state" / "skill" / "scan-history.md"
+        state_file.parent.mkdir(parents=True)
+        state_file.write_text("# Scan History\n", encoding="utf-8")
+        main_file = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+        main_file.parent.mkdir(parents=True)
+        main_file.write_text("# Scan History\n", encoding="utf-8")
+
+        resolved = scan_index._resolve_scan_history_path("skill", tmp_path)
+        assert resolved == state_file
+
+    def test_falls_back_to_main_when_no_state_worktree(self, tmp_path):
+        resolved = scan_index._resolve_scan_history_path("skill", tmp_path)
+        assert resolved == tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+
+
 # ---------------------------------------------------------------------------
 # record-scan
 # ---------------------------------------------------------------------------

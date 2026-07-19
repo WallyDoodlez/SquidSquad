@@ -180,6 +180,7 @@ def _walk_source_files(root=None):
 def suggest_targets(role, count=5, db_path=None):
     """Return top N files to scan, ranked by composite score."""
     resolved_db_path = db_path or DB_PATH
+    root = REPO_ROOT if db_path is None else db_path.parent.parent
 
     # Lazy churn refresh (if stale > 24h) — uses its own connection.
     # Gracefully handle corrupt DB during refresh (#7614).
@@ -187,6 +188,19 @@ def suggest_targets(role, count=5, db_path=None):
         _maybe_refresh_churn(resolved_db_path)
     except (sqlite3.DatabaseError, sqlite3.OperationalError):
         pass  # Churn refresh failed — proceed with stale data
+
+    # Auto-prune this role's scan-history.md if it's grown past the
+    # retention cap (#13566 follow-up). rebuild() is the only other caller
+    # of _prune_scan_history() and it is CLI-only (`scan_index.py rebuild`,
+    # reached only by a human typing the command) — nothing in the running
+    # system invokes it automatically. suggest_targets() is what actually
+    # fires every improvement-scan cycle (see improvement-scan.md Step 3),
+    # so the self-healing hook has to live here for existing installs to
+    # shed accumulated bloat without a separate manual migration step.
+    try:
+        _maybe_prune_scan_history(role, root)
+    except OSError:
+        pass  # Prune failed — proceed with the oversized file this cycle
 
     # Open DB once after churn refresh (#7614)
     try:
@@ -196,7 +210,6 @@ def suggest_targets(role, count=5, db_path=None):
         return []
 
     # Get all source files on disk
-    root = REPO_ROOT if db_path is None else db_path.parent.parent
     all_files = _walk_source_files(root)
     if not all_files:
         conn.close()
@@ -700,6 +713,30 @@ def _prune_scan_history(history_file, keep=SCAN_HISTORY_RETENTION):
         "# Scan History Archive\n\n" + combined_body, encoding="utf-8"
     )
     return True
+
+
+def _resolve_scan_history_path(role, root):
+    """Resolve a role's scan-history.md, preferring the state worktree
+    (.squidsquad-state/) over main (.squidsquad/) — same preference order
+    as rebuild()'s search_dirs (#3664)."""
+    state_path = root / ".squidsquad-state" / role / "scan-history.md"
+    if state_path.exists():
+        return state_path
+    return root / ".squidsquad" / role / "scan-history.md"
+
+
+def _maybe_prune_scan_history(role, root):
+    """Auto-trigger _prune_scan_history() for the current role's own
+    scan-history.md (#13566 follow-up).
+
+    Cheap and idempotent — _prune_scan_history() itself no-ops (returns
+    False, no write) when the file is already under SCAN_HISTORY_RETENTION,
+    so this is safe to call on every suggest_targets() invocation without
+    a staleness timer (unlike _maybe_refresh_churn, which hits git and
+    needs 24h throttling to stay cheap).
+    """
+    history_file = _resolve_scan_history_path(role, root)
+    _prune_scan_history(history_file)
 
 
 def rebuild(db_path=None):
