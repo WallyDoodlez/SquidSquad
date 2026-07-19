@@ -1,35 +1,32 @@
 # Working State
 
-- **Task**: #13585 (harness restart coordination — TRIGGERING NOW)
-- **Status**: in-progress
-- **Started**: 2026-07-18 01:20
+- **Task**: #10003 (VAULT-ARCH.md v2 TRD rewrite — in-progress, resumable)
+- **Status**: deploy-halt checkpoint
+- **Updated**: 2026-07-18 22:14
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
 
-## >>> RESPAWNED PM MUST (first cycle after this restart) <<<
+## Session note (EVENT boot 2026-07-18 ~07:43 → deploy-halt ~22:15)
 
-1. **Verify restart outcome**: /status — all 4 aliases running + event mode + fresh harness boot_time; harness now imports CURRENT git_ops.py (the #13585 sys.modules staleness this restart cures).
-2. **Confirm #13585 cure end-to-end**: ask dm (comment + work-assign wake on #13582) to RE-ATTEMPT the PR #13583 merge — it needs NO code changes (dm RCA: current git_ops passes it clean). If merge now succeeds → dm ships #13582 → then PM closes #13585 (transition per its type) and routes the DURABLE fix (importlib.reload / subprocess isolation at harness.py:4625 /merge handler) to skill as a new issue UNLESS #13580's shipped rework already covers it (check #13580 final content first).
-3. **Reconcile inject-permissions.ps1** after #13583 merges: content-compare local dirty copy vs origin (modulo EOL, MSYS_NO_PATHCONV=1); identical → drop (`git restore`); different → surface to operator, do NOT discard. Same protocol as start.ps1 (done cleanly this session). `.gitattributes` local hunk: skill bundled it into PR #13583 — reconcile it the same way once merged.
-4. **Bare-mode caveat still holds** (#13545): if any agent fails to come up, `boot_remote.py --role <name>` (qa needed this at 00:10 tonight).
+Long productive session, ended by a deploy-signal after #13565 (composed-prompt re-diet) merged — my own composed instructions changed (task-intake hot/cold split, event-mode-contract split), halting for recompose+respawn.
 
-## Watches (carry forward)
+**Token-efficiency batch COMPLETE this session**: #13563 (BRIEFING diet), #13564 (cycle-input diet), #13566 (scan-history pruning), #13565 (prompt re-diet; I revised AC1 mid-flight after verifying the composed-size premise was wrong — v2_link_stage.py D2/Q-D2 never inlines sub-skill bodies) all SHIPPED. #13567/#13568 remain pending (blocked on #13561 P3 telemetry / measure-first).
 
-- **pending-test with qa**: #13574 (write-outage boot-gate; PM CQ ACs AC-F1/CQ1-4/D1 in issue body) + #13580 (scope-gate sequencing, PR #13586). #13575 verified+merged pre-restart (dm was mid-delivery at trigger — if #13575 not shipped, dm resumes it at boot).
-- **#13582 (HIGH)**: waiting ONLY on the post-restart #13583 merge re-attempt (step 2 above).
-- **qa pickup mis-claim (#13556)**: watch-only; improvement item only if the pending-test→in-progress claim recurs.
-- Session context: auth RESTORED (WallyDoodlez, push verified); Context Threshold now 75 (#13562 §T3, operator veto offered); Verbose OFF/quiet.
+**Vault-v2 redesign is the ACTIVE WORKSTREAM** (operator-collaborative, inline):
+- Direction locked: port dmp-web's consumption-pipeline + telemetry-driven ranking as domain-agnostic infra; NOT its SWE taxonomy. PARAG kept for our own profile; hub layer (`systems/`) added. All in `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md` §9+§10 (READ §10 FULLY on resume — it supersedes parts of §9).
+- Decisions locked: drop `confidence`+`source`+`links` frontmatter; engine via Skill-tool invocation of the portable dmp-web extraction (2 verifications still pending, §10.3); telemetry = git-tracked per-harness-instance append-only JSONL shards + `merge=union` + read-time event-id dedupe (§10.5 — PM-recommended, operator was reviewing when deploy hit; CONFIRM LOCK-IN with operator on resume).
+- TRD draft: `docs/VAULT-ARCH.md` v2 on branch `squidsquad/task/10003`, draft PR #13708. §1–§4 drafted+pushed. NEXT: §5 (BRIEFING, mostly survives) + §6 (telemetry — use §10.5 shard design, NOT §9.4). Then §7/§8 (blocked on the 2 Skill-invocation verifications), §9-cycle-integration, §10 target-state reframe, §11 gaps, §12–13.
+- 10 superseded vault tickets closed this session; #10003 is the single TRD ticket (reopened, rescoped).
 
 ## HITL standing (advertise each check-in)
 
-- **#13515** — blocked-status name ruling (PM rec 'blocked') + scope add.
-- **#13263** — behind-clone squash-merge, KEEP OPEN.
-- **#13561–#13568** — token-efficiency batch `pending`, awaiting operator approval (#13562 already shipped via bug lane).
-- **#12527** — greenfield smoke test, awaiting operator go.
-- **Threshold 70→75** veto offer.
+- **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN.
+- **Vault-v2 §10.5 telemetry design** — awaiting operator lock-in (asked right before deploy-halt).
+- **~130 `status:pending` backlog tasks** awaiting operator go-ahead (advertise by count).
 
 ## PM queue
 
-- work_queue(pm approved) = #10690 only, GATED (E6+E7) — not pickable.
+- work_queue(pm approved) = #10690 only, GATED (E7/#10686 OPEN) — not pickable.
+- #10003 is my in-progress task (see above).
 - Parked coord-holds: #11092 / #10839 / #9968.
-- Idle-driver: state file says armed, scan 2/3; session cron dies with this restart — Step A.2 CronList check re-creates on next idle.
+- Idle-driver: cancelled at cap earlier; state in .subloop-driver.json; re-arm on next idle.
