@@ -12,6 +12,8 @@ integration-level wizard tests in TEST-PLAN.md once Phase G lands.
 """
 
 import json
+import os
+import stat
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -1083,6 +1085,178 @@ class TestScaffoldInstallDevVariants:
         # file (in status bar examples, working-state path references, etc.)
         assert "be" in be_md.lower() or "BE" in be_md
         assert "fe" in fe_md.lower() or "FE" in fe_md
+
+
+class TestScaffoldInstallSiblingCloneCleanup13793:
+    """#13793: a failed `git clone` for a sibling agent clone must not leave
+    a stray directory behind. `git clone` creates its target directory
+    before it can fail (bad remote, dropped connection, interrupted
+    process), so an orphaned directory permanently blocks every future
+    clone attempt to that same path ("fatal: destination path already
+    exists and is not an empty directory"), stranding provisioning until an
+    operator manually removes it. Cleanup must fire whether or not the
+    stray directory happens to contain a `.git` folder -- an untimed,
+    non-shallow clone interrupted mid-transfer over a real network already
+    has one by the time it dies (verifier round-1 finding on this issue)."""
+
+    def _spec_and_clone_dir(self, tmp_path):
+        target_root = tmp_path / "project"
+        spec = _design_preset_spec()  # pm + dm; dm is the non-pm sibling clone
+        clone_dir = target_root.parent / f"{spec['project']['name']}-dm"
+        return spec, target_root, clone_dir
+
+    @staticmethod
+    def _is_rev_parse_head(cmd):
+        return cmd[:2] == ["git", "-C"] and cmd[-3:] == ["rev-parse", "--verify", "HEAD"]
+
+    def test_failed_clone_nonzero_exit_cleans_up_stray_directory(self, tmp_path, monkeypatch):
+        spec, target_root, clone_dir = self._spec_and_clone_dir(tmp_path)
+        monkeypatch.setattr(wizard, "_detect_remote_url",
+                             lambda repo_dir: "https://example.invalid/x.git")
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[:2] == ["git", "clone"]:
+                # Real git creates the target dir before it can fail.
+                Path(cmd[-1]).mkdir(parents=True, exist_ok=True)
+                return _fake_proc(returncode=128,
+                                   stderr="fatal: could not read from remote repository.")
+            if self._is_rev_parse_head(cmd):
+                # No real ref exists -- an empty stray dir is not a clone.
+                return _fake_proc(returncode=128, stderr="fatal: not a git repository")
+            return _fake_proc(returncode=0)
+
+        monkeypatch.setattr(wizard, "_run", _fake_run)
+        wizard.scaffold_install(spec, target_root)
+        assert not clone_dir.exists(), "failed clone left a stray directory behind"
+
+    def test_failed_clone_via_exception_still_cleans_up(self, tmp_path, monkeypatch):
+        spec, target_root, clone_dir = self._spec_and_clone_dir(tmp_path)
+        monkeypatch.setattr(wizard, "_detect_remote_url",
+                             lambda repo_dir: "https://example.invalid/x.git")
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[:2] == ["git", "clone"]:
+                Path(cmd[-1]).mkdir(parents=True, exist_ok=True)
+                raise RuntimeError("network unreachable")
+            if self._is_rev_parse_head(cmd):
+                return _fake_proc(returncode=128, stderr="fatal: not a git repository")
+            return _fake_proc(returncode=0)
+
+        monkeypatch.setattr(wizard, "_run", _fake_run)
+        wizard.scaffold_install(spec, target_root)
+        assert not clone_dir.exists(), "failed clone left a stray directory behind"
+
+    def test_interrupted_mid_transfer_clone_with_dot_git_still_cleaned_up(self, tmp_path, monkeypatch):
+        """The realistic failure mode: an untimed, non-shallow clone killed
+        mid-transfer already has a `.git` folder, but no resolvable HEAD --
+        this must NOT be mistaken for a genuinely complete clone."""
+        spec, target_root, clone_dir = self._spec_and_clone_dir(tmp_path)
+        monkeypatch.setattr(wizard, "_detect_remote_url",
+                             lambda repo_dir: "https://example.invalid/x.git")
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[:2] == ["git", "clone"]:
+                target = Path(cmd[-1])
+                target.mkdir(parents=True, exist_ok=True)
+                (target / ".git").mkdir()  # git had already started before dying
+                return _fake_proc(returncode=128, stderr="fatal: the remote end hung up unexpectedly")
+            if self._is_rev_parse_head(cmd):
+                # Partial clone: .git exists but no ref resolves.
+                return _fake_proc(returncode=128, stderr="fatal: ambiguous argument 'HEAD'")
+            return _fake_proc(returncode=0)
+
+        monkeypatch.setattr(wizard, "_run", _fake_run)
+        wizard.scaffold_install(spec, target_root)
+        assert not clone_dir.exists(), \
+            "a partial clone with .git but no resolvable HEAD must still be cleaned up"
+
+    def test_successful_clone_is_not_touched(self, tmp_path, monkeypatch):
+        spec, target_root, clone_dir = self._spec_and_clone_dir(tmp_path)
+        monkeypatch.setattr(wizard, "_detect_remote_url",
+                             lambda repo_dir: "https://example.invalid/x.git")
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[:2] == ["git", "clone"]:
+                target = Path(cmd[-1])
+                target.mkdir(parents=True, exist_ok=True)
+                (target / ".git").mkdir()
+                return _fake_proc(returncode=0)
+            if self._is_rev_parse_head(cmd):
+                return _fake_proc(returncode=0, stdout="deadbeef\n")  # resolves fine
+            return _fake_proc(returncode=0)
+
+        monkeypatch.setattr(wizard, "_run", _fake_run)
+        summary = wizard.scaffold_install(spec, target_root)
+        assert clone_dir.exists()
+        assert (clone_dir / ".git").exists()
+        assert str(clone_dir) in summary.get("clones_created", [])
+
+
+class TestCleanupFailedClone13793:
+    """Uses real `git` subprocess calls (no mocking) -- `_cleanup_failed_clone`'s
+    completeness check is exactly the kind of subtle behavior that's worth
+    verifying against actual git, not just a stubbed response."""
+
+    def _git(self, cwd, *args):
+        import subprocess
+        return subprocess.run(["git", *args], cwd=str(cwd), capture_output=True,
+                              text=True, check=True)
+
+    def test_removes_directory_without_git(self, tmp_path):
+        stray = tmp_path / "stray-clone"
+        stray.mkdir()
+        wizard._cleanup_failed_clone(stray)
+        assert not stray.exists()
+
+    def test_removes_directory_with_git_but_no_resolvable_head(self, tmp_path):
+        """#13793 verifier round 1: an interrupted mid-transfer clone already
+        has a `.git` folder by the time it dies, but no commit/ref resolves --
+        the realistic failure mode a bare "does .git exist" check would miss."""
+        broken = tmp_path / "broken-clone"
+        broken.mkdir()
+        self._git(broken, "init", "-q")
+        # Freshly-init'd, zero commits: HEAD is an unborn branch, unresolvable.
+        wizard._cleanup_failed_clone(broken)
+        assert not broken.exists()
+
+    def test_leaves_completed_clone_untouched(self, tmp_path):
+        real_clone = tmp_path / "real-clone"
+        real_clone.mkdir()
+        self._git(real_clone, "init", "-q")
+        self._git(real_clone, "config", "user.email", "t@t")
+        self._git(real_clone, "config", "user.name", "t")
+        self._git(real_clone, "commit", "--allow-empty", "-q", "-m", "init")
+        wizard._cleanup_failed_clone(real_clone)
+        assert real_clone.exists()
+        assert (real_clone / ".git").exists()
+
+    def test_missing_directory_is_a_no_op(self, tmp_path):
+        missing = tmp_path / "does-not-exist"
+        wizard._cleanup_failed_clone(missing)  # must not raise
+
+    def test_removes_directory_containing_readonly_pack_file(self, tmp_path):
+        """#13793 verifier round 2: git writes pack objects read-only, and any
+        clone that got far enough to write ONE pack object -- the realistic
+        mid-transfer interruption this cleanup targets -- hits this on
+        Windows, where a bare shutil.rmtree() cannot unlink a read-only file.
+        This is not an edge case: it's the primary path for a real
+        interrupted clone, reproduced here without needing a live network
+        transfer -- a read-only file is exactly what a partial pack object
+        looks like on disk regardless of how it got interrupted."""
+        broken = tmp_path / "broken-clone-with-pack"
+        pack_dir = broken / ".git" / "objects" / "pack"
+        pack_dir.mkdir(parents=True)
+        readonly_file = pack_dir / "tmp_pack_deadbeef"
+        readonly_file.write_bytes(b"partial pack data")
+        os.chmod(readonly_file, stat.S_IREAD)
+        try:
+            wizard._cleanup_failed_clone(broken)
+            assert not broken.exists()
+        finally:
+            # Best-effort: if the assertion above failed, don't leave a
+            # read-only file behind for pytest's tmp_path cleanup to choke on.
+            if readonly_file.exists():
+                os.chmod(readonly_file, stat.S_IWRITE)
 
 
 class TestScaffoldInstallSafetyAndIdempotency:
