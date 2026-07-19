@@ -5,8 +5,11 @@
 ## Pending-test (mine, awaiting verifier)
 - none -- queue fully clear, all self-filed follow-ups confirmed shipped.
 
-## Shipped this tick (prior ticks, confirmed merged to main -- verified CLOSED/status:shipped via gh issue view, not assumed)
-- #13565, #13566, #13709/#13710/#13711, #13714, #13722, #13723/#13724, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13737 (TC coverage gate glob fix), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741), #13742 (health_check.py .local-config collision detection, round-2 fix), #13743 (tracker.py --extra-label), #13745 (compose.py generate_local_config warning), #13746 (pm/instructions.md improvement-scan wiring, round 2 -- comprehension baseline refresh), #13760 (wizard.py harden_stdio fleet wiring + em-dash fix).
+## Shipped this session (confirmed merged to main via gh issue view, not assumed) -- older entries trimmed, see git log for full history
+- #13737-13746 range: TC coverage gate glob fix, health_check.py .local-config collision detection, tracker.py --extra-label, compose.py generate_local_config warning, pm/instructions.md improvement-scan wiring.
+- #13760 (wizard.py harden_stdio fleet wiring + em-dash fix).
+- #13792 (L2 role-template drift -- worker auto-prepend caution, dm type:issue/type:task labels; also refreshed a pre-existing stale comprehension baseline that was blocking the static gate).
+- #13793 (wizard.py: failed sibling-clone git clone now cleans up the stray directory it left behind, so a retry doesn't hit "destination path already exists"; 6 new regression tests, a previously fully-untested code path).
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
@@ -30,6 +33,8 @@
 - A "never bypassed" gate can be silently dead for months if its own file-discovery logic drifts from a later renaming convention (#13737: tc_coverage.py's glob never matched #9184's TEST-PLAN-<N>.md shape) -- discovery/glob logic feeding a hard gate deserves its own regression test asserting it actually finds real current-format files, not just that the gate's pass/fail arithmetic is correct once files are found.
 - Fixing a silently-inert gate can surface a SECOND, larger problem the inertness was masking (#13737/#13738: QA-RESULTS format drifted away from the TC-N template once nothing was checking it). Don't silently expand scope to paper over that with a parser change -- disclose loudly and cross-file to the owning role before shipping the narrow fix.
 - Verifier can reject on pure gate-ownership grounds (comprehension-staleness baseline invalidated by the SAME PR's diff) even when the substance is independently confirmed correct -- refresh the baseline in the SAME PR per #13575's tooling contract; it's the worker's fix, not verifier bookkeeping (#13746 round 1->2).
+- A stale comprehension baseline caused by ANOTHER agent's recompose (not your own diff) still blocks the full static gate for everyone -- if you hit it mid-task, verify the quizzed content doesn't overlap the changed region, then refresh it inline (own script/gate, in-scope even if the drift wasn't yours). If two of your own in-flight branches both need the same refresh (cut from main before either PR merged), do it on both -- the resulting baseline value is identical either way, so parallel PRs don't conflict (#13792/#13793, same root cause as #13731/#13746).
+- `git clone <url> <dir>` creates its target directory before it can fail -- any caller that doesn't clean up on clone failure can strand a stray, no-.git directory that blocks every future retry into that path ("destination path already exists and is not an empty directory"). Check for this pattern wherever a script shells out to `git clone` (#13793).
 
 ## Improvement Scan
 Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 05:52 (references/roles/instructions.md/tests/test_harness_deploy_12912.py; clean, no findings; scan 1/3 of new burst).
