@@ -209,6 +209,79 @@ class TestSuggestTargets:
         assert targets == []
 
 
+class TestSuggestTargetsAutoPrune:
+    """#13566 follow-up: suggest_targets() is the only code path invoked
+    every improvement-scan cycle (rebuild() is CLI-only), so it must
+    auto-trigger pruning for existing installs to self-heal without a
+    separate manual migration step."""
+
+    def test_oversized_history_gets_pruned_as_a_side_effect(self, db, tmp_path):
+        history_file = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+        history_file.parent.mkdir(parents=True, exist_ok=True)
+        history_file.write_text(_make_oversized_history(150), encoding="utf-8")
+
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            scan_index.suggest_targets("skill", count=5, db_path=db)
+
+        kept_text = history_file.read_text(encoding="utf-8")
+        assert kept_text.count("## Scan —") == scan_index.SCAN_HISTORY_RETENTION
+        archive_file = tmp_path / ".squidsquad" / "skill" / "scan-history.archive.md"
+        assert archive_file.exists()
+        assert archive_file.read_text(encoding="utf-8").count("## Scan —") == 50
+
+    def test_under_cap_history_left_untouched(self, db, tmp_path):
+        history_file = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+        history_file.parent.mkdir(parents=True, exist_ok=True)
+        body = _make_oversized_history(10)
+        history_file.write_text(body, encoding="utf-8")
+
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            scan_index.suggest_targets("skill", count=5, db_path=db)
+
+        assert history_file.read_text(encoding="utf-8") == body
+        assert not (tmp_path / ".squidsquad" / "skill" / "scan-history.archive.md").exists()
+
+    def test_missing_history_does_not_crash(self, db, tmp_path):
+        """No scan-history.md yet (fresh role, never scanned) — auto-prune
+        must no-op silently, not raise."""
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            targets = scan_index.suggest_targets("skill", count=5, db_path=db)
+        assert isinstance(targets, list)
+
+    def test_other_roles_history_untouched(self, db, tmp_path):
+        """Auto-prune only touches the role passed to suggest_targets()."""
+        skill_history = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+        skill_history.parent.mkdir(parents=True, exist_ok=True)
+        skill_history.write_text(_make_oversized_history(150), encoding="utf-8")
+
+        qa_history = tmp_path / ".squidsquad" / "qa" / "scan-history.md"
+        qa_history.parent.mkdir(parents=True, exist_ok=True)
+        qa_body = _make_oversized_history(150)
+        qa_history.write_text(qa_body, encoding="utf-8")
+
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            scan_index.suggest_targets("skill", count=5, db_path=db)
+
+        assert qa_history.read_text(encoding="utf-8") == qa_body
+
+
+class TestResolveScanHistoryPath:
+    def test_prefers_state_worktree_when_present(self, tmp_path):
+        state_file = tmp_path / ".squidsquad-state" / "skill" / "scan-history.md"
+        state_file.parent.mkdir(parents=True)
+        state_file.write_text("# Scan History\n", encoding="utf-8")
+        main_file = tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+        main_file.parent.mkdir(parents=True)
+        main_file.write_text("# Scan History\n", encoding="utf-8")
+
+        resolved = scan_index._resolve_scan_history_path("skill", tmp_path)
+        assert resolved == state_file
+
+    def test_falls_back_to_main_when_no_state_worktree(self, tmp_path):
+        resolved = scan_index._resolve_scan_history_path("skill", tmp_path)
+        assert resolved == tmp_path / ".squidsquad" / "skill" / "scan-history.md"
+
+
 # ---------------------------------------------------------------------------
 # record-scan
 # ---------------------------------------------------------------------------
@@ -503,6 +576,190 @@ class TestRebuild:
             "SELECT * FROM scans WHERE file_path='stale.py'"
         ).fetchone()
         assert stale is None  # old data should be gone
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# scan-history.md retention cap (#13566)
+# ---------------------------------------------------------------------------
+
+def _make_oversized_history(count):
+    """Build a synthetic scan-history.md body with `count` entries, newest
+    first (block N is dated further in the past than block N-1), matching
+    the file's real prepend convention."""
+    blocks = []
+    for i in range(count):
+        day = 28 - (i % 27)
+        blocks.append(
+            f"## Scan — 2026-01-{day:02d} 0{i % 10}:00\n\n"
+            f"- **Files scanned**: references/scripts/file_{i}.py\n"
+            "- **Findings**: none\n"
+            "- **Items rejected by human**: none\n\n"
+        )
+    return "# Scan History\n\n" + "".join(blocks)
+
+
+class TestPruneScanHistoryNoPreamble:
+    def test_headerless_file_no_spurious_blank_lines(self, tmp_path):
+        """Some roles' scan-history.md (e.g. pm's) has no '# ... History'
+        line and starts directly with the first '## Scan' block -- pruning
+        must not inject blank lines at the top (real committed data)."""
+        history_file = tmp_path / "scan-history.md"
+        body = "".join(
+            f"## Scan — 2026-01-{28 - (i % 27):02d} 0{i % 10}:00\n\n"
+            f"- **Files scanned**: references/scripts/file_{i}.py\n"
+            "- **Findings**: none\n"
+            "- **Items rejected by human**: none\n\n"
+            for i in range(150)
+        )
+        history_file.write_text(body, encoding="utf-8")
+        pruned = scan_index._prune_scan_history(history_file, keep=100)
+        assert pruned is True
+        kept_text = history_file.read_text(encoding="utf-8")
+        assert not kept_text.startswith("\n"), (
+            "headerless prune must not prepend spurious blank lines"
+        )
+        assert kept_text.startswith("## Scan — 2026-01-28")
+
+
+class TestPruneScanHistoryRegexParity:
+    def test_dash_less_scan_mention_in_body_does_not_fragment_block(self, tmp_path):
+        """The prune split must require the same dash separator as
+        _parse_scan_history's split, so a finding description that starts a
+        line with '## Scan ' (no dash) doesn't get misread as a new block
+        boundary by prune while the parser correctly ignores it."""
+        history_file = tmp_path / "scan-history.md"
+        body = (
+            "# Scan History\n\n"
+            "## Scan — 2026-01-28 00:00\n\n"
+            "- **Files scanned**: references/scripts/file_0.py\n"
+            "- **Findings**: none\n"
+            "- **Criteria note**: watch for headers like\n"
+            "## Scan of a subsystem inside finding prose (no dash after Scan)\n"
+            "- **Items rejected by human**: none\n\n"
+            "## Scan — 2026-01-27 00:00\n\n"
+            "- **Files scanned**: references/scripts/file_1.py\n"
+            "- **Findings**: none\n"
+            "- **Items rejected by human**: none\n\n"
+        )
+        history_file.write_text(body, encoding="utf-8")
+        # Well under the cap -- prune is a no-op, but the block COUNT it
+        # computes internally must still be 2, not 3 (which would indicate
+        # the dash-less "## Scan of a subsystem..." line was mis-split).
+        pruned = scan_index._prune_scan_history(history_file, keep=1)
+        assert pruned is True
+        kept_text = history_file.read_text(encoding="utf-8")
+        assert kept_text.count("## Scan — 2026-01") == 1
+        assert "2026-01-28" in kept_text
+        archive_text = (tmp_path / "scan-history.archive.md").read_text(encoding="utf-8")
+        assert "2026-01-27" in archive_text
+        # The dash-less in-body mention must have stayed attached to its
+        # parent block (2026-01-28, kept), not been split into its own block.
+        assert "watch for headers like" in kept_text
+
+
+class TestPruneScanHistory:
+    def test_under_cap_is_a_noop(self, tmp_path):
+        history_file = tmp_path / "scan-history.md"
+        history_file.write_text(_make_oversized_history(10), encoding="utf-8")
+        pruned = scan_index._prune_scan_history(history_file, keep=100)
+        assert pruned is False
+        assert history_file.read_text(encoding="utf-8").count("## Scan") == 10
+        assert not (tmp_path / "scan-history.archive.md").exists()
+
+    def test_over_cap_trims_to_keep_and_archives_remainder(self, tmp_path):
+        history_file = tmp_path / "scan-history.md"
+        history_file.write_text(_make_oversized_history(150), encoding="utf-8")
+        pruned = scan_index._prune_scan_history(history_file, keep=100)
+        assert pruned is True
+
+        kept_text = history_file.read_text(encoding="utf-8")
+        assert kept_text.count("## Scan") == 100
+        # Newest (file_0) stays; oldest (file_149) is evicted.
+        assert "file_0.py" in kept_text
+        assert "file_149.py" not in kept_text
+
+        archive_file = tmp_path / "scan-history.archive.md"
+        assert archive_file.exists()
+        archived_text = archive_file.read_text(encoding="utf-8")
+        assert archived_text.count("## Scan") == 50
+        assert "file_99.py" not in archived_text  # kept, not archived
+        assert "file_100.py" in archived_text
+        assert "file_149.py" in archived_text  # nothing deleted, just moved
+        assert archived_text.startswith("# Scan History Archive")
+
+    def test_repeated_prune_prepends_to_existing_archive(self, tmp_path):
+        history_file = tmp_path / "scan-history.md"
+        history_file.write_text(_make_oversized_history(150), encoding="utf-8")
+        scan_index._prune_scan_history(history_file, keep=100)
+
+        # Grow scan-history.md again past the cap and prune a second time.
+        grown = _make_oversized_history(120)
+        history_file.write_text(grown, encoding="utf-8")
+        scan_index._prune_scan_history(history_file, keep=100)
+
+        archive_file = tmp_path / "scan-history.archive.md"
+        archived_text = archive_file.read_text(encoding="utf-8")
+        # 50 from the first prune + 20 from the second = 70, single header.
+        assert archived_text.count("## Scan") == 70
+        assert archived_text.count("# Scan History Archive") == 1
+
+    def test_missing_file_is_a_noop(self, tmp_path):
+        assert scan_index._prune_scan_history(tmp_path / "missing.md") is False
+
+
+class TestRebuildEnforcesRetentionCap:
+    def test_rebuild_prunes_oversized_history_and_keeps_full_db_coverage(
+        self, tmp_path
+    ):
+        ss = tmp_path / ".squidsquad"
+        skill_dir = ss / "skill"
+        skill_dir.mkdir(parents=True)
+        history_file = skill_dir / "scan-history.md"
+        history_file.write_text(_make_oversized_history(150), encoding="utf-8")
+
+        db_path = ss / "scan-index.db"
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            scan_index.rebuild(db_path=db_path)
+
+        # On-disk file is capped.
+        assert history_file.read_text(encoding="utf-8").count("## Scan") == 100
+        assert (skill_dir / "scan-history.archive.md").exists()
+
+        # DB coverage includes archived entries too — pruning the markdown
+        # file must not lose historical scan-index stats.
+        conn = scan_index._get_db(db_path)
+        scans = conn.execute(
+            "SELECT COUNT(*) FROM scans WHERE role='skill'"
+        ).fetchone()[0]
+        assert scans == 150
+        conn.close()
+
+    def test_rebuild_is_idempotent_on_already_pruned_history(self, tmp_path):
+        ss = tmp_path / ".squidsquad"
+        skill_dir = ss / "skill"
+        skill_dir.mkdir(parents=True)
+        history_file = skill_dir / "scan-history.md"
+        history_file.write_text(_make_oversized_history(150), encoding="utf-8")
+
+        db_path = ss / "scan-index.db"
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            scan_index.rebuild(db_path=db_path)
+            scan_index.rebuild(db_path=db_path)  # second run, already pruned
+
+        assert history_file.read_text(encoding="utf-8").count("## Scan") == 100
+        archived_text = (skill_dir / "scan-history.archive.md").read_text(
+            encoding="utf-8"
+        )
+        # Second rebuild's prune is a no-op (already at the cap) — archive
+        # must not accumulate the same 50 entries twice.
+        assert archived_text.count("## Scan") == 50
+
+        conn = scan_index._get_db(db_path)
+        scans = conn.execute(
+            "SELECT COUNT(*) FROM scans WHERE role='skill'"
+        ).fetchone()[0]
+        assert scans == 150
         conn.close()
 
 
