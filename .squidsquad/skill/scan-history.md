@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 00:49
+
+- **Files scanned**: references/scripts/harness.py, tests/test_git_ops.py, tests/test_harness.py (suggest-targets top-3 for skill; harness.py TODO/FIXME grep clean, AST em-dash sweep found nothing beyond the already-exempted intentional banner art per TestHarnessWiring13236).
+- **Findings**: none.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-18 23:53
 
 - **Files scanned**: references/scripts/cli_stdio.py (45 lines, full read; never-scanned per name-vs-history diff — the #13198 cp1252-crash-proofing helper). Clean itself, but cross-referencing its own test suite's TestFleetWiring13198.WIRED sweep list against the codebase surfaced a real gap: references/scripts/git_ops.py is not in the 9-script sweep and never calls harden_stdio().
@@ -612,23 +618,5 @@
 
 - **Files scanned**: references/scripts/start_team.py, references/scripts/thin_launcher.py, references/scripts/diagnostics.py
 - **Findings**: #8234 (start_team.py bare except swallows all errors — low), #8235 (diagnostics.py missing redaction keywords — medium)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 14:33
-
-- **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
-- **Findings**: #8200 (vault_check.py wikilink pipe-alias not stripped — low), #8201 (vault_entity.py unhandled --file read error — low)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 13:33
-
-- **Files scanned**: references/scripts/event_bus.py, references/scripts/event_bus_reader.py, references/scripts/event_catalog.py
-- **Findings**: #8193 (unused import sys in event_bus.py and event_bus_reader.py — low)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 11:33
-
-- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/soul_adaptation.py
-- **Findings**: #8159 (compose.py redundant imports in agent_compose — low), #8160 (boot_remote.py corrupt .claude-pid silent fallthrough — low)
 - **Items rejected by human**: none yet
 
