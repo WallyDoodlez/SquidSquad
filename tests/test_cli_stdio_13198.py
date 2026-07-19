@@ -71,6 +71,7 @@ class TestFleetWiring13198:
     WIRED = [
         "config", "subloop_driver", "model_router", "scan_index", "compose",
         "boot_remote", "add_role", "migrate_state_branch", "tracker",
+        "git_ops",  # #13728: most heavily-invoked fleet CLI, was unswept
     ]
 
     @pytest.mark.parametrize("mod", WIRED)
