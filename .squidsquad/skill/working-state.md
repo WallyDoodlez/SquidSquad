@@ -4,6 +4,7 @@
 
 ## Pending-test (mine, awaiting verifier)
 - #13831 (PR #13832) -- factored #13819's stash-guard into shared _stash_guarded_ff_only_merge(), now used by all 3 identical git merge --ff-only call sites in git_ops.py. 10 new regression tests.
+- #13838 (PR #13839) -- clarified TC-coverage ship gate is task-flow-only by design (tracker.py comment + verification-issue-flow.md note); 3 new regression tests locking the no-TEST-PLAN no-op at the tracker.transition() integration level (previously untested there).
 
 ## Shipped this session (confirmed merged to main via gh issue view, not assumed) -- older entries trimmed, see git log for full history
 - #13737-13746 range: TC coverage gate glob fix, health_check.py .local-config collision detection, tracker.py --extra-label, compose.py generate_local_config warning, pm/instructions.md improvement-scan wiring.
