@@ -68,7 +68,7 @@ The vault is **distinct from**:
 
 ### 3.0 What actually changes here, and why
 
-**PARAG itself is not the diagnosis.** Nothing in the dmp-web comparison shows PARAG's actionability-based sorting caused SquidSquad's vault to underperform — SquidSquad simply never ran long enough, at scale, with real consumption pressure, to find out whether the folder axis mattered. What the comparison *does* show is that dmp-web's two structural additions — **a connected graph via dedicated hub/entity notes with budgeted traversal**, and **telemetry-driven ranking** (§6) — are directly responsible for its vault staying useful under real load. SquidSquad had neither. §3 replaces the *hardcoded* part of v1's layout (a single taxonomy baked into scripts and sub-skill prose, with no reachable hub layer) and adds the *missing* part (graph connectivity); it does not throw away PARAG on the strength of an unproven complaint.
+**PARAG (Projects / Areas / Resources / Archives / Galaxy — the five-folder taxonomy; `archives/` is no longer a physical destination per §3.4, and `systems/` post-dates the acronym) itself is not the diagnosis.** Nothing in the dmp-web comparison shows PARAG's actionability-based sorting caused SquidSquad's vault to underperform — SquidSquad simply never ran long enough, at scale, with real consumption pressure, to find out whether the folder axis mattered. What the comparison *does* show is that dmp-web's two structural additions — **a connected graph via dedicated hub/entity notes with budgeted traversal**, and **telemetry-driven ranking** (§6) — are directly responsible for its vault staying useful under real load. SquidSquad had neither. §3 replaces the *hardcoded* part of v1's layout (a single taxonomy baked into scripts and sub-skill prose, with no reachable hub layer) and adds the *missing* part (graph connectivity); it does not throw away PARAG on the strength of an unproven complaint.
 
 Two changes, independent of each other:
 
@@ -83,13 +83,15 @@ Each install's vault ships a `vault-schema.json` at the vault root defining its 
 {
   "traversalBudget": 2,
   "searchTopK": 12,
+  "dedupThreshold": 0.0-1.0,
   "tieBreakWeights": { "used": 2.0, "impression": 0.25, "walked": 0.5, "recency": 0.25 },
   "types": {
     "<type-name>": {
       "folder": "<folder>",
       "traversal": "free | budgeted",
       "weight": 0.0-1.0,
-      "hub": true | false
+      "hub": true | false,
+      "prefix": "<optional filename prefix, for types sharing a folder>"
     }
   }
 }
@@ -108,14 +110,15 @@ An install customizes its taxonomy by editing this file — no code or sub-skill
 {
   "traversalBudget": 2,
   "searchTopK": 12,
+  "dedupThreshold": 0.0-1.0,
   "tieBreakWeights": { "used": 2.0, "impression": 0.25, "walked": 0.5, "recency": 0.25 },
   "types": {
     "project":  { "folder": "projects",  "traversal": "free",     "weight": 0.8, "hub": true },
     "area":     { "folder": "areas",     "traversal": "free",     "weight": 0.8, "hub": true },
     "resource": { "folder": "resources", "traversal": "free",     "weight": 0.6, "hub": false },
-    "decision": { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false },
-    "pattern":  { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false },
-    "learning": { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false },
+    "decision": { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false, "prefix": "decision-" },
+    "pattern":  { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false, "prefix": "pattern-" },
+    "learning": { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false, "prefix": "learning-" },
     "system":   { "folder": "systems",   "traversal": "free",     "weight": 0.8, "hub": true }
   }
 }
@@ -200,7 +203,7 @@ Derived entirely from the install's `vault-schema.json` (§3.1) — the table be
 Same two-field agreement as v1, now checked against the schema registry instead of a hardcoded table:
 
 1. **Folder ↔ type**: a note's folder must match its `type:`'s registered `folder` in `vault-schema.json` (§3.1).
-2. **Galaxy prefix ↔ type**: `decision-X.md` → `type: decision`; `pattern-X.md` → `type: pattern`; `learning-X.md` → `type: learning`.
+2. **Prefix ↔ type**: where a type declares a `prefix` in the registry (§3.1 — SquidSquad's profile declares them for the three galaxy types sharing one folder), filenames must carry it: `decision-X.md` → `type: decision`; `pattern-X.md` → `type: pattern`; `learning-X.md` → `type: learning`. Types without a declared prefix skip this check — so custom installs get prefix validation only when they opt in via the registry.
 3. **Validation**: `vault_check.py check-structure` reads `vault-schema.json` at runtime — an install that adds a custom type gets consistency checking for free, no code change needed. (v1's hardcoded version of this check is tracked at #10098, closed as superseded — the schema-driven version replaces it, not extends it.)
 
 ### 4.3 Required frontmatter (all notes)
@@ -296,7 +299,7 @@ Three counters, written by different parties, disjoint per run:
 
 The engine/consumer split is load-bearing: `impression` measures what search *offers*, `used` measures what work *actually consumed*. Conflating them (letting the engine write `used`, or counting reads as usage) would collapse the signal that makes §4.4's staleness buckets and §6.2's ranking meaningful.
 
-Every event is one JSONL record: `{id: <uuid>, ts, agent, task, slug, counter}`. `task` (the tracker issue number) is deliberately carried on every event — per-task attribution is richer than dmp-web's flat per-note integers and is what enables outcome-linked telemetry (§9: joining events against tracker outcomes to detect missed consultations). `id` is the dedup key (§6.3).
+Every event is one JSONL record: `{id: <uuid>, ts, agent, task, slug, counter}` — `agent` is the acting agent's **alias** (e.g. `pm`, `skill`); the writing *instance* is not a field because it is encoded in which shard the event lands in (§6.3). Callers pass their identity (instance id + alias) on every engine call (§8.5). `task` (the tracker issue number) is deliberately carried on every event — per-task attribution is richer than dmp-web's flat per-note integers and is what enables outcome-linked telemetry (§9: joining events against tracker outcomes to detect missed consultations). `id` is the dedup key (§6.3).
 
 A `--no-write` dry-run flag suppresses event emission for diagnostic searches — telemetry should measure real consumption, not debugging.
 
@@ -362,7 +365,7 @@ The engine itself is *not* a sub-skill — see §7.5 for how sub-skills reach it
 ### 7.2 vault-remember — the write path
 
 - End-of-cycle sweep, kept from v1 with its throttles (write budget, quiet-gate, role lanes) intact.
-- **Dedup gate reroutes through the engine**: prefer-update-over-create (§9.5) — the top-ranked hit above a similarity threshold becomes the merge target; creation only when nothing ranks. v1's title/tag `dedup-check` is retired.
+- **Dedup gate reroutes through the engine**: prefer-update-over-create (§9.5) — the top-ranked hit above the dedup threshold becomes the merge target; creation only when nothing ranks. v1's title/tag `dedup-check` is retired. Dedup is **not a separate engine operation**: it is a §8.5 `search` call using the draft note's title + body as the query; the threshold applies to the top hit's Stage-2 score (§6.2), with the cutoff configured as `vault-schema.json` `dedupThreshold` (default tuned at implementation).
 - The four gates persist with gate 2 re-based on engine dedup: (1) write budget → (2) engine dedup / merge-target selection → (3) reusability → (4) fresh-context test.
 - Companion step in the worker's ship flow: capture-at-ship (§9.5 item 1) — same gates, notes ride the feature PR.
 - BRIEFING staleness check unchanged (every cycle, budget-free, §5).
@@ -418,8 +421,8 @@ The engine interface the sub-skills (§7) and scripts above depend on, satisfied
 
 | Operation | Contract (mirrors §6) |
 |---|---|
-| **search** | Query → tiered match + budgeted traversal (§6.2) → top-K metadata-only JSON (paths, tiers, scores, link map); writes `impression`/`walked` events; `--no-write` dry-run |
-| **record** | Consumer-cited slugs + task number → `used` events appended to the caller's shard (§6.3) |
+| **search** | Query + **caller identity (instance id + alias — required)** → tiered match + budgeted traversal (§6.2) → top-K metadata-only JSON (paths, tiers, scores, link map); writes `impression`/`walked` events to the caller's shard; `--no-write` dry-run |
+| **record** | Consumer-cited slugs + task number + **caller identity (instance id + alias — required)** → `used` events appended to the caller's shard (§6.3) |
 | **report** | Shards + note inventory → cold / surfaced-never-used / stale buckets (§6.4), JSON |
 
 Shard append discipline (one writer, one file, trailing-newline JSONL) is part of the engine's write contract; the installer seeds `.telemetry/.gitattributes` (`merge=union`) and the harness owns instance-id minting (§6.3) — neither is engine work. If any operation is unavailable at runtime, callers follow §9.9's degradation rows; no SquidSquad script grows a fallback ranking implementation.
@@ -441,9 +444,11 @@ When PM files a task, the intake flow runs an engine search (§6.2) on the task'
 Before implementing, the working agent's task flow runs two engine-backed steps whose *output is committed*, not just performed:
 
 1. **Context consultation**: an engine search on the task's subject; the result lands in the task artifact (CONTEXT.md / research doc / PR body) as a **`## Vault context consumed`** section — wikilink + one-line relevance per cited note, or an explicit "none relevant." Cited notes get `used` events with the task number.
-2. **Rules matching**: a two-stage tag-catalog match against the binding-rules lane; the result lands as **`## Applicable rules`** (explicit "none matched" required). Matched rules get `used` events. *(The rules lane's placement in the type registry — a dedicated `rule` type vs. binding-flagged notes in an existing type — is an open decision, §11; the receipt contract here is independent of where the rules live.)*
+2. **Rules matching**: a two-stage match against the binding-rules lane — stage 1 matches the task's keywords against the rules lane's tag catalog to shortlist candidate rules; stage 2 reads the shortlisted rules and keeps (and cites) only those actually applicable; the result lands as **`## Applicable rules`** (explicit "none matched" required). Matched rules get `used` events. *(The rules lane's placement in the type registry — a dedicated `rule` type vs. binding-flagged notes in an existing type — is an open decision, §11; the receipt contract here is independent of where the rules live.)*
 
 The step *cannot be skipped silently*: an artifact without the receipt sections is an incomplete artifact (§9.4). "None relevant" is always available, so the cost floor is one honest line — the receipt is evidence the search ran, not busywork.
+
+**Receipt location rule**: when the task produces a PR, the **PR body** is the canonical location the verifier checks (it is what ships to review); otherwise the task's primary artifact (CONTEXT.md / research doc). Receipts may additionally appear elsewhere, but the canonical location alone decides the §9.4 gate — no verifier judgment call about which artifact counts.
 
 ### 9.4 Verification — receipt enforcement
 
@@ -519,6 +524,7 @@ The vault remains **non-blocking and degradation-tolerant** — no vault failure
 
 - Freeze vault writes by setting the existing write-budget gate to 0 via config — deterministic, reuses the shipped budget mechanism. Vault writes are low-volume; a 1–2 day freeze is harmless and beats delta-replay complexity.
 - Snapshot v1 (git tag or branch) as the rollback point and the migration input. The M0 snapshot computes the input inventory (note counts per type, owner/status distributions) that M3's reconciliation checks against.
+- **Rehearse first**: before M0 touches live state, run the entire M0→M3 walk on a test clone (house rule: rehearse on test environments, never live state). The rehearsal is a precondition of starting, not an M3 gate.
 
 ### 10.2 M1 — mechanical transform (deterministic script, tested, no judgment)
 
@@ -546,7 +552,7 @@ Modeled on dmp-web's optimize analyze phase: lightweight-tier model subagents pe
 
 - Operator reviews the manifest — merges and prunes are the judgment calls that must not be autonomous. Filed as a HITL tracker item, never a blocking terminal prompt.
 - Apply executes the approved manifest on top of M1's output.
-- **Verification gates (all must pass)**: full `vault_check` sweep with zero errors; zero broken wikilinks; reconciliation — M0's note count = Σ(migrated + merged-into + pruned), committed as a per-note-disposition artifact; and a dry-run of the whole M1→M3 pipeline on a test clone first (house rule: rehearse on test environments, never live state).
+- **Verification gates (all must pass)**: full `vault_check` sweep with zero errors; zero broken wikilinks; reconciliation — M0's note count = Σ(migrated + merged-into + pruned), committed as a per-note-disposition artifact. (The test-clone rehearsal happens before M0 — see §10.1.)
 
 ### 10.5 M4 — cutover & unfreeze
 
