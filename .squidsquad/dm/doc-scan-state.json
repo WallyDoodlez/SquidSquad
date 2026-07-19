@@ -12,6 +12,13 @@
   "rotation_count": 102,
   "scan_history": [
     {
+      "file": "2-ship session delivery-integrity self-QA (#13793/#13801)",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 of this burst (scan_count->2/3). Self-QA of both ships this session: #13793 (wizard.py failed-clone stranding fix, PR #13800) + #13801 (pm/instructions.md frontmatter step-ids completion, PR #13808 -- verified no-recompose-needed, banked as a new vault learning). VERIFIED from forge: both CLOSED + exactly ONE status:shipped label each (zero dual-status-label drift, no orphan pending-ship). Counter consistent: config shipped-since-bump=107 == .ship-counter=107. origin/main durability: fetched (7a57431fd->eb002bb5e), only small state/vault commits since my last ship push (BRIEFING increment + a pm vault learning), no mass-deletion. Pulled clean. 0 findings."
+    },
+    {
       "file": "README.md",
       "date": "2026-07-19",
       "findings": 1,
