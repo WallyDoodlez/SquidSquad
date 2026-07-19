@@ -4,7 +4,7 @@
 
 ## Pending-test (mine, awaiting verifier)
 - #13743 (PR ready): tracker.py create_issue/create_task gained --extra-label.
-- #13746 (branch squidsquad/task/13746, PR #13753 ready): pm/instructions.md was missing a step:cycle/improvement-scan marker -- roles/pm/improvement-scan.md was orphaned since includes.yml (the only place that referenced it) is a confirmed-dead TOMBSTONE (#13264) unreachable from the real v2_link_stage compose path. Added the marker immediately before step:cycle/vault-optimize.
+- #13746 (branch squidsquad/task/13746, PR #13753 ready, round 2 landed): pm/instructions.md was missing a step:cycle/improvement-scan marker -- roles/pm/improvement-scan.md was orphaned since includes.yml (the only place that referenced it) is a confirmed-dead TOMBSTONE (#13264) unreachable from the real v2_link_stage compose path. Added the marker immediately before step:cycle/vault-optimize. Round 1 verifier FAIL was gate-ownership only (substance confirmed correct) -- my diff shifted instructions.md's blob sha, staling 13327_spec.json's baseline; refreshed it in round 2 per #13575's tooling contract.
 - #13745 (branch squidsquad/task/13745, PR #13759 ready): compose.py generate_local_config() now warns loudly on stderr instead of silently guessing wrong .local-config clone paths -- the confirmed deeper root cause behind #13742's symptom. Scoped to the "at minimum" fix; the two riskier redesign directions (enforce target_root==primary, source from harness /status) left as open design questions, not attempted.
 
 ## Shipped this tick (prior ticks, confirmed merged to main -- verified CLOSED/status:shipped via gh issue view, not assumed)
@@ -12,7 +12,7 @@
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
-- No open skill issues -- queue drained, all self-filed follow-ups now pending-test.
+- #13760 (open, self-filed, actionable): wizard.py unwired from cli_stdio.harden_stdio() fleet + live em-dash on an ERROR-path print. Picking up next.
 
 ## Standing lessons (session)
 - commit-code (git_ops.py) takes <role> <branch> <msg> as POSITIONAL args -- there is no --message flag. Passing --message prepends the literal string into the commit subject.
@@ -31,6 +31,7 @@
 - Backtick mangling in tracker.py free-text flags isn't just `--message` (comment/transition) -- `create-issue --body` hit it too (#13738), dropping a file path silently. Any tracker.py flag carrying prose with backticked code terms/paths needs the same care; verify posted content via `gh issue view <N> --json body,comments` after sending. Updated feedback_tracker_comment_backtick_mangling memory to cover create-issue explicitly.
 - A "never bypassed" gate can be silently dead for months if its own file-discovery logic drifts from a later renaming convention (#13737: tc_coverage.py's glob never matched #9184's TEST-PLAN-<N>.md shape) -- discovery/glob logic feeding a hard gate deserves its own regression test asserting it actually finds real current-format files, not just that the gate's pass/fail arithmetic is correct once files are found.
 - Fixing a silently-inert gate can surface a SECOND, larger problem the inertness was masking (#13737/#13738: QA-RESULTS format drifted away from the TC-N template once nothing was checking it). Don't silently expand scope to paper over that with a parser change -- disclose loudly and cross-file to the owning role before shipping the narrow fix.
+- Verifier can reject on pure gate-ownership grounds (comprehension-staleness baseline invalidated by the SAME PR's diff) even when the substance is independently confirmed correct -- refresh the baseline in the SAME PR per #13575's tooling contract; it's the worker's fix, not verifier bookkeeping (#13746 round 1->2).
 
 ## Improvement Scan
 Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 04:54 (wizard.py/test_cli_stdio_13198.py; 1 finding filed -- #13760, wizard.py unwired from harden_stdio fleet + live em-dash on an ERROR-path print; scan 1/3 of new burst).
