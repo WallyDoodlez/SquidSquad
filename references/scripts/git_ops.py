@@ -2125,7 +2125,19 @@ def _sync_local_branch_to_origin(branch):
         ["git", "merge-base", "--is-ancestor", local_sha, origin_sha], check=False
     ).returncode == 0
     if behind:
+        # #13819: stash-before/pop-after, mirroring _safe_checkout() -- a
+        # bare `git merge --ff-only` refuses to run when uncommitted local
+        # changes touch a file the fast-forward would also update ("Your
+        # local changes ... would be overwritten by merge"), which is
+        # routine mid-cycle state for an event-mode agent (this is the
+        # verifier re-verification path). #13167-safe: only pop a stash we
+        # actually created, never a pre-existing unrelated one.
+        pre_stash_ref = _stash_top_ref()
+        _run("git stash -q", check=False)
+        stashed = _stash_top_ref() != pre_stash_ref
         ff = _run_list(["git", "merge", "--ff-only", f"origin/{branch}"], check=False)
+        if stashed:
+            _safe_stash_pop()
         if ff.returncode != 0:
             print(
                 f"ERROR: task-begin could not fast-forward {branch} to origin/"
