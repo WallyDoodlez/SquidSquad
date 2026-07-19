@@ -12,6 +12,8 @@ integration-level wizard tests in TEST-PLAN.md once Phase G lands.
 """
 
 import json
+import os
+import stat
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -1231,6 +1233,30 @@ class TestCleanupFailedClone13793:
     def test_missing_directory_is_a_no_op(self, tmp_path):
         missing = tmp_path / "does-not-exist"
         wizard._cleanup_failed_clone(missing)  # must not raise
+
+    def test_removes_directory_containing_readonly_pack_file(self, tmp_path):
+        """#13793 verifier round 2: git writes pack objects read-only, and any
+        clone that got far enough to write ONE pack object -- the realistic
+        mid-transfer interruption this cleanup targets -- hits this on
+        Windows, where a bare shutil.rmtree() cannot unlink a read-only file.
+        This is not an edge case: it's the primary path for a real
+        interrupted clone, reproduced here without needing a live network
+        transfer -- a read-only file is exactly what a partial pack object
+        looks like on disk regardless of how it got interrupted."""
+        broken = tmp_path / "broken-clone-with-pack"
+        pack_dir = broken / ".git" / "objects" / "pack"
+        pack_dir.mkdir(parents=True)
+        readonly_file = pack_dir / "tmp_pack_deadbeef"
+        readonly_file.write_bytes(b"partial pack data")
+        os.chmod(readonly_file, stat.S_IREAD)
+        try:
+            wizard._cleanup_failed_clone(broken)
+            assert not broken.exists()
+        finally:
+            # Best-effort: if the assertion above failed, don't leave a
+            # read-only file behind for pytest's tmp_path cleanup to choke on.
+            if readonly_file.exists():
+                os.chmod(readonly_file, stat.S_IWRITE)
 
 
 class TestScaffoldInstallSafetyAndIdempotency:

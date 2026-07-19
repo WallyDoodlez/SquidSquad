@@ -48,6 +48,7 @@ import os
 import platform
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -1808,7 +1809,17 @@ def _cleanup_failed_clone(clone_dir):
     if result.returncode == 0:
         return  # genuinely complete, usable clone -- never touch
     try:
-        shutil.rmtree(clone_dir)
+        # #13793 verifier round 2: git writes pack objects read-only, and any
+        # clone that got far enough to write ONE pack object -- the realistic
+        # mid-transfer interruption this cleanup targets -- hits this on
+        # Windows, where shutil.rmtree cannot unlink a read-only file without
+        # help (POSIX deletion is governed by directory perms; Windows needs
+        # the file's own write bit cleared first). onexc clears it and
+        # retries the failed operation once per offending path.
+        def _clear_readonly_and_retry(func, path, exc):
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        shutil.rmtree(clone_dir, onexc=_clear_readonly_and_retry)
     except OSError as e:
         print(f"  WARNING: could not remove stray clone dir {clone_dir}: {e}",
               file=sys.stderr)
