@@ -145,6 +145,7 @@
   "references/sub-skills/roles/pm/task-intake.md": "ab2151ff0a3d2918258c032567412cd8f92021f8"
  },
  "1428_spec.json": {
+  "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification.md": "060cc3b168d7feb4456c59201b82a0283df9cffb"
  },
  "2181_spec.json": {
