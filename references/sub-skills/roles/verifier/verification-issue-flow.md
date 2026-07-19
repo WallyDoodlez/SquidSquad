@@ -39,6 +39,7 @@ For each issue:
 3. Run the relevant test or manually verify the fix.
 4. **Test coverage check**: Verify that the fix includes a regression test. Check for new or modified test files corresponding to the changed code. If the fix adds or changes code but includes no tests, reject it.
 5. **Run the full test suite**: `python tests/run_tests.py` — all tests must pass.
+   This flow intentionally never authors a `TEST-PLAN-<N>.md` — issue-flow has no AC-derived TC list to enumerate, so `tracker.py`'s TC-coverage ship gate (task-flow's `TEST-PLAN`/`QA-RESULTS` pairing) structurally never activates for `type:issue` items. Steps 4 and 5 above are this flow's own equivalent guarantee — a required regression test plus a green full suite — enforced directly by the verifier rather than by that script (#13838).
 6. If verified (fix works, regression test exists, all tests pass):
    - If a PR exists for this issue, convert from draft to ready:
      ```bash
