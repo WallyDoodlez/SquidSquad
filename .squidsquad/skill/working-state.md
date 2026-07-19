@@ -33,6 +33,6 @@
 - Fixing a silently-inert gate can surface a SECOND, larger problem the inertness was masking (#13737/#13738: QA-RESULTS format drifted away from the TC-N template once nothing was checking it). Don't silently expand scope to paper over that with a parser change -- disclose loudly and cross-file to the owning role before shipping the narrow fix.
 
 ## Improvement Scan
-Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 03:22 (SKILL.md/test_tracker.py/docs/INSTALLER-RUNTIME.md, clean, no findings; scan 1/3 of burst).
+Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 04:54 (wizard.py/test_cli_stdio_13198.py; 1 finding filed -- #13760, wizard.py unwired from harden_stdio fleet + live em-dash on an ERROR-path print; scan 1/3 of new burst).
 
 ## Quiet Cycle Counter: 0

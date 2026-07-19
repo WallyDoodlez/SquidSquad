@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 04:54
+
+- **Files scanned**: references/scripts/wizard.py (4520 lines; TODO/FIXME grep clean; AST em-dash/decorative-Unicode sweep on print() literals + f-string segments found a live hit; grepped for harden_stdio/cli_stdio wiring -- zero hits), tests/test_cli_stdio_13198.py (cross-referenced the TestFleetWiring13198.WIRED list -- wizard.py absent).
+- **Findings**: 1 filed — #13760 (low — wizard.py, the setup/install CLI, never calls cli_stdio.harden_stdio() and is absent from the #13198 fleet-wiring test's WIRED list; also has a live em-dash literal on an ERROR-path print (line ~4398, fires when a role fails to compose during setup) that would crash a strict cp1252 console instead of printing the clear error message -- same class as #13728's git_ops.py finding, different script).
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 03:22
 
 - **Files scanned**: SKILL.md (529 lines, TODO/FIXME clean, cross-referenced 9 file paths mentioned in prose -- all resolve), tests/test_tracker.py (908 lines, TODO/FIXME + skip/xfail markers grep clean), docs/INSTALLER-RUNTIME.md (light skim, PM-owned architecture doc, nothing flagged).
@@ -612,11 +618,5 @@
 
 - **Files scanned**: references/scripts/config.py, references/scripts/cycle_pre.py
 - **Findings**: #8343 (cycle_pre.py: inconsistent boolean config parsing across functions)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-15 20:03
-
-- **Files scanned**: references/scripts/cycle_post.py, references/scripts/model_router.py
-- **Findings**: #8336 (cycle_post.py: redundant import re inside two functions)
 - **Items rejected by human**: none
 
