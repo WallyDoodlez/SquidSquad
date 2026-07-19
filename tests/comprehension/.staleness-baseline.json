@@ -153,6 +153,9 @@
  "13711_spec.json": {
   "references/sub-skills/common/improvement-scan.md": "0c96478c0a33200ecdb39092bedf534fd61b4c33"
  },
+ "13735_spec.json": {
+  "references/sub-skills/roles/pm/improvement-scan.md": "d683d3ad3559aabba27831deaad6fc06ad7f4389"
+ },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification-templates.md": "a26674577d5fc7a6933261bdb5656edcaa709427",
