@@ -61,67 +61,100 @@ The vault is **distinct from**:
 
 ## 3. On-disk layout — PARAG
 
-The vault uses a **PARAG** taxonomy: **P**rojects, **A**reas, **R**esources, **A**rchives, **G**alaxy. The first four letters come from Tiago Forte's PARA system in *Building a Second Brain*; the fifth letter (G — Galaxy) is a SquidSquad addition for Zettelkasten-style atomic notes.
+### 3.0 What actually changes here, and why
+
+**PARAG itself is not the diagnosis.** Nothing in the dmp-web comparison shows PARAG's actionability-based sorting caused SquidSquad's vault to underperform — SquidSquad simply never ran long enough, at scale, with real consumption pressure, to find out whether the folder axis mattered. What the comparison *does* show is that dmp-web's two structural additions — **a connected graph via dedicated hub/entity notes with budgeted traversal**, and **telemetry-driven ranking** (§6) — are directly responsible for its vault staying useful under real load. SquidSquad had neither. §3 replaces the *hardcoded* part of v1's layout (a single taxonomy baked into scripts and sub-skill prose, with no reachable hub layer) and adds the *missing* part (graph connectivity); it does not throw away PARAG on the strength of an unproven complaint.
+
+Two changes, independent of each other:
+
+1. **The taxonomy becomes configurable** (`vault-schema.json`, §3.1) — required regardless of what SquidSquad's own install picks, because SquidSquad is general-purpose (marketing/ops/content teams, not just SWE) and a hardcoded taxonomy is wrong for installs that aren't SquidSquad-on-SquidSquad.
+2. **SquidSquad's own default profile keeps PARAG** (§3.2) — the folders don't change — but gains a genuine **hub/connective layer** (dmp-web's missing-in-v1 piece, gap G6 in the comparison doc) and a **traversal-budget** classification per type, so search can walk the graph instead of grepping a flat pile.
+
+### 3.1 The type registry — `vault-schema.json`
+
+Each install's vault ships a `vault-schema.json` at the vault root defining its own note types. Nothing in the engine, the validator, or the templates hardcodes folder names — everything reads this registry.
+
+```json
+{
+  "traversalBudget": 2,
+  "searchTopK": 12,
+  "tieBreakWeights": { "used": 2.0, "impression": 0.25, "walked": 0.5, "recency": 0.25 },
+  "types": {
+    "<type-name>": {
+      "folder": "<folder>",
+      "traversal": "free | budgeted",
+      "weight": 0.0-1.0,
+      "hub": true | false
+    }
+  }
+}
+```
+
+- **`traversal: free`** — connective/hub types. Free to traverse — following a wikilink through one of these doesn't cost budget. Dense knowledge notes can cluster around them without the traversal budget running out before reaching related content.
+- **`traversal: budgeted`** — dense knowledge types (SquidSquad's galaxy leaves). Each hop through one of these costs 1 unit of `traversalBudget` (default 2, per dmp-web's tuned value) — keeps search on-topic instead of wandering the whole graph.
+- **`hub: true`** — marks a type as the connective layer specifically (a stronger signal than `traversal: free` alone — used by §3.3's hub-linking convention and by the search engine's ranking to slightly favor hub notes as entry points).
+- **`weight`** — per-type multiplier in the ranking tiebreak (§6.2), separate from the traversal classification.
+
+An install customizes its taxonomy by editing this file — no code or sub-skill change required. `vault-init`, `vault-create`, `vault_check.py`, and the search engine all read it.
+
+### 3.2 SquidSquad's own default profile — PARAG kept, hub layer added
+
+```json
+{
+  "traversalBudget": 2,
+  "searchTopK": 12,
+  "tieBreakWeights": { "used": 2.0, "impression": 0.25, "walked": 0.5, "recency": 0.25 },
+  "types": {
+    "project":  { "folder": "projects",  "traversal": "free",     "weight": 0.8, "hub": true },
+    "area":     { "folder": "areas",     "traversal": "free",     "weight": 0.8, "hub": true },
+    "resource": { "folder": "resources", "traversal": "free",     "weight": 0.6, "hub": false },
+    "decision": { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false },
+    "pattern":  { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false },
+    "learning": { "folder": "galaxy",    "traversal": "budgeted", "weight": 1.0, "hub": false },
+    "system":   { "folder": "systems",   "traversal": "free",     "weight": 0.8, "hub": true }
+  }
+}
+```
+
+The folder layout stays PARAG, unchanged:
 
 ```
 .squidsquad/vault/
-├── BRIEFING.md         # active-context summary, ~50 lines target (today: 80+)
+├── BRIEFING.md         # active-context summary, ~50 lines target
+├── vault-schema.json   # the type registry above
 ├── projects/           # active project context, goals, constraints
-├── areas/              # ongoing concerns: human prefs, code conventions,
-│                       # design system, company values, team culture
+├── areas/              # ongoing concerns: human prefs, code conventions
 ├── resources/          # reference material, external docs, research
-├── archives/           # shipped features, closed decisions, historical context
-├── galaxy/             # atomic knowledge notes (Zettelkasten):
-│                       # decision-*, pattern-*, learning-*, style-*
-├── .relevance-index.json   # written by vault_optimize.py (gitignored)
-└── .obsidian/          # optional Obsidian app config (gitignored)
+├── systems/            # NEW — hub notes for subsystems the squad keeps learning
+│                        #   about (harness, event bus, compose pipeline, tracker,
+│                        #   pr_merge, vault itself, ...): connective tissue with
+│                        #   no actionability semantics, just a place galaxy
+│                        #   leaves link INTO
+├── archives/            # shipped features, closed decisions (now: status:archived
+│                        #   on any type, no forced folder move — see §3.4)
+├── galaxy/              # atomic knowledge notes (Zettelkasten):
+│                        # decision-*, pattern-*, learning-*
+└── .obsidian/           # optional Obsidian app config (gitignored)
 ```
 
-### 3.1 The PARA buckets — what goes where
+**What's new**: `systems/` — the one gap PARAG genuinely had no answer for. §11.4 of v1 (gap G6, "no connective entity layer") observed that galaxy notes are 95% flat leaves with almost no hubs, so even a working search engine would have little graph to traverse. `systems/` notes are entity references for subsystems the squad repeatedly learns about — one note per subsystem (harness, event bus, compose pipeline, tracker, pr_merge, launcher, vault itself), each accumulating inbound wikilinks from the galaxy leaves that touch it. This is the direct fix for G6, and it's additive — nothing existing moves.
 
-PARA sorts notes by **actionability** rather than topic. The original framing (paraphrased): "How soon will I need to act on this?" Buckets are ordered by decreasing actionability.
+**What's dropped**: `style-*` galaxy notes (zero ever written in ~3 months of operation, per v1 §10.2 — folded into `pattern-*`, no evidence a fourth prefix was ever needed) and the `pattern-posture-*` subtype tag (superseded by `system` hub notes for cross-cutting principles — a posture is really "a decision that spans multiple systems," which the graph now expresses via wikilinks rather than a special tag).
 
-| Bucket | What it holds | Test for placement |
-|---|---|---|
-| `projects/` | Bounded, scoped work with a definition-of-done | "Does this end?" If yes → project. One note per project. |
-| `areas/` | Ongoing responsibilities and standing context with no end date | "Will I always care about this?" If yes → area. Stable, slow-changing, few notes. |
-| `resources/` | Reference material — research, external docs, third-party patterns | "Would I look this up later?" Prefer linking to externals over copy-paste. |
-| `archives/` | Anything from the three above that is no longer active | "Has this shipped / been superseded / become irrelevant?" |
+**Migration cost**: near-zero for existing content — every current galaxy/areas/projects/resources note keeps its folder and (mostly) its type. The only *new* content required is authoring the initial `systems/` hub set (~7-10 notes) and retroactively linking existing galaxy leaves to the hub they're about — this is the M2 distillation pass from `VAULT-COMPARISON-DMPWEB.md` §9.5.
 
-The placement test is **"actionable now vs. someday vs. never"**, not topic similarity. The same subject can validly live in `projects/` (active work), `areas/` (the ongoing concern behind that work), and `archives/` (a closed past project on it) simultaneously — each captures a different lifecycle slice.
+### 3.3 Hub-linking convention
 
-### 3.2 Galaxy — the Zettelkasten layer
+A galaxy note SHOULD wikilink to at least one `systems/` hub if its subject matter clearly belongs to one (e.g., a `learning-*` about a harness restart bug links `[[harness]]`). This isn't enforced at write time (a false requirement would just get rubber-stamped), but `vault_check.py`'s Level 2 sweep flags galaxy notes with zero hub links as a maintenance signal — "orphaned from the graph" is a distinct, cheaper-to-fix defect from "orphaned from any other note" (v1's existing orphan check).
 
-PARA covers *contextual* knowledge (what's active, what's standing, what's reference). It does not cover **atomic, durable, cross-cutting knowledge**: a single architectural decision, a reusable pattern observed across many projects, a lesson from a single incident. Those are too small to be a project, too pointed to be an area, and too internal to be a resource — but too valuable to lose.
+### 3.4 How notes move — archived by status, not by folder
 
-The `galaxy/` folder fills that gap with Zettelkasten-style notes:
+v1 moved notes physically from an active folder to `archives/` on archival. v2 drops the forced move: any note's `status:` flips to `archived` in place. Two reasons this is better, both learned from dmp-web:
 
-- **Atomic** — one idea per note; if a note grows past ~500 lines or covers more than one idea, split it (per §4.1).
-- **Typed by filename prefix** — `decision-*`, `pattern-*`, `learning-*`, `style-*` (full taxonomy in §4.2).
-- **Heavily cross-linked** — body text uses bare `[[wikilinks]]` to connect related notes; the `links:` frontmatter field is auto-maintained from those wikilinks by `vault_optimize.py reindex` (§7.3) — `vault_check.py check-wikilinks` only validates them (§4.5), it does not rewrite the `links:` field.
-- **Append-only in practice** — galaxy notes are rarely deleted; superseded ones get `status: superseded` and are auto-archived by `vault_optimize.py prune-scan` (§3.3).
+1. **Simpler engine.** The search engine and the file-path-based dedup logic don't need a "did this note's path change" special case — a note's identity (its path) never changes on status transitions, only on explicit rename (§4.5-equivalent, still a distinct operation).
+2. **Ranking, not relocation, does the work.** §6.2's ranking formula scores `superseded`/`archived` notes near zero (still discoverable via direct search, just never surfaces as a default top-K result) — the same effect v1's folder-move achieved, without a file-move needing to happen at all.
 
-Galaxy is the **compounding** layer: every decision the squad makes and every learning it captures adds one more linkable node. PARA tells you *what's hot right now*; Galaxy tells you *what we have learned over time*.
-
-### 3.3 How notes move between buckets
-
-Note movement is rare and almost always one-directional:
-
-- **`projects/` → `archives/`** — when a project completes or is abandoned, the note's `status:` flips to `archived` and either an agent or `vault_optimize.py prune-scan` moves the file. Project notes are not deleted; the historical context matters.
-- **`galaxy/` → `archives/`** — `vault_optimize.py prune-scan` auto-archives galaxy notes that are (a) `status: superseded`, or (b) stale **and** orphaned (no inbound wikilinks for longer than the staleness threshold in `.squidsquad/config.md`). Wikilinks pointing at the archived note continue to resolve by filename match (per §4.5 — the resolver scans `.squidsquad/vault/**`, not a specific folder), so the link graph remains valid across the move. `vault_optimize.py _rewrite_wikilinks_after_archive` appends an optional `<!-- archived: [[name]] moved to archives/ -->` breadcrumb to each linking note for human-reader hygiene (Obsidian path display, etc.); the breadcrumb is cosmetic, not load-bearing for resolution.
-- **`areas/` and `resources/`** — generally stay put. Areas are stable by definition; resources stay as long as someone might look them up. Both can be manually archived if the squad decides they're dead weight, but `vault_optimize.py` does not touch them automatically.
-
-There is no automatic *promotion* path (e.g., a `learning-*` note that turns out to be a fundamental pattern is rewritten or split manually; the script doesn't second-guess). The trim-or-graduate rule in §5 covers the **BRIEFING → galaxy** edge case, where lines trimmed from BRIEFING.md become new galaxy notes rather than being deleted.
-
-### 3.4 Why this layout
-
-The PARAG split serves three jobs that a single flat folder couldn't:
-
-1. **Boot-time signal** — `BRIEFING.md` + `projects/` + `areas/` are the small, hot set agents read at every cycle start. Keeping them as separate top-level folders means an agent can read "current context" without scanning the (much larger) `galaxy/` or `archives/`.
-2. **Long-tail without dilution** — `galaxy/` can grow to thousands of notes without dragging on every read, because nothing reads the whole folder during a cycle — only `vault_optimize.py reindex` and `vault-synthesis` traverse it, and both are quiet-cycle work.
-3. **Lossless decay** — `archives/` is the dumping ground that keeps prune scans honest. Nothing is deleted; if a hot note turns cold, it moves to `archives/` and the link graph rewrites itself.
-
-Concrete operational consequences appear in §8 (which script touches which folder) and §10 (what the buckets actually contain in this repo today). Which-agent-touches-which lives in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) / [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md).
+`archives/` survives as a *type* (`status: archived` on any note, any folder) rather than a folder notes get physically relocated into. Existing physically-archived v1 notes migrate in place (folder stays, `status:` already says `archived`) — no data movement needed at migration time.
 
 ---
 
