@@ -357,6 +357,49 @@ class TestCreateTask:
         # #13370: the reporter-annotated body is now passed as the stdin body arg.
         assert "**Reported By**: skill-lead" in calls[0][1]
 
+    def test_extra_label_appended_13743(self, monkeypatch):
+        """#13743: create_task mirrors create_issue's extra_label passthrough."""
+        calls = []
+
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
+            return _mock_result(stdout="https://github.com/org/repo/issues/52\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
+        tracker.create_task("feat", "body", "skill", "low",
+                             extra_label="improvement-scan")
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
+        assert "improvement-scan" in label_arg.split(",")
+
+    def test_no_extra_label_by_default(self, monkeypatch):
+        calls = []
+
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
+            return _mock_result(stdout="https://github.com/org/repo/issues/53\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
+        tracker.create_task("feat", "body", "skill", "low")
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
+        assert "improvement-scan" not in label_arg.split(",")
+
+    def test_extra_label_via_forge_adapter(self, monkeypatch):
+        adapter_calls = []
+
+        class FakeAdapter:
+            def create_issue(self, title, body, labels=None):
+                adapter_calls.append({"labels": labels})
+                return {"number": 54, "url": "http://forge/issues/54"}
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: FakeAdapter())
+        tracker.create_task("feat", "body", "skill", "low",
+                             extra_label="improvement-scan")
+        assert "improvement-scan" in adapter_calls[0]["labels"]
+
 
 class TestCommentNoRedundantImport:
     """#6849: comment() must use module-level re, not import re as _re."""
