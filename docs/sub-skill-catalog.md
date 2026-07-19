@@ -263,7 +263,7 @@ Role-specific event extras:
 
 These are **seed templates** copied to `.squidsquad/project/` at install time. The runtime versions in `.squidsquad/project/` are auto-included by `compose.py` as the L4 layer of the composed CLAUDE.md. The seeds in this directory are NOT consumed at compose time — they're the starting point a fresh install begins from.
 
-**Target state — one seed per role-class** (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay)):
+**Target state — one seed per role-class** (per [COMPOSE-ARCHITECTURE.md §3.3 + §7.3](COMPOSE-ARCHITECTURE.md#33-layer-operations-l2-l4-creative-overlay)):
 
 | Seed | Purpose |
 |---|---|
@@ -272,7 +272,7 @@ These are **seed templates** copied to `.squidsquad/project/` at install time. T
 | `dm.md` | DM L4 — same H2 grammar |
 | `worker.md` | Worker L4 — exactly one file, shared by ALL worker-class agents regardless of L3 specialization (FE/BE/iOS/etc.). Same H2 grammar as the other role-class seeds. |
 
-Per [COMPOSE-ARCHITECTURE.md §3.3](COMPOSE-ARCHITECTURE.md#33-l4-operations-creative-overlay): the four L4 filenames are fixed (`pm.md` / `worker.md` / `verifier.md` / `dm.md`) — one per L2 role-class. L3 specialization does NOT differentiate L4 files. `compose.py deploy <alias>` resolves alias → role-class via the `## Aliases` registry, then reads the corresponding L4 file. Multi-instance installs of the same role-class share that one L4 file.
+Per [COMPOSE-ARCHITECTURE.md §3.3](COMPOSE-ARCHITECTURE.md#33-layer-operations-l2-l4-creative-overlay): the four L4 filenames are fixed (`pm.md` / `worker.md` / `verifier.md` / `dm.md`) — one per L2 role-class. L3 specialization does NOT differentiate L4 files. `compose.py deploy <alias>` resolves alias → role-class via the `## Aliases` registry, then reads the corresponding L4 file. Multi-instance installs of the same role-class share that one L4 file.
 
 **Legacy multi-file L4 seeds (deprecated)** — earlier installs scattered L4 content across per-slot files. These remain on disk under `references/sub-skills/project/` until the unified model is implemented (see #10359 doc spec; implementation tracked separately), at which point they collapse into the per-role-class files above:
 

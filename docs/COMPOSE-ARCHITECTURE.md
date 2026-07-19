@@ -975,7 +975,7 @@ Project-shaped descriptive facts — *what is true about this project / role-cla
 
 **Authoring — L4-exclusive.** Project Context is the only slot that L1-L3 do NOT author. The reason is structural: L1 ships universal-across-all-installs, L2 ships role-across-all-installs, L3 ships variant-across-all-installs — none of those layers knows about any specific project, so none of them can author "what is true about *this* project." Anything that *seems* like cross-install project-context content (e.g., "PMs typically work in markdown") is actually role-identity content (Identity slot) or role-contract content (Responsibility) or tooling guidance (Instructions via a sub-skill) — not Project Context.
 
-A compose-pipeline validation rule (per [§3.3](#33-l4-operations-creative-overlay) per-slot constraints) rejects any L1-L3 source file that declares `slot: project-context` in its frontmatter. The slot identifier remains valid; it just has no authoring location above L4.
+A compose-pipeline validation rule (per [§3.3](#33-layer-operations-l2-l4-creative-overlay) per-slot constraints) rejects any L1-L3 source file that declares `slot: project-context` in its frontmatter. The slot identifier remains valid; it just has no authoring location above L4.
 
 **Where Project Context comes from** — two complementary sources, both at L4:
 
