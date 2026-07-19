@@ -18,6 +18,7 @@ Branch-per-feature workflow is the only mode (#9478). Split commits into code (f
      ```bash
      python references/scripts/tracker.py comment [NUMBER] --role [ROLE]-lead --message "Working on branch [BRANCH]."
      ```
+   - **`commit-code` always switches you back to the working branch (`main`) afterward**, fast-forwarding it to origin if it's behind (#13613 — prevents local main from silently drifting across repeated commit-code calls). This is deliberate and load-bearing: the state commit in step 2 below requires being on `main` and errors otherwise. Don't assume you're still on `[BRANCH]` after this call — if you need to make another code commit to the same feature branch, `git checkout [BRANCH]` first. The switch prints a `commit-code: switched back to '<working>' ...` line so it's visible in the transcript (#13730).
 
 2. **Always** commit state changes (.squidsquad/) to main:
    ```bash

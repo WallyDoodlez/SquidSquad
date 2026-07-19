@@ -1311,7 +1311,7 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
         # never masquerades as the race.
         if "base branch was modified" in error_lower and attempt < _max_base_retries:
             print(
-                f"PR #{pr_number}: base branch moved (batch-ship race) — "
+                f"PR #{pr_number}: base branch moved (batch-ship race) -- "
                 f"retry {attempt + 1}/{_max_base_retries} after {_base_retry_delay}s",
                 file=sys.stderr,
             )
@@ -1737,6 +1737,10 @@ def _sync_working_branch_to_origin(working):
 def _checkout_and_sync_working(working):
     """Return to `working` and fast-forward it to origin (#13613)."""
     _safe_checkout(working)
+    print(
+        f"commit-code: switched back to '{working}' -- follow-on commits "
+        f"(e.g. commit-state) land here, not on the feature branch (#13730)"
+    )
     _sync_working_branch_to_origin(working)
 
 
@@ -1935,7 +1939,7 @@ def commit_role_scoped(role, message):
     current = _run("git branch --show-current").stdout.strip()
     if current != working:
         print(
-            f"WARNING: cycle commit skipped — current branch '{current}' "
+            f"WARNING: cycle commit skipped -- current branch '{current}' "
             f"is not the configured working branch '{working}'. Role-state "
             f"files stay on disk; the next cycle on '{working}' will commit "
             f"them. (#11083)",
@@ -2147,7 +2151,7 @@ def _sync_local_branch_to_origin(branch):
     print(
         f"ERROR: task-begin: local {branch} ({local_sha[:9]}) and origin/"
         f"{branch} ({origin_sha[:9]}) have DIVERGED. Resolve manually (merge "
-        f"origin, never rebase) before retrying — refusing to check out an "
+        f"origin, never rebase) before retrying -- refusing to check out an "
         f"unsynced tip (#13373).",
         file=sys.stderr,
     )
@@ -2498,7 +2502,7 @@ def guard_galaxy_frontmatter():
             violations.append((p, reason))
     if violations:
         print(
-            f"ERROR: pre-commit guard BLOCKED commit — {len(violations)} galaxy "
+            f"ERROR: pre-commit guard BLOCKED commit -- {len(violations)} galaxy "
             f"note(s) lack valid YAML frontmatter (#12905; a frontmatter-less "
             f"note reds tests/test_vault.py for the whole fleet):",
             file=sys.stderr,
@@ -2635,6 +2639,8 @@ def _parse_args():
 
 
 def main():
+    from cli_stdio import harden_stdio  # #13198/#13728: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     cmd, rest = _parse_args()
 
     # Self-heal the pre-commit state guard on every invocation except the guard
