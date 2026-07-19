@@ -347,6 +347,14 @@ The report is the **purge signal**: it feeds `vault_optimize.py`'s pruning/archi
 
 A quiet-cycle maintenance pass rolls events older than N days into a **per-writer aggregate file** (still per-writer, so still conflict-free by construction), truncating the raw shard. Aggregates preserve per-note, per-counter totals plus last-event timestamps — sufficient for §6.2 ranking and §6.4 bucketing; per-task attribution older than the compaction horizon is dropped (outcome-linking consumes recent events, not deep history). Readers treat `aggregate + live shard` as one logical stream.
 
+Three invariants make compaction safe. They are architectural — any implementation must satisfy them:
+
+1. **Only the owning writer compacts its own shard, in its own clone.** The single-writer invariant (§6.3) extends to compaction: no maintenance pass ever rewrites another writer's shard, so truncation can never race an append.
+2. **Aggregate-before-truncate, one commit.** The updated aggregate and the truncated shard land in the same commit, so no observable state — local after the commit, or remote after the push — ever shows a truncated shard without its absorbed aggregate.
+3. **Idempotent re-compaction.** The aggregate records the id of the last event it absorbed; compaction skips events at or before that id. A crash between the file writes (before the commit lands) or a re-run over an already-compacted range therefore re-absorbs nothing. This must hold structurally because aggregates carry summed totals without per-event ids — §6.3's dedup-by-id backstop cannot catch a double-count after the fact.
+
+The N-day horizon and the aggregate file's naming/format are implementation-level, resolved at PRD time. Scheduling is the harness maintenance window (§9.6).
+
 ---
 
 ## 7. The sub-skills
