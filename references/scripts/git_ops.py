@@ -2639,8 +2639,18 @@ def _parse_args():
 
 
 def main():
-    from cli_stdio import harden_stdio  # #13198/#13728: crash-proof CLI stdio (cp1252)
-    harden_stdio()
+    # #13198/#13728: crash-proof CLI stdio (cp1252). Fails OPEN (#13728
+    # verifier round 1): the post-merge hook invokes this script from a
+    # merge-dropped-state restore path that must never raise (#13556's
+    # documented fail-safe guarantee), including in a degraded environment
+    # where cli_stdio.py isn't co-located with git_ops.py (e.g. an isolated
+    # copy of just this script) -- an ImportError here must not crash before
+    # command dispatch even runs.
+    try:
+        from cli_stdio import harden_stdio
+        harden_stdio()
+    except ImportError:
+        pass
     cmd, rest = _parse_args()
 
     # Self-heal the pre-commit state guard on every invocation except the guard
