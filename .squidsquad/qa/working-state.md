@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
+- **Task**: #13566
+- **Status**: in-progress
 
 ## Completed Steps
 - Rejected #13565 (FAIL, back to in-progress) -- composed-prompt re-diet task. 4 confirmed gaps: AC1 (>=15% composed-size cut) objectively failed, sizes rose ~0.6-0.7% instead -- root cause independently reproduced (sub-skill `run sub-skill:` markers never inline at compose time, so splitting sub-skill bodies can't move composed-boot size by construction); flagged as a scope-tension needing PM/human input, not a pure worker miss. AC2 failed for verification.md specifically (23.9KB vs ~8KB target; task-intake.md correctly hit 5.5KB). AC3's mandatory CQ coverage for the re-read-discipline rule doesn't exist yet (my own #9184 job, deferred until AC2's rework lands so it isn't written against a boundary that's about to move). AC4's comprehension-staleness sweep left 11 specs unrefreshed that skill's own PR comment never mentions. TEST-PLAN-13565.md / QA-RESULTS-13565.md under `.squidsquad/qa/planning/`.
