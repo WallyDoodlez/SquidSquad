@@ -15,7 +15,7 @@
 This doc describes the **v2 target design**:
 
 - What the vault *is* — its purpose, the storage model, the entity types it holds
-- The config-driven type registry that replaces v1's hardcoded PARAG taxonomy
+- The config-driven type registry that replaces v1's hardcoded PARAG (Projects / Areas / Resources / Archives / Galaxy) taxonomy
 - The consumption engine (search + telemetry-driven ranking) and how it's invoked
 - The consumption-pipeline pattern — mandatory touchpoints producing committed receipts
 - The sub-skills and scripts that operate on it
@@ -174,13 +174,13 @@ Each install's vault ships a `vault-schema.json` at the vault root defining its 
 {
   "traversalBudget": 2,
   "searchTopK": 12,
-  "dedupThreshold": 0.0-1.0,
+  "dedupThreshold": "<set at implementation — §11 #6>",
   "tieBreakWeights": { "used": 2.0, "impression": 0.25, "walked": 0.5, "recency": 0.25 },
   "types": {
     "<type-name>": {
       "folder": "<folder>",
       "traversal": "free | budgeted",
-      "weight": 0.0-1.0,
+      "weight": "<number 0.0-1.0>",
       "hub": true | false,
       "prefix": "<optional filename prefix, for types sharing a folder>"
     }
@@ -201,7 +201,7 @@ An install customizes its taxonomy by editing this file — no code or sub-skill
 {
   "traversalBudget": 2,
   "searchTopK": 12,
-  "dedupThreshold": 0.0-1.0,
+  "dedupThreshold": "<number 0.0-1.0>",
   "tieBreakWeights": { "used": 2.0, "impression": 0.25, "walked": 0.5, "recency": 0.25 },
   "types": {
     "project":  { "folder": "projects",  "traversal": "free",     "weight": 0.8, "hub": true },
@@ -307,7 +307,7 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 status: active | superseded | archived
 owner: pm | worker | verifier | dm | shared   # primary author role-class
-community: <string>                   # optional — cluster label, set by vault-optimize (§7.3-equivalent)
+community: <string>                   # optional — cluster label, set by vault-optimize (§7.3)
 subcommunity: <string>                # optional — sub-cluster within community
 last_optimized: YYYY-MM-DD            # optional — last time an optimize pass touched this note
 ---
@@ -338,7 +338,7 @@ v1 had a `confidence` field that decayed `high → medium → low` purely on tim
 - **Surfaced-but-never-used** — shown in results repeatedly, never cited (`used`) by any consumer.
 - **Stale** — was `used` at least once, but not in the last N days (config, default 90 — the reference system's tuned value).
 
-These three buckets feed `vault_optimize.py`'s pruning decisions (§7.3-equivalent) — the same *function* v1's time-decay served (deciding what to archive), computed from a signal that actually correlates with whether the note is helping anyone.
+These three buckets feed `vault_optimize.py`'s pruning decisions (§7.3) — the same *function* v1's time-decay served (deciding what to archive), computed from a signal that actually correlates with whether the note is helping anyone.
 
 No `evergreen` opt-out tag exists in v2 — it's unnecessary once staleness is usage-based: a genuinely evergreen note gets `used` regularly by definition and never enters the Stale bucket.
 
@@ -418,7 +418,7 @@ The design — telemetry is a grow-only counter, a solved distributed-systems sh
 3. **Sync layer = the git remote already serving as the bus.** `git pull` = telemetry sync; no new infrastructure — consistent with the house philosophy that git is the audit trail and GitHub the coordination bus.
 4. **Read path**: any consumer (ranking Stage 2, impressions report, viewer) reads all shards + aggregates, dedupes by `id`, sums per note.
 5. **PR-noise control**: shard commits ride routine `main` commits only, **never task branches** — telemetry stays out of review diffs. This preserves the intent behind planning doc §9.4's original "never in a PR" directive under the new storage model.
-6. **Durability** (§9.6 open decision #5) largely **dissolves**: telemetry lives in repo history; a lost machine costs only its unpushed events (bounded by push cadence). No snapshot mechanism needed.
+6. **Durability** (planning doc §9.6 #5) largely **dissolves**: telemetry lives in repo history; a lost machine costs only its unpushed events (bounded by push cadence). No snapshot mechanism needed.
 
 **What survives from planning doc §9.4 unchanged**: notes stay pure content, forever — no counter fields in frontmatter (§4.3). That rule was always the load-bearing half.
 
@@ -432,7 +432,7 @@ The port of the reference system's `vault-impressions-report`: reads the shards 
 - **Surfaced-but-never-used** — repeatedly offered in top-K, never once cited by a consumer.
 - **Stale** — `used` at least once, but not within the last N days (config, default 90).
 
-The report is the **purge signal**: it feeds `vault_optimize.py`'s pruning/archival proposals (§7-equivalent) and PM's improvement scan. It replaces v1's time-based confidence decay entirely — the same maintenance function, computed from a signal that correlates with whether the note is helping anyone.
+The report is the **purge signal**: it feeds `vault_optimize.py`'s pruning/archival proposals (§7.3) and PM's improvement scan. It replaces v1's time-based confidence decay entirely — the same maintenance function, computed from a signal that correlates with whether the note is helping anyone.
 
 ### 6.5 Compaction
 
@@ -464,7 +464,7 @@ The engine itself is *not* a sub-skill — see §7.5 for how sub-skills reach it
 ### 7.2 vault-remember — the write path
 
 - End-of-cycle sweep, kept from v1 with its throttles (write budget, quiet-gate, role lanes) intact.
-- **Dedup gate reroutes through the engine**: prefer-update-over-create (§9.5) — the top-ranked hit above the dedup threshold becomes the merge target; creation only when nothing ranks. v1's title/tag `dedup-check` is retired. Dedup is **not a separate engine operation**: it is a §8.5 `search` call using the draft note's title + body as the query; the threshold applies to the top hit's Stage-2 score (§6.2), with the cutoff configured as `vault-schema.json` `dedupThreshold` (default tuned at implementation).
+- **Dedup gate reroutes through the engine**: prefer-update-over-create (§9.5) — the top-ranked hit above the dedup threshold becomes the merge target; creation only when nothing ranks. v1's title/tag `dedup-check` is retired. Dedup is **not a separate engine operation**: it is a §8.5 `search` call using the draft note's title + body as the query; the threshold applies to the top hit's Stage-2 score (§6.2), with the cutoff configured as `vault-schema.json` `dedupThreshold` (default tuned at implementation — §11 #6).
 - The four gates persist with gate 2 re-based on engine dedup: (1) write budget → (2) engine dedup / merge-target selection → (3) reusability → (4) fresh-context test.
 - Companion step in the worker's ship flow: capture-at-ship (§9.5 item 1) — same gates, notes ride the feature PR.
 - BRIEFING staleness check unchanged (every cycle, budget-free, §5).
@@ -485,7 +485,7 @@ Kept from v1: PM-lane, fires on sustained quiet, proposes cross-agent posture pa
 Resolved direction (planning doc §10.3, verified §10.7): the engine — search, telemetry write, impressions report — is the **portable reference-system extraction, invoked via the Skill tool** from inside agent sessions, not ported to Python and not vendored as subprocess scripts.
 
 - **Mechanism: verified.** A harness-spawned agent session invoked a Claude Skill live with no prompt and no interactivity (2026-07-18). The real dependency is **availability**: the package's skills must be installed (user- or project-level) on the machine running the agents — an install-time concern, not a runtime one.
-- **Node is a checkable soft prerequisite, not an assumption.** npm-mode Claude Code installs imply Node; native-binary installs do not. The wizard/installer preflights `node --version` when enabling the engine; absent Node, the feature degrades per §6.2/§9.9 (search falls back to engine-unavailable receipts; ranking to tier + recency) — and the Python-port fallback (planning §9.4.2) remains the contingency if Skill-based packaging proves unreliable in practice.
+- **Node is a checkable soft prerequisite, not an assumption.** npm-mode Claude Code installs imply Node; native-binary installs do not. The wizard/installer preflights `node --version` when enabling the engine; absent Node, the feature degrades per §6.2/§9.9 (search falls back to engine-unavailable receipts; ranking to tier + recency) — and the Python-port fallback (planning doc §9.4.2) remains the contingency if Skill-based packaging proves unreliable in practice.
 - **Concrete skill names/contracts bind at implementation.** The portable package's published Skill surface is the §11 residual unknown; sub-skills reference the abstract interface in §8.5 so their prose survives the binding.
 - Zero-maintenance-drift rationale: upstream engine improvements arrive without a SquidSquad release; SquidSquad's Python installer gains no new runtime dependency of its own.
 
@@ -668,9 +668,9 @@ v1's §11 re-verified #5855's claims against a 2026-05-24 snapshot; that audit d
 | 1 | **Skill-invocation feasibility** — does invoking the portable reference-system package's Claude Skills work reliably from an autonomous, non-interactive agent session? | §7/§8 concrete shape (engine packaging) | PM research, before §7/§8 are drafted — the two-path fallback is a Python port per the planning doc §9.4.2 |
 | 2 | **Node-alongside-Claude-Code guarantee** — is Node present on a target machine just because Claude Code is? | Same as #1 | Same as #1 |
 | 3 | **Rules-lane registry placement** — dedicated `rule` type vs `binding: true` flag on existing types (§9.3 item 2's receipt contract is independent of this) | Rules matching implementation, M1 mapping for binding content | Operator + PM at §7 drafting; recommendation forthcoming with the sub-skill design |
-| 4 | **Distillation aggressiveness** — how hard M2 prunes the single-incident learning pile (planning §9.6 #3; recommendation: aggressive — telemetry vindicates or refutes survivors within weeks) | M2/M3 only | Operator at M3 manifest review |
-| 5 | **Viewer priority** — vendored graph viewer + harness `/vault` route: cutover scope or post-cutover polish (planning §9.6 #4) | Nothing in M0–M4 | Operator, any time before M4 scoping |
-| 6 | **Compaction horizon + staleness threshold defaults** — N days for §6.5 rollup and §4.4's stale bucket (default 90) | Implementation config only | Dev at implementation, config-overridable |
+| 4 | **Distillation aggressiveness** — how hard M2 prunes the single-incident learning pile (planning doc §9.6 #3; recommendation: aggressive — telemetry vindicates or refutes survivors within weeks) | M2/M3 only | Operator at M3 manifest review |
+| 5 | **Viewer priority** — vendored graph viewer + harness `/vault` route: cutover scope or post-cutover polish (planning doc §9.6 #4) | Nothing in M0–M4 | Operator, any time before M4 scoping |
+| 6 | **Compaction horizon + staleness threshold + dedup-threshold defaults** — N days for §6.5 rollup, §4.4's stale bucket (default 90), and §7.2's `dedupThreshold` cutoff (§3.2 profile carries the placeholder) | Implementation config only | Dev at implementation, config-overridable |
 | 7 | **Multi-instance state layer** (adjacent, NOT vault-v2 scope) — parallel squads per developer expose that fixed-path per-role state files are not instance-safe; telemetry (§6.3) is instance-safe by design | A future parallel-squads workflow, not this TRD | CONFIRMED + filed as **#13725** (multi-instance state layer, backlog per operator 2026-07-18; `instances/<id>/` tree shape locked) |
 
 ## 12. Cross-references to other docs
@@ -703,4 +703,4 @@ The §12.1 map is directionally current (re-verify anchors at reconciliation tim
 - **2026-05-24 (v1 draft, descriptive snapshot)** — initial draft. Consolidates the vault's specification (from 5 sub-skills + 4 scripts) and current state (from on-disk inventory) into one architecture doc. No design changes proposed. References open issue #5855 for the known living-memory gap; resolution out of scope.
 - **2026-05-24 (v1 draft, expanded)** — added §9.6 failure modes + recovery paths, §9.7 explicit non-functionality, §10.3-§10.6 ownership/confidence/status/recency distributions, §11 re-verified #5855 claims (each verdict CONFIRMED / PARTIALLY TRUE / NOT TRUE TODAY) + new drift findings (owner label `<role>` vs `<role>-lead`; zero `superseded` notes), §12.1 verified cross-refs with line numbers, §12.2 reconciliation needs for ARCHITECTURE / COMPOSE-ARCHITECTURE / AGENT-RUNTIME / INSTALLER-ARCH / sub-skill-catalog.
 - **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per the planning doc §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes planning doc §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. Later same day: §10 reframed from stale inventory to the M0–M4 migration design (product feature, lean transform for the PARAG-kept profile); §11 rewritten as the open-decisions table (#5855 noted as closing at M4); §12.2 rewritten as the v2 reconciliation list (ARCHITECTURE / AGENT-RUNTIME / COMPOSE / INSTALLER / catalog / HARNESS). Same evening: the two §10.3 packaging verifications resolved by live probe (Skill invocation from a harness-spawned session CONFIRMED; Node NOT guaranteed → preflight soft-prerequisite model), unblocking §7/§8 — rewritten as the engine-based sub-skill layer (consultation/receipt steps, engine-rerouted dedup, harness-scheduled maintenance, §7.5 packaging-via-Skill-invocation) and the v2 script surface with the §8.5 engine-boundary contract table. **All sections now v2**; doc ready for DS audit.
-- **2026-07-19 (post-audit operator pass, #10003)** -- external-system naming removed from the established TRD (neutral "reference system" phrasing; planning-doc citation trail preserved -- operator directive). SS6.5 tightened with the three compaction-safety invariants (owner-only compaction, aggregate-before-truncate in one commit, idempotent re-absorption via last-absorbed event id). New SS2.1 "The vault at a glance": PARAG flow diagram, vault-entry sequence diagram, worked matching example, note-retirement decision diagram (orientation only, no new semantics). SS4.4/SS6.4 wording fix: "classifies/buckets every note" corrected to "screens every note against three retirement buckets" -- the healthy no-bucket case was implicit, now explicit.
+- **2026-07-19 (post-audit operator pass, #10003)** -- external-system naming removed from the established TRD (neutral "reference system" phrasing; planning-doc citation trail preserved -- operator directive). SS6.5 tightened with the three compaction-safety invariants (owner-only compaction, aggregate-before-truncate in one commit, idempotent re-absorption via last-absorbed event id). New SS2.1 "The vault at a glance": PARAG flow diagram, vault-entry sequence diagram, worked matching example, note-retirement decision diagram (orientation only, no new semantics). SS4.4/SS6.4 wording fix: "classifies/buckets every note" corrected to "screens every note against three retirement buckets" -- the healthy no-bucket case was implicit, now explicit. DS audit r3 (post-operator-pass): 4/4 change-criteria clean; 6 doc-wide findings fixed (SS-equivalent vestiges, planning-doc citation shorthand x4, PARAG expanded on first use, JSON range placeholders quoted, dedupThreshold default tracked under SS11 #6); 1 finding rejected as false positive (SS6.1 alias example 'skill' vs SS4.3 owner classes -- events route by alias, ownership by class, both correct).
