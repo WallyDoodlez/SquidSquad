@@ -138,7 +138,7 @@ class TestPrMergeCallsNeutralizeBeforeMerging:
                 patch("git_ops._checkout_and_ff_working_after_merge"):
             yield
 
-    @patch("git_ops._neutralize_pr_body_before_merge")
+    @patch("git_ops._neutralize_pr_body_before_merge", return_value=(None, None))
     @patch("git_ops._run_list")
     def test_success_path_neutralizes_before_merge_call(self, mock_rl, mock_neutralize):
         calls = []
@@ -156,7 +156,7 @@ class TestPrMergeCallsNeutralizeBeforeMerging:
         assert success is True
         mock_neutralize.assert_called_once_with(13654)
 
-    @patch("git_ops._neutralize_pr_body_before_merge")
+    @patch("git_ops._neutralize_pr_body_before_merge", return_value=(None, None))
     @patch("git_ops._run_list")
     def test_already_merged_skips_neutralize(self, mock_rl, mock_neutralize):
         mock_rl.return_value = _mk(0, json.dumps({"state": "MERGED"}))
@@ -164,7 +164,7 @@ class TestPrMergeCallsNeutralizeBeforeMerging:
         assert success is True
         mock_neutralize.assert_not_called()
 
-    @patch("git_ops._neutralize_pr_body_before_merge")
+    @patch("git_ops._neutralize_pr_body_before_merge", return_value=(None, None))
     @patch("git_ops._run_list")
     def test_neutralize_runs_before_state_scope_and_behind_guards(
         self, mock_rl, mock_neutralize
