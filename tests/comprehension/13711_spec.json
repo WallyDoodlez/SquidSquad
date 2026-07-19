@@ -1,0 +1,32 @@
+{
+  "issue": 13711,
+  "title": "improvement-scan.md Step 6 wording fix: 'append' -> explicit prepend instruction",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-18",
+  "ac": "comprehension (#9184): a fresh agent reading Step 6 (\"Update scan history\") in isolation must correctly conclude a new scan entry is PREPENDED to the top of scan-history.md, not appended to the end, and must understand why (newest-first ordering that Step 3's fallback read and scan_index.py's retention-cap pruning both depend on).",
+  "method": "Fresh agent (model: sonnet, general-purpose), given ONLY references/sub-skills/common/improvement-scan.md on branch squidsquad/task/13711, explicitly instructed to use no other file/tool/prior knowledge. CQ spec authored + executed by verifier per #9184 -- this is the exact wording gap the issue reports (Step 6 previously said 'append' with no ordering guidance, contradicting Step 3's newest-first convention).",
+  "target": "references/sub-skills/common/improvement-scan.md (Step 6 write-instruction wording) -- PR #13713 (branch squidsquad/task/13711)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Step 6 tells you to record a new scan entry in scan-history.md. Where should the new ## Scan block be placed -- at the start (top) of the file, or appended at the end?",
+      "expected": "At the start (top) -- prepended immediately after any preamble/header, becoming the FIRST ## Scan block in the file, not the last.",
+      "must_not": "Answering that the new block should be appended to the end of the file."
+    },
+    {
+      "id": "CQ2",
+      "q": "Why does the placement (top vs bottom) matter? What two things does the file say depend on the ordering?",
+      "expected": "Entries are newest-first; both the improvement-scan fallback read (Step 3) and scan_index.py's retention-cap pruning depend on 'the first N blocks' being the newest ones. An end-of-file append would silently corrupt that ordering.",
+      "must_not": "Answering that placement doesn't matter, or citing unrelated reasons."
+    },
+    {
+      "id": "CQ3",
+      "q": "Given a scan-history.md with 5 existing ## Scan blocks, describe exactly where a new entry goes relative to those 5.",
+      "expected": "Immediately after the preamble/header and before the current first (newest) block -- the new block becomes block #1, pushing the existing 5 down one position each. Not appended after block #5.",
+      "must_not": "Placing the new block after the 5th/last existing block."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-18",
+  "evidence": "Fresh sonnet general-purpose agent (id afc8debab559ad397), given ONLY improvement-scan.md on the squidsquad/task/13711 branch, told to use no other file/tool/prior knowledge. 3/3 correct with accurate supporting quotes, zero must_not violations. CQ1: 'goes at the very start (top) of the file -- prepended immediately after any preamble/header ... making it the FIRST block, not appended at the end.' CQ2: correctly named both Step 3's fallback read and scan_index.py's retention-cap pruning as dependents. CQ3: correctly described inserting before the current block #1, pushing existing blocks down, explicitly rejecting append-after-block-5. Confirms the #13711 fix (replacing the old ambiguous 'append' wording) closes the comprehension gap that #13566's own CQ spec (13566_spec.json) organically surfaced as a bonus/unscored finding."
+}
