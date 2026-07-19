@@ -39,7 +39,7 @@ SPEC_DIR = REPO_ROOT / "tests" / "comprehension"
 BASELINE = SPEC_DIR / ".staleness-baseline.json"
 
 _PATH_RE = re.compile(
-    r"(?:references|docs|\.squidsquad|tests)/[\w\-./{},]*\.(?:md|py|txt|json|yml|ps1|sh)")
+    r"(?:references|docs|\.squidsquad|tests)/[\w\-./{},]*\.(?:md|py|txt|json|yml|ps1|sh|j2)")
 
 
 def _expand_braces(path):
@@ -143,7 +143,17 @@ def check():
 
 
 def refresh(names):
-    """Regenerate baseline entries for the named specs (or all)."""
+    """Regenerate baseline entries for the named specs (or all).
+
+    Returns the list of requested names that did not match any spec on disk
+    (empty = every name resolved). #13710: the summary line used to report
+    len(names) — the *requested* count — even when every name failed to
+    resolve, so a fully-invalid refresh (e.g. bare issue numbers instead of
+    the required "<N>_spec.json" filenames) printed a success-shaped message
+    and exited 0 while writing zero new entries. Callers that care about
+    partial/total failure (main()'s CLI exit code) use the return value
+    instead of trusting the print alone.
+    """
     baseline = load_baseline()
     specs = load_specs()
     live_names = set(specs)
@@ -154,9 +164,12 @@ def refresh(names):
     # metadata and always survive.
     for gone in [k for k in baseline if not k.startswith("_") and k not in live_names]:
         del baseline[gone]
+    failed = []
+    refreshed = []
     for name in names:
         if name not in specs:
             print(f"WARNING: no such spec {name}", file=sys.stderr)
+            failed.append(name)
             continue
         entry = {}
         for frag in spec_fragment_paths(specs[name]):
@@ -164,11 +177,14 @@ def refresh(names):
             if sha:
                 entry[frag] = sha
         baseline[name] = entry
+        refreshed.append(name)
     tmp = BASELINE.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(baseline, indent=1, sort_keys=True) + "\n",
                    encoding="utf-8")
     tmp.replace(BASELINE)
-    print(f"baseline refreshed for {len(names)} spec(s) -> {BASELINE.name}")
+    print(f"baseline refreshed for {len(refreshed)}/{len(names)} spec(s) "
+          f"-> {BASELINE.name}")
+    return failed
 
 
 def main():
@@ -186,8 +202,8 @@ def main():
             print("Usage: comprehension_staleness.py refresh <spec>... | --all",
                   file=sys.stderr)
             sys.exit(2)
-        refresh(rest)
-        sys.exit(0)
+        failed = refresh(rest)
+        sys.exit(1 if failed else 0)
     print(__doc__, file=sys.stderr)
     sys.exit(2)
 
