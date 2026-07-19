@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
+- **Task**: #13565
+- **Status**: in-progress (round 3, mechanical confirm)
 
 ## Completed Steps
 - Verified #13566 (PASS, pending-ship) round 2 -- scan-history pruning now auto-triggers from suggest_targets() (live-verified: called it directly, not rebuild(), confirmed the real 153,820B skill/scan-history.md got pruned as a side effect). CQ spec authored (3/3). Full suite 56/56, static gate 5792/5792. PR #13692 merged (confirmed MERGED). Side finding filed as #13711 (improvement-scan.md's pre-existing "append" wording vs. the prepend convention -- low severity, doesn't block). TEST-PLAN-13566.md / QA-RESULTS-13566.md under `.squidsquad/qa/planning/`.
