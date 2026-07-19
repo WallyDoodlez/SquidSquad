@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
+- **Task**: #13565
+- **Status**: in-progress (round 2)
 
 ## Completed Steps
 - Rejected #13566 (FAIL, back to in-progress) -- scan-history pruning task. Prune mechanism itself is correct (live-verified against the real 153,820B skill/scan-history.md and 62,703B pm/scan-history.md, both reverted after testing) and fallback wording correctly reads from the start of the file (prepend convention). Real gap: repo-wide grep found scan_index.py's rebuild() has exactly one caller -- the CLI's own manual dispatch -- so the CONTEXT's required "self-heal on next rebuild, no separate migration step" is unmet; nothing auto-triggers rebuild, so existing oversized files never actually get pruned under normal operation. AC2's CQ scenario also outstanding (my own #9184 job, deferred pending the fix). TEST-PLAN-13566.md / QA-RESULTS-13566.md under `.squidsquad/qa/planning/`.
