@@ -587,83 +587,52 @@ The vault remains **non-blocking and degradation-tolerant** — no vault failure
 
 ---
 
-## 10. Current state inventory (snapshot 2026-05-24) `[v1 — not yet migrated]`
+## 10. Migration from v1
 
-> **Freshness note (2026-06-20):** the counts in this section are the 2026-05-24 snapshot and are now materially stale — the live `galaxy/` holds **~93 notes** (decision 19 / learning 56 / pattern 18; still 0 `style-*`, 0 `pattern-posture-*`) vs the 28 below, `archives/` has **1** note (not 0), and `BRIEFING.md` is **~102 lines**. The section *structure* (what is counted, the buckets, the distributions tracked) still holds; only the numbers are dated. Re-snapshot on the next VAULT-ARCH revision.
+> v1's §10 was a static inventory of this repo's vault (snapshot 2026-05-24, already materially stale by 2026-06-20). v2 drops the inventory from the doc entirely — counts are computed at migration time (M0) and recorded as migration artifacts, not maintained prose. This section replaces it with the thing the TRD actually owes: the migration design.
 
-What is actually in `.squidsquad/vault/` right now in this repo:
+**Product framing**: this is not a one-off cleanup of this repo. Every installed project has its own vault content, so the migration ships as a **product feature** — a deterministic transform script, an optional distillation pass, and a `references/migrations/` entry per the upgrade-is-fresh-install model. Our own repo (~140 notes, ~93 galaxy) is simply the first and hardest install to run it.
 
-### 10.1 Note counts
+**Sequencing wrapper** (v1-coexistence pattern): this TRD lands human-reviewed first → v2 tooling/templates land side-by-side behind an opt-in compose flag, v1 stays the runtime contract → M0–M4 below run → one atomic cutover PR flips the default and deletes v1 machinery → the target-state layers (§5 Vault Pulse, §9.7 outcome-linking) build on top.
 
-| Location | Count | Notes |
-|---|---|---|
-| `BRIEFING.md` | 1 (88 lines) | Active context, last updated cycle ~1499 per content; carries `status: active` in its header so it is counted in the §10.5 status distribution |
-| `projects/` | 2 | `agent-communication-layer.md`, `squidsquad.md` |
-| `areas/` | 2 | `human-profile.md`, `code-conventions.md` |
-| `resources/` | 1 | `cli-anything-research.md` |
-| `archives/` | 0 | Empty |
-| `galaxy/` | 28 | Breakdown below |
+### 10.1 M0 — snapshot & freeze
 
-### 10.2 Galaxy note breakdown by prefix
+- Freeze vault writes by setting the existing write-budget gate to 0 via config — deterministic, reuses the shipped budget mechanism. Vault writes are low-volume; a 1–2 day freeze is harmless and beats delta-replay complexity.
+- Snapshot v1 (git tag or branch) as the rollback point and the migration input. The M0 snapshot computes the input inventory (note counts per type, owner/status distributions) that M3's reconciliation checks against.
 
-| Prefix | Count |
-|---|---|
-| `decision-*` | 16 |
-| `learning-*` | 9 |
-| `pattern-*` | 3 |
-| `style-*` | 0 |
-| `pattern-posture-*` | 0 |
+### 10.2 M1 — mechanical transform (deterministic script, tested, no judgment)
 
-### 10.3 Ownership distribution (across whole vault, 33 notes total)
+Far smaller than the wholesale-adoption version the planning doc first sketched (its galaxy→`knowledge/` remap is superseded by §3's PARAG-kept profile). What actually transforms:
 
-| `owner:` value | Whole-vault count | Galaxy-only count (of 28) |
-|---|---|---|
-| `pm` | 13 | 9 |
-| `skill` | 12 | 11 |
-| `skill-lead` | 6 | 6 |
-| `pm-lead` | 2 | 2 |
+- **Folders and galaxy prefixes: unchanged.** No mass slug rename — prefixes still carry type (§4.2), so wikilinks overwhelmingly survive as-is.
+- **Frontmatter** (per §4.3): drop `confidence`, `source`, `links`; add empty `community` / `subcommunity` / `last_optimized`; keep `created` / `updated` / `tags` / `status` / `owner`. Owner-label drift (`<role>-lead` variants, pre-#6274 role names) swept to bare role-class values in the same pass.
+- **`style-*` notes fold into `pattern-*`** (zero exist in our vault; the rule exists for installs that have them). The `pattern-posture-*` tag is dropped where present.
+- **Physically-archived notes migrate in place** (§3.4): folder stays, `status: archived` already says what matters. `archives/` stops receiving new moves.
+- **`.relevance-index.json` deleted** (replaced by engine ranking + §6.4 report).
+- **Redirect map + wikilink rewrite**: the script maintains an old→new map for any note that does move or rename, rewrites every wikilink vault-wide, and greps the whole repo (`docs/`, `references/`, `.squidsquad/`) for out-of-vault references to old slugs, fixing or flagging each. The map ships as a migration artifact (§4.5's durable rename answer).
+- **Changelog**: every migrated note gets one appended entry (`- **<date>** — migrated to vault v2.`).
+- Idempotent, dry-runnable, pinned by tests — the `vault_check.py` treatment.
 
-The galaxy-only column is what §11.1 row 1 references; whole-vault includes the `projects/`, `areas/`, `resources/` notes that also carry `owner:`.
+### 10.3 M2 — distillation (agent judgment, analyze-only)
 
-**Two owner-label conventions are in use** (`skill` vs `skill-lead`; `pm` vs `pm-lead`). The spec in `vault-protocol.md` says `owner: pm | skill | qa | dm | shared`, so the `-lead` suffix variant is non-spec and looks like organic drift — agents have been writing `<role>-lead` (their tracker-comment role tag) instead of the spec'd bare role-class name. Not flagged in any open issue today; recorded here for traceability.
+Modeled on dmp-web's optimize analyze phase: sonnet subagents per topical cluster, **proposing, never applying**:
 
-### 10.4 Confidence distribution (galaxy notes, 28 total)
+- Per note or cluster, a verdict — `keep` / `merge-into <target>` (with merged draft) / `prune` (with one-line justification). The single-incident `learning-*` pile (~56 live) is the main target.
+- Author the initial `systems/` hub set (~7–10: harness, event bus, compose pipeline, tracker, pr_merge, launcher, QA gates, vault itself) and propose which surviving leaves link to which hub — this is what makes §6.2's traversal productive on day one (§3.2).
+- Output: one reviewable **migration manifest** (every v1 note → disposition).
+- **Skippable per config** for installs with small young vaults (product framing — a 20-note vault doesn't need distillation).
 
-| `confidence:` value | Count |
-|---|---|
-| `high` | 24 |
-| `medium` | 4 |
-| `low` | 0 |
+### 10.4 M3 — human gate, then apply
 
-### 10.5 Status distribution (whole vault, 33 notes)
+- Operator reviews the manifest — merges and prunes are the judgment calls that must not be autonomous. Filed as a HITL tracker item, never a blocking terminal prompt.
+- Apply executes the approved manifest on top of M1's output.
+- **Verification gates (all must pass)**: full `vault_check` sweep with zero errors; zero broken wikilinks; reconciliation — M0's note count = Σ(migrated + merged-into + pruned), committed as a per-note-disposition artifact; and a dry-run of the whole M1→M3 pipeline on a test clone first (house rule: rehearse on test environments, never live state).
 
-| `status:` value | Count |
-|---|---|
-| `active` | 33 |
+### 10.5 M4 — cutover & unfreeze
 
-No notes are `archived` or `superseded` — consistent with the empty `archives/` folder.
-
-### 10.6 Update recency (galaxy, top of mtime list)
-
-| Note | mtime |
-|---|---|
-| `learning-migration-6274-cutover.md` | 2026-05-23 |
-| `decision-event-bus-architecture-redesign.md` | 2026-05-21 |
-| `learning-strip-vs-wire-audit-findings.md` | 2026-05-21 |
-| `decision-phase-4-event-ack-lifecycle-deferred.md` | 2026-05-21 |
-| `learning-broadcast-deque-cannot-have-in-stream-gaps.md` | 2026-05-19 |
-
-Oldest galaxy notes are dated 2026-04-25 (vault store initialization), e.g. `decision-deterministic-testing.md`, `decision-comprehension-test-pipeline.md`, `decision-branch-per-feature-workflow.md`.
-
-### 10.7 Vault templates
-
-Under `references/vault-templates/`:
-
-- `BRIEFING.md`, `archives-template.md`, `areas-template.md`, `galaxy-template.md`, `human-profile-seed.md`, `projects-template.md`, `resources-template.md`
-
-These are seeds used by `vault-init` (per `vault-protocol.md` §Vault Initialization).
-
----
+- Atomic PR: compose default flips to the v2 sub-skills (rewritten around the engine + receipts, with CQ specs per house rule); v1 machinery deleted (grep-protocol prose, relevance index, confidence-decay paths, `style.md` template).
+- `references/migrations/v<N>-to-v<N+1>.md` documents the same M0→M4 walk for installed projects: the mechanical script always runs; M2 is offered but skippable; M3's human gate scales down to reviewing whatever M2 proposed.
+- Unfreeze writes (budget restored). **Telemetry starts cold — by design**: usage signal rebuilds within weeks of normal operation, and §6.2's ranking degrades gracefully (tier + recency + type weight) until it does.
 
 ## 11. Known gaps `[v1 — not yet migrated]`
 
