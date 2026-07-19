@@ -1,3 +1,10 @@
+## Scan — 2026-07-19 02:23
+
+- **Files scanned**: docs/archive/EVENT-ARCHITECTURE.md, references/sub-skills/common-events/event-mode-contract.md, README.md, SKILL.md, docs/INSTALLER-RUNTIME.md
+- **Findings**: README/SKILL.md /loop-first drift confirmed but already tracked (#10024, #13571, #13572 — no refile). Real finding: stale-scope cluster in the doc-realignment backlog — #10024 body prescribed superseded 'two-mode coexistence' framing + falsely claimed #8702 closed; #8698 gated on the removed `event-driven:` config field and scopes deletion of the deliberately-retained polling fallback. Actions: #10024 body rescoped to event-canonical + comment; audit comments with operator recommendations on #8702 (close-as-superseded rec) and #8698 (re-scope-or-close rec). INSTALLER-RUNTIME.md and archive/EVENT-ARCHITECTURE.md verified CLEAN; event-mode-contract.md current.
+- **Auto-fixed**: #10024 body correction (PM-authored scope doc, own-domain)
+- **Items rejected by human**: none new
+
 ## Scan — 2026-07-19 01:12
 
 - **Files scanned**: docs/sub-skill-catalog.md, references/installer-files.txt, references/sub-skills/roles/pm/improvement-scan.md
@@ -702,18 +709,4 @@
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
 - **Burst note**: 3rd scan of this idle period → at_cap, driver cancelled + cron deleted (re-arms on next forge-work re-idle).
-
-## Scan — 2026-06-20 01:17 (idle-driver tick, fresh burst after reidle, 1st scan)
-
-- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this boot's forge-verified ship-states + /status)
-- **Findings**: BRIEFING stale — latest Active-Priorities increment predated this boot (~20:48); #12526 listed as an OPEN chronic blocker but it SHIPPED 00:58 (PR #12993); "pipeline otherwise idle (0 pending-test/ship)" claim outdated after a full bug-fix ship burst (#12818/#12914/#12823/#12526); newly-shipped items absent from Recently-Shipped.
-- **Auto-fixed**: BRIEFING.md refreshed (PM own-domain, Tier-1) — new 2026-06-20 ~01:00 increment (ship burst + #12912 qa-bounce + #12854→#12451 fold + #12896-planned + PM idle); #12526 Constraints line corrected (open-blocker → shipped/mitigated); Recently-Shipped 2026-06-20 line added. Left alone: auto-versioning counter line (DM-owned; #12823 ship-counter-split just changed its semantics — DM to refresh, not PM to guess); Team State (all 4 EVENT + sha 398d1c1a still accurate).
-- **Items rejected by human**: (none)
-
-## Scan — 2026-06-20 02:16 (idle-driver tick, 2nd scan of burst)
-
-- **Files scanned**: .squidsquad/config.md (integrity / internal-consistency check — roster, counters, event-reactions, interval coherence)
-- **Findings**: none filed. Two candidates examined: (1) Auto-Versioning `Shipped Since Last Bump: 50` vs `Ship Threshold: 10` looks 5× overdue, but version bumps are under the operator's standing bump-hold (CHANGELOG batched to v0.45.0 per Recent-Decisions c1383) AND #12823 just reworked counter mechanics (DM-owned; DM's own comment shows 50→51 active management) → intentional, not a defect. (2) `dm: dm/skill` alias mapping is unusual but the team boots correctly on it and it's unconfirmable-as-wrong without the config.py schema (skill domain) → not fabricating a finding. Rest internally consistent (Iteration-Interval 30 ↔ Cool-Down 30m, Port 7373, Event-Reactions covers all 4 roles, scanning/vault values match driver).
-- **Auto-fixed**: none
-- **Items rejected by human**: (none)
 

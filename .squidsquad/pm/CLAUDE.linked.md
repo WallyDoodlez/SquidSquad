@@ -459,8 +459,9 @@ flowchart LR
         S6_2["6.2 boot-remote-agents"]
         S6_3["6.3 own-domain-autofix"]
         S6_4["6.4 soul-shepherd"]
-        S6_5["6.5 vault-optimize"]
-        S6_6["6.6 vault-synthesis"]
+        S6_5["6.5 improvement-scan"]
+        S6_6["6.6 vault-optimize"]
+        S6_7["6.7 vault-synthesis"]
         S7["7. step:cycle/exit"]
     end
     S1 --> S2
@@ -478,7 +479,8 @@ flowchart LR
     S6_3 --> S6_4
     S6_4 --> S6_5
     S6_5 --> S6_6
-    S6_6 --> S7
+    S6_6 --> S6_7
+    S6_7 --> S7
     SessionBoot --> WalkLoop
 ```
 
@@ -661,13 +663,19 @@ When PM detects an issue in PM's own domain (BRIEFING.md staleness, config count
 
 For each new task or bug processed this cycle, evaluate against the 5-category character-signal checklist (deliverable-type, tech-stack, domain-vocabulary, quality-preference, user-persona). If a new signal appears that isn't already in the role adaptations, flag for human in check-in (if contradicting) or add it silently (if non-contradicting).
 
-#### Step 6.5 — step:cycle/vault-optimize
+#### Step 6.5 — step:cycle/improvement-scan
+
+→ run sub-skill: roles/pm/improvement-scan
+
+On quiet cycles (no task picked up): run a scan for process/workflow improvements per the sub-skill's rules. PM's variant is process-focused only — never scan for or suggest code changes. File findings as issues per the sub-skill's cap and severity rules.
+
+#### Step 6.6 — step:cycle/vault-optimize
 
 → run sub-skill: vault-optimize
 
 On quiet cycles (no task picked up) when the vault has 20+ notes AND no improvement scan ran this cycle: run `vault_optimize.py` to prune, decay confidence on stale notes, reindex links, and score relevance. Config-gated via `Vault Optimize > Enabled` in `config.md`.
 
-#### Step 6.6 — step:cycle/vault-synthesis
+#### Step 6.7 — step:cycle/vault-synthesis
 
 → run sub-skill: vault-synthesis
 
