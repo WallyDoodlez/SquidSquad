@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 258 files
+# Total: 264 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -221,11 +221,16 @@ references/sub-skills/roles/pm/pipeline-sentinel.md
 references/sub-skills/roles/pm/soul-shepherd.md
 references/sub-skills/roles/pm/task-approval.md
 references/sub-skills/roles/pm/task-intake.md
+references/sub-skills/roles/pm/task-intake-phases.md
 references/sub-skills/roles/pm/testing-and-verification.md
 references/sub-skills/roles/pm/vault-synthesis.md
 references/sub-skills/roles/verifier/discussion-protocol.md
 references/sub-skills/roles/verifier/issue-filing.md
 references/sub-skills/roles/verifier/verification.md
+references/sub-skills/roles/verifier/verification-templates.md
+references/sub-skills/roles/verifier/verification-findings.md
+references/sub-skills/roles/verifier/verification-issue-flow.md
+references/sub-skills/roles/verifier/verification-ship-flow.md
 references/presets/design/manifest.yaml
 references/presets/software-dev/manifest.yaml
 references/templates/forgejo-compose.yaml
@@ -260,6 +265,7 @@ references/sub-skills/roles/pm/ralph-loop-overview.md
 references/sub-skills/roles/dm/ralph-loop-overview.md
 references/sub-skills/common-events/comment-handling.md
 references/sub-skills/common-events/cursor-management.md
+references/sub-skills/common-events/deploy-signal-handling.md
 references/sub-skills/common-events/event-driven-workflow.md
 references/sub-skills/common-events/event-mode-contract.md
 references/sub-skills/common-events/forge-read-pattern.md

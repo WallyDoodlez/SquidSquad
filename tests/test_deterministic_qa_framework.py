@@ -50,7 +50,11 @@ class TestVerificationSubSkill:
     @pytest.fixture
     def verification(self):
         # #10156: post-#6274.2 rename — qa→verifier directory.
-        return (REPO / "references/sub-skills/roles/verifier/verification.md").read_text(encoding="utf-8")
+        # #13565: the TC result rules (PASS/FAIL/HUMAN-REQUIRED, "Deferred"/
+        # "Skipped" not valid) moved to the cold-path verification-templates.md.
+        hot = (REPO / "references/sub-skills/roles/verifier/verification.md").read_text(encoding="utf-8")
+        cold = (REPO / "references/sub-skills/roles/verifier/verification-templates.md").read_text(encoding="utf-8")
+        return hot + "\n" + cold
 
     def test_deferred_not_valid(self, verification):
         assert '"Deferred"' in verification and "NOT valid" in verification
