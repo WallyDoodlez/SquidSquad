@@ -8,9 +8,39 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CONTRIBUTING.md",
-  "rotation_count": 95,
+  "last_scanned": "CHANGELOG.md",
+  "rotation_count": 100,
   "scan_history": [
+    {
+      "file": "#13742/#13743 post-ship delivery-integrity self-QA",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (scan_count->1/3). Self-QA of the 2 items shipped this tick: #13742 (health_check.py .local-config collision detection, PR #13744) + #13743 (tracker.py --label flag, PR #13747). VERIFIED: both CLOSED + exactly ONE status:shipped label each. Counter consistent: config shipped-since-bump=101 == .ship-counter=101. Both internal tooling fixes, no CHANGELOG. 0 findings."
+    },
+    {
+      "file": "post-#13735/#13739-recompose durability + reactively-read-sub-skill mechanics clarification",
+      "date": "2026-07-19",
+      "findings": 1,
+      "fixes": [],
+      "note": "Idle-driver scan of this burst, post #13737+#13739 ships (2 ticks folded into one continuous investigation -- scan_count double-recorded, a minor pacing slip, no correctness impact). Investigated whether my `compose.py deploy pm`/`deploy qa` calls (run to package #13735/#13739's template fixes) actually did anything, since they produced ZERO local diff. First pass used a mangled `git show origin/main:path` (Windows/MSYS bash colon bug, [[learning-git-show-ref-path-mangled-on-windows-bash]]) -- silently returned nothing, a false negative. Redid properly with exact-SHA form. CONFIRMED (real, not a bash artifact): both PM's clone (D:\\Dev\\Dev\\SquidSquad) and QA's clone (D:\\Dev\\Dev\\SquidSquad-qa) had already independently pulled past both fix commits (0522457b6, 571b56154) -- each agent's own boot-time pull is independent of DM's clone freshness, so the restarts I triggered were the load-bearing action and landed correctly regardless of my own clone's staleness. BUT digging into why my recompose was a no-op surfaced a REAL finding: roles/pm/improvement-scan.md's body (the very file #13735 fixed) appears NOWHERE in PM's actual composed CLAUDE.md -- neither inlined nor as a '-> run sub-skill:' reference -- despite includes.yml:26 listing it; instructions.md (pointed to by manifest.yaml as PM's actual compose source) has zero {{include}} directives and zero reference to it. Filed #13746 (role:skill, medium) for confirmation/root-cause -- NOT asserted as certain (didn't read the full 1100+-line compose.py), but concrete grep evidence on both local and origin/main via correct SHA form. 1 finding (filed, not fixed -- compose engine internals are skill's lane, not DM's).",
+      "note2": "Learning worth capturing: for template-touching ships, DM's compose.py deploy step only matters when the changed sub-skill is {{include:}}-inlined into the composed prompt; for reactively-read (`-> run sub-skill:`) sub-skills, the restart alone (forcing a fresh session + fresh Read + a fresh pull in the AFFECTED agent's own clone) is what actually matters -- DM's own clone freshness is irrelevant to that path."
+    },
+    {
+      "file": "CHANGELOG batch-discipline + version triple-consistency",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 of this burst (scan_count->2/3). No new ships since last scan. VERIFIED: CHANGELOG head=[0.45.0] 2026-06-30, ZERO premature v0.46.0/Unreleased entries -- all 97 held ships this batch correctly stay in issue discussions, assembled at bump time per version-bumps. Version TRIPLE-consistent: config SquidSquad Version=0.45.0 == SKILL.md version=0.45.0 == CHANGELOG head=0.45.0. v0.46.0 bump still HELD per [[feedback_bump_requires_pm_signal]] (counter 97 = 9.7x threshold) -- no operator green-light this session. 0 findings."
+    },
+    {
+      "file": "6-ship session delivery-integrity self-QA (#13731/#13728/#13729/#13730/#13732/#13735)",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (scan_count->1/3). Self-QA of all 6 items shipped this fresh session boot: #13731 (comprehension baseline drift, PR #13733) + bundled #13728/#13729/#13730/#13732 (git_ops.py harden_stdio wiring + fail-open guard, PR #13734, also incidentally fixed the #13732 flaky post-merge-hook test) + #13735 (roles/pm/improvement-scan.md prepend wording, PR #13736 -- recomposed+restarted pm). VERIFIED from forge: all 6 = CLOSED + exactly ONE status:shipped label each (zero dual-status-label drift, no orphan pending-ship). Counter consistent: config shipped-since-bump=97 == .ship-counter=97. All internal-only fixes, no CHANGELOG entries (consistent with established pattern). Bump gate technically far past threshold (97 vs 10) but HELD per [[feedback_bump_requires_pm_signal]] -- no operator green-light seen this session. 0 findings.",
+      "note2": "PM restart triggered this session (#13735 template change) -- landed cleanly, no other pending reboots owed."
+    },
     {
       "file": "3-ship-burst delivery-integrity self-QA (#13557/#13585/#13580)",
       "date": "2026-07-18",
@@ -955,16 +985,39 @@
         "Line 49 pointed external contributors at docs/sub-skill-guide.md as 'how to create and contribute' sub-skills -- contradicts the 2026-06-09 operator decision that sub-skill authoring is internal-maintainer-only (no public authoring guide; docs/sub-skill-guide.md is itself slated for retirement under open task #11400). Reworded to point at SKILL.md's composition overview and route new-sub-skill proposals through a task request instead."
       ],
       "note": "Idle-driver scan (scan_count 2->3/3, burst cap). Skipped docs/sub-skill-guide.md in this rotation slot (still exists but its retirement is already tracked+open at #11400, PM-owned) -- advanced straight to CONTRIBUTING.md rather than duplicate that disposition. Verified /squidsquad-issue, requirements-dev.txt, tests/run_tests.py, issue-report.yml/task-request.yml templates all still exist -- no dead references."
+    },
+    {
+      "file": "CHANGELOG.md",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan (post-#13565-respawn, scan_count 0/3). Verified latest entry (0.45.0) still matches config.md current version; all ships since 0.45.0 (incl. #13565 this wake) are internal-only per established no-CHANGELOG-for-internal precedent, consistent with entries present. 0 findings. Rotation complete (README->SKILL->ARCHITECTURE->sub-skill-guide->CONTRIBUTING->CHANGELOG), restarting at README.md next."
+    },
+    {
+      "file": "README.md",
+      "date": "2026-07-19",
+      "findings": 2,
+      "fixes": [
+        "Auto-versioning bullet said minor versions auto-bump when thresholds are met; corrected to describe the operator-gate (threshold met -> eligible, not automatic -- matches actual DM practice, counter has sat at 58-84 without a bump for exactly this reason)"
+      ],
+      "note": "Idle-driver scan (scan_count 2/3). 1 direct fix (README auto-versioning claim). 1 structural gap filed as #13720: the version-bumps.md sub-skill itself still encodes an unconditional auto-bump algorithm with no mention of the operator-gate -- out of doc-improvement-loop scope (agent-instruction source, not user-facing docs) so filed rather than edited inline."
+    },
+    {
+      "file": "SKILL.md",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan (fresh burst after absorb-work, scan_count 0/3). Checked DM Ralph Loop (already correctly describes the operator-gate on version bump -- confirms the README fix earlier this wake was catching real drift between the two docs, not a false alarm), Label Taxonomy/Bug+Feature Flow (status:blocked, pending-human-review/setup all present and accurate), Setup Instructions (docs/INSTALLER-RUNTIME.md + all 3 referenced scripts verified to exist). Considered role:fe/role:be/role:designer vs actual repo label set (role:skill/pm/qa/dm/designer only) but held off -- ambiguous whether fe/be are intentional generic template documentation vs stale, not confident enough to edit. 0 findings."
     }
   ],
   "doc_inventory": {
     "README.md": {
-      "last_scanned": "2026-06-21",
-      "status": "current (deploy-all staleness fixed 006508eba; verbose section added edeaafa7c)"
+      "last_scanned": "2026-07-19",
+      "status": "current"
     },
     "SKILL.md": {
-      "last_scanned": "2026-07-17",
-      "status": "current (health-monitoring + auto-versioning staleness fixed; event-mode coverage gap filed #13571)"
+      "last_scanned": "2026-07-19",
+      "status": "current (3 sections spot-checked: DM Ralph Loop, Label Taxonomy, Setup Instructions)"
     },
     "docs/ARCHITECTURE.md": {
       "last_scanned": "2026-07-17",
@@ -979,7 +1032,7 @@
       "status": "current (sub-skill-guide.md contributor pointer fixed)"
     },
     "CHANGELOG.md": {
-      "last_scanned": "2026-06-20",
+      "last_scanned": "2026-07-19",
       "status": "current"
     },
     "docs/INSTALLER-ARCH.md": {
