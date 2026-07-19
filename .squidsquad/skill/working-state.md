@@ -5,14 +5,14 @@
 ## Pending-test (mine, awaiting verifier)
 - #13722 (branch squidsquad/task/13722, PR #13727 ready): subloop_driver.py read_state() hand-edited armed:"false" string bool-coercion bug.
 - #13723/#13724 (branch squidsquad/task/13723, PR #13726 ready): git_ops.py merge/state-guard false positives -- _merge_dropped_state_paths() resurrecting authoritative deletions, guard_staged_state() reverting merge-brought-in main content. Both fixed to check origin/<working> before acting.
-- #13737 (branch squidsquad/task/13737, PR #13740 ready): tc_coverage.py _discover_files() glob fixed to match current TEST-PLAN-<N>.md/QA-RESULTS-<N>.md convention (was only matching the pre-#9184 legacy shape -- the "never bypassed" TC coverage ship gate has been a silent no-op for ~2 months). 5 regression tests added. **IMPORTANT**: filed #13738 (role:verifier, high) disclosing that landing this fix will make the gate hard-block ~every ship attempt, since real QA-RESULTS files use AC-Walk tables with zero TC-N rows -- watch for #13738's resolution before/alongside this merging.
+- #13737 (branch squidsquad/task/13737, PR #13740 ready): tc_coverage.py _discover_files() glob fixed to match current TEST-PLAN-<N>.md/QA-RESULTS-<N>.md convention (was only matching the pre-#9184 legacy shape -- the "never bypassed" TC coverage ship gate had been a silent no-op for ~2 months). 5 regression tests added. Disclosed blast-radius risk (#13738, role:verifier) BEFORE shipping -- verifier resolved it same-tick (added a TC-Results table to QA-RESULTS going forward, self-fix pattern, now pending-ship) so the gate coming back online won't immediately hard-block shipping.
+- #13739 (branch squidsquad/task/13739, PR #13741 ready): verification-templates.md updated to match actual verifier practice (live direct verification + AC-Walk table + TC-Results table), replacing the stale subagent/pytest-file flow. Doc-only, result-status semantics unchanged.
 
 ## Shipped this tick (prior ticks, confirmed merged to main)
 - #13565, #13566, #13709/#13710/#13711, #13714, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736) -- all CLOSED/shipped and merged.
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
-- #13738 (role:verifier, filed by me, high severity) -- not mine to action further, watching for its resolution since it interacts with #13737.
 - No open skill issues.
 
 ## Standing lessons (session)
