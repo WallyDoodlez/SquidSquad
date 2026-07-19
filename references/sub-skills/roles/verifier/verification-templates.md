@@ -50,30 +50,35 @@ per the existing convention so the comprehension test runner can pick it up.
 
 ---
 
-**After writing `TEST-PLAN-<NUMBER>.md` using the structure above**, spawn a Verifier subagent (via the Agent tool) to write executable assertions for the live-system test cases:
+**After writing `TEST-PLAN-<NUMBER>.md` using the structure above**, execute each test case **directly against the live system yourself** — real commands (bash/python one-liners, actual git operations, actual scripts, spawned comprehension-CQ agents where a TC requires one) — rather than authoring a formal pytest file per TC (#13739: an earlier version of this doc described spawning a subagent to write `TEST-<NUMBER>-tests.py`; that flow was superseded by live direct verification, which better matches the Quality Bar's "reproduce the expected behavior with your own eyes" standard over mocked/scripted assertions run once and never looked at again).
 
-Subagent prompt:
-```
-Read .squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md. For each test case:
+Write `QA-RESULTS-<NUMBER>.md` with two sections:
 
-1. Write an executable pytest test in .squidsquad/[VERIFIER_ALIAS]/planning/TEST-<NUMBER>-tests.py
-   - Each TC becomes a test function: test_tc_01_[name], test_tc_02_[name], etc.
-   - Tests must use concrete assertions (file exists, string matches, JSON parses, exit code checks)
-   - Tests must exercise the REAL live system — actual scripts, actual harness, actual tracker. Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure. Do not mock the system under test.
-2. Run the tests: python -m pytest .squidsquad/[VERIFIER_ALIAS]/planning/TEST-<NUMBER>-tests.py -v
-3. Record pytest output verbatim in QA-RESULTS-<NUMBER>.md
+1. **AC Walk** (primary content — the actual verification record): one row per AC, with your evidence.
+   ```markdown
+   ## AC Walk
+   | AC | Result | Evidence |
+   |----|--------|----------|
+   | AC-1 | PASS | [what you ran/observed, concretely] |
+   | AC-2 | FAIL | [what broke, with the exact failure] |
+   ```
+2. **TC Results** (machine-parseable coverage — required, #13738): one row per TC from the TEST-PLAN, keyed by the same `TC-N` id `tc_coverage.py`'s gate parses (`| TC1 | PASS |` — table format, no heading needed).
+   ```markdown
+   ## TC Results
+   | TC | Result |
+   |----|--------|
+   | TC1 | PASS |
+   | TC2 | FAIL |
+   ```
+   Every TC in the TEST-PLAN's Test Cases / Coverage matrix must appear here — this is what `tracker.py`'s pending-test → pending-ship gate actually checks (`tc_coverage.check_coverage()`), independent of however much detail the AC Walk table carries.
 
-TC result rules:
-- PASS: test function passes
-- FAIL: test function fails — include assertion error
+TC result rules (unchanged):
+- PASS: directly observed to work as specified.
+- FAIL: directly observed to be broken — include what you saw.
 - HUMAN-REQUIRED: TC cannot run because the environment is not set up (missing API key,
   Docker not running, etc.). This is NOT a code bug — a human must fix the environment.
   Tag with `blocked:human-action` label and note what the human needs to do.
 - "Deferred" and "Skipped" are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED.
-
-Write results to .squidsquad/[VERIFIER_ALIAS]/planning/QA-RESULTS-<NUMBER>.md
-Include the full pytest output and a summary table.
-```
 
 **HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the `blocked:human-action` label and comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
 
