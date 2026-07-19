@@ -12,6 +12,13 @@
   "rotation_count": 102,
   "scan_history": [
     {
+      "file": "#13845 post-ship delivery-integrity self-QA",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-3/BURST CAP of this burst (scan_count->3/3). Self-QA of MY OWN #13845 ship this tick (broken anchor-link fix in COMPOSE-ARCHITECTURE.md/sub-skill-catalog.md, direct-to-main commit 6275346c7, no PR). VERIFIED from forge: CLOSED + exactly ONE status:shipped label. Counter consistent: config=.ship-counter=111. Session running total: 6 ships (#13793/#13801/#13819/#13831/#13838/#13845), all internal, zero CHANGELOG entries. 0 findings. Driver at cap -- cancelling."
+    },
+    {
       "file": "#13838 post-ship delivery-integrity self-QA",
       "date": "2026-07-19",
       "findings": 0,
