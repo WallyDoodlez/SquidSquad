@@ -60,7 +60,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
    ```
    If `scan_index.py` is not available, skip the DB write — the markdown write below is sufficient.
 
-   Also append to `.squidsquad/[your-role]/scan-history.md`:
+   Also record in `.squidsquad/[your-role]/scan-history.md` — **prepend** the new block immediately after any preamble/header line, so it becomes the FIRST `## Scan` block in the file, not the last. Entries are newest-first (#13566/#13711): the improvement-scan fallback read (Step 3 above) and `scan_index.py`'s retention-cap pruning both depend on "the first N blocks" being the newest ones. A literal end-of-file append would silently corrupt that ordering:
 
    ```markdown
    ## Scan — YYYY-MM-DD HH:MM
