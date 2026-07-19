@@ -1,3 +1,10 @@
+## Scan — 2026-07-19 01:12
+
+- **Files scanned**: docs/sub-skill-catalog.md, references/installer-files.txt, references/sub-skills/roles/pm/improvement-scan.md
+- **Findings**: #13735 (PM improvement-scan variant step 5 still says 'append' — same newest-first ambiguity #13711 fixed in the common variant). Catalog + installer-files coverage of the 6 newly split sub-skills verified CLEAN.
+- **Auto-fixed**: none
+- **Items rejected by human**: none new
+
 ## Scan — 2026-07-19 00:42
 
 - **Files scanned**: scan_index.py suggest-targets output (live behavior), git_ops.py commit-code (live behavior), references/sub-skills/common/git-commit.md, references/sub-skills/roles/pm/improvement-scan.md
