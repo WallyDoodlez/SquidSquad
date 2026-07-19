@@ -131,7 +131,27 @@ Both write paths — capture-at-ship (worker, pre-PR) and the end-of-cycle `vaul
 >
 > **3. The verifier checks** — receipt sections present in the PR body (the canonical location)? Implementation violates no listed rule? A missing receipt routes the task back, same as any other gap (§9.4).
 >
-> **4. Telemetry closes the loop** — the cited note is now *Active* in the impressions report (§4.4, §6.4); a note that keeps surfacing without ever earning `used` drifts toward the pruning proposals instead.
+> **4. Telemetry closes the loop** — the cited note now sits outside all three retirement buckets of the impressions report (§4.4, §6.4); a note that keeps surfacing without ever earning `used` drifts toward the pruning proposals instead.
+
+**How notes retire — the optimization decision** (§4.4 buckets, §6.4 report, §7.3/§9.6 maintenance):
+
+```mermaid
+flowchart TD
+    H["Harness maintenance window (§9.6)<br/>optimize queue by last_optimized, 14-day cutoff"] --> AN["vault-optimize — analyze (§7.3)"]
+    SH["Telemetry shards (§6.3)"] --> IR["Impressions report (§6.4)<br/>events joined against the note inventory"]
+    IR --> B{"Screen each note against<br/>the retirement buckets (§4.4)"}
+    B -->|"earning used events —<br/>in no bucket"| OK["Healthy — untouched.<br/>No evergreen tag needed: regular use<br/>IS the exemption (§4.4)"]
+    B -->|"never surfaced by any search"| COLD["Cold"]
+    B -->|"repeatedly in top-K,<br/>never once cited"| SBNU["Surfaced-but-never-used"]
+    B -->|"used at least once,<br/>but not in the last 90 days"| STALE["Stale"]
+    COLD --> AN
+    SBNU --> AN
+    STALE --> AN
+    AN -->|"pruning / archival proposal"| AR["status: archived — flipped in place (§3.4)<br/>ranking → near zero; reversible, still addressable"]
+    AN -->|"contradiction finding"| HITL["HITL tracker task —<br/>human decides, never auto-applied (§7.3)"]
+```
+
+The decision input is **usage, never age**: v1's time-based confidence decay is gone entirely (§4.4), so an old-but-consulted note never retires, and a young-but-dead note doesn't get a grace period. Archival is a reversible status flip, not a deletion — §6.2's ranking is what takes the note out of circulation, and a direct query can always still reach it. Only contradiction findings cross a human gate; bucket-driven archival proposals ride the normal analyze-then-apply maintenance flow.
 
 ---
 
@@ -312,7 +332,7 @@ last_optimized: YYYY-MM-DD            # optional — last time an optimize pass 
 
 v1 had a `confidence` field that decayed `high → medium → low` purely on time since `updated:` (§4.4 in the v1 snapshot). **This entire mechanism is dropped**, not adapted — it's the exact thing the vault comparison identifies as inferior (the planning doc §3.2/§9.2.6): a note that's old but heavily used decayed anyway (unless manually tagged `evergreen` at creation, which requires foresight); a note that's young but never consulted didn't decay at all despite being dead weight from day one.
 
-**Replacement**: staleness is now a **usage** signal, computed from the telemetry ledger (§6), not stored on the note. The impressions report (§6.4, port of the reference system's `vault-impressions-report`) classifies every note as:
+**Replacement**: staleness is now a **usage** signal, computed from the telemetry ledger (§6), not stored on the note. The impressions report (§6.4, port of the reference system's `vault-impressions-report`) screens every note against three retirement buckets — a note in none of them is healthy and untouched:
 
 - **Cold** — never surfaced by a search.
 - **Surfaced-but-never-used** — shown in results repeatedly, never cited (`used`) by any consumer.
@@ -406,7 +426,7 @@ The design — telemetry is a grow-only counter, a solved distributed-systems sh
 
 ### 6.4 Impressions report
 
-The port of the reference system's `vault-impressions-report`: reads the shards (§6.3), joins against the note inventory, and buckets every note into §4.4's three classes (definitions canonical there):
+The port of the reference system's `vault-impressions-report`: reads the shards (§6.3), joins against the note inventory, and screens every note against §4.4's three retirement buckets (definitions canonical there; a note in none of them is healthy and untouched):
 
 - **Cold** — never surfaced by any search.
 - **Surfaced-but-never-used** — repeatedly offered in top-K, never once cited by a consumer.
@@ -683,4 +703,4 @@ The §12.1 map is directionally current (re-verify anchors at reconciliation tim
 - **2026-05-24 (v1 draft, descriptive snapshot)** — initial draft. Consolidates the vault's specification (from 5 sub-skills + 4 scripts) and current state (from on-disk inventory) into one architecture doc. No design changes proposed. References open issue #5855 for the known living-memory gap; resolution out of scope.
 - **2026-05-24 (v1 draft, expanded)** — added §9.6 failure modes + recovery paths, §9.7 explicit non-functionality, §10.3-§10.6 ownership/confidence/status/recency distributions, §11 re-verified #5855 claims (each verdict CONFIRMED / PARTIALLY TRUE / NOT TRUE TODAY) + new drift findings (owner label `<role>` vs `<role>-lead`; zero `superseded` notes), §12.1 verified cross-refs with line numbers, §12.2 reconciliation needs for ARCHITECTURE / COMPOSE-ARCHITECTURE / AGENT-RUNTIME / INSTALLER-ARCH / sub-skill-catalog.
 - **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per the planning doc §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes planning doc §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. Later same day: §10 reframed from stale inventory to the M0–M4 migration design (product feature, lean transform for the PARAG-kept profile); §11 rewritten as the open-decisions table (#5855 noted as closing at M4); §12.2 rewritten as the v2 reconciliation list (ARCHITECTURE / AGENT-RUNTIME / COMPOSE / INSTALLER / catalog / HARNESS). Same evening: the two §10.3 packaging verifications resolved by live probe (Skill invocation from a harness-spawned session CONFIRMED; Node NOT guaranteed → preflight soft-prerequisite model), unblocking §7/§8 — rewritten as the engine-based sub-skill layer (consultation/receipt steps, engine-rerouted dedup, harness-scheduled maintenance, §7.5 packaging-via-Skill-invocation) and the v2 script surface with the §8.5 engine-boundary contract table. **All sections now v2**; doc ready for DS audit.
-- **2026-07-19 (post-audit operator pass, #10003)** -- external-system naming removed from the established TRD (neutral "reference system" phrasing; planning-doc citation trail preserved -- operator directive). SS6.5 tightened with the three compaction-safety invariants (owner-only compaction, aggregate-before-truncate in one commit, idempotent re-absorption via last-absorbed event id). New SS2.1 "The vault at a glance": PARAG flow diagram, vault-entry sequence diagram, worked matching example (orientation only, no new semantics).
+- **2026-07-19 (post-audit operator pass, #10003)** -- external-system naming removed from the established TRD (neutral "reference system" phrasing; planning-doc citation trail preserved -- operator directive). SS6.5 tightened with the three compaction-safety invariants (owner-only compaction, aggregate-before-truncate in one commit, idempotent re-absorption via last-absorbed event id). New SS2.1 "The vault at a glance": PARAG flow diagram, vault-entry sequence diagram, worked matching example, note-retirement decision diagram (orientation only, no new semantics). SS4.4/SS6.4 wording fix: "classifies/buckets every note" corrected to "screens every note against three retirement buckets" -- the healthy no-bucket case was implicit, now explicit.
