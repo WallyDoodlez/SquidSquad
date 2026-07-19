@@ -1,5 +1,7 @@
 {
   "issue": 13032,
+  "superseded_by": 13565,
+  "superseded_note": "#13565 extracted the deploy-signal ack-stop/halt/respawn mechanics (CQ1-CQ3) out of event-mode-contract.md into a new reactively-read fragment (deploy-signal-handling.md), so a fresh agent given ONLY event-mode-contract.md per this spec's method can no longer derive those answers. The underlying facts are unchanged, just relocated; a new spec scoped to both files would be needed to re-certify. Historical PASS record retained.",
   "title": "deploy-signal halt must END the session (/quit) so the process exits and the harness respawn isn't singleton-blocked",
   "authored_by": "skill",
   "authored_at": "2026-06-20 15:30",

@@ -166,6 +166,7 @@ Referenced by the single mode-agnostic `references/roles/<role>/includes.yml` ma
 | Sub-skill | One-liner |
 |---|---|
 | `event-mode-contract` | Event-mode base contract (replaces polling base for that session) |
+| `deploy-signal-handling` | Case E `deploy-signal` handling — extracted from `event-mode-contract` (#13565), read only when that event type is actually observed |
 | `event-driven-workflow` | The event-listen / react / commit loop |
 | `cursor-management` | Advance `last_processed_event_id`; recover from missed events |
 | `forge-read-pattern` | How to read the tracker when prompted by an event vs polling |
@@ -199,7 +200,8 @@ Role-specific event extras:
 | Sub-skill | One-liner |
 |---|---|
 | `checkin` | Step 2 — non-blocking human check-in; issue/task/approval intake |
-| `task-intake` | 5-phase feature lifecycle (Research → Discussion → Planning → human-approve → Execution) |
+| `task-intake` | Hot-path core: lifecycle overview, artifact-resume logic, phase-dispatch table pointing at `task-intake-phases` (#13565 hot/cold split) |
+| `task-intake-phases` | Cold-path: full per-phase mechanics (Research → Discussion Prep → Discussion → Re-Research Gate → AC Drafting/Issue Filing → Plan-in-PR → Execution/Verification pointers), read only when `task-intake` dispatches to the active phase (#13565) |
 | `task-approval` | Feature-approval gate; planned → approved transition |
 | `testing-and-verification` | Steps 3–6 — delegate to verifier; PM doesn't verify |
 | `delivery` | Delegate to DM; PM doesn't package |
@@ -220,6 +222,10 @@ Role-specific event extras:
 | Sub-skill | One-liner |
 |---|---|
 | `verification` | Steps 2–6 — E2E tests, AC verification, health check |
+| `roles/verifier/verification-templates` | Cold-path: TEST-PLAN.md structure + subagent-prompt templates, read only when authoring a fresh test plan (#13565 hot/cold split) — slash-bearing per #10743 |
+| `roles/verifier/verification-findings` | Cold-path: Step 3's finding classify/dedup/file/record-on-PR procedure (#13565 hot/cold split) — slash-bearing per #10743 |
+| `roles/verifier/verification-issue-flow` | Cold-path: Step 4's full per-issue (`type:issue`) verification procedure (#13565 hot/cold split) — slash-bearing per #10743 |
+| `roles/verifier/verification-ship-flow` | Cold-path: Step 5's post-verdict merge/ship mechanics + Step 5b's PR-monitoring loop (#13565 hot/cold split) — slash-bearing per #10743 |
 | `roles/verifier/issue-filing` | Verifier's bug template (with reproduction + AC reference) — slash-bearing per #10743 |
 | `roles/verifier/discussion-protocol` | Verifier's comment format (→ retires; common/`discussion` is the canonical) — slash-bearing per #10743 |
 | `roles/verifier/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |

@@ -2,7 +2,7 @@
 type: area
 tags: [human, preferences, profile]
 created: 2026-04-05
-updated: 2026-06-28
+updated: 2026-07-18
 owner: pm
 status: active
 confidence: medium
@@ -69,3 +69,4 @@ _Wikilinks to related notes: [[code-conventions]]_
 - 2026-04-26 — Updated by skill-lead. Added Design Philosophy section: source-agnostic vault reflection (human directive), inter-agent conversation system as prerequisite.
 - 2026-05-12 — Updated by pm. Added deterministic-cycle preference: mechanical agent work must be programmatic, not LLM prose. Drives #7630.
 - 2026-06-28 — Updated by pm. Nuanced the direct-checks/PID preference: general principle stands, but PID-as-liveness-authority was operator-approved for supersession (#12492 progress-liveness cutover; PID→teardown-only). Reconciles with archived [[decision-pid-primary-liveness]].
+- 2026-07-18 — Updated by pm. Context pressure threshold raised 70→75 via #13562 (confirmed live in config.md); "80 too high" ceiling unchanged.

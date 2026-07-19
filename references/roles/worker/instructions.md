@@ -82,8 +82,6 @@ Scan this role's open issues for bug reports. For each: investigate root cause, 
 
 Before starting work on the picked-up task, verify the pickup comment posted on the issue accurately reflects the tracker's current status, the AC list you'll implement against, and any constraints from PM's locked CONTEXT.md. Pickup comments are the cross-agent contract — drift here causes verifier rejections downstream.
 
-### append
-
 #### step:cycle/implement
 
 → run sub-skill: implement-tasks

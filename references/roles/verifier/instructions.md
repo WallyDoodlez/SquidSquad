@@ -63,8 +63,6 @@ step-ids: [step:cycle/verify, step:cycle/e2e-check]
 
 If E2E / integration test command is configured in `.squidsquad/config.md`, run it. Triage failures to the correct role via tracker comments. Do not fix failures yourself.
 
-### append
-
 #### step:cycle/verify
 
 → run sub-skill: verification

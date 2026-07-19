@@ -1,5 +1,7 @@
 {
   "issue": 13136,
+  "superseded_by": 13565,
+  "superseded_note": "#13565 extracted the deploy-signal ack-stop(deploy-halted) emission detail out of event-mode-contract.md into a new reactively-read fragment (deploy-signal-handling.md), so CQ3's stop-vs-deploy-signal contrast can no longer be fully derived from this spec's stated source set. CQ1/CQ2 (stop-requested path only) are unaffected. Historical PASS record retained.",
   "title": "stop-requested handler — explicit ack-stop (none) + ack-cursor (nothing) guidance, intent-driven not a bus event",
   "authored_by": "verifier",
   "authored_at": "2026-06-21 14:55",

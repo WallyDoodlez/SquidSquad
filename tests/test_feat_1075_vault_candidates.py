@@ -8,15 +8,21 @@ from pathlib import Path
 
 REPO = Path(__file__).parent.parent
 TASK_INTAKE = REPO / "references/sub-skills/roles/pm/task-intake.md"
+TASK_INTAKE_PHASES = REPO / "references/sub-skills/roles/pm/task-intake-phases.md"
 RESEARCH_PROMPT = REPO / "references/prompts/research.md.j2"
 
 
 class TestTaskIntakeTemplate:
-    """task-intake.md RESEARCH.md template includes Vault Candidates."""
+    """task-intake.md RESEARCH.md template includes Vault Candidates.
+
+    #13565: the Phase 1 mechanics (incl. the RESEARCH.md template) moved to
+    the cold-path task-intake-phases.md; content is read from both.
+    """
 
     @pytest.fixture
     def content(self):
-        return TASK_INTAKE.read_text(encoding="utf-8")
+        return (TASK_INTAKE.read_text(encoding="utf-8")
+                + "\n" + TASK_INTAKE_PHASES.read_text(encoding="utf-8"))
 
     def test_vault_candidates_section_in_template(self, content):
         """TC-1: RESEARCH.md format template has ## Vault Candidates section."""
