@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-18 21:53
+
+- **Files scanned**: references/scripts/comprehension_staleness.py (197 lines, full read; first scan of this file per scan-history — never-scanned per a name-vs-history diff, and I had just hit real friction with it this session doing #13565's baseline refresh)
+- **Findings**: 2 filed — #13709 (low — `_PATH_RE`'s extension whitelist omits `j2`; a spec's `files` list naming a Jinja2 template like `references/prompts/test-plan.md.j2` gets silently dropped from `spec_fragment_paths()` because the regex greedily matches a truncated `.md`-suffixed substring that then fails the `is_file()` check — confirmed empirically against 1428_spec.json, which lists the file but never got a baseline entry for it) and #13710 (low — `refresh()`'s summary line prints `len(names)`, the *requested* count, not the actual number of specs that resolved and got a baseline entry; `main()` always exits 0 regardless — reproduced empirically this session: `refresh 1428 13464 10678` (wrong CLI form — bare numbers instead of `<N>_spec.json`) printed 3 WARNINGs then "baseline refreshed for 3 spec(s)" and exited 0 while writing zero entries).
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-18 18:23
 
 - **Files scanned**: references/scripts/l4_parser.py (283 lines, full read; first scan of this file per scan-history — continuing the L4-family vein, this time the upstream H2/H3 grammar parser that produces the `L4Op` records `l4_op_processor.py` consumes, verified clean at the 17:41 scan)
