@@ -64,6 +64,34 @@ def _dispatch(*, origin_exists=True, behind=False, ahead=False, ff_rc=0,
     return side_effect, calls
 
 
+def _fake_run_working_branch(calls, *, current=WORKING, stash_activity=False, pop_rc=0):
+    """A `git_ops._run` fake (string-command form) covering both the
+    `git branch --show-current` check and the #13819/#13831 shared
+    `_stash_guarded_ff_only_merge` stash-guard calls this function makes."""
+    state = {"stash_sha": ""}
+
+    def side_effect(cmd, check=False):
+        calls.append(cmd)
+        if cmd.strip() == "git branch --show-current":
+            return _mk(0, current + "\n")
+        if "refs/stash" in cmd:
+            return _mk(0 if state["stash_sha"] else 1, state["stash_sha"])
+        if cmd.strip() == "git stash -q":
+            if stash_activity:
+                state["stash_sha"] = "c" * 40
+            return _mk(0)
+        if cmd.strip() == "git stash pop":
+            if pop_rc == 0:
+                state["stash_sha"] = ""
+            return _mk(pop_rc)
+        if cmd.strip() == "git stash drop":
+            state["stash_sha"] = ""
+            return _mk(0)
+        return _mk(1)
+
+    return side_effect
+
+
 class TestSyncWorkingBranchToOrigin:
     @patch("git_ops._run", return_value=_mk(0, WORKING + "\n"))
     @patch("git_ops._run_list")
@@ -134,6 +162,46 @@ class TestSyncWorkingBranchToOrigin:
         mock_rl.side_effect = side_effect
         git_ops._sync_working_branch_to_origin(WORKING)
         assert not [c for c in calls if "merge" in c and "--ff-only" in c]
+
+
+class TestSyncWorkingBranchToOriginStashGuard13831:
+    """#13831: this call site's fast-forward was 1 of 3 identical fast-
+    forwards missing #13819's stash-before/pop-after protection -- now
+    routed through the shared _stash_guarded_ff_only_merge helper."""
+
+    @patch("git_ops._run")
+    @patch("git_ops._run_list")
+    def test_dirty_tree_stashes_before_and_pops_after_successful_ff(self, mock_rl, mock_run):
+        calls = []
+        rl_side_effect, rl_calls = _dispatch(origin_exists=True, behind=True, ff_rc=0)
+        mock_rl.side_effect = rl_side_effect
+        mock_run.side_effect = _fake_run_working_branch(calls, stash_activity=True)
+        git_ops._sync_working_branch_to_origin(WORKING)
+        assert any(c.strip() == "git stash -q" for c in calls)
+        assert any(c.strip() == "git stash pop" for c in calls)
+        assert [c for c in rl_calls if "merge" in c and "--ff-only" in c]
+
+    @patch("git_ops._run")
+    @patch("git_ops._run_list")
+    def test_clean_tree_never_pops_a_preexisting_stash(self, mock_rl, mock_run):
+        calls = []
+        rl_side_effect, rl_calls = _dispatch(origin_exists=True, behind=True, ff_rc=0)
+        mock_rl.side_effect = rl_side_effect
+        mock_run.side_effect = _fake_run_working_branch(calls, stash_activity=False)
+        git_ops._sync_working_branch_to_origin(WORKING)
+        assert any(c.strip() == "git stash -q" for c in calls)
+        assert not any(c.strip() == "git stash pop" for c in calls)
+
+    @patch("git_ops._run")
+    @patch("git_ops._run_list")
+    def test_ff_failure_still_restores_work_never_raises(self, mock_rl, mock_run):
+        calls = []
+        rl_side_effect, rl_calls = _dispatch(origin_exists=True, behind=True, ff_rc=1)
+        mock_rl.side_effect = rl_side_effect
+        mock_run.side_effect = _fake_run_working_branch(calls, stash_activity=True)
+        git_ops._sync_working_branch_to_origin(WORKING)  # must not raise (fail-open, #13613)
+        assert any(c.strip() == "git stash pop" for c in calls), \
+            "stashed work must be restored even when the fail-open ff-only merge still fails"
 
 
 class TestCheckoutAndSyncWorking:
