@@ -351,10 +351,53 @@ def check_all_agents(local_config_overrides=None):
     else:
         agents_map = _parse_local_config()
 
+    # #13742: a misconfigured/stale .local-config can resolve two DIFFERENT
+    # roles' relative paths to the SAME clone_path (most commonly: pm's "."
+    # shorthand only resolves correctly when read from pm's own clone --
+    # every other clone reading "pm: ." resolves it to ITS OWN root instead,
+    # colliding with whichever OTHER role also maps there). A collision like
+    # this produces a health verdict built from the WRONG agent's on-disk
+    # files -- confirmed live to sometimes read as a confident but false
+    # "stalled" (a stray/unrelated .claude-pid under the wrong clone), not
+    # merely "unknown". Detect collisions up front and flag every affected
+    # role loudly instead of silently running the normal check against data
+    # that structurally cannot be trusted.
+    path_to_roles = {}
+    for role, clone_root in agents_map.items():
+        path_to_roles.setdefault(Path(clone_root), []).append(role)
+    colliding_roles = {
+        role
+        for roles in path_to_roles.values() if len(roles) > 1
+        for role in roles
+    }
+
     results = []
     for role in sorted(agents_map):
         clone_root = agents_map[role]
-        result = check_agent_health(role, clone_root, interval, now=now)
+        if role in colliding_roles:
+            other_roles = sorted(
+                r for r in path_to_roles[Path(clone_root)] if r != role
+            )
+            result = {
+                "role": role,
+                "health": UNKNOWN,
+                "health_source": "local-config-collision",
+                "clone_path": str(clone_root),
+                "current_state_phase": "",
+                "current_state_desc": "",
+                "current_state_stale": False,
+                "task": "unknown",
+                "last_active_minutes_ago": None,
+                "reason": (
+                    f".local-config error: '{role}' resolves to the same "
+                    f"clone_path as {other_roles} ({clone_root}) -- this is "
+                    f"a misconfigured/stale .local-config entry, not a "
+                    f"genuine health reading. Fix .local-config before "
+                    f"trusting this result."
+                ),
+            }
+        else:
+            result = check_agent_health(role, clone_root, interval, now=now)
         results.append(result)
 
     all_healthy = all(r["health"] == HEALTHY for r in results) if results else True

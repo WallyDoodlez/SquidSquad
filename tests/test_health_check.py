@@ -319,6 +319,62 @@ class TestCheckAgentHealth:
         assert result["last_active_minutes_ago"] >= 119
 
 
+class TestCheckAllAgentsCollision13742:
+    """#13742: a misconfigured .local-config can resolve two different roles
+    to the same clone_path (most commonly pm's "." shorthand read from a
+    non-pm clone) -- confirmed live to produce a false-confident "stalled"
+    verdict off the WRONG agent's files, not just "unknown". check_all_agents
+    must detect the collision up front and flag every affected role loudly,
+    never running the normal pid/mtime check against untrustworthy data."""
+
+    def _setup_agent(self, tmp_path, role, claude_pid=None, state_text=None):
+        squid = tmp_path / ".squidsquad" / role
+        squid.mkdir(parents=True, exist_ok=True)
+        if claude_pid is not None:
+            (squid / ".claude-pid").write_text(str(claude_pid))
+        if state_text is not None:
+            (squid / "current-state").write_text(state_text)
+        return tmp_path
+
+    def test_two_roles_same_path_flagged_as_collision(self, tmp_path):
+        shared = self._setup_agent(tmp_path, "pm", claude_pid=99999)
+        overrides = {"pm": shared, "dm": shared}
+        report = health_check.check_all_agents(local_config_overrides=overrides)
+        by_role = {a["role"]: a for a in report["agents"]}
+        assert by_role["pm"]["health"] == "unknown"
+        assert by_role["pm"]["health_source"] == "local-config-collision"
+        assert "dm" in by_role["pm"]["reason"]
+        assert by_role["dm"]["health"] == "unknown"
+        assert by_role["dm"]["health_source"] == "local-config-collision"
+        assert "pm" in by_role["dm"]["reason"]
+
+    def test_collision_does_not_read_the_others_pid(self, tmp_path):
+        """The bug this locks: a collision must NOT fall through to a normal
+        pid-check that reports a confident (but meaningless) health verdict
+        using data that belongs to a different role's process."""
+        with patch.object(health_check, "_is_process_alive", return_value=False):
+            shared = self._setup_agent(tmp_path, "pm", claude_pid=12345)
+            overrides = {"pm": shared, "dm": shared}
+            report = health_check.check_all_agents(local_config_overrides=overrides)
+        by_role = {a["role"]: a for a in report["agents"]}
+        assert by_role["pm"]["health"] != "stalled"
+        assert "pid" not in by_role["pm"]
+
+    def test_three_way_collision_all_flagged(self, tmp_path):
+        shared = self._setup_agent(tmp_path, "qa")
+        overrides = {"pm": shared, "skill": shared, "dm": shared}
+        report = health_check.check_all_agents(local_config_overrides=overrides)
+        assert all(a["health_source"] == "local-config-collision" for a in report["agents"])
+
+    def test_no_collision_when_paths_distinct(self, tmp_path):
+        pm_dir = self._setup_agent(tmp_path / "pm-clone", "pm", claude_pid=1)
+        skill_dir = self._setup_agent(tmp_path / "skill-clone", "skill", claude_pid=2)
+        with patch.object(health_check, "_is_process_alive", return_value=True):
+            overrides = {"pm": pm_dir, "skill": skill_dir}
+            report = health_check.check_all_agents(local_config_overrides=overrides)
+        assert all(a["health_source"] != "local-config-collision" for a in report["agents"])
+
+
 class TestNoLegacyReads:
     """#4792 §5.4 source-grep guards: legacy sentinel reads must be gone."""
 
