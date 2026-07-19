@@ -503,77 +503,86 @@ Deterministic gates for vault-remember reflection. Subcommands:
 
 ---
 
-## 9. Cycle integration `[v1 — not yet migrated]`
+## 9. Cycle integration
 
-The vault is touched at three points in a cycle (boot, creative, post-cycle); pre-cycle is intentionally not a touch — see §9.2. §9.5 covers how vault writes ride the cycle's git commit, which is a packaging concern rather than a separate touch.
+v1 touched the vault at three points (boot read, an advisory "consult before work," post-cycle write sweep) — all of them **optional in practice**: nothing verified the consult happened, so it usually didn't (the root finding of the dmp-web comparison). v2's cycle integration is the **consumption pipeline**: vault touchpoints become mandatory, verifiable steps that produce **committed receipts**, with telemetry (§6) flowing from every touch. Nothing about the pipeline blocks at *runtime* — the enforcement is process-level (verifier gates), preserving the non-blocking philosophy (§9.6).
 
-### 9.1 Session start (boot)
+### 9.1 Boot — BRIEFING read
 
-- Boot reads `.squidsquad/vault/BRIEFING.md` for active context (priorities, recent decisions, human preferences). No write.
+Unchanged from v1: every agent reads `BRIEFING.md` (§5) at session start and re-reads when stale. No write, no telemetry (§5 exclusion).
 
-### 9.2 Pre-cycle (mechanical)
+### 9.2 Task filing — context injection (PM intake)
 
-- No vault read or write. (Earlier revisions had `cycle_pre.py` read `vault-remember` and `vault-optimize` enabled-flags into `cycle-input.json`; those flags have been retired — both sub-skills are always-on and self-gate via their per-cycle conditions.)
+When PM files a task, the intake flow runs an engine search (§6.2) on the task's keywords and appends a **`## Vault context`** section to the issue body — top-K note names + one-line relevance each. Dev agents read the issue body first (house rule), so relevant vault context arrives *with the task*, deterministically, before any agent has to remember to search. The search's `impression` events attribute to the task number. This is the leapfrog item dmp-web structurally can't do (single-agent, no intake step) — `VAULT-COMPARISON-DMPWEB.md` §7 4.1.
 
-### 9.3 Creative phase (agent)
+### 9.3 Task pickup — mandatory consultation + receipts
 
-- Agent consults vault "before work" per `vault-protocol` — typically targeted searches by tag, type, keyword, or wikilink (max 10 results, cached within cycle).
-- Source: per the locked principle, "all agents consult vault before work (PM in research, dev/QA before pickup)" (BRIEFING.md recent decisions, #5571, #5572).
+Before implementing, the working agent's task flow runs two engine-backed steps whose *output is committed*, not just performed:
 
-### 9.4 Post-cycle (mechanical wrap)
+1. **Context consultation**: an engine search on the task's subject; the result lands in the task artifact (CONTEXT.md / research doc / PR body) as a **`## Vault context consumed`** section — wikilink + one-line relevance per cited note, or an explicit "none relevant." Cited notes get `used` events with the task number.
+2. **Rules matching**: a two-stage tag-catalog match against the binding-rules lane; the result lands as **`## Applicable rules`** (explicit "none matched" required). Matched rules get `used` events. *(The rules lane's placement in the type registry — a dedicated `rule` type vs. binding-flagged notes in an existing type — is an open decision, §11; the receipt contract here is independent of where the rules live.)*
 
-> Step labels (Step 4a, 4b, …) in this section reference the post-cycle sequence enumerated in [AGENT-RUNTIME.md §7.1](AGENT-RUNTIME.md). This doc only describes the vault-touching steps; non-vault post-cycle steps (status transitions, tracker comments, iteration logs, commits) live there.
+The step *cannot be skipped silently*: an artifact without the receipt sections is an incomplete artifact (§9.4). "None relevant" is always available, so the cost floor is one honest line — the receipt is evidence the search ran, not busywork.
 
-In order:
+### 9.4 Verification — receipt enforcement
 
-1. **vault-remember Step 4b** (every cycle, gated):
-   - Staleness check on BRIEFING.md (always runs, ignores quiet gate, doesn't consume budget).
-   - Quiet-cycle gate via `vault_remember.py is-quiet`.
-   - If active: reflection across 5 categories (DECISIONS / PATTERNS / LEARNINGS / STYLES / PROJECT CONTEXT), four gates per candidate, up to 2 writes.
+The verifier adds two cheap checks to every verification pass:
 
-2. **vault-optimize** (quiet cycles, vault ≥20 notes, after improvement scan):
-   - Prune + decay + reindex + relevance scoring via `vault_optimize.py run`.
+1. The receipt sections (`## Vault context consumed`, `## Applicable rules`) exist in the task artifacts.
+2. The implementation does not violate any rule listed in `## Applicable rules`.
 
-3. **vault-synthesis** (PM only, after 5 consecutive quiet cycles — counter resets on real work — vault ≥10 galaxy notes):
-   - Cross-agent pattern detection; writes at most 1 `pattern-posture-*` note; files pending human-review task.
+Missing receipt = back to dev, same as any other gap (zero-gap gate). This is the step that turns dmp-web's single-agent self-discipline into **team-enforced process** — the multi-agent structure is what makes the pipeline verifiable rather than aspirational.
 
-The agent's working-state holds two relevant counters: the synthesis counter (per `vault-synthesis.md`) and the write counter (per `vault_remember.py`).
+### 9.5 Ship — capture-at-ship + end-of-cycle sweep
 
-### 9.5 Git integration
+Two complementary write paths (dmp-web has only the first):
 
-- Vault files are under `.squidsquad/vault/` and committed by `cycle_post.py` as part of normal cycle commits.
-- Per `git_ops.py:659` the vault path is registered in the standard commit set.
-- Per `state_bus.py:194` comment: "Everything else stays on main (code, templates, config, vault, planning)" — vault stays on the `main` branch (not the `squid-squad` state branch).
-- Per `migrate_state_branch.py:36` the vault dir is part of state-migration scope.
+1. **Capture-at-ship** (worker, pre-PR): decide whether the task produced durable knowledge (decision / root cause / pattern — with a skip-list for chores); if yes, write the note **on the feature branch so it ships in the same PR** as the change that produced it, issue number in the note's references. Counts against the write budget; dedup gate applies.
+2. **End-of-cycle `vault-remember`** (every role, post-cycle): the sweep for what per-task capture missed. Carried from v1 with one structural change: **dedup reroutes through the engine** — the gate calls the engine's search instead of v1's title/tag `dedup-check`, and adopts **prefer-update-over-create**: the top-ranked hit above a similarity threshold becomes the merge target; a new note is created only when nothing ranks. Most cycle output becomes *appends to existing notes* — the correct pressure for a vault that should consolidate, not sprawl. Write throttles survive v1 unchanged (budget, quiet-gate, role lanes — autonomy needs them).
 
-### 9.6 Failure modes and recovery paths
+### 9.6 Quiet cycles — maintenance
 
-The vault is designed to be **non-blocking and degradation-tolerant** — no vault failure ever blocks a cycle from committing. Concrete failure paths today:
+- **vault-optimize**: the analyze phase is **harness-scheduled** (not "hope a quiet cycle notices" — the v1 bug where `vault_optimize.py run` never fired). Queue ordered by `last_optimized` (14-day cutoff); community detection + subsplit; analyze-then-apply with **contradiction findings human-gated** as HITL tracker tasks, never auto-applied. Pruning/archival proposals consume the impressions report (§6.4) — usage-based, replacing v1's time decay.
+- **Telemetry compaction** (§6.5) rides the same maintenance window.
+- **vault-synthesis** (PM, cross-agent pattern detection): carried from v1, still human-gated. Its output target changes with §3.2: cross-cutting posture notes become `systems/` hub content or `pattern-*` notes (the `pattern-posture-*` subtype is retired).
 
-| Failure | Behavior today |
+### 9.7 Outcome-linked telemetry (target state)
+
+Joining the event stream (§6.1, per-task attribution) with tracker outcomes — the second leapfrog dmp-web can't reach (it has no tracker):
+
+- A task that fails verification, where the failure matches an existing note that was **never consulted** during §9.3 → a **missed-consultation** finding: direct evidence the read side failed. PM's improvement scan reviews these.
+- A note repeatedly `used` by tasks that pass verification first-try → ranking boost signal.
+
+dmp-web measures *usage*; this measures *effectiveness*. Depends on §6 telemetry + §9.3 receipts being live first — sequenced last.
+
+### 9.8 Git integration
+
+- Vault notes stay under `.squidsquad/vault/` on **main**, committed as part of normal cycle commits — unchanged from v1.
+- **New**: telemetry shards (§6.3) also live under the vault tree and ride **routine main commits only, never task branches** — review diffs stay telemetry-free.
+- The one PR that legitimately carries a vault note is capture-at-ship (§9.5.1) — a content note, deliberately atomic with its change.
+
+### 9.9 Failure modes and recovery paths
+
+The vault remains **non-blocking and degradation-tolerant** — no vault failure ever blocks a cycle from committing. v1's file-level failure rows (malformed note mid-write, missing counter state files, BRIEFING budget exhaustion, idempotent re-init, crash-before-commit) carry forward unchanged and are not repeated here. What changes or is new in v2:
+
+| Failure | v2 behavior |
 |---|---|
-| **Harness unreachable during cycle** | Vault operations are local file I/O + git commits with no harness dependency. Cycle continues; vault writes succeed; commit and push happen at `cycle_post.py`. |
-| **vault-create fails mid-write** | Not transactional. If the agent writes a `.md` file but crashes before frontmatter is complete, a malformed note can land on disk. `vault_check.py validate` flags missing fields on next run; agent (or human) must repair. |
-| **vault-check Level 1 finds issues post-write** | Prints `[vault-check]` warnings; **does not block** the cycle. The flawed note remains on disk until manually fixed or next vault-optimize run. |
-| **Merge conflict on a vault note** | Per `vault-protocol.md` rule: "keep both versions, never discard vault content." No automated conflict resolution — human (or PM at next cycle review) must reconcile. The git merge driver does not have special handling for vault notes today. |
-| **Two roles write the "same" note concurrently** | Each writes to its own clone; on push the second to push hits a non-fast-forward, must `git pull` (merge — per operator rule [[feedback_never_rebase_merge_instead]] never use `--rebase`), and may produce a merge conflict (see row above). The dedup gate (`vault_check.py dedup-check`) only checks the *local* vault at write time and does not coordinate across clones. |
-| **`vault_remember.py` state files missing** | `.write-counter`, `.synthesis-counter` etc. — implementations default to zero/unset, equivalent to a fresh-cycle start. No hard failure. |
-| **Stale `.relevance-index.json`** | The file is `.gitignored` per §9.5 / `.obsidian/` convention. Recomputed on next `vault_optimize.py run`. If missing entirely, relevance scoring just returns empty. |
-| **BRIEFING.md token budget exhausted** | `vault_remember.py briefing-budget` returns 0. New content cannot be added without trimming; trimmed content moves to a galaxy note (per `vault-remember.md` "trim-or-graduate" rule). No hard failure. |
-| **vault-init re-run on already-initialized vault** | Idempotent per `vault-protocol.md` §Vault Initialization. Creates only what's missing; never overwrites existing notes or `BRIEFING.md`. |
-| **`cycle_post.py` crashes after vault write but before commit** | Uncommitted vault files remain in the working tree. Next `cycle_pre.py` `git pull` would surface them; if no conflict they get committed in the next successful cycle_post. |
-| **vault-optimize prunes a note an agent still references** | Pruned notes move to `archives/`, not deleted. Wikilinks to archived notes continue to resolve by filename match anywhere under `.squidsquad/vault/` (§4.5), and `vault_check.py check-wikilinks` is filename-only so no broken-link warning fires. The optional breadcrumb appended by `_rewrite_wikilinks_after_archive` (§3.3) lets a human reader see that the target moved; resolution does not depend on it. |
-| **`vault-synthesis` produces a posture an agent later disagrees with** | Posture notes are written with `confidence: medium` and require a pending PM task → human approval before becoming "active scan criteria." Until approved, they're informational notes only. |
+| **Engine unavailable** (Skill invocation fails, package missing) | Consultation steps (§9.2/§9.3) degrade to an honest receipt line stating the engine was unavailable — never a fabricated "none relevant." The verifier treats an engine-unavailable receipt as pass-with-note; PM sees recurrences via improvement scan. Search never blocks a cycle. |
+| **Telemetry write fails** (shard I/O error) | Event dropped with a log line. Telemetry is operational signal, not content — losing an event is fine, blocking work on it is not. |
+| **Telemetry unavailable at read** (cold start, shard read failure) | Ranking degrades to tier + recency + type weight (§6.2). Impressions report skips the run. |
+| **Same-shard divergence across machines** (restored backup, cloned VM) | `merge=union` auto-resolves (§6.3); duplicate lines are read-time-deduped by event `id`. |
+| **Cross-writer shard conflict** | Structurally impossible — each writer appends only to its own shard (§6.3). |
+| **Merge conflict on a vault *note*** | Unchanged from v1: keep both versions, never discard vault content; human or PM reconciles. Rarer in v2 — prefer-update-over-create (§9.5) plus receipts reduce blind concurrent creation of near-duplicate notes. |
+| **Contradiction found by optimize analyze** | Never auto-applied — filed as a HITL tracker task (§9.6). |
+| **Receipt section missing from an artifact** | Not a runtime failure — a verification gap (§9.4): back to dev. |
 
-### 9.7 What the vault does NOT do today
+### 9.10 What the vault does NOT do (v2)
 
-For completeness, behaviors that some readers might expect but that are not implemented:
-
-- **No automatic propagation across SquidSquad installs.** Each install has its own vault; there is no shared/federated layer. (See `project_memory_layer_vision` in PM auto-memory for an aspirational note on cross-install sharing; not implemented.)
-- **No queryable index or embedded search.** All search is `grep` over the markdown files (per the 4 search modes in `vault-protocol.md` §vault-search).
-- **No machine-learning on vault store content.** No embedding store, no semantic search, no RAG. Confidence levels and tags are agent-assigned, not computed.
-- **No write-ahead log or transactional guarantees.** Writes are file overwrites + git commits.
-- **No per-note access control.** Read/write is at the role-class level (full vs slim variant), not the note level.
+- **No automatic propagation across SquidSquad installs.** Per-install vaults; no federated layer. (The cross-install memory-layer vision remains aspirational and out of scope here.)
+- **No embeddings, no RAG.** The engine is tiered lexical matching + graph traversal + telemetry ranking (§6.2) — a CLI with a JSON contract, pinned by tests. The second-brain RAG vision stays a separate, later track.
+- **No write-ahead log or transactional guarantees.** Writes are file writes + git commits.
+- **No per-note access control.** Access is role-class-level; every role has R/W via the vault protocol.
+- **No runtime blocking on any vault subsystem.** Enforcement is process-level (§9.4), never a cycle-blocking runtime gate.
 
 ---
 
@@ -813,4 +822,4 @@ These are noted here; the actual edits land in a separate commit or as part of t
 
 - **2026-05-24 (v1 draft, descriptive snapshot)** — initial draft. Consolidates the vault's specification (from 5 sub-skills + 4 scripts) and current state (from on-disk inventory) into one architecture doc. No design changes proposed. References open issue #5855 for the known living-memory gap; resolution out of scope.
 - **2026-05-24 (v1 draft, expanded)** — added §9.6 failure modes + recovery paths, §9.7 explicit non-functionality, §10.3-§10.6 ownership/confidence/status/recency distributions, §11 re-verified #5855 claims (each verdict CONFIRMED / PARTIALLY TRUE / NOT TRUE TODAY) + new drift findings (owner label `<role>` vs `<role>-lead`; zero `superseded` notes), §12.1 verified cross-refs with line numbers, §12.2 reconciliation needs for ARCHITECTURE / COMPOSE-ARCHITECTURE / AGENT-RUNTIME / INSTALLER-ARCH / sub-skill-catalog.
-- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per `VAULT-COMPARISON-DMPWEB.md` §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. §7+ still v1 pending rewrite.
+- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per `VAULT-COMPARISON-DMPWEB.md` §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. §7/§8 (blocked on §10.3 packaging verifications), §10–§12 still v1 pending rewrite.
