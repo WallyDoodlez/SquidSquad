@@ -374,6 +374,46 @@ class TestCheckAllAgentsCollision13742:
             report = health_check.check_all_agents(local_config_overrides=overrides)
         assert all(a["health_source"] != "local-config-collision" for a in report["agents"])
 
+    def test_self_role_exempted_from_collision_verifier_round1(self, tmp_path):
+        """#13742 verifier round 1 regression: when this script's OWN
+        REPO_ROOT is one of the colliding paths (e.g. two OTHER roles' broken
+        "." entries both collide onto the executing clone's own root), the
+        role whose resolved path equals REPO_ROOT AND whose raw value is a
+        genuine sibling-relative path (not the ambiguous ".") is
+        independently ground-truthed -- this process IS running from there --
+        and must NOT be flagged. Only the genuinely-unverifiable other
+        role(s) sharing that path stay flagged."""
+        qa_dir = self._setup_agent(tmp_path, "qa", claude_pid=42)
+        pm_dir = self._setup_agent(tmp_path.parent / "pm-elsewhere", "pm")
+        with patch.object(health_check, "REPO_ROOT", tmp_path), \
+                patch.object(health_check, "_is_process_alive", return_value=True):
+            overrides = {"qa": qa_dir, "pm": pm_dir, "dm": qa_dir}
+            raw_overrides = {"qa": "../SquidSquad-qa", "pm": "../SquidSquad", "dm": "."}
+            report = health_check.check_all_agents(
+                local_config_overrides=overrides,
+                local_config_raw_overrides=raw_overrides,
+            )
+        by_role = {a["role"]: a for a in report["agents"]}
+        assert by_role["qa"]["health_source"] != "local-config-collision"
+        assert by_role["qa"]["health"] == "healthy"
+        assert by_role["dm"]["health_source"] == "local-config-collision"
+        assert by_role["pm"]["health_source"] != "local-config-collision"
+
+    def test_dot_raw_value_never_exempted_even_at_repo_root(self, tmp_path):
+        """#13742 verifier round 1: if BOTH colliding roles' raw values are
+        "." (both coincidentally resolve to REPO_ROOT, e.g. two broken
+        entries), neither is exempted -- "." is never trustworthy evidence
+        on its own, regardless of which role stores it."""
+        shared = self._setup_agent(tmp_path, "dm")
+        with patch.object(health_check, "REPO_ROOT", tmp_path):
+            overrides = {"pm": shared, "dm": shared}
+            raw_overrides = {"pm": ".", "dm": "."}
+            report = health_check.check_all_agents(
+                local_config_overrides=overrides,
+                local_config_raw_overrides=raw_overrides,
+            )
+        assert all(a["health_source"] == "local-config-collision" for a in report["agents"])
+
 
 class TestNoLegacyReads:
     """#4792 §5.4 source-grep guards: legacy sentinel reads must be gone."""
