@@ -15,6 +15,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import tracker
+import tc_coverage
 
 
 def _mock_result(stdout="", stderr="", returncode=0):
@@ -993,3 +994,67 @@ class TestHardenStdio13185:
         src = inspect.getsource(tracker.work_assign)
         assert "→" not in src, "work-assign success print must stay ASCII (#13185)"
         assert "work-assign ->" in src
+
+
+class TestTransitionTcCoverageGateScope13838:
+    """#13838: the TC-coverage gate (transition() step 4) only ACTIVATES
+    when tc_coverage._discover_files() finds a TEST-PLAN. Task-flow items
+    author one (AC-derived TCs); type:issue bug-fix verifications never do
+    (verification-issue-flow.md gates them with its own regression-test +
+    full-suite requirements instead). No TEST-PLAN found must remain a
+    structural no-op forever, not an accidental gap that later "hardens"
+    into blocking every type:issue ship."""
+
+    def _stub_transition_environment(self, monkeypatch):
+        monkeypatch.setattr(tracker, "_check_unread_feedback", lambda *a, **kw: [])
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                             lambda *a, **kw: _mock_result(stdout="ok"))
+        monkeypatch.setattr(tracker, "_get_issue_status_labels",
+                             lambda n: {"status:pending-test"})
+        monkeypatch.setattr(tracker, "_convert_draft_pr_to_ready", lambda n: None)
+        monkeypatch.setattr(tracker, "_log_diagnostic", lambda *a, **kw: None)
+
+    def test_no_test_plan_never_blocks_pending_ship(self, monkeypatch):
+        """No TEST-PLAN discovered (the type:issue case) -> transition
+        succeeds, no SystemExit. Locks the documented, by-design no-op."""
+        self._stub_transition_environment(monkeypatch)
+        monkeypatch.setattr(tc_coverage, "_discover_files", lambda n: (None, None))
+        try:
+            tracker.transition(13838, "pending-test", "pending-ship",
+                                role="verifier-lead", force=False)
+        except SystemExit:
+            pytest.fail(
+                "TC coverage gate must never block when no TEST-PLAN exists (#13838)"
+            )
+
+    def test_coverage_failure_still_blocks_when_test_plan_exists(
+        self, monkeypatch, tmp_path
+    ):
+        """A TEST-PLAN DOES exist (task-flow) and coverage fails -> the gate
+        still blocks, unaffected by the #13838 scoping clarification."""
+        self._stub_transition_environment(monkeypatch)
+        tp = tmp_path / "TEST-PLAN-13838.md"
+        qr = tmp_path / "QA-RESULTS-13838.md"
+        tp.write_text("dummy", encoding="utf-8")
+        qr.write_text("dummy", encoding="utf-8")
+        monkeypatch.setattr(tc_coverage, "_discover_files", lambda n: (tp, qr))
+        monkeypatch.setattr(tc_coverage, "check_coverage", lambda *a, **kw: 1)
+        with pytest.raises(SystemExit) as exc_info:
+            tracker.transition(13838, "pending-test", "pending-ship",
+                                role="verifier-lead", force=False)
+        assert exc_info.value.code == 1
+
+    def test_missing_qa_results_with_test_plan_still_blocks(
+        self, monkeypatch, tmp_path
+    ):
+        """A TEST-PLAN exists but QA-RESULTS doesn't (task-flow, incomplete)
+        -> still blocks, distinct from the no-TEST-PLAN-at-all no-op case."""
+        self._stub_transition_environment(monkeypatch)
+        tp = tmp_path / "TEST-PLAN-13838.md"
+        tp.write_text("dummy", encoding="utf-8")
+        monkeypatch.setattr(tc_coverage, "_discover_files", lambda n: (tp, None))
+        with pytest.raises(SystemExit) as exc_info:
+            tracker.transition(13838, "pending-test", "pending-ship",
+                                role="verifier-lead", force=False)
+        assert exc_info.value.code == 1

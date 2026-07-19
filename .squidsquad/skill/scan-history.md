@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 10:32
+
+- **Files scanned**: references/roles/pm/instructions.md (166 lines, full read -- cross-referenced frontmatter `step-ids` (12 entries) against all 12 `#### step:cycle/*` body anchors, still exact-match order per the #13801 fix; cross-referenced all 16 `→ run sub-skill:` marker names against docs/sub-skill-catalog.md -- all resolve), tests/test_wizard.py (3047 lines; TODO/FIXME/skip/xfail grep clean; 48 test classes, no duplicate names; em-dash sweep found ~24 hits, all in comments/docstrings -- dev-facing source prose, never on a print()/raise console-output path, not the #13728/#13760 crash-risk class).
+- **Findings**: none. Both files clean.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 09:38
 
 - **Files scanned**: references/scripts/compose.py (2459 lines; suggest-targets top pick; TODO/FIXME/XXX/HACK grep clean; confirmed already wired to cli_stdio.harden_stdio (#13198, line 2150-2151); em-dash/decorative-unicode sweep on print()/raise/f-string literals found 2 hits (line 481 `_render_role_roster`, line 983 the DeepSeek-polish prompt template) -- both traced to non-crash-risk sinks: line 481's output flows only into composed CLAUDE.md content written via `write_text(..., encoding="utf-8")` (lines 1697/1748), never printed to console; line 983's prompt is piped to a subprocess with `subprocess.run(..., encoding="utf-8", errors="replace")` explicitly set -- neither matches the #13728/#13760 crash-risk pattern of an unencoded print()/raise on a strict-console path; cross-referenced `_inject_role_roster`'s "marker-absent steady state" docstring claim against a repo-wide grep for `{{role-roster}}` -- confirmed accurate, the literal only survives in historical/archival planning docs (#9925 CONTEXT/REVIEW, audit-e6, docs/sub-skill-catalog.md's retirement note), never in live composed output), tests/test_wizard_runbook.py (410 lines; TODO/FIXME/skip/xfail grep clean).
@@ -612,11 +618,5 @@
 
 - **Files scanned**: references/scripts/scan_index.py, references/scripts/vault_optimize.py, references/scripts/event_validator.py
 - **Findings**: #8435 (scan_index.py: acceptance_rate scoring always 0 for unreviewed files)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 22:52
-
-- **Files scanned**: references/sub-skills/roles/dm/prohibitions.md, references/prompts/discussion-prep.md.j2, references/prompts/improvement-scan.md.j2, references/roles/LAYERS.md, references/roles/dev/android/instructions.md
-- **Findings**: #8381 (LAYERS.md references deprecated reboot_agent.py instead of start_team.py)
 - **Items rejected by human**: none yet
 
