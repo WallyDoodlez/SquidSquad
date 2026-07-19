@@ -1,6 +1,7 @@
 # Working State
 
 - **Task**: none
+- **OPERATOR DIRECTIVE (2026-07-19 inline, one-off)**: when #13846 finishes (ship), PAUSE the team — POST /agents/{role}/stop for skill, qa, dm (individually; NOT all-stop, PM stays up for inline). While paused: idle-driver stays disarmed (no improvement scans), PM burns tokens only for inline conversation + event acks. Resume only on operator say-so.
 - **Status**: Idle, event mode. Awaiting operator action on HITL items below.
 - **Updated**: 2026-07-19 05:45
 
