@@ -2,7 +2,7 @@
 slot: instructions
 ordinal: 20
 roles: [pm]
-step-ids: [step:cycle/check-in, step:cycle/pipeline-sentinel, step:cycle/task-intake, step:cycle/task-approval, step:cycle/health-check, step:cycle/vault-synthesis]
+step-ids: [step:cycle/check-in, step:cycle/triage-external, step:cycle/task-intake, step:cycle/task-approval, step:cycle/pipeline-sentinel, step:cycle/health-check, step:cycle/boot-remote-agents, step:cycle/own-domain-autofix, step:cycle/soul-shepherd, step:cycle/improvement-scan, step:cycle/vault-optimize, step:cycle/vault-synthesis]
 ---
 
 <!-- sub-skill: file-conventions -->
