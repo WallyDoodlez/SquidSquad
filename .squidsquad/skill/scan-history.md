@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-18 23:47
+
+- **Files scanned**: references/scripts/orphan_cleanup.py (519 lines, full read; never-scanned per name-vs-history diff — the Windows claude.exe orphan-reaper)
+- **Findings**: none. Clean after a thorough read — already heavily iterated (D1-D8 CONTEXT locks plus #9926 per-role-skip fix and #9937 PID-recycle re-verification), with both unit (test_orphan_cleanup_9688.py) and live-integration (test_feat_9688_orphan_cleanup_live.py) coverage. No forced finding.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-18 23:04
 
 - **Files scanned**: references/scripts/atomic_emit.py (330 lines, full read; never-scanned per name-vs-history diff — the §4.6 verbatim-triple atomic-write module) and references/scripts/subloop_driver.py (339 lines, full read; also never-scanned, despite heavy personal use this session as the idle-cooldown-loop driver)
