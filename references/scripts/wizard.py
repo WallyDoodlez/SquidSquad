@@ -1789,19 +1789,29 @@ def _cleanup_failed_clone(clone_dir):
     """Remove a stray directory left behind by a failed ``git clone`` (#13793).
 
     ``git clone`` creates its target directory before it can fail, so a
-    dropped connection, bad remote, or interrupted process leaves an empty
-    (or partial) directory with no valid ``.git`` -- blocking every future
-    clone attempt to that same path. Only removes directories that are NOT a
-    completed clone (no ``.git``), so a legitimate clone is never touched.
-    Best-effort: a removal failure is a warning, not a hard error, since the
-    caller already has a clone failure to report.
+    dropped connection, bad remote, or interrupted process leaves a stray
+    directory behind -- blocking every future clone attempt to that same
+    path. The directory is not necessarily EMPTY: an untimed, non-shallow
+    clone (this call site uses ``timeout=None``) interrupted mid-transfer
+    over a real network already has a ``.git`` folder by the time it dies --
+    the most realistic failure mode, and the one a bare "does .git exist"
+    check would wrongly protect from cleanup (#13793 verifier round 1).
+    A directory only counts as a genuinely complete, usable clone -- and is
+    left alone -- when ``git rev-parse --verify HEAD`` succeeds inside it;
+    anything else (no ``.git``, a ``.git`` with no resolvable HEAD) is
+    cleaned up. Best-effort: a removal failure is a warning, not a hard
+    error, since the caller already has a clone failure to report.
     """
-    if clone_dir.exists() and not (clone_dir / ".git").exists():
-        try:
-            shutil.rmtree(clone_dir)
-        except OSError as e:
-            print(f"  WARNING: could not remove stray clone dir {clone_dir}: {e}",
-                  file=sys.stderr)
+    if not clone_dir.exists():
+        return
+    result = _run(["git", "-C", str(clone_dir), "rev-parse", "--verify", "HEAD"])
+    if result.returncode == 0:
+        return  # genuinely complete, usable clone -- never touch
+    try:
+        shutil.rmtree(clone_dir)
+    except OSError as e:
+        print(f"  WARNING: could not remove stray clone dir {clone_dir}: {e}",
+              file=sys.stderr)
 
 
 INSTALL_SPEC_FILENAME = ".install-spec.json"
