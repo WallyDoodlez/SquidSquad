@@ -1,3 +1,10 @@
+## Scan — 2026-07-19 06:12
+
+- **Files scanned**: references/roles/worker/instructions.md, references/roles/verifier/instructions.md, references/roles/dm/instructions.md, docs/archive/event-bus.md, .squidsquad/vault/BRIEFING.md
+- **Findings**: #13792 (role:skill, low) — L2 role-template drift: worker discussion-protocol block missing the auto-prepend/no-**[ROLE]**-in---message caution that verifier+dm carry; dm file-conventions documents retired type:bug/type:feature labels (live taxonomy type:issue/type:task). docs/VAULT-ARCH.md skipped (mid-rewrite in PR #13708, pending operator merge — scanning would churn against in-flight v2). docs/archive/event-bus.md verified fine as-is (archive convention is directory README banner, not per-file).
+- **Auto-fixed**: BRIEFING.md Team State stale "write-frozen (#13570)" blocker line cleared — #13570/#13473 verified CLOSED on forge, 07-18 increment already recorded resolution (own-domain, Tier 1)
+- **Items rejected by human**: none new
+
 ## Scan — 2026-07-19 02:23
 
 - **Files scanned**: docs/archive/EVENT-ARCHITECTURE.md, references/sub-skills/common-events/event-mode-contract.md, README.md, SKILL.md, docs/INSTALLER-RUNTIME.md
@@ -701,12 +708,4 @@
 - **Findings**: none filed. Considered a candidate gap — the check-in advertise step (checkin.md:17) covers only `role:<human>` + `pending-human-*` items, NOT PM-owned `planned` items awaiting approval (e.g. #12896). Concluded INTENTIONAL/coherent, not a gap: PM tracks its own `planned` items in working-state and surfaces them with judgment at check-in; advertise-duty is specifically the cross-agent pending-human-* return-path (items OTHER agents hand off that PM wouldn't otherwise know). A blanket 'advertise all planned' would nag the operator about deliberately operator-paced items (#10837/#10838/#10839 etc.). PM judgment + working-state tracking covers the #12896 case. NOT filed (designed distinction, filing would be marginal noise).
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
-
-## Scan — 2026-06-20 00:02 (fresh-boot idle-driver tick, 3rd/burst-cap scan)
-
-- **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md (PM core stall-detection sub-skill, exercised live this boot; not scanned recently)
-- **Findings**: 1 identified, NOT filed (dedup). pipeline-sentinel.md is framed in pure loop-mode terms — "Step 6f" anchor (event-hydrated cycle puts it at Step 4.1), "runs every cycle", "90 minutes (3 cycles at 30-min interval)" cadence reasoning — while the canonical architecture is event-mode. The 90-min WALL-CLOCK stall threshold is still correct; only the loop-cadence FRAMING is stale. **Already in scope of in-flight #12493** ("L2: pipeline-sentinel — detect HALT, investigate, unblock (event-effective)") which explicitly rewrites THIS file event-effectively → a competent event-mode rewrite sweeps up the cadence framing. Filing would duplicate. Cannot Tier-1 auto-fix: references/sub-skills/ is skill's domain (PM-docs-only boundary) AND skill is actively rewriting this file under #12493 — an edit would conflict.
-- **Auto-fixed**: none
-- **Items rejected by human**: (none)
-- **Burst note**: 3rd scan of this idle period → at_cap, driver cancelled + cron deleted (re-arms on next forge-work re-idle).
 

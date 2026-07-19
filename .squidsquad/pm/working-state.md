@@ -1,25 +1,25 @@
 # Working State
 
-- **Task**: none (#10003 → pending-human-review 2026-07-19)
-- **Status**: Idle, event mode. #10003/PR #13708 awaiting operator merge approval; on approval: merge, then file §12.2 reconciliation tasks. Audit artifacts: planning/DS-AUDIT-10003-{r1,r2,xp1..xp4}.md.
-- **Updated**: 2026-07-19 03:18
+- **Task**: none
+- **Status**: Idle, event mode. Awaiting operator action on HITL items below.
+- **Updated**: 2026-07-19 05:45
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
 
-## Session note (EVENT boot 2026-07-19 ~01:45)
+## Session note (EVENT boot 2026-07-19 ~05:45)
 
-Booted EVENT mode, quiet posture. Overnight pipeline healthy — clean autonomous ships #13735/#13737/#13739 (zero PM intervention). Post-merge recomposes run for PRs #13740/#13741, no composed drift. Improvement scan (02:23, burst 3/3 → driver cancelled at cap): doc-realignment backlog stale vs locked event-canonical architecture — #10024 body rescoped (own-domain; was two-mode framing + false "#8702 closed" claim), operator-rec comments on #8702 (close-as-superseded) + #8698 (re-scope or close). No new filings (drift already tracked by #10024/#13571/#13572).
+Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #13760 (wizard.py harden_stdio) and #13746 shipped cleanly by skill/verifier/dm, zero PM intervention. Post-merge recompose run for PR #13786 (touched references/scripts/wizard.py) — no composed drift. work_queue(pm) re-verified: #10690 only, still GATED (E7/#10686 OPEN). Idle driver re-armed (reidle, scan_count 0/3, cron 4,34 * * * *).
 
 ## HITL standing (advertise each check-in)
 
-- **#10003** — VAULT-ARCH v2 TRD, pending-human-review, PR #13708 all-gates-passed, awaiting merge approval.
-- **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN.
+- **#10003** — VAULT-ARCH v2 TRD, pending-human-review, PR #13708 all-gates-passed, awaiting merge approval. (verified 05:45)
+- **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN. (verified 05:45)
 - **#10377** — blocked:human-action (gated L4 DM curation task).
 - **#10024 / #8702 / #8698** — doc-realignment cluster: approve #10024 as rescoped; rule on closing #8702 (rec: supersede) and #8698 (rec: re-scope or close).
 - **~128 `status:pending` backlog tasks** awaiting operator go-ahead (verified 2026-07-18).
 
 ## PM queue
 
-- work_queue(pm approved) = #10690 only, GATED (E7/#10686 OPEN, re-verified 2026-07-19) — not pickable.
+- work_queue(pm approved) = #10690 only, GATED (E7/#10686 OPEN, re-verified 2026-07-19 05:45) — not pickable.
 - Parked coord-holds: #11092 / #10839 / #9968.
-- Idle-driver: cancelled at cap 2026-07-19 03:24 UTC (scan_count 3/3); reidle on next processed forge work.
+- Idle-driver: re-armed 2026-07-19 05:45 (scan_count 0/3, cron job 8750c6bc).
