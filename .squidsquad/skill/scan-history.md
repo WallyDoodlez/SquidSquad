@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 02:22
+
+- **Files scanned**: references/roles/SOUL.md (114 lines, full read — clean, matches composed content, no drift), references/scripts/config.py (TODO/FIXME + AST em-dash sweep clean, already in the harden_stdio WIRED list), README.md (link-checked all 8 relative .md references — all resolve).
+- **Findings**: none.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 01:32
 
 - **Files scanned**: docs/HARNESS-ARCH.md, references/scripts/tracker.py, references/sub-skills/common-events/event-mode-contract.md (suggest-targets top-3 for skill; tracker.py TODO/FIXME + AST em-dash sweep both clean, already wired; event-mode-contract.md checked for the append/prepend and no-action-wake wording classes touched elsewhere this session -- no matches, nothing stale found).
@@ -613,10 +619,4 @@
 - **Files scanned**: references/scripts/triage.py, references/scripts/event_bus.py, tests/test_triage.py, tests/test_event_bus.py, tests/test_feat_2495_upgrade_rewrite.py
 - **Findings**: #8307 (triage.py: dead code in find_qa_rejected own-comment check)
 - **Items rejected by human**: none
-
-## Scan — 2026-05-15 17:33
-
-- **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/squidsquad_cli.py
-- **Findings**: #8268 (tracker.py get_state returns OPEN for missing state — low), #8269 (squidsquad_cli.py unused import os — low)
-- **Items rejected by human**: none yet
 
