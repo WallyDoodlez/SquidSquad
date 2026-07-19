@@ -1587,7 +1587,16 @@ def transition(number, from_status, to_status, role=None, force=False):
             sys.exit(1)
 
     # 4. Guard: TC coverage gate for pending-test -> pending-ship
-    #    (NEVER bypassed, even with --force)
+    #    (NEVER bypassed, even with --force -- but only ACTIVATES when a
+    #    TEST-PLAN-<N>.md is discovered for the issue. TEST-PLAN authorship
+    #    is task-flow-only (verification.md Step 5, AC-derived TCs);
+    #    verification-issue-flow.md's type:issue bug-fix path never produces
+    #    one -- that flow is instead gated by its own Step 4/5 requirements
+    #    (a regression test must exist + the full suite must pass), enforced
+    #    by the verifier directly rather than by this script. #13838: do not
+    #    read the absence of a TC-coverage BLOCKED here as "the gate was
+    #    skipped" for type:issue items -- it structurally never applies to
+    #    them, by design, not as an accidental gap.
     if from_label == "status:pending-test" and to_label == "status:pending-ship":
         try:
             from tc_coverage import _discover_files, check_coverage

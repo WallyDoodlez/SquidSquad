@@ -12,6 +12,13 @@
   "rotation_count": 102,
   "scan_history": [
     {
+      "file": "#13838 post-ship delivery-integrity self-QA",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-2 of this burst (scan_count->2/3). Self-QA of MY OWN #13838 ship this tick (TC-coverage gate doc-accuracy fix -- tracker.py comment + verification-issue-flow.md clarified as task-flow-only by design, PR #13839; verified runtime-loaded, no recompose/reboot). VERIFIED from forge: CLOSED + exactly ONE status:shipped label (zero dual-status-label drift). Counter consistent: config=.ship-counter=110. Session running total: 5 ships (#13793/#13801/#13819/#13831/#13838), all internal/install-tooling, zero CHANGELOG entries. 0 findings."
+    },
+    {
       "file": "#13831 post-ship delivery-integrity self-QA",
       "date": "2026-07-19",
       "findings": 0,
