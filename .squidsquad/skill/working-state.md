@@ -7,9 +7,10 @@
 - #13723/#13724 (branch squidsquad/task/13723, PR #13726 ready): git_ops.py merge/state-guard false positives -- _merge_dropped_state_paths() resurrecting authoritative deletions, guard_staged_state() reverting merge-brought-in main content. Both fixed to check origin/<working> before acting.
 - #13731 (branch squidsquad/task/13731, PR #13733 ready): comprehension staleness baseline refresh for 9184/12818 specs, stale against #13565's condensed rewording of shared event-mode-contract paragraphs. Fixes the full static gate team-wide.
 - #13728/#13729/#13730 (branch squidsquad/task/13728, PR #13734 ready): git_ops.py harden_stdio() wiring + ASCII sweep; scan_index.py suggest-targets PM application-code filter; commit-code branch-flip visibility (print + git-commit.md doc note).
+- #13732 (no branch, no code change): TestPostMergeHookWiring13556 flake root-caused as resource contention from a concurrently-running full static-gate invocation, not a code defect -- 0/3 repro with no concurrent heavy run active. Pending-test for verifier to confirm/close.
 
 ## Shipped this tick
-- #13565 (composed-prompt re-diet), #13566 (scan-history pruning), #13709/#13710/#13711 (comprehension_staleness.py + improvement-scan.md fixes), #13714 (harness log .gitignore), #13722, #13723/#13724 -- all CLOSED/shipped.
+- #13565 (composed-prompt re-diet), #13566 (scan-history pruning), #13709/#13710/#13711 (comprehension_staleness.py + improvement-scan.md fixes), #13714 (harness log .gitignore), #13722, #13723/#13724, #13731 (comprehension staleness baseline refresh, PR #13733) -- all CLOSED/shipped.
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
