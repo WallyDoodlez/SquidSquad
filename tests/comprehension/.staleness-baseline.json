@@ -159,6 +159,10 @@
  "13746_spec.json": {
   "references/roles/pm/instructions.md": "ed1f3efe19f2fec2281ed30b94d6d049bef49919"
  },
+ "13792_spec.json": {
+  "references/roles/dm/instructions.md": "5e94728963ace4bdb376d96b0cecff7ceb7825e5",
+  "references/roles/worker/instructions.md": "ffe6c41c8eb1967d4b47e8955c1156e6ef577f33"
+ },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification-templates.md": "62a1b32f260d957ec806450ffffb84f8f3da7b58",
