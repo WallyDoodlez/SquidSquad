@@ -634,114 +634,21 @@ Modeled on dmp-web's optimize analyze phase: sonnet subagents per topical cluste
 - `references/migrations/v<N>-to-v<N+1>.md` documents the same M0→M4 walk for installed projects: the mechanical script always runs; M2 is offered but skippable; M3's human gate scales down to reviewing whatever M2 proposed.
 - Unfreeze writes (budget restored). **Telemetry starts cold — by design**: usage signal rebuilds within weeks of normal operation, and §6.2's ranking degrades gracefully (tier + recency + type weight) until it does.
 
-## 11. Known gaps `[v1 — not yet migrated]`
+## 11. Open decisions & gaps
 
-### 11.1 #5855 — Vault is static decision log
+v1's §11 re-verified #5855's claims against a 2026-05-24 snapshot; that audit did its job — it seeded the dmp-web comparison that produced this redesign, and **#5855 (vault is a static decision log) is the umbrella gap this entire TRD answers**: it closes at M4 cutover, not before. What remains open, with owners and resolution points:
 
-[Issue #5855 — Vault is static decision log, not living institutional memory](https://github.com/WallyDoodlez/SquidSquad/issues/5855) (status:pending, priority:high, role:skill).
+| # | Open item | Blocks | Resolve by / owner |
+|---|---|---|---|
+| 1 | **Skill-invocation feasibility** — does invoking the portable dmp-web package's Claude Skills work reliably from an autonomous, non-interactive agent session? | §7/§8 concrete shape (engine packaging) | PM research, before §7/§8 are drafted — the two-path fallback is a Python port per the planning doc §9.4.2 |
+| 2 | **Node-alongside-Claude-Code guarantee** — is Node present on a target machine just because Claude Code is? | Same as #1 | Same as #1 |
+| 3 | **Rules-lane registry placement** — dedicated `rule` type vs `binding: true` flag on existing types (§9.3.2's receipt contract is independent of this) | Rules matching implementation, M1 mapping for binding content | Operator + PM at §7 drafting; recommendation forthcoming with the sub-skill design |
+| 4 | **Distillation aggressiveness** — how hard M2 prunes the single-incident learning pile (planning §9.6 #3; recommendation: aggressive — telemetry vindicates or refutes survivors within weeks) | M2/M3 only | Operator at M3 manifest review |
+| 5 | **Viewer priority** — vendored graph viewer + harness `/vault` route: cutover scope or post-cutover polish (planning §9.6 #4) | Nothing in M0–M4 | Operator, any time before M4 scoping |
+| 6 | **Compaction horizon + staleness threshold defaults** — N days for §6.5 rollup and §4.4's stale bucket (default 90) | Implementation config only | Dev at implementation, config-overridable |
+| 7 | **Multi-instance state layer** (adjacent, NOT vault-v2 scope) — parallel squads per developer expose that fixed-path per-role state files are not instance-safe; telemetry (§6.3) is instance-safe by design | A future parallel-squads workflow, not this TRD | Operator to confirm as requirement (raised inline 2026-07-18); then its own design task |
 
-Each claim from the issue body re-verified against the snapshot in §10:
-
-| #5855 claim | Verdict | Verified state (2026-05-24) |
-|---|---|---|
-| "Only skill + PM contribute (skill 64%, PM 36%)" | **CONFIRMED** | Galaxy (28 notes): skill+skill-lead = 17 (61%); pm+pm-lead = 11 (39%); qa = 0; dm = 0 (§10.3). Whole-vault distribution same shape. |
-| "20/22 galaxy notes are `confidence:high`" | **CONFIRMED, numbers shifted** | Today: 24/28 high (86%), 4/28 medium, 0 low (§10.4). The skew is still extreme but the vault has grown since the issue was filed. |
-| "No notes updated in last 7+ days" | **NOT TRUE today** | Most-recent galaxy update is `learning-migration-6274-cutover.md` (2026-05-23, 1 day ago); 3 more notes updated 2026-05-21 (3 days ago) (§10.6). The claim was true when filed; the recent #6274 + event-bus work has driven fresh writes. |
-| "No style notes (0)" | **CONFIRMED** | 0 `style-*` notes (§10.2). |
-| "No posture notes from vault synthesis" | **CONFIRMED** | 0 `pattern-posture-*` notes (§10.2). Either `vault-synthesis` has never fired, or every firing skipped at one of its gates. |
-| "No learnings captured from recent shipping" | **PARTIALLY TRUE** | 9 `learning-*` notes exist (§10.2), some recent. However, distribution suggests learnings cluster around large architecture work (6274, event-bus) and not around routine ships — most recently shipped items in BRIEFING.md have no corresponding learning note. |
-| "Archives folder empty" | **CONFIRMED** | 0 notes in `archives/` (§10.1). All 33 notes have `status: active` (§10.5). |
-
-#5855 also enumerates suspected causes (verbatim from the issue):
-
-- vault-remember's 4-gate filter may be too aggressive (filters out everything)
-- "Quiet cycle only" reflection trigger may be the wrong model
-- QA and DM missing instructions / template gap / wrong incentives
-- No automated capture of failure-mode learnings
-
-Additional drift surfaced by this audit (not yet in #5855):
-
-- **Owner label drift** (§10.3): two conventions in use, `<role>` vs `<role>-lead`. Spec says `pm | skill | qa | dm | shared` (no `-lead` suffix). Agents have been writing the role tag they use in tracker comments.
-- **No `superseded` notes** (§10.5): every note is `active`. Either decisions are never superseded (unlikely over 1+ months of work) or the supersession mechanism isn't being used.
-
-This doc does not propose fixes — those belong to whoever picks up #5855.
-
-### 11.2 Future gap — vault knowledge-tree integrity enforcement (#10100)
-
-The §4.5 operating assumption (SquidSquad-only writes; sub-skills mediate all modifications) is a convention, not a hard guarantee. A future CI/CD workflow should formally enforce knowledge-tree integrity on note renames:
-
-- **Detect**: git diff between PR head and base reveals any vault note that was renamed (filesystem path change) or moved
-- **Enforce**: one of two policies
-  - **Reconcile**: auto-rewrite all incoming `[[wikilinks]]` to point at the new name; fail the CI check if the rewrite is ambiguous (e.g., name collision)
-  - **Prohibit**: fail the CI check outright on any direct rename; force the rename to go through a vault sub-skill (e.g., `vault_optimize rename-note`) that triggers the existing rewrite logic
-- **Policy choice**: prohibit-outright is simpler and matches the SquidSquad-only-write assumption (humans never rename vault notes directly); reconcile-automatically is more permissive but adds CI complexity. The recommendation in #10100 is to start with prohibit.
-
-Tracked in #10100.
-
-### 11.3 Future gap — usage-aware decay (impression-based / hybrid)
-
-The current decay model (§4.4) is purely time-based: every note decays by `updated:` age regardless of how much it is actually being used. This is blunt — evergreen content that is heavily read still decays unless manually tagged `evergreen` at creation time, which requires foresight and is brittle to miscategorization.
-
-A more accurate model would treat **usage as the primary signal**:
-
-- **Impression-based**: decay based on impressions-since-last-event (read, search hit, wikilink traversal, BRIEFING reference). Heavily used notes never decay.
-- **Hybrid (recommended direction)**: time decays as today, BUT every impression resets the timer. Captures both failure modes — old + unused → decays; old + used → stays.
-
-Open design questions for whoever picks this up:
-
-- What counts as an impression? Just file reads? Search hits? Wikilink traversal? BRIEFING-loads? All four with weights?
-- Where do impression counters live? `.relevance-index.json` (already gitignored, already updated by `vault_optimize`) is the natural home. Frontmatter would be too noisy — counter increments every cycle.
-- Cold-start: how do new notes accumulate enough impressions to defend themselves before the timer fires?
-- Backfill for existing notes: assume average impression count, or start cold?
-
-Falls under the broader vault-living-memory umbrella (#5855).
-
-### 11.4 Future gap — event bus integration (vault emits/consumes zero events today)
-
-[`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §5 documents the event bus and §5.2 the signal catalog. The vault is presently **not on the bus**: vault operations (`vault-create`, `vault-update`, `decay-apply`, `prune-scan`, `vault-synthesis` posture writes) execute as in-process script calls plus git commits, with no event emission. Agents discover vault changes via git pull on the next cycle, not in real time.
-
-Consequences for current behavior:
-
-- No way for one agent to react to another agent's vault write before the next cycle boundary
-- The §11.3 impression-tracking model has no natural event source today (every vault read would have to be observed in-process by the reader's own sub-skill rather than via a bus subscription)
-- `vault-synthesis` cross-agent broadcast (notifying other agents when a posture lands) has to be done manually via `tracker.py create-task` instead of as an event subscription
-- Sub-skills like `vault-remember` and `vault-optimize` cannot be triggered by external signals — they only fire on cycle steps
-
-A future integration would add vault-related signal types to the catalog, e.g.:
-
-- `vault.note-written` (payload: `path`, `type`, `owner`, `tags`) — emitted by `vault-create`
-- `vault.note-updated` (payload: `path`, `fields-changed`) — emitted by `vault-update`
-- `vault.note-archived` (payload: `from-path`, `to-path`, `reason`) — emitted by `vault_optimize.py prune-scan`
-- `vault.posture-detected` (payload: `posture-name`, `source-notes`) — emitted by `vault-synthesis`
-- `vault.note-read` (payload: `path`, `reader-role`) — would source the §11.3 impression model
-
-Falls under the broader vault-living-memory umbrella (#5855) and overlaps with the event-driven mode work in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) §8.
-
-### 11.5 Implementation gap — heavy sub-skills currently run inline (target: background subagent)
-
-§7's Execution model paragraph specifies that `vault-remember` and `vault-synthesis` must run as background subagents (`sonnet`) so the reflection / cross-note reasoning transcript stays out of the consuming agent's context. The current implementation runs both inline:
-
-- `references/sub-skills/common/vault-remember.md` is composed directly into the consuming agent's `CLAUDE.md` and the agent itself performs the 4-gate evaluation, dedup decisions, and write reasoning every cycle.
-- `references/sub-skills/roles/pm/vault-synthesis.md` is composed into PM's `CLAUDE.md` and PM itself performs theme/convergence detection across recent notes.
-
-Consequences today:
-
-- Every quiet cycle that triggers vault-remember consumes main-context tokens for candidate enumeration + per-candidate dedup-check output + write/skip reasoning. Each reflection is a meaningful slice of the cycle context, on top of whatever creative work happened.
-- Every 5th quiet cycle vault-synthesis adds another bulk read of recent galaxy notes + cross-agent comparison reasoning into PM's context.
-- Context-pressure thresholds get reached faster than they would with the offload — meaning more restarts at the agent layer, more cache invalidation, more wall-clock latency.
-
-Closing this gap requires:
-
-1. **Sub-skill source split** — the `references/sub-skills/common/vault-remember.md` body becomes two parts: a short stub composed into the consuming agent (defines the "spawn subagent at Step 4b with these inputs and apply the returned write list" contract) and a longer subagent prompt template stored separately (the actual 4-gate reflection instructions, loaded only by the subagent). Same split for `vault-synthesis.md`.
-2. **Compose-time awareness** — `compose.py` must know to compose the stub into the role-class's CLAUDE.md but leave the subagent prompt at its source path for the spawned subagent to read.
-3. **Subagent contract** — defined by the structured return shape on each sub-skill's §7 entry (vault-remember returns `{action, path, type, body, reason}` per candidate; vault-synthesis returns at most one posture descriptor).
-4. **Model pin** — `sonnet` per §7's rationale; honor `feedback_skill_sonnet_subagents` / `feedback_dm_sonnet_subagents` consistency.
-
-Filed as #10180. Until that lands, the §7 description is the architectural target and the current code is the documented departure from it.
-
----
-
-## 12. Cross-references to other docs `[v1 — not yet migrated]`
+## 12. Cross-references to other docs
 
 ### 12.1 Where vault appears in other docs today (verified)
 
@@ -755,41 +662,19 @@ Filed as #10180. Until that lands, the §7 description is the architectural targ
 
 This doc (`VAULT-ARCH.md`) is the first **dedicated** architecture treatment of the vault. ARCHITECTURE.md §L6 has the most content elsewhere, but it's overview-level — not an architecture spec.
 
-### 12.2 Reconciliation needs surfaced by §12.1
+### 12.2 Reconciliation needs when this TRD lands (v2)
 
-The cross-references above are **accurate but not yet two-way**. Reconciliation work that should happen alongside this doc landing:
+The §12.1 map of where the vault appears elsewhere still holds. What v2 changes in each doc — reconcile alongside the cutover, per the prose-drift discipline (DS audit before merge):
 
-- **ARCHITECTURE.md §L6 Memory Layer**: Should add a single line pointing to `VAULT-ARCH.md` as the canonical deep-dive. Today's L150-167 content is overview-correct but doesn't reference this doc (it can't — this doc didn't exist before).
-- **COMPOSE-ARCHITECTURE.md §5.6 and §11.2 G4**: §5.6 now references `VAULT-ARCH.md` for the architecture (vs `vault-protocol.md` for the per-cycle usage contract) and declares the slot **L1-exclusive** (no L2/L3/L4 authoring). §11.2 G4 is **CLOSED** as of 2026-05-29 — the "slot contract" gap is settled by the L1-exclusive guardrail (the slot contract is the L1 short-descriptor pattern; nothing else is authorable). Revisit when a concrete customization pattern surfaces.
-- **AGENT-RUNTIME.md §6 state-persistence row**: Should link to `VAULT-ARCH.md` for the "what" (vs the row's "where" + "owner" + "why" data).
-- **INSTALLER-ARCH.md §3.2 + §5 + §11**: All vault mentions are factual scaffolding/preservation notes. Should cross-reference `VAULT-ARCH.md` once in the file-layout section so a reader knows where to learn what they just installed.
-- **sub-skill-catalog.md "Vault (institutional memory)" subsection**: Should add a header line linking to `VAULT-ARCH.md` for architecture context.
-
-These are noted here; the actual edits land in a separate commit or as part of this PR depending on review preference.
-
-### 12.3 Vault sub-skill source files (canonical specs)
-
-- [`references/sub-skills/common/vault-protocol.md`](../references/sub-skills/common/vault-protocol.md) — full R/W contract (used by all 4 roles; the historical `vault-protocol-slim.md` read-only variant was retired in #11331 Iter 56)
-- [`references/sub-skills/common/vault-remember.md`](../references/sub-skills/common/vault-remember.md) — reflection
-- [`references/sub-skills/common/vault-optimize.md`](../references/sub-skills/common/vault-optimize.md) — quiet-cycle maintenance
-- [`references/sub-skills/roles/pm/vault-synthesis.md`](../references/sub-skills/roles/pm/vault-synthesis.md) — PM cross-agent synthesis
-
-### 12.4 Vault scripts (canonical implementations)
-
-- [`references/scripts/vault_check.py`](../references/scripts/vault_check.py)
-- [`references/scripts/vault_entity.py`](../references/scripts/vault_entity.py)
-- [`references/scripts/vault_optimize.py`](../references/scripts/vault_optimize.py)
-- [`references/scripts/vault_remember.py`](../references/scripts/vault_remember.py)
-
-### 12.5 Related vault decisions in the vault itself
-
-- [`galaxy/decision-vault-remember-source-agnostic.md`](../.squidsquad/vault/galaxy/decision-vault-remember-source-agnostic.md) — vault-remember treats QA-rejection learnings as equal in value to human-directive learnings (source-agnostic reflection)
-- [`galaxy/decision-vault-subagent-model-sonnet.md`](../.squidsquad/vault/galaxy/decision-vault-subagent-model-sonnet.md) — heavy vault sub-skills (`vault-remember`, `vault-synthesis`) execute as background subagents on the `sonnet` tier; light ones stay inline (see §7 Execution model + §11.5)
-
----
+- **ARCHITECTURE.md §L6 Memory Layer**: overview must gain the fourth defining property (consumption-instrumented) and point here as canonical deep-dive; the PARAG explanation gains the `systems/` hub layer and the schema registry.
+- **AGENT-RUNTIME.md**: cycle-integration touchpoints change materially — task filing gains context injection (§9.2), pickup gains mandatory consultation + receipts (§9.3), verification gains receipt enforcement (§9.4). The state-persistence table gains the `.telemetry/` shard row (git-tracked, per-writing-clone, instance id from gitignored harness state).
+- **COMPOSE-ARCHITECTURE.md §5.6 / §3.3**: the L1-exclusive vault slot survives; add the §3.1 carve-out — `vault-schema.json` is the sanctioned per-install taxonomy customization point, distinct from slot authoring.
+- **INSTALLER-ARCH.md**: install scaffold seeds `vault-schema.json` (default profile) + `.telemetry/.gitattributes` (`merge=union`); the migrations model gains the M0–M4 `references/migrations/` entry; vault preservation rules extend to shards.
+- **sub-skill-catalog.md**: vault sub-skill entries are rewritten at M4 (engine-backed vault-protocol/remember/optimize/synthesis + the new consultation/receipt steps); catalog updates ride the cutover PR.
+- **HARNESS-ARCH.md**: harness gains the instance-id mint/persist responsibility (§6.3) and the scheduled optimize-analyze + compaction maintenance windows (§9.6).
 
 ## 13. Revision log
 
 - **2026-05-24 (v1 draft, descriptive snapshot)** — initial draft. Consolidates the vault's specification (from 5 sub-skills + 4 scripts) and current state (from on-disk inventory) into one architecture doc. No design changes proposed. References open issue #5855 for the known living-memory gap; resolution out of scope.
 - **2026-05-24 (v1 draft, expanded)** — added §9.6 failure modes + recovery paths, §9.7 explicit non-functionality, §10.3-§10.6 ownership/confidence/status/recency distributions, §11 re-verified #5855 claims (each verdict CONFIRMED / PARTIALLY TRUE / NOT TRUE TODAY) + new drift findings (owner label `<role>` vs `<role>-lead`; zero `superseded` notes), §12.1 verified cross-refs with line numbers, §12.2 reconciliation needs for ARCHITECTURE / COMPOSE-ARCHITECTURE / AGENT-RUNTIME / INSTALLER-ARCH / sub-skill-catalog.
-- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per `VAULT-COMPARISON-DMPWEB.md` §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. §7/§8 (blocked on §10.3 packaging verifications), §10–§12 still v1 pending rewrite.
+- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per `VAULT-COMPARISON-DMPWEB.md` §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. Later same day: §10 reframed from stale inventory to the M0–M4 migration design (product feature, lean transform for the PARAG-kept profile); §11 rewritten as the open-decisions table (#5855 noted as closing at M4); §12.2 rewritten as the v2 reconciliation list (ARCHITECTURE / AGENT-RUNTIME / COMPOSE / INSTALLER / catalog / HARNESS). **Only §7/§8 remain v1** — blocked on the two §10.3 packaging verifications (Skill-invocation from autonomous sessions; Node-alongside-Claude-Code).
