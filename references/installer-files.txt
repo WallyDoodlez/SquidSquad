@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 261 files
+# Total: 264 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -228,6 +228,9 @@ references/sub-skills/roles/verifier/discussion-protocol.md
 references/sub-skills/roles/verifier/issue-filing.md
 references/sub-skills/roles/verifier/verification.md
 references/sub-skills/roles/verifier/verification-templates.md
+references/sub-skills/roles/verifier/verification-findings.md
+references/sub-skills/roles/verifier/verification-issue-flow.md
+references/sub-skills/roles/verifier/verification-ship-flow.md
 references/presets/design/manifest.yaml
 references/presets/software-dev/manifest.yaml
 references/templates/forgejo-compose.yaml

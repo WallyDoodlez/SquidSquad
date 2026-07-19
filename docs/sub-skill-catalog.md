@@ -223,6 +223,9 @@ Role-specific event extras:
 |---|---|
 | `verification` | Steps 2–6 — E2E tests, AC verification, health check |
 | `roles/verifier/verification-templates` | Cold-path: TEST-PLAN.md structure + subagent-prompt templates, read only when authoring a fresh test plan (#13565 hot/cold split) — slash-bearing per #10743 |
+| `roles/verifier/verification-findings` | Cold-path: Step 3's finding classify/dedup/file/record-on-PR procedure (#13565 hot/cold split) — slash-bearing per #10743 |
+| `roles/verifier/verification-issue-flow` | Cold-path: Step 4's full per-issue (`type:issue`) verification procedure (#13565 hot/cold split) — slash-bearing per #10743 |
+| `roles/verifier/verification-ship-flow` | Cold-path: Step 5's post-verdict merge/ship mechanics + Step 5b's PR-monitoring loop (#13565 hot/cold split) — slash-bearing per #10743 |
 | `roles/verifier/issue-filing` | Verifier's bug template (with reproduction + AC reference) — slash-bearing per #10743 |
 | `roles/verifier/discussion-protocol` | Verifier's comment format (→ retires; common/`discussion` is the canonical) — slash-bearing per #10743 |
 | `roles/verifier/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |

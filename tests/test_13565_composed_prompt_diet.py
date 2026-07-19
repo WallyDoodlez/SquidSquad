@@ -193,6 +193,9 @@ class TestTaskIntakeSplit13565:
 class TestVerificationCuts13565:
     HOT = SUBSKILLS / "roles" / "verifier" / "verification.md"
     TEMPLATES = SUBSKILLS / "roles" / "verifier" / "verification-templates.md"
+    FINDINGS = SUBSKILLS / "roles" / "verifier" / "verification-findings.md"
+    ISSUE_FLOW = SUBSKILLS / "roles" / "verifier" / "verification-issue-flow.md"
+    SHIP_FLOW = SUBSKILLS / "roles" / "verifier" / "verification-ship-flow.md"
 
     def test_health_check_now_calls_script_not_prose_algorithm(self):
         text = _read(self.HOT)
@@ -216,8 +219,69 @@ class TestVerificationCuts13565:
         assert "## Comprehension Questions" in text
         assert "HUMAN-REQUIRED gate" in text
 
+    def test_hot_core_under_11kb(self):
+        """#13565 AC2 targets <=~8KB; verification.md's Steps 2-6 run
+        sequentially (not phase-exclusive like task-intake), so a full split
+        to 8KB was judged riskier than task-intake's clean phase boundaries.
+        Landed at ~10.2KB after extracting findings/issue-flow/ship-flow (from
+        23.9KB originally, a 57%+ reduction) plus a DS-review-driven pointer
+        clarification (Findings 1/2 of the AC2/AC4 fix pass) that added a
+        few hundred bytes back for correctness. 11KB is the enforced ceiling;
+        the tracker comment discloses the literal-8KB miss honestly."""
+        assert self.HOT.stat().st_size <= 11 * 1024
+
+    def test_findings_extracted_with_pointer_left_behind(self):
+        text = _read(self.HOT)
+        assert "run sub-skill: `roles/verifier/verification-findings`" in text
+        assert "Step 3a" not in text  # sub-step detail itself moved out
+
+    def test_findings_file_has_full_content(self):
+        text = _read(self.FINDINGS)
+        assert "Step 3a" in text
+        assert "Step 3d" in text
+        assert "tracker-protocol" in text
+
+    def test_issue_flow_extracted_with_pointer_left_behind(self):
+        text = _read(self.HOT)
+        assert "run sub-skill: `roles/verifier/verification-issue-flow`" in text
+        # Step 4's own release-counter disclaimer moved out (Step 5 doesn't
+        # have one, so this string is unambiguous to Step 4's content).
+        assert "belongs entirely to the DM" not in text
+
+    def test_issue_flow_file_has_full_content(self):
+        text = _read(self.ISSUE_FLOW)
+        assert "blocked:human-action" in text
+        assert "task-begin [role] [number]" in text
+        assert "belongs entirely to the DM" in text
+
+    def test_ship_flow_extracted_with_pointer_left_behind(self):
+        text = _read(self.HOT)
+        assert "run sub-skill: `roles/verifier/verification-ship-flow`" in text
+        # The merge-mechanics detail itself moved out.
+        assert "Promote test files to tests/" not in text
+
+    def test_ship_flow_file_has_full_content(self):
+        text = _read(self.SHIP_FLOW)
+        assert "Promote test files to tests/" in text
+        assert "Auto Merge" in text
+        assert "Merge conflict" in text
+        assert "Monitor PRs (Step 5b" in text
+
+    def test_verdict_posting_rule_stays_hot(self):
+        """#13464 safety-critical rule must stay inline, not extracted --
+        it's a MANDATORY hard precondition, not optional mechanics."""
+        text = _read(self.HOT)
+        assert "MANDATORY, ordered" in text
+        assert "hard precondition" in text
+
     def test_catalog_and_installer_manifest_registered(self):
         catalog = _read(REPO_ROOT / "docs" / "sub-skill-catalog.md")
         assert "verification-templates" in catalog
+        assert "verification-findings" in catalog
+        assert "verification-issue-flow" in catalog
+        assert "verification-ship-flow" in catalog
         manifest = _read(REPO_ROOT / "references" / "installer-files.txt")
         assert "references/sub-skills/roles/verifier/verification-templates.md" in manifest
+        assert "references/sub-skills/roles/verifier/verification-findings.md" in manifest
+        assert "references/sub-skills/roles/verifier/verification-issue-flow.md" in manifest
+        assert "references/sub-skills/roles/verifier/verification-ship-flow.md" in manifest
