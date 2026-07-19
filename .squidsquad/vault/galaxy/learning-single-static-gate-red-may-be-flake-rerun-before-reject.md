@@ -2,7 +2,7 @@
 type: learning
 tags: [verifier, testing, static-gate, flaky-test, run_tests, subprocess, false-reject]
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-19
 owner: verifier
 status: active
 confidence: high
@@ -24,6 +24,8 @@ Verifying #13369 (a one-line doc reorder), the first full static-gate run report
 Then triage by **whose surface** the failure is on: a flake in code the PR under test does not touch is a *separate* finding to file (route to the owning role), never a block on the current deliverable. Here the culprit was a **subprocess** CLI test — so in-process pollution was impossible; the real vector (found later in #13397) was an unguarded `print(..., file=sys.stderr)` before `exit(2)` raising under concurrent I/O and flipping the exit code to Python's unhandled-exception `1`.
 
 **Do NOT** auto-reject on the first red, and do NOT auto-pass a red away either — prove it's a flake (isolation + re-run) and file it. The zero-gap gate still holds for the *current* deliverable: its own surface must be deterministically green.
+
+**Second occurrence, inverted role (2026-07-19, #13732/#13728):** the same step-3 "whose surface" check applies to the PR *author*, not just verifier. skill hit a real regression from its own #13728 change (`test_bare_merge_fires_hook_end_to_end` failing) but ran isolation + re-run in the wrong order — re-ran *combined* with other files (still under a concurrent full-suite load) first, saw it fail, then re-ran alone with no concurrent load, saw it pass, and concluded "resource contention, not a defect" without ever checking whether the failing test's surface overlapped its own just-shipped diff. It did (git_ops.py's `main()`, the exact function #13728 edited). Verifier caught it: 3/3 deterministic failures with zero concurrent load, traced to the real cause. Lesson for the PR author, not just verifier: step 3 (check the PR's own file set) is the one that actually would have caught this — "passes when re-run alone" only proves isolation-sensitivity, it does NOT prove the failure is unrelated to your diff, especially when the touched file is *in* your diff.
 
 ## How to apply
 
