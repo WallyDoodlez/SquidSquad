@@ -343,8 +343,43 @@ Modeled on dmp-web's optimize Phase A: sonnet subagents per topical cluster, **p
 
 ### 9.6 Open decisions for the operator
 
-1. **Engine language:** Python port with translated spec tests (recommended — keeps installs node-free) vs vendoring dmp-web's .mjs scripts (fastest, adds node to target-repo runtime requirements).
+1. **Engine language:** Python port with translated spec tests (recommended — keeps installs node-free) vs vendoring dmp-web's .mjs scripts (fastest, adds node to target-repo runtime requirements). **Superseded — see §10.2.**
 2. **`confidence` field:** keep as an engine ranking multiplier, or drop (no write-only metadata). Recommendation: drop at migration, reintroduce only with a consumer.
 3. **Distillation aggressiveness:** how hard to prune the 91 learnings during migration (recommendation: aggressive — usage telemetry will vindicate or refute survivors within weeks).
 4. **Viewer priority:** vendored-frontend + harness endpoints is cheap but still optional polish; confirm it belongs in the cutover scope vs the leapfrog layer.
 5. **Telemetry durability:** accept reset-on-reinstall (recommended — signal rebuilds within weeks of use), or have the harness export a periodic compact aggregate snapshot as backup.
+
+---
+
+## 10. Revision 3 (2026-07-18): scope correction — mechanics over shape, and a packaging option §9 didn't anticipate
+
+Operator decision, superseding §9's "adopt wholesale" framing. Two new facts changed the plan:
+
+### 10.1 SquidSquad is general-purpose; dmp-web's vault is SWE-only — that's a real conflict, not a footnote
+
+§9.2's "make the folder taxonomy dynamic" (a config-driven `vault-schema.json`) still shipped dmp-web's five SWE-shaped types (`people/systems/projects/knowledge/development-rules`) as the *default*, and §9.1's "adopt as-is" list includes dmp-web's Jira/PR-shaped receipt conventions and its "no implementation details, Jira/PRs are the source of truth" rule. SquidSquad's own product vision (`areas/human-profile.md` Product Vision section) explicitly targets non-technical teams (marketing, ops, content) with no GitHub/git knowledge. Shipping a SWE-coupled default is wrong on day one for that audience, even though it's *fine for SquidSquad's own self-hosted install today* (self-hosting is inherently dev-work).
+
+**Corrected framing — port the mechanics, not the shape:**
+- **Adopt (domain-agnostic, ports directly):**
+  - The **consumption pipeline pattern**: mandatory vault touchpoints baked into a skill's own steps (not "remember to check the vault" — the step *cannot proceed* without running the search), producing a committed receipt (`## Vault context consumed` / `## Applicable rules`) that downstream steps and the verifier can check. This is §7 Phase 2's G3/G4 port — nothing about it assumes software.
+  - The **telemetry-driven ranking**: `impression`/`walked`/`used` events replacing time-based confidence decay. Nothing about counting "was this note used" assumes software either.
+- **Do NOT adopt as the hardcoded default:** dmp-web's specific five-folder taxonomy, its Jira/PR-only receipt shape, its "no implementation details" rule. These become *one configurable type-registry profile* (the one SquidSquad's own self-hosted install uses, since it IS software work) — never the engine's baked-in assumption. §9.3's `vault-schema.json` config-driven design already pointed this direction; this revision makes it the *load-bearing* requirement, not an extensibility nice-to-have.
+
+### 10.2 Packaging: the portable extraction may resolve §9.6 open decision #1 differently
+
+dmp-web's vault system is being separated out of dmp-web's own codebase into a standalone, multi-project-capable tool — **packaged as Node + Claude Skills**, scoped to software-development use for now (consistent with §10.1 — SquidSquad still needs to generalize the taxonomy regardless of how the engine is packaged).
+
+This opens a third option §9.4.2 didn't consider: **invoke the portable package's Claude Skills directly from within a SquidSquad agent session**, rather than either (a) porting the engine to Python or (b) vendoring the `.mjs` scripts as a subprocess dependency SquidSquad's Python installer has to manage. SquidSquad agents already run as Claude Code sessions with Skill-tool access (demonstrated live this session — Skill invocations to `deep-research` etc. work identically to how a `/vault-search` skill would). If viable, this sidesteps §9.4.2's Python-runtime-purity constraint entirely: the Node dependency would sit on whatever machine already runs Claude Code, not on SquidSquad's own install-time Python runtime.
+
+**Two things must be verified before this becomes the plan, not assumed:**
+- Whether invoking another project's Claude Skill reliably works from inside an *autonomous, non-interactive* agent session the way it does in this interactive one.
+- Whether Node is guaranteed present on a target machine just because Claude Code is (not yet confirmed).
+
+**This does not change §10.1** — even if the engine is consumed via Skill invocation rather than ported/vendored, the taxonomy/schema genericization is still required; packaging and domain-scope are orthogonal decisions.
+
+### 10.3 Next steps
+
+1. Verify the two open questions in §10.2 (Skill-invocation-from-autonomous-session viability; Node-alongside-Claude-Code guarantee).
+2. Resolve the remaining §9.6 open decisions (#2–5) plus the packaging question (§10.2) with the operator.
+3. Write `docs/VAULT-ARCH.md` v2 as a human-reviewed TRD update per doc-first process — this document (§9 as corrected by §10) is the seed; no implementation tasks get filed before the TRD lands and is reviewed.
+4. **Cleanup done 2026-07-18**: closed 10 vault tickets superseded by this direction (#10098, #10099, #10100, #10179, #10182, #5855, #207, #20, #1290, #9875). Kept open as independent of this redesign: #10180 (subagent offload, explicitly still-aligned), #19 (hybrid RAG, explicitly a separate future track), #7464 (QA vault write access), #3497 (CLAUDE.md/SOUL.md cross-linking investigation), #3419 (human expertise mapping), #5613 (mostly an event-bus ticket), #555 (DM doc-site page, needs a rewrite later but isn't superseded).
