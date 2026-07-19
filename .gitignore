@@ -18,6 +18,9 @@
 .squidsquad/*/cycle-input.json
 .squidsquad/*/cycle-output.json
 .squidsquad/.harness-port
+.squidsquad/harness-errors.log
+.squidsquad/harness-supervisor.log
+.squidsquad/harness-supervisor.log.err
 
 .claude/commands/squidsquad-*
 .claude/settings.local.json
