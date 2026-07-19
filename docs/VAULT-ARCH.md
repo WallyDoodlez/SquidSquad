@@ -1,31 +1,35 @@
-# Vault Architecture (current state)
+# Vault Architecture (v2 — target design)
 
-> **Status**: Descriptive snapshot, 2026-05-24. Documents the vault as it exists in code, sub-skills, and on-disk content today. **No proposals or recommendations.** Where a section says "specification" it reflects what the existing sub-skills and scripts implement; where it says "current state" it reflects what is actually present in this repo's `.squidsquad/vault/` right now.
+> **Status**: v2 TRD draft, in progress 2026-07-18 (tracked on #10003, draft PR pending). This is a **prescriptive target design**, not a snapshot of current code — v1's descriptive-snapshot content is being replaced section by section as this draft lands. Where a section is not yet rewritten, it still reflects v1 (current/live) behavior; such sections are marked `[v1 — not yet migrated]` until superseded.
+>
+> **Why v2**: research comparing SquidSquad's vault against dmp-web's (a mature, actively-used agent-memory system) found SquidSquad's vault functions as a static decision log, not living institutional memory — full analysis in `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md`. The root cause: consumption (search, ranking, verified usage) was never instrumented, so the write side curates blind and nothing measures whether captured knowledge is ever used. v2 ports dmp-web's consumption-pipeline pattern and telemetry-driven ranking as **domain-agnostic infrastructure** — not its SWE-specific taxonomy, which would be wrong for SquidSquad's general-purpose (non-technical-team) audience. See `VAULT-COMPARISON-DMPWEB.md` §9 (design) and §10 (scope correction + resolved decisions) for the full reasoning this doc formalizes.
 >
 > **Companion docs**: [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system; vault appears as "L6 Memory"), [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration), [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (vault slot in composed CLAUDE.md), [`sub-skill-catalog.md`](sub-skill-catalog.md) (vault sub-skill entries).
 >
-> **Known live gaps**: [#5855 — Vault is static decision log, not living institutional memory](https://github.com/WallyDoodlez/SquidSquad/issues/5855) (status:pending, high, role:skill); [#10100 — vault: CI/CD enforce knowledge-tree integrity on note renames](https://github.com/WallyDoodlez/SquidSquad/issues/10100) (low). Documented in §11; not addressed by this doc.
+> **No implementation tasks get filed against this redesign until this TRD is human-reviewed and merged** (doc-first process).
 
 ---
 
 ## 1. Goal & scope
 
-This doc describes:
+This doc describes the **v2 target design**:
 
 - What the vault *is* — its purpose, the storage model, the entity types it holds
-- Where it lives on disk
+- The config-driven type registry that replaces v1's hardcoded PARAG taxonomy
+- The consumption engine (search + telemetry-driven ranking) and how it's invoked
+- The consumption-pipeline pattern — mandatory touchpoints producing committed receipts
 - The sub-skills and scripts that operate on it
-- How it integrates into the cycle (boot, pre-cycle, creative phase, post-cycle, quiet ticks)
-- What is actually present in this repo's vault as of the snapshot date
-- Known gaps between the spec and the live behavior
+- How it integrates into the cycle (boot, task-creation, creative phase, capture-at-ship, quiet ticks)
+- The migration path from v1's live content
+- Known open decisions still needing resolution before/during implementation
 
 It does NOT describe per-role-class access (read/write); that lives in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) where the per-role-class `includes.yml` mapping is composed.
 
-**Vault slot authorship is L1-exclusive** (guardrail dated 2026-05-29). The composed `## Vault` section in every agent's CLAUDE.md is authored entirely by L1 fragments shipped from this repo — L2 / L3 / L4 cannot contribute `slot: vault` content. The contract documented here (PARAG model, entity types, wikilink grammar, confidence levels) is framework-owned and is not customizable per-role-class, per-domain, or per-install. Projects that need bespoke vault behaviour file a framework feature request — see [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) §3.3, §5.6, and §11.2 G4 for the policy and revisit conditions.
+**Vault slot authorship is L1-exclusive** (guardrail dated 2026-05-29, carried forward into v2). The composed `## Vault` section in every agent's CLAUDE.md is authored entirely by L1 fragments shipped from this repo — L2 / L3 / L4 cannot contribute `slot: vault` content. **What changes in v2**: the type-registry (`vault-schema.json`, §3) IS the sanctioned per-install customization point — a project can define its own note types without touching the L1-exclusive slot content, resolving the old "projects that need bespoke vault behaviour file a framework feature request" limitation for the taxonomy specifically. The read/write *protocol* (search contract, telemetry, receipts) remains framework-owned.
 
 It does NOT describe:
 
-- Proposed fixes for the gaps in §11 (out of scope; planned for follow-up under #5855)
+- The actual implementation (vault_search.py, migration script, etc.) — those are implementation tasks this TRD unblocks, filed separately once this lands
 - How vault slot content gets into composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §5.5)
 - The L4 project-local layer in `.squidsquad/project/` (different system; see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §3)
 
@@ -39,17 +43,18 @@ It does NOT describe:
 > |---|---|---|---|
 > | **vault slot** | The `## Vault` H2 section in composed CLAUDE.md — short framework-shipped prose describing the vault contract | L1 only (this slot is L1-exclusive per COMPOSE-ARCHITECTURE §3.3) | Runtime agents at boot |
 > | **vault store** | The on-disk knowledge store at `.squidsquad/vault/` (markdown notes organized via PARAG) | All agents at runtime via vault sub-skills (vault-remember, etc.) | All agents at runtime |
-> | **vault contract** | The framework-owned design spec — PARAG taxonomy, entity types, wikilink grammar, confidence levels | SquidSquad framework (`references/sub-skills/common/vault-protocol.md` + this doc) | Vault sub-skills + agents that read the slot |
+> | **vault contract** | The framework-owned design spec — type registry, entity model, wikilink grammar, search + telemetry contracts | SquidSquad framework (`references/sub-skills/common/vault-protocol.md` + this doc) | Vault sub-skills + agents that read the slot |
 >
 > When this doc says "vault" without a qualifier, assume the most specific applicable term from context. When the meaning is structurally significant (e.g., "L1-exclusive"), the qualifier is mandatory.
 
 The vault store is a **shared, git-tracked, per-install knowledge store** at `.squidsquad/vault/`. It holds institutional knowledge that outlives any single cycle, task, or session — decisions, learnings, patterns, project context, ongoing concerns, and human preferences as the agents have observed them.
 
-Three properties define it:
+Four properties define it (the fourth is new in v2):
 
 1. **Shared across roles** — all agents in the install read the vault, and so does the human. Write access is restricted; specifics on which agents write live in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (sub-skill composition).
-2. **Git-tracked** — every note has a commit; every change has authorship and timestamp. There is no separate database, indexer, or memory service.
+2. **Git-tracked** — every note has a commit; every change has authorship and timestamp. There is no separate database, indexer, or memory service. (Telemetry, §6, is the one exception — harness-owned and deliberately NOT git-tracked, see §6.3.)
 3. **Per-install** — `.squidsquad/vault/` lives inside the project repo's `.squidsquad/` tree. A separate SquidSquad install has its own vault; there is no cross-install vault today.
+4. **Consumption-instrumented (v2)** — every search and every cited use is an event (`impression`/`walked`/`used`, §6.1). This is the property v1 lacked entirely: nothing measured whether a written note was ever read, so the write side curated blind and dead notes accumulated indefinitely. v2 makes consumption a first-class, measurable signal that ranking and maintenance both consume.
 
 The vault is **distinct from**:
 
