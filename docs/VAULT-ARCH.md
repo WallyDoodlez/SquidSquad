@@ -2,7 +2,7 @@
 
 > **Status**: v2 TRD draft, **all sections v2 as of 2026-07-18** (tracked on #10003, draft PR #13708 — pending DS audit + operator review). This is a **prescriptive target design**, not a snapshot of current code; v1 behavior remains live until the M4 cutover (§10.5). Locked decisions are marked inline (e.g. §6.3 telemetry storage — operator-confirmed 2026-07-18); open items are consolidated in §11. The one residual unknown: the portable engine package's concrete Skill surface (§7.5/§11 #1).
 >
-> **Why v2**: research comparing SquidSquad's vault against dmp-web's (a mature, actively-used agent-memory system) found SquidSquad's vault functions as a static decision log, not living institutional memory — full analysis in `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md`. The root cause: consumption (search, ranking, verified usage) was never instrumented, so the write side curates blind and nothing measures whether captured knowledge is ever used. v2 ports dmp-web's consumption-pipeline pattern and telemetry-driven ranking as **domain-agnostic infrastructure** — not its SWE-specific taxonomy, which would be wrong for SquidSquad's general-purpose (non-technical-team) audience. See `VAULT-COMPARISON-DMPWEB.md` §9 (design) and §10 (scope correction + resolved decisions) for the full reasoning this doc formalizes.
+> **Why v2**: research comparing SquidSquad's vault against dmp-web's (a mature, actively-used agent-memory system) found SquidSquad's vault functions as a static decision log, not living institutional memory — full analysis in `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md` (the “planning doc” hereafter). The root cause: consumption (search, ranking, verified usage) was never instrumented, so the write side curates blind and nothing measures whether captured knowledge is ever used. v2 ports dmp-web's consumption-pipeline pattern and telemetry-driven ranking as **domain-agnostic infrastructure** — not its SWE-specific taxonomy, which would be wrong for SquidSquad's general-purpose (non-technical-team) audience. See `VAULT-COMPARISON-DMPWEB.md` §9 (design) and §10 (scope correction + resolved decisions) for the full reasoning this doc formalizes.
 >
 > **Companion docs**: [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system; vault appears as "L6 Memory"), [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration), [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (vault slot in composed CLAUDE.md), [`sub-skill-catalog.md`](sub-skill-catalog.md) (vault sub-skill entries).
 >
@@ -156,7 +156,7 @@ A galaxy note SHOULD wikilink to at least one `systems/` hub if its subject matt
 
 v1 moved notes physically from an active folder to `archives/` on archival. v2 drops the forced move: any note's `status:` flips to `archived` in place. Two reasons this is better, both learned from dmp-web:
 
-1. **Simpler engine.** The search engine and the file-path-based dedup logic don't need a "did this note's path change" special case — a note's identity (its path) never changes on status transitions, only on explicit rename (§4.5-equivalent, still a distinct operation).
+1. **Simpler engine.** The search engine and the file-path-based dedup logic don't need a "did this note's path change" special case — a note's identity (its path) never changes on status transitions, only on explicit rename (a distinct operation; §4.5's redirect-map mechanism covers it).
 2. **Ranking, not relocation, does the work.** §6.2's ranking formula scores `superseded`/`archived` notes near zero (still discoverable via direct search, just never surfaces as a default top-K result) — the same effect v1's folder-move achieved, without a file-move needing to happen at all.
 
 `archives/` survives as a *type* (`status: archived` on any note, any folder) rather than a folder notes get physically relocated into. Existing physically-archived v1 notes migrate in place (folder stays, `status:` already says `archived`) — no data movement needed at migration time.
@@ -223,7 +223,7 @@ last_optimized: YYYY-MM-DD            # optional — last time an optimize pass 
 
 **Not in frontmatter, ever**: `impression` / `used` / `walked` / `last_impression` — these look like note-level counters but are **telemetry**, not content. They live in the git-tracked per-writer telemetry shards (§6.3) and are joined against note content at query/read time — never written to the `.md` file. This is a deliberate divergence from dmp-web (which bumps these as frontmatter counters, livable for one dev on one checkout but a merge-conflict generator for N agents in N clones — `VAULT-COMPARISON-DMPWEB.md` §9.4 P1). The shard design (§6.3) makes the conflict class structurally impossible instead of auto-resolving it — "notes stay pure content" was always the load-bearing half of the §9.4 rule, and it survives unchanged.
 
-**Ownership note** (`owner:` field): unchanged from v1 — authored role-class of the note's content, `owner: shared` for content that benefits multiple roles. The pre-#6274 naming drift (`qa`/`skill` vs `verifier`/`worker`) and the `<role>` vs `<role>-lead` convention drift (v1 §10.3) both get swept during migration (§9.5 M1) rather than patched in place.
+**Ownership note** (`owner:` field): unchanged from v1 — authored role-class of the note's content, `owner: shared` for content that benefits multiple roles. The pre-#6274 naming drift (`qa`/`skill` vs `verifier`/`worker`) and the `<role>` vs `<role>-lead` convention drift (v1 §10.3) both get swept during migration (§10.2 M1) rather than patched in place.
 
 **Tag convention** (for searchability) — unchanged from v1:
 
@@ -304,7 +304,7 @@ A `--no-write` dry-run flag suppresses event emission for diagnostic searches �
 
 - **Tiered matching**: filename match > inbound-wikilink match > tag match > content match. Tier is the primary sort key — a filename hit always outranks a content hit.
 - **Budgeted graph traversal**: from each matched note, the engine follows body wikilinks outward. Hops through `traversal: budgeted` types (galaxy leaves) cost 1 unit of `traversalBudget` (§3.1, default 2); hops through `traversal: free` types (hubs) are free. This keeps traversal on-topic while letting dense knowledge cluster around hubs without exhausting the budget (§3.2's `systems/` layer is what makes this productive).
-- **Two-stage ranking**: Stage 1 orders by match tier. Stage 2 tiebreaks within a tier by the telemetry-weighted score — `used×2.0 + impression×0.25 + walked×0.5 + recency×0.25` (weights from `vault-schema.json` `tieBreakWeights`, tunable per install) — multiplied by the type's `weight` (§3.1) and by a status multiplier: `status: superseded|archived` rank near zero (still discoverable by direct query, never a default top-K result — this is what lets §3.4 retire the physical `archives/` move).
+- **Two-stage ranking**: Stage 1 orders by match tier. Stage 2 tiebreaks within a tier by the telemetry-weighted score — `used×2.0 + impression×0.25 + walked×0.5 + recency×0.25` (weights from `vault-schema.json` `tieBreakWeights`, tunable per install; **recency** = a 0–1 freshness score computed from days since the note's `updated:` frontmatter date, newer → higher — telemetry-independent, which is why it survives in the degraded path) — multiplied by the type's `weight` (§3.1) and by a status multiplier: `status: superseded|archived` rank near zero (still discoverable by direct query, never a default top-K result — this is what lets §3.4 retire the physical `archives/` move).
 - **Top-K output** (`searchTopK`, default 12): metadata-only JSON — paths, tiers, scores, link map. The consuming agent Reads the note bodies it chooses; the engine never inlines content. Each note in the returned top-K gets an `impression` event; traversed connectors get `walked`.
 - **Graceful degradation**: when telemetry is unavailable (fresh install, cold start, shard read failure), Stage 2 falls back to tier + recency + type weight. Search never blocks on telemetry.
 - **Raw-grep ban**: sub-skills must reach the vault through the engine, never `grep -r`. The rationale is telemetry blindness, not style: a grep that finds the right note leaves no `impression`/`used` trail, so the note reads as dead to §6.4 and gets pruned — silent consumption actively corrupts the maintenance signal. (v1's sub-skill grep snippets are replaced wholesale at migration.)
@@ -312,7 +312,7 @@ A `--no-write` dry-run flag suppresses event emission for diagnostic searches �
 
 ### 6.3 Telemetry storage — git-tracked per-writer shards
 
-> **Design status**: **LOCKED — operator-confirmed 2026-07-18** (inline session; granularity refined during review from per-harness-instance to per-writing-clone). Supersedes `VAULT-COMPARISON-DMPWEB.md` §9.4 point 1 (2026-07-12: harness-owned gitignored store) — see §10.5 for the full supersession rationale.
+> **Design status**: **LOCKED — operator-confirmed 2026-07-18** (inline session; granularity refined during review from per-harness-instance to per-writing-clone). Supersedes `VAULT-COMPARISON-DMPWEB.md` §9.4 point 1 (2026-07-12: harness-owned gitignored store) — see `VAULT-COMPARISON-DMPWEB.md` §10.5 for the full supersession history; the load-bearing rationale is restated inline below.
 
 **Why §9.4's harness-local store had to change**: a SquidSquad install can run **multiple independent harness instances** — e.g. each teammate runs their own harness against their own clone, with no shared always-on server. A harness-local store fragments telemetry into N per-teammate partial pictures, defeating team-wide ranking. This is the same many-independent-checkouts topology dmp-web has — which is why dmp-web routes telemetry through git. dmp-web's *mechanism* (frontmatter counters + a custom `vault-note` merge driver) is still not the model: custom merge drivers require per-clone opt-in registration, and counters-in-notes is the conflict *source*, not a solution.
 
@@ -320,7 +320,7 @@ The design — telemetry is a grow-only counter, a solved distributed-systems sh
 
 1. **Per-writing-clone, append-only JSONL shards, git-tracked**: `.squidsquad/vault/.telemetry/<harness-instance-id>-<role>.jsonl`. The shard axis is *the writer* — the working copy that actually appends and pushes — and under clone isolation that is each agent's clone, not the harness as a whole (one harness supervises N agents in N separate clones, each committing independently; a shared per-harness file would recreate concurrent writers within one squad). Every shard has exactly one author, ever — merge conflicts between writers are *structurally impossible*, not auto-resolved. Which note an event concerns is carried per-record in `slug` (§6.1), never in the file layout: sharding is by **who writes**, not what is written about (per-note files would give the hottest notes the most concurrent writers — dmp-web's conflict problem in a different shape).
    - **Instance identity**: `<harness-instance-id>` is a UUID minted at harness provision time and persisted in the instance's own **gitignored local state** — never derived from hostname or username (one developer running several squads in parallel would collide), and never stored in a committed file (all clones would inherit the same id). This makes the multi-squad-per-developer case (one install, X harness instances, same or different machines) safe by construction: X squads → X disjoint shard sets, one shared ranking. File count stays bounded: roles × squads, not notes.
-2. **`merge=union` in `.gitattributes`** on `.telemetry/*.jsonl` — git's built-in union strategy, no per-clone registration, works for every clone on day one. It covers the one residual divergence case (the same shard diverging across machines — restored backup, cloned VM); union-merge on append-only lines is safe because readers dedupe by event `id`, so a double-merged line is harmless.
+2. **`merge=union` via a directory-local `.squidsquad/vault/.telemetry/.gitattributes`** (containing `*.jsonl merge=union`), seeded by the install scaffold — git's built-in union strategy, no per-clone registration, works for every clone on day one, and never touches the host repo's root `.gitattributes`. It covers the one residual divergence case (the same shard diverging across machines — restored backup, cloned VM); union-merge on append-only lines is safe because readers dedupe by event `id`, so a double-merged line is harmless.
 3. **Sync layer = the git remote already serving as the bus.** `git pull` = telemetry sync; no new infrastructure — consistent with the house philosophy that git is the audit trail and GitHub the coordination bus.
 4. **Read path**: any consumer (ranking Stage 2, impressions report, viewer) reads all shards + aggregates, dedupes by `id`, sums per note.
 5. **PR-noise control**: shard commits ride routine `main` commits only, **never task branches** — telemetry stays out of review diffs. This preserves the intent behind §9.4's original "never in a PR" directive under the new storage model.
@@ -332,7 +332,7 @@ The design — telemetry is a grow-only counter, a solved distributed-systems sh
 
 ### 6.4 Impressions report
 
-The port of dmp-web's `vault-impressions-report`: reads the shards (§6.3), joins against the note inventory, and buckets every note (per §4.4):
+The port of dmp-web's `vault-impressions-report`: reads the shards (§6.3), joins against the note inventory, and buckets every note into §4.4's three classes (definitions canonical there):
 
 - **Cold** — never surfaced by any search.
 - **Surfaced-but-never-used** — repeatedly offered in top-K, never once cited by a consumer.
@@ -364,7 +364,7 @@ The engine itself is *not* a sub-skill — see §7.5 for how sub-skills reach it
 - End-of-cycle sweep, kept from v1 with its throttles (write budget, quiet-gate, role lanes) intact.
 - **Dedup gate reroutes through the engine**: prefer-update-over-create (§9.5) — the top-ranked hit above a similarity threshold becomes the merge target; creation only when nothing ranks. v1's title/tag `dedup-check` is retired.
 - The four gates persist with gate 2 re-based on engine dedup: (1) write budget → (2) engine dedup / merge-target selection → (3) reusability → (4) fresh-context test.
-- Companion step in the worker's ship flow: capture-at-ship (§9.5.1) — same gates, notes ride the feature PR.
+- Companion step in the worker's ship flow: capture-at-ship (§9.5 item 1) — same gates, notes ride the feature PR.
 - BRIEFING staleness check unchanged (every cycle, budget-free, §5).
 
 ### 7.3 vault-optimize — maintenance
@@ -480,7 +480,7 @@ dmp-web measures *usage*; this measures *effectiveness*. Depends on §6 telemetr
 
 - Vault notes stay under `.squidsquad/vault/` on **main**, committed as part of normal cycle commits — unchanged from v1.
 - **New**: telemetry shards (§6.3) also live under the vault tree and ride **routine main commits only, never task branches** — review diffs stay telemetry-free.
-- The one PR that legitimately carries a vault note is capture-at-ship (§9.5.1) — a content note, deliberately atomic with its change.
+- The one PR that legitimately carries a vault note is capture-at-ship (§9.5 item 1) — a content note, deliberately atomic with its change.
 
 ### 9.9 Failure modes and recovery paths
 
@@ -535,10 +535,10 @@ Far smaller than the wholesale-adoption version the planning doc first sketched 
 
 ### 10.3 M2 — distillation (agent judgment, analyze-only)
 
-Modeled on dmp-web's optimize analyze phase: sonnet subagents per topical cluster, **proposing, never applying**:
+Modeled on dmp-web's optimize analyze phase: lightweight-tier model subagents per topical cluster (per the house lower-models-for-subagents rule), **proposing, never applying**:
 
 - Per note or cluster, a verdict — `keep` / `merge-into <target>` (with merged draft) / `prune` (with one-line justification). The single-incident `learning-*` pile (~56 live) is the main target.
-- Author the initial `systems/` hub set (~7–10: harness, event bus, compose pipeline, tracker, pr_merge, launcher, QA gates, vault itself) and propose which surviving leaves link to which hub — this is what makes §6.2's traversal productive on day one (§3.2).
+- Author the initial `systems/` hub set (~7–10; exemplars per §3.2) and propose which surviving leaves link to which hub — this is what makes §6.2's traversal productive on day one (§3.2).
 - Output: one reviewable **migration manifest** (every v1 note → disposition).
 - **Skippable per config** for installs with small young vaults (product framing — a 20-note vault doesn't need distillation).
 
@@ -562,7 +562,7 @@ v1's §11 re-verified #5855's claims against a 2026-05-24 snapshot; that audit d
 |---|---|---|---|
 | 1 | **Skill-invocation feasibility** — does invoking the portable dmp-web package's Claude Skills work reliably from an autonomous, non-interactive agent session? | §7/§8 concrete shape (engine packaging) | PM research, before §7/§8 are drafted — the two-path fallback is a Python port per the planning doc §9.4.2 |
 | 2 | **Node-alongside-Claude-Code guarantee** — is Node present on a target machine just because Claude Code is? | Same as #1 | Same as #1 |
-| 3 | **Rules-lane registry placement** — dedicated `rule` type vs `binding: true` flag on existing types (§9.3.2's receipt contract is independent of this) | Rules matching implementation, M1 mapping for binding content | Operator + PM at §7 drafting; recommendation forthcoming with the sub-skill design |
+| 3 | **Rules-lane registry placement** — dedicated `rule` type vs `binding: true` flag on existing types (§9.3 item 2's receipt contract is independent of this) | Rules matching implementation, M1 mapping for binding content | Operator + PM at §7 drafting; recommendation forthcoming with the sub-skill design |
 | 4 | **Distillation aggressiveness** — how hard M2 prunes the single-incident learning pile (planning §9.6 #3; recommendation: aggressive — telemetry vindicates or refutes survivors within weeks) | M2/M3 only | Operator at M3 manifest review |
 | 5 | **Viewer priority** — vendored graph viewer + harness `/vault` route: cutover scope or post-cutover polish (planning §9.6 #4) | Nothing in M0–M4 | Operator, any time before M4 scoping |
 | 6 | **Compaction horizon + staleness threshold defaults** — N days for §6.5 rollup and §4.4's stale bucket (default 90) | Implementation config only | Dev at implementation, config-overridable |
