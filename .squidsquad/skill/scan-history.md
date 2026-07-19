@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-18 23:53
+
+- **Files scanned**: references/scripts/cli_stdio.py (45 lines, full read; never-scanned per name-vs-history diff — the #13198 cp1252-crash-proofing helper). Clean itself, but cross-referencing its own test suite's TestFleetWiring13198.WIRED sweep list against the codebase surfaced a real gap: references/scripts/git_ops.py is not in the 9-script sweep and never calls harden_stdio().
+- **Findings**: 1 filed — #13728 (low — git_ops.py, the most heavily-invoked CLI script in the fleet, never calls harden_stdio() and has 4 live WARNING/ERROR-path print() literals containing U+2014 em-dash, confirmed via the same AST scan the test suite itself uses; a cp1252 console hitting any of these 4 paths would crash with UnicodeEncodeError, producing exactly the false-failure-then-harmful-retry pattern #13198 was created to eliminate fleet-wide).
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-18 23:47
 
 - **Files scanned**: references/scripts/orphan_cleanup.py (519 lines, full read; never-scanned per name-vs-history diff — the Windows claude.exe orphan-reaper)
