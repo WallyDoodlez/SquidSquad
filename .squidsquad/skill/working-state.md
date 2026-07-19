@@ -3,16 +3,15 @@
 - **Task**: none — actionable queue drained; idle (improvement-scan cool-down)
 
 ## Pending-test (mine, awaiting verifier)
-- #13722 (branch squidsquad/task/13722, PR #13727 ready): subloop_driver.py read_state() hand-edited armed:"false" string bool-coercion bug.
-- #13723/#13724 (branch squidsquad/task/13723, PR #13726 ready): git_ops.py merge/state-guard false positives -- _merge_dropped_state_paths() resurrecting authoritative deletions, guard_staged_state() reverting merge-brought-in main content. Both fixed to check origin/<working> before acting.
-- #13737 (branch squidsquad/task/13737, PR #13740 ready): tc_coverage.py _discover_files() glob fixed to match current TEST-PLAN-<N>.md/QA-RESULTS-<N>.md convention -- the "never bypassed" TC coverage ship gate had been a silent no-op for ~2 months.
+- #13743 (PR ready): tracker.py create_issue/create_task gained --extra-label.
+- #13746 (branch squidsquad/task/13746, PR #13753 ready): pm/instructions.md was missing a step:cycle/improvement-scan marker -- roles/pm/improvement-scan.md was orphaned since includes.yml (the only place that referenced it) is a confirmed-dead TOMBSTONE (#13264) unreachable from the real v2_link_stage compose path. Added the marker immediately before step:cycle/vault-optimize.
 
-## Shipped this tick (prior ticks, confirmed merged to main)
-- #13565, #13566, #13709/#13710/#13711, #13714, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741) -- all CLOSED/shipped and merged.
+## Shipped this tick (prior ticks, confirmed merged to main -- verified CLOSED/status:shipped via gh issue view, not assumed)
+- #13565, #13566, #13709/#13710/#13711, #13714, #13722, #13723/#13724, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13737 (TC coverage gate glob fix), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741), #13742 (health_check.py .local-config collision detection, round-2 fix).
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
-- No open skill issues.
+- #13745 (open, self-filed, deferred): compose.py generate_local_config() wrong-path-guessing root cause behind #13742's symptom -- deliberately deferred for separate design review, not fixed as part of #13742's narrower scope-down. Pick up per normal queue priority if/when it surfaces.
 
 ## Standing lessons (session)
 - commit-code (git_ops.py) takes <role> <branch> <msg> as POSITIONAL args -- there is no --message flag. Passing --message prepends the literal string into the commit subject.
