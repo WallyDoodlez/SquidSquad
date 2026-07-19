@@ -10,7 +10,7 @@
 - #13760 (wizard.py harden_stdio fleet wiring + em-dash fix).
 - #13792 (L2 role-template drift -- worker auto-prepend caution, dm type:issue/type:task labels).
 - #13793 (wizard.py: failed sibling-clone git clone cleans up the stray dir it left behind -- 3 rounds: (1) bare no-.git check, (2) strengthened to git rev-parse --verify HEAD after verifier showed .git alone isn't evidence of a complete clone, (3) added onexc to shutil.rmtree after verifier showed Windows can't unlink git's read-only pack files without help; 9 regression tests total, a previously fully-untested code path).
-- #13801 (pm/instructions.md frontmatter step-ids completed to all 12 body anchors -- scoped narrowly after discovering the convention isn't uniform across role files, see standing lessons).
+- #13801 (pm/instructions.md frontmatter step-ids completed to all 12 body anchors -- scoped narrowly after discovering the convention isn't uniform across role files, see standing lessons; round 2 refreshed 13327_spec.json/13746_spec.json for the frontmatter-only blob-sha shift).
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
