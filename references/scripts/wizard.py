@@ -4398,7 +4398,7 @@ def cmd_setup_yes(args):
         print(
             f"\nERROR: {len(failed)} role(s) failed to compose a CLAUDE.md: "
             f"{', '.join(a.get('id', '?') for a in failed)}. The install is NOT "
-            f"bootable for those agents — see the WARNING(s) above for the cause.",
+            f"bootable for those agents -- see the WARNING(s) above for the cause.",
             file=sys.stderr,
         )
         return 1
@@ -4472,6 +4472,8 @@ def cmd_save_spec(args):
 
 
 def main():
+    from cli_stdio import harden_stdio  # #13198: crash-proof CLI stdio (cp1252)
+    harden_stdio()
     args = sys.argv[1:]
     if not args or args[0] in ("--help", "-h"):
         print(__doc__)
