@@ -575,7 +575,8 @@ class TestPrMerge:
                 patch("git_ops._post_merge_scope_audit"), \
                 patch("git_ops._revert_composed_state_contamination"), \
                 patch("git_ops._checkout_and_ff_working_after_merge"), \
-                patch("git_ops._neutralize_pr_body_before_merge"):
+                patch("git_ops._neutralize_pr_body_before_merge",
+                      return_value=(None, None)):
             yield
 
     @patch("git_ops._run_list")
@@ -3371,7 +3372,8 @@ class TestPrMergeDraftSelfHeal:
                 patch("git_ops._post_merge_scope_audit"), \
                 patch("git_ops._revert_composed_state_contamination"), \
                 patch("git_ops._checkout_and_ff_working_after_merge"), \
-                patch("git_ops._neutralize_pr_body_before_merge"):
+                patch("git_ops._neutralize_pr_body_before_merge",
+                      return_value=(None, None)):
             yield
 
     @patch("git_ops.pr_ready", return_value=True)
