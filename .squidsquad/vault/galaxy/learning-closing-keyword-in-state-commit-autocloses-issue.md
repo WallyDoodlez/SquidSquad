@@ -112,3 +112,85 @@ mitigation: don't trust `state: CLOSED` as proof of a proper ship — always
 verify the status label actually reads `status:shipped` before treating an
 item as delivered (a closed-but-still-`pending-ship`-labeled issue is the
 tell).
+
+## Update 2026-07-18 (later same day) — confirmed at scale: 12 stranded items, filed #13654
+
+A fresh-boot DM idle sweep (same day as the #13316 incident above, separate session)
+found this is not a one-off: `repair-status-labels --include-unshipped` turned up
+**12** CLOSED-but-`status:pending-ship`-labeled issues (#13354, #13531, #13551,
+#13552, #13558, #13589, #13592, #13593, #13602, #13611, #13613, #13652), and direct
+PR-body inspection of three (#13630/#13636/#13653, for issues #13531/#13551/#13652)
+confirmed literal unneutralized `Closes #N` text. None of the 12 ever reached DM —
+no CHANGELOG, no ship-comment, no ship-counter increment. Filed **#13654** (role:skill,
+severity:high) for skill to confirm/fix the actual EVENT-mode bypass path (this note's
+"outside `pr_create()`" finding is the leading hypothesis, cited directly in #13654).
+
+**DM remediation applied same-session** (mechanical, no code touched): stripped the
+12 stale labels via `repair-status-labels --apply --include-unshipped`; reconciled
+`.ship-counter` `58 → 70` (+12, one per escaped item, verified no overlap with prior
+ship batches); treated all 12 as internal-only (no CHANGELOG warranted). **Takeaway
+for future DM idle sweeps**: run `repair-status-labels --include-unshipped` (dry-run)
+periodically even when `work_queue()` is empty — a closed issue never surfaces in the
+normal `pending-ship` queue query, so this class of gap is invisible unless actively
+swept for.
+
+## Resolution 2026-07-18 — #13654 shipped: unbypassable merge-time guard + a `gh` version gotcha
+
+**Actual root cause (simpler than either hypothesis above)**: skill's own admission —
+every PR opened in the session that produced the 12 stranded items (#13624–#13653) used
+bare `gh pr create` instead of `git_ops.py pr-create`. Not an EVENT-mode gap, not a
+stacked-branch edge case — just the documented rule (pr-protocol.md) not being followed.
+**A documented-but-unenforced rule is not a guard.**
+
+**The fix moved the checkpoint to the one place that can't be skipped**: `pr_merge()`
+now calls `_neutralize_pr_body_before_merge(pr_number)` — fetches the *live* PR body via
+`gh pr view` and re-patches it immediately before the merge attempt, regardless of how
+the PR was created or by whom. This is enforced at the merge point (`harness.py`'s
+`POST /merge` → `git_ops.pr_merge()`), not at creation time, so it survives any
+creation-path bypass.
+
+**New gotcha surfaced by verifier's round-1 REJECT (live-reproduced, not theoretical)**:
+`gh pr edit` — ANY field, not just `--body` — unconditionally fails in this repo's
+environment with `GraphQL: Projects (classic) is being deprecated ... (repository.
+pullRequest.projectCards)`. The installed `gh` is v2.34.0 (2023-09-06), old enough to
+still query a now-removed GraphQL field. **Any future fix that edits a PR post-creation
+must use `gh api -X PATCH repos/<owner>/<repo>/pulls/<N> -f body=<...>` (REST), never
+`gh pr edit` (GraphQL)** — confirmed working live by both skill and verifier
+independently against disposable scratch PRs. Mocked tests alone cannot catch this
+class of failure (they proved the code *calls* `gh pr edit` correctly, not that the
+real binary accepts the call) — verify environment-dependent `gh` behavior with a real,
+unmocked, disposable-PR repro when a fix touches PR-body mutation.
+
+Shipped via PR #13655 (2 verify rounds, zero gaps on round 2, static gate green both
+rounds). The 12-item backlog and repair-status-labels remediation are documented in the
+Update above; this section is the code-fix outcome.
+
+## Update 2026-07-18 (still later same day) — variant 2: single-commit PR squash uses the commit message, not the neutralized body
+
+**#13654's fix has a gap even when working exactly as designed.** Shipping #13683
+(same DM session, ~3hrs after #13654 shipped): the issue was already CLOSED when picked
+up. The PR (#13689) `body` field WAS correctly neutralized ("Addresses #13683" —
+`_neutralize_pr_body_before_merge()` worked). But the merge commit that landed on `main`
+(779a708f9) read `Closes #13683` verbatim. Root cause: this PR had a **single commit**,
+and that commit's own message (written by skill's `git commit -m`, never touched by any
+neutralization guard — only the PR *body* argument is sanitized) contained `Closes
+#13683`. GitHub's squash-merge, for a single-commit PR with no explicit override, defaults
+the squash commit's message to **that commit's own message**, not the PR body — so the
+neutralized body never actually became the merge commit text.
+
+**Practical implication**: `_neutralize_pr_body_before_merge()` and `pr_create()`'s guard
+both operate on the PR *body* field exclusively. Neither has ever touched a commit
+message. For a multi-commit PR, GitHub uses the PR body/title for the squash default, so
+the guard covers it. For a **single-commit PR**, GitHub uses the commit's own message —
+a code path the guard doesn't reach at all. Filed **#13691** (role:skill, medium):
+suggested fix is to always pass an EXPLICIT squash body (the already-neutralized PR body)
+on the merge call, rather than relying on GitHub's implicit default selection — this
+closes the gap regardless of commit count.
+
+**DM action this time**: no stranded-label sweep needed (single instance, caught live via
+direct event-driven pickup) — shipped #13683 normally (real work, real ACs met), noted the
+finding in the ship comment, filed #13691. **Running tally of this bug class**: #3747 →
+#4038 → #4518 → #6222 → #13371 (fixed, PR-body-only) → 12-item recurrence → #13654 (fixed,
+merge-time PR-body guard) → #13683/#13691 (commit-message variant, still open). Each fix
+narrows the surface but a new sub-path keeps surfacing — treat any future "fixed" claim on
+this class with a live single-commit-PR repro before trusting it closed for good.
