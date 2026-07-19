@@ -566,7 +566,7 @@ v1's §11 re-verified #5855's claims against a 2026-05-24 snapshot; that audit d
 | 4 | **Distillation aggressiveness** — how hard M2 prunes the single-incident learning pile (planning §9.6 #3; recommendation: aggressive — telemetry vindicates or refutes survivors within weeks) | M2/M3 only | Operator at M3 manifest review |
 | 5 | **Viewer priority** — vendored graph viewer + harness `/vault` route: cutover scope or post-cutover polish (planning §9.6 #4) | Nothing in M0–M4 | Operator, any time before M4 scoping |
 | 6 | **Compaction horizon + staleness threshold defaults** — N days for §6.5 rollup and §4.4's stale bucket (default 90) | Implementation config only | Dev at implementation, config-overridable |
-| 7 | **Multi-instance state layer** (adjacent, NOT vault-v2 scope) — parallel squads per developer expose that fixed-path per-role state files are not instance-safe; telemetry (§6.3) is instance-safe by design | A future parallel-squads workflow, not this TRD | Operator to confirm as requirement (raised inline 2026-07-18); then its own design task |
+| 7 | **Multi-instance state layer** (adjacent, NOT vault-v2 scope) — parallel squads per developer expose that fixed-path per-role state files are not instance-safe; telemetry (§6.3) is instance-safe by design | A future parallel-squads workflow, not this TRD | CONFIRMED + filed as **#13725** (multi-instance state layer, backlog per operator 2026-07-18; `instances/<id>/` tree shape locked) |
 
 ## 12. Cross-references to other docs
 
