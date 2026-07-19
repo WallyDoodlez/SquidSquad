@@ -16,6 +16,9 @@ from pathlib import Path
 
 REPO = Path(__file__).parent.parent
 QA_VERIFICATION = REPO / "references/sub-skills/roles/verifier/verification.md"  # #10156
+# #13565: the Auto Merge gate logic moved to this cold-path file, reached
+# via a pointer in verification.md's Step 5.
+QA_VERIFICATION_SHIP_FLOW = REPO / "references/sub-skills/roles/verifier/verification-ship-flow.md"
 SCRIPTS = REPO / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
@@ -25,7 +28,8 @@ class TestQAVerificationAutoMerge:
 
     @pytest.fixture
     def content(self):
-        return QA_VERIFICATION.read_text(encoding="utf-8")
+        return (QA_VERIFICATION.read_text(encoding="utf-8")
+                + "\n" + QA_VERIFICATION_SHIP_FLOW.read_text(encoding="utf-8"))
 
     def test_checks_auto_merge_config(self, content):
         assert "auto-merge" in content

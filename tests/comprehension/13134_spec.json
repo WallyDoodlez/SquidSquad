@@ -1,5 +1,7 @@
 {
   "issue": 13134,
+  "superseded_by": 13565,
+  "superseded_note": "#13565 extracted the deploy-halt force-kill/respawn confirmation detail (CQ1, CQ3) out of event-mode-contract.md into a new reactively-read fragment (deploy-signal-handling.md); CQ2 (stop/restart path, unrelated to deploy-signal) is unaffected. Also noting a pre-existing, unrelated gap discovered while reviewing this spec: references/sub-skills/common/self-restart.md (one of this spec's named sources) no longer exists in the repo — out of scope for #13565 to fix. Historical PASS record retained.",
   "title": "Agent /quit instructions reconciled to harness-reaper model (#13077)",
   "authored_by": "verifier",
   "authored_at": "2026-06-21 03:55",

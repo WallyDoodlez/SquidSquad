@@ -19,12 +19,19 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 VERIFICATION_FILE = (
     REPO_ROOT / "references" / "sub-skills" / "roles" / "verifier" / "verification.md"
 )
+# #13565: the approve command + its self-approve-failure note moved to this
+# cold-path file, reached via a pointer in verification.md's Step 5.
+VERIFICATION_SHIP_FLOW = (
+    REPO_ROOT / "references" / "sub-skills" / "roles" / "verifier" / "verification-ship-flow.md"
+)
 
 
 @pytest.fixture
 def verification_text():
     assert VERIFICATION_FILE.exists(), f"verification.md missing: {VERIFICATION_FILE}"
-    return VERIFICATION_FILE.read_text(encoding="utf-8")
+    assert VERIFICATION_SHIP_FLOW.exists(), f"verification-ship-flow.md missing: {VERIFICATION_SHIP_FLOW}"
+    return (VERIFICATION_FILE.read_text(encoding="utf-8")
+            + "\n" + VERIFICATION_SHIP_FLOW.read_text(encoding="utf-8"))
 
 
 class TestSelfApproveFailureDocumented:

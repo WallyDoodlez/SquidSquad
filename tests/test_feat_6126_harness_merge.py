@@ -313,9 +313,13 @@ class TestTemplateUpdates:
         assert "git_ops.py pr-merge" not in content
 
     def test_qa_verification_has_post_merge(self):
-        """verifier verification.md should reference POST /merge."""
+        """verifier verification.md should reference POST /merge. #13565:
+        the merge POST call moved to the cold-path verification-ship-flow.md,
+        reached via a pointer in verification.md's Step 5."""
         path = REPO_ROOT / "references" / "sub-skills" / "roles" / "verifier" / "verification.md"
-        content = path.read_text(encoding="utf-8")
+        ship_flow_path = (REPO_ROOT / "references" / "sub-skills" / "roles"
+                           / "verifier" / "verification-ship-flow.md")
+        content = path.read_text(encoding="utf-8") + ship_flow_path.read_text(encoding="utf-8")
         assert "POST" in content and "/merge" in content
 
     def test_dm_delivery_no_git_ops_pr_merge(self):

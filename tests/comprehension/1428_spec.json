@@ -3,6 +3,7 @@
   "title": "Deterministic QA verification framework",
   "files": [
     "references/sub-skills/roles/verifier/verification.md",
+    "references/sub-skills/roles/verifier/verification-templates.md",
     "references/prompts/test-plan.md.j2"
   ],
   "questions": [

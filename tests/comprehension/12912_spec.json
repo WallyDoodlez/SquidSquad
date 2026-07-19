@@ -1,5 +1,7 @@
 {
   "issue": 12912,
+  "superseded_by": 13565,
+  "superseded_note": "#13565 extracted the deploy-signal deferral/halt mechanics (CQ2, CQ3) out of event-mode-contract.md into a new reactively-read fragment (deploy-signal-handling.md), so a fresh agent given ONLY event-mode-contract.md per this spec's method can no longer derive those answers. The underlying facts are unchanged, just relocated; a new spec scoped to both files would be needed to re-certify. Historical PASS record retained.",
   "title": "deploy-signal recompose model (Phase 2 of #12895) — S1: deploy-signal catalog + agent halt branch",
   "authored_by": "skill",
   "authored_at": "2026-06-19 18:10",
