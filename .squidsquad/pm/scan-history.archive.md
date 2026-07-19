@@ -1,5 +1,12 @@
 # Scan History Archive
 
+## Scan — 2026-06-19 22:11 (post-restart idle-driver tick, 2nd burst scan)
+
+- **Files scanned**: references/sub-skills/roles/pm/checkin.md (advertise-duty mechanics) + references/roles/pm/responsibility.md advertise-duty — consistency/completeness check (PM about to rely on it for #12896-planned + #10686-parked surfacing)
+- **Findings**: none filed. Considered a candidate gap — the check-in advertise step (checkin.md:17) covers only `role:<human>` + `pending-human-*` items, NOT PM-owned `planned` items awaiting approval (e.g. #12896). Concluded INTENTIONAL/coherent, not a gap: PM tracks its own `planned` items in working-state and surfaces them with judgment at check-in; advertise-duty is specifically the cross-agent pending-human-* return-path (items OTHER agents hand off that PM wouldn't otherwise know). A blanket 'advertise all planned' would nag the operator about deliberately operator-paced items (#10837/#10838/#10839 etc.). PM judgment + working-state tracking covers the #12896 case. NOT filed (designed distinction, filing would be marginal noise).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-06-20 00:02 (fresh-boot idle-driver tick, 3rd/burst-cap scan)
 
 - **Files scanned**: references/sub-skills/roles/pm/pipeline-sentinel.md (PM core stall-detection sub-skill, exercised live this boot; not scanned recently)
