@@ -1,5 +1,12 @@
 # Scan History Archive
 
+## Scan — 2026-06-19 21:13 (post-restart idle-driver tick, 1st burst scan)
+
+- **Files scanned**: HARNESS-ARCH.md §7/§11 (deploy-signal/recompose/restart — verify shipped #12906 + #12912-design accuracy); config.md Improvement-Scanning defaults vs idle-cooldown-loop; .squidsquad/vault/BRIEFING.md (mandatory staleness check vs this boot's verified facts)
+- **Findings**: HARNESS-ARCH §7.6/§11 coherent — deploy-signal model documented as the #12912 design contract (intentional target-state doc-first, NOT drift); `deploying` intent + ensure-main→pull→recompose→commit→push + deploy-halt exit + multi-clone-consistency window all consistent. Config defaults (30m cool-down, burst 3) match driver output. No actionable doc-drift finding (the planned-vs-pending-human-* surfacing distinction is intentional design, not a gap — NOT filed).
+- **Auto-fixed**: BRIEFING.md refreshed (PM own-domain, Tier-1) — new 2026-06-19 ~20:48 post-restart Active-Priorities increment (restart succeeded, #12906 confirmed-live, qa now EVENT, #12896 intaken→planned); Team State rewritten (all 4 EVENT, harness sha 398d1c1a); Constraints updated (boot-pull-lag regression neutralized by #12906-live → restore-dance now backstop); version sha b15e7fc5→398d1c1a.
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-06-19 22:11 (post-restart idle-driver tick, 2nd burst scan)
 
 - **Files scanned**: references/sub-skills/roles/pm/checkin.md (advertise-duty mechanics) + references/roles/pm/responsibility.md advertise-duty — consistency/completeness check (PM about to rely on it for #12896-planned + #10686-parked surfacing)
