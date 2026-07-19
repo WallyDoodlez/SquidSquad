@@ -30,6 +30,6 @@
 - A wrapped `try/except ImportError` around an optional-hardening import (harden_stdio) is the right shape when the guarded code path (a post-merge hook restore) has its own "never raises" contract that predates and outranks the newer hardening feature -- fail open, don't let a crash-proofing helper become a new crash vector.
 
 ## Improvement Scan
-Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 00:49 (harness.py/test_git_ops.py/test_harness.py, clean, no findings; scan 1/3 of burst).
+Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 01:32 (docs/HARNESS-ARCH.md/tracker.py/event-mode-contract.md, clean, no findings; scan 1/3 of burst).
 
 ## Quiet Cycle Counter: 0

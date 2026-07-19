@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 01:32
+
+- **Files scanned**: docs/HARNESS-ARCH.md, references/scripts/tracker.py, references/sub-skills/common-events/event-mode-contract.md (suggest-targets top-3 for skill; tracker.py TODO/FIXME + AST em-dash sweep both clean, already wired; event-mode-contract.md checked for the append/prepend and no-action-wake wording classes touched elsewhere this session -- no matches, nothing stale found).
+- **Findings**: none.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 00:49
 
 - **Files scanned**: references/scripts/harness.py, tests/test_git_ops.py, tests/test_harness.py (suggest-targets top-3 for skill; harness.py TODO/FIXME grep clean, AST em-dash sweep found nothing beyond the already-exempted intentional banner art per TestHarnessWiring13236).
@@ -612,11 +618,5 @@
 
 - **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/squidsquad_cli.py
 - **Findings**: #8268 (tracker.py get_state returns OPEN for missing state — low), #8269 (squidsquad_cli.py unused import os — low)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 16:03
-
-- **Files scanned**: references/scripts/start_team.py, references/scripts/thin_launcher.py, references/scripts/diagnostics.py
-- **Findings**: #8234 (start_team.py bare except swallows all errors — low), #8235 (diagnostics.py missing redaction keywords — medium)
 - **Items rejected by human**: none yet
 
