@@ -5,13 +5,14 @@
 ## Pending-test (mine, awaiting verifier)
 - #13743 (PR ready): tracker.py create_issue/create_task gained --extra-label.
 - #13746 (branch squidsquad/task/13746, PR #13753 ready): pm/instructions.md was missing a step:cycle/improvement-scan marker -- roles/pm/improvement-scan.md was orphaned since includes.yml (the only place that referenced it) is a confirmed-dead TOMBSTONE (#13264) unreachable from the real v2_link_stage compose path. Added the marker immediately before step:cycle/vault-optimize.
+- #13745 (branch squidsquad/task/13745, PR #13759 ready): compose.py generate_local_config() now warns loudly on stderr instead of silently guessing wrong .local-config clone paths -- the confirmed deeper root cause behind #13742's symptom. Scoped to the "at minimum" fix; the two riskier redesign directions (enforce target_root==primary, source from harness /status) left as open design questions, not attempted.
 
 ## Shipped this tick (prior ticks, confirmed merged to main -- verified CLOSED/status:shipped via gh issue view, not assumed)
 - #13565, #13566, #13709/#13710/#13711, #13714, #13722, #13723/#13724, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13737 (TC coverage gate glob fix), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741), #13742 (health_check.py .local-config collision detection, round-2 fix).
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
-- #13745 (open, self-filed, deferred): compose.py generate_local_config() wrong-path-guessing root cause behind #13742's symptom -- deliberately deferred for separate design review, not fixed as part of #13742's narrower scope-down. Pick up per normal queue priority if/when it surfaces.
+- No open skill issues -- queue drained, all self-filed follow-ups now pending-test.
 
 ## Standing lessons (session)
 - commit-code (git_ops.py) takes <role> <branch> <msg> as POSITIONAL args -- there is no --message flag. Passing --message prepends the literal string into the commit subject.
