@@ -377,9 +377,15 @@ This opens a third option §9.4.2 didn't consider: **invoke the portable package
 
 **This does not change §10.1** — even if the engine is consumed via Skill invocation rather than ported/vendored, the taxonomy/schema genericization is still required; packaging and domain-scope are orthogonal decisions.
 
-### 10.3 Next steps
+### 10.3 §9.6 decisions #1–#2 resolved (2026-07-18, operator)
 
-1. Verify the two open questions in §10.2 (Skill-invocation-from-autonomous-session viability; Node-alongside-Claude-Code guarantee).
-2. Resolve the remaining §9.6 open decisions (#2–5) plus the packaging question (§10.2) with the operator.
-3. Write `docs/VAULT-ARCH.md` v2 as a human-reviewed TRD update per doc-first process — this document (§9 as corrected by §10) is the seed; no implementation tasks get filed before the TRD lands and is reviewed.
-4. **Cleanup done 2026-07-18**: closed 10 vault tickets superseded by this direction (#10098, #10099, #10100, #10179, #10182, #5855, #207, #20, #1290, #9875). Kept open as independent of this redesign: #10180 (subagent offload, explicitly still-aligned), #19 (hybrid RAG, explicitly a separate future track), #7464 (QA vault write access), #3497 (CLAUDE.md/SOUL.md cross-linking investigation), #3419 (human expertise mapping), #5613 (mostly an event-bus ticket), #555 (DM doc-site page, needs a rewrite later but isn't superseded).
+- **§9.6 #1 (engine language) superseded by §10.2's packaging question — resolved: invoke via Skill tool.** SquidSquad agents call the portable package's Claude Skills directly (as this session's PM does with `deep-research` etc.), rather than porting to Python or vendoring the `.mjs` scripts. Rationale: zero maintenance drift (upstream improvements arrive free), no new install-time runtime dependency for SquidSquad's Python-only installer. **Still pending, not yet verified** (do NOT treat as fully locked until confirmed): (a) Skill invocation reliability from an autonomous, non-interactive agent session; (b) Node-alongside-Claude-Code guarantee on arbitrary target machines. §10.1's taxonomy/schema genericization requirement is unaffected either way — packaging and domain-scope are orthogonal.
+- **§9.6 #2 (`confidence` field) — resolved: drop.** No write-only metadata in the v2 schema. Reintroduce only if a real ranking need for "how sure are we" surfaces later, with an actual consumer at adoption time — not speculatively.
+
+Remaining open: §9.6 #3 (distillation aggressiveness), #4 (viewer priority), #5 (telemetry durability) — not yet needed to start drafting the TRD's core sections; resolve when the migration/viewer/durability sections are reached.
+
+### 10.4 Next steps
+
+1. Verify the two pending §10.3 items (Skill-invocation-from-autonomous-session viability; Node-alongside-Claude-Code guarantee) — before finalizing the TRD's §7/§8-equivalent sections (sub-skills/scripts), since their concrete shape depends on the answer.
+2. Write `docs/VAULT-ARCH.md` v2 as a human-reviewed TRD update per doc-first process — this document (§9 as corrected by §10) is the seed; no implementation tasks get filed before the TRD lands and is reviewed. **In progress as of 2026-07-18 on `#10003`.**
+3. **Cleanup done 2026-07-18**: closed 10 vault tickets superseded by this direction (#10098, #10099, #10100, #10179, #10182, #5855, #207, #20, #1290, #9875). Kept open as independent of this redesign: #10180 (subagent offload, explicitly still-aligned), #19 (hybrid RAG, explicitly a separate future track), #7464 (QA vault write access), #3497 (CLAUDE.md/SOUL.md cross-linking investigation), #3419 (human expertise mapping), #5613 (mostly an event-bus ticket), #555 (DM doc-site page, needs a rewrite later but isn't superseded).
