@@ -62,6 +62,77 @@ The vault is **distinct from**:
 - **Working state** (`.squidsquad/<role>/working-state.md`): per-cycle crash-recovery checkpoint, single-agent-owned. Working state is *what this agent is doing right now*; vault is *what the squad has learned over time*.
 - **Iteration logs** (`.squidsquad/<role>/iterations/iter-N.md`): per-cycle activity log. Iteration logs are *what happened this cycle*; vault is the *durable filtered residue*.
 
+### 2.1 The vault at a glance
+
+Three high-level orientation views before the deep sections: where documents live and flow (§3), how information enters (§9.5 + §6), and a worked retrieval example (§9.2–§9.4). Every element shown is specified in the cited section — these views add no semantics of their own.
+
+**How documents flow through the PARAG structure** (§3):
+
+```mermaid
+flowchart LR
+    K["New knowledge<br/>(decision, root cause, pattern,<br/>preference, reference material)"] --> T{"Typed by the registry<br/>vault-schema.json (§3.1)"}
+    T --> P["projects/ — hub"]
+    T --> A["areas/ — hub"]
+    T --> R["resources/"]
+    T --> S["systems/ — subsystem hubs<br/>(new in v2)"]
+    T --> G["galaxy/ — atomic leaves<br/>decision-* / pattern-* / learning-*"]
+    G -.->|"wikilinks INTO hubs (§3.3)"| S
+```
+
+A note never moves after that: its lifecycle is a `status:` flip in place (`active → archived / superseded`, §3.4), and §6.2's ranking — not a folder move — is what removes retired notes from default search results. Hubs (`projects/`, `areas/`, `systems/`) are free to traverse; galaxy leaves cost traversal budget (§3.2) — which is why leaves link *into* hubs: the hub layer is what makes graph search productive.
+
+**How information enters the vault** (§9.5 write paths, §6 engine):
+
+```mermaid
+sequenceDiagram
+    participant W as Agent (any role)
+    participant E as Consumption engine
+    participant V as Vault notes
+    participant T as Own telemetry shard
+    participant F as Forge (PR)
+    Note over W: work completes — candidate durable knowledge (skip-list filters chores)
+    W->>E: dedup search on the subject (§9.5)
+    E->>V: tiered match + budgeted traversal (§6.2)
+    E->>T: impression / walked events (§6.1)
+    E-->>W: top-K metadata (paths, scores)
+    alt a hit ranks above the similarity threshold
+        W->>V: append to that note — prefer-update-over-create (§9.5)
+    else nothing ranks
+        W->>V: create from the type's template (§3.5), wikilink a systems/ hub (§3.3)
+    end
+    W->>F: note ships in the task's own PR (capture-at-ship) or the post-cycle sweep commit
+```
+
+Both write paths — capture-at-ship (worker, pre-PR) and the end-of-cycle `vault-remember` sweep (every role) — funnel through this same engine-gated shape; write budgets and role lanes throttle them (§9.5).
+
+**Worked example — matching a vault item** (illustrative names; the consumption pipeline, §9.2–§9.4):
+
+> **1. PM files a task** — *"harness restart loses status-bar state."* Intake runs an engine search on the task's keywords. The engine matches the `[[harness]]` systems hub (filename tier) and walks one budgeted hop through its inbound links to two galaxy leaves. The issue body gains:
+>
+> ```
+> ## Vault context
+> - [[harness]] — subsystem hub: restart semantics, intent state machine
+> - [[learning-proactor-loop-two-bugs]] — prior restart-adjacent root cause
+> - [[decision-harness-sole-lifecycle]] — harness owns all agent start/stop
+> ```
+>
+> Each listed note earns an `impression` event tagged with the task number (§9.2).
+>
+> **2. The dev agent picks up the task** — reads the issue body first (house rule), Reads the notes it judges relevant, and its PR body carries the receipt (§9.3):
+>
+> ```
+> ## Vault context consumed
+> - [[decision-harness-sole-lifecycle]] — constrained the fix to harness-side persistence
+> ## Applicable rules
+> - none matched
+> ```
+>
+> The cited note earns a `used` event — written by the consumer, never by the engine (§6.1's load-bearing split).
+>
+> **3. The verifier checks** — receipt sections present in the PR body (the canonical location)? Implementation violates no listed rule? A missing receipt routes the task back, same as any other gap (§9.4).
+>
+> **4. Telemetry closes the loop** — the cited note is now *Active* in the impressions report (§4.4, §6.4); a note that keeps surfacing without ever earning `used` drifts toward the pruning proposals instead.
+
 ---
 
 ## 3. On-disk layout — PARAG
@@ -612,3 +683,4 @@ The §12.1 map is directionally current (re-verify anchors at reconciliation tim
 - **2026-05-24 (v1 draft, descriptive snapshot)** — initial draft. Consolidates the vault's specification (from 5 sub-skills + 4 scripts) and current state (from on-disk inventory) into one architecture doc. No design changes proposed. References open issue #5855 for the known living-memory gap; resolution out of scope.
 - **2026-05-24 (v1 draft, expanded)** — added §9.6 failure modes + recovery paths, §9.7 explicit non-functionality, §10.3-§10.6 ownership/confidence/status/recency distributions, §11 re-verified #5855 claims (each verdict CONFIRMED / PARTIALLY TRUE / NOT TRUE TODAY) + new drift findings (owner label `<role>` vs `<role>-lead`; zero `superseded` notes), §12.1 verified cross-refs with line numbers, §12.2 reconciliation needs for ARCHITECTURE / COMPOSE-ARCHITECTURE / AGENT-RUNTIME / INSTALLER-ARCH / sub-skill-catalog.
 - **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per the planning doc §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes planning doc §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. Later same day: §10 reframed from stale inventory to the M0–M4 migration design (product feature, lean transform for the PARAG-kept profile); §11 rewritten as the open-decisions table (#5855 noted as closing at M4); §12.2 rewritten as the v2 reconciliation list (ARCHITECTURE / AGENT-RUNTIME / COMPOSE / INSTALLER / catalog / HARNESS). Same evening: the two §10.3 packaging verifications resolved by live probe (Skill invocation from a harness-spawned session CONFIRMED; Node NOT guaranteed → preflight soft-prerequisite model), unblocking §7/§8 — rewritten as the engine-based sub-skill layer (consultation/receipt steps, engine-rerouted dedup, harness-scheduled maintenance, §7.5 packaging-via-Skill-invocation) and the v2 script surface with the §8.5 engine-boundary contract table. **All sections now v2**; doc ready for DS audit.
+- **2026-07-19 (post-audit operator pass, #10003)** -- external-system naming removed from the established TRD (neutral "reference system" phrasing; planning-doc citation trail preserved -- operator directive). SS6.5 tightened with the three compaction-safety invariants (owner-only compaction, aggregate-before-truncate in one commit, idempotent re-absorption via last-absorbed event id). New SS2.1 "The vault at a glance": PARAG flow diagram, vault-entry sequence diagram, worked matching example (orientation only, no new semantics).
