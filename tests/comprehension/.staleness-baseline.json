@@ -3,15 +3,15 @@
   "references/sub-skills/common/l4-curation.md": "638aff62b51b3aeb14124e420d614c5ea43f92b8"
  },
  "10678_spec.json": {
-  "docs/COMPOSE-ARCHITECTURE.md": "3f7e41e0b17704371bdd9ef2e0f4b266226d8e76",
-  "docs/sub-skill-catalog.md": "b2165c46b6f9dc9fd3d93446d76223622a31b388"
+  "docs/COMPOSE-ARCHITECTURE.md": "e50c3b0af405f37fb311c4fd213d35b8d11ae5e2",
+  "docs/sub-skill-catalog.md": "a9c426936b2e75f103d71cfd672fe9bbcbe8dec4"
  },
  "11140_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
   "references/roles/responsibility.md": "8495bfec35fdabb092bdf164a356922c92f5e4df"
  },
  "11227_spec.json": {
-  "docs/COMPOSE-ARCHITECTURE.md": "3f7e41e0b17704371bdd9ef2e0f4b266226d8e76",
+  "docs/COMPOSE-ARCHITECTURE.md": "e50c3b0af405f37fb311c4fd213d35b8d11ae5e2",
   "references/scripts/l4_op_processor.py": "af384ef9937b94944cfd1a75ecf504bb5f30e6a0",
   "references/scripts/v2_link_stage.py": "797f2794f6987178385d0ecb3d2b7834e5617210"
  },

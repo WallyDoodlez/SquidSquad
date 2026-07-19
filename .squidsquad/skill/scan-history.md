@@ -1,5 +1,18 @@
 # Scan History
 
+## Scan — 2026-07-19 13:26
+
+- **Files scanned**: references/scripts/wizard.py + config.py (suggest-targets picks; TODO/FIXME clean; corrected a false-positive duplicate-def grep of my own (`_parse_agents_v1`/`_parse_agents_v2` matched as dupes under a digit-excluding regex -- fixed pattern, no real dupes); investigated 2 em-dash hits genuinely INSIDE `raise AliasesRegistryError(...)` message text in config.py (not just comments) -- traced the concern through to compose.py's `except Exception as e: print(f"...{e}...")` catch site and confirmed it's moot: every caller in the chain (config.py, compose.py, wizard.py mains) already calls `harden_stdio()` per #13198, so individual message content doesn't matter; the real gate is entry-point wiring, not per-string unicode sweeps, for scripts already in the WIRED list. That reframing led to the actual valuable check this scan: **cross-referenced all 46 references/scripts/*.py files with a `__main__` entry against the 12-script #13198 WIRED list** (script names + non-ASCII-on-print/raise detection, all file I/O not just the WIRED subset) -- found 8 unwired scripts with non-ASCII print/raise content; the 2 highest-blast-radius (cycle_pre.py, cycle_post.py -- the harness's every-single-cycle mechanical wrappers, more heavily invoked than any already-wired script) got a full investigation and were filed; the other 6 (run_comprehension_test.py, squidsquad_cli.py, vault_check.py, vault_optimize.py, repo_scan.py, tc_coverage.py) are lower-blast-radius one-off utilities, noted in the filed issue's body for a future sweep rather than filed separately (stayed within the 2-finding cap by choice, not by exhausting it).
+- **Findings**: 1 filed -- #13846 (HIGH, role:skill -- cycle_pre.py/cycle_post.py unwired for #13198 cp1252 crash-proofing; reproduced the underlying UnicodeEncodeError class live against my own scan tooling mid-investigation, printing a `→`-bearing line copied from cycle_post.py to this Windows console).
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 12:22
+
+- **Process note**: `scan_index.py suggest-targets` had returned the same top-5 (already-scanned) files for 3 consecutive scans -- turns out I'd only been calling `subloop_driver.py record-scan` (burst/cooldown bookkeeping), never `scan_index.py record-scan` (the churn-ranking index feeding suggest-targets), so it never learned these files were freshly covered. Ran `scan_index.py rebuild` (backfills the DB from scan-history.md's own entries) -- suggestions immediately rotated to fresh targets. Going forward, prefer `scan_index.py record-scan --role skill --files <list>` after each scan so this doesn't recur; `rebuild` is the recovery lever if it's skipped again.
+- **Files scanned**: references/roles/SOUL.md (114 lines, full read -- this is literally my own composed Soul content; cross-checked its internal self-references (*Universal Quality Gate*, *Token Consciousness*, *Never Stop While Work Is Pending*) all resolve to real sections in the same file, no drift against the live composed instructions), tests/test_harness.py (5775 lines; TODO/FIXME/XXX/HACK grep clean; skip/xfail grep clean; 53 test classes, no duplicate names).
+- **Findings**: none. Both files clean.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 11:23
 
 - **Files scanned**: docs/COMPOSE-ARCHITECTURE.md (1708 lines; suggest-targets 5th pick, the one untouched file from the last 2 scans; TODO/FIXME/XXX/HACK grep clean (1 XXX hit was inside a quoted illustrative example string, not a real marker); cross-referenced all 3 same-doc anchor links against their target headings' GitHub slug -- 2 correct, 1 broken: `#33-l4-operations-creative-overlay` doesn't match `### 3.3 Layer operations (L2-L4 creative overlay)`'s actual slug `#33-layer-operations-l2-l4-creative-overlay`; grepped the repo for other references to the same broken anchor and found 2 more identical hits in docs/sub-skill-catalog.md (lines 266, 275) -- same root cause, not a broader link-hygiene problem in either file).
@@ -606,17 +619,5 @@
 
 - **Files scanned**: references/scripts/wizard.py
 - **Findings**: #8547 (wizard.py: duplicate check=False kwarg crashes cmd_setup_yes — medium), #8548 (wizard.py: load_install_spec uncaught JSONDecodeError — low)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-16 04:03
-
-- **Files scanned**: references/scripts/harness.py
-- **Findings**: #8525 (harness.py: redundant import time as _time), #8526 (harness.py: type mismatch clone_root vs REPO_ROOT)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-16 02:33
-
-- **Files scanned**: references/scripts/vault_remember.py, references/scripts/compose.py, references/scripts/cycle.py
-- **Findings**: #8483 (cycle.py: unused imports io and json), #8484 (cycle.py: set_counter missing upsert logic)
 - **Items rejected by human**: none yet
 

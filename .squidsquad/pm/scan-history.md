@@ -702,10 +702,3 @@
 - **Auto-fixed**: none
 - **Items rejected by human**: (none)
 
-## Scan — 2026-06-19 18:42 UTC (3rd burst scan)
-
-- **Files scanned**: vault wikilink integrity (`vault_check.py check-wikilinks`) across .squidsquad/vault/
-- **Findings**: intra-vault link integrity CLEAN (0 broken decision-/pattern-/learning-/style- targets). All ~20 WARN are cross-layer references the checker can't resolve — vault→memory (feedback_*/project_*) and vault→docs (AGENT-RUNTIME/VAULT-ARCH) — which are intentional, not breakage. Tooling note: check-wikilinks is low-signal because cross-layer refs dominate the output (a real intra-vault break would be buried). NOT filed (low value, likely known limitation; vault_check.py = skill code domain).
-- **Auto-fixed**: pattern-chain-ship-per-item-auth.md — `[[feedback-pm-docs-only]]` → `[[feedback_pm_docs_only]]` (hyphen→underscore, canonical memory-note name)
-- **Items rejected by human**: (none)
-
