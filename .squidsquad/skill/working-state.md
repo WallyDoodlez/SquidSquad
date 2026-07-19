@@ -5,11 +5,10 @@
 ## Pending-test (mine, awaiting verifier)
 - #13722 (branch squidsquad/task/13722, PR #13727 ready): subloop_driver.py read_state() hand-edited armed:"false" string bool-coercion bug.
 - #13723/#13724 (branch squidsquad/task/13723, PR #13726 ready): git_ops.py merge/state-guard false positives -- _merge_dropped_state_paths() resurrecting authoritative deletions, guard_staged_state() reverting merge-brought-in main content. Both fixed to check origin/<working> before acting.
-- #13737 (branch squidsquad/task/13737, PR #13740 ready): tc_coverage.py _discover_files() glob fixed to match current TEST-PLAN-<N>.md/QA-RESULTS-<N>.md convention (was only matching the pre-#9184 legacy shape -- the "never bypassed" TC coverage ship gate had been a silent no-op for ~2 months). 5 regression tests added. Disclosed blast-radius risk (#13738, role:verifier) BEFORE shipping -- verifier resolved it same-tick (added a TC-Results table to QA-RESULTS going forward, self-fix pattern, now pending-ship) so the gate coming back online won't immediately hard-block shipping.
-- #13739 (branch squidsquad/task/13739, PR #13741 ready): verification-templates.md updated to match actual verifier practice (live direct verification + AC-Walk table + TC-Results table), replacing the stale subagent/pytest-file flow. Doc-only, result-status semantics unchanged.
+- #13737 (branch squidsquad/task/13737, PR #13740 ready): tc_coverage.py _discover_files() glob fixed to match current TEST-PLAN-<N>.md/QA-RESULTS-<N>.md convention -- the "never bypassed" TC coverage ship gate had been a silent no-op for ~2 months.
 
 ## Shipped this tick (prior ticks, confirmed merged to main)
-- #13565, #13566, #13709/#13710/#13711, #13714, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736) -- all CLOSED/shipped and merged.
+- #13565, #13566, #13709/#13710/#13711, #13714, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741) -- all CLOSED/shipped and merged.
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
@@ -34,6 +33,6 @@
 - Fixing a silently-inert gate can surface a SECOND, larger problem the inertness was masking (#13737/#13738: QA-RESULTS format drifted away from the TC-N template once nothing was checking it). Don't silently expand scope to paper over that with a parser change -- disclose loudly and cross-file to the owning role before shipping the narrow fix.
 
 ## Improvement Scan
-Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 02:22 (SOUL.md/config.py/README.md, clean, no findings; scan 1/3 of burst).
+Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 03:22 (SKILL.md/test_tracker.py/docs/INSTALLER-RUNTIME.md, clean, no findings; scan 1/3 of burst).
 
 ## Quiet Cycle Counter: 0

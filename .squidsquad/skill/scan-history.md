@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 03:22
+
+- **Files scanned**: SKILL.md (529 lines, TODO/FIXME clean, cross-referenced 9 file paths mentioned in prose -- all resolve), tests/test_tracker.py (908 lines, TODO/FIXME + skip/xfail markers grep clean), docs/INSTALLER-RUNTIME.md (light skim, PM-owned architecture doc, nothing flagged).
+- **Findings**: none.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 02:22
 
 - **Files scanned**: references/roles/SOUL.md (114 lines, full read — clean, matches composed content, no drift), references/scripts/config.py (TODO/FIXME + AST em-dash sweep clean, already in the harden_stdio WIRED list), README.md (link-checked all 8 relative .md references — all resolve).
@@ -612,11 +618,5 @@
 
 - **Files scanned**: references/scripts/cycle_post.py, references/scripts/model_router.py
 - **Findings**: #8336 (cycle_post.py: redundant import re inside two functions)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-15 18:32
-
-- **Files scanned**: references/scripts/triage.py, references/scripts/event_bus.py, tests/test_triage.py, tests/test_event_bus.py, tests/test_feat_2495_upgrade_rewrite.py
-- **Findings**: #8307 (triage.py: dead code in find_qa_rejected own-comment check)
 - **Items rejected by human**: none
 
