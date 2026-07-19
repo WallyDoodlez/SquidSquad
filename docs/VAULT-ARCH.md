@@ -2,7 +2,7 @@
 
 > **Status**: v2 TRD draft, **all sections v2 as of 2026-07-18** (tracked on #10003, draft PR #13708 — pending DS audit + operator review). This is a **prescriptive target design**, not a snapshot of current code; v1 behavior remains live until the M4 cutover (§10.5). Locked decisions are marked inline (e.g. §6.3 telemetry storage — operator-confirmed 2026-07-18); open items are consolidated in §11. The one residual unknown: the portable engine package's concrete Skill surface (§7.5/§11 #1).
 >
-> **Why v2**: research comparing SquidSquad's vault against dmp-web's (a mature, actively-used agent-memory system) found SquidSquad's vault functions as a static decision log, not living institutional memory — full analysis in `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md` (the “planning doc” hereafter). The root cause: consumption (search, ranking, verified usage) was never instrumented, so the write side curates blind and nothing measures whether captured knowledge is ever used. v2 ports dmp-web's consumption-pipeline pattern and telemetry-driven ranking as **domain-agnostic infrastructure** — not its SWE-specific taxonomy, which would be wrong for SquidSquad's general-purpose (non-technical-team) audience. See `VAULT-COMPARISON-DMPWEB.md` §9 (design) and §10 (scope correction + resolved decisions) for the full reasoning this doc formalizes.
+> **Why v2**: research comparing SquidSquad's vault against a reference agent-memory system — a mature, actively-used single-agent memory system studied in the vault comparison — found SquidSquad's vault functions as a static decision log, not living institutional memory — full analysis in the vault-comparison planning doc in `.squidsquad/pm/planning/` (the “planning doc” hereafter). The root cause: consumption (search, ranking, verified usage) was never instrumented, so the write side curates blind and nothing measures whether captured knowledge is ever used. v2 ports the reference system's consumption-pipeline pattern and telemetry-driven ranking as **domain-agnostic infrastructure** — not its SWE-specific taxonomy, which would be wrong for SquidSquad's general-purpose (non-technical-team) audience. See the planning doc §9 (design) and §10 (scope correction + resolved decisions) for the full reasoning this doc formalizes.
 >
 > **Companion docs**: [`ARCHITECTURE.md`](ARCHITECTURE.md) (overall system; vault appears as "L6 Memory"), [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration), [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (vault slot in composed CLAUDE.md), [`sub-skill-catalog.md`](sub-skill-catalog.md) (vault sub-skill entries).
 >
@@ -68,12 +68,12 @@ The vault is **distinct from**:
 
 ### 3.0 What actually changes here, and why
 
-**PARAG (Projects / Areas / Resources / Archives / Galaxy — the five-folder taxonomy; `archives/` is no longer a physical destination per §3.4, and `systems/` post-dates the acronym) itself is not the diagnosis.** Nothing in the dmp-web comparison shows PARAG's actionability-based sorting caused SquidSquad's vault to underperform — SquidSquad simply never ran long enough, at scale, with real consumption pressure, to find out whether the folder axis mattered. What the comparison *does* show is that dmp-web's two structural additions — **a connected graph via dedicated hub/entity notes with budgeted traversal**, and **telemetry-driven ranking** (§6) — are directly responsible for its vault staying useful under real load. SquidSquad had neither. §3 replaces the *hardcoded* part of v1's layout (a single taxonomy baked into scripts and sub-skill prose, with no reachable hub layer) and adds the *missing* part (graph connectivity); it does not throw away PARAG on the strength of an unproven complaint.
+**PARAG (Projects / Areas / Resources / Archives / Galaxy — the five-folder taxonomy; `archives/` is no longer a physical destination per §3.4, and `systems/` post-dates the acronym) itself is not the diagnosis.** Nothing in the vault comparison shows PARAG's actionability-based sorting caused SquidSquad's vault to underperform — SquidSquad simply never ran long enough, at scale, with real consumption pressure, to find out whether the folder axis mattered. What the comparison *does* show is that the reference system's two structural additions — **a connected graph via dedicated hub/entity notes with budgeted traversal**, and **telemetry-driven ranking** (§6) — are directly responsible for its vault staying useful under real load. SquidSquad had neither. §3 replaces the *hardcoded* part of v1's layout (a single taxonomy baked into scripts and sub-skill prose, with no reachable hub layer) and adds the *missing* part (graph connectivity); it does not throw away PARAG on the strength of an unproven complaint.
 
 Two changes, independent of each other:
 
 1. **The taxonomy becomes configurable** (`vault-schema.json`, §3.1) — required regardless of what SquidSquad's own install picks, because SquidSquad is general-purpose (marketing/ops/content teams, not just SWE) and a hardcoded taxonomy is wrong for installs that aren't SquidSquad-on-SquidSquad.
-2. **SquidSquad's own default profile keeps PARAG** (§3.2) — the folders don't change — but gains a genuine **hub/connective layer** (dmp-web's missing-in-v1 piece, gap G6 in the comparison doc) and a **traversal-budget** classification per type, so search can walk the graph instead of grepping a flat pile.
+2. **SquidSquad's own default profile keeps PARAG** (§3.2) — the folders don't change — but gains a genuine **hub/connective layer** (the reference system's missing-in-v1 piece, gap G6 in the planning doc) and a **traversal-budget** classification per type, so search can walk the graph instead of grepping a flat pile.
 
 ### 3.1 The type registry — `vault-schema.json`
 
@@ -98,7 +98,7 @@ Each install's vault ships a `vault-schema.json` at the vault root defining its 
 ```
 
 - **`traversal: free`** — connective/hub types. Free to traverse — following a wikilink through one of these doesn't cost budget. Dense knowledge notes can cluster around them without the traversal budget running out before reaching related content.
-- **`traversal: budgeted`** — dense knowledge types (SquidSquad's galaxy leaves). Each hop through one of these costs 1 unit of `traversalBudget` (default 2, per dmp-web's tuned value) — keeps search on-topic instead of wandering the whole graph.
+- **`traversal: budgeted`** — dense knowledge types (SquidSquad's galaxy leaves). Each hop through one of these costs 1 unit of `traversalBudget` (default 2, per the reference system's tuned value) — keeps search on-topic instead of wandering the whole graph.
 - **`hub: true`** — marks a type as the connective layer specifically (a stronger signal than `traversal: free` alone — used by §3.3's hub-linking convention and by the search engine's ranking to slightly favor hub notes as entry points).
 - **`weight`** — per-type multiplier in the ranking tiebreak (§6.2), separate from the traversal classification.
 
@@ -149,7 +149,7 @@ The folder layout stays PARAG, unchanged:
 
 **What's dropped**: `style-*` galaxy notes (zero ever written in ~3 months of operation, per v1 §10.2 — folded into `pattern-*`, no evidence a fourth prefix was ever needed) and the `pattern-posture-*` subtype tag (superseded by `system` hub notes for cross-cutting principles — a posture is really "a decision that spans multiple systems," which the graph now expresses via wikilinks rather than a special tag).
 
-**Migration cost**: near-zero for existing content — every current galaxy/areas/projects/resources note keeps its folder and (mostly) its type. The only *new* content required is authoring the initial `systems/` hub set (~7-10 notes) and retroactively linking existing galaxy leaves to the hub they're about — this is the M2 distillation pass from `VAULT-COMPARISON-DMPWEB.md` §9.5.
+**Migration cost**: near-zero for existing content — every current galaxy/areas/projects/resources note keeps its folder and (mostly) its type. The only *new* content required is authoring the initial `systems/` hub set (~7-10 notes) and retroactively linking existing galaxy leaves to the hub they're about — this is the M2 distillation pass from the planning doc §9.5.
 
 ### 3.3 Hub-linking convention
 
@@ -157,7 +157,7 @@ A galaxy note SHOULD wikilink to at least one `systems/` hub if its subject matt
 
 ### 3.4 How notes move — archived by status, not by folder
 
-v1 moved notes physically from an active folder to `archives/` on archival. v2 drops the forced move: any note's `status:` flips to `archived` in place. Two reasons this is better, both learned from dmp-web:
+v1 moved notes physically from an active folder to `archives/` on archival. v2 drops the forced move: any note's `status:` flips to `archived` in place. Two reasons this is better, both learned from the reference system:
 
 1. **Simpler engine.** The search engine and the file-path-based dedup logic don't need a "did this note's path change" special case — a note's identity (its path) never changes on status transitions, only on explicit rename (a distinct operation; §4.5's redirect-map mechanism covers it).
 2. **Ranking, not relocation, does the work.** §6.2's ranking formula scores `superseded`/`archived` notes near zero (still discoverable via direct search, just never surfaces as a default top-K result) — the same effect v1's folder-move achieved, without a file-move needing to happen at all.
@@ -224,7 +224,7 @@ last_optimized: YYYY-MM-DD            # optional — last time an optimize pass 
 
 **Dropped from v1**: `confidence` (was write-only — nothing ever consumed it for ranking or filtering; operator decision 2026-07-18, reintroduce only if a real ranking need surfaces with an actual consumer) and `source` (conversation/review/observation/research — provenance-of-claim metadata that, like `confidence`, had no downstream consumer). `links` is also dropped — v1 auto-maintained a `links:` field from body wikilinks via `vault_optimize.py reindex`; v2's search engine computes the link graph live from body content instead, so a stored, driftable copy is unnecessary.
 
-**Not in frontmatter, ever**: `impression` / `used` / `walked` / `last_impression` — these look like note-level counters but are **telemetry**, not content. They live in the git-tracked per-writer telemetry shards (§6.3) and are joined against note content at query/read time — never written to the `.md` file. This is a deliberate divergence from dmp-web (which bumps these as frontmatter counters, livable for one dev on one checkout but a merge-conflict generator for N agents in N clones — `VAULT-COMPARISON-DMPWEB.md` §9.4 P1). The shard design (§6.3) makes the conflict class structurally impossible instead of auto-resolving it — "notes stay pure content" was always the load-bearing half of the planning doc §9.4 rule, and it survives unchanged.
+**Not in frontmatter, ever**: `impression` / `used` / `walked` / `last_impression` — these look like note-level counters but are **telemetry**, not content. They live in the git-tracked per-writer telemetry shards (§6.3) and are joined against note content at query/read time — never written to the `.md` file. This is a deliberate divergence from the reference system (which bumps these as frontmatter counters, livable for one dev on one checkout but a merge-conflict generator for N agents in N clones — the planning doc §9.4 P1). The shard design (§6.3) makes the conflict class structurally impossible instead of auto-resolving it — "notes stay pure content" was always the load-bearing half of the planning doc §9.4 rule, and it survives unchanged.
 
 **Ownership note** (`owner:` field): unchanged from v1 — authored role-class of the note's content, `owner: shared` for content that benefits multiple roles. The pre-#6274 naming drift (`qa`/`skill` vs `verifier`/`worker`) and the `<role>` vs `<role>-lead` convention drift (v1 §10.3) both get swept during migration (§10.2 M1) rather than patched in place.
 
@@ -239,13 +239,13 @@ last_optimized: YYYY-MM-DD            # optional — last time an optimize pass 
 
 ### 4.4 Staleness — usage-based, not time-based confidence decay
 
-v1 had a `confidence` field that decayed `high → medium → low` purely on time since `updated:` (§4.4 in the v1 snapshot). **This entire mechanism is dropped**, not adapted — it's the exact thing the dmp-web comparison identifies as inferior (`VAULT-COMPARISON-DMPWEB.md` §3.2/§9.2.6): a note that's old but heavily used decayed anyway (unless manually tagged `evergreen` at creation, which requires foresight); a note that's young but never consulted didn't decay at all despite being dead weight from day one.
+v1 had a `confidence` field that decayed `high → medium → low` purely on time since `updated:` (§4.4 in the v1 snapshot). **This entire mechanism is dropped**, not adapted — it's the exact thing the vault comparison identifies as inferior (the planning doc §3.2/§9.2.6): a note that's old but heavily used decayed anyway (unless manually tagged `evergreen` at creation, which requires foresight); a note that's young but never consulted didn't decay at all despite being dead weight from day one.
 
-**Replacement**: staleness is now a **usage** signal, computed from the telemetry ledger (§6), not stored on the note. The impressions report (§6.4, port of dmp-web's `vault-impressions-report`) classifies every note as:
+**Replacement**: staleness is now a **usage** signal, computed from the telemetry ledger (§6), not stored on the note. The impressions report (§6.4, port of the reference system's `vault-impressions-report`) classifies every note as:
 
 - **Cold** — never surfaced by a search.
 - **Surfaced-but-never-used** — shown in results repeatedly, never cited (`used`) by any consumer.
-- **Stale** — was `used` at least once, but not in the last N days (config, default 90 — dmp-web's tuned value).
+- **Stale** — was `used` at least once, but not in the last N days (config, default 90 — the reference system's tuned value).
 
 These three buckets feed `vault_optimize.py`'s pruning decisions (§7.3-equivalent) — the same *function* v1's time-decay served (deciding what to archive), computed from a signal that actually correlates with whether the note is helping anyone.
 
@@ -259,7 +259,7 @@ Bare wikilink syntax in the body: `[[note-name]]`. No aliases. Cross-note refere
 
 **Broken-link validation**: `vault_check.py check-wikilinks` — same contract as v1 (walks all notes, flags any `[[name]]` whose target doesn't exist, exit 1 if any found).
 
-**Note renames**: v1's proposed fix was a CI/CD enforcement layer (#10100, closed as superseded by this redesign). v2's answer is different and more durable: the migration script (`VAULT-COMPARISON-DMPWEB.md` §9.5 M1) already builds an old→new redirect map and rewrites every wikilink vault-wide as part of the one-time v1→v2 migration. Post-migration, the same redirect-map mechanism is the generalizable answer to *any* future rename — a rename becomes "run the redirect tool," not "hope nobody renamed a file by hand." Whether to formalize this as an enforced CI gate (v1's prohibit-vs-reconcile question) is deferred — not needed for the TRD to be complete, since the redirect-map tool makes renames cheap to fix after the fact even without a gate.
+**Note renames**: v1's proposed fix was a CI/CD enforcement layer (#10100, closed as superseded by this redesign). v2's answer is different and more durable: the migration script (the planning doc §9.5 M1) already builds an old→new redirect map and rewrites every wikilink vault-wide as part of the one-time v1→v2 migration. Post-migration, the same redirect-map mechanism is the generalizable answer to *any* future rename — a rename becomes "run the redirect tool," not "hope nobody renamed a file by hand." Whether to formalize this as an enforced CI gate (v1's prohibit-vs-reconcile question) is deferred — not needed for the TRD to be complete, since the redirect-map tool makes renames cheap to fix after the fact even without a gate.
 
 ---
 
@@ -267,7 +267,7 @@ Bare wikilink syntax in the body: `[[note-name]]`. No aliases. Cross-note refere
 
 `.squidsquad/vault/BRIEFING.md` is the **active-context summary** every agent reads at session start and re-reads when more than one cycle has passed. It is the one vault file injected *wholesale* into agent context rather than reached through search — the hot layer over the searchable store.
 
-**Outside the engine, by design.** BRIEFING.md is excluded from the search index, the ranking, and telemetry (`VAULT-COMPARISON-DMPWEB.md` §9.2.3): it is a *digest* of the vault and the tracker, not a knowledge note — indexing it would double-count every note it summarizes, and impression-counting a file every agent reads unconditionally would only add noise to the usage signal. It carries no §4 frontmatter and no `type:` — it is not a registry entity.
+**Outside the engine, by design.** BRIEFING.md is excluded from the search index, the ranking, and telemetry (the planning doc §9.2.3): it is a *digest* of the vault and the tracker, not a knowledge note — indexing it would double-count every note it summarizes, and impression-counting a file every agent reads unconditionally would only add noise to the usage signal. It carries no §4 frontmatter and no `type:` — it is not a registry entity.
 
 Spec (all carried from v1, now stated prescriptively):
 
@@ -277,7 +277,7 @@ Spec (all carried from v1, now stated prescriptively):
 - **New-content token budget** per `.squidsquad/config.md` (`BRIEFING Token Budget`).
 - **Sections**: Active Priorities, Recently Shipped, Core Architecture, Recent Decisions, Human Preferences (a pointer to `[[human-profile]]`, never a copy), Constraints & Blockers, Team State.
 
-**New in v2 — the auto-digest section** (target state; depends on §6 telemetry being live): a small auto-generated **Vault Pulse** section built from telemetry aggregates — hottest notes this period, newly added binding rules, missed-consultation count (§9's outcome-linking). This is the `VAULT-COMPARISON-DMPWEB.md` §7 4.4 leapfrog item: it keeps the hot layer honest (the digest reflects measured usage, not what an agent remembered to write) and gives the operator a vault health pulse for free. The rest of BRIEFING stays hand-maintained by the write path exactly as in v1.
+**New in v2 — the auto-digest section** (target state; depends on §6 telemetry being live): a small auto-generated **Vault Pulse** section built from telemetry aggregates — hottest notes this period, newly added binding rules, missed-consultation count (§9's outcome-linking). This is the planning doc §7 4.4 leapfrog item: it keeps the hot layer honest (the digest reflects measured usage, not what an agent remembered to write) and gives the operator a vault health pulse for free. The rest of BRIEFING stays hand-maintained by the write path exactly as in v1.
 
 ---
 
@@ -285,7 +285,7 @@ Spec (all carried from v1, now stated prescriptively):
 
 This section is the heart of v2: the consumption side v1 never had. It specifies three contracts — the **event model** (§6.1), the **search + ranking contract** (§6.2), and the **telemetry storage** (§6.3) — plus the two consumers built on them (§6.4 impressions report, §6.5 compaction).
 
-**Contracts, not implementation.** Per `VAULT-COMPARISON-DMPWEB.md` §10.2/§10.3, the engine is planned to be consumed as the portable dmp-web extraction invoked via the Skill tool (two feasibility checks still pending — see §7/§8). The contracts below hold regardless of how the engine is packaged: they are what any implementation must satisfy, and what the sub-skills and verifier check against.
+**Contracts, not implementation.** Per the planning doc §10.2/§10.3, the engine is planned to be consumed as the portable reference-system extraction invoked via the Skill tool (two feasibility checks still pending — see §7/§8). The contracts below hold regardless of how the engine is packaged: they are what any implementation must satisfy, and what the sub-skills and verifier check against.
 
 ### 6.1 Event model
 
@@ -299,7 +299,7 @@ Three counters, written by different parties, disjoint per run:
 
 The engine/consumer split is load-bearing: `impression` measures what search *offers*, `used` measures what work *actually consumed*. Conflating them (letting the engine write `used`, or counting reads as usage) would collapse the signal that makes §4.4's staleness buckets and §6.2's ranking meaningful.
 
-Every event is one JSONL record: `{id: <uuid>, ts, agent, task, slug, counter}` — `agent` is the acting agent's **alias** (e.g. `pm`, `skill`); the writing *instance* is not a field because it is encoded in which shard the event lands in (§6.3). Callers pass their identity (instance id + alias) on every engine call (§8.5). `task` (the tracker issue number) is deliberately carried on every event — per-task attribution is richer than dmp-web's flat per-note integers and is what enables outcome-linked telemetry (§9: joining events against tracker outcomes to detect missed consultations). `id` is the dedup key (§6.3).
+Every event is one JSONL record: `{id: <uuid>, ts, agent, task, slug, counter}` — `agent` is the acting agent's **alias** (e.g. `pm`, `skill`); the writing *instance* is not a field because it is encoded in which shard the event lands in (§6.3). Callers pass their identity (instance id + alias) on every engine call (§8.5). `task` (the tracker issue number) is deliberately carried on every event — per-task attribution is richer than the reference system's flat per-note integers and is what enables outcome-linked telemetry (§9: joining events against tracker outcomes to detect missed consultations). `id` is the dedup key (§6.3).
 
 A `--no-write` dry-run flag suppresses event emission for diagnostic searches — telemetry should measure real consumption, not debugging.
 
@@ -315,13 +315,13 @@ A `--no-write` dry-run flag suppresses event emission for diagnostic searches �
 
 ### 6.3 Telemetry storage — git-tracked per-writer shards
 
-> **Design status**: **LOCKED — operator-confirmed 2026-07-18** (inline session; granularity refined during review from per-harness-instance to per-writing-clone). Supersedes `VAULT-COMPARISON-DMPWEB.md` §9.4 point 1 (2026-07-12: harness-owned gitignored store) — see `VAULT-COMPARISON-DMPWEB.md` §10.5 for the full supersession history; the load-bearing rationale is restated inline below.
+> **Design status**: **LOCKED — operator-confirmed 2026-07-18** (inline session; granularity refined during review from per-harness-instance to per-writing-clone). Supersedes the planning doc §9.4 point 1 (2026-07-12: harness-owned gitignored store) — see the planning doc §10.5 for the full supersession history; the load-bearing rationale is restated inline below.
 
-**Why the planning doc §9.4's harness-local store had to change**: a SquidSquad install can run **multiple independent harness instances** — e.g. each teammate runs their own harness against their own clone, with no shared always-on server. A harness-local store fragments telemetry into N per-teammate partial pictures, defeating team-wide ranking. This is the same many-independent-checkouts topology dmp-web has — which is why dmp-web routes telemetry through git. dmp-web's *mechanism* (frontmatter counters + a custom `vault-note` merge driver) is still not the model: custom merge drivers require per-clone opt-in registration, and counters-in-notes is the conflict *source*, not a solution.
+**Why the planning doc §9.4's harness-local store had to change**: a SquidSquad install can run **multiple independent harness instances** — e.g. each teammate runs their own harness against their own clone, with no shared always-on server. A harness-local store fragments telemetry into N per-teammate partial pictures, defeating team-wide ranking. This is the same many-independent-checkouts topology the reference system has — which is why the reference system routes telemetry through git. The reference system's *mechanism* (frontmatter counters + a custom `vault-note` merge driver) is still not the model: custom merge drivers require per-clone opt-in registration, and counters-in-notes is the conflict *source*, not a solution.
 
 The design — telemetry is a grow-only counter, a solved distributed-systems shape (CRDT G-counter): **per-writer shards, sum at read**:
 
-1. **Per-writing-clone, append-only JSONL shards, git-tracked**: `.squidsquad/vault/.telemetry/<harness-instance-id>-<role>.jsonl`. The shard axis is *the writer* — the working copy that actually appends and pushes — and under clone isolation that is each agent's clone, not the harness as a whole (one harness supervises N agents in N separate clones, each committing independently; a shared per-harness file would recreate concurrent writers within one squad). Every shard has exactly one author, ever — merge conflicts between writers are *structurally impossible*, not auto-resolved. Which note an event concerns is carried per-record in `slug` (§6.1), never in the file layout: sharding is by **who writes**, not what is written about (per-note files would give the hottest notes the most concurrent writers — dmp-web's conflict problem in a different shape).
+1. **Per-writing-clone, append-only JSONL shards, git-tracked**: `.squidsquad/vault/.telemetry/<harness-instance-id>-<role>.jsonl`. The shard axis is *the writer* — the working copy that actually appends and pushes — and under clone isolation that is each agent's clone, not the harness as a whole (one harness supervises N agents in N separate clones, each committing independently; a shared per-harness file would recreate concurrent writers within one squad). Every shard has exactly one author, ever — merge conflicts between writers are *structurally impossible*, not auto-resolved. Which note an event concerns is carried per-record in `slug` (§6.1), never in the file layout: sharding is by **who writes**, not what is written about (per-note files would give the hottest notes the most concurrent writers — the reference system's conflict problem in a different shape).
    - **Instance identity**: `<harness-instance-id>` is a UUID minted at harness provision time and persisted in the instance's own **gitignored local state** — never derived from hostname or username (one developer running several squads in parallel would collide), and never stored in a committed file (all clones would inherit the same id). This makes the multi-squad-per-developer case (one install, X harness instances, same or different machines) safe by construction: X squads → X disjoint shard sets, one shared ranking. File count stays bounded: roles × squads, not notes.
 2. **`merge=union` via a directory-local `.squidsquad/vault/.telemetry/.gitattributes`** (containing `*.jsonl merge=union`), seeded by the install scaffold — git's built-in union strategy, no per-clone registration, works for every clone on day one, and never touches the host repo's root `.gitattributes`. It covers the one residual divergence case (the same shard diverging across machines — restored backup, cloned VM); union-merge on append-only lines is safe because readers dedupe by event `id`, so a double-merged line is harmless.
 3. **Sync layer = the git remote already serving as the bus.** `git pull` = telemetry sync; no new infrastructure — consistent with the house philosophy that git is the audit trail and GitHub the coordination bus.
@@ -335,7 +335,7 @@ The design — telemetry is a grow-only counter, a solved distributed-systems sh
 
 ### 6.4 Impressions report
 
-The port of dmp-web's `vault-impressions-report`: reads the shards (§6.3), joins against the note inventory, and buckets every note into §4.4's three classes (definitions canonical there):
+The port of the reference system's `vault-impressions-report`: reads the shards (§6.3), joins against the note inventory, and buckets every note into §4.4's three classes (definitions canonical there):
 
 - **Cold** — never surfaced by any search.
 - **Surfaced-but-never-used** — repeatedly offered in top-K, never once cited by a consumer.
@@ -383,7 +383,7 @@ Kept from v1: PM-lane, fires on sustained quiet, proposes cross-agent posture pa
 
 ### 7.5 Engine packaging & invocation
 
-Resolved direction (planning doc §10.3, verified §10.7): the engine — search, telemetry write, impressions report — is the **portable dmp-web extraction, invoked via the Skill tool** from inside agent sessions, not ported to Python and not vendored as subprocess scripts.
+Resolved direction (planning doc §10.3, verified §10.7): the engine — search, telemetry write, impressions report — is the **portable reference-system extraction, invoked via the Skill tool** from inside agent sessions, not ported to Python and not vendored as subprocess scripts.
 
 - **Mechanism: verified.** A harness-spawned agent session invoked a Claude Skill live with no prompt and no interactivity (2026-07-18). The real dependency is **availability**: the package's skills must be installed (user- or project-level) on the machine running the agents — an install-time concern, not a runtime one.
 - **Node is a checkable soft prerequisite, not an assumption.** npm-mode Claude Code installs imply Node; native-binary installs do not. The wizard/installer preflights `node --version` when enabling the engine; absent Node, the feature degrades per §6.2/§9.9 (search falls back to engine-unavailable receipts; ranking to tier + recency) — and the Python-port fallback (planning §9.4.2) remains the contingency if Skill-based packaging proves unreliable in practice.
@@ -429,7 +429,7 @@ Shard append discipline (one writer, one file, trailing-newline JSONL) is part o
 
 ## 9. Cycle integration
 
-v1 touched the vault at three points (boot read, an advisory "consult before work," post-cycle write sweep) — all of them **optional in practice**: nothing verified the consult happened, so it usually didn't (the root finding of the dmp-web comparison). v2's cycle integration is the **consumption pipeline**: vault touchpoints become mandatory, verifiable steps that produce **committed receipts**, with telemetry (§6) flowing from every touch. Nothing about the pipeline blocks at *runtime* — the enforcement is process-level (verifier gates), preserving the non-blocking philosophy (§9.6).
+v1 touched the vault at three points (boot read, an advisory "consult before work," post-cycle write sweep) — all of them **optional in practice**: nothing verified the consult happened, so it usually didn't (the root finding of the vault comparison). v2's cycle integration is the **consumption pipeline**: vault touchpoints become mandatory, verifiable steps that produce **committed receipts**, with telemetry (§6) flowing from every touch. Nothing about the pipeline blocks at *runtime* — the enforcement is process-level (verifier gates), preserving the non-blocking philosophy (§9.6).
 
 ### 9.1 Boot — BRIEFING read
 
@@ -437,7 +437,7 @@ Unchanged from v1: every agent reads `BRIEFING.md` (§5) at session start and re
 
 ### 9.2 Task filing — context injection (PM intake)
 
-When PM files a task, the intake flow runs an engine search (§6.2) on the task's keywords and appends a **`## Vault context`** section to the issue body — top-K note names + one-line relevance each. Dev agents read the issue body first (house rule), so relevant vault context arrives *with the task*, deterministically, before any agent has to remember to search. The search's `impression` events attribute to the task number. This is the leapfrog item dmp-web structurally can't do (single-agent, no intake step) — `VAULT-COMPARISON-DMPWEB.md` §7 4.1.
+When PM files a task, the intake flow runs an engine search (§6.2) on the task's keywords and appends a **`## Vault context`** section to the issue body — top-K note names + one-line relevance each. Dev agents read the issue body first (house rule), so relevant vault context arrives *with the task*, deterministically, before any agent has to remember to search. The search's `impression` events attribute to the task number. This is the leapfrog item the reference system structurally can't do (single-agent, no intake step) — the planning doc §7 4.1.
 
 ### 9.3 Task pickup — mandatory consultation + receipts
 
@@ -457,11 +457,11 @@ The verifier adds two cheap checks to every verification pass:
 1. The receipt sections (`## Vault context consumed`, `## Applicable rules`) exist in the task artifacts.
 2. The implementation does not violate any rule listed in `## Applicable rules`.
 
-Missing receipt = back to dev, same as any other gap (zero-gap gate). This is the step that turns dmp-web's single-agent self-discipline into **team-enforced process** — the multi-agent structure is what makes the pipeline verifiable rather than aspirational.
+Missing receipt = back to dev, same as any other gap (zero-gap gate). This is the step that turns the reference system's single-agent self-discipline into **team-enforced process** — the multi-agent structure is what makes the pipeline verifiable rather than aspirational.
 
 ### 9.5 Ship — capture-at-ship + end-of-cycle sweep
 
-Two complementary write paths (dmp-web has only the first):
+Two complementary write paths (the reference system has only the first):
 
 1. **Capture-at-ship** (worker, pre-PR): decide whether the task produced durable knowledge (decision / root cause / pattern — with a skip-list for chores); if yes, write the note **on the feature branch so it ships in the same PR** as the change that produced it, issue number in the note's references. Counts against the write budget; dedup gate applies.
 2. **End-of-cycle `vault-remember`** (every role, post-cycle): the sweep for what per-task capture missed. Carried from v1 with one structural change: **dedup reroutes through the engine** — the gate calls the engine's search instead of v1's title/tag `dedup-check`, and adopts **prefer-update-over-create**: the top-ranked hit above a similarity threshold becomes the merge target; a new note is created only when nothing ranks. Most cycle output becomes *appends to existing notes* — the correct pressure for a vault that should consolidate, not sprawl. Write throttles survive v1 unchanged (budget, quiet-gate, role lanes — autonomy needs them).
@@ -474,12 +474,12 @@ Two complementary write paths (dmp-web has only the first):
 
 ### 9.7 Outcome-linked telemetry (target state)
 
-Joining the event stream (§6.1, per-task attribution) with tracker outcomes — the second leapfrog dmp-web can't reach (it has no tracker):
+Joining the event stream (§6.1, per-task attribution) with tracker outcomes — the second leapfrog the reference system can't reach (it has no tracker):
 
 - A task that fails verification, where the failure matches an existing note that was **never consulted** during §9.3 → a **missed-consultation** finding: direct evidence the read side failed. PM's improvement scan reviews these.
 - A note repeatedly `used` by tasks that pass verification first-try → ranking boost signal.
 
-dmp-web measures *usage*; this measures *effectiveness*. Depends on §6 telemetry + §9.3 receipts being live first — sequenced last.
+The reference system measures *usage*; this measures *effectiveness*. Depends on §6 telemetry + §9.3 receipts being live first — sequenced last.
 
 ### 9.8 Git integration
 
@@ -541,7 +541,7 @@ Far smaller than the wholesale-adoption version the planning doc first sketched 
 
 ### 10.3 M2 — distillation (agent judgment, analyze-only)
 
-Modeled on dmp-web's optimize analyze phase: lightweight-tier model subagents per topical cluster (per the house lower-models-for-subagents rule), **proposing, never applying**:
+Modeled on the reference system's optimize analyze phase: lightweight-tier model subagents per topical cluster (per the house lower-models-for-subagents rule), **proposing, never applying**:
 
 - Per note or cluster, a verdict — `keep` / `merge-into <target>` (with merged draft) / `prune` (with one-line justification). The single-incident `learning-*` pile (~56 live) is the main target.
 - Author the initial `systems/` hub set (~7–10; exemplars per §3.2) and propose which surviving leaves link to which hub — this is what makes §6.2's traversal productive on day one (§3.2).
@@ -562,11 +562,11 @@ Modeled on dmp-web's optimize analyze phase: lightweight-tier model subagents pe
 
 ## 11. Open decisions & gaps
 
-v1's §11 re-verified #5855's claims against a 2026-05-24 snapshot; that audit did its job — it seeded the dmp-web comparison that produced this redesign, and **#5855 (vault is a static decision log) is the umbrella gap this entire TRD answers**: it closes at M4 cutover, not before. What remains open, with owners and resolution points:
+v1's §11 re-verified #5855's claims against a 2026-05-24 snapshot; that audit did its job — it seeded the vault comparison that produced this redesign, and **#5855 (vault is a static decision log) is the umbrella gap this entire TRD answers**: it closes at M4 cutover, not before. What remains open, with owners and resolution points:
 
 | # | Open item | Blocks | Resolve by / owner |
 |---|---|---|---|
-| 1 | **Skill-invocation feasibility** — does invoking the portable dmp-web package's Claude Skills work reliably from an autonomous, non-interactive agent session? | §7/§8 concrete shape (engine packaging) | PM research, before §7/§8 are drafted — the two-path fallback is a Python port per the planning doc §9.4.2 |
+| 1 | **Skill-invocation feasibility** — does invoking the portable reference-system package's Claude Skills work reliably from an autonomous, non-interactive agent session? | §7/§8 concrete shape (engine packaging) | PM research, before §7/§8 are drafted — the two-path fallback is a Python port per the planning doc §9.4.2 |
 | 2 | **Node-alongside-Claude-Code guarantee** — is Node present on a target machine just because Claude Code is? | Same as #1 | Same as #1 |
 | 3 | **Rules-lane registry placement** — dedicated `rule` type vs `binding: true` flag on existing types (§9.3 item 2's receipt contract is independent of this) | Rules matching implementation, M1 mapping for binding content | Operator + PM at §7 drafting; recommendation forthcoming with the sub-skill design |
 | 4 | **Distillation aggressiveness** — how hard M2 prunes the single-incident learning pile (planning §9.6 #3; recommendation: aggressive — telemetry vindicates or refutes survivors within weeks) | M2/M3 only | Operator at M3 manifest review |
@@ -603,4 +603,4 @@ The §12.1 map is directionally current (re-verify anchors at reconciliation tim
 
 - **2026-05-24 (v1 draft, descriptive snapshot)** — initial draft. Consolidates the vault's specification (from 5 sub-skills + 4 scripts) and current state (from on-disk inventory) into one architecture doc. No design changes proposed. References open issue #5855 for the known living-memory gap; resolution out of scope.
 - **2026-05-24 (v1 draft, expanded)** — added §9.6 failure modes + recovery paths, §9.7 explicit non-functionality, §10.3-§10.6 ownership/confidence/status/recency distributions, §11 re-verified #5855 claims (each verdict CONFIRMED / PARTIALLY TRUE / NOT TRUE TODAY) + new drift findings (owner label `<role>` vs `<role>-lead`; zero `superseded` notes), §12.1 verified cross-refs with line numbers, §12.2 reconciliation needs for ARCHITECTURE / COMPOSE-ARCHITECTURE / AGENT-RUNTIME / INSTALLER-ARCH / sub-skill-catalog.
-- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per `VAULT-COMPARISON-DMPWEB.md` §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes planning doc §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. Later same day: §10 reframed from stale inventory to the M0–M4 migration design (product feature, lean transform for the PARAG-kept profile); §11 rewritten as the open-decisions table (#5855 noted as closing at M4); §12.2 rewritten as the v2 reconciliation list (ARCHITECTURE / AGENT-RUNTIME / COMPOSE / INSTALLER / catalog / HARNESS). Same evening: the two §10.3 packaging verifications resolved by live probe (Skill invocation from a harness-spawned session CONFIRMED; Node NOT guaranteed → preflight soft-prerequisite model), unblocking §7/§8 — rewritten as the engine-based sub-skill layer (consultation/receipt steps, engine-rerouted dedup, harness-scheduled maintenance, §7.5 packaging-via-Skill-invocation) and the v2 script surface with the §8.5 engine-boundary contract table. **All sections now v2**; doc ready for DS audit.
+- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per the planning doc §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes planning doc §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. Later same day: §10 reframed from stale inventory to the M0–M4 migration design (product feature, lean transform for the PARAG-kept profile); §11 rewritten as the open-decisions table (#5855 noted as closing at M4); §12.2 rewritten as the v2 reconciliation list (ARCHITECTURE / AGENT-RUNTIME / COMPOSE / INSTALLER / catalog / HARNESS). Same evening: the two §10.3 packaging verifications resolved by live probe (Skill invocation from a harness-spawned session CONFIRMED; Node NOT guaranteed → preflight soft-prerequisite model), unblocking §7/§8 — rewritten as the engine-based sub-skill layer (consultation/receipt steps, engine-rerouted dedup, harness-scheduled maintenance, §7.5 packaging-via-Skill-invocation) and the v2 script surface with the §8.5 engine-boundary contract table. **All sections now v2**; doc ready for DS audit.
