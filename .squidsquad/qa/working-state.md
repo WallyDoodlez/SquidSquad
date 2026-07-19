@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: none
-- **Status**: none
+- **Task**: #13566
+- **Status**: in-progress (round 2)
 
 ## Completed Steps
 - #13565: PM revised AC1 (composed-size target -> re-read-cost target) immediately after my round-2 @-mention, matching the numbers already on the branch exactly (task-intake 5,457B/verification 10,481B/deploy-signal-handling 8,838B, all confirmed against PM's revised targets). All 4 ACs now effectively pass -- posted confirmation, but item is stuck at in-progress (my own round-2 transition landed just before PM's ruling) and only skill holds in-progress->pending-test authority, so it's a mechanical bounce-back I'm waiting on, not further work of mine. Will do a fast Round 3 confirm + ship once it re-lands on pending-test.
