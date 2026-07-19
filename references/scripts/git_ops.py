@@ -1462,20 +1462,45 @@ def _merge_dropped_state_paths(pre_ref):
     delete with zero conflict signal (no unmerged path for
     ``_auto_resolve_state_conflicts`` to catch). Returns a sorted list of dropped
     paths (empty if none / on any git uncertainty -> fail-safe: never a spurious
-    restore)."""
+    restore).
+
+    #13723: a path absent/emptied post-merge is only a genuine DROP if the
+    CANONICAL REMOTE (``origin/<working>``) does NOT also confirm the deletion.
+    If ``origin/<working>``'s current tip also has the path absent/empty, the
+    deletion is authoritative (a teammate's own committed fix landing via
+    merge, not something the merge machinery silently ate) -- restoring from
+    ``ORIG_HEAD`` would silently revert that teammate's own fix (observed
+    live: PM's ``git rm --cached`` of two harness log files, landing via
+    merge, got reverted by this guard before the #13723 fix). Deliberately
+    checks ``origin/<working>`` specifically, NOT ``HEAD^2`` (whatever branch
+    happened to be merged in) -- the ORIGINAL #13556 incident this guard
+    protects against is exactly a throwaway/feature branch's deletion
+    silently winning over untouched canonical content, so an arbitrary
+    merged-in branch's deletion must NOT be trusted the same way a confirmed
+    canonical-remote deletion is. Any resolution failure (no ``origin`` remote
+    configured, ref not fetched, detached test repo) falls back to the
+    ORIGINAL #13556 behavior (restore) -- the new check only ever narrows
+    (opts OUT of) a restore with positive confirmation, never the reverse,
+    so an unrelated resolution failure can't defeat the core protection."""
     before = _state_blob_sizes(pre_ref)
     if not before:  # None (git failure) or {} (no protected paths) -> nothing to check
         return []
     after = _state_blob_sizes("HEAD")
     if after is None:  # DS-13556 F2: git failure on HEAD -> unknown, never a mass-restore
         return []
+    origin_state = _state_blob_sizes(f"origin/{_get_working_branch()}")
     dropped = []
     for path, size in before.items():
         if size == 0:
             continue  # was already empty pre-merge -> a later empty isn't a drop
         now = after.get(path)
-        if now is None or now == 0:  # absent, or emptied
-            dropped.append(path)
+        if now is not None and now != 0:
+            continue  # still present post-merge -> not dropped
+        if origin_state is not None:
+            origin_size = origin_state.get(path)
+            if origin_size is None or origin_size == 0:
+                continue  # #13723: canonical remote confirms the deletion -> legitimate
+        dropped.append(path)
     return sorted(dropped)
 
 
@@ -2354,6 +2379,31 @@ def guard_staged_state():
             state_staged.append(p)
     if not state_staged:
         return []
+
+    # #13724: a staged state path whose content already matches
+    # origin/<working>'s current tip produces ZERO diff for that path in the
+    # PR either way -- stripping it back to HEAD (the feature branch's own,
+    # possibly-stale, pre-merge value) actively HURTS here: it turns a
+    # no-op path into a real revert-looking diff against main. This fires on
+    # a legitimate `git merge origin/<working>` conflict-resolution commit
+    # on a stale feature branch, where the merge's index already holds
+    # main's newer state content for these paths -- reported live this
+    # session: guard_staged_state reverting merged-in state content caused
+    # the harness /merge endpoint to reject two otherwise-clean PRs
+    # (#13712, #13713) as carrying "out-of-scope state/vault changes",
+    # when in fact the guard itself introduced that divergence from main.
+    origin_working = f"origin/{working}"
+    to_unstage = []
+    for p in state_staged:
+        matches_main = _run_list(
+            ["git", "diff", "--cached", "--quiet", origin_working, "--", p],
+            check=False)
+        if matches_main.returncode == 0:
+            continue  # identical to origin/<working> already -- leave staged
+        to_unstage.append(p)
+    if not to_unstage:
+        return []
+    state_staged = to_unstage
 
     # Unstage (reset, not restore --staged: works on older git and leaves the
     # working-tree copy untouched). Per-path so one bad path can't drop the lot.
