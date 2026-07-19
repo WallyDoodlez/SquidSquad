@@ -48,6 +48,7 @@ import os
 import platform
 import re
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -1785,6 +1786,45 @@ def _detect_remote_url(repo_dir):
     return None
 
 
+def _cleanup_failed_clone(clone_dir):
+    """Remove a stray directory left behind by a failed ``git clone`` (#13793).
+
+    ``git clone`` creates its target directory before it can fail, so a
+    dropped connection, bad remote, or interrupted process leaves a stray
+    directory behind -- blocking every future clone attempt to that same
+    path. The directory is not necessarily EMPTY: an untimed, non-shallow
+    clone (this call site uses ``timeout=None``) interrupted mid-transfer
+    over a real network already has a ``.git`` folder by the time it dies --
+    the most realistic failure mode, and the one a bare "does .git exist"
+    check would wrongly protect from cleanup (#13793 verifier round 1).
+    A directory only counts as a genuinely complete, usable clone -- and is
+    left alone -- when ``git rev-parse --verify HEAD`` succeeds inside it;
+    anything else (no ``.git``, a ``.git`` with no resolvable HEAD) is
+    cleaned up. Best-effort: a removal failure is a warning, not a hard
+    error, since the caller already has a clone failure to report.
+    """
+    if not clone_dir.exists():
+        return
+    result = _run(["git", "-C", str(clone_dir), "rev-parse", "--verify", "HEAD"])
+    if result.returncode == 0:
+        return  # genuinely complete, usable clone -- never touch
+    try:
+        # #13793 verifier round 2: git writes pack objects read-only, and any
+        # clone that got far enough to write ONE pack object -- the realistic
+        # mid-transfer interruption this cleanup targets -- hits this on
+        # Windows, where shutil.rmtree cannot unlink a read-only file without
+        # help (POSIX deletion is governed by directory perms; Windows needs
+        # the file's own write bit cleared first). onexc clears it and
+        # retries the failed operation once per offending path.
+        def _clear_readonly_and_retry(func, path, exc):
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        shutil.rmtree(clone_dir, onexc=_clear_readonly_and_retry)
+    except OSError as e:
+        print(f"  WARNING: could not remove stray clone dir {clone_dir}: {e}",
+              file=sys.stderr)
+
+
 INSTALL_SPEC_FILENAME = ".install-spec.json"
 
 
@@ -2179,10 +2219,21 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
                                 f"{result.stderr.strip()}",
                                 file=sys.stderr,
                             )
+                            # #13793: `git clone` creates the target directory
+                            # before it can fail (bad remote, dropped
+                            # connection, interrupted process) -- left behind,
+                            # this stray dir has no .git and blocks EVERY
+                            # future clone attempt for this agent_id ("fatal:
+                            # destination path already exists and is not an
+                            # empty directory"), permanently stranding
+                            # provisioning until an operator manually removes
+                            # it. Clean it up now so a retry can succeed.
+                            _cleanup_failed_clone(clone_dir)
                             continue
                         summary.setdefault("clones_created", []).append(str(clone_dir))
                     except Exception as e:
                         print(f"  WARNING: Clone failed for {agent_id}: {e}", file=sys.stderr)
+                        _cleanup_failed_clone(clone_dir)
                         continue
 
     # PM always maps to current directory

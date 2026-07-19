@@ -15,6 +15,7 @@ Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #1
 - **#10003** — VAULT-ARCH v2 TRD, pending-human-review, PR #13708 all-gates-passed, awaiting merge approval. (verified 05:45)
 - **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN. (verified 05:45)
 - **#10377** — blocked:human-action (gated L4 DM curation task).
+- **#13807** — pending-human-setup: delete stale sibling dirs SquidSquad-web + SquidSquad-qa-omain (recovered from shipped #13793's untracked comment-only ask; PM closes on confirmation).
 - **#10024 / #8702 / #8698** — doc-realignment cluster: approve #10024 as rescoped; rule on closing #8702 (rec: supersede) and #8698 (rec: re-scope or close).
 - **~128 `status:pending` backlog tasks** awaiting operator go-ahead (verified 2026-07-18).
 

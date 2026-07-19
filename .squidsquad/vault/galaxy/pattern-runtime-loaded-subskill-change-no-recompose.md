@@ -7,7 +7,7 @@ owner: dm-lead
 status: active
 confidence: high
 source: observation
-links: [pattern-verify-composed-output-with-main-landing-state-applied, learning-l4-only-fix-skips-pr-flow]
+links: [pattern-verify-composed-output-with-main-landing-state-applied, learning-l4-only-fix-skips-pr-flow, learning-includes-yml-tombstoned-instructions-md-is-real-compose-source]
 ---
 
 ## Context
@@ -36,4 +36,7 @@ rather than forcing an immediate reboot. Confirm the no-recompose call with a fa
 restart, currently-running sessions keep executing the OLD fragment — note that explicitly in the ship comment if the
 fix's behavior matters to live sessions (e.g. #12506's idle-scan dormancy still affects running agents until they reboot).
 
-See also [[pattern-verify-composed-output-with-main-landing-state-applied]] (the inlined/composed-output side).
+See also [[pattern-verify-composed-output-with-main-landing-state-applied]] (the inlined/composed-output side)
+and [[learning-includes-yml-tombstoned-instructions-md-is-real-compose-source]] (a distinct trap: confirm the
+include is wired in `instructions.md` at all — `includes.yml` is tombstoned dead code and can list something
+that was migrated away from entirely).

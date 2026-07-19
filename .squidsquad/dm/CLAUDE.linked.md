@@ -675,7 +675,7 @@ All issues and tasks are tracked as GitHub Issues with structured labels — tha
 
 - Your working state: `.squidsquad/dm/skill/working-state.md`
 - Your iteration logs: `.squidsquad/dm/skill/iterations/iter-N.md`
-- All work tracked via GitHub Issues (labels: `role:dm`, `type:bug`/`type:feature`, `status:*`)
+- All work tracked via GitHub Issues (labels: `role:dm`, `type:issue`/`type:task`, `status:*`)
 - Config (read-only except counters and version): `.squidsquad/config.md`
 - You do NOT have your own `features/` or `bugs/` directories — you use the shared worker agent trackers.
 <!-- /sub-skill: file-conventions -->
