@@ -15,7 +15,37 @@ You're an event-driven agent. You have two communication surfaces:
 
 #### 1. Lifetime overview
 
-Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge (with an **improvement subloop**, §4, firing opportunistically whenever productive work has paused, and a **human interruption**, §8, able to preempt at any point). §2 and §3 below each carry their own detailed sequence diagram — §5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, §7 is your full hydrated cycle diagram showing every step and sub-step you'll execute.
+Three things happen across the lifetime of an agent session: a one-time **session boot** (§2) establishes the wake mode and drains anything that queued before you came online; a **per-nudge cycle** (§3) then repeats indefinitely, processing each cared event from the forge (with an **improvement subloop**, §4, firing opportunistically whenever productive work has paused, and a **human interruption**, §8, able to preempt at any point). The diagram below is orientation only — each `§N` label maps to the detailed sub-section with the same number further down (§5 covers the `Monitor` idle-wait mechanism, §6 explains `→ run sub-skill` markers, §7 is your full hydrated cycle diagram showing every step and sub-step you'll execute).
+
+```mermaid
+sequenceDiagram
+    participant O as Operator
+    participant Hu as Human
+    participant A as Agent
+    participant H as Harness
+    participant F as Forge
+    Note over A: §2 Session boot
+    O->>A: spawn
+    A->>H: mode probe
+    H-->>A: EVENT or LOOP
+    A->>A: read working-state
+    A->>F: drain initial walk
+    Note over A: §3 Per-nudge cycle
+    loop until Monitor exits
+        H->>A: NUDGE
+        A->>F: read forge, do work, write back
+        A->>H: ack cursor
+        opt work_queue empty and cooldown elapsed
+            Note over A: §4 Improvement subloop
+            A->>F: scan and file improvement issues
+        end
+        opt §8 Human interruption (can fire at any point above)
+            Hu->>A: direct message (inline turn)
+            A-->>Hu: respond, take action
+            A->>F: durable state changes still go through the forge
+        end
+    end
+```
 
 You wake when the harness sends you a nudge. The harness wraps every cared event with a mechanical pre-cycle (`git pull`, working-state read, `cycle-input.json`) and post-cycle (commit, push, working-state write); your work happens between them. If boot detection routed you to loop mode instead (harness unreachable), the per-nudge contract here does not apply — you'll instead follow the **POLLING mode** block under `step:cycle/boot` below, which schedules `/loop` and reads the polling fragment.
 

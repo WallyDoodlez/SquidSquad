@@ -1,5 +1,7 @@
 {
   "issue": 13369,
+  "superseded_by": 13569,
+  "superseded_note": "Discovered while reviewing this spec during #13565 (unrelated file touch triggered the staleness gate): CQ4's expected answer ('honor it at that point in the drain: emit ack-stop... then halt') describes the PRE-#13569 mid-drain-honor behavior. #13569 changed this to a HELD/deferred-until-post-drain-boundary behavior (see tests/comprehension/13569_spec.json), which this spec's CQ4 was never updated to reflect — a pre-existing gap unrelated to #13565's content relocation. CQ1-CQ3 (bootup-complete-before-drain ordering, drain discipline) are unaffected and still accurate. Historical PASS record retained.",
   "title": "Eager bootup-complete — boot drain must not run under bootup_complete=false",
   "source_file": "references/sub-skills/common-events/event-mode-contract.md",
   "section": "Boot Sequence (Case A) steps 4-5 + Case E deploy-signal boot-drain bullet",

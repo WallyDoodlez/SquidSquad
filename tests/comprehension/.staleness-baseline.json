@@ -4,7 +4,7 @@
  },
  "10678_spec.json": {
   "docs/COMPOSE-ARCHITECTURE.md": "3f7e41e0b17704371bdd9ef2e0f4b266226d8e76",
-  "docs/sub-skill-catalog.md": "661ba6425d3272a84dfdff9fd76480c929470c53"
+  "docs/sub-skill-catalog.md": "9689ea390672634032d9febf3fa843220cf7c85a"
  },
  "11140_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
@@ -16,7 +16,7 @@
   "references/scripts/v2_link_stage.py": "797f2794f6987178385d0ecb3d2b7834e5617210"
  },
  "11512_spec.json": {
-  "references/roles/instructions.md": "332e22d7a16aac2dfc05deefe10266b20008157b",
+  "references/roles/instructions.md": "380c1a8f2b54d4090c707e674b79c24db48e1d68",
   "references/scripts/thin_launcher.py": "eec18f4a5032dd1634b121c36f1562403e8dcdf0"
  },
  "11613_spec.json": {},
@@ -30,7 +30,7 @@
   "references/roles/worker/web/instructions.md": "e265bd74df2712a341d043cb35ff66dc92571caf"
  },
  "12451_spec.json": {
-  "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
+  "references/sub-skills/common-events/event-mode-contract.md": "e232d33dd7139e411c77e436b2e439292b881e8e"
  },
  "12473_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8"
@@ -66,7 +66,7 @@
  },
  "13035_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
-  "references/roles/instructions.md": "332e22d7a16aac2dfc05deefe10266b20008157b"
+  "references/roles/instructions.md": "380c1a8f2b54d4090c707e674b79c24db48e1d68"
  },
  "13043_spec.json": {},
  "13134_spec.json": {
@@ -83,7 +83,7 @@
  },
  "13162_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
-  "references/roles/instructions.md": "332e22d7a16aac2dfc05deefe10266b20008157b"
+  "references/roles/instructions.md": "380c1a8f2b54d4090c707e674b79c24db48e1d68"
  },
  "13175_spec.json": {
   "references/sub-skills/common-events/event-mode-contract.md": "07d223fe9a9a0b6757c4908a32b47ee1dbfe25b9"
@@ -108,7 +108,7 @@
   "docs/INSTALLER-RUNTIME.md": "d345fd45768bc3f8b16420a8b98d6a43d41441ac"
  },
  "13335_spec.json": {
-  "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
+  "references/sub-skills/common-events/event-mode-contract.md": "e232d33dd7139e411c77e436b2e439292b881e8e"
  },
  "13336_spec.json": {
   "docs/INSTALLER-RUNTIME.md": "d345fd45768bc3f8b16420a8b98d6a43d41441ac"
@@ -168,7 +168,7 @@
  "8694_spec.json": {
   "references/sub-skills/common-events/comment-handling.md": "8d5a2a4ab4164fbdb3f5657f89ef08586bd5e254",
   "references/sub-skills/common-events/cursor-management.md": "e70f63d8d81fa0889240e64d38fbf8a0c8f0735a",
-  "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b",
+  "references/sub-skills/common-events/event-mode-contract.md": "e232d33dd7139e411c77e436b2e439292b881e8e",
   "references/sub-skills/common-events/forge-read-pattern.md": "682ba6f78e8f56c85a011ccbd3587a36224ce2c0",
   "references/sub-skills/common-events/idle-cooldown-loop.md": "acc3cebbc3acaeeac8fa179ca352ff7f311bdaa9"
  },
@@ -190,7 +190,7 @@
  },
  "9588_spec.json": {},
  "9742_spec.json": {
-  "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
+  "references/sub-skills/common-events/event-mode-contract.md": "e232d33dd7139e411c77e436b2e439292b881e8e"
  },
  "9743_spec.json": {
   "references/sub-skills/common-events/idle-cooldown-loop.md": "acc3cebbc3acaeeac8fa179ca352ff7f311bdaa9"

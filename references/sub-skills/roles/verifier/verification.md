@@ -173,72 +173,7 @@ python references/scripts/git_ops.py task-end [role] [number]
 
    The router uses the `Test Plan Model` config setting and falls back to a Claude subagent on failure (same fallback contract PM uses for research/discussion-prep). Verifier reviews the draft, adjusts as needed, and saves the final version. This is optional — Verifier can also write the plan directly without routing.
 
-   **Test plan structure**:
-
-   ```markdown
-   # TEST-PLAN-<NUMBER> — [Title]
-
-   **Source**: GitHub issue #<NUMBER> Acceptance Criteria (and CONTEXT-<NUMBER>.md locked decisions if present).
-   **Derived without reading the diff.**
-
-   ## Test Cases
-
-   ### TC-1 (covers AC-1): [observable scenario]
-   - **Precondition**: [state of live instance before]
-   - **Steps**: [what verifier does against the live system]
-   - **Expected**: [observable result that satisfies AC-1]
-   - **Verification command**: [exact command verifier runs]
-
-   ### TC-2 (covers AC-2): …
-   ...
-
-   ## Coverage matrix
-   - AC-1 → TC-1
-   - AC-2 → TC-2, TC-3
-   - AC-N → TC-…
-
-   Every AC must appear in this matrix.
-
-   ## Comprehension Questions (if task touches LLM-consumed instructions)
-
-   This section is REQUIRED when the task adds or modifies LLM-consumed
-   instructions (CLAUDE.md content, sub-skill fragments, SOUL.md, prompts).
-   Verifier writes the CQ specs here — not PM (#9184).
-
-   ### CQ-1: [observable question a fresh agent should answer from the modified files alone]
-   - **Files**: [exact files the comprehension agent will be given]
-   - **Expected answer**: [the correct answer, derivable from the files alone]
-
-   Also persist the CQ spec at `tests/comprehension/<NUMBER>_spec.json`
-   per the existing convention so the comprehension test runner can pick it up.
-   ```
-
-   Spawn a Verifier subagent (via the Agent tool) to write executable assertions for the live-system test cases:
-
-   Subagent prompt:
-   ```
-   Read .squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md. For each test case:
-
-   1. Write an executable pytest test in .squidsquad/[VERIFIER_ALIAS]/planning/TEST-<NUMBER>-tests.py
-      - Each TC becomes a test function: test_tc_01_[name], test_tc_02_[name], etc.
-      - Tests must use concrete assertions (file exists, string matches, JSON parses, exit code checks)
-      - Tests must exercise the REAL live system — actual scripts, actual harness, actual tracker. Use subprocess.run for script verification, pathlib for file checks, json/yaml for structure. Do not mock the system under test.
-   2. Run the tests: python -m pytest .squidsquad/[VERIFIER_ALIAS]/planning/TEST-<NUMBER>-tests.py -v
-   3. Record pytest output verbatim in QA-RESULTS-<NUMBER>.md
-
-   TC result rules:
-   - PASS: test function passes
-   - FAIL: test function fails — include assertion error
-   - HUMAN-REQUIRED: TC cannot run because the environment is not set up (missing API key,
-     Docker not running, etc.). This is NOT a code bug — a human must fix the environment.
-     Tag with `blocked:human-action` label and note what the human needs to do.
-   - "Deferred" and "Skipped" are NOT valid results. Every TC must be PASS, FAIL, or HUMAN-REQUIRED.
-
-   Write results to .squidsquad/[VERIFIER_ALIAS]/planning/QA-RESULTS-<NUMBER>.md
-   Include the full pytest output and a summary table.
-   ```
-
-   **HUMAN-REQUIRED gate**: If any TC is HUMAN-REQUIRED, do NOT transition to pending-ship. Add the `blocked:human-action` label and comment: `"HUMAN-REQUIRED: [N] TCs need human environment setup: [list what's needed]. Cannot ship until resolved."`
+   → run sub-skill: `roles/verifier/verification-templates` for the TEST-PLAN.md structure template and the Verifier-subagent prompt that turns it into executable pytest assertions — skip if reusing per the resume logic above (most cycles reuse an existing, unchanged TEST-PLAN-<NUMBER>.md and never need this file).
 
    Verifier reviews QA-RESULTS-<NUMBER>.md and makes the final decision.
 
@@ -421,17 +356,10 @@ If `PR Flow: no`, skip this step.
 
 Print: `[🦑 HH:MM:SS] Checking agent health...`
 
-Check each agent's health by reading their `current-state` file via cross-clone paths from `.squidsquad/.local-config`. Each agent writes to its `current-state` file at the end of every cycle (including quiet cycles), so the file's mtime indicates when the agent last completed a cycle.
+Run the deterministic health check script — the same one PM's own health-check step calls (#13565: this step used to hand-roll the identical `.claude-pid`/`current-state`-mtime algorithm in prose; two independently-maintained descriptions of the same liveness check is a drift risk the script already eliminates for PM):
 
-Read `.squidsquad/.local-config` to get each agent's clone path. For each worker agent listed in `config.md`, plus PM, plus DM and designer (if their directories exist):
+```bash
+python references/scripts/health_check.py --json
+```
 
-1. Look up the agent's clone path from `.local-config` (format: `- **role**: /absolute/path`).
-2. Read `<path>/.squidsquad/<role>/current-state` and check the file's mtime.
-3. Read the `Iteration Interval > Minutes` value from `config.md` (default 30). An agent is stalled if the `current-state` mtime is older than 2× the iteration interval.
-
-- If `current-state` exists and mtime is recent (within 2× interval): agent is healthy (🦑).
-- If `current-state` exists but mtime is stale (older than 2× interval): agent is **stalled** (👻). Log a warning in `qa/qa-log.md` and append a Discussion note:
-  ```
-  > [YYYY-MM-DD HH:MM] **verifier**: Agent [role] appears stalled — no cycle activity for [elapsed] minutes. Please check.
-  ```
-- If `.local-config` is missing, path is unreachable, or `current-state` doesn't exist: agent status is unknown (❓) — note in `qa/qa-log.md` (install-coupled; will be renamed with `.squidsquad/[VERIFIER_ALIAS]/` → `.squidsquad/verifier/` in wizard.py D4).
+Parse each entry's `health` field. Log the run in `qa/qa-log.md`. For any agent whose `health` is `"stalled"` or `"unknown"`: find that agent's latest open tracker item with `python references/scripts/tracker.py list-tasks [ROLE] --status open` (take the most recent), then append a Discussion note to it (`> [YYYY-MM-DD HH:MM] **verifier**: Agent [role] appears stalled — [elapsed]. Please check.`); if no open item exists, log in `qa-log.md` only.
