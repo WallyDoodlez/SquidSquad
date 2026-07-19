@@ -30,7 +30,7 @@ It does NOT describe per-role-class access (read/write); that lives in [`AGENT-R
 It does NOT describe:
 
 - The actual implementation (vault_search.py, migration script, etc.) — those are implementation tasks this TRD unblocks, filed separately once this lands
-- How vault slot content gets into composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §5.5)
+- How vault slot content gets into composed CLAUDE.md (see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §5.6)
 - The L4 project-local layer in `.squidsquad/project/` (different system; see [COMPOSE-ARCHITECTURE.md](COMPOSE-ARCHITECTURE.md) §3)
 
 ---
@@ -588,7 +588,7 @@ The §12.1 map is directionally current (re-verify anchors at reconciliation tim
 
 - **ARCHITECTURE.md §L6 Memory Layer**: overview must gain the fourth defining property (consumption-instrumented) and point here as canonical deep-dive; the PARAG explanation gains the `systems/` hub layer and the schema registry.
 - **AGENT-RUNTIME.md**: cycle-integration touchpoints change materially — task filing gains context injection (§9.2), pickup gains mandatory consultation + receipts (§9.3), verification gains receipt enforcement (§9.4). Heaviest reconciliation: the **§7.1 cycle diagram** and the **§7.6 vault-touchpoints subsection** (rewritten around the consumption pipeline; its dead "VAULT-ARCH §11.5" backref — v2's §11 is a flat table — fixed in the same pass). The state-persistence table gains the `.telemetry/` shard row (git-tracked, per-writing-clone, instance id from gitignored harness state).
-- **COMPOSE-ARCHITECTURE.md §5.6 / §3.3**: the L1-exclusive vault slot survives; add the §3.1 carve-out — `vault-schema.json` is the sanctioned per-install taxonomy customization point, distinct from slot authoring.
+- **COMPOSE-ARCHITECTURE.md §5.6 / §3.3**: the L1-exclusive vault slot survives; add the §3.1 carve-out — `vault-schema.json` is the sanctioned per-install taxonomy customization point, distinct from slot authoring. Also scrub v1-vocabulary vestiges: COMPOSE's vault mentions (§3.3, §5.6, §11.2 G4) still name `confidence levels` as part of the vault contract — dropped in v2 (§4.3); grep every companion doc for `confidence` at reconciliation time, the vestige class likely generalizes.
 - **INSTALLER-ARCH.md**: install scaffold seeds `vault-schema.json` (default profile) + `.telemetry/.gitattributes` (`merge=union`); the migrations model gains the M0–M4 `references/migrations/` entry; vault preservation rules extend to shards.
 - **sub-skill-catalog.md**: vault sub-skill entries are rewritten at M4 (engine-backed vault-protocol/remember/optimize/synthesis + the new consultation/receipt steps); catalog updates ride the cutover PR.
 - **HARNESS-ARCH.md**: harness gains the instance-id mint/persist responsibility (§6.3) and the scheduled optimize-analyze + compaction maintenance windows (§9.6).
