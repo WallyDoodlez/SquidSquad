@@ -4,7 +4,7 @@
  },
  "10678_spec.json": {
   "docs/COMPOSE-ARCHITECTURE.md": "3f7e41e0b17704371bdd9ef2e0f4b266226d8e76",
-  "docs/sub-skill-catalog.md": "9689ea390672634032d9febf3fa843220cf7c85a"
+  "docs/sub-skill-catalog.md": "b2165c46b6f9dc9fd3d93446d76223622a31b388"
  },
  "11140_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
@@ -126,7 +126,7 @@
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
  },
  "13464_spec.json": {
-  "references/sub-skills/roles/verifier/verification.md": "7867ef7029e3c315170d926fcfbdb83fc3cab3cb"
+  "references/sub-skills/roles/verifier/verification.md": "e5180a9753ad4786c6406e53d6da94d928fb9202"
  },
  "13551_spec.json": {
   "references/sub-skills/common/git-commit.md": "b94d0036f84ebed790bc70f2b47db3bf22391253"
@@ -146,7 +146,7 @@
  },
  "1428_spec.json": {
   "references/sub-skills/roles/verifier/verification-templates.md": "a26674577d5fc7a6933261bdb5656edcaa709427",
-  "references/sub-skills/roles/verifier/verification.md": "7867ef7029e3c315170d926fcfbdb83fc3cab3cb"
+  "references/sub-skills/roles/verifier/verification.md": "e5180a9753ad4786c6406e53d6da94d928fb9202"
  },
  "2181_spec.json": {
   "references/sub-skills/roles/dm/delivery-packaging.md": "5a5ea484685a605aeffdbe9c93ad2e523473a1bd"
