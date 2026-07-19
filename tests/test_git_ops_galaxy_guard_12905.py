@@ -172,6 +172,10 @@ class TestGuardComposition(unittest.TestCase):
         def fake_run_list(cmd, check=True):
             if cmd[:4] == ["git", "diff", "--cached", "--name-only"]:
                 return _cp(0, galaxy + "\n")
+            if cmd[:3] == ["git", "diff", "--cached"] and "--quiet" in cmd:
+                # #13724: matches-origin/main check -- returncode=1 (differs)
+                # so the note proceeds to the genuine-leak unstage path below.
+                return _cp(1, "")
             if cmd[:2] == ["git", "reset"]:
                 reset_calls.append(cmd[-1])
                 return _cp(0, "")
