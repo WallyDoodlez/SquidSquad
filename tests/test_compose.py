@@ -336,6 +336,45 @@ class TestGenerateLocalConfig:
         assert "- **pm**: ." in content
         assert "- **skill**: ../proj-skill" in content
 
+    def test_guessed_default_warns_13745(self, tmp_path, capsys):
+        """#13745: a role missing from clone_paths and .local-config with no
+        existing entry gets a guessed default -- this must warn loudly on
+        stderr, not silently guess."""
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        compose.generate_local_config(["pm", "skill"], target_root=tmp_path)
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "skill" in captured.err
+        assert "GUESSED" in captured.err
+        # pm never guesses -- it always resolves to "." -- so it must not
+        # appear in the warned-roles list.
+        assert "- pm:" not in captured.err
+
+    def test_no_warning_when_all_roles_have_existing_entries(self, tmp_path, capsys):
+        """#13745: preserving existing .local-config entries is not a guess
+        and must not warn."""
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        (ss / ".local-config").write_text(
+            "- **pm**: .\n- **skill**: ../myproject-skill\n", encoding="utf-8",
+        )
+        compose.generate_local_config(["pm", "skill"], target_root=tmp_path)
+        captured = capsys.readouterr()
+        assert "WARNING" not in captured.err
+
+    def test_no_warning_when_clone_paths_explicit_13745(self, tmp_path, capsys):
+        """#13745: an explicit clone_paths dict bypasses the guess path
+        entirely -- no warning applies."""
+        ss = tmp_path / ".squidsquad"
+        ss.mkdir()
+        compose.generate_local_config(
+            ["pm", "skill"], target_root=tmp_path,
+            clone_paths={"pm": ".", "skill": "../proj-skill"},
+        )
+        captured = capsys.readouterr()
+        assert "WARNING" not in captured.err
+
 
 # ---------------------------------------------------------------------------
 
