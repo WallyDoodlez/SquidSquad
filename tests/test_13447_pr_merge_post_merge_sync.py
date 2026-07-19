@@ -41,6 +41,50 @@ def _mk(rc=0, stdout="", stderr=""):
     return m
 
 
+def _fake_run_no_stash_activity(calls):
+    """A `git_ops._run` fake (string-command form) for the `_stash_top_ref`/
+    `git stash -q` calls the #13819/#13831 shared stash guard makes.
+    Simulates a perpetually clean tree: `_stash_top_ref()` always returns the
+    same (empty) value, so `stashed` computes False and no pop is ever
+    attempted."""
+    def side_effect(cmd, check=False):
+        calls.append(cmd)
+        if "refs/stash" in cmd:
+            return _mk(1, "")  # no stash ref exists -- never changes
+        if cmd.strip() == "git stash -q":
+            return _mk(0)  # no-op stash on a clean tree
+        return _mk(1)
+
+    return side_effect
+
+
+def _fake_run_creates_and_pops_stash(calls, *, pop_rc=0):
+    """A `git_ops._run` fake simulating a REAL uncommitted change: the first
+    `_stash_top_ref()` call (pre-stash) sees no stash, `git stash -q`
+    creates one (dirty tree), the second `_stash_top_ref()` call (post-
+    stash) sees it -- so `stashed` computes True and `_safe_stash_pop()`'s
+    `git stash pop` is expected to fire."""
+    state = {"stash_sha": ""}
+
+    def side_effect(cmd, check=False):
+        calls.append(cmd)
+        if "refs/stash" in cmd:
+            return _mk(0 if state["stash_sha"] else 1, state["stash_sha"])
+        if cmd.strip() == "git stash -q":
+            state["stash_sha"] = "c" * 40
+            return _mk(0)
+        if cmd.strip() == "git stash pop":
+            if pop_rc == 0:
+                state["stash_sha"] = ""
+            return _mk(pop_rc)
+        if cmd.strip() == "git stash drop":
+            state["stash_sha"] = ""
+            return _mk(0)
+        return _mk(1)
+
+    return side_effect
+
+
 class TestRevertComposedStateContamination:
     @patch("git_ops._run_list")
     @patch("git_ops._run")
@@ -97,9 +141,10 @@ class TestRevertComposedStateContamination:
 
 
 class TestCheckoutAndFfWorkingAfterMerge:
+    @patch("git_ops._run")
     @patch("git_ops._run_list")
     @patch("git_ops._safe_checkout", return_value=True)
-    def test_behind_fast_forwards(self, mock_checkout, mock_rl):
+    def test_behind_fast_forwards(self, mock_checkout, mock_rl, mock_run):
         def side_effect(cmd, check=False):
             s = str(cmd)
             if cmd[:2] == ["git", "fetch"]:
@@ -114,6 +159,7 @@ class TestCheckoutAndFfWorkingAfterMerge:
                 return _mk(0)
             return _mk(1)
         mock_rl.side_effect = side_effect
+        mock_run.side_effect = _fake_run_no_stash_activity([])
         git_ops._checkout_and_ff_working_after_merge(WORKING)
         mock_checkout.assert_called_once_with(WORKING)
         ff_calls = [c.args[0] for c in mock_rl.call_args_list
@@ -146,9 +192,10 @@ class TestCheckoutAndFfWorkingAfterMerge:
                     if "merge" in c.args[0] and "--ff-only" in c.args[0]]
         assert not ff_calls
 
+    @patch("git_ops._run")
     @patch("git_ops._run_list")
     @patch("git_ops._safe_checkout", return_value=True)
-    def test_ff_failure_warns_never_raises(self, mock_checkout, mock_rl, capsys):
+    def test_ff_failure_warns_never_raises(self, mock_checkout, mock_rl, mock_run, capsys):
         def side_effect(cmd, check=False):
             s = str(cmd)
             if cmd[:2] == ["git", "fetch"]:
@@ -163,6 +210,7 @@ class TestCheckoutAndFfWorkingAfterMerge:
                 return _mk(1, stderr="ff failed")
             return _mk(1)
         mock_rl.side_effect = side_effect
+        mock_run.side_effect = _fake_run_no_stash_activity([])
         git_ops._checkout_and_ff_working_after_merge(WORKING)  # must not raise
         err = capsys.readouterr().err
         assert "WARNING" in err
@@ -173,6 +221,67 @@ class TestCheckoutAndFfWorkingAfterMerge:
     def test_origin_unreachable_noop(self, mock_checkout, mock_rl):
         mock_rl.return_value = _mk(1)  # rev-parse --verify remotes fails
         git_ops._checkout_and_ff_working_after_merge(WORKING)  # must not raise
+
+
+class TestCheckoutAndFfWorkingAfterMergeStashGuard13831:
+    """#13831: this call site's fast-forward was 1 of 3 identical fast-
+    forwards missing #13819's stash-before/pop-after protection -- now
+    routed through the shared _stash_guarded_ff_only_merge helper."""
+
+    def _rl_side_effect(self, ff_rc=0):
+        def side_effect(cmd, check=False):
+            s = str(cmd)
+            if cmd[:2] == ["git", "fetch"]:
+                return _mk(0)
+            if "rev-parse" in cmd and "refs/remotes/" in s:
+                return _mk(0, ORIGIN + "\n")
+            if "rev-parse" in cmd and "refs/heads/" in s:
+                return _mk(0, LOCAL + "\n")
+            if "merge-base" in cmd:
+                return _mk(0 if cmd[3] == LOCAL else 1)
+            if "merge" in cmd and "--ff-only" in cmd:
+                return _mk(ff_rc, stderr="ff failed" if ff_rc else "")
+            return _mk(1)
+        return side_effect
+
+    @patch("git_ops._run")
+    @patch("git_ops._run_list")
+    @patch("git_ops._safe_checkout", return_value=True)
+    def test_dirty_tree_stashes_before_and_pops_after_successful_ff(
+        self, mock_checkout, mock_rl, mock_run
+    ):
+        calls = []
+        mock_rl.side_effect = self._rl_side_effect(ff_rc=0)
+        mock_run.side_effect = _fake_run_creates_and_pops_stash(calls)
+        git_ops._checkout_and_ff_working_after_merge(WORKING)
+        assert any(c.strip() == "git stash -q" for c in calls)
+        assert any(c.strip() == "git stash pop" for c in calls)
+
+    @patch("git_ops._run")
+    @patch("git_ops._run_list")
+    @patch("git_ops._safe_checkout", return_value=True)
+    def test_clean_tree_never_pops_a_preexisting_stash(
+        self, mock_checkout, mock_rl, mock_run
+    ):
+        calls = []
+        mock_rl.side_effect = self._rl_side_effect(ff_rc=0)
+        mock_run.side_effect = _fake_run_no_stash_activity(calls)
+        git_ops._checkout_and_ff_working_after_merge(WORKING)
+        assert any(c.strip() == "git stash -q" for c in calls)
+        assert not any(c.strip() == "git stash pop" for c in calls)
+
+    @patch("git_ops._run")
+    @patch("git_ops._run_list")
+    @patch("git_ops._safe_checkout", return_value=True)
+    def test_ff_still_fails_after_stash_restores_work_before_returning(
+        self, mock_checkout, mock_rl, mock_run
+    ):
+        calls = []
+        mock_rl.side_effect = self._rl_side_effect(ff_rc=1)
+        mock_run.side_effect = _fake_run_creates_and_pops_stash(calls)
+        git_ops._checkout_and_ff_working_after_merge(WORKING)  # must not raise (fail-open)
+        assert any(c.strip() == "git stash pop" for c in calls), \
+            "stashed work must be restored even when the fail-open ff-only merge still fails"
 
 
 class TestPrMergePostMergeSync13447:
