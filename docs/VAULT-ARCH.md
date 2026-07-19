@@ -167,13 +167,17 @@ v1 moved notes physically from an active folder to `archives/` on archival. v2 d
 
 ### 4.1 By folder
 
-| Folder | Entity types | Lifespan | Growth model |
-|---|---|---|---|
-| `projects/` | `project` | While project active | One note per project; updated as scope evolves |
-| `areas/` | `area` | Ongoing | Few notes (typical: human-profile, code-conventions); grow freely |
-| `resources/` | `resource` | While referenced | One note per reference; prefer linking to externals |
-| `archives/` | any type, status `archived` | Forever (historical) | Auto-populated by `vault_optimize.py prune-scan` |
-| `galaxy/` | `decision`, `pattern`, `learning`, `style` | Forever (Zettelkasten) | Atomic; max ~500 lines each; split if larger |
+Derived entirely from the install's `vault-schema.json` (§3.1) — the table below is SquidSquad's own default profile (§3.2), not a framework-hardcoded mapping.
+
+| Folder | Entity types | Traversal | Lifespan | Growth model |
+|---|---|---|---|---|
+| `projects/` | `project` | free (hub) | While project active | One note per project; updated as scope evolves |
+| `areas/` | `area` | free (hub) | Ongoing | Few notes (typical: human-profile, code-conventions); grow freely |
+| `resources/` | `resource` | free | While referenced | One note per reference; prefer linking to externals |
+| `systems/` | `system` | free (hub) | Forever (connective) | ~7-10 initial notes (harness, event bus, compose pipeline, ...); grows slowly, one per subsystem the squad repeatedly learns about |
+| `galaxy/` | `decision`, `pattern`, `learning` | **budgeted** | Forever (Zettelkasten) | Atomic; max ~500 lines each; split if larger |
+
+`archives/` is **retired as a folder** (§3.4) — archival is a `status:` value on any note, any type, in its existing folder.
 
 ### 4.2 By note name prefix (galaxy only)
 
@@ -182,87 +186,71 @@ v1 moved notes physically from an active folder to `archives/` on archival. v2 d
 | `decision-` | `decision` | Architectural choice, trade-off, or commitment |
 | `pattern-` | `pattern` | Reusable pattern discovered or confirmed |
 | `learning-` | `learning` | Something that failed or succeeded unexpectedly |
-| `style-` | `style` | Preferred coding/structural/communication style |
 
-Subtypes layered on top via tags:
-
-- `pattern` + tag `posture` = synthesis-derived cross-agent principle (written only by the `vault-synthesis` sub-skill, see §7.4).
+**Dropped from v1**: `style-` (zero notes ever written; folds into `pattern-` — a style preference is just a pattern about how, not what) and the `pattern + posture` tag subtype (superseded by `systems/` hub notes, §3.2 — a posture is a decision that spans multiple systems, now expressed via wikilinks to the relevant `systems/` hubs rather than a special tag).
 
 ### 4.2a Consistency rules (folder + prefix + type)
 
-Three fields must agree:
+Same two-field agreement as v1, now checked against the schema registry instead of a hardcoded table:
 
-1. **Folder ↔ type**: a note in `projects/` must have `type: project`; same for `areas/`, `resources/`. `galaxy/` accepts the four prefixed types (`decision`, `pattern`, `learning`, `style`); `archives/` accepts any type with `status: archived`.
-2. **Galaxy prefix ↔ type**: `decision-X.md` → `type: decision`; `pattern-X.md` → `type: pattern`; `learning-X.md` → `type: learning`; `style-X.md` → `type: style`.
-3. **Validation**: checked manually today; planned to be enforced by a future `vault_check.py check-consistency` subcommand (tracked in #10098).
+1. **Folder ↔ type**: a note's folder must match its `type:`'s registered `folder` in `vault-schema.json` (§3.1).
+2. **Galaxy prefix ↔ type**: `decision-X.md` → `type: decision`; `pattern-X.md` → `type: pattern`; `learning-X.md` → `type: learning`.
+3. **Validation**: `vault_check.py check-structure` reads `vault-schema.json` at runtime — an install that adds a custom type gets consistency checking for free, no code change needed. (v1's hardcoded version of this check is tracked at #10098, closed as superseded — the schema-driven version replaces it, not extends it.)
 
 ### 4.3 Required frontmatter (all notes)
 
 ```yaml
 ---
-type: decision | pattern | learning | style | area | project | resource
+type: <per vault-schema.json registry>
 tags: [list]                          # see Tag convention below
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
-status: active | archived | superseded
-confidence: high | medium | low       # see §4.4
-source: conversation | review | observation | research
-owner: pm | worker | verifier | dm | shared   # primary author role-class (see Ownership note below)
+status: active | superseded | archived
+owner: pm | worker | verifier | dm | shared   # primary author role-class
+community: <string>                   # optional — cluster label, set by vault-optimize (§7.3-equivalent)
+subcommunity: <string>                # optional — sub-cluster within community
+last_optimized: YYYY-MM-DD            # optional — last time an optimize pass touched this note
 ---
 ```
 
-**Ownership note** (`owner:` field): authored role-class of the note's content. Used today by the §10.3 ownership-distribution inventory and the §11.1 #5855 audit verdicts that depend on it. The `vault-protocol` source file still lists pre-#6274 values (`qa`, `skill`) — a sync pass to the post-#6274 names (`verifier`, `worker`) is tracked in #10098. Notes that observably benefit multiple role-classes use `owner: shared`.
+**Dropped from v1**: `confidence` (was write-only — nothing ever consumed it for ranking or filtering; operator decision 2026-07-18, reintroduce only if a real ranking need surfaces with an actual consumer) and `source` (conversation/review/observation/research — provenance-of-claim metadata that, like `confidence`, had no downstream consumer). `links` is also dropped — v1 auto-maintained a `links:` field from body wikilinks via `vault_optimize.py reindex`; v2's search engine computes the link graph live from body content instead, so a stored, driftable copy is unnecessary.
 
-**Tag convention** (for searchability):
+**Not in frontmatter, ever**: `impression` / `used` / `walked` / `last_impression` — these look like note-level counters but are **telemetry**, not content, and per the non-negotiable adaptation in `VAULT-COMPARISON-DMPWEB.md` §9.4, telemetry never enters git. They live in the harness-owned event store (§6) and are joined against note content at query/read time — never written to the `.md` file. This is a deliberate divergence from dmp-web (which bumps these as frontmatter counters, livable for one dev on one checkout but a merge-conflict generator for N agents in N clones — §9.4 P1).
 
-- **Required**: at least one **domain tag** identifying the subsystem, feature, or area the note is about. Domain tags are **project-specific** — they reflect the vocabulary of the codebase the vault serves (e.g., a billing app might use `payments`, `subscription`, `invoicing`; a content platform might use `editor`, `publishing`, `cdn`). Use whatever a teammate searching for related notes would naturally type.
+**Ownership note** (`owner:` field): unchanged from v1 — authored role-class of the note's content, `owner: shared` for content that benefits multiple roles. The pre-#6274 naming drift (`qa`/`skill` vs `verifier`/`worker`) and the `<role>` vs `<role>-lead` convention drift (v1 §10.3) both get swept during migration (§9.5 M1) rather than patched in place.
+
+**Tag convention** (for searchability) — unchanged from v1:
+
+- **Required**: at least one **domain tag** identifying the subsystem, feature, or area the note is about. Domain tags are **project-specific** — they reflect the vocabulary of the codebase the vault serves. Use whatever a teammate searching for related notes would naturally type.
 - **Recommended**: one **category tag** identifying the kind of insight. Categories are **universal** across projects: `architecture`, `process`, `testing`, `convention`, `migration`, `incident`, `lifecycle`.
-- **Optional, role-relevance**: `role:<name>` prefix when the note is most useful to one role (e.g., `role:pm`, `role:skill`, `role:qa`, `role:dm`). Used by future cross-role broadcast features.
-- **Reserved subtype tags**: `posture` (see §4.2 — `pattern + posture` is the synthesis-derived cross-agent principle subtype). Other reserved tags will be added here as the system grows.
+- **Optional, role-relevance**: `role:<name>` prefix when the note is most useful to one role.
 - **Free-form**: any additional keywords for searchability.
 
 **Empty values**: `tags: []` is not allowed (the required domain tag rule means at least one tag is always present).
 
-### 4.4 Confidence levels
+### 4.4 Staleness — usage-based, not time-based confidence decay
 
-| Level | Meaning |
-|---|---|
-| `high` | Human explicitly stated or confirmed this |
-| `medium` | Agent observed this directly (e.g., during review or examination of material, observable pattern in conversation or behavior) |
-| `low` | Agent inferred this (e.g., from indirect signals, extrapolation) |
+v1 had a `confidence` field that decayed `high → medium → low` purely on time since `updated:` (§4.4 in the v1 snapshot). **This entire mechanism is dropped**, not adapted — it's the exact thing the dmp-web comparison identifies as inferior (`VAULT-COMPARISON-DMPWEB.md` §3.2/§9.2.6): a note that's old but heavily used decayed anyway (unless manually tagged `evergreen` at creation, which requires foresight); a note that's young but never consulted didn't decay at all despite being dead weight from day one.
 
-**Decay**: `vault_optimize.py decay-apply` walks all notes and decays staleness:
+**Replacement**: staleness is now a **usage** signal, computed from the telemetry ledger (§6), not stored on the note. The impressions report (§6.3, port of dmp-web's `vault-impressions-report`) classifies every note as:
 
-| Transition | Threshold |
-|---|---|
-| `high → medium` | 60 days since last `updated:` |
-| `medium → low` | 120 days since last `updated:` |
-| `low → ?` | **Terminal — no further decay.** Note stays at `low` and still contributes to relevance scoring at reduced weight (`high`=10, `medium`=6, `low`=3 in `vault_optimize.py compute-relevance`). The note remains in its current folder *unless* prune-scan archives it for being stale + orphaned (§7.3 step 1 / §3.3) — decay terminality only blocks further `confidence:` transitions, not folder moves driven by orphan-pruning. |
+- **Cold** — never surfaced by a search.
+- **Surfaced-but-never-used** — shown in results repeatedly, never cited (`used`) by any consumer.
+- **Stale** — was `used` at least once, but not in the last N days (config, default 90 — dmp-web's tuned value).
 
-A changelog entry is appended to the note body on each decay step, so the decay history is visible without `git blame`. **Decay steps do NOT modify `updated:`** — the decay clock keys off the last *human or agent semantic edit*, not the decay event itself. So `medium → low` at 120 days means 120 days since the last semantic `updated:` value, not 60 days after a prior `high → medium` decay step.
+These three buckets feed `vault_optimize.py`'s pruning decisions (§7.3-equivalent) — the same *function* v1's time-decay served (deciding what to archive), computed from a signal that actually correlates with whether the note is helping anyone.
 
-**Opt-out**: notes tagged `evergreen` are exempt from decay entirely. Use for content where staleness is meaningless — enduring style preferences, fundamental architectural commitments.
-
-**Configuration drift** (current snapshot): `.squidsquad/config.md` exposes a `Confidence Decay Days` field (default 60), and `config.py` maps the slug, but `vault_optimize.py` hardcodes the threshold at `STALE_DAYS = 60` and does NOT read the config field. The field exists but is not consumed today. Wiring tracked in #10099.
+No `evergreen` opt-out tag exists in v2 — it's unnecessary once staleness is usage-based: a genuinely evergreen note gets `used` regularly by definition and never enters the Stale bucket.
 
 ### 4.5 Wikilinks
 
-Bare wikilink syntax in the body: `[[note-name]]`. No aliases (e.g., `[[note-name|display]]` is not used). Cross-note references resolve via filename match anywhere under `.squidsquad/vault/`.
+Bare wikilink syntax in the body: `[[note-name]]`. No aliases. Cross-note references resolve via filename match anywhere under `.squidsquad/vault/` — unchanged from v1.
 
-**Operating assumption**: only SquidSquad agents write to the vault. Agent-driven note modifications go through `vault_*` sub-skills (see §7) which trigger the link-rewrite-on-archive logic in `vault_optimize.py _rewrite_wikilinks_after_archive`. Under this assumption, broken wikilinks are rare in practice.
+**What changes**: the link graph is no longer a stored, auto-maintained `links:` frontmatter field (dropped, §4.3) — the search engine (§6.1) computes it live by parsing body wikilinks at query/index time. This removes an entire class of v1 drift risk (a `links:` field that's out of sync with the body because `reindex` didn't run) at the cost of the engine needing to parse bodies rather than trust cached frontmatter — an acceptable tradeoff at vault scale (hundreds, not millions, of notes).
 
-**Broken-link validation**: `vault_check.py check-wikilinks` walks all notes, extracts every `[[bare-wikilink]]`, and flags any whose target filename does not exist in the vault.
+**Broken-link validation**: `vault_check.py check-wikilinks` — same contract as v1 (walks all notes, flags any `[[name]]` whose target doesn't exist, exit 1 if any found).
 
-| Behavior | Detail |
-|---|---|
-| Per-broken-link output | `WARN: <path>: broken link [[<name>]]` to stdout |
-| Clean output | `OK: All wikilinks resolve` |
-| Exit code | `1` if any broken link found; `0` if all clean |
-| Automated invocation | None today; on-demand only. Acceptable risk under the SquidSquad-only-write assumption. |
-
-**Semantic note**: a wikilink to a previously-existing note that has gone dead is itself information — it signals that the referenced concept was removed or superseded. Broken links are not automatically a defect; they should be investigated case-by-case (could be a typo, deletion signal, intentional forward-reference, or rename without rewrite).
-
-**Note renames**: renaming a vault note in the filesystem without rewriting incoming wikilinks breaks references. Today this is mitigated by the operating assumption (SquidSquad-only writes go through the sub-skills). Hard enforcement is tracked in §11.2 (#10100).
+**Note renames**: v1's proposed fix was a CI/CD enforcement layer (#10100, closed as superseded by this redesign). v2's answer is different and more durable: the migration script (`VAULT-COMPARISON-DMPWEB.md` §9.5 M1) already builds an old→new redirect map and rewrites every wikilink vault-wide as part of the one-time v1→v2 migration. Post-migration, the same redirect-map mechanism is the generalizable answer to *any* future rename — a rename becomes "run the redirect tool," not "hope nobody renamed a file by hand." Whether to formalize this as an enforced CI gate (v1's prohibit-vs-reconcile question) is deferred — not needed for the TRD to be complete, since the redirect-map tool makes renames cheap to fix after the fact even without a gate.
 
 ---
 
