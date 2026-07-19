@@ -321,6 +321,81 @@ class TestStashTopRef:
         assert git_ops._stash_top_ref() == ""
 
 
+class TestStashGuardedFfOnlyMerge:
+    """#13819/#13831: the shared stash-before/pop-after wrapper around
+    `git merge --ff-only <ref>`. Factored out of _sync_local_branch_to_origin
+    (#13819, the first of 3 identical call sites fixed) so
+    _checkout_and_ff_working_after_merge (#13447) and
+    _sync_working_branch_to_origin (#13613) get the same protection instead
+    of reimplementing it independently -- and so a future 4th fast-forward
+    call site inherits the fix automatically."""
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_clean_tree_no_stash_no_pop(self, mock_run, mock_rl):
+        # _stash_top_ref() returns "" both before and after `git stash -q`
+        # (a no-op stash on a clean tree never creates an entry) -> stashed
+        # is False -> no pop attempted.
+        mock_run.side_effect = [
+            _mock_result(returncode=1),   # _stash_top_ref pre -> ""
+            _mock_result(),               # git stash -q
+            _mock_result(returncode=1),   # _stash_top_ref post -> "" (unchanged)
+        ]
+        mock_rl.return_value = _mock_result(returncode=0)
+        ff = git_ops._stash_guarded_ff_only_merge("origin/main")
+        assert ff.returncode == 0
+        mock_rl.assert_called_once_with(
+            ["git", "merge", "--ff-only", "origin/main"], check=False
+        )
+        assert mock_run.call_count == 3  # pre, stash, post -- no pop/drop
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_dirty_tree_stashes_and_pops_after_success(self, mock_run, mock_rl):
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # _stash_top_ref pre -> ""
+            _mock_result(),                      # git stash -q (creates one)
+            _mock_result(stdout="newsha"),       # _stash_top_ref post -> changed
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
+        ]
+        mock_rl.return_value = _mock_result(returncode=0)
+        ff = git_ops._stash_guarded_ff_only_merge("origin/main")
+        assert ff.returncode == 0
+        pop_calls = [c for c in mock_run.call_args_list if c.args[0] == "git stash pop"]
+        assert len(pop_calls) == 1
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_preexisting_unrelated_stash_never_popped(self, mock_run, mock_rl):
+        # A pre-existing stash present both before and after `git stash -q`
+        # (which no-ops on a clean tree) -> stashed=False -> must never pop.
+        mock_run.side_effect = [
+            _mock_result(stdout="oldsha"),   # _stash_top_ref pre: pre-existing
+            _mock_result(),                  # git stash -q (no-op, clean tree)
+            _mock_result(stdout="oldsha"),   # _stash_top_ref post: unchanged
+        ]
+        mock_rl.return_value = _mock_result(returncode=0)
+        git_ops._stash_guarded_ff_only_merge("origin/main")
+        pop_calls = [c for c in mock_run.call_args_list if c.args[0] == "git stash pop"]
+        assert not pop_calls
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_ff_failure_still_restores_stash_before_returning(self, mock_run, mock_rl):
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # _stash_top_ref pre -> ""
+            _mock_result(),                      # git stash -q (creates one)
+            _mock_result(stdout="newsha"),       # _stash_top_ref post -> changed
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
+        ]
+        mock_rl.return_value = _mock_result(returncode=1, stderr="ff failed")
+        ff = git_ops._stash_guarded_ff_only_merge("origin/main")
+        assert ff.returncode == 1
+        pop_calls = [c for c in mock_run.call_args_list if c.args[0] == "git stash pop"]
+        assert len(pop_calls) == 1, \
+            "uncommitted work must be restored even when the ff-only merge still fails"
+
+
 # ---------------------------------------------------------------------------
 # add_all()
 # ---------------------------------------------------------------------------

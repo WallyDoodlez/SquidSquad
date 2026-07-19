@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 09:38
+
+- **Files scanned**: references/scripts/compose.py (2459 lines; suggest-targets top pick; TODO/FIXME/XXX/HACK grep clean; confirmed already wired to cli_stdio.harden_stdio (#13198, line 2150-2151); em-dash/decorative-unicode sweep on print()/raise/f-string literals found 2 hits (line 481 `_render_role_roster`, line 983 the DeepSeek-polish prompt template) -- both traced to non-crash-risk sinks: line 481's output flows only into composed CLAUDE.md content written via `write_text(..., encoding="utf-8")` (lines 1697/1748), never printed to console; line 983's prompt is piped to a subprocess with `subprocess.run(..., encoding="utf-8", errors="replace")` explicitly set -- neither matches the #13728/#13760 crash-risk pattern of an unencoded print()/raise on a strict-console path; cross-referenced `_inject_role_roster`'s "marker-absent steady state" docstring claim against a repo-wide grep for `{{role-roster}}` -- confirmed accurate, the literal only survives in historical/archival planning docs (#9925 CONTEXT/REVIEW, audit-e6, docs/sub-skill-catalog.md's retirement note), never in live composed output), tests/test_wizard_runbook.py (410 lines; TODO/FIXME/skip/xfail grep clean).
+- **Findings**: none. Both files clean; the 2 em-dash hits investigated and confirmed benign (explicit UTF-8 encoding at both sinks).
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 05:52
 
 - **Files scanned**: references/roles/instructions.md (288 lines, the shared L1 base cycle contract composed into every role; full read; cross-referenced every `→ run sub-skill:` marker against docs/sub-skill-catalog.md -- all resolve; cross-referenced docs/AGENT-RUNTIME.md §8.1/§8.4/§8.5 and docs/HARNESS-ARCH.md §7.4 citations -- all sections exist at the cited numbers; verified `[POLLING_FRAGMENT_PATH]`/`[INTERVAL]` placeholders substitute correctly per role, matches previously-seen composed output), tests/test_harness_deploy_12912.py (833 lines; TODO/FIXME grep clean; cross-referenced its "established pattern in test_harness.py::test_ack_stop_confirmed_guarded_by_stopping_intent" citation -- still exists).
@@ -613,10 +619,4 @@
 - **Files scanned**: references/sub-skills/roles/dm/prohibitions.md, references/prompts/discussion-prep.md.j2, references/prompts/improvement-scan.md.j2, references/roles/LAYERS.md, references/roles/dev/android/instructions.md
 - **Findings**: #8381 (LAYERS.md references deprecated reboot_agent.py instead of start_team.py)
 - **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 22:02
-
-- **Files scanned**: references/scripts/health_check.py, references/scripts/state_bus.py
-- **Findings**: #8350 (state_bus.py: unused import os)
-- **Items rejected by human**: none
 

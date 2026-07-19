@@ -318,6 +318,32 @@ def _safe_stash_pop():
     return False
 
 
+def _stash_guarded_ff_only_merge(target_ref):
+    """Run ``git merge --ff-only <target_ref>``, stash-guarded (#13819/#13831).
+
+    A bare ``git merge --ff-only`` refuses to run when uncommitted local
+    changes touch a file the fast-forward would also update ("Your local
+    changes ... would be overwritten by merge") — routine mid-cycle state for
+    an event-mode agent. This mirrors ``_safe_checkout()``'s stash-before/
+    pop-after pattern so every fast-forward call site gets the same
+    protection instead of reimplementing it independently (#13819 fixed only
+    one of three identical call sites; this factors it out so a future fourth
+    site doesn't reintroduce the same gap). #13167-safe: only pops a stash
+    this call actually created, never a pre-existing unrelated one.
+
+    Returns the ``CompletedProcess`` from the merge attempt; callers keep
+    their own success/failure handling (fail-loud vs fail-open differs by
+    call site).
+    """
+    pre_stash_ref = _stash_top_ref()
+    _run("git stash -q", check=False)
+    stashed = _stash_top_ref() != pre_stash_ref
+    ff = _run_list(["git", "merge", "--ff-only", target_ref], check=False)
+    if stashed:
+        _safe_stash_pop()
+    return ff
+
+
 def pull(role=None):
     """Pull with merge (#5378, #5445).
 
@@ -897,7 +923,7 @@ def _checkout_and_ff_working_after_merge(working):
         # Ahead (unpushed local commits) or diverged — only a fast-forward is
         # safe here; leave it for a human/task-begin to reconcile.
         return
-    ff = _run_list(["git", "merge", "--ff-only", f"origin/{working}"], check=False)
+    ff = _stash_guarded_ff_only_merge(f"origin/{working}")
     if ff.returncode != 0:
         print(
             f"WARNING: could not fast-forward local {working} to origin/"
@@ -1719,7 +1745,7 @@ def _sync_working_branch_to_origin(working):
         # Something switched us away between the caller's checkout and here
         # — never merge onto the wrong branch.
         return
-    ff = _run_list(["git", "merge", "--ff-only", f"origin/{working}"], check=False)
+    ff = _stash_guarded_ff_only_merge(f"origin/{working}")
     if ff.returncode != 0:
         print(
             f"WARNING: could not fast-forward local {working} to origin/"
@@ -2125,19 +2151,13 @@ def _sync_local_branch_to_origin(branch):
         ["git", "merge-base", "--is-ancestor", local_sha, origin_sha], check=False
     ).returncode == 0
     if behind:
-        # #13819: stash-before/pop-after, mirroring _safe_checkout() -- a
-        # bare `git merge --ff-only` refuses to run when uncommitted local
-        # changes touch a file the fast-forward would also update ("Your
-        # local changes ... would be overwritten by merge"), which is
-        # routine mid-cycle state for an event-mode agent (this is the
-        # verifier re-verification path). #13167-safe: only pop a stash we
-        # actually created, never a pre-existing unrelated one.
-        pre_stash_ref = _stash_top_ref()
-        _run("git stash -q", check=False)
-        stashed = _stash_top_ref() != pre_stash_ref
-        ff = _run_list(["git", "merge", "--ff-only", f"origin/{branch}"], check=False)
-        if stashed:
-            _safe_stash_pop()
+        # #13819/#13831: stash-guarded fast-forward (see
+        # _stash_guarded_ff_only_merge) -- a bare `git merge --ff-only`
+        # refuses to run when uncommitted local changes touch a file the
+        # fast-forward would also update ("Your local changes ... would be
+        # overwritten by merge"), which is routine mid-cycle state for an
+        # event-mode agent (this is the verifier re-verification path).
+        ff = _stash_guarded_ff_only_merge(f"origin/{branch}")
         if ff.returncode != 0:
             print(
                 f"ERROR: task-begin could not fast-forward {branch} to origin/"
