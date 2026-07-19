@@ -264,6 +264,50 @@ class TestCreateIssue:
         assert title_arg == "ISSUE: already prefixed"
         assert not title_arg.startswith("ISSUE: ISSUE:")
 
+    def test_extra_label_appended_13743(self, monkeypatch):
+        """#13743: create_issue must be able to tag an extra label (e.g.
+        improvement-scan) alongside the fixed type/severity/role/status set."""
+        calls = []
+
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
+            return _mock_result(stdout="https://github.com/org/repo/issues/1\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
+        tracker.create_issue("test", "body", "skill", "low",
+                              extra_label="improvement-scan")
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
+        assert "improvement-scan" in label_arg.split(",")
+
+    def test_no_extra_label_by_default(self, monkeypatch):
+        calls = []
+
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
+            return _mock_result(stdout="https://github.com/org/repo/issues/1\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
+        tracker.create_issue("test", "body", "skill", "low")
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
+        assert "improvement-scan" not in label_arg.split(",")
+
+    def test_extra_label_via_forge_adapter(self, monkeypatch):
+        adapter_calls = []
+
+        class FakeAdapter:
+            def create_issue(self, title, body, labels=None):
+                adapter_calls.append({"labels": labels})
+                return {"number": 1, "url": "http://forge/issues/1"}
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: FakeAdapter())
+        tracker.create_issue("test", "body", "skill", "low",
+                              extra_label="improvement-scan")
+        assert "improvement-scan" in adapter_calls[0]["labels"]
+
 
 class TestCreateTask:
     def test_creates_with_pending_status(self, monkeypatch):
