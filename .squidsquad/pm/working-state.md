@@ -1,7 +1,7 @@
 # Working State
 
 - **Task**: #10003 (VAULT-ARCH.md v2 TRD rewrite — in-progress, resumable)
-- **Status**: §5/§6/§9 drafted+pushed; §6.3 telemetry LOCKED by operator (inline 2026-07-18 ~22:55); next §10–§12 reframes
+- **Status**: §1–§6, §9–§12 ALL drafted+pushed; only §7/§8 remain v1 (blocked on §10.3 verifications). §6.3 LOCKED by operator.
 - **Updated**: 2026-07-18 22:35
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
@@ -12,7 +12,7 @@ Booted EVENT mode post-#13565-recompose. Resumed #10003 directly.
 
 **#10003 progress**: §1–§6 now drafted+pushed on `squidsquad/task/10003` (draft PR #13708). This session: §5 (BRIEFING hot layer, prescriptive + Vault Pulse auto-digest as target state), §6 (consumption engine: 6.1 event model, 6.2 search/ranking contract, 6.3 **git-tracked per-writer telemetry shards per planning §10.5 — operator lock-in PENDING, marked in doc**, 6.4 impressions report, 6.5 compaction), §3.5 templates (registry-derived), consistency patches §2/§4.3/§4.4 (removed superseded harness-owned-store language), v1 markers on §7–§12.
 
-**NEXT on #10003**: §9 cycle-integration rewrite (independent, can proceed); §10 target-state reframe; §11 gaps; §12–13. §7 (sub-skills) + §8 (scripts) BLOCKED on the 2 §10.3 verifications (Skill-invocation from autonomous session; Node-alongside-Claude-Code guarantee) — those checks are mine to attempt or route, not yet started.
+**NEXT on #10003**: the 2 §10.3 verifications (Skill-invocation from autonomous session — partially demonstrable live from any agent session; Node-alongside-Claude-Code guarantee — needs research on Claude Code install modes), then §7 (sub-skills) + §8 (scripts) rewrites, then DS audit + PR ready + operator review. NOTE #13714 interaction: PM clone has .git/info/exclude for the 3 harness logs; main untracked twice (81773c447, 73429d267 via temp worktree — Windows lock workaround).
 
 Planning seed: `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md` — §10 supersedes parts of §9; §10.5 = telemetry design.
 
