@@ -1,5 +1,23 @@
 # Scan History Archive
 
+## Scan — 2026-05-15 14:33
+
+- **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
+- **Findings**: #8200 (vault_check.py wikilink pipe-alias not stripped — low), #8201 (vault_entity.py unhandled --file read error — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 13:33
+
+- **Files scanned**: references/scripts/event_bus.py, references/scripts/event_bus_reader.py, references/scripts/event_catalog.py
+- **Findings**: #8193 (unused import sys in event_bus.py and event_bus_reader.py — low)
+- **Items rejected by human**: none yet
+
+## Scan — 2026-05-15 11:33
+
+- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/soul_adaptation.py
+- **Findings**: #8159 (compose.py redundant imports in agent_compose — low), #8160 (boot_remote.py corrupt .claude-pid silent fallthrough — low)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-15 09:03
 
 - **Files scanned**: references/scripts/cycle_pre.py, references/scripts/config.py, references/scripts/health_check.py

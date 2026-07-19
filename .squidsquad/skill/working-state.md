@@ -30,6 +30,6 @@
 - `TestPostMergeHookWiring13556::test_bare_merge_fires_hook_end_to_end` is flaky under combined/full-suite runs (passes standalone every time) -- filed #13732 with repro evidence, not yet root-caused; don't assume corruption if it fails again, check that issue first.
 
 ## Improvement Scan
-Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-18 23:47 (orphan_cleanup.py, clean, no findings).
+Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 00:49 (harness.py/test_git_ops.py/test_harness.py, clean, no findings; scan 1/3 of burst).
 
 ## Quiet Cycle Counter: 0
