@@ -280,3 +280,43 @@ class TestStatePersistence:
         assert state["last_run"] == "1700000000"
         res = sd.tick("skill", drained=True, now=T0)
         assert res["action"] == "scan"
+
+    def test_hand_edited_armed_false_string_coerces_to_false(self, isolated):
+        # #13722: bool("false") == True in Python -- a hand-edited operator
+        # intent to disarm ({"armed": "false"}, a JSON string) must NOT flip
+        # the driver back on. Only an exact JSON `true` counts as armed.
+        path = sd._state_path("skill")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"armed": "false", "scan_count": 0, "last_run": null}',
+                        encoding="utf-8")
+        assert sd.read_state("skill")["armed"] is False
+
+    def test_hand_edited_armed_true_string_also_coerces_to_false(self, isolated):
+        # #13722: any string value -- even "true" -- is type-corruption, not a
+        # trusted signal. Only the exact JSON boolean `true` is honored.
+        path = sd._state_path("skill")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"armed": "true", "scan_count": 0, "last_run": null}',
+                        encoding="utf-8")
+        assert sd.read_state("skill")["armed"] is False
+
+    def test_armed_numeric_one_coerces_to_false(self, isolated):
+        # #13722: same class -- a hand-edited {"armed": 1} (numeric, not a
+        # real JSON boolean) is also treated as corruption, not "truthy armed".
+        path = sd._state_path("skill")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"armed": 1, "scan_count": 0, "last_run": null}',
+                        encoding="utf-8")
+        assert sd.read_state("skill")["armed"] is False
+
+    def test_real_json_booleans_still_honored(self, isolated):
+        # Sanity: the normal programmatic round-trip (write_state always emits
+        # real JSON booleans) is unaffected by the #13722 fix.
+        path = sd._state_path("skill")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('{"armed": true, "scan_count": 0, "last_run": null}',
+                        encoding="utf-8")
+        assert sd.read_state("skill")["armed"] is True
+        path.write_text('{"armed": false, "scan_count": 0, "last_run": null}',
+                        encoding="utf-8")
+        assert sd.read_state("skill")["armed"] is False
