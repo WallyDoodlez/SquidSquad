@@ -1,6 +1,6 @@
 # Vault Architecture (v2 — target design)
 
-> **Status**: v2 TRD draft, in progress 2026-07-18 (tracked on #10003, draft PR pending). This is a **prescriptive target design**, not a snapshot of current code — v1's descriptive-snapshot content is being replaced section by section as this draft lands. Where a section is not yet rewritten, it still reflects v1 (current/live) behavior; such sections are marked `[v1 — not yet migrated]` until superseded.
+> **Status**: v2 TRD draft, **all sections v2 as of 2026-07-18** (tracked on #10003, draft PR #13708 — pending DS audit + operator review). This is a **prescriptive target design**, not a snapshot of current code; v1 behavior remains live until the M4 cutover (§10.5). Locked decisions are marked inline (e.g. §6.3 telemetry storage — operator-confirmed 2026-07-18); open items are consolidated in §11. The one residual unknown: the portable engine package's concrete Skill surface (§7.5/§11 #1).
 >
 > **Why v2**: research comparing SquidSquad's vault against dmp-web's (a mature, actively-used agent-memory system) found SquidSquad's vault functions as a static decision log, not living institutional memory — full analysis in `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md`. The root cause: consumption (search, ranking, verified usage) was never instrumented, so the write side curates blind and nothing measures whether captured knowledge is ever used. v2 ports dmp-web's consumption-pipeline pattern and telemetry-driven ranking as **domain-agnostic infrastructure** — not its SWE-specific taxonomy, which would be wrong for SquidSquad's general-purpose (non-technical-team) audience. See `VAULT-COMPARISON-DMPWEB.md` §9 (design) and §10 (scope correction + resolved decisions) for the full reasoning this doc formalizes.
 >
@@ -346,163 +346,83 @@ A quiet-cycle maintenance pass rolls events older than N days into a **per-write
 
 ---
 
-## 7. The sub-skills `[v1 — not yet migrated]`
+## 7. The sub-skills
 
-All vault behavior is encoded as markdown fragments under `references/sub-skills/`. Each fragment is inlined into the consuming agent's composed `CLAUDE.md` by `compose.py`. Four distinct sub-skills are described below. The vault is **shared institutional knowledge** — every role (PM, verifier, worker, DM) has full R/W access via `vault-protocol`; the historical `vault-protocol-slim` read-only variant was retired in #11331 (Iter 56) when verifier/DM were granted write access for their lane-specific patterns (verifier: testing-and-verification learnings; DM: delivery patterns).
+All vault behavior still ships as markdown sub-skills under `references/sub-skills/`, composed into agents' CLAUDE.md by `compose.py` — the delivery mechanism and the vault slot's L1-exclusivity (§1) are unchanged from v1. What changes is the content: every sub-skill is rewritten around the engine (§6) and the receipts pipeline (§9). Every role has full R/W access via `vault-protocol` (the read-only slim variant stayed retired). Per house rule, each rewritten sub-skill lands with comprehension-test specs.
 
-**Execution model**: vault sub-skills split into two execution lanes by weight. The principle: keep the consuming agent's context lean — anything that requires meaningful reasoning over vault content runs out of process.
+The engine itself is *not* a sub-skill — see §7.5 for how sub-skills reach it.
 
-- **Inline (runs in the consuming agent's context)**: `vault-protocol` (continuous read/write rules; the agent is doing real work the vault must record) and `vault-optimize` (thin wrapper around `vault_optimize.py run` — almost entirely mechanical, no reasoning to offload).
-- **Background subagent (Agent tool, fresh context, `sonnet`)**: `vault-remember` (end-of-cycle reflection: 4-category candidate evaluation, dedup near-match decision, write/skip/update judgment per candidate) and `vault-synthesis` (cross-agent theme detection, convergence detection, posture drafting). Only the structured write decisions (and any new note paths) return to the main agent — never the reflection transcript.
+### 7.1 vault-protocol — the read contract
 
-Model choice rationale: vault reflection is pattern-matching + dedup judgment + small write decisions, not multi-step planning. Sonnet is the same tier already used for skill and DM subagent spawns (see `feedback_skill_sonnet_subagents`, `feedback_dm_sonnet_subagents`); Opus is overkill, Haiku underpowered for the dedup near-match call. The pin is by tier (`sonnet`), not a specific version — version selection follows the Agent-tool model alias, which tracks the latest in the tier.
+- **All vault search goes through the engine** — the raw-grep ban (§6.2) with its telemetry-blindness rationale replaces v1's four grep modes.
+- Carries the two consumption steps of §9: context injection at task filing (PM intake, §9.2) and mandatory consultation + rules matching at pickup (§9.3), including the receipt section formats (`## Vault context consumed`, `## Applicable rules`) and the explicit none-variants.
+- **Citation duty**: any consumer that actually uses a note in a committed artifact records a `used` event (§6.1) — the engine cannot do this for you, and silent use corrupts the maintenance signal.
+- BRIEFING read rules per §5 (boot read, staleness re-read; BRIEFING is outside the engine).
 
-Each sub-skill's **Cycle integration** line below names its lane.
+### 7.2 vault-remember — the write path
 
-### 7.1 `vault-protocol`
+- End-of-cycle sweep, kept from v1 with its throttles (write budget, quiet-gate, role lanes) intact.
+- **Dedup gate reroutes through the engine**: prefer-update-over-create (§9.5) — the top-ranked hit above a similarity threshold becomes the merge target; creation only when nothing ranks. v1's title/tag `dedup-check` is retired.
+- The four gates persist with gate 2 re-based on engine dedup: (1) write budget → (2) engine dedup / merge-target selection → (3) reusability → (4) fresh-context test.
+- Companion step in the worker's ship flow: capture-at-ship (§9.5.1) — same gates, notes ride the feature PR.
+- BRIEFING staleness check unchanged (every cycle, budget-free, §5).
 
-**Path**: `references/sub-skills/common/vault-protocol.md`
+### 7.3 vault-optimize — maintenance
 
-**Behavior**: Provides the full read/write protocol for vault interaction. Defines five operations the consuming agent performs as part of normal work:
+- Analyze phase **harness-scheduled** (§9.6); queue by `last_optimized` (14-day cutoff); community detection + subsplit write `community`/`subcommunity`/`last_optimized` (§4.3).
+- Pruning/archival proposals consume the impressions report (§6.4) — usage-based staleness (§4.4), never time decay.
+- **Contradictions are human-gated** — filed as HITL tracker tasks, never auto-applied.
+- Drives telemetry compaction (§6.5) in the same maintenance window.
 
-- `vault-init` — if `.squidsquad/vault/` does not exist, create the PARAG structure (`projects/`, `areas/`, `resources/`, `archives/`, `galaxy/`), bootstrap `BRIEFING.md`, `areas/human-profile.md`, and `projects/<project-name>.md` from `references/vault-templates/`, plus `.obsidian/` for the Obsidian app. Idempotent.
-- `vault-create` — pick the correct folder by entity type (per §4.1), name with kebab-case (galaxy notes use the `decision-`/`pattern-`/`learning-`/`style-` prefix per §4.2), copy the folder's template, fill frontmatter per §4.3 and body per template, use bare `[[wikilinks]]` per §4.5. Creation threshold: only create if the content is reusable beyond this cycle — transient observations belong in the iteration log.
-- `vault-update` — read the full note first, surgical edits only, never delete existing content (mark superseded via `status` frontmatter instead), update the `updated:` date, append a Changelog body entry, then run `vault-check` Level 1.
-- `vault-search` — four modes: by tag, by type, by keyword, by wikilink traversal (1-hop outbound + inbound, max 2-hop). Max 10 results sorted by recency; cache within a cycle.
-- `vault-check` Level 1 — runs automatically after every `vault-create` or `vault-update`; validates the written note plus all notes within 2 wikilink hops against the §4 spec.
+### 7.4 vault-synthesis — cross-agent patterns
 
-**Cycle integration**: Composed into the consuming agent's CLAUDE.md at session start; rules apply continuously during agent work, not at a single step. **Lane**: inline (the agent itself is doing the read/write the protocol governs).
+Kept from v1: PM-lane, fires on sustained quiet, proposes cross-agent posture patterns, human-gated before becoming active guidance. Output target updated per §3.2: a synthesized posture lands as a `systems/` hub note or `pattern-*` note (the `pattern-posture-*` subtype is retired).
 
-**Scripts used** (from §8): `vault_check.py dedup-check` (before any create), `vault_check.py` Level 1 (after every write), `vault_entity.py` (template-backed note creation/update).
+### 7.5 Engine packaging & invocation
 
-**Outputs**: New or updated `.squidsquad/vault/**/*.md` notes; never deletes.
+Resolved direction (planning doc §10.3, verified §10.7): the engine — search, telemetry write, impressions report — is the **portable dmp-web extraction, invoked via the Skill tool** from inside agent sessions, not ported to Python and not vendored as subprocess scripts.
 
-**Source-vs-spec drift**: source file still references the dropped `links` frontmatter field, the dropped `source: code` value, the unimplemented "auto-maintain `links` frontmatter" behavior, and the pre-#6274 `owner:` enum values (`qa`, `skill` instead of `verifier`, `worker`). Sync tracked in #10098.
-
-**Per-role write lanes**: every role uses the full `vault-protocol`. What differs is what each role writes about — patterns from its own lane (PM: coordination/decision; worker: implementation; verifier: testing-and-verification; DM: delivery). The verifier specifically does NOT use vault writes to revisit or rebut decisions made by PM/worker — the verifier's vault contribution is testing craft, not design call. Project-adaptation prose (under `.squidsquad/project/<role>.md`) names the per-role discipline; the universal write budget + 4-gate logic still applies (max 2 writes/cycle).
-
-### 7.2 `vault-remember`
-
-**Path**: `references/sub-skills/common/vault-remember.md`
-
-**Behavior**: End-of-cycle reflection. Runs two responsibilities in order:
-
-1. **BRIEFING.md staleness check** — runs every cycle, including quiet cycles. Compares `BRIEFING.md` key fields (version, active agents, current priorities) against `.squidsquad/config.md` and the tracker; updates any stale field. Staleness fixes do NOT consume the write budget.
-2. **Reflection** — gated by a quiet-cycle check (skipped if the cycle did no real work). Evaluates this cycle's iteration log for vault-worthy candidates in five galaxy categories: DECISIONS, PATTERNS, LEARNINGS, STYLES, plus PROJECT CONTEXT (which targets `projects/` updates, not a galaxy prefix). Each candidate runs through four deterministic gates IN ORDER: (1) write budget remaining (default 2 per cycle, per `.squidsquad/config.md` `Vault Remember > Writes Per Cycle`), (2) dedup-check against existing notes by title + tags, (3) reusability beyond this cycle, (4) would a fresh agent benefit? Only candidates passing all four are written. When more than 2 pass, priority is decisions > learnings > patterns; surplus is deferred to iteration-log notes as `Vault-worthy but deferred (budget): <description>`. Behavioral or personality directives are explicitly out of scope — those go to soul-shepherd (observed signals) or L4 (explicit directives), not the vault.
-
-**Cycle integration**: Post-cycle Step 4b. Gated by the per-cycle quiet check only — always-on, no feature toggle (the 4-gate filter already provides sufficient noise control; a blunt on/off flag on top earns no use case). **Lane**: background subagent (`sonnet`). The consuming agent hands the iteration log + write-budget + dedup-tool access to the subagent; the subagent runs the 4-gate evaluation and returns a structured list of `{action: write|update|skip, path, type, body, reason}` decisions plus the resulting note paths. The reflection transcript stays out of the consuming agent's context.
-
-**Scripts used** (from §8): `vault_remember.py is-quiet`/`reset-writes`/`write-budget`/`inc-writes`/`briefing-budget` (gating and accounting), `vault_check.py dedup-check` (gate 2). (The legacy `config.py get vault-remember` enabled-flag read has been retired — the sub-skill is always-on and self-gates per its own per-cycle conditions.)
-
-**Outputs**: Up to 2 new `.squidsquad/vault/galaxy/*.md` notes per cycle (`decision-*` / `pattern-*` / `learning-*` / `style-*`), optional `projects/*.md` updates from the PROJECT CONTEXT category, optional `BRIEFING.md` staleness updates, iteration-log notes for deferred candidates.
-
-### 7.3 `vault-optimize`
-
-**Path**: `references/sub-skills/common/vault-optimize.md`
-
-**Behavior**: Quiet-cycle housekeeping. Runs after the improvement-scan check (if the scan ran this cycle, optimize skips). Activates only when the vault has 20+ notes. Invokes `vault_optimize.py run`, which performs four bundled operations:
-
-1. **Prune** — auto-archive galaxy notes that are both stale (60+ days since `updated:`) and orphaned (no inbound wikilinks). Notes created today are never pruned.
-2. **Confidence decay** — apply the §4.4 decay rules (high → medium at 60 days, medium → low at 120 days, terminal at `low`). Notes tagged `evergreen` are exempt.
-3. **Reindex** — walk all notes and rebuild each note's `links:` frontmatter to match its body `[[wikilinks]]`; this link data is what prune-orphan-detection and relevance scoring read.
-4. **Relevance scoring** — compute link-count + recency + confidence scores, write to `.squidsquad/vault/.relevance-index.json` (gitignored).
-
-The sub-skill also exposes a pending-questions queue: optimization-surfaced questions that need human input (e.g., "should these similar notes be merged?") are added via `vault_optimize.py add-question`, surfaced in the status bar, and mentioned in the next agent check-in.
-
-**Cycle integration**: Quiet cycle only, after the improvement-scan check. Gated by the 20+ note count — always-on, no feature toggle (the quiet-cycle + note-count gates already provide sufficient activation control). **Lane**: inline (thin wrapper around `vault_optimize.py run` — no reasoning happens in the agent's context).
-
-**Scripts used** (from §8): `vault_optimize.py run` (the all-in-one orchestrator), `vault_optimize.py add-question` (pending-question queue).
-
-**Outputs**: Archived notes (moved from `galaxy/` to `archives/`); in-place confidence-decay frontmatter edits plus body changelog entries; `.relevance-index.json`; pending-question queue entries.
-
-### 7.4 `vault-synthesis`
-
-**Path**: `references/sub-skills/roles/pm/vault-synthesis.md`
-
-**Behavior**: Cross-agent pattern detection. Maintains a synthesis cycle counter (separate from the improvement-scan counter); fires after 5 consecutive quiet cycles. Counter resets on real work or on a completed synthesis. Activation also requires the vault to have 10+ galaxy notes.
-
-When triggered, the synthesis runs in five steps:
-
-1. Gather galaxy notes modified since the last synthesis or in the last 7 days (whichever is shorter).
-2. Detect recurring themes — same tags across notes from different agents, similar topics across owners, wikilink clusters that span agent boundaries.
-3. Detect convergent decisions — separate decisions that imply a shared principle (e.g., "Hard error over silent fallback" + "never ship with gaps" → "explicit failure over silent degradation"). Convergences must be supported by 2+ distinct notes from different agents or contexts.
-4. For each detected posture (max 1 per synthesis cycle), create a `pattern-posture-<name>.md` galaxy note with `type: pattern`, `posture` tag, `confidence: medium`, and body citing the source notes via wikilinks. Then file a pending agent task requesting human review.
-5. Touch the `.last-synthesis` sentinel file and log to iteration summary.
-
-Postures need explicit human approval before becoming active scan criteria for other agents — they are never auto-approved. Single-agent patterns are not postures; convergence across agents is the defining property.
-
-**Cycle integration**: Quiet cycle, sub-skill composed only for PM (the designated synthesizer role; pluggability across role-classes is not implemented today). Gated by the 5-consecutive-quiet-cycle counter and the 10+ galaxy-note threshold. **Lane**: background subagent (`sonnet`). The synthesizer agent hands the recent-notes set to the subagent; the subagent runs theme/convergence detection and returns at most one posture descriptor `{name, principle, source-notes, body}` for the consuming agent to write via `vault-create` (plus the pending-review task body). Cross-note reasoning transcript stays out of the consuming agent's context.
-
-**Scripts used** (from §8): `vault_check.py` Level 1 (after creating the posture note), `tracker.py create-task` (file the pending-review task).
-
-**Outputs**: At most 1 new `pattern-posture-*.md` note per cycle; one pending agent task per posture; `.last-synthesis` sentinel file.
+- **Mechanism: verified.** A harness-spawned agent session invoked a Claude Skill live with no prompt and no interactivity (2026-07-18). The real dependency is **availability**: the package's skills must be installed (user- or project-level) on the machine running the agents — an install-time concern, not a runtime one.
+- **Node is a checkable soft prerequisite, not an assumption.** npm-mode Claude Code installs imply Node; native-binary installs do not. The wizard/installer preflights `node --version` when enabling the engine; absent Node, the feature degrades per §6.2/§9.9 (search falls back to engine-unavailable receipts; ranking to tier + recency) — and the Python-port fallback (planning §9.4.2) remains the contingency if Skill-based packaging proves unreliable in practice.
+- **Concrete skill names/contracts bind at implementation.** The portable package's published Skill surface is the §11 residual unknown; sub-skills reference the abstract interface in §8.5 so their prose survives the binding.
+- Zero-maintenance-drift rationale: upstream engine improvements arrive without a SquidSquad release; SquidSquad's Python installer gains no new runtime dependency of its own.
 
 ---
 
-## 8. The four scripts `[v1 — not yet migrated]`
+## 8. The scripts
 
-All mechanical vault operations are encapsulated in scripts under `references/scripts/`. Agents shell out to these from inside the sub-skills.
+v1 shipped four deterministic Python scripts; v2 keeps the **deterministic, test-pinned Python** posture for everything SquidSquad owns — but the ranking/telemetry brain moves behind the engine boundary (§8.5). SquidSquad scripts never reimplement ranking.
 
-### 8.1 `vault_check.py`
+### 8.1 vault_check.py — validation
 
-Validates vault integrity. Subcommands:
+- `check-structure`: folder ↔ type ↔ prefix consistency, now **driven by `vault-schema.json`** (§4.2a) — a custom type gets validation for free.
+- Frontmatter validation against §4.3 (including rejecting counter fields in frontmatter — telemetry belongs in shards, §6.3).
+- `check-wikilinks`: unchanged contract (walk all notes, flag unresolved `[[name]]`, exit 1 on any).
+- **New Level-2 signal**: galaxy notes with zero hub links flagged as graph-orphaned (§3.3) — maintenance signal, not a write-time block.
 
-| Subcommand | Purpose |
+### 8.2 vault_remember.py — write mechanics
+
+Budget counter, quiet-gate detection, BRIEFING token budget — the deterministic halves of §7.2, kept. The dedup subcommand is retired; the sub-skill calls the engine for dedup instead.
+
+### 8.3 vault_optimize.py — maintenance mechanics
+
+Analyze/apply split per §7.3; consumes the impressions report (§6.4); executes compaction (§6.5). The v1 `reindex` (stored `links:` maintenance) and confidence-decay paths are deleted — the link graph is engine-computed live (§4.5), decay is gone (§4.4). `.relevance-index.json` handling is deleted with the file (§10.2).
+
+### 8.4 vault_entity.py — note creation
+
+Materializes a template into a new note: resolves template by registered type (§3.5), fills frontmatter per §4.3, validates via `vault_check.py` before write. Generic-skeleton fallback for custom types without a shipped template.
+
+### 8.5 The engine boundary — what SquidSquad deliberately does NOT implement
+
+The engine interface the sub-skills (§7) and scripts above depend on, satisfied by the packaged engine (§7.5) regardless of its concrete skill names:
+
+| Operation | Contract (mirrors §6) |
 |---|---|
-| `validate` | Full vault validation (all checks) |
-| `check-frontmatter` | Validate frontmatter fields in galaxy notes |
-| `check-wikilinks` | Find broken `[[name]]` references |
-| `dedup-check --title <t> --tags <t>` | Used by `vault-remember` Gate 2 |
-| `check-structure` | Validate the folder ↔ prefix ↔ type consistency rules (§4.2a) |
-| `list-orphans` | List galaxy notes with no inbound wikilinks |
-| `suggest-connections` | Suggest candidate wikilinks between topically-related notes |
-| `check-size` | Warn on galaxy notes exceeding the ~500-line advisory ceiling (§4.1); advisory, not a hard-fail |
+| **search** | Query → tiered match + budgeted traversal (§6.2) → top-K metadata-only JSON (paths, tiers, scores, link map); writes `impression`/`walked` events; `--no-write` dry-run |
+| **record** | Consumer-cited slugs + task number → `used` events appended to the caller's shard (§6.3) |
+| **report** | Shards + note inventory → cold / surfaced-never-used / stale buckets (§6.4), JSON |
 
-Runs **automatically after every vault-create or vault-update** (Level 1 — single note + 2-hop neighborhood). Level 2 (full-vault sweep with orphan + staleness detection) is on-demand only.
-
-### 8.2 `vault_entity.py`
-
-Entity extraction. Given a block of text (e.g., a tracker comment, iteration log entry), detects entity candidates (decision, pattern, learning, style) for vault-remember to consider. Subcommands:
-
-| Subcommand | Purpose |
-|---|---|
-| `extract "<text>"` | Extract entities from inline text |
-| `extract --file <path>` | Extract entities from a file |
-
-### 8.3 `vault_optimize.py`
-
-On-demand maintenance. Subcommands:
-
-| Subcommand | Purpose |
-|---|---|
-| `full-sweep [--dry-run]` | Full pass (prune + decay + reindex + relevance) |
-| `prune-scan [--dry-run]` | Archive stale (60+ days, unupdated) + orphan (no inbound wikilinks) galaxy notes |
-| `consolidate-scan [--dry-run]` | Detect merge candidates (similar topics) |
-| `decay-apply [--dry-run]` | Confidence decay (high→medium after 60d, medium→low after 120d) |
-| `add-question --agent <r> --note <p> --question "<q>"` | Queue pending question for human |
-| `reindex` | Rebuild `links:` frontmatter across all notes from their body wikilinks |
-| `relevance-report` | Print the relevance-score ranking (from `.relevance-index.json`) |
-| `pending-count` | Count queued pending-questions |
-| `run` | Convenience alias for the full pipeline (see `vault-optimize.md`) |
-
-Notes never created today are protected — prune never targets them.
-
-### 8.4 `vault_remember.py`
-
-Deterministic gates for vault-remember reflection. Subcommands:
-
-| Subcommand | Purpose |
-|---|---|
-| `is-quiet <role>` | Was this cycle quiet? (exit 0 = quiet, skip reflection) |
-| `write-budget <role>` | Remaining write budget this cycle |
-| `inc-writes <role>` | Increment write counter after a successful write |
-| `reset-writes <role>` | Reset counter at start of reflection |
-| `briefing-budget` | Remaining token budget for BRIEFING.md additions |
-| `effective-confidence <note>` | A note's current confidence after time-decay is applied |
-| `note-count` | Total vault note count (backs the 20+/10+ activation gates) |
-| `decay-scan` | List galaxy notes currently due for confidence decay |
-
----
+Shard append discipline (one writer, one file, trailing-newline JSONL) is part of the engine's write contract; the installer seeds `.telemetry/.gitattributes` (`merge=union`) and the harness owns instance-id minting (§6.3) — neither is engine work. If any operation is unavailable at runtime, callers follow §9.9's degradation rows; no SquidSquad script grows a fallback ranking implementation.
 
 ## 9. Cycle integration
 
@@ -677,4 +597,4 @@ The §12.1 map of where the vault appears elsewhere still holds. What v2 changes
 
 - **2026-05-24 (v1 draft, descriptive snapshot)** — initial draft. Consolidates the vault's specification (from 5 sub-skills + 4 scripts) and current state (from on-disk inventory) into one architecture doc. No design changes proposed. References open issue #5855 for the known living-memory gap; resolution out of scope.
 - **2026-05-24 (v1 draft, expanded)** — added §9.6 failure modes + recovery paths, §9.7 explicit non-functionality, §10.3-§10.6 ownership/confidence/status/recency distributions, §11 re-verified #5855 claims (each verdict CONFIRMED / PARTIALLY TRUE / NOT TRUE TODAY) + new drift findings (owner label `<role>` vs `<role>-lead`; zero `superseded` notes), §12.1 verified cross-refs with line numbers, §12.2 reconciliation needs for ARCHITECTURE / COMPOSE-ARCHITECTURE / AGENT-RUNTIME / INSTALLER-ARCH / sub-skill-catalog.
-- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per `VAULT-COMPARISON-DMPWEB.md` §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. Later same day: §10 reframed from stale inventory to the M0–M4 migration design (product feature, lean transform for the PARAG-kept profile); §11 rewritten as the open-decisions table (#5855 noted as closing at M4); §12.2 rewritten as the v2 reconciliation list (ARCHITECTURE / AGENT-RUNTIME / COMPOSE / INSTALLER / catalog / HARNESS). **Only §7/§8 remain v1** — blocked on the two §10.3 packaging verifications (Skill-invocation from autonomous sessions; Node-alongside-Claude-Code).
+- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per `VAULT-COMPARISON-DMPWEB.md` §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. **§6.3 LOCKED same day** (operator-confirmed inline, after stress-testing per-note vs per-writer sharding and the multi-squad-per-developer topology; granularity refined to per-writing-clone, instance ids specified as provision-time UUIDs in gitignored local state). Same day: §9 rewritten as the consumption pipeline — context injection at intake, mandatory consultation + committed receipts at pickup, verifier receipt enforcement, capture-at-ship + engine-rerouted prefer-update-over-create sweep, harness-scheduled maintenance, outcome-linked telemetry (target state), v2 failure-mode table. Later same day: §10 reframed from stale inventory to the M0–M4 migration design (product feature, lean transform for the PARAG-kept profile); §11 rewritten as the open-decisions table (#5855 noted as closing at M4); §12.2 rewritten as the v2 reconciliation list (ARCHITECTURE / AGENT-RUNTIME / COMPOSE / INSTALLER / catalog / HARNESS). Same evening: the two §10.3 packaging verifications resolved by live probe (Skill invocation from a harness-spawned session CONFIRMED; Node NOT guaranteed → preflight soft-prerequisite model), unblocking §7/§8 — rewritten as the engine-based sub-skill layer (consultation/receipt steps, engine-rerouted dedup, harness-scheduled maintenance, §7.5 packaging-via-Skill-invocation) and the v2 script surface with the §8.5 engine-boundary contract table. **All sections now v2**; doc ready for DS audit.
