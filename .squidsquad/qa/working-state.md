@@ -4,6 +4,7 @@
 - **Status**: none
 
 ## Completed Steps
+- Verified #13735 (PASS, pending-ship) -- pm-variant improvement-scan.md wording fix mirroring #13711. Authored a new CQ spec (#9184, no prior spec covered this file), 3/3 via fresh agent. Independently swept for other stale-wording variants, none found.
 - Verified #13728/#13729/#13730/#13732 (PASS, pending-ship) round 2 -- skill fixed exactly as suggested (harden_stdio wrapped in try/except ImportError, fails open). Independently re-confirmed 3x standalone (3/3 PASS, was 3/3 FAIL) + full manual E2E repro outside pytest. Full static gate 5887/5887 PASS matching skill's own number. All 4 issues closed correctly, including #13732 as fixed-by-#13728 rather than the round-1 flaky misdiagnosis.
 - Rejected #13732 (FAIL, back to in-progress) -- skill's own investigation into #13728's regression (same test) concluded "flaky/resource-contention, no code defect." Independently re-ran the exact standalone repro 3x with zero concurrent load: 3/3 deterministic failures, directly contradicting the diagnosis. Corrected: same root cause as #13728 (harden_stdio import crash), not environmental.
 - Verified #13731 (PASS, pending-ship -> shipped) -- the exact pre-existing comprehension-staleness gap flagged as "unrelated" throughout this whole session, now root-caused (traced to #13565's condense) and fixed. Held to the issue's own bar: confirmed via direct blob-diff (not trusted from skill's claim) that neither spec's tested content overlaps the changed regions.
