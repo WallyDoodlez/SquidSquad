@@ -8,9 +8,26 @@
       "rule_was": "PAUSE general doc updates that explain /loop mechanics until event-driven mode (Phase 5: #8694 #8695 #8696 #8697 #8700) ships"
     }
   ],
-  "last_scanned": "CHANGELOG.md",
-  "rotation_count": 100,
+  "last_scanned": "README.md",
+  "rotation_count": 102,
   "scan_history": [
+    {
+      "file": "README.md",
+      "date": "2026-07-19",
+      "findings": 1,
+      "fixes": [
+        "FIXED Requirements-section gap: unconditionally listed `gh` CLI + 'A GitHub repository' as required, but the self-hosted Forgejo backend (verified real: references/scripts/forgejo_setup.py Docker-Compose deploy script, references/templates/forgejo-compose.yaml, documented `Forge Backend` -> `Provider` config option in docs/CONFIGURATION.md) needs neither -- it needs Docker instead. Rephrased Requirements as GitHub-or-Forgejo alternatives, pointing to the Forge Backend config doc."
+      ],
+      "note": "Idle-driver scan-1 of fresh burst (scan_count->1/3, fresh session boot, 0 items in work_queue). Rotation-order README.md scan (Tier 1: version refs, feature descriptions, config fields, command refs, dead links, missing coverage, terminology drift). Verified clean: SQLite-backed scan-targeting claim (line 35) is REAL (scan_index.py has sqlite3 + 5x CREATE TABLE); all 12 referenced files/scripts/docs (ARCHITECTURE/CONFIGURATION/AGENT-RUNTIME/DM-ARCH/sub-skill-guide/CONTRIBUTING/CHANGELOG/SKILL.md + tui/app.py + wizard.py + squidsquad_cli.py + migrate_state_branch.py) exist -- 0 dead links/refs. 1 finding (fixed directly, factual correction, no recompose needed -- README is not a compose source)."
+    },
+    {
+      "file": "#13746 pm-restart durability + #13760 post-ship self-QA",
+      "date": "2026-07-19",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan-1 of fresh burst (scan_count->1/3). Self-QA of #13760 (wizard.py harden_stdio wiring, PR #13786): CLOSED + exactly ONE status:shipped label. Counter consistent: config=104==.ship-counter=104. Also durability-checked my own #13746 recompose+restart from the prior tick: pm agent status=running, bootup_complete=true -- clean respawn, no crash loop. 0 findings.",
+      "note2": "Banked 2 vault writes this session for the #13746 finding: new learning-includes-yml-tombstoned-instructions-md-is-real-compose-source + a links update on pattern-runtime-loaded-subskill-change-no-recompose."
+    },
     {
       "file": "#13742/#13743 post-ship delivery-integrity self-QA",
       "date": "2026-07-19",
