@@ -1785,6 +1785,25 @@ def _detect_remote_url(repo_dir):
     return None
 
 
+def _cleanup_failed_clone(clone_dir):
+    """Remove a stray directory left behind by a failed ``git clone`` (#13793).
+
+    ``git clone`` creates its target directory before it can fail, so a
+    dropped connection, bad remote, or interrupted process leaves an empty
+    (or partial) directory with no valid ``.git`` -- blocking every future
+    clone attempt to that same path. Only removes directories that are NOT a
+    completed clone (no ``.git``), so a legitimate clone is never touched.
+    Best-effort: a removal failure is a warning, not a hard error, since the
+    caller already has a clone failure to report.
+    """
+    if clone_dir.exists() and not (clone_dir / ".git").exists():
+        try:
+            shutil.rmtree(clone_dir)
+        except OSError as e:
+            print(f"  WARNING: could not remove stray clone dir {clone_dir}: {e}",
+                  file=sys.stderr)
+
+
 INSTALL_SPEC_FILENAME = ".install-spec.json"
 
 
@@ -2179,10 +2198,21 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
                                 f"{result.stderr.strip()}",
                                 file=sys.stderr,
                             )
+                            # #13793: `git clone` creates the target directory
+                            # before it can fail (bad remote, dropped
+                            # connection, interrupted process) -- left behind,
+                            # this stray dir has no .git and blocks EVERY
+                            # future clone attempt for this agent_id ("fatal:
+                            # destination path already exists and is not an
+                            # empty directory"), permanently stranding
+                            # provisioning until an operator manually removes
+                            # it. Clean it up now so a retry can succeed.
+                            _cleanup_failed_clone(clone_dir)
                             continue
                         summary.setdefault("clones_created", []).append(str(clone_dir))
                     except Exception as e:
                         print(f"  WARNING: Clone failed for {agent_id}: {e}", file=sys.stderr)
+                        _cleanup_failed_clone(clone_dir)
                         continue
 
     # PM always maps to current directory

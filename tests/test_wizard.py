@@ -1085,6 +1085,93 @@ class TestScaffoldInstallDevVariants:
         assert "fe" in fe_md.lower() or "FE" in fe_md
 
 
+class TestScaffoldInstallSiblingCloneCleanup13793:
+    """#13793: a failed `git clone` for a sibling agent clone must not leave
+    a stray directory behind. `git clone` creates its target directory
+    before it can fail (bad remote, dropped connection, interrupted
+    process), so an orphaned directory with no `.git` permanently blocks
+    every future clone attempt to that same path ("fatal: destination path
+    already exists and is not an empty directory"), stranding provisioning
+    until an operator manually removes it."""
+
+    def _spec_and_clone_dir(self, tmp_path):
+        target_root = tmp_path / "project"
+        spec = _design_preset_spec()  # pm + dm; dm is the non-pm sibling clone
+        clone_dir = target_root.parent / f"{spec['project']['name']}-dm"
+        return spec, target_root, clone_dir
+
+    def test_failed_clone_nonzero_exit_cleans_up_stray_directory(self, tmp_path, monkeypatch):
+        spec, target_root, clone_dir = self._spec_and_clone_dir(tmp_path)
+        monkeypatch.setattr(wizard, "_detect_remote_url",
+                             lambda repo_dir: "https://example.invalid/x.git")
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[:2] == ["git", "clone"]:
+                # Real git creates the target dir before it can fail.
+                Path(cmd[-1]).mkdir(parents=True, exist_ok=True)
+                return _fake_proc(returncode=128,
+                                   stderr="fatal: could not read from remote repository.")
+            return _fake_proc(returncode=0)
+
+        monkeypatch.setattr(wizard, "_run", _fake_run)
+        wizard.scaffold_install(spec, target_root)
+        assert not clone_dir.exists(), "failed clone left a stray directory behind"
+
+    def test_failed_clone_via_exception_still_cleans_up(self, tmp_path, monkeypatch):
+        spec, target_root, clone_dir = self._spec_and_clone_dir(tmp_path)
+        monkeypatch.setattr(wizard, "_detect_remote_url",
+                             lambda repo_dir: "https://example.invalid/x.git")
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[:2] == ["git", "clone"]:
+                Path(cmd[-1]).mkdir(parents=True, exist_ok=True)
+                raise RuntimeError("network unreachable")
+            return _fake_proc(returncode=0)
+
+        monkeypatch.setattr(wizard, "_run", _fake_run)
+        wizard.scaffold_install(spec, target_root)
+        assert not clone_dir.exists(), "failed clone left a stray directory behind"
+
+    def test_successful_clone_is_not_touched(self, tmp_path, monkeypatch):
+        spec, target_root, clone_dir = self._spec_and_clone_dir(tmp_path)
+        monkeypatch.setattr(wizard, "_detect_remote_url",
+                             lambda repo_dir: "https://example.invalid/x.git")
+
+        def _fake_run(cmd, **kwargs):
+            if cmd[:2] == ["git", "clone"]:
+                target = Path(cmd[-1])
+                target.mkdir(parents=True, exist_ok=True)
+                (target / ".git").mkdir()
+                return _fake_proc(returncode=0)
+            return _fake_proc(returncode=0)
+
+        monkeypatch.setattr(wizard, "_run", _fake_run)
+        summary = wizard.scaffold_install(spec, target_root)
+        assert clone_dir.exists()
+        assert (clone_dir / ".git").exists()
+        assert str(clone_dir) in summary.get("clones_created", [])
+
+
+class TestCleanupFailedClone13793:
+    def test_removes_directory_without_git(self, tmp_path):
+        stray = tmp_path / "stray-clone"
+        stray.mkdir()
+        wizard._cleanup_failed_clone(stray)
+        assert not stray.exists()
+
+    def test_leaves_completed_clone_untouched(self, tmp_path):
+        real_clone = tmp_path / "real-clone"
+        real_clone.mkdir()
+        (real_clone / ".git").mkdir()
+        wizard._cleanup_failed_clone(real_clone)
+        assert real_clone.exists()
+        assert (real_clone / ".git").exists()
+
+    def test_missing_directory_is_a_no_op(self, tmp_path):
+        missing = tmp_path / "does-not-exist"
+        wizard._cleanup_failed_clone(missing)  # must not raise
+
+
 class TestScaffoldInstallSafetyAndIdempotency:
     def test_refuses_existing_install_without_overwrite(self, tmp_path):
         spec = _design_preset_spec()
