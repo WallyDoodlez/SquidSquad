@@ -134,9 +134,6 @@
  "13563_spec.json": {
   "references/sub-skills/common/vault-remember.md": "54bc6fb99e537560fa8df7e1bc74f0761aa672bd"
  },
- "13565_spec.json": {
-  "references/roles/instructions.md": "ddd703dfe9e2929957007b0591792bea028f848b"
- },
  "13566_spec.json": {
   "references/sub-skills/common/improvement-scan.md": "27fd175de42b184066b0affdbcd0d3ef2b0c595a"
  },
