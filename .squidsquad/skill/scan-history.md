@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 05:52
+
+- **Files scanned**: references/roles/instructions.md (288 lines, the shared L1 base cycle contract composed into every role; full read; cross-referenced every `→ run sub-skill:` marker against docs/sub-skill-catalog.md -- all resolve; cross-referenced docs/AGENT-RUNTIME.md §8.1/§8.4/§8.5 and docs/HARNESS-ARCH.md §7.4 citations -- all sections exist at the cited numbers; verified `[POLLING_FRAGMENT_PATH]`/`[INTERVAL]` placeholders substitute correctly per role, matches previously-seen composed output), tests/test_harness_deploy_12912.py (833 lines; TODO/FIXME grep clean; cross-referenced its "established pattern in test_harness.py::test_ack_stop_confirmed_guarded_by_stopping_intent" citation -- still exists).
+- **Findings**: none. Both files clean.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 04:54
 
 - **Files scanned**: references/scripts/wizard.py (4520 lines; TODO/FIXME grep clean; AST em-dash/decorative-Unicode sweep on print() literals + f-string segments found a live hit; grepped for harden_stdio/cli_stdio wiring -- zero hits), tests/test_cli_stdio_13198.py (cross-referenced the TestFleetWiring13198.WIRED list -- wizard.py absent).
@@ -612,11 +618,5 @@
 
 - **Files scanned**: references/scripts/health_check.py, references/scripts/state_bus.py
 - **Findings**: #8350 (state_bus.py: unused import os)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-15 21:03
-
-- **Files scanned**: references/scripts/config.py, references/scripts/cycle_pre.py
-- **Findings**: #8343 (cycle_pre.py: inconsistent boolean config parsing across functions)
 - **Items rejected by human**: none
 

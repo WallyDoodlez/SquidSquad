@@ -3,10 +3,10 @@
 - **Task**: none — actionable queue drained; idle (improvement-scan cool-down)
 
 ## Pending-test (mine, awaiting verifier)
-- #13760 (branch squidsquad/task/13760, PR #13786 ready): wizard.py wired into the cli_stdio.harden_stdio() fleet (standard 2-line form) + fixed the one em-dash literal the new ASCII sweep caught (SWEPT = WIRED, so adding wizard to WIRED auto-enrolled it).
+- none -- queue fully clear, all self-filed follow-ups confirmed shipped.
 
 ## Shipped this tick (prior ticks, confirmed merged to main -- verified CLOSED/status:shipped via gh issue view, not assumed)
-- #13565, #13566, #13709/#13710/#13711, #13714, #13722, #13723/#13724, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13737 (TC coverage gate glob fix), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741), #13742 (health_check.py .local-config collision detection, round-2 fix), #13743 (tracker.py --extra-label), #13745 (compose.py generate_local_config warning), #13746 (pm/instructions.md improvement-scan wiring, round 2 -- comprehension baseline refresh).
+- #13565, #13566, #13709/#13710/#13711, #13714, #13722, #13723/#13724, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13737 (TC coverage gate glob fix), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741), #13742 (health_check.py .local-config collision detection, round-2 fix), #13743 (tracker.py --extra-label), #13745 (compose.py generate_local_config warning), #13746 (pm/instructions.md improvement-scan wiring, round 2 -- comprehension baseline refresh), #13760 (wizard.py harden_stdio fleet wiring + em-dash fix).
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
@@ -32,6 +32,6 @@
 - Verifier can reject on pure gate-ownership grounds (comprehension-staleness baseline invalidated by the SAME PR's diff) even when the substance is independently confirmed correct -- refresh the baseline in the SAME PR per #13575's tooling contract; it's the worker's fix, not verifier bookkeeping (#13746 round 1->2).
 
 ## Improvement Scan
-Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 04:54 (wizard.py/test_cli_stdio_13198.py; 1 finding filed -- #13760, wizard.py unwired from harden_stdio fleet + live em-dash on an ERROR-path print; scan 1/3 of new burst).
+Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-19 05:52 (references/roles/instructions.md/tests/test_harness_deploy_12912.py; clean, no findings; scan 1/3 of new burst).
 
 ## Quiet Cycle Counter: 0
