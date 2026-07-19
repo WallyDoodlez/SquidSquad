@@ -1,0 +1,32 @@
+{
+  "issue": 13566,
+  "title": "scan-history pruning + size-guarded fallback read",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-19",
+  "ac": "comprehension (issue AC2 / #9184): a fresh agent hitting the scan_index.py-unavailable fallback on an oversized scan-history.md must correctly bound the read to the newest ~50 entries, correctly identify that they are at the START of the file (prepended newest-first, not appended), and correctly know the evicted/archived remainder is out of scope for this fallback.",
+  "method": "Fresh agent (model: sonnet, general-purpose) given ONLY references/sub-skills/common/improvement-scan.md on branch squidsquad/task/13566, explicitly instructed to use no other file/tool/prior knowledge. CQ spec authored + executed by verifier per #9184 -- skill's PR comment correctly deferred authorship, consistent with the CQ-authorship boundary established elsewhere this session.",
+  "target": "references/sub-skills/common/improvement-scan.md (Step 3 fallback-read text) -- PR (branch squidsquad/task/13566)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "In the scan_index.py-unavailable fallback, should the agent read the whole scan-history.md file or a bounded portion? If bounded, roughly how many entries?",
+      "expected": "Bounded -- read only the newest ~50 entries (the first ~50 '## Scan' blocks), explicitly not the whole file.",
+      "must_not": "Answering that the whole file should be read."
+    },
+    {
+      "id": "CQ2",
+      "q": "Entries are added over time. Which physical part of the file -- the start or the end -- holds the newest ~50 entries the fallback should read?",
+      "expected": "The start of the file -- entries are prepended newest-first, so the first ~50 blocks are the newest ones, not the last ~50.",
+      "must_not": "Answering that the newest entries are at the end of the file, or that the fallback should read the tail."
+    },
+    {
+      "id": "CQ3",
+      "q": "If the file has grown past its retention cap, where did the older/evicted entries go, and does the fallback need to check that location?",
+      "expected": "Evicted entries roll into a sibling scan-history.archive.md; the fallback never reads it -- recency/staleness signal doesn't need the archived history.",
+      "must_not": "Answering that the fallback must also read the archive file, or that evicted entries are deleted/lost."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-19",
+  "evidence": "Fresh sonnet general-purpose agent (id ac959c686aaf3e1ad), given ONLY improvement-scan.md, explicitly told to use no other file/tool/prior knowledge. 3/3 correct with accurate supporting quotes, zero must_not violations. CQ1: 'Bounded... roughly 50 Scan entries, explicitly not the whole file.' CQ2: 'the newest ~50 entries live at the start of the file... entries are prepended newest-first.' CQ3: 'evicted entries go to scan-history.archive.md... the fallback explicitly should not read it.' Bonus catch (not scored, out of this spec's AC scope): the agent independently flagged that Step 6's write-instruction wording ('append') is ambiguous against the prepend convention Step 3 relies on -- filed separately as #13711 (pre-existing text, untouched by this PR, does not block #13566)."
+}
