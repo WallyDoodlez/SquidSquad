@@ -1,7 +1,7 @@
 # Working State
 
 - **Task**: #10003 (VAULT-ARCH.md v2 TRD rewrite — in-progress, resumable)
-- **Status**: §5+§6 drafted+pushed; next §9-cycle-integration (§7/§8 blocked on §10.3 verifications)
+- **Status**: §5/§6/§9 drafted+pushed; §6.3 telemetry LOCKED by operator (inline 2026-07-18 ~22:55); next §10–§12 reframes
 - **Updated**: 2026-07-18 22:35
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
@@ -19,7 +19,8 @@ Planning seed: `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md` — §10 sup
 ## HITL standing (advertise each check-in)
 
 - **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN.
-- **Vault-v2 §10.5 telemetry design** — operator lock-in pending (re-advertised this session's check-in; TRD §6.3 carries it as working design with pending-lock-in banner).
+- ~~Vault-v2 telemetry lock-in~~ RESOLVED: operator LOCKED §6.3 inline 2026-07-18 (per-writing-clone shards, UUID instance ids). Recorded: TRD §6.3, planning §10.6, BRIEFING.
+- **Multi-instance/parallel-squads design task** — offered to operator inline (one dev, X squads, one install; state layer not instance-safe). NOT yet confirmed as requirement — re-raise at next check-in.
 - **~128 `status:pending` backlog tasks** awaiting operator go-ahead (count verified this session).
 
 ## PM queue

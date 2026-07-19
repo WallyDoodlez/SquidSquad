@@ -409,3 +409,12 @@ Remaining open: §9.6 #3 (distillation aggressiveness), #4 (viewer priority), #5
 **Cloud Claude agents — considered and rejected as the sync/storage layer** (operator floated, PM advised against, 2026-07-18): cloud agents are ephemeral compute, not a datastore — the data still needs a durable home, which becomes either a hosted DB (new auth/availability/cost/privacy surface; note slugs leak repo content to a third party) or the git repo, i.e. where this design already is. Legitimate future niche only: running the compaction/impressions-report pass on a schedule for installs with no always-on machine — optional convenience, not architecture.
 
 **Consequence for the TRD**: §6 (telemetry architecture) of `docs/VAULT-ARCH.md` v2 should specify the shard design above, NOT §9.4's harness-endpoint/gitignored-store design. The "notes stay pure content, no counters in frontmatter" rule from §9.4 **survives unchanged** — it was always the load-bearing half.
+
+### 10.6 §10.5 LOCKED + granularity refined (2026-07-18, operator inline review)
+
+Operator explicitly confirmed the §10.5 shard design after stress-testing it live (per-note-vs-per-writer sharding; append-only-still-conflicts-in-git; multi-squad-per-developer topology). Two refinements came out of that review, now canonical in `docs/VAULT-ARCH.md` §6.3 (which supersedes §10.5's wording where they differ):
+
+- **Granularity: per writing clone, not per harness instance** — under clone isolation one harness supervises N agents in N separate clones, each committing independently; a shared per-harness shard would recreate concurrent writers within one squad. Shard = `.telemetry/<harness-instance-id>-<role>.jsonl`.
+- **Instance identity: UUID minted at provision time, persisted in gitignored local harness state** — never hostname/username-derived (a developer running X parallel squads would collide), never in a committed file (all clones would inherit it). Makes one-install/X-squads safe by construction.
+
+Related but out of scope for vault-v2: the *rest* of the per-role state layer (`working-state.md`, scan-history, subloop-driver at fixed per-role paths) is NOT multi-instance-safe; parallel squads per developer needs its own design task if the operator wants it as a supported workflow (raised inline 2026-07-18, not yet confirmed as a requirement).
