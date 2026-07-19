@@ -117,42 +117,54 @@ def parse_tc_results(text: str) -> dict[int, str]:
 def _discover_files(issue_number: int) -> tuple[Path | None, Path | None]:
     """Auto-discover TEST-PLAN and QA-RESULTS files for an issue number.
 
-    Searches .squidsquad/*/planning/ directories.
-    PM planning dir is preferred over other roles.
-    For QA-RESULTS, picks highest -RN revision.
+    Searches .squidsquad/*/planning/ directories. Verifier ('qa') planning dir
+    is preferred (#9184 moved TEST-PLAN/QA-RESULTS ownership from PM to
+    verifier). Tries the current #9184 naming convention (TEST-PLAN-<N>.md /
+    QA-RESULTS-<N>.md, number last) first; falls back to the pre-#9184 legacy
+    convention (*-<N>-TEST-PLAN.md / *-<N>-QA-RESULTS[-RN].md) for in-flight
+    tasks filed before the rename (verification.md documents this fallback as
+    intentionally kept, not removed) (#13737).
     """
     planning_dirs = sorted(SQUID_DIR.glob("*/planning"))
 
-    # Sort to put pm first (PM owns test plans)
+    # Sort to put qa/verifier first (owns TEST-PLAN/QA-RESULTS per #9184)
     planning_dirs = sorted(
-        planning_dirs, key=lambda p: (0 if p.parent.name == "pm" else 1, p.parent.name)
+        planning_dirs, key=lambda p: (0 if p.parent.name == "qa" else 1, p.parent.name)
     )
 
     test_plan = None
     qa_results = None
 
     for pdir in planning_dirs:
-        # Find TEST-PLAN
+        # Find TEST-PLAN: current convention first, legacy as fallback
         if test_plan is None:
-            matches = list(pdir.glob(f"*-{issue_number}-TEST-PLAN.md"))
+            matches = list(pdir.glob(f"TEST-PLAN-{issue_number}.md"))
+            if not matches:
+                matches = list(pdir.glob(f"*-{issue_number}-TEST-PLAN.md"))
             if matches:
                 test_plan = matches[0]
 
-        # Find QA-RESULTS (prefer highest -RN revision)
+        # Find QA-RESULTS: current convention first (round revisions live as
+        # sections within the single file, not separate -RN.md files under
+        # #9184), legacy -RN.md revision fallback second.
         if qa_results is None:
-            base_matches = list(pdir.glob(f"*-{issue_number}-QA-RESULTS.md"))
-            rev_matches = list(pdir.glob(f"*-{issue_number}-QA-RESULTS-R*.md"))
+            matches = list(pdir.glob(f"QA-RESULTS-{issue_number}.md"))
+            if matches:
+                qa_results = matches[0]
+            else:
+                base_matches = list(pdir.glob(f"*-{issue_number}-QA-RESULTS.md"))
+                rev_matches = list(pdir.glob(f"*-{issue_number}-QA-RESULTS-R*.md"))
 
-            if rev_matches:
-                # Sort by revision number, pick highest
-                def _rev_num(p):
-                    m = re.search(r"-R(\d+)\.md$", p.name)
-                    return int(m.group(1)) if m else 0
+                if rev_matches:
+                    # Sort by revision number, pick highest
+                    def _rev_num(p):
+                        m = re.search(r"-R(\d+)\.md$", p.name)
+                        return int(m.group(1)) if m else 0
 
-                rev_matches.sort(key=_rev_num)
-                qa_results = rev_matches[-1]
-            elif base_matches:
-                qa_results = base_matches[0]
+                    rev_matches.sort(key=_rev_num)
+                    qa_results = rev_matches[-1]
+                elif base_matches:
+                    qa_results = base_matches[0]
 
     return test_plan, qa_results
 

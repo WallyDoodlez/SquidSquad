@@ -374,6 +374,91 @@ class TestAutoDiscovery:
         assert tp is None
 
 
+class TestAutoDiscoveryCurrentConvention13737:
+    """#13737: the #9184 convention is TEST-PLAN-<N>.md / QA-RESULTS-<N>.md
+    (number last, no dashes sandwiching it, no role prefix) under the
+    verifier ('qa') planning dir -- _discover_files() previously only
+    recognized the pre-#9184 *-<N>-TEST-PLAN.md shape and silently found
+    nothing for every real post-#9184 issue, making the 'never bypassed' TC
+    coverage ship gate a permanent no-op."""
+
+    def _setup_planning(self, tmp_path, role, files):
+        planning = tmp_path / ".squidsquad" / role / "planning"
+        planning.mkdir(parents=True, exist_ok=True)
+        for fname, content in files.items():
+            (planning / fname).write_text(content, encoding="utf-8")
+        return planning
+
+    def test_discovers_current_convention_pair(self, tmp_path, monkeypatch):
+        """A real TEST-PLAN-<N>.md/QA-RESULTS-<N>.md pair is found."""
+        self._setup_planning(tmp_path, "qa", {
+            "TEST-PLAN-13735.md": "| TC | Maps to |\n| TC1 | AC1 |\n",
+            "QA-RESULTS-13735.md": "### TC-1\n- **Result**: PASS\n",
+        })
+        monkeypatch.setattr(tc_coverage, "SQUID_DIR", tmp_path / ".squidsquad")
+
+        tp, qr = tc_coverage._discover_files(13735)
+        assert tp is not None and tp.name == "TEST-PLAN-13735.md"
+        assert qr is not None and qr.name == "QA-RESULTS-13735.md"
+
+    def test_qa_preferred_over_pm_for_current_convention(self, tmp_path, monkeypatch):
+        """qa (verifier) planning dir wins -- #9184 moved TEST-PLAN/QA-RESULTS
+        ownership from PM to verifier, unlike the pre-#9184 PM-first order."""
+        self._setup_planning(tmp_path, "pm", {
+            "TEST-PLAN-500.md": "### TC-1: PM copy\n",
+        })
+        self._setup_planning(tmp_path, "qa", {
+            "TEST-PLAN-500.md": "### TC-1: QA copy\n",
+        })
+        monkeypatch.setattr(tc_coverage, "SQUID_DIR", tmp_path / ".squidsquad")
+
+        tp, _ = tc_coverage._discover_files(500)
+        assert tp is not None
+        assert tp.parent.parent.name == "qa"
+
+    def test_current_convention_does_not_require_rn_file(self, tmp_path, monkeypatch):
+        """Round revisions live as sections inside the single QA-RESULTS-<N>.md
+        under #9184 -- no separate -RN.md file needed or expected."""
+        self._setup_planning(tmp_path, "qa", {
+            "TEST-PLAN-777.md": "### TC-1: A\n",
+            "QA-RESULTS-777.md": (
+                "## Round 1\n### TC-1\n- **Result**: FAIL\n\n"
+                "## Round 2\n### TC-1\n- **Result**: PASS\n"
+            ),
+        })
+        monkeypatch.setattr(tc_coverage, "SQUID_DIR", tmp_path / ".squidsquad")
+
+        tp, qr = tc_coverage._discover_files(777)
+        assert tp is not None
+        assert qr is not None and qr.name == "QA-RESULTS-777.md"
+
+    def test_legacy_convention_still_falls_back(self, tmp_path, monkeypatch):
+        """Pre-#9184 in-flight issues (legacy *-<N>-TEST-PLAN.md shape) must
+        still resolve -- verification.md documents this as a kept fallback,
+        not a removed path."""
+        self._setup_planning(tmp_path, "pm", {
+            "FEAT-PM-42-TEST-PLAN.md": "### TC-1: A\n",
+            "FEAT-PM-42-QA-RESULTS.md": "### TC-1: A\n- **Result**: PASS\n",
+        })
+        monkeypatch.setattr(tc_coverage, "SQUID_DIR", tmp_path / ".squidsquad")
+
+        tp, qr = tc_coverage._discover_files(42)
+        assert tp is not None and "FEAT-PM-42-TEST-PLAN" in tp.name
+        assert qr is not None and "FEAT-PM-42-QA-RESULTS" in qr.name
+
+    def test_current_convention_preferred_over_legacy_in_same_dir(self, tmp_path, monkeypatch):
+        """If both shapes somehow exist for the same issue, the current
+        convention wins (it's checked first)."""
+        self._setup_planning(tmp_path, "qa", {
+            "TEST-PLAN-88.md": "### TC-1: current\n",
+            "FEAT-PM-88-TEST-PLAN.md": "### TC-1: legacy\n",
+        })
+        monkeypatch.setattr(tc_coverage, "SQUID_DIR", tmp_path / ".squidsquad")
+
+        tp, _ = tc_coverage._discover_files(88)
+        assert tp is not None and tp.name == "TEST-PLAN-88.md"
+
+
 class TestCheckCoverageFileErrors:
     """#7622: check_coverage must handle unreadable files gracefully."""
 
