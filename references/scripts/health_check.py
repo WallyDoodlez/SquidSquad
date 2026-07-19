@@ -76,6 +76,19 @@ def _read_interval():
     return 30
 
 
+# #13742 verifier round 1: raw (pre-resolution) .local-config values from the
+# most recent _parse_local_config() call, keyed by role. "." is compose.py's
+# ONE special-cased default (only ever assigned to "pm") -- a NON-pm role
+# storing raw "." is always a stale/misconfigured entry by construction, so
+# its resolution to REPO_ROOT must never be trusted as ground truth, even
+# when it happens to numerically match. A role with a genuine sibling-
+# relative raw value (e.g. "../SquidSquad-qa") that ALSO resolves to
+# REPO_ROOT (via legitimate sibling-symmetric self-reference) is NOT
+# ambiguous the same way. check_all_agents() consults this to distinguish
+# the two cases when exempting a role from collision-flagging.
+_LAST_PARSED_RAW = {}
+
+
 def _parse_local_config():
     """Parse clone paths → {role: Path(clone_root)}.
 
@@ -96,6 +109,7 @@ def _parse_local_config():
         sys.exit(2)
 
     result = {}
+    raw = {}
 
     # .local-config (project-scoped, always correct)
     # Format: `- **role**: <path>` — relative paths resolve against repo root.
@@ -105,7 +119,9 @@ def _parse_local_config():
             m = re.match(r"-\s*\*\*([\w-]+)\*\*:\s*(.+)", line)
             if m:
                 role = m.group(1).strip()
-                raw_path = Path(m.group(2).strip())
+                raw_str = m.group(2).strip()
+                raw[role] = raw_str
+                raw_path = Path(raw_str)
                 # Resolve relative paths against repo root
                 if not raw_path.is_absolute():
                     raw_path = (REPO_ROOT / raw_path).resolve()
@@ -126,6 +142,8 @@ def _parse_local_config():
         )
         sys.exit(2)
 
+    global _LAST_PARSED_RAW
+    _LAST_PARSED_RAW = raw
     return result
 
 
@@ -328,12 +346,17 @@ def check_agent_health(role, clone_root, interval_minutes, now=None):
     return result
 
 
-def check_all_agents(local_config_overrides=None):
+def check_all_agents(local_config_overrides=None, local_config_raw_overrides=None):
     """Check health of every agent found in .local-config.
 
     Args:
         local_config_overrides: optional dict {role: Path} to use instead
             of reading .local-config (for testing)
+        local_config_raw_overrides: optional dict {role: str} of the raw
+            (pre-resolution) .local-config value per role, paired with
+            local_config_overrides (for testing the #13742 exemption below).
+            Ignored when local_config_overrides is None (a real read
+            populates _LAST_PARSED_RAW from the actual file).
 
     Returns:
         {
@@ -348,13 +371,78 @@ def check_all_agents(local_config_overrides=None):
 
     if local_config_overrides is not None:
         agents_map = local_config_overrides
+        raw_map = local_config_raw_overrides or {}
     else:
         agents_map = _parse_local_config()
+        raw_map = _LAST_PARSED_RAW
+
+    # #13742: a misconfigured/stale .local-config can resolve two DIFFERENT
+    # roles' relative paths to the SAME clone_path (most commonly: pm's "."
+    # shorthand only resolves correctly when read from pm's own clone --
+    # every other clone reading "pm: ." resolves it to ITS OWN root instead,
+    # colliding with whichever OTHER role also maps there). A collision like
+    # this produces a health verdict built from the WRONG agent's on-disk
+    # files -- confirmed live to sometimes read as a confident but false
+    # "stalled" (a stray/unrelated .claude-pid under the wrong clone), not
+    # merely "unknown". Detect collisions up front and flag every affected
+    # role loudly instead of silently running the normal check against data
+    # that structurally cannot be trusted.
+    path_to_roles = {}
+    for role, clone_root in agents_map.items():
+        path_to_roles.setdefault(Path(clone_root), []).append(role)
+    colliding_roles = {
+        role
+        for roles in path_to_roles.values() if len(roles) > 1
+        for role in roles
+    }
+    # #13742 verifier round 1: a role whose OWN resolved path equals
+    # REPO_ROOT (this script's own execution root) is independently
+    # ground-truthed -- this process IS running from that root -- BUT ONLY
+    # when its raw (pre-resolution) value isn't "." itself. "." is
+    # compose.py's ONE special-cased default (assigned only to "pm"); any
+    # OTHER role storing raw "." is always a stale/misconfigured entry by
+    # construction, and its coincidental resolution to REPO_ROOT is exactly
+    # the untrustworthy case this whole check exists to catch -- exempting
+    # it would silently re-trust the very data that's broken. A role with a
+    # genuine sibling-relative raw value (e.g. "../SquidSquad-qa") that also
+    # resolves to REPO_ROOT via legitimate sibling-symmetric self-reference
+    # is not ambiguous the same way, and is safe to exempt. Without this
+    # distinction, a role whose entry is genuinely correct could get swept
+    # into "don't trust this" purely because a DIFFERENT role's broken "."
+    # entry happens to collide onto the same path -- a regression from a
+    # previously-accurate reading.
+    colliding_roles -= {
+        role for role in colliding_roles
+        if agents_map[role] == REPO_ROOT and raw_map.get(role) != "."
+    }
 
     results = []
     for role in sorted(agents_map):
         clone_root = agents_map[role]
-        result = check_agent_health(role, clone_root, interval, now=now)
+        if role in colliding_roles:
+            other_roles = sorted(
+                r for r in path_to_roles[Path(clone_root)] if r != role
+            )
+            result = {
+                "role": role,
+                "health": UNKNOWN,
+                "health_source": "local-config-collision",
+                "clone_path": str(clone_root),
+                "current_state_phase": "",
+                "current_state_desc": "",
+                "current_state_stale": False,
+                "task": "unknown",
+                "last_active_minutes_ago": None,
+                "reason": (
+                    f".local-config error: '{role}' resolves to the same "
+                    f"clone_path as {other_roles} ({clone_root}) -- this is "
+                    f"a misconfigured/stale .local-config entry, not a "
+                    f"genuine health reading. Fix .local-config before "
+                    f"trusting this result."
+                ),
+            }
+        else:
+            result = check_agent_health(role, clone_root, interval, now=now)
         results.append(result)
 
     all_healthy = all(r["health"] == HEALTHY for r in results) if results else True
