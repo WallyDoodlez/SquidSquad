@@ -3,13 +3,10 @@
 - **Task**: none — actionable queue drained; idle (improvement-scan cool-down)
 
 ## Pending-test (mine, awaiting verifier)
-- #13743 (PR ready): tracker.py create_issue/create_task gained --extra-label.
-- #13746 (branch squidsquad/task/13746, PR #13753 ready, round 2 landed): pm/instructions.md was missing a step:cycle/improvement-scan marker -- roles/pm/improvement-scan.md was orphaned since includes.yml (the only place that referenced it) is a confirmed-dead TOMBSTONE (#13264) unreachable from the real v2_link_stage compose path. Added the marker immediately before step:cycle/vault-optimize. Round 1 verifier FAIL was gate-ownership only (substance confirmed correct) -- my diff shifted instructions.md's blob sha, staling 13327_spec.json's baseline; refreshed it in round 2 per #13575's tooling contract.
-- #13745 (branch squidsquad/task/13745, PR #13759 ready): compose.py generate_local_config() now warns loudly on stderr instead of silently guessing wrong .local-config clone paths -- the confirmed deeper root cause behind #13742's symptom. Scoped to the "at minimum" fix; the two riskier redesign directions (enforce target_root==primary, source from harness /status) left as open design questions, not attempted.
 - #13760 (branch squidsquad/task/13760, PR #13786 ready): wizard.py wired into the cli_stdio.harden_stdio() fleet (standard 2-line form) + fixed the one em-dash literal the new ASCII sweep caught (SWEPT = WIRED, so adding wizard to WIRED auto-enrolled it).
 
 ## Shipped this tick (prior ticks, confirmed merged to main -- verified CLOSED/status:shipped via gh issue view, not assumed)
-- #13565, #13566, #13709/#13710/#13711, #13714, #13722, #13723/#13724, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13737 (TC coverage gate glob fix), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741), #13742 (health_check.py .local-config collision detection, round-2 fix).
+- #13565, #13566, #13709/#13710/#13711, #13714, #13722, #13723/#13724, #13731 (comprehension staleness baseline refresh, PR #13733), #13728/#13729/#13730/#13732 (round 2 fix -- fail-open harden_stdio, PR #13734), #13735 (PR #13736), #13737 (TC coverage gate glob fix), #13738 (verifier's TC-Results-table self-fix), #13739 (verification-templates.md doc fix, PR #13741), #13742 (health_check.py .local-config collision detection, round-2 fix), #13743 (tracker.py --extra-label), #13745 (compose.py generate_local_config warning), #13746 (pm/instructions.md improvement-scan wiring, round 2 -- comprehension baseline refresh).
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
