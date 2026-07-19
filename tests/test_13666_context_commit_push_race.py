@@ -25,13 +25,18 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TASK_INTAKE = REPO_ROOT / "references" / "sub-skills" / "roles" / "pm" / "task-intake.md"
+TASK_INTAKE_PHASES = REPO_ROOT / "references" / "sub-skills" / "roles" / "pm" / "task-intake-phases.md"
 TASK_APPROVAL = REPO_ROOT / "references" / "sub-skills" / "roles" / "pm" / "task-approval.md"
 
 
 @pytest.fixture
 def task_intake_text():
+    # #13565: Phase 2 mechanics (incl. the CONTEXT.md commit step) moved to
+    # the cold-path task-intake-phases.md; content is read from both.
     assert TASK_INTAKE.exists(), f"task-intake.md missing: {TASK_INTAKE}"
-    return TASK_INTAKE.read_text(encoding="utf-8")
+    assert TASK_INTAKE_PHASES.exists(), f"task-intake-phases.md missing: {TASK_INTAKE_PHASES}"
+    return (TASK_INTAKE.read_text(encoding="utf-8")
+            + "\n" + TASK_INTAKE_PHASES.read_text(encoding="utf-8"))
 
 
 @pytest.fixture

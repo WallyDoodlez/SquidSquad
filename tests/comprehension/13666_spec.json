@@ -1,5 +1,7 @@
 {
   "issue": 13666,
+  "superseded_by": 13565,
+  "superseded_note": "#13565 moved Phase 2's full mechanics (incl. the immediate CONTEXT.md commit+push step CQ1/CQ4 test) out of task-intake.md into the new cold-path task-intake-phases.md, so a fresh agent given ONLY task-intake.md + task-approval.md per this spec's method can no longer derive CQ1/CQ4 from the stated file set. CQ2/CQ3 (task-approval.md, untouched) are unaffected. The underlying facts are unchanged, just relocated. Historical PASS record retained.",
   "title": "task-intake.md doesn't ensure CONTEXT.md is committed+pushed before Approved, so same-session worker pickup can race ahead of it",
   "authored_by": "verifier",
   "authored_at": "2026-07-18",

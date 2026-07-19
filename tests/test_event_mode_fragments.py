@@ -268,15 +268,24 @@ class TestBootDrainDeploySignalDeferral:
     the moment it is reached mid-drain. Honoring mid-drain reboots the agent
     before boot completes ("agents reboot before boot completes" symptom).
 
-    These assertions pin the behavioral contract in event-mode-contract.md so a
-    future edit that reverts to eager mid-drain honoring is caught. Prose is
+    These assertions pin the behavioral contract. As of #13565, the full
+    deferral procedure lives in the reactively-read `deploy-signal-handling.md`
+    fragment (event-mode-contract.md keeps only the load-bearing invariants
+    inline + a pointer), so `contract_text` covers both files. Prose is
     matched on stable, load-bearing tokens (not full sentences) to stay robust
     to wording changes that preserve the contract.
     """
 
     @pytest.fixture(scope="class")
     def contract_text(self, fragment_texts):
-        return fragment_texts["common-events/event-mode-contract.md"]
+        deploy_signal_handling = (
+            SUB_SKILLS / "common-events" / "deploy-signal-handling.md"
+        ).read_text(encoding="utf-8")
+        return (
+            fragment_texts["common-events/event-mode-contract.md"]
+            + "\n"
+            + deploy_signal_handling
+        )
 
     def test_carries_issue_marker(self, contract_text):
         assert "#13569" in contract_text, (

@@ -1,5 +1,7 @@
 {
   "issue": 13569,
+  "superseded_by": 13565,
+  "superseded_note": "#13565 extracted the entire boot-drain deferral procedure this spec tests (CQ1-CQ4) out of event-mode-contract.md into a new reactively-read fragment (deploy-signal-handling.md), leaving only a one-line compressed restatement of the two invariants inline. A fresh agent given ONLY event-mode-contract.md per this spec's method can no longer derive the detailed CQ1-CQ4 answers. The underlying facts are unchanged (verified verbatim during the #13565 extraction), just relocated; a new spec scoped to both files would be needed to re-certify. Historical PASS record retained.",
   "title": "Agents reboot before boot completes: boot-drain deploy-signal deferred (not honored on reach)",
   "authored_by": "verifier",
   "authored_at": "2026-07-17",

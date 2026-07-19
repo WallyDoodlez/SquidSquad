@@ -12,6 +12,9 @@ from pathlib import Path
 REPO = Path(__file__).parent.parent
 PM_VERIFICATION = REPO / "references/sub-skills/roles/pm/testing-and-verification.md"
 QA_VERIFICATION = REPO / "references/sub-skills/roles/verifier/verification.md"  # #10156
+# #13565: Step 4's full per-issue procedure (incl. its blocked:human-action
+# check) moved to this cold-path file, reached via a pointer in Step 4.
+QA_ISSUE_FLOW = REPO / "references/sub-skills/roles/verifier/verification-issue-flow.md"
 
 
 class TestPMVerificationBlockedCheck:
@@ -44,8 +47,11 @@ class TestShipCounterOwnership:
     def test_qa_owns_ship_counter(self):
         """Verifier verification.md must NOT increment the ship counter —
         release state is the DM's under its L4 policy (#12749). Method name
-        retained for pytest -k compatibility (#10156)."""
+        retained for pytest -k compatibility (#10156). #13565: the
+        disclaimer line lives in Step 4's content, which moved to the
+        cold-path verification-issue-flow.md — check both files."""
         content = QA_VERIFICATION.read_text(encoding="utf-8")
+        content += QA_ISSUE_FLOW.read_text(encoding="utf-8")
         # No increment command may survive on the verifier (the prior
         # `config.py set shipped-since-bump` line was removed).
         assert "set shipped-since-bump" not in content
@@ -66,21 +72,26 @@ class TestQAVerificationBlockedCheck:
     def content(self):
         return QA_VERIFICATION.read_text(encoding="utf-8")
 
-    def test_step4_has_blocked_check(self, content):
-        """Step 4 (verify fixed issues) checks blocked:human-action."""
-        step4_start = content.index("Step 4")
-        step5_start = content.index("Step 5")
-        step4_text = content[step4_start:step5_start]
-        assert "blocked:human-action" in step4_text
+    @pytest.fixture
+    def issue_flow_content(self):
+        return QA_ISSUE_FLOW.read_text(encoding="utf-8")
+
+    def test_step4_has_blocked_check(self, issue_flow_content):
+        """Step 4 (verify fixed issues) checks blocked:human-action. #13565:
+        Step 4's full procedure moved to verification-issue-flow.md, reached
+        via a pointer in verification.md's Step 4 — check the cold file."""
+        assert "blocked:human-action" in issue_flow_content
 
     def test_step5_has_blocked_check(self, content):
         """Step 5 (verify pending test tasks) checks blocked:human-action."""
         step5_start = content.index("Step 5 — Verify Pending Test Tasks")
-        step5b_start = content.index("Step 5b")
-        step5_text = content[step5_start:step5b_start]
+        step6_start = content.index("Step 6")
+        step5_text = content[step5_start:step6_start]
         assert "blocked:human-action" in step5_text
 
-    def test_no_status_transition_for_blocked(self, content):
-        """Blocked items must not have their status changed."""
-        # Each blocked check should say "Do not change its status"
-        assert content.count("Do not change its status") >= 2
+    def test_no_status_transition_for_blocked(self, content, issue_flow_content):
+        """Blocked items must not have their status changed. #13565: Step 4's
+        blocked check (with its own 'Do not change its status' line) moved to
+        the cold-path issue-flow file; Step 5's stayed inline."""
+        combined = content + issue_flow_content
+        assert combined.count("Do not change its status") >= 2

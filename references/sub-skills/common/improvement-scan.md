@@ -35,7 +35,7 @@ Write status bar state: `scanning|🔍 Scanning [target description]...`
    ```bash
    python references/scripts/scan_index.py suggest-targets [ROLE] --count 5
    ```
-   This returns files ranked by a composite score (coverage gaps, git churn, cross-role findings, acceptance rate). If `scan_index.py` is not available or fails, fall back to manually checking `.squidsquad/[your-role]/scan-history.md` and picking files based on recency, coverage gaps, and staleness.
+   This returns files ranked by a composite score (coverage gaps, git churn, cross-role findings, acceptance rate). If `scan_index.py` is not available or fails, fall back to manually checking `.squidsquad/[your-role]/scan-history.md` and picking files based on recency, coverage gaps, and staleness — **read only the newest ~50 entries** (the first ~50 `## Scan` blocks — entries are prepended newest-first, so this is the *start* of the file, not the end; do not read the whole file). `scan-history.md` is capped at ~100 entries by `scan_index.py`'s rebuild path (#13566); older history rolls into `scan-history.archive.md`, which this fallback never reads — recency/staleness signal doesn't need it.
 
    **Exclude from scanning**: `.squidsquad/`, `node_modules/`, `vendor/`, `.git/`, build output directories (`dist/`, `build/`, `out/`), generated files, and binary files. Only scan source files belonging to the target project.
 

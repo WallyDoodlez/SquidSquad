@@ -1,3 +1,73 @@
+## Scan — 2026-07-18 13:12
+
+- **Files scanned**: `.squidsquad/pm/planning/` (orphaned-artifact lens, per own-domain-autofix scope)
+- **Findings**: directory has 300+ historical planning artifacts (RESEARCH/CONTEXT/TEST-PLAN/REVIEW/AUDIT files spanning the project's whole history). Too large to audit for genuine orphans within one bounded scan — a real orphan sweep needs cross-referencing every filename's issue number against closed/shipped status, which is its own dedicated pass, not a quick-scan item. Declining to force a finding.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 12:12
+
+- **Files scanned**: `.squidsquad/vault/galaxy/` (pattern-consolidation lens — 4 independent `gh issue list --limit 50` truncation instances surfaced across this session's #13660/#13661 and the prior #13555/#13602, no existing learning note tying them together)
+- **Findings**: recurring-pattern gap — no vault note existed to help future scans/reviews recognize this as one class instead of re-discovering it call-site by call-site.
+- **Auto-fixed**: wrote `[[learning-gh-issue-list-hardcoded-limit-silently-truncates]]` (own-domain vault write, Tier-1).
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 11:12
+
+- **Files scanned**: `.squidsquad/config.md` (consistency lens — roster/alias check against live `/status`, prompted by this session's #13660 finding)
+- **Findings**: none — roster (pm/dm/qa/skill) and aliases (incl. `dm: dm/skill`) match the live harness `/status` response exactly. No drift.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 10:09
+
+- **Files scanned**: `.squidsquad/vault/areas/human-profile.md` (staleness lens — not scanned since 2026-06-28; cross-checked the 2026-07-18 context-threshold note against live `config.md`)
+- **Findings**: config.md confirms threshold=75 (consistent, no drift) — but the inline 2026-07-18 update to the Technical Preferences bullet had no matching Changelog entry, breaking the file's own convention (every substantive update gets one).
+- **Auto-fixed**: appended the missing Changelog line + bumped frontmatter `updated:` to 2026-07-18 (own-domain, Tier-1).
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 09:09
+
+- **Files scanned**: `references/sub-skills/roles/verifier/verification.md` (contradiction lens — checking whether the #13515-shipped `status:blocked` self-pause overlaps/conflicts with the pre-existing `blocked:human-action` label the verifier already special-cases)
+- **Findings**: none — the two "blocked" concepts don't collide. `status:blocked` (#13515) is only reachable from `in-progress` (park/resume, self-service by the assignee) and is excluded from `work_queue()`/pipeline-sentinel before it ever reaches `pending-test`; `blocked:human-action` is a distinct label the verifier checks specifically on `pending-test` items awaiting human env setup. No pending-test item can carry `status:blocked` given the legal-transition graph, so verification.md needing no update is correct, not a doc gap.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 08:09
+
+- **Files scanned**: `.squidsquad/vault/BRIEFING.md` (mandatory staleness check — 04:15 entry predated this session's #13531/#13551 ships)
+- **Findings**: BRIEFING top entry stale — didn't reflect this session's clean skill→verifier→dm cycles on #13531 and #13551.
+- **Auto-fixed**: prepended a fresh 2026-07-18 ~08:09 increment summarizing the session (own-domain, Tier-1).
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 05:19
+
+- **Files scanned**: `.squidsquad/config.md` (consistency lens; cross-checked against `.squidsquad/.ship-counter` + `config.py get shipped-since-bump`)
+- **Findings**: config.md's literal `Auto Versioning > Shipped Since Last Bump` field reads **0**, but the authoritative source (split out by #12823 into `.squidsquad/.ship-counter`, by design never synced back to the display copy) is actually **53** — 5x past the Ship Threshold of 10. `config.py get`/`dump` correctly overlay the real value for any script/agent that queries properly, so this is NOT a tracking bug — just a stale literal number in the raw file that could mislead anyone who `cat`s config.md directly (as I just did). NOT filed as a ticket: low-value (the field is intentionally legacy per the code's own comments; hand-editing the number would just go stale again on the next ship with nothing keeping it synced). More valuable to surface directly: version bump is significantly overdue and is operator-paced per project design — advertised to operator this cycle instead of filing.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 04:14
+
+- **Files scanned**: `.squidsquad/vault/BRIEFING.md` (mandatory staleness check — heavy session activity since the 00:30 boot entry)
+- **Findings**: BRIEFING top entry stale — its HITL standing (#13515, #12527) and pipeline snapshot predated this session's #13334 close, #13515 full lifecycle (incl. a genuine verifier live-testing catch), #13588 ship, #12527 ship + 3 follow-ups, and the #13602 re-route.
+- **Auto-fixed**: prepended a fresh 2026-07-18 ~04:15 increment summarizing the session (own-domain, Tier-1).
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 03:14
+
+- **Files scanned**: `references/roles/pm/responsibility.md` (compose-drift lens — v2 source file, not the sub-skill layer; not in recent scan history)
+- **Findings**: none — matches the composed CLAUDE.md I booted on verbatim (no compose drift), and consistent with today's live PM actions (advertise-duty exercised at check-in, verify-boundary held for #12527/#13574/#13580/#13515/#13588 all routed to verifier not self-verified).
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
+## Scan — 2026-07-18 02:21
+
+- **Files scanned**: `references/sub-skills/roles/pm/pipeline-sentinel.md` (freshness lens — not scanned since 2026-06-19; also topical, given today's #13515 doc-first review)
+- **Findings**: none — internally consistent. Confirmed it does NOT prematurely reference the not-yet-shipped `status:blocked` (would be a contradiction ahead of the code). The known future gap (sentinel must not treat a parked `blocked` item as a stall) is already scoped as #13515's approved 4d addition — not re-filed, would duplicate.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-07-17 (post-recovery)
 
 - **Files scanned**: `.squidsquad/config.md` (consistency lens, cross-checked vs live /status + boot facts)

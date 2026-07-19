@@ -218,7 +218,23 @@ class TestManifestIntegrity:
         # transitive references from sub-skill bodies are invisible to it.
         # Grandfather alongside event-reactions.md until the walker is
         # taught to traverse sub-skill bodies.
-        known_unused = {"common/event-reactions.md", "common/pr-protocol.md"}
+        # #13565: same transitive-reference gap as #11381 above — these
+        # six are reached via `→ run sub-skill:` pointers inside sub-skill
+        # bodies (event-mode-contract.md → deploy-signal-handling,
+        # task-intake.md → task-intake-phases, verification.md →
+        # verification-templates/verification-findings/verification-issue-flow/
+        # verification-ship-flow), not from a references/roles/**/
+        # instructions.md file, so the directive walker above can't see them.
+        known_unused = {
+            "common/event-reactions.md",
+            "common/pr-protocol.md",
+            "common-events/deploy-signal-handling.md",
+            "roles/pm/task-intake-phases.md",
+            "roles/verifier/verification-templates.md",
+            "roles/verifier/verification-findings.md",
+            "roles/verifier/verification-issue-flow.md",
+            "roles/verifier/verification-ship-flow.md",
+        }
         orphans = all_md - referenced - known_unused
         assert not orphans, f"Sub-skill files not referenced in manifest: {orphans}"
 

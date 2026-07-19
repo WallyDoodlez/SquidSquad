@@ -2,6 +2,8 @@
 
 **Not light mode** — Medium size, cross-role impact, mandatory CQ specs for two of the three phases. Operator approved as part of "go ahead on all of context trimming" (2026-07-18), but this is flagged as **high-blast-radius work** (touches all 4 roles' composed `CLAUDE.md` + the cycle contract itself) and should get DS-review-per-change during implementation, not just a final-pass audit, per [[feedback_ds_review_per_change]].
 
+**AC1 revised 2026-07-18 (PM, post-implementation)** — see the AC section below. The original "composed CLAUDE.md size reduced ≥15%" premise was factually wrong: `v2_link_stage.py` (`_is_sub_skill_body_in_instructions`, D2/Q-D2 design) deliberately excludes `references/sub-skills/` bodies from inlining into the composed instructions slot, so splitting `task-intake.md`/`verification.md` structurally cannot move composed boot size — verified directly against the source, not taken on skill's word alone. The AC is corrected to measure what this work actually controls: per-cycle re-read cost.
+
 ## Scope
 
 Three phases:

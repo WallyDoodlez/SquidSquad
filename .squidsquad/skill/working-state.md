@@ -3,30 +3,24 @@
 - **Task**: none — actionable queue drained; idle (improvement-scan cool-down)
 
 ## Pending-test (mine, awaiting verifier)
-- #13555 (PR #13590): EAD issue-poll --limit 50->500 + warn-at-cap.
-- #13574 (PR #13587): forge WRITE-outage probe. Verifier-rejected on the #13575 staleness gate; FIXED (merged main, refreshed specs 12493/2183/4792). Re-submitted.
-- #13588 (PR #13591): harness /merge reloads git_ops per merge under _MERGE_LOCK (stale-module fix, durable #13585 fix). Gate 5497/0.
-- #12527 (no PR — task): greenfield installer smoke. Core install verified foreign-safe; blocked at outward-facing gh/harness steps; findings doc FINDINGS-12527.md; 3 bugs filed.
-- #13575 (PR #13584), #13580 (PR #13586): earlier items, awaiting verifier.
-
-## Filed this cycle
-- #13589 (low): FLAKE test_cli_happy_path_envelope (full-gate-only, empty stdout+stderr).
-- #13592 (medium): greenfield generate_default_spec hardcodes [pm,skill] — self-named worker + no verifier/dm.
-- #13593 (medium): greenfield setup-yes gh ops use ambient CWD not target_dir.
-- #13594 (low): greenfield config.md deprecated 'Dev Agents:' field (breaks at #6274.3).
+- #13565 (branch squidsquad/task/13565): composed-prompt re-diet. All 4 ACs confirmed PASS by verifier round 2; mechanically bounced back to pending-test (no code changes needed).
+- #13566 (branch squidsquad/task/13566): scan-history pruning. Verifier picked up round 2 after the auto-trigger fix (suggest_targets() now self-prunes).
+- #13709/#13710 (branch squidsquad/task/13710, PR #13712 ready): comprehension_staleness.py .j2 extension gap + refresh() misleading success message. Round 1: code correct, rejected only for missing PR. Fixed — PR created, bounced back.
+- #13711 (branch squidsquad/task/13711, PR #13713 ready): improvement-scan.md Step 6 append->prepend wording fix. Same missing-PR rejection, same fix.
 
 ## Queue snapshot (remaining, NOT autonomously actionable)
 - Approved tasks: #10690 (GATED on E6+E7 — E7/#10686 not done); #10686 (manual, human-operator participation by design).
-- Open bugs all carry improvement-scan label (need PM/human triage before build): #13558/#13552/#13551/#13531/#13447/#13356/#13354/#13317/#13316 + this cycle's filings.
+- No open skill issues.
 
 ## Standing lessons (session)
-- commit-code switches to the branch, commits, and returns to main + pushes. Do NOT run it while a static gate subprocess is reading the working tree (branch switch mid-gate corrupts the run). Wait for the gate first.
-- Stale on-disk working-state can name a task the forge has already moved on (13574 read as in-progress mid-gate but was pending-test); ALWAYS reconcile working-state's Task against get-labels before resuming.
-- #13575 staleness gate fires on ANY edit to a fragment named by a comprehension spec, even additive ones; remediation is PR-author `comprehension_staleness.py refresh <spec>` (re-review first), committed in the same PR.
-- Harness module-staleness (#13585/#13588): git_ops changes are INERT for harness /merge until restart.
-- NEVER tail-truncate a background gate; retain full log.
+- commit-code (git_ops.py) takes <role> <branch> <msg> as POSITIONAL args -- there is no --message flag. Passing --message prepends the literal string into the commit subject.
+- comprehension_staleness.py refresh takes full "<N>_spec.json" filenames, not bare issue numbers -- wrong form prints a misleading success message (fixed in #13710, but older muscle memory may still trip on it).
+- committed_blob_sha() hashes HEAD, not the working tree -- always commit code first, THEN refresh the staleness baseline in a separate follow-up commit.
+- scan-history.md is newest-first (prepend), not append -- #13566/#13711.
+- A comprehension-staleness baseline entry authored against an unmerged feature branch's blob (rather than main's) will show as a spurious gate failure on main until that branch merges -- self-resolving, not a bug to chase if the mismatch traces to genuinely-unmerged content.
+- **task-begin does NOT auto-create a PR** for a self-filed bug (no PM plan-in-PR draft exists yet) -- run `git_ops.py pr-create` right after the first commit-code on that branch, BEFORE marking pending-test. Hit this identically on #13709/#13710/#13711 this session (all 3 rejected for the same missing-PR gap); vault note: learning-task-begin-does-not-auto-create-pr-for-bugs.
 
 ## Improvement Scan
-Status: idle; driver state in .subloop-driver.json is authoritative.
+Status: idle; driver state in .subloop-driver.json is authoritative. Last scan 2026-07-18 21:53 (filed #13709/#13710).
 
 ## Quiet Cycle Counter: 0

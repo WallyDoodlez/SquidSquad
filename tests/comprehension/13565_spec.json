@@ -1,0 +1,32 @@
+{
+  "issue": 13565,
+  "title": "Composed-prompt re-diet + sub-skill re-read discipline",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-19",
+  "ac": "comprehension (#9184 hard gate, CONTEXT-13565.md's mandatory Phase C CQ requirement): a fresh agent reading ONLY references/roles/instructions.md must correctly derive the skip-vs-reread verdict for all three required scenarios -- same-session-no-compaction (skip), post-compaction (re-read), post-restart (re-read) -- and ground each in the visibility-not-memory distinction the rule is explicitly worded against.",
+  "method": "Fresh agent (model: sonnet, general-purpose) given ONLY references/roles/instructions.md on branch squidsquad/task/13565, explicitly instructed to use no other file/tool/prior knowledge. CQ spec authored + executed by verifier per #9184 -- CONTEXT-13565.md explicitly makes this mandatory for Phase C and skill's PR correctly deferred authorship to verifier (no skill-role action claimed for AC3).",
+  "target": "references/roles/instructions.md (\"Re-read discipline\" paragraph, step:cycle/pickup area) -- PR #13693, branch squidsquad/task/13565",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Same session, no compaction since: an agent Read a sub-skill's full text earlier this session and it's still visible above in the conversation. The agent reaches the same `-> run sub-skill:` marker again later in the same session. Skip or re-read?",
+      "expected": "Skip -- the file states this exact condition (\"within the same session, with no compaction since, reaching a marker whose text is still visible above in this conversation\") is a skip; re-reading would be redundant, not informative.",
+      "must_not": "Answering re-read for this case, or basing the skip decision on the agent remembering having read it rather than the text still being visible."
+    },
+    {
+      "id": "CQ2",
+      "q": "A context-compaction summary just happened. The agent reaches a marker it Read before the compaction. Skip or re-read, and why does 'remembering' reading it not matter?",
+      "expected": "Re-read -- compaction replaces the raw text with a summary, so the text is no longer visible even though the agent 'remembers' reading it; the rule is explicitly keyed to visibility, never memory.",
+      "must_not": "Answering skip on the grounds that the agent remembers the content, or failing to name compaction as the reason visibility is lost."
+    },
+    {
+      "id": "CQ3",
+      "q": "The session just restarted fresh (e.g. after a respawn). The agent reaches a marker it definitely read in the previous session before it ended. Skip or re-read?",
+      "expected": "Re-read -- a fresh session shares no context with the prior one, so nothing from before is visible; re-read every marker reached, exactly as on a first boot, regardless of what was read in the prior session.",
+      "must_not": "Answering skip because the marker was read in a prior session, or treating session continuity as preserved across a restart."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-19",
+  "evidence": "Fresh sonnet general-purpose agent (id ae6b4b1582cb534c4), given ONLY references/roles/instructions.md, explicitly told to use no other file/tool/prior knowledge. 3/3 correct with accurate supporting quotes, zero must_not violations. CQ1: 'skip... The rule's basis for skipping is visibility, not memory, and here visibility holds.' CQ2: 're-read... Compaction replaces the raw text with a summary, which destroys visibility even though memory persists... memory of having read it is not sufficient grounds to skip.' CQ3: 're-read... A session restart severs all context continuity, regardless of what happened in the prior session... that prior Read's text is not visible in the new session's context, so it must be re-read.'"
+}

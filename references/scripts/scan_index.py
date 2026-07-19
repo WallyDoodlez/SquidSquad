@@ -43,6 +43,13 @@ EXCLUDE_DIRS = {
     ".obsidian", ".claude",
 }
 
+# #13566: scan-history.md is append-only (newest entries prepended) and
+# unbounded — the documented fallback read path when scan_index.py is
+# unavailable, so an oversized file is a latent full-file token hit. Keep
+# only the newest SCAN_HISTORY_RETENTION entries on disk; older entries roll
+# into scan-history.archive.md (never deleted, never re-read by instructions).
+SCAN_HISTORY_RETENTION = 100
+
 # File extensions to exclude (binary / generated)
 EXCLUDE_EXTS = {
     ".pyc", ".pyo", ".exe", ".dll", ".so", ".dylib",
@@ -173,6 +180,7 @@ def _walk_source_files(root=None):
 def suggest_targets(role, count=5, db_path=None):
     """Return top N files to scan, ranked by composite score."""
     resolved_db_path = db_path or DB_PATH
+    root = REPO_ROOT if db_path is None else db_path.parent.parent
 
     # Lazy churn refresh (if stale > 24h) — uses its own connection.
     # Gracefully handle corrupt DB during refresh (#7614).
@@ -180,6 +188,19 @@ def suggest_targets(role, count=5, db_path=None):
         _maybe_refresh_churn(resolved_db_path)
     except (sqlite3.DatabaseError, sqlite3.OperationalError):
         pass  # Churn refresh failed — proceed with stale data
+
+    # Auto-prune this role's scan-history.md if it's grown past the
+    # retention cap (#13566 follow-up). rebuild() is the only other caller
+    # of _prune_scan_history() and it is CLI-only (`scan_index.py rebuild`,
+    # reached only by a human typing the command) — nothing in the running
+    # system invokes it automatically. suggest_targets() is what actually
+    # fires every improvement-scan cycle (see improvement-scan.md Step 3),
+    # so the self-healing hook has to live here for existing installs to
+    # shed accumulated bloat without a separate manual migration step.
+    try:
+        _maybe_prune_scan_history(role, root)
+    except OSError:
+        pass  # Prune failed — proceed with the oversized file this cycle
 
     # Open DB once after churn refresh (#7614)
     try:
@@ -189,7 +210,6 @@ def suggest_targets(role, count=5, db_path=None):
         return []
 
     # Get all source files on disk
-    root = REPO_ROOT if db_path is None else db_path.parent.parent
     all_files = _walk_source_files(root)
     if not all_files:
         conn.close()
@@ -641,6 +661,84 @@ def _parse_scan_history(md_path):
     return entries
 
 
+def _prune_scan_history(history_file, keep=SCAN_HISTORY_RETENTION):
+    """Cap scan-history.md at `keep` newest entries (#13566).
+
+    Entries are prepended (newest first, per the file's own observed
+    convention), so the newest `keep` blocks are simply the first `keep`
+    "## Scan" blocks. Overflow blocks are rolled into a sibling
+    scan-history.archive.md, newest-evicted-first, ahead of any prior
+    archive content — archived history is never deleted, just moved out of
+    the bounded fallback-read path.
+
+    Returns True if a prune happened (file rewritten), False if already
+    under the cap.
+    """
+    if not history_file.exists():
+        return False
+
+    text = history_file.read_text(encoding="utf-8", errors="replace")
+    # Same dash-separator requirement as _parse_scan_history's split, so the
+    # two functions agree on what counts as a scan-block boundary — a finding
+    # description that happens to start a line with "## Scan " (no dash)
+    # would otherwise fragment a block here but not in the parser.
+    parts = re.split(r"(?=^## Scan\s*[—–-]+\s)", text, flags=re.MULTILINE)
+    preamble = parts[0]
+    blocks = [p for p in parts[1:] if p.strip()]
+
+    if len(blocks) <= keep:
+        return False
+
+    kept_blocks = blocks[:keep]
+    archived_blocks = blocks[keep:]
+
+    # Some roles' scan-history.md has no "# ... History" preamble line (it
+    # starts directly with the first "## Scan" block) — don't inject spurious
+    # blank lines in that case.
+    if preamble.strip():
+        new_history = preamble.rstrip("\n") + "\n\n" + "".join(kept_blocks)
+    else:
+        new_history = "".join(kept_blocks)
+    history_file.write_text(new_history, encoding="utf-8")
+
+    archive_file = history_file.parent / "scan-history.archive.md"
+    archived_text = "".join(archived_blocks)
+    if archive_file.exists():
+        existing = archive_file.read_text(encoding="utf-8", errors="replace")
+        existing_body = re.sub(r"^# Scan History Archive\n+", "", existing, count=1)
+        combined_body = archived_text + existing_body
+    else:
+        combined_body = archived_text
+    archive_file.write_text(
+        "# Scan History Archive\n\n" + combined_body, encoding="utf-8"
+    )
+    return True
+
+
+def _resolve_scan_history_path(role, root):
+    """Resolve a role's scan-history.md, preferring the state worktree
+    (.squidsquad-state/) over main (.squidsquad/) — same preference order
+    as rebuild()'s search_dirs (#3664)."""
+    state_path = root / ".squidsquad-state" / role / "scan-history.md"
+    if state_path.exists():
+        return state_path
+    return root / ".squidsquad" / role / "scan-history.md"
+
+
+def _maybe_prune_scan_history(role, root):
+    """Auto-trigger _prune_scan_history() for the current role's own
+    scan-history.md (#13566 follow-up).
+
+    Cheap and idempotent — _prune_scan_history() itself no-ops (returns
+    False, no write) when the file is already under SCAN_HISTORY_RETENTION,
+    so this is safe to call on every suggest_targets() invocation without
+    a staleness timer (unlike _maybe_refresh_churn, which hits git and
+    needs 24h throttling to stay cheap).
+    """
+    history_file = _resolve_scan_history_path(role, root)
+    _prune_scan_history(history_file)
+
+
 def rebuild(db_path=None):
     """Rebuild the DB from scan-history.md files."""
     path = db_path or DB_PATH
@@ -682,7 +780,16 @@ def rebuild(db_path=None):
                 continue
             seen_roles.add(role)
 
+            # #13566: parse current + already-archived entries so DB coverage
+            # stats stay complete, then enforce the on-disk retention cap.
+            # Archived entries are never re-parsed twice across rebuilds
+            # because scans are keyed UNIQUE(role, scanned_at, file_path) —
+            # a rebuild always starts from a fresh DB (see above), so this
+            # is a from-scratch ingest each time, not an incremental one.
             entries = _parse_scan_history(history_file)
+            archive_file = role_dir / "scan-history.archive.md"
+            entries += _parse_scan_history(archive_file)
+            _prune_scan_history(history_file)
 
             for entry in entries:
                 # Insert one scan row per file; remember each file's scan id so
