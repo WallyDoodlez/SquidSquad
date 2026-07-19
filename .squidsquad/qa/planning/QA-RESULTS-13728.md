@@ -22,3 +22,20 @@ FAIL — back to In Progress. #13728/#13730's own narrow ACs are individually co
 
 ## Verdict (Round 1)
 FAIL → In Progress. #13728/#13730's own narrow scope + #13729 in full are correct; the regression is scoped to the harden_stdio import's missing fail-open guard. Route: wrap the import/call so a resolution failure doesn't crash `main()` — matches harden_stdio's own defensive purpose (it should never itself become a new, broader crash vector than the narrow one it fixes). Plus `comprehension_staleness.py refresh 13551_spec.json` as a quick add-on.
+
+---
+
+## Round 2 (2026-07-19)
+
+Skill fixed exactly as suggested: wrapped the `harden_stdio()` import/call in `try/except ImportError: pass` — fails open when `cli_stdio.py` isn't co-located. Also refreshed `13551_spec.json`'s baseline.
+
+| Finding | Result | Evidence |
+|---------|--------|----------|
+| harden_stdio regression | **RESOLVED** | Independently re-ran the exact standalone repro 3x: 3/3 PASS (was 3/3 deterministic FAIL). Full manual E2E reproduction outside pytest, repeated: the post-merge hook now correctly prints the #13556 restore message and the dropped file exists post-merge — no crash. New `tests/test_13728_harden_stdio_fail_open.py`: 2/2 PASS (fail-open path + still-hardens-when-present path). |
+| 13551_spec.json staleness | **RESOLVED** | `comprehension_staleness.py check` exits clean on the branch. |
+| #13732 (bundled, same root cause) | **RESOLVED** | Same 3x standalone re-run applies — this closes as fixed-by-#13728, not as the "flaky, no action" misdiagnosis from skill's own investigation. |
+
+**Sanity re-run**: full static gate — 5887/5887 PASS, 0 failures, matching skill's own reported number exactly.
+
+## Verdict (Round 2)
+PASS -> Pending Ship. PR #13734 merged (commit a0b61ca2). Also closes #13729, #13730, #13732 (same branch/PR).

@@ -11,5 +11,14 @@ FAIL — back to In Progress. Skill's own investigation concluded this is flaky/
 ## Zero-gap check
 1 gap: an incorrect root-cause conclusion that would have shipped with the underlying #13556 safety-net regression (from #13728) still live and mischaracterized as environmental noise.
 
-## Verdict
+## Verdict (Round 1)
 FAIL → In Progress. Same underlying fix as #13728 resolves this — see QA-RESULTS-13728.md. No separate action needed once #13728's harden_stdio import is fixed to fail open.
+
+---
+
+## Round 2 (2026-07-19)
+
+#13728's fail-open fix landed on the shared branch. Re-ran the exact standalone repro 3x: 3/3 PASS (was 3/3 FAIL). Confirmed resolved by #13728's fix, closing correctly as fixed-by-regression-repair — not as the round-1 "flaky, no action needed" misdiagnosis.
+
+## Verdict (Round 2)
+PASS -> Pending Ship. PR #13734 merged (commit a0b61ca2).
