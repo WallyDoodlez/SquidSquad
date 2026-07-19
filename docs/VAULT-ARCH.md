@@ -52,7 +52,7 @@ The vault store is a **shared, git-tracked, per-install knowledge store** at `.s
 Four properties define it (the fourth is new in v2):
 
 1. **Shared across roles** — all agents in the install read the vault, and so does the human. Write access is restricted; specifics on which agents write live in [`AGENT-RUNTIME.md`](AGENT-RUNTIME.md) (cycle integration) and [`COMPOSE-ARCHITECTURE.md`](COMPOSE-ARCHITECTURE.md) (sub-skill composition).
-2. **Git-tracked** — every note has a commit; every change has authorship and timestamp. There is no separate database, indexer, or memory service. (Telemetry, §6, is the one exception — harness-owned and deliberately NOT git-tracked, see §6.3.)
+2. **Git-tracked** — every note has a commit; every change has authorship and timestamp. There is no separate database, indexer, or memory service. (Telemetry, §6, is git-tracked too — but as append-only per-writer event shards under `vault/.telemetry/`, never as note content; see §6.3.)
 3. **Per-install** — `.squidsquad/vault/` lives inside the project repo's `.squidsquad/` tree. A separate SquidSquad install has its own vault; there is no cross-install vault today.
 4. **Consumption-instrumented (v2)** — every search and every cited use is an event (`impression`/`walked`/`used`, §6.1). This is the property v1 lacked entirely: nothing measured whether a written note was ever read, so the write side curated blind and dead notes accumulated indefinitely. v2 makes consumption a first-class, measurable signal that ranking and maintenance both consume.
 
@@ -161,6 +161,12 @@ v1 moved notes physically from an active folder to `archives/` on archival. v2 d
 
 `archives/` survives as a *type* (`status: archived` on any note, any folder) rather than a folder notes get physically relocated into. Existing physically-archived v1 notes migrate in place (folder stays, `status:` already says `archived`) — no data movement needed at migration time.
 
+### 3.5 Templates
+
+Vault templates live at `references/vault-templates/` and are the seed content for new notes — framework-shipped, only consulted by vault sub-skill operations, never read at agent runtime. What changes in v2: **the template set is derived from the type registry, not a hardcoded list.** Every type registered in `vault-schema.json` (§3.1) has a corresponding template (`<type>.md`), resolved by folder+type at note-creation time; an install that registers a custom type supplies a template for it (falling back to a generic skeleton if absent). Plus one special template outside the registry: `briefing.md` (the `BRIEFING.md` skeleton + section order, §5 — BRIEFING is not a typed note).
+
+For SquidSquad's own profile (§3.2) that means: `project.md`, `area.md`, `resource.md`, `system.md` (new — hub-note skeleton), `decision.md`, `pattern.md`, `learning.md`. The v1 `style.md` template is deleted with its type (§4.2). Templates are not subject to the §4 frontmatter spec themselves; their job is to produce notes that conform.
+
 ---
 
 ## 4. Entity model
@@ -215,7 +221,7 @@ last_optimized: YYYY-MM-DD            # optional — last time an optimize pass 
 
 **Dropped from v1**: `confidence` (was write-only — nothing ever consumed it for ranking or filtering; operator decision 2026-07-18, reintroduce only if a real ranking need surfaces with an actual consumer) and `source` (conversation/review/observation/research — provenance-of-claim metadata that, like `confidence`, had no downstream consumer). `links` is also dropped — v1 auto-maintained a `links:` field from body wikilinks via `vault_optimize.py reindex`; v2's search engine computes the link graph live from body content instead, so a stored, driftable copy is unnecessary.
 
-**Not in frontmatter, ever**: `impression` / `used` / `walked` / `last_impression` — these look like note-level counters but are **telemetry**, not content, and per the non-negotiable adaptation in `VAULT-COMPARISON-DMPWEB.md` §9.4, telemetry never enters git. They live in the harness-owned event store (§6) and are joined against note content at query/read time — never written to the `.md` file. This is a deliberate divergence from dmp-web (which bumps these as frontmatter counters, livable for one dev on one checkout but a merge-conflict generator for N agents in N clones — §9.4 P1).
+**Not in frontmatter, ever**: `impression` / `used` / `walked` / `last_impression` — these look like note-level counters but are **telemetry**, not content. They live in the git-tracked per-writer telemetry shards (§6.3) and are joined against note content at query/read time — never written to the `.md` file. This is a deliberate divergence from dmp-web (which bumps these as frontmatter counters, livable for one dev on one checkout but a merge-conflict generator for N agents in N clones — `VAULT-COMPARISON-DMPWEB.md` §9.4 P1). The shard design (§6.3) makes the conflict class structurally impossible instead of auto-resolving it — "notes stay pure content" was always the load-bearing half of the §9.4 rule, and it survives unchanged.
 
 **Ownership note** (`owner:` field): unchanged from v1 — authored role-class of the note's content, `owner: shared` for content that benefits multiple roles. The pre-#6274 naming drift (`qa`/`skill` vs `verifier`/`worker`) and the `<role>` vs `<role>-lead` convention drift (v1 §10.3) both get swept during migration (§9.5 M1) rather than patched in place.
 
@@ -232,7 +238,7 @@ last_optimized: YYYY-MM-DD            # optional — last time an optimize pass 
 
 v1 had a `confidence` field that decayed `high → medium → low` purely on time since `updated:` (§4.4 in the v1 snapshot). **This entire mechanism is dropped**, not adapted — it's the exact thing the dmp-web comparison identifies as inferior (`VAULT-COMPARISON-DMPWEB.md` §3.2/§9.2.6): a note that's old but heavily used decayed anyway (unless manually tagged `evergreen` at creation, which requires foresight); a note that's young but never consulted didn't decay at all despite being dead weight from day one.
 
-**Replacement**: staleness is now a **usage** signal, computed from the telemetry ledger (§6), not stored on the note. The impressions report (§6.3, port of dmp-web's `vault-impressions-report`) classifies every note as:
+**Replacement**: staleness is now a **usage** signal, computed from the telemetry ledger (§6), not stored on the note. The impressions report (§6.4, port of dmp-web's `vault-impressions-report`) classifies every note as:
 
 - **Cold** — never surfaced by a search.
 - **Surfaced-but-never-used** — shown in results repeatedly, never cited (`used`) by any consumer.
@@ -254,38 +260,92 @@ Bare wikilink syntax in the body: `[[note-name]]`. No aliases. Cross-note refere
 
 ---
 
-## 5. BRIEFING.md
+## 5. BRIEFING.md — the hot layer
 
-`.squidsquad/vault/BRIEFING.md` is the **active-context summary** every agent reads at session start and at every cycle.
+`.squidsquad/vault/BRIEFING.md` is the **active-context summary** every agent reads at session start and re-reads when more than one cycle has passed. It is the one vault file injected *wholesale* into agent context rather than reached through search — the hot layer over the searchable store.
 
-| Property | Spec | Current state |
-|---|---|---|
-| Target length | ~50 lines | 80+ lines (today's snapshot) |
-| Update trigger | Every cycle (staleness check, not gated by quiet) | Implemented by `vault-remember.md` Step 4b |
-| Token budget for new content | 2000 (per `.squidsquad/config.md` `BRIEFING Token Budget`) | Trim-or-graduate rule: trimmed content moves to a galaxy note, never deleted |
-| Sections | Active Priorities, Recently Shipped, Core Architecture, Recent Decisions, Human Preferences (via `[[human-profile]]`), Blockers | Today's BRIEFING has Active Priorities, Recently Shipped, Core Architecture, Recent Decisions; no explicit Blockers section |
+**Outside the engine, by design.** BRIEFING.md is excluded from the search index, the ranking, and telemetry (`VAULT-COMPARISON-DMPWEB.md` §9.2.3): it is a *digest* of the vault and the tracker, not a knowledge note — indexing it would double-count every note it summarizes, and impression-counting a file every agent reads unconditionally would only add noise to the usage signal. It carries no §4 frontmatter and no `type:` — it is not a registry entity.
 
-The staleness check is special — it runs every cycle including quiet cycles, and fixing stale fields (version mismatch, agent list mismatch, priority list mismatch with tracker) does **not** consume the vault-remember write budget.
+Spec (all carried from v1, now stated prescriptively):
 
----
+- **Target length ~50 lines.** The hot layer's value is inverse to its size — it is read every session by every agent, so every line is a standing per-session token cost multiplied by the roster.
+- **Trim-or-graduate, never delete.** Content that outgrows the budget graduates to a galaxy note or a dated archive note (e.g. `archives/briefing-active-priorities-<range>.md`) with a pointer if still relevant. BRIEFING is a cache; the vault proper is the store.
+- **Update trigger: staleness check every cycle, including quiet cycles.** Fixing stale fields (version mismatch, agent-list mismatch, priority list diverging from tracker) does **not** consume the vault-remember write budget — staleness repair is hygiene, not knowledge capture.
+- **New-content token budget** per `.squidsquad/config.md` (`BRIEFING Token Budget`).
+- **Sections**: Active Priorities, Recently Shipped, Core Architecture, Recent Decisions, Human Preferences (a pointer to `[[human-profile]]`, never a copy), Constraints & Blockers, Team State.
 
-## 6. Templates
-
-Vault templates live at `references/vault-templates/` and are the seed content for new notes. One template per entity folder plus `BRIEFING.md`:
-
-| Template | Used by | Purpose |
-|---|---|---|
-| `briefing.md` | `vault-init` (§7.1), `vault-remember` BRIEFING staleness check (§7.2) | Initial `BRIEFING.md` skeleton + section order |
-| `projects/<entity>.md` | `vault-create` for `type: project` | Frontmatter + body skeleton for project notes |
-| `areas/<entity>.md` | `vault-create` for `type: area` | Area-note skeleton (e.g., `human-profile.md` bootstrap) |
-| `resources/<entity>.md` | `vault-create` for `type: resource` | Resource-note skeleton |
-| `galaxy/decision.md` / `pattern.md` / `learning.md` / `style.md` | `vault-create` for galaxy types | Per-prefix skeletons; copied verbatim then frontmatter-filled and body-edited |
-
-Templates are framework-shipped (not operator-written) and are only consulted by `vault-protocol` sub-skill operations — never read at runtime. `vault_entity.py` (§8.4) is the script that materializes a template into a new note. Templates are not subject to the §4 frontmatter spec themselves; their job is to produce notes that conform.
+**New in v2 — the auto-digest section** (target state; depends on §6 telemetry being live): a small auto-generated **Vault Pulse** section built from telemetry aggregates — hottest notes this period, newly added binding rules, missed-consultation count (§9's outcome-linking). This is the `VAULT-COMPARISON-DMPWEB.md` §7 4.4 leapfrog item: it keeps the hot layer honest (the digest reflects measured usage, not what an agent remembered to write) and gives the operator a vault health pulse for free. The rest of BRIEFING stays hand-maintained by the write path exactly as in v1.
 
 ---
 
-## 7. The sub-skills
+## 6. Consumption engine — search, ranking, telemetry
+
+This section is the heart of v2: the consumption side v1 never had. It specifies three contracts — the **event model** (§6.1), the **search + ranking contract** (§6.2), and the **telemetry storage** (§6.3) — plus the two consumers built on them (§6.4 impressions report, §6.5 compaction).
+
+**Contracts, not implementation.** Per `VAULT-COMPARISON-DMPWEB.md` §10.2/§10.3, the engine is planned to be consumed as the portable dmp-web extraction invoked via the Skill tool (two feasibility checks still pending — see §7/§8). The contracts below hold regardless of how the engine is packaged: they are what any implementation must satisfy, and what the sub-skills and verifier check against.
+
+### 6.1 Event model
+
+Three counters, written by different parties, disjoint per run:
+
+| Counter | Meaning | Written by |
+|---|---|---|
+| `impression` | The note surfaced in a search's top-K results | The engine, automatically, per search |
+| `walked` | The engine traversed *through* this note's wikilinks to reach a result (connective credit) | The engine, automatically, per search |
+| `used` | A consumer actually cited the note in a committed artifact (receipt section, research doc, PR body) | **Consumers only** — never the engine |
+
+The engine/consumer split is load-bearing: `impression` measures what search *offers*, `used` measures what work *actually consumed*. Conflating them (letting the engine write `used`, or counting reads as usage) would collapse the signal that makes §4.4's staleness buckets and §6.2's ranking meaningful.
+
+Every event is one JSONL record: `{id: <uuid>, ts, agent, task, slug, counter}`. `task` (the tracker issue number) is deliberately carried on every event — per-task attribution is richer than dmp-web's flat per-note integers and is what enables outcome-linked telemetry (§9: joining events against tracker outcomes to detect missed consultations). `id` is the dedup key (§6.3).
+
+A `--no-write` dry-run flag suppresses event emission for diagnostic searches — telemetry should measure real consumption, not debugging.
+
+### 6.2 Search contract & ranking
+
+- **Tiered matching**: filename match > inbound-wikilink match > tag match > content match. Tier is the primary sort key — a filename hit always outranks a content hit.
+- **Budgeted graph traversal**: from each matched note, the engine follows body wikilinks outward. Hops through `traversal: budgeted` types (galaxy leaves) cost 1 unit of `traversalBudget` (§3.1, default 2); hops through `traversal: free` types (hubs) are free. This keeps traversal on-topic while letting dense knowledge cluster around hubs without exhausting the budget (§3.2's `systems/` layer is what makes this productive).
+- **Two-stage ranking**: Stage 1 orders by match tier. Stage 2 tiebreaks within a tier by the telemetry-weighted score — `used×2.0 + impression×0.25 + walked×0.5 + recency×0.25` (weights from `vault-schema.json` `tieBreakWeights`, tunable per install) — multiplied by the type's `weight` (§3.1) and by a status multiplier: `status: superseded|archived` rank near zero (still discoverable by direct query, never a default top-K result — this is what lets §3.4 retire the physical `archives/` move).
+- **Top-K output** (`searchTopK`, default 12): metadata-only JSON — paths, tiers, scores, link map. The consuming agent Reads the note bodies it chooses; the engine never inlines content. Each note in the returned top-K gets an `impression` event; traversed connectors get `walked`.
+- **Graceful degradation**: when telemetry is unavailable (fresh install, cold start, shard read failure), Stage 2 falls back to tier + recency + type weight. Search never blocks on telemetry.
+- **Raw-grep ban**: sub-skills must reach the vault through the engine, never `grep -r`. The rationale is telemetry blindness, not style: a grep that finds the right note leaves no `impression`/`used` trail, so the note reads as dead to §6.4 and gets pruned — silent consumption actively corrupts the maintenance signal. (v1's sub-skill grep snippets are replaced wholesale at migration.)
+- **BRIEFING.md is excluded** from index, ranking, and telemetry (§5).
+
+### 6.3 Telemetry storage — git-tracked per-writer shards
+
+> **Design status**: PM-recommended working design (2026-07-18), operator lock-in pending. Supersedes `VAULT-COMPARISON-DMPWEB.md` §9.4 point 1 (2026-07-12: harness-owned gitignored store) — see §10.5 for the full supersession rationale.
+
+**Why §9.4's harness-local store had to change**: a SquidSquad install can run **multiple independent harness instances** — e.g. each teammate runs their own harness against their own clone, with no shared always-on server. A harness-local store fragments telemetry into N per-teammate partial pictures, defeating team-wide ranking. This is the same many-independent-checkouts topology dmp-web has — which is why dmp-web routes telemetry through git. dmp-web's *mechanism* (frontmatter counters + a custom `vault-note` merge driver) is still not the model: custom merge drivers require per-clone opt-in registration, and counters-in-notes is the conflict *source*, not a solution.
+
+The design — telemetry is a grow-only counter, a solved distributed-systems shape (CRDT G-counter): **per-writer shards, sum at read**:
+
+1. **Per-harness-instance, append-only JSONL shards, git-tracked**: `.squidsquad/vault/.telemetry/<harness-instance-id>.jsonl`. Each harness instance appends only to its own shard — cross-teammate merge conflicts are *structurally impossible*, not auto-resolved.
+2. **`merge=union` in `.gitattributes`** on `.telemetry/*.jsonl` — git's built-in union strategy, no per-clone registration, works for every clone on day one. It covers the one residual divergence case (the same shard diverging across machines — restored backup, cloned VM); union-merge on append-only lines is safe because readers dedupe by event `id`, so a double-merged line is harmless.
+3. **Sync layer = the git remote already serving as the bus.** `git pull` = telemetry sync; no new infrastructure — consistent with the house philosophy that git is the audit trail and GitHub the coordination bus.
+4. **Read path**: any consumer (ranking Stage 2, impressions report, viewer) reads all shards + aggregates, dedupes by `id`, sums per note.
+5. **PR-noise control**: shard commits ride routine `main` commits only, **never task branches** — telemetry stays out of review diffs. This preserves the intent behind §9.4's original "never in a PR" directive under the new storage model.
+6. **Durability** (§9.6 open decision #5) largely **dissolves**: telemetry lives in repo history; a lost machine costs only its unpushed events (bounded by push cadence). No snapshot mechanism needed.
+
+**What survives from §9.4 unchanged**: notes stay pure content, forever — no counter fields in frontmatter (§4.3). That rule was always the load-bearing half.
+
+**Cloud agents considered and rejected** as the sync/storage layer (operator floated, 2026-07-18): ephemeral compute is not a datastore — the data still needs a durable home, which is either a hosted DB (new auth/availability/cost/privacy surface; note slugs leak repo content to a third party) or the git repo, i.e. where this design already is. Legitimate future niche: running scheduled compaction/report passes for installs with no always-on machine — optional convenience, not architecture.
+
+### 6.4 Impressions report
+
+The port of dmp-web's `vault-impressions-report`: reads the shards (§6.3), joins against the note inventory, and buckets every note (per §4.4):
+
+- **Cold** — never surfaced by any search.
+- **Surfaced-but-never-used** — repeatedly offered in top-K, never once cited by a consumer.
+- **Stale** — `used` at least once, but not within the last N days (config, default 90).
+
+The report is the **purge signal**: it feeds `vault_optimize.py`'s pruning/archival proposals (§7-equivalent) and PM's improvement scan. It replaces v1's time-based confidence decay entirely — the same maintenance function, computed from a signal that correlates with whether the note is helping anyone.
+
+### 6.5 Compaction
+
+A quiet-cycle maintenance pass rolls events older than N days into a **per-writer aggregate file** (still per-writer, so still conflict-free by construction), truncating the raw shard. Aggregates preserve per-note, per-counter totals plus last-event timestamps — sufficient for §6.2 ranking and §6.4 bucketing; per-task attribution older than the compaction horizon is dropped (outcome-linking consumes recent events, not deep history). Readers treat `aggregate + live shard` as one logical stream.
+
+---
+
+## 7. The sub-skills `[v1 — not yet migrated]`
 
 All vault behavior is encoded as markdown fragments under `references/sub-skills/`. Each fragment is inlined into the consuming agent's composed `CLAUDE.md` by `compose.py`. Four distinct sub-skills are described below. The vault is **shared institutional knowledge** — every role (PM, verifier, worker, DM) has full R/W access via `vault-protocol`; the historical `vault-protocol-slim` read-only variant was retired in #11331 (Iter 56) when verifier/DM were granted write access for their lane-specific patterns (verifier: testing-and-verification learnings; DM: delivery patterns).
 
@@ -378,7 +438,7 @@ Postures need explicit human approval before becoming active scan criteria for o
 
 ---
 
-## 8. The four scripts
+## 8. The four scripts `[v1 — not yet migrated]`
 
 All mechanical vault operations are encapsulated in scripts under `references/scripts/`. Agents shell out to these from inside the sub-skills.
 
@@ -443,7 +503,7 @@ Deterministic gates for vault-remember reflection. Subcommands:
 
 ---
 
-## 9. Cycle integration
+## 9. Cycle integration `[v1 — not yet migrated]`
 
 The vault is touched at three points in a cycle (boot, creative, post-cycle); pre-cycle is intentionally not a touch — see §9.2. §9.5 covers how vault writes ride the cycle's git commit, which is a packaging concern rather than a separate touch.
 
@@ -517,7 +577,7 @@ For completeness, behaviors that some readers might expect but that are not impl
 
 ---
 
-## 10. Current state inventory (snapshot 2026-05-24)
+## 10. Current state inventory (snapshot 2026-05-24) `[v1 — not yet migrated]`
 
 > **Freshness note (2026-06-20):** the counts in this section are the 2026-05-24 snapshot and are now materially stale — the live `galaxy/` holds **~93 notes** (decision 19 / learning 56 / pattern 18; still 0 `style-*`, 0 `pattern-posture-*`) vs the 28 below, `archives/` has **1** note (not 0), and `BRIEFING.md` is **~102 lines**. The section *structure* (what is counted, the buckets, the distributions tracked) still holds; only the numbers are dated. Re-snapshot on the next VAULT-ARCH revision.
 
@@ -595,7 +655,7 @@ These are seeds used by `vault-init` (per `vault-protocol.md` §Vault Initializa
 
 ---
 
-## 11. Known gaps
+## 11. Known gaps `[v1 — not yet migrated]`
 
 ### 11.1 #5855 — Vault is static decision log
 
@@ -702,7 +762,7 @@ Filed as #10180. Until that lands, the §7 description is the architectural targ
 
 ---
 
-## 12. Cross-references to other docs
+## 12. Cross-references to other docs `[v1 — not yet migrated]`
 
 ### 12.1 Where vault appears in other docs today (verified)
 
@@ -753,3 +813,4 @@ These are noted here; the actual edits land in a separate commit or as part of t
 
 - **2026-05-24 (v1 draft, descriptive snapshot)** — initial draft. Consolidates the vault's specification (from 5 sub-skills + 4 scripts) and current state (from on-disk inventory) into one architecture doc. No design changes proposed. References open issue #5855 for the known living-memory gap; resolution out of scope.
 - **2026-05-24 (v1 draft, expanded)** — added §9.6 failure modes + recovery paths, §9.7 explicit non-functionality, §10.3-§10.6 ownership/confidence/status/recency distributions, §11 re-verified #5855 claims (each verdict CONFIRMED / PARTIALLY TRUE / NOT TRUE TODAY) + new drift findings (owner label `<role>` vs `<role>-lead`; zero `superseded` notes), §12.1 verified cross-refs with line numbers, §12.2 reconciliation needs for ARCHITECTURE / COMPOSE-ARCHITECTURE / AGENT-RUNTIME / INSTALLER-ARCH / sub-skill-catalog.
+- **2026-07-18 (v2 rewrite in progress, #10003)** — §1–§6 rewritten as prescriptive target design per `VAULT-COMPARISON-DMPWEB.md` §9+§10: consumption-instrumented as a defining property; `vault-schema.json` type registry replacing hardcoded PARAG (folders kept, `systems/` hub layer added); entity model drops `confidence`/`source`/`links`, staleness becomes usage-based; templates registry-derived (§3.5); §5 BRIEFING restated prescriptively + Vault Pulse auto-digest (target state); §6 replaced (was Templates) by the consumption engine — event model, search/ranking contract, **git-tracked per-writer telemetry shards** (supersedes §9.4's harness-owned store; operator lock-in pending), impressions report, compaction. §7+ still v1 pending rewrite.
