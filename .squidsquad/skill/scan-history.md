@@ -1,5 +1,11 @@
 # Scan History
 
+## Scan — 2026-07-19 11:23
+
+- **Files scanned**: docs/COMPOSE-ARCHITECTURE.md (1708 lines; suggest-targets 5th pick, the one untouched file from the last 2 scans; TODO/FIXME/XXX/HACK grep clean (1 XXX hit was inside a quoted illustrative example string, not a real marker); cross-referenced all 3 same-doc anchor links against their target headings' GitHub slug -- 2 correct, 1 broken: `#33-l4-operations-creative-overlay` doesn't match `### 3.3 Layer operations (L2-L4 creative overlay)`'s actual slug `#33-layer-operations-l2-l4-creative-overlay`; grepped the repo for other references to the same broken anchor and found 2 more identical hits in docs/sub-skill-catalog.md (lines 266, 275) -- same root cause, not a broader link-hygiene problem in either file).
+- **Findings**: 1 filed -- #13845 (low, role:pm -- broken internal anchor link, 3 occurrences across 2 docs, cosmetic-only navigation defect; routed to PM since docs/*-ARCH.md is PM's docs-only domain, outside worker's code/code-consumed-data lane).
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-19 10:32
 
 - **Files scanned**: references/roles/pm/instructions.md (166 lines, full read -- cross-referenced frontmatter `step-ids` (12 entries) against all 12 `#### step:cycle/*` body anchors, still exact-match order per the #13801 fix; cross-referenced all 16 `→ run sub-skill:` marker names against docs/sub-skill-catalog.md -- all resolve), tests/test_wizard.py (3047 lines; TODO/FIXME/skip/xfail grep clean; 48 test classes, no duplicate names; em-dash sweep found ~24 hits, all in comments/docstrings -- dev-facing source prose, never on a print()/raise console-output path, not the #13728/#13760 crash-risk class).
@@ -612,11 +618,5 @@
 
 - **Files scanned**: references/scripts/vault_remember.py, references/scripts/compose.py, references/scripts/cycle.py
 - **Findings**: #8483 (cycle.py: unused imports io and json), #8484 (cycle.py: set_counter missing upsert logic)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-16 00:32
-
-- **Files scanned**: references/scripts/scan_index.py, references/scripts/vault_optimize.py, references/scripts/event_validator.py
-- **Findings**: #8435 (scan_index.py: acceptance_rate scoring always 0 for unreviewed files)
 - **Items rejected by human**: none yet
 
