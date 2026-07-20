@@ -1,7 +1,7 @@
 # Working State
 
 - **Task**: none (#10003 MERGED 2026-07-19 -- PR #13708 = 800bf4049; -> pending-ship for dm; SS12.2 umbrella filed as #13854 pending)
-- **OPERATOR DIRECTIVE (2026-07-19 inline, one-off)**: when #13846 finishes (ship), PAUSE the team — POST /agents/{role}/stop for skill, qa, dm (individually; NOT all-stop, PM stays up for inline). While paused: idle-driver stays disarmed (no improvement scans), PM burns tokens only for inline conversation + event acks. Resume only on operator say-so.
+- **OPERATOR DIRECTIVE (2026-07-19 inline, one-off)**: when #13846 finishes (ship), PAUSE the team — POST /agents/{role}/stop for skill, qa, dm (individually; NOT all-stop, PM stays up for inline). While paused: idle-driver stays disarmed (no improvement scans), PM burns tokens only for inline conversation + event acks. Resume scheduled: one-shot wake 2026-07-20 06:03 boots skill/qa/dm, verifies each, re-arms PM idle driver. AT RESUME FIRST: #13863 (HIGH, skill) -- fleet git-push credential fix (credential-manager entry gone; PM clone already fixed via gh-keyring helper); verify each agent's first push. Then P1 #13857 (engine foundation) is first PRD pickup.
 - **Status**: Idle, event mode. Awaiting operator action on HITL items below.
 - **Updated**: 2026-07-19 05:45
 
