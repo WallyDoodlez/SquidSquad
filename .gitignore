@@ -1,5 +1,7 @@
 # SquidSquad runtime (not committed)
 .squidsquad/.active-role
+.squidsquad/.instance-id
+.squidsquad/.instance-id.tmp
 .squidsquad/*/current-state
 .squidsquad/*/.pid
 .squidsquad/*/.claude-pid
