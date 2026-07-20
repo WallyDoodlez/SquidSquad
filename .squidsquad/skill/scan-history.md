@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-20 09:39
+
+- **Files scanned**: references/scripts/tracker.py (CLI arg parser)
+- **Findings**: #14037 (CLI silently swallows unknown/typoed flags — empirically re-verified with --bogus-flag exit 0; live-hit was #14024/#14025 filed unlabeled via --label vs --extra-label). Filed WITH --extra-label improvement-scan this time; label verified on the issue.
+- **Items rejected by human**: none
+- **Criteria note**: the prior scan's criteria note is now discharged (candidate filed). Scan kept to ONE high-confidence empirically-verified finding — quality over quota.
+
 ## Scan — 2026-07-20 08:41
 
 - **Files scanned**: references/scripts/git_ops.py, references/scripts/model_router.py
