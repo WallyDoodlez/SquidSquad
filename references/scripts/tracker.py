@@ -54,6 +54,9 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 
+sys.path.insert(0, str(SCRIPT_DIR))
+import gh_identity  # noqa: E402  — #13865: GH_TOKEN-pinned env for gh calls
+
 # === FORGE ADAPTER (optional — falls back to direct gh calls if unavailable) ===
 
 _forge_adapter = None
@@ -571,6 +574,7 @@ def _run_list(cmd_list, check=True):
         cmd_list, capture_output=True, text=True,
         encoding="utf-8", errors="replace",
         check=check, cwd=str(REPO_ROOT),
+        env=gh_identity.gh_env(cmd_list),  # #13865: pin gh calls to the repo identity (None = inherit)
     )
 
 
@@ -588,6 +592,7 @@ def _run_list_timeout(cmd_list, timeout, check=False):
             cmd_list, capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             check=check, cwd=str(REPO_ROOT), timeout=timeout,
+            env=gh_identity.gh_env(cmd_list),  # #13865
         )
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(
@@ -621,6 +626,7 @@ def _run_gh_with_body(cmd_list, body, check=True):
         capture_output=True, text=True,
         encoding="utf-8", errors="replace",
         check=check, cwd=str(REPO_ROOT),
+        env=gh_identity.gh_env(cmd_list),  # #13865
     )
 
 
