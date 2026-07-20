@@ -116,23 +116,70 @@ class TestTrackerListTasksThroughShim(unittest.TestCase):
             self.assertEqual(parsed, [])
 
 
+def _make_hermetic_git_workspace(root: Path) -> Path:
+    """A throwaway scripts-copy install whose ``origin`` is a LOCAL bare
+    repo (#13957). Returns the workspace root; the runnable tracker is at
+    ``<work>/references/scripts/tracker.py``.
+
+    ``check-gh`` grew a real-git push path in #13863 (``git_ops.py
+    push-doctor``: credential-helper rewrite into ``.git/config`` +
+    ``git push --dry-run origin HEAD``), and ``git_ops`` pins every git
+    command to the repo root derived from its OWN file location — cwd is
+    ignored. Running the real clone's tracker therefore (a) fails on any
+    clone whose credential chain routes through the PATH-shimmed fake
+    ``gh`` — the doctor's dry-run authenticates against the REAL origin
+    with credentials served by the fake — and (b) worse, rewrites the
+    developer's real ``.git/config`` as a test side effect. Copying
+    ``references/scripts`` into a scratch git repo re-roots git_ops there;
+    its local (non-https) origin makes the doctor take its own documented
+    non-https early-return ("nothing to heal"), touching nothing real.
+    """
+    import shutil
+
+    bare = root / "origin.git"
+    work = root / "work"
+    (work / "references").mkdir(parents=True)
+    shutil.copytree(REPO_ROOT / "references" / "scripts",
+                    work / "references" / "scripts")
+    subprocess.run(["git", "init", "--bare", str(bare)],
+                   capture_output=True, check=True, timeout=15)
+    subprocess.run(["git", "init"], cwd=str(work),
+                   capture_output=True, check=True, timeout=15)
+    subprocess.run(["git", "-c", "user.name=shim-test",
+                    "-c", "user.email=shim@test",
+                    "commit", "--allow-empty", "-m", "seed"],
+                   cwd=str(work), capture_output=True, check=True, timeout=15)
+    subprocess.run(["git", "remote", "add", "origin", str(bare)],
+                   cwd=str(work), capture_output=True, check=True, timeout=15)
+    return work
+
+
 class TestCheckGhThroughShim(unittest.TestCase):
     """``tracker.py check-gh`` is the boot-time gh-permissions
     probe every SquidSquad agent runs. It calls ``gh issue list
     --limit 1`` and accepts any non-error exit as 'gh works'. The
     shim's read-fallback (empty list) makes this probe pass — pin
     that contract so future shim refactors don't break agent boot
-    under the test fixture."""
+    under the test fixture.
+
+    Runs in a hermetic scratch workspace (#13957), NOT the real repo:
+    the #13863 push-doctor half of check-gh must neither depend on the
+    host's credential chain (which the fake ``gh`` breaks) nor mutate
+    the real clone's ``.git/config``."""
 
     def test_check_gh_passes_through_shim(self):
         with tempfile.TemporaryDirectory(prefix="gh-shim-check-") as tmp:
-            env = ems.env_with_gh_shim(fixtures_dir=Path(tmp))
+            fdir = Path(tmp) / "fixtures"
+            fdir.mkdir()
+            work = _make_hermetic_git_workspace(Path(tmp))
+            hermetic_tracker = work / "references" / "scripts" / "tracker.py"
+            env = ems.env_with_gh_shim(fixtures_dir=fdir)
             proc = subprocess.run(
-                [sys.executable, str(TRACKER_PY), "check-gh"],
-                env=env, cwd=str(REPO_ROOT),
+                [sys.executable, str(hermetic_tracker), "check-gh"],
+                env=env, cwd=str(work),
                 capture_output=True, text=True,
                 encoding="utf-8", errors="replace",
-                timeout=15, check=False,
+                timeout=60, check=False,
             )
             self.assertEqual(
                 proc.returncode, 0,
@@ -143,6 +190,41 @@ class TestCheckGhThroughShim(unittest.TestCase):
                 ),
             )
             self.assertIn("OK", proc.stdout)
+
+    def test_check_gh_does_not_doctor_the_hermetic_workspace(self):
+        """The push-doctor's non-https early-return must fire: no
+        credential-helper entries written into the scratch repo's local
+        config proves the doctoring path was skipped, not merely lucky
+        (#13957). This is the pin that the shim test stays hermetic even
+        if a future refactor reorders the doctor's guard."""
+        with tempfile.TemporaryDirectory(prefix="gh-shim-doctor-") as tmp:
+            fdir = Path(tmp) / "fixtures"
+            fdir.mkdir()
+            work = _make_hermetic_git_workspace(Path(tmp))
+            hermetic_tracker = work / "references" / "scripts" / "tracker.py"
+            env = ems.env_with_gh_shim(fixtures_dir=fdir)
+            proc = subprocess.run(
+                [sys.executable, str(hermetic_tracker), "check-gh"],
+                env=env, cwd=str(work),
+                capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
+                timeout=60, check=False,
+            )
+            # Guard against a vacuum pass (external-review finding): if
+            # check-gh died before reaching push-doctor, no helper entries
+            # would be written either — returncode 0 proves the doctor ran
+            # and the emptiness below is its early-return, not an accident.
+            self.assertEqual(
+                proc.returncode, 0,
+                msg=f"check-gh failed: stderr={proc.stderr[:500]!r}",
+            )
+            helpers = subprocess.run(
+                ["git", "config", "--local", "--get-all", "credential.helper"],
+                cwd=str(work), capture_output=True, text=True,
+                timeout=15, check=False,
+            )
+            # Exit 1 + empty output = key entirely absent (never written).
+            self.assertEqual((helpers.stdout or "").strip(), "")
 
 
 if __name__ == "__main__":

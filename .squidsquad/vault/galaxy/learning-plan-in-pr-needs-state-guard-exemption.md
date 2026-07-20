@@ -2,7 +2,7 @@
 type: learning
 tags: [git, workflow, gotcha, state-guard, plan-in-pr, compose]
 created: 2026-06-17
-updated: 2026-06-17
+updated: 2026-07-20
 owner: skill-lead
 status: active
 confidence: high
@@ -48,6 +48,22 @@ When a deterministic guard contradicts a new instruction-level flow, the seam is
 broadly-consumed classifier. Always prove the guard's actual behavior empirically
 before trusting that a `.squidsquad/` path will survive onto a feature branch.
 
+## Second failure mode — seed-commit dual-landing auto-closes the PR (2026-07-20)
+
+The exemption has a sharp edge on the other side: if the SAME commit that seeds a
+task branch (plan body or any PR-carried `.squidsquad/` file) ALSO reaches `main`
+through the direct-to-main state lane, GitHub sees the PR's head reachable from
+base the moment `main` pushes and **auto-closes the PR with an empty diff**.
+Observed on #13561/PR #13889: the TUI-INTERFACE-DESIGN.md amendment commit
+(daef22565) was both the branch tip and an unpushed local-main commit; pushing
+main closed the PR silently, stranding the real deliverable (which was separately
+sitting uncommitted — compounding). Rule: a commit is EITHER branch-lane OR
+main-lane, never both; when a planning artifact must ride main (#11511) and a
+branch needs seeding, seed the branch with a DIFFERENT commit (even an empty
+one). After any main push, re-verify open PRs whose branches share history with
+what you pushed.
+
 ## Changelog
 
 - 2026-06-17 — Created by skill-lead. Discovered building #12750 (plan-in-PR).
+- 2026-07-20 — skill-lead: second failure mode (seed-commit dual-landing → GitHub auto-close, #13561/PR #13889 incident) + either-lane-never-both rule.
