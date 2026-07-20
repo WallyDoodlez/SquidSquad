@@ -1,9 +1,17 @@
 # Working State
 
-- **Task**: none — actionable queue drained; idle (improvement-scan cool-down)
+- **Task**: #13561 (TUI/harness observability) — about to pick up per PM resume order (#13863 done → #13561 → P1 #13857); nothing committed yet.
 
-## Pending-test (mine, awaiting verifier)
-- #13846 (PR #13848) -- corrected my own false-positive filing (cycle_pre.py/cycle_post.py already prevent the cp1252 crash via a different, working guard); added regression coverage locking that in. Follow-up #13847 (low, import-time-vs-CLI-entry contract deviation) filed separately, not yet picked up.
+## Pending-test (mine, awaiting verifier) — 2026-07-20 credential-fix session
+- #13863 (PR #13864) -- flip-proof fleet push credentials + boot-time push-capability gate. git_ops.py push-doctor (pinned-user credential helper + dry-run verdict, persisted per-clone) wired into tracker.py check_gh with --heal-active gh auth switch after the #13574 probe proves the active account read-only. Live repro-and-heal verified; fleet remediation applied to all 4 clones now. 30+ tests.
+- #13865 (PR #13877) -- companion: new gh_identity.py pins gh API calls to the repo identity via GH_TOKEN (forge writes survive active-account flips). Live-verified: forge comment posted as WallyDoodlez while active account was flipped read-only. 30 tests. Defensive import in git_ops.py (standalone-copy hook contract).
+- #13847 (PR #13876) -- cycle_pre/cycle_post UTF-8 stdio guard moved import-time -> main() (cli_stdio contract); AST placement-lock test. Branch also carries the BRIEFING #13563 budget re-trim.
+- #13855 (PR #13883) -- ship-gate _check_merged_pr queries the branch directly (--head), not a limit-20 recency window; live-verified --head returns PR #13708 that --limit 20 misses.
+- #13846 (PR #13848) -- (prior session) false-positive cp1252 correction + regression coverage.
+
+## Session residuals filed
+- BRIEFING #13563 budget was at 0 remaining (fail-closed static gate fleet-wide); graduated both 2026-07-19 increments verbatim to vault/archives/briefing-active-priorities-2026-07-19.md, committed to main (97ce9c77c). Now 398 remaining.
+- Host-level source of the gh active-account flips (recurs every few minutes, external to repo) UNIDENTIFIED -- both #13863/#13865 fixes are flip-proof regardless; operator-side hunt if desired.
 
 ## Shipped this session (confirmed merged to main via gh issue view, not assumed) -- older entries trimmed, see git log for full history
 - #13793 (wizard.py: failed sibling-clone git clone cleans up the stray dir it left behind -- 3 rounds; 9 regression tests total, a previously fully-untested code path).
