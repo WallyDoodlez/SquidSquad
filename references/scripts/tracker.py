@@ -2071,6 +2071,57 @@ def work_assign(target_alias, caller, issue=None, event_context=None, payload=No
     return event_id
 
 
+# Per-command known optional flags (#14037). The parser collects ANY --key,
+# and each command reads only the keys it knows -- so an unknown/typoed flag
+# was silently swallowed with exit 0 and the data vanished (live: `create-issue
+# --label X` instead of --extra-label filed #14024/#14025 unlabeled). Callers
+# are agents and scripts, never humans mid-flow: fail-closed costs nothing and
+# converts silent data loss into an immediate, self-explanatory exit 2.
+# Command aliases share one entry; a command absent from this table is an
+# unknown command (the dispatcher's existing error handles it).
+KNOWN_FLAGS = {
+    "check-gh": set(),
+    "list-issues": {"status"}, "list-bugs": {"status"},
+    "list-tasks": {"status"}, "list-features": {"status"},
+    "work-queue": set(),
+    "create-issue": {"title", "body", "role", "severity", "reporter", "extra-label"},
+    "create-bug": {"title", "body", "role", "severity", "reporter", "extra-label"},
+    "create-task": {"title", "body", "role", "priority", "reporter", "extra-label"},
+    "create-feature": {"title", "body", "role", "priority", "reporter", "extra-label"},
+    "transition": {"role", "force"},
+    "comment": {"role", "message"},
+    "work-assign": {"target-alias", "caller", "issue", "event-context", "payload"},
+    "get-labels": set(),
+    "get-state": set(),
+    "close": set(),
+    "list-by-labels": {"state"},
+    "list-all-open": set(),
+    "add-labels": set(),
+    "repair-status-labels": {"apply", "include-unshipped"},
+}
+
+
+def _validate_flags(cmd, opts):
+    """Exit 2 naming the flag and the command's valid set on any unknown
+    --flag (#14037). Unknown COMMANDS pass through untouched -- the
+    dispatcher's existing unknown-command error owns that case."""
+    if cmd not in KNOWN_FLAGS:
+        return
+    unknown = sorted(set(opts) - KNOWN_FLAGS[cmd])
+    if not unknown:
+        return
+    valid = KNOWN_FLAGS[cmd]
+    valid_str = (" ".join("--" + f for f in sorted(valid))
+                 if valid else "(this command takes no flags)")
+    print(
+        f"Unknown flag{'s' if len(unknown) > 1 else ''} "
+        f"{', '.join('--' + f for f in unknown)} for {cmd}; "
+        f"valid: {valid_str}",
+        file=sys.stderr,
+    )
+    sys.exit(2)
+
+
 def _parse_args():
     """Simple arg parser."""
     args = sys.argv[1:]
@@ -2094,6 +2145,7 @@ def _parse_args():
         else:
             positional.append(args[i])
             i += 1
+    _validate_flags(cmd, opts)
     return cmd, positional, opts
 
 
