@@ -479,3 +479,117 @@ class TestCheckCoverageFileErrors:
             str(tmp_path / "nonexistent-results.md"),
         )
         assert result == 1
+
+
+# --- #13944: merged-cell table rows + bold-bullet plan declarations ---
+
+
+class TestMergedCellTableRows13944:
+    """The QA-RESULTS convention verifier sessions actually write puts TC-N
+    plus a free-text description in ONE cell (`| TC1 -- repro | PASS |`).
+    The old regex required the cell to BE exactly TC-N, so every conforming
+    QA-RESULTS parsed as 0 TCs and the ship-integrity gate skipped (#13944)."""
+
+    def test_merged_cell_id_and_result(self):
+        text = "| TC1 — core repro under real flipped state | PASS | evidence |\n"
+        assert tc_coverage.parse_tc_ids(text) == [1]
+        assert tc_coverage.parse_tc_results(text) == {1: "PASS"}
+
+    def test_merged_cell_description_words_do_not_pollute_result(self):
+        """Description prose containing invalid-result vocabulary must not
+        register: only cells AFTER the TC cell are searched (the table-row
+        analog of the #2469 heading fix)."""
+        text = "| TC2 — deferred cleanup and N/A handling | PASS | e |\n"
+        assert tc_coverage.parse_tc_results(text) == {2: "PASS"}
+
+    def test_isolated_cell_backcompat(self):
+        text = "| TC-3 | FAIL | notes |\n"
+        assert tc_coverage.parse_tc_results(text) == {3: "FAIL"}
+
+    def test_malformed_row_without_closing_pipe_is_unknown(self):
+        """A TC cell that never closes has no result cell -- UNKNOWN, never a
+        result guessed out of description prose."""
+        text = "| TC4 — description only, row never closes PASS\n"
+        assert tc_coverage.parse_tc_results(text) == {4: "UNKNOWN"}
+
+    def test_partial_number_not_matched(self):
+        """TC123abc must not parse as TC-123 (word boundary)."""
+        text = "| TC123abc | PASS |\n"
+        assert tc_coverage.parse_tc_ids(text) == []
+
+    def test_real_qa_results_shape_end_to_end(self, tmp_path):
+        """Round-trip the real #13863-era artifact shapes: bold-bullet
+        TEST-PLAN declarations + merged-cell QA-RESULTS table -> full
+        coverage, gate pass (was: 'No TCs found, gate skipped 0/0')."""
+        plan = tmp_path / "TEST-PLAN-9999.md"
+        plan.write_text(
+            "## TCs\n\n"
+            "- **TC1 — core repro**: does the fix hold?\n"
+            "- **TC2 — gate fails loudly**: does boot block?\n",
+            encoding="utf-8",
+        )
+        results = tmp_path / "QA-RESULTS-9999.md"
+        results.write_text(
+            "## TC Results\n\n"
+            "| TC | Result | Evidence |\n"
+            "|---|---|---|\n"
+            "| TC1 — core repro | PASS | live push succeeded |\n"
+            "| TC2 — gate fails loudly | PASS | marker-keyed block |\n",
+            encoding="utf-8",
+        )
+        assert tc_coverage.check_coverage(str(plan), str(results)) == 0
+
+
+class TestBulletDeclarations13944:
+    """Real TEST-PLANs declare TCs as bold bullets (`- **TC1 -- x**: ...`);
+    with only heading/table patterns the plan side parsed 0 TCs."""
+
+    def test_bold_bullet_ids(self):
+        text = "- **TC1 — override proof**: works?\n- **TC-2 — resolves**: yes?\n* **TC 3 — star bullet**: also\n"
+        assert tc_coverage.parse_tc_ids(text) == [1, 2, 3]
+
+    def test_plain_bullet_prose_not_matched(self):
+        """Un-bolded prose mentions are references, not declarations."""
+        text = "- TC3 is covered by the integration run\n- see **the TC4 notes** above\n"
+        assert tc_coverage.parse_tc_ids(text) == []
+
+
+# --- #13990: result-cell-only scan for table rows ---
+
+
+class TestResultCellOnly13990:
+    """#13944's first cut scanned the whole row remainder, so Evidence-column
+    prose mentioning deferred/N-A misclassified a genuine PASS as INVALID
+    (live-hit shipping QA-RESULTS-13944 itself). A result is only ever
+    declared in the Result cell; Evidence is prose."""
+
+    def test_evidence_prose_with_invalid_words_does_not_block(self):
+        """The live repro shape: PASS in the Result cell, deferred/N-A
+        wording inside the Evidence cell."""
+        text = ('| TC5 — description-pollution guard | PASS | a TC cell '
+                'description containing the literal words "deferred" and "N/A" |\n')
+        assert tc_coverage.parse_tc_results(text) == {5: "PASS"}
+
+    def test_isolated_cell_notes_column_no_longer_scanned(self):
+        """Pre-#13944 latent form of the same bug: isolated TC cell, notes
+        column mentioning an invalid token."""
+        text = "| TC-1 | PASS | scenario covers the deferred cleanup path |\n"
+        assert tc_coverage.parse_tc_results(text) == {1: "PASS"}
+
+    def test_invalid_token_in_result_cell_still_blocks(self):
+        """The invalid check still fires where it should: in the Result
+        cell itself."""
+        text = "| TC2 — edge case | deferred | will do later |\n"
+        assert tc_coverage.parse_tc_results(text) == {2: "INVALID"}
+
+    def test_empty_result_cell_is_unknown_not_scavenged(self):
+        """An empty Result cell must not scavenge a result from Evidence
+        or from subsequent lines."""
+        text = "| TC3 — desc | | evidence says PASS somewhere |\nPASS on the next line\n"
+        assert tc_coverage.parse_tc_results(text) == {3: "UNKNOWN"}
+
+    def test_result_cell_with_qualifier_prose_still_parses(self):
+        """Real-artifact shape: 'PASS (by code inspection + TC1)' in the
+        Result cell."""
+        text = "| TC2 — credential-manager-independent | PASS (by code inspection + TC1) | evidence |\n"
+        assert tc_coverage.parse_tc_results(text) == {2: "PASS"}

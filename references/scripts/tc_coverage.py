@@ -28,9 +28,25 @@ _TC_HEADING_RE = re.compile(
     r"^#{1,6}\s+TC[\s\-]?(\d+)\s*:", re.IGNORECASE
 )
 
-# Table row pattern: | TC-1 | RESULT | ... | (TC at start of a table cell)
+# Table row pattern: the first cell STARTS with TC-N. Matches both the
+# isolated-cell shape `| TC-1 | PASS |` and the merged-cell convention
+# verifier sessions actually write -- `| TC1 -- core repro | PASS |` (#13944:
+# four independent verification sessions converged on TC-N-plus-description
+# in one cell; requiring the cell to BE exactly TC-N left the ship-integrity
+# gate parsing 0 TCs from every conforming QA-RESULTS). The trailing \b keeps
+# `TC123abc` from matching a partial number.
 _TC_TABLE_RE = re.compile(
-    r"^\|\s*TC[\s\-]?(\d+)\s*\|", re.IGNORECASE
+    r"^\|\s*TC[\s\-]?(\d+)\b", re.IGNORECASE
+)
+
+# Bold-bullet TC declaration: `- **TC1 -- description**: ...` -- the shape
+# real TEST-PLANs actually use for issue-flow TC lists (#13944: both
+# TEST-PLAN-13863.md and TEST-PLAN-13865.md declare every TC this way; with
+# only heading/table patterns the plan side parsed 0 TCs and the gate
+# skipped). The `**` requirement keeps prose mentions ("- TC3 is covered by
+# ...") from registering as declarations.
+_TC_BULLET_RE = re.compile(
+    r"^[-*]\s*\*\*TC[\s\-]?(\d+)\b", re.IGNORECASE
 )
 
 # Valid result tokens (case-insensitive matching)
@@ -52,6 +68,31 @@ def _normalize_tc_id(raw_num: str) -> int:
     return int(raw_num)
 
 
+def _result_cell(line: str, match_end: int) -> str:
+    """Return ONLY the Result cell of a TC table row (#13944 → #13990).
+
+    ``match_end`` is where the TC-N token ended; the rest of that cell (a
+    free-text description under the merged-cell convention) runs to the next
+    ``|``, and the RESULT cell is the one cell after that. #13944's first cut
+    returned the whole row remainder, so the invalid-result check also
+    scanned the Evidence column — evidence prose *describing* a scenario
+    with the words "deferred"/"N/A" misclassified a genuine PASS as INVALID
+    and blocked shipping (#13990, hit live on QA-RESULTS-13944 TC5). A
+    result is only ever declared in the Result cell; Evidence is prose.
+
+    A malformed row with no closing pipe (or no result cell at all) returns
+    '' -- parse_tc_results reports UNKNOWN rather than guessing a result out
+    of description or evidence prose.
+    """
+    cell_start = line.find("|", match_end)
+    if cell_start == -1:
+        return ""
+    cell_end = line.find("|", cell_start + 1)
+    if cell_end == -1:
+        return line[cell_start + 1:]
+    return line[cell_start + 1:cell_end]
+
+
 def parse_tc_ids(text: str) -> list[int]:
     """Extract TC IDs from a markdown file in heading or table-row position.
 
@@ -59,7 +100,7 @@ def parse_tc_ids(text: str) -> list[int]:
     """
     ids = []
     for line in text.splitlines():
-        m = _TC_HEADING_RE.match(line) or _TC_TABLE_RE.match(line)
+        m = _TC_HEADING_RE.match(line) or _TC_TABLE_RE.match(line) or _TC_BULLET_RE.match(line)
         if m:
             ids.append(_normalize_tc_id(m.group(1)))
     return ids
@@ -80,17 +121,25 @@ def parse_tc_results(text: str) -> dict[int, str]:
             continue
         tc_id = _normalize_tc_id(m.group(1))
 
-        # For table rows, result is on the same line (| TC-1 | PASS |).
-        # For headings, skip the heading line to avoid matching words in
-        # the TC title like "not-applicable" (#2469). Stop at the next
-        # TC marker to avoid bleeding into adjacent TCs.
-        start = i if is_table else i + 1
-        result_lines = []
-        for j in range(start, min(i + 5, len(lines))):
-            if j != i and (_TC_HEADING_RE.match(lines[j]) or _TC_TABLE_RE.match(lines[j])):
-                break
-            result_lines.append(lines[j])
-        search_block = "\n".join(result_lines)
+        if is_table:
+            # Table rows declare the result in the RESULT cell and nowhere
+            # else (#13990): scanning the TC-description cell (#13944/#2469
+            # hazard), the Evidence column (#13990 live false-INVALID), or
+            # subsequent lines can only misread prose as a result. This
+            # also fixes the pre-#13944 latent form: isolated-cell rows
+            # (| TC-1 | PASS | notes |) used to scan their notes column too.
+            search_block = _result_cell(line, m.end())
+        else:
+            # Headings: skip the heading line to avoid matching words in
+            # the TC title like "not-applicable" (#2469); scan the next few
+            # lines, stopping at the next TC marker to avoid bleeding into
+            # adjacent TCs.
+            result_lines = []
+            for j in range(i + 1, min(i + 5, len(lines))):
+                if _TC_HEADING_RE.match(lines[j]) or _TC_TABLE_RE.match(lines[j]):
+                    break
+                result_lines.append(lines[j])
+            search_block = "\n".join(result_lines)
 
         # Check for invalid results first
         if _INVALID_RESULTS_RE.search(search_block):

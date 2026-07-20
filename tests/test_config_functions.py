@@ -76,6 +76,10 @@ SAMPLE_CONFIG = """# SquidSquad Config
 
 - **Enabled**: no
 
+## Flags
+
+- **Vault Engine**: yes
+
 ## Vault Optimize
 
 - **Enabled**: yes

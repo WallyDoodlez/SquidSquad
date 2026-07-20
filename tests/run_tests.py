@@ -82,15 +82,22 @@ KNOWN_NON_STATIC = {
 # Currently-red files quarantined out of the gate. The post-cutover stale-test
 # debt (gate went dead at the v0.44.0 cutover, masking these; full detail in
 # .squidsquad/skill/planning/11394-reasons.txt) has been worked down under
-# #11503. The REMAINING two entries are NOT stale-test debt: they are tests
-# that correctly fail on genuinely-incomplete work tracked by OPEN #10360
-# (Implement Responsibility compose slot per COMPOSE-ARCHITECTURE §5.2). They
-# clear only once #10360 lands the Responsibility slot — do NOT paper over by
-# weakening assertions. See the #11503 comment for the full triage.
-KNOWN_FAILURES = {
-    "test_compose_author_comments_11142": "test_10360_cleanup_markers_preserved: #10360-cleanup breadcrumbs (future-work pointers for OPEN #10360) dropped by #11331 rewrite — blocked on #10360 (the stale boot-bootstrap-marker half is fixed)",
-    "test_agent_boundaries": "test_ac7: 20 L3 variant responsibility stubs missing (COMPOSE-ARCH §5.2) — blocked on OPEN #10360. The other 19 assertions (ac4/ac6/ac11) are superseded by the agent-boundaries sub-skill retirement; rewrite the file together once #10360 unblocks it",
-}
+# #11503 established this registry; #13890 emptied it. The two long-standing
+# entries (test_agent_boundaries, test_compose_author_comments_11142) framed
+# their failures as "genuinely-incomplete #10360 work — hold red until #10360
+# lands". #13890's root-cause traced every failing assertion to a DELIBERATE
+# later cleanup that shipped without retiring its guard (#10366 deleted the 20
+# L3 stubs as pure orphans; #13006 deleted the pm/dm L4 seeds; f8d867a9d
+# removed the #10360-cleanup breadcrumbs after their migration completed; the
+# lineage-tag and roster conventions retired with the agent-boundaries
+# sub-skill). The guards were reconciled to the current contract in #13890 —
+# assertions rewritten or retired with per-item evidence, NOT weakened-to-
+# green — and #10360 remains tracked on its own issue, which is where future
+# work belongs (a permanently-red test is signal debt, not a reminder). If
+# #10360's slot migration reintroduces stub inventories, its PR ships its own
+# guards. Add new entries here ONLY with an issue reference and a removal
+# condition.
+KNOWN_FAILURES = {}
 
 
 def discover_static_modules():
