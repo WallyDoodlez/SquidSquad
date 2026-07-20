@@ -1,3 +1,11 @@
+# QA-RESULTS-14055 (round 2)
+
+**Verdict: PASS → pending-ship**
+
+Round 1's only gap (TC2/TC7/TC8) is fixed: `.squidsquad/pm/planning/.deepseek-13213.diff` is now genuinely removed from `main` directly (confirmed via fresh `git fetch` + `git ls-tree origin/main` — empty). `TestArtifactHygiene` now 13/13 on the refreshed branch (merged latest main). Full static gate re-run: **PASS — 6218 gated test(s) passed (0 failures, 0 errors)**. Integration: **54/54 OK**. TC1/TC3/TC4/TC5/TC6 (the guard mechanism itself + basic sweep) already independently verified live in round 1 and unchanged since — not re-derived. → **pending-ship**.
+
+---
+
 # QA-RESULTS-14055 (round 1)
 
 **Verdict: FAIL → back to in-progress**
