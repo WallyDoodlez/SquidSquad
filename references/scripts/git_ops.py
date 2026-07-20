@@ -41,6 +41,20 @@ import threading
 import time
 from pathlib import Path
 
+# #13865: GH_TOKEN-pinned env for gh calls. Import is DEFENSIVE, not hard:
+# git_ops.py must keep working when copied standalone (the post-merge hook
+# copies only this file into scratch/consumer repos — the "stdlib-only"
+# contract exercised by test_bare_merge_fires_hook_end_to_end). Without the
+# sibling module every gh call simply inherits the ambient env, which is the
+# pre-#13865 behavior (fail-open).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    import gh_identity  # noqa: E402
+    _gh_env = gh_identity.gh_env
+except ImportError:  # standalone copy — pinning unavailable, inherit env
+    def _gh_env(_cmd_list):
+        return None
+
 # #13211 — serialize ensure_main_and_pull across ALL in-process callers (the
 # L4 watcher's per-role-class freshen bursts AND the post-merge deploy-all path,
 # both in the harness process). Concurrent main-checkout + pull on the SAME
@@ -135,7 +149,13 @@ def _run(cmd, check=True, timeout=None):
 
 
 def _run_list(cmd_list, check=True, timeout=None):
-    """Run a command from repo root using list form (safe for variable args)."""
+    """Run a command from repo root using list form (safe for variable args).
+
+    #13865: gh invocations get a GH_TOKEN-pinned env (gh_identity.gh_env)
+    so forge writes don't ride the flippable machine-global active account;
+    non-gh commands and every fail-open case inherit the ambient env
+    (env=None) exactly as before.
+    """
     if timeout is None:
         timeout = _git_timeout()
     try:
@@ -143,6 +163,7 @@ def _run_list(cmd_list, check=True, timeout=None):
             cmd_list, capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             check=check, cwd=str(REPO_ROOT), timeout=timeout,
+            env=_gh_env(cmd_list),
         )
     except subprocess.TimeoutExpired:
         return _timeout_failure(cmd_list, check, timeout)
