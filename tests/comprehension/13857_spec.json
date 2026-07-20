@@ -1,0 +1,34 @@
+{
+  "issue": 13857,
+  "title": "vault-search engine Skill contract (PRD-VAULT-V2 P1)",
+  "files": [
+    "references/skills/vault-search/SKILL.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "You need to search the vault for notes about 'auth flow'. What command do you run, and what two identity flags are always required?",
+      "expected": "Run node .claude/skills/vault-search/scripts/vault-query.mjs with at least one of --entities/--tags/--terms for the query. --instance-id (the harness instance UUID from .squidsquad/.instance-id, or 'unprovisioned' if absent) and --alias (the caller's own agent alias) are REQUIRED on every call."
+    },
+    {
+      "id": "2",
+      "question": "The engine returns its JSON output. Does it include the full body text of the matched notes? What should you do to read a note's actual content?",
+      "expected": "No -- the output is metadata-only JSON (results + traversed): paths, tiers, scores, link map, no note bodies. To read a note's actual content, use the Read tool on the note's path yourself."
+    },
+    {
+      "id": "3",
+      "question": "You need to find vault notes about 'deployment'. Is it acceptable to run grep -r 'deployment' .squidsquad/vault/ instead of the engine? Why or why not?",
+      "expected": "No -- raw grep/glob/Read-scanning the vault folders is banned. The engine is the only sanctioned search path; a grep that finds the right note leaves no impression/used telemetry trail, so the note reads as dead to the maintenance signal and gets pruned. Always use the engine Skill instead."
+    },
+    {
+      "id": "4",
+      "question": "You're running a diagnostic test invocation of the engine that isn't a real consumption event. What flag should you pass, and why?",
+      "expected": "Pass --no-write. It suppresses telemetry writes for diagnostic/side-effect-free searches (tests, CI, debugging) so telemetry measures only real consumption, not test noise."
+    },
+    {
+      "id": "5",
+      "question": "You try to invoke the engine but node is not available on this machine (or the engine call fails). What should you do?",
+      "expected": "Degrade honestly per VAULT-ARCH 9.9: state in your receipt line that the engine was unavailable. Never fabricate 'none relevant' and never substitute a manual grep-based search."
+    }
+  ]
+}

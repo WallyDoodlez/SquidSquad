@@ -1,37 +1,27 @@
-# QA-RESULTS-13857 (round 1)
+# QA-RESULTS-13857 (round 2)
 
-**Verdict: FAIL → back to in-progress**
+**Verdict: PASS → pending-ship**
+
+Round 1 (FAIL, back to in-progress) already established AC1/AC2/AC4 live-verified PASS; only AC3 (grep-audit) failed. This round verifies the AC3 fix and completes AC5.
 
 ## TC Results
 
 | TC | AC | Result | Evidence |
 |----|----|--------|----------|
-| TC1 | AC1 | PASS | Live, non-mocked: deployed the packaged engine (`wizard.install_vault_engine()`, real function call) into an isolated scratch install, seeded one real vault note, ran `node .claude/skills/vault-search/scripts/vault-query.mjs --instance-id test-instance-ac1 --alias qa --task 13857 --vault .squidsquad/vault --entities auth --tags testing --top 5` exactly per SKILL.md's documented invocation. Output matches the documented top-K JSON shape (`query`/`results`/`traversed`/`written`) exactly; telemetry shard genuinely written to disk with the correct `{id,ts,agent,task,slug,counter}` schema. |
-| TC2 | AC2 (installer) | PASS | Genuinely stripped `node`/`node.exe` from `PATH` (not `unittest.mock.patch` — real `os.environ['PATH']` surgery) and called the real `wizard.install_vault_engine()`: `{'deployed': ['vault-search'], 'node': None, 'degraded': True, 'telemetry_seeded': True}` — install not blocked, skills still deployed. |
-| TC3 | AC2 (query) | PASS | With `node` genuinely absent from `PATH`, invoking `vault-query.mjs` directly fails with a clean shell "command not found" (exit 127) — an unambiguous, agent-detectable signal, not a hang or opaque error, supporting the honest-degradation behavior SKILL.md's prose instructs. |
-| **TC4** | **AC3** | **FAIL** | See "AC3 finding" below. |
-| TC5 | AC4 | PASS | Live: `vault-query.mjs ... --no-write` against the same real scratch vault returns `"written": {"events": 0, "shard": null, "skipped": true}`, and the `.telemetry/` directory has zero new `.jsonl` content after the call. |
-| TC6 | AC5 | NOT YET DONE | Deferred to the re-verification round — see note below. |
-| TC7 | — | PASS | `test_vault_engine_13857.py` + `test_vault_engine_boundary_13857.py` + `test_vault_engine_installer_13857.py` + `test_config_functions.py`: 135/135. |
-| TC8 | — | not run | Not meaningful to run the full ship gate against a branch that's failing its own AC — deferred to the re-verification round. |
+| TC1 | AC1 | PASS (carried from round 1, unchanged) | `git diff main...HEAD --stat` confirms every file underlying AC1 (the engine scripts, `SKILL.md`, etc.) is byte-identical to round 1 — only `test_vault_engine_boundary_13857.py` changed this round. Round 1's live, non-mocked evidence (real scratch install, real `vault-query.mjs` invocation, real top-K JSON + telemetry shard) still holds. |
+| TC2 | AC2 (installer half) | PASS (carried from round 1, unchanged) | `wizard.py` byte-identical to round 1 — round 1's live, non-mocked `node`-stripped-`PATH` test still holds (`degraded: True`, `node: None`, install not blocked). |
+| TC3 | AC2 (query half) | PASS (carried from round 1, unchanged) | Same unchanged code path — round 1's live confirmation (clean exit-127 "command not found" with `node` genuinely absent) still holds. |
+| TC4 | AC3 | **PASS (fixed this round)** | The audit now scans EVERY `*.md`/`*.j2` file under `references/` (only the engine package itself excluded, correctly — its own `SKILL.md` teaches the ban). Independently re-derived: confirmed no vault-grep pattern exists outside `.md`/`.j2` anywhere under `references/` (broad extension sweep, zero hits beyond the already-covered scope). Independently re-counted both my previously-flagged files against the raw regex myself: `vault-reference.md` → 6 hits, `research.md.j2` → 1 hit — exact match to the new allowlist entries. Boundary suite 7/7. |
+| TC5 | AC4 | PASS (carried from round 1, unchanged) | `--no-write` code path byte-identical to round 1 — round 1's live confirmation (zero telemetry events, zero new shard content) still holds. |
+| TC6 | AC5 | **PASS (completed this round)** | Authored `tests/comprehension/13857_spec.json` independently (5 questions covering invocation syntax + required identity flags, metadata-only output contract, the raw-grep ban with rationale, `--no-write`, and honest degradation) and ran the live comprehension harness (`run_comprehension_test.py`, fresh agent, `SKILL.md` only, no other context): **5/5 PASS**. Refreshed the staleness baseline in-PR per the gate's own instructions (a same-PR spec+file pair — distinct from the vault learning about refreshing an *existing* baseline for a file a *different* PR is still changing, which is what that learning actually governs). |
+| TC7 | — | PASS | `test_vault_engine_boundary_13857.py` + `test_vault_engine_13857.py` + `test_vault_engine_installer_13857.py`: 43/43. |
+| TC8 | — | PASS | See "Ship gate" below. |
 
-## AC3 finding (blocking)
+## Ship gate
 
-**`test_vault_engine_boundary_13857.py`'s grep-audit ratchet only scans `references/sub-skills/` and `references/roles/` (`INSTRUCTION_ROOTS`). Two live, agent-reachable instruction sources outside that scope still teach the banned raw-grep vault-search pattern and are invisible to the audit:**
-
-1. **`references/docs/vault-reference.md`** — titled "Vault Reference — Detailed Operations", section "Searching the Vault (vault-search)" states *"vault-search finds notes by tag, type, keyword, or wikilink traversal. It uses grep internally."* and gives 4 literal `grep -rl ... .squidsquad/vault/` commands as the sanctioned search modes — the exact v1 mechanism the engine boundary replaces. Confirmed live: shipped to every install (`references/installer-files.txt`) AND directly referenced from the live `references/sub-skills/common/vault-protocol.md` ("See `references/docs/vault-reference.md` for full search examples" — vault-protocol.md's OWN allowlisted grep sites point readers at this exact file for more detail).
-2. **`references/prompts/research.md.j2`** — a Jinja2 template confirmed rendered by `references/scripts/model_router.py` into real research-task prompts sent to agents. Its "Consult the vault first" step instructs: `Search the vault for related notes: \`grep -rl "<keywords from task>" .squidsquad/vault/ --include="*.md"\`` — again the banned raw-grep pattern, in a live prompt path outside the audit's scope.
-
-Independently re-derived the full set (POSIX-ERE-compatible regex, not the Python test's `(?:...)` syntax which plain shell `grep -E` doesn't support — first attempt at manual re-derivation silently under-counted for this reason, caught and corrected): exactly 7 files under `references/` contain raw vault-grep snippets — the 5 already frozen in `V1_ALLOWLIST` plus these 2 new ones.
-
-**Why this blocks AC3**: AC3's own text is "grep-audit: vault sub-skills/scripts reach search only through the engine" — an audit that doesn't scan two real, live violation sites doesn't establish the claim, independent of whether those two sites would ultimately be judged P4-deferred (like the 5 allowlisted ones) or fixed now. Nobody has made that call for these two — they're simply missing from the audit's field of view.
-
-**Suggested fix (either is fine)**: extend `INSTRUCTION_ROOTS` to also cover `references/docs/` and `references/prompts/` and add both files to `V1_ALLOWLIST` with their current line counts (mirroring the existing 5, if P4-deferred is the right call for these too — `vault-reference.md` in particular reads like it should probably be rewritten/retired now since it actively contradicts the new engine boundary, not just deferred); or fix the two files directly in this PR.
-
-## AC5 (comprehension coverage) — deferred, not evaluated this round
-
-Per house rule the verifier authors the CQ spec for `references/skills/vault-search/SKILL.md` once the artifact is in its final, review-passed shape. Holding off until the AC3 fix lands (unlikely to touch SKILL.md, but a re-verification round is coming regardless) rather than authoring a spec now that might need a baseline refresh next round — see [[learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping]].
+- Official static gate (`tests/run_tests.py static`): first pass caught a genuine, expected gap — the new comprehension spec had no baseline entry yet (`test_no_silently_stale_comprehension_specs` FAILED with an explicit, actionable message). Ran `comprehension_staleness.py refresh 13857_spec.json` in-branch (the gate's own instructed remedy for a same-PR spec+file pair), re-ran: **PASS — 6060 gated test(s) passed (0 failures, 0 errors)**.
+- Integration suite: first run showed a transient failure in `harness` (1) and `status_flow` (3 failures + 9 errors) — re-ran both immediately, both clean (`OK`, 5/5 and 12/12). Consistent with this session's established pattern of transient gh-API-load flakiness under heavy concurrent multi-agent activity (pm/skill/dm all active throughout), not a regression from this diff — the same two test files ran clean on this exact branch's content moments apart.
 
 ## Conclusion
 
-AC1/AC2/AC4 pass with live, non-mocked evidence. AC3's audit has a real, evidenced completeness gap (2 missed live violation sites). Zero-gap gate: back to in-progress. AC5 CQ-spec authoring resumes on re-verification.
+All 5 ACs now verified with live, non-mocked, independently-re-derived evidence (AC1/AC2/AC4 carried from round 1 unchanged; AC3's fix confirmed complete via an independent re-scan; AC5's comprehension spec authored and run fresh, 5/5). Zero gaps. → **pending-ship**.
