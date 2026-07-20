@@ -1,5 +1,7 @@
 # Sub-Skill Developer Guide
 
+> **Internal maintainer reference.** Sub-skill authoring is not an open or user-facing workflow — sub-skills are an internal compose artifact, authored only by SquidSquad maintainers (operator decision 2026-06-09). This guide will retire once the new architecture cutover lands (#11400).
+
 This guide explains how to create, test, and contribute sub-skills for SquidSquad.
 
 ---
