@@ -5,6 +5,25 @@
 **Supersedes**: #10838 (v1-era alignment PRD — all findings dissolved by v2 or ported here; see §Ported below).
 **Delivery model**: TRD → this PRD → Stories/Tasks (worker breaks phases into stories at pickup; every task's ACs must verify the consumption path, not file existence).
 
+## Framework deliverable vs. this-install prepopulation
+
+SquidSquad builds SquidSquad, so this PRD delivers at **two distinct layers** — do not conflate them (operator directive, 2026-07-19):
+
+**Framework deliverable** — content-free mechanism, shipped to *every* install by the installer/wizard:
+- `vault-schema.json` default profile (PARAG + `system` type registered) and the registry loader
+- Registry-derived templates including the `system.md` hub skeleton; `briefing.md` skeleton
+- Empty PARAG folder scaffold + `.telemetry/.gitattributes` (installer seeds)
+- The engine (search/telemetry/report/compaction), consumption-pipeline steps, rewritten sub-skills, harness hooks
+- A fresh deployment on **another project** starts with an *empty* vault: its team authors its own hubs for *its* subsystems and accumulates its own notes. Nothing SquidSquad-specific ships as content.
+
+**This-install prepopulation** — content authored for the SquidSquad-project vault specifically (the dogfood install), carried by the stories marked ⌂ below:
+- ⌂ The initial `systems/` hub set (~7–10 notes: harness, event bus, compose pipeline, tracker, pr_merge, launcher, vault itself) — S2.2's authoring half. These name *our* subsystems; they are vault **content**, not framework files, and are never shipped by the installer.
+- ⌂ Retroactive hub-linking of our existing galaxy leaves (M2 distillation)
+- ⌂ Migration of our existing note inventory through M0–M4 (transform, distillation, owner-label sweep)
+- ⌂ Our BRIEFING.md and existing areas/projects/resources content, migrated in place
+
+Story ACs must respect the split: a framework AC is verified on a scratch/greenfield install; a ⌂ prepopulation AC is verified against this repo's `.squidsquad/vault/`. A story that mixes both layers must state which AC belongs to which.
+
 ## Phase structure (operator-approved)
 
 Ordering rationale: P1 first — everything downstream consumes the engine, and both feasibility probes (Skill invocation from harness-spawned session; Node-preflight model) already passed. P4 before P5 — receipts are the value proposition; maintenance polish trails. The M-track runs after P1–P4 land (M4 cutover needs the pipeline live) and carries the #13854 doc-reconciliation umbrella.
@@ -19,7 +38,7 @@ Package the portable engine, invoked via the Skill tool; establish the engine bo
 ### P2 — Structure: registry + hubs + templates (TRD §3)
 
 - **S2.1 `vault-schema.json`**: type registry shipped with the §3.2 default profile; loader validates; unknown types fall back to generic template. AC: registering a custom type in a scratch install produces a working folder/template/traversal config consumed by search — not just a parsed file.
-- **S2.2 `systems/` hub layer**: initial hub set authored (~7–10 notes: harness, event bus, compose, tracker, pr_merge, launcher, vault); `vault_check.py` Level-2 flags galaxy notes with zero hub links (§3.3). AC: engine traversal demonstrably reaches a galaxy leaf through a hub at budget cost 0 for the hub hop.
+- **S2.2 `systems/` hub layer** *(two-layer story — see §Framework vs. prepopulation)*: **framework half** — `system` type registered, hub template, `vault_check.py` Level-2 flags galaxy notes with zero hub links (§3.3); AC verified on a scratch install. **⌂ Prepopulation half** — initial hub set authored for *this* install (~7–10 notes: harness, event bus, compose, tracker, pr_merge, launcher, vault); AC: engine traversal demonstrably reaches one of our galaxy leaves through a hub at budget cost 0 for the hub hop, verified against this repo's vault.
 - **S2.3 Registry-derived templates**: template set derived from registry (§3.5), `style.md` deleted with its type; `briefing.md` special-cased. AC: note creation for every registered type resolves its template; custom-type fallback works.
 
 ### P3 — Telemetry (TRD §6)
@@ -44,7 +63,7 @@ Package the portable engine, invoked via the Skill tool; establish the engine bo
 - **S5.2 Instance-id mint/persist**: harness responsibility per §6.3 (provision-time UUID in gitignored local state); replaces any P3 provisional mint. AC: two harness instances on one machine mint distinct ids; ids survive restart.
 - **S5.3 HARNESS-ARCH doc update**: rides #13854 (§12.2 reconciliation umbrella).
 
-### M-track — Migration M0–M4 (TRD §10)
+### M-track — Migration M0–M4 (TRD §10) ⌂ *(entirely this-install: migrates our existing vault; a fresh deployment has nothing to migrate)*
 
 M0 snapshot & freeze → M1 mechanical transform (deterministic, tested; **ported from #10838**: owner-label normalization `<role>-lead` → class values; plus dropping retired fields `confidence`/`source`/`links` from existing notes) → M2 distillation (analyze-only; §11 #4 aggressiveness decided at M3) → M3 human gate (operator manifest review) → M4 cutover & unfreeze (+ #13854 doc reconciliation, S4.5 catalog rides here, §11 #5 viewer call any time before this).
 
