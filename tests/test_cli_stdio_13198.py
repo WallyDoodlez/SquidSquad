@@ -171,6 +171,58 @@ class TestUtf8ReconfigureAlternative13846:
         stream.write("[\U0001F991 12:00:00] cycle_post → done — ok\n")
         stream.flush()  # must not raise
 
+    # ---- #13847: guard placement, not just presence ----
+
+    @staticmethod
+    def _reconfigure_call_scopes(mod):
+        """AST walk: for each `sys.stdout/sys.stderr.reconfigure(...)` call,
+        yield the name of the enclosing function ('' at module scope)."""
+        tree = ast.parse((SCRIPTS / f"{mod}.py").read_text(encoding="utf-8"))
+        scopes = []
+
+        def visit(node, func_name):
+            for child in ast.iter_child_nodes(node):
+                child_func = func_name
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    child_func = child.name
+                if isinstance(child, ast.Call):
+                    f = child.func
+                    if (isinstance(f, ast.Attribute)
+                            and f.attr == "reconfigure"
+                            and isinstance(f.value, ast.Attribute)
+                            and f.value.attr in ("stdout", "stderr")
+                            and isinstance(f.value.value, ast.Name)
+                            and f.value.value.id == "sys"):
+                        scopes.append(func_name)
+                visit(child, child_func)
+
+        visit(tree, "")
+        return scopes
+
+    @pytest.mark.parametrize("mod", RECONFIGURE_GUARDED)
+    def test_guard_is_cli_entry_only_not_import_time(self, mod):
+        """#13847: the reconfigure guard must live inside main() — never at
+        module scope. cycle_pre.py is imported as a library (by cycle_post.py
+        and 9+ test files); an import-time reconfigure silently mutates the
+        importing process's global stdio, exactly what cli_stdio.py's
+        docstring contract forbids. Verified via AST (not string match) so a
+        regression that re-hoists the block to module level fails here even
+        if the source text otherwise matches."""
+        scopes = self._reconfigure_call_scopes(mod)
+        assert scopes, f"{mod}.py: no sys.std*.reconfigure guard found at all"
+        at_module_scope = [s for s in scopes if s == ""]
+        assert not at_module_scope, (
+            f"{mod}.py has {len(at_module_scope)} sys.std*.reconfigure "
+            f"call(s) at MODULE scope — the guard must run at CLI entry "
+            f"(inside main()) only, per cli_stdio.py's documented contract "
+            f"(#13847); import-time reconfigure mutates library consumers' "
+            f"global stdio"
+        )
+        assert any(s == "main" for s in scopes), (
+            f"{mod}.py: reconfigure guard exists but not inside main() "
+            f"(found in: {sorted(set(scopes))}) — keep it at the CLI entry"
+        )
+
 
 class TestHarnessWiring13236:
     """#13236 — harness.py was named in #13198's cp1252 crash-class list but
