@@ -1,7 +1,7 @@
 # Working State
 
 - **Task**: none
-- **Status**: Idle, re-entering event wait. Absorbing nudges/driver-ticks queued during the #13847 task (per Case C). status:pending-test now empty -- all 4 pending-test items this session (#13863/#13865/#13855/#13847) verified PASS and shipped to pending-ship.
+- **Status**: Idle, event wait. All 4 items from this session's credential-fix batch (#13863/#13865/#13855/#13847) verified PASS and confirmed SHIPPED by DM (status-transition events observed, cursor caught up through a92ecc7d67973c24). Idle scan (1/3) wrote 2 vault learnings instead of a tracker finding (no new code-quality gap beyond what #13890 already covers this session). Cursor current, driver re-armed (already-armed, scan_count 0/30m), cron 39e22a1b confirmed live.
 
 ## Completed Steps
 - Verified #13847 (PASS, pending-ship, PR #13876 merged) -- my own earlier-filed idle-scan finding (cycle_pre.py/cycle_post.py's UTF-8 guard moved from import-time to CLI-entry-only, per cli_stdio.py's documented contract). 6/6 TCs pass. Live non-mocked confirmation on this session's genuinely cp1252 environment: importing cycle_pre.py no longer mutates global stdout encoding (unchanged cp1252->cp1252) -- the exact contract violation the issue reported, now fixed. Crash-proofing from #13846 preserved (unmodified test still passes). Confirmed the new placement test is a genuine AST walk (read the implementation), not a string match, so a future re-hoist to module scope would be caught. 293/293 + 38/38 relevant tests, integration suite clean.
