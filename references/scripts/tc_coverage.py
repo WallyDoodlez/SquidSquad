@@ -28,9 +28,25 @@ _TC_HEADING_RE = re.compile(
     r"^#{1,6}\s+TC[\s\-]?(\d+)\s*:", re.IGNORECASE
 )
 
-# Table row pattern: | TC-1 | RESULT | ... | (TC at start of a table cell)
+# Table row pattern: the first cell STARTS with TC-N. Matches both the
+# isolated-cell shape `| TC-1 | PASS |` and the merged-cell convention
+# verifier sessions actually write -- `| TC1 -- core repro | PASS |` (#13944:
+# four independent verification sessions converged on TC-N-plus-description
+# in one cell; requiring the cell to BE exactly TC-N left the ship-integrity
+# gate parsing 0 TCs from every conforming QA-RESULTS). The trailing \b keeps
+# `TC123abc` from matching a partial number.
 _TC_TABLE_RE = re.compile(
-    r"^\|\s*TC[\s\-]?(\d+)\s*\|", re.IGNORECASE
+    r"^\|\s*TC[\s\-]?(\d+)\b", re.IGNORECASE
+)
+
+# Bold-bullet TC declaration: `- **TC1 -- description**: ...` -- the shape
+# real TEST-PLANs actually use for issue-flow TC lists (#13944: both
+# TEST-PLAN-13863.md and TEST-PLAN-13865.md declare every TC this way; with
+# only heading/table patterns the plan side parsed 0 TCs and the gate
+# skipped). The `**` requirement keeps prose mentions ("- TC3 is covered by
+# ...") from registering as declarations.
+_TC_BULLET_RE = re.compile(
+    r"^[-*]\s*\*\*TC[\s\-]?(\d+)\b", re.IGNORECASE
 )
 
 # Valid result tokens (case-insensitive matching)
@@ -52,6 +68,19 @@ def _normalize_tc_id(raw_num: str) -> int:
     return int(raw_num)
 
 
+def _after_tc_cell(line: str, match_end: int) -> str:
+    """Return the table-row content after the TC cell (#13944).
+
+    ``match_end`` is where the TC-N token ended; the rest of that cell (a
+    free-text description under the merged-cell convention) runs to the next
+    ``|``. A malformed row with no closing pipe returns '' -- no result cell
+    exists, which parse_tc_results reports as UNKNOWN rather than guessing
+    a result out of description prose.
+    """
+    cell_end = line.find("|", match_end)
+    return line[cell_end:] if cell_end != -1 else ""
+
+
 def parse_tc_ids(text: str) -> list[int]:
     """Extract TC IDs from a markdown file in heading or table-row position.
 
@@ -59,7 +88,7 @@ def parse_tc_ids(text: str) -> list[int]:
     """
     ids = []
     for line in text.splitlines():
-        m = _TC_HEADING_RE.match(line) or _TC_TABLE_RE.match(line)
+        m = _TC_HEADING_RE.match(line) or _TC_TABLE_RE.match(line) or _TC_BULLET_RE.match(line)
         if m:
             ids.append(_normalize_tc_id(m.group(1)))
     return ids
@@ -89,7 +118,15 @@ def parse_tc_results(text: str) -> dict[int, str]:
         for j in range(start, min(i + 5, len(lines))):
             if j != i and (_TC_HEADING_RE.match(lines[j]) or _TC_TABLE_RE.match(lines[j])):
                 break
-            result_lines.append(lines[j])
+            if j == i and is_table:
+                # Merged-cell rows (#13944) carry a free-text description in
+                # the TC cell itself; search only the cells AFTER it so
+                # description words ("deferred cleanup", "N/A handling")
+                # can't register as the result -- the same hazard #2469
+                # fixed for heading titles.
+                result_lines.append(_after_tc_cell(lines[j], m.end()))
+            else:
+                result_lines.append(lines[j])
         search_block = "\n".join(result_lines)
 
         # Check for invalid results first
