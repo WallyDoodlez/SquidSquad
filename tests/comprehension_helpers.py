@@ -46,6 +46,22 @@ def run_comprehension_or_skip(spec_path, output_dir, timeout=600):
     spec_path = Path(spec_path)
     output_dir = Path(output_dir)
 
+    # #13890: a spec marked ``"superseded_by": <issue>`` is an overruled
+    # historical record (the #13575 staleness convention) — later commits
+    # deliberately changed or deleted the content it quizzes, so running it
+    # live can only re-prove a known mismatch. The staleness gate already
+    # ignores such specs; the live harness must agree or every bare pytest
+    # run drags permanent failures (the #13890 signal-degradation class).
+    try:
+        spec_data = json.loads(spec_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        spec_data = {}
+    if spec_data.get("superseded_by"):
+        pytest.skip(
+            f"spec superseded by #{spec_data['superseded_by']} "
+            f"(overruled historical record, #13575 convention)"
+        )
+
     if not claude_available():
         pytest.skip("claude CLI not available")
 

@@ -1,9 +1,38 @@
-"""#9925 regression tests — L1+L2+L3+L4 responsibility-layering machinery.
+"""#9925 regression tests — responsibility-layering machinery, reconciled.
 
-Covers AC4 (compose-time roster + L2 content), AC6 (memory absorption
-lineage tags), AC7 (L3 stub files), AC8 (L4 stub files in both seed
-and live locations), AC9 (L4 prefix-filtered inclusion), AC10 (byte-
-identical re-runs with agent_compose disabled), AC11 (degraded modes).
+Originally covered AC4 (compose-time roster + L2 content), AC6 (memory
+absorption lineage tags), AC7 (L3 stub files), AC8 (L4 stub files), AC10
+(byte-identical re-runs), AC11 (degraded modes).
+
+#13890 reconciliation: every retired assertion below pinned an inventory or
+behavior that a LATER, deliberate, correctly-scoped cleanup removed without
+retiring the guard in the same PR (the verifier's root-cause pattern):
+
+- **AC6 (13 params) RETIRED** — asserted ``<!-- absorbed from X -->``
+  lineage tags in ``references/sub-skills/roles/<role>/responsibility.md``.
+  Those files were deleted in #11087 (orphan sub-skill sources, D1-inlined
+  per #11049); the successor files at ``references/roles/<role>/
+  responsibility.md`` carry NO lineage tags (the #11331 polish rewrite
+  dropped the convention repo-wide — grep confirms zero occurrences under
+  references/). The absorbed CONTENT lives on; the tag convention does not.
+- **AC7 (20 params) RETIRED** — asserted 20 L3 variant responsibility
+  stubs; all deliberately deleted as pure orphans by #10366 (5b6977922).
+  If #10360's slot migration reintroduces L3 stubs it ships its own guard.
+- **AC8 seed pm/dm params RETIRED** — deleted by #13006 (0995f246d, "6
+  dead pm-/dm- L4 seed stubs"); verifier/worker/shared seeds survive and
+  stay pinned below.
+- **AC4 REWRITTEN, roster-count RETIRED** — the ``agent-boundaries``
+  sub-skill (rendered ``## Your Teammates' Responsibilities`` roster block)
+  was retired per #10360/#11331: team awareness is now inlined prose in the
+  L1 Identity slot and the marker is intentionally absent (see
+  ``compose._inject_role_roster``'s docstring). The surviving invariants —
+  teammate awareness present, L2 does/does-NOT-do sections present — are
+  asserted against the current composed shape.
+- **AC11 missing-marker warning RETIRED, replaced** — the warning was
+  intentionally removed: marker absence is the documented steady state
+  (``_inject_role_roster`` docstring). The replacement pins the documented
+  behavior (content unchanged, NO warning) so a regression that starts
+  warning on every compose is caught.
 """
 
 from __future__ import annotations
@@ -22,25 +51,20 @@ from _v2_test_helpers import v2_compose_for as _v2_compose_for  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
-# AC4 — composed CLAUDE.md contains L1 awareness + roster + L2 content
+# AC4 (reconciled) — composed CLAUDE.md carries team awareness + L2 content
 # ---------------------------------------------------------------------------
 
 
 # #10156: post-#6274.2 rename — qa→verifier, dev→worker. "skill" remains
-# as the variant name (config.md's `Workers: skill`); the role behind it
-# is now `worker` after composition.
+# as the variant name (config.md's `Workers: skill`).
 @pytest.mark.parametrize("role", ["pm", "verifier", "dm", "skill"])
-def test_ac4_composed_contains_l1_awareness_and_l2(role):
-    """For each of pm/verifier/dm/worker (skill is the worker variant), the
-    composed output must contain the L1 awareness instruction, the roster
-    header, and the role's own L2 'What this role does' header (#9925 AC4).
-    """
+def test_ac4_composed_contains_identity_awareness_and_l2(role):
+    """Post-#10360/#11331 shape: team awareness is L1 Identity prose (the
+    rendered roster block is retired), and the role's own Responsibility
+    slot carries the does / does-NOT-do sections."""
     composed = _v2_compose_for(role)
-    assert "Know each other's responsibilities" in composed, (
-        f"L1 awareness instruction missing from composed {role}"
-    )
-    assert "## Your Teammates' Responsibilities" in composed, (
-        f"L1 roster header missing from composed {role}"
+    assert "Your teammates run in parallel on their own clones" in composed, (
+        f"L1 Identity teammate-awareness prose missing from composed {role}"
     )
     assert "What this role does" in composed, (
         f"L2 'What this role does' header missing from composed {role}"
@@ -50,97 +74,15 @@ def test_ac4_composed_contains_l1_awareness_and_l2(role):
     )
 
 
-def test_ac4_roster_has_exactly_active_roles():
-    """AC4: for the current install (`Workers: skill` + mandatory
-    PM/Verifier/DM), the roster MUST contain exactly 4 entries — one per
-    pm/verifier/dm/worker. Roles whose manifest exists but are NOT active
-    in config.md must NOT appear (F4 lock). #10156: post-#6274.2 rename."""
-    composed = _v2_compose_for("pm")
-    # Each rendered entry uses a `### <DisplayName>` header inside the
-    # 'Your Teammates' Responsibilities' block. Slice the roster section
-    # and count its level-3 headers.
-    start = composed.find("## Your Teammates' Responsibilities")
-    assert start != -1
-    # Roster ends at the next h2 (or the L1 closing marker).
-    end_candidates = [
-        composed.find("\n## ", start + 5),
-        composed.find("<!-- /sub-skill: agent-boundaries -->", start),
-    ]
-    end = min(c for c in end_candidates if c != -1)
-    roster_block = composed[start:end]
-    h3_count = roster_block.count("\n### ")
-    assert h3_count == 4, (
-        f"AC4: expected exactly 4 roster entries (one per pm/verifier/dm/worker), "
-        f"saw {h3_count}. Roster block:\n{roster_block}"
-    )
-
-
 # ---------------------------------------------------------------------------
-# AC6 — memory absorption lineage tags present in predicted L2 files
+# AC8 (reconciled) — surviving L4 stub files in seed and live locations
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("source,filename", [
-    # PM L2 absorptions
-    ("feedback_dont_do_qa_job", "references/sub-skills/roles/pm/responsibility.md"),
-    ("feedback_bugs_behavior_only", "references/sub-skills/roles/pm/responsibility.md"),
-    ("feedback_auto_approve_bugs", "references/sub-skills/roles/pm/responsibility.md"),
-    ("feedback_dm_optional", "references/sub-skills/roles/pm/responsibility.md"),
-    # Verifier L2 absorptions (#10156: was "QA" pre-#6274.2)
-    ("feedback_no_ship_failed_tc", "references/sub-skills/roles/verifier/responsibility.md"),
-    ("feedback_no_ship_with_gaps", "references/sub-skills/roles/verifier/responsibility.md"),
-    # DM L2 absorptions
-    ("feedback_dm_optional", "references/sub-skills/roles/dm/responsibility.md"),
-    ("feedback_no_ship_failed_tc", "references/sub-skills/roles/dm/responsibility.md"),
-    ("feedback_no_ship_with_gaps", "references/sub-skills/roles/dm/responsibility.md"),
-    # Cross-role test_workflow_separation
-    ("feedback_test_workflow_separation", "references/sub-skills/roles/pm/responsibility.md"),
-    ("feedback_test_workflow_separation", "references/sub-skills/roles/verifier/responsibility.md"),
-    ("feedback_test_workflow_separation", "references/sub-skills/roles/dm/responsibility.md"),
-    ("feedback_test_workflow_separation", "references/sub-skills/roles/worker/responsibility.md"),
-])
-def test_ac6_memory_absorption_lineage_tag(source, filename):
-    """AC6: each memory entry from D5 is absorbed into the indicated L2
-    file with an HTML-comment lineage tag `<!-- absorbed from <name> -->`.
-    """
-    path = REPO / filename
-    assert path.exists(), f"L2 file missing: {filename}"
-    content = path.read_text(encoding="utf-8")
-    assert f"<!-- absorbed from {source} -->" in content, (
-        f"AC6: lineage tag for {source} not found in {filename}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# AC7 — 20 L3 stub files exist with the locked template content
-# ---------------------------------------------------------------------------
-
-
-# #10156: post-#6274.2 rename — dev→worker, qa→verifier.
-@pytest.mark.parametrize("role", ["worker", "dm", "pm", "verifier"])
-@pytest.mark.parametrize("variant", ["android", "fullstack", "ios", "skill", "web"])
-def test_ac7_l3_stub_exists_and_matches_template(role, variant):
-    """AC7: all 20 L3 stub files exist and match the D6a template
-    (literal string match for 'No variant-specific responsibility
-    narrowing'). None are wired into includes_yml's additional_includes.
-    """
-    stub = REPO / "references" / "roles" / role / variant / "responsibility.md"
-    assert stub.exists(), f"L3 stub missing: {stub}"
-    content = stub.read_text(encoding="utf-8")
-    assert "No variant-specific responsibility narrowing" in content, (
-        f"AC7: L3 stub at {stub} doesn't match the locked template"
-    )
-
-
-# ---------------------------------------------------------------------------
-# AC8 — 5 L4 stub files in BOTH seed (references/) and live (.squidsquad/)
-# ---------------------------------------------------------------------------
-
-
-# #10156: post-#6274.2 rename — dev→worker, qa→verifier prefix.
-@pytest.mark.parametrize("prefix", ["pm", "verifier", "dm", "worker", "shared"])
+# pm/dm seed params retired (#13006 deleted them — see module docstring).
+@pytest.mark.parametrize("prefix", ["verifier", "worker", "shared"])
 def test_ac8_l4_seed_stub_exists(prefix):
-    """AC8 (seed half): seed templates at references/sub-skills/project/."""
+    """AC8 (seed half): surviving seed templates at references/sub-skills/project/."""
     seed = REPO / "references" / "sub-skills" / "project" / f"{prefix}-responsibility.md"
     assert seed.exists(), f"L4 seed stub missing: {seed}"
     content = seed.read_text(encoding="utf-8")
@@ -191,17 +133,7 @@ def test_ac11_missing_display_name_raises_systemexit(capsys):
     """AC11: a role manifest missing the required `display_name` field
     must produce a build error with exit code != 0.
     """
-    # Build a fake manifest dict without display_name by mocking the
-    # cache read for one of the active roles.
-    def fake_read_manifest(role_id):
-        if role_id == "pm":
-            return {"id": "pm", "tagline": "x", "description": "y"}  # no display_name
-        # Pass through to real read for others by clearing cache once
-        return compose._read_role_manifest.__wrapped__(role_id) if hasattr(
-            compose._read_role_manifest, "__wrapped__"
-        ) else compose._ROLE_MANIFEST_CACHE.get(role_id)
-
-    # Simpler: directly seed the cache so PM has no display_name.
+    # Directly seed the cache so PM has no display_name.
     compose._ROLE_MANIFEST_CACHE.clear()
     try:
         compose._ROLE_MANIFEST_CACHE["pm"] = {
@@ -216,16 +148,19 @@ def test_ac11_missing_display_name_raises_systemexit(capsys):
         compose._ROLE_MANIFEST_CACHE.clear()
 
 
-def test_ac11_missing_marker_emits_warning_and_continues(capsys):
-    """AC11/D8: if `{{role-roster}}` marker is absent from composed
-    content, compose emits a stderr warning and continues (does NOT
-    crash). This covers the agent-boundaries-not-included edge case.
-    """
+def test_ac11_marker_absent_is_silent_steady_state(capsys):
+    """#13890 (replaces the retired warn-on-missing-marker assertion):
+    per ``_inject_role_roster``'s documented contract, `{{role-roster}}`
+    is intentionally absent from every composed CLAUDE.md since the
+    agent-boundaries retirement — content passes through unchanged with
+    NO warning. A compose that starts warning on every run (or mutating
+    marker-less content) is the regression this now catches."""
     out = compose._inject_role_roster("hello world\n", "pm")
     assert out == "hello world\n", "no marker → content unchanged"
     captured = capsys.readouterr()
-    assert "WARNING" in captured.err
-    assert "role-roster" in captured.err
+    assert captured.err == "", (
+        "marker absence is the documented steady state — no warning expected"
+    )
 
 
 def test_ac11_missing_tagline_or_description_warns_but_succeeds(capsys):

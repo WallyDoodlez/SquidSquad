@@ -140,15 +140,12 @@ def test_sub_skill_wrapper_markers_preserved(_deploy_all):
     )
 
 
-def test_10360_cleanup_markers_preserved(_deploy_all):
-    """``<!-- #10360-cleanup: ... -->`` future-work pointers (preserved
-    in #11137 R0 as load-bearing breadcrumbs) must survive #11142."""
-    path = REPO_ROOT / "references" / "roles" / "worker" / "instructions.md"
-    text = path.read_text(encoding="utf-8")
-    assert "#10360-cleanup:" in text, (
-        "#10360-cleanup markers missing from worker/instructions.md — "
-        "#11142 strip should not touch the #10360 future-work pointers."
-    )
+# RETIRED (#13890): test_10360_cleanup_markers_preserved asserted the
+# ``<!-- #10360-cleanup: ... -->`` breadcrumbs survive in
+# worker/instructions.md. The breadcrumbs were deliberately removed by
+# f8d867a9d (DS Audit Iter 16 M4, 2026-06-12) once the migration they
+# pointed at completed — the guard pinned inventory a later legitimate
+# cleanup deleted, and was never retired with it (the #13890 pattern).
 
 
 def test_l4_curation_code_fence_examples_preserved():

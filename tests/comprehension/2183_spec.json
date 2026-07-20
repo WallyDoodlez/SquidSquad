@@ -32,5 +32,7 @@
       "question": "The wrapper detects that claude crashed after only 5 seconds of runtime. What happens?",
       "expected": "The wrapper retries once (one crash retry). If the retry also crashes immediately, the wrapper exits. PM will detect the dead heartbeat on its next health check and handle the persistent failure."
     }
-  ]
+  ],
+  "superseded_by": 13890,
+  "superseded_reason": "lifecycle model overruled: intent-driven restarts (#13077/#13335) + progress-liveness (#12443) replaced the heartbeat/self-restart answers this spec records"
 }
