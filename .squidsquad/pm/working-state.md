@@ -1,7 +1,7 @@
 # Working State
 
-- **Task**: none
-- **OPERATOR DIRECTIVE (2026-07-19 inline, one-off)**: when #13846 finishes (ship), PAUSE the team — POST /agents/{role}/stop for skill, qa, dm (individually; NOT all-stop, PM stays up for inline). While paused: idle-driver stays disarmed (no improvement scans), PM burns tokens only for inline conversation + event acks. Resume only on operator say-so.
+- **Task**: none (#10003 MERGED 2026-07-19 -- PR #13708 = 800bf4049; -> pending-ship for dm; SS12.2 umbrella filed as #13854 pending)
+- **RESUMED**: pause lifted by operator 2026-07-20 ~02:0x (ahead of the 6am schedule). skill+qa rebooted via boot_remote; dm never stopped. Priority order at resume: #13863 (HIGH, git-push credential fleet fix) -> flush #10003 ship + #13847 -> P1 #13857 (vault-v2 engine). Idle driver re-armed.
 - **Status**: Idle, event mode. Awaiting operator action on HITL items below.
 - **Updated**: 2026-07-19 05:45
 
@@ -13,7 +13,7 @@ Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #1
 
 ## HITL standing (advertise each check-in)
 
-- **#10003** — VAULT-ARCH v2 TRD, pending-human-review, PR #13708 all-gates-passed, awaiting merge approval. (verified 05:45)
+- ~~#10003~~ MERGED + shipped-track (dm). SS12.2 reconciliation umbrella: #13854 (pending, operator-paced).
 - **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN. (verified 05:45)
 - **#10377** — blocked:human-action (gated L4 DM curation task).
 - **#13807** — pending-human-setup: delete stale sibling dirs SquidSquad-web + SquidSquad-qa-omain (recovered from shipped #13793's untracked comment-only ask; PM closes on confirmation).
