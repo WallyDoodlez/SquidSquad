@@ -1,5 +1,17 @@
 # Scan History Archive
 
+## Scan — 2026-05-16 07:32
+
+- **Files scanned**: references/scripts/repo_scan.py, references/scripts/comms_adapter.py
+- **Findings**: none
+- **Items rejected by human**: n/a
+
+## Scan — 2026-05-16 06:33
+
+- **Files scanned**: references/scripts/boot_remote.py, references/scripts/manifest.py
+- **Findings**: #8561 (boot_remote.py: _parse_local_config regex rejects hyphenated role names)
+- **Items rejected by human**: none yet
+
 ## Scan — 2026-05-16 05:34
 
 - **Files scanned**: references/scripts/wizard.py

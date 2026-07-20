@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-20 10:39
+
+- **Files scanned**: tests/test_wizard.py, tests/test_vault_engine_installer_13857.py (production-caller coverage lens); pre-scan vault consult via the LIVE vault-search engine (first real production consumption — 12 telemetry events on this clone's shard)
+- **Findings**: #14038 (install_vault_engine wiring guarded only by source-inspection; real scaffold_install runs no-op the step on bare fixtures — self-filed against my own #13857/#13858 test design)
+- **Items rejected by human**: none
+- **Criteria note**: burst 3/3 — driver cancelled + session cron deleted per protocol; re-arms on next activity→idle transition.
+
 ## Scan — 2026-07-20 09:39
 
 - **Files scanned**: references/scripts/tracker.py (CLI arg parser)
@@ -616,16 +623,4 @@
 - **Files scanned**: references/scripts/soul_adaptation.py, references/scripts/shared_fs.py
 - **Findings**: none
 - **Items rejected by human**: n/a
-
-## Scan — 2026-05-16 07:32
-
-- **Files scanned**: references/scripts/repo_scan.py, references/scripts/comms_adapter.py
-- **Findings**: none
-- **Items rejected by human**: n/a
-
-## Scan — 2026-05-16 06:33
-
-- **Files scanned**: references/scripts/boot_remote.py, references/scripts/manifest.py
-- **Findings**: #8561 (boot_remote.py: _parse_local_config regex rejects hyphenated role names)
-- **Items rejected by human**: none yet
 

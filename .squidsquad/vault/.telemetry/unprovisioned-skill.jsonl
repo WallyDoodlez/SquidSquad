@@ -1,0 +1,12 @@
+{"id":"2a4757c2-7339-482b-bb91-5bc5f6088d78","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"compose","counter":"impression"}
+{"id":"25e48db6-ba73-495e-8711-9a4652fff04b","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-includes-yml-tombstoned-instructions-md-is-real-compose-source","counter":"impression"}
+{"id":"fe2ebf67-72bc-4bb6-848e-897cea5bc600","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-instructions-md-frontmatter-step-ids-not-inlined-no-recompose-needed","counter":"impression"}
+{"id":"28c363dc-e669-4c34-8390-e302496884fe","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-sub-skill-splitting-does-not-reduce-composed-boot-size","counter":"impression"}
+{"id":"be75a7ff-bd76-4874-be18-6e0b193e2bcb","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-confirm-composed-currency-with-zero-diff-compose-not-behind-clone-grep","counter":"impression"}
+{"id":"9c82a8dc-7d4a-4bc2-b14e-fc913be4012c","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts","counter":"impression"}
+{"id":"53615614-8608-4890-8d07-42bf68613e70","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-stale-source-recompose-reverts-shipped-on-behind-clone","counter":"impression"}
+{"id":"50db03a2-d557-4463-a73a-1b454ab8b48b","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-recompose-and-config-carry-across-checkout","counter":"impression"}
+{"id":"4efec71d-b093-4b5a-af49-98e7d9af53d0","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"pattern-runtime-loaded-subskill-change-no-recompose","counter":"impression"}
+{"id":"a23a5e65-e313-4305-9eae-1c83b05e82f0","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"pattern-verify-composed-output-with-main-landing-state-applied","counter":"impression"}
+{"id":"a62faabf-3edb-479e-a57d-7cdcb4858841","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-compose-engine-change-no-claudemd-recompose","counter":"impression"}
+{"id":"db4b631d-82af-4f19-b74c-decc657bb64b","ts":"2026-07-20T14:38:38.121Z","agent":"skill","task":null,"slug":"learning-plan-in-pr-needs-state-guard-exemption","counter":"impression"}
