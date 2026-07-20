@@ -20,9 +20,27 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-INSTRUCTION_ROOTS = [REPO / "references" / "sub-skills", REPO / "references" / "roles"]
 SCRIPTS = REPO / "references" / "scripts"
 ENGINE = REPO / "references" / "skills" / "vault-search"
+
+# Audit scope: EVERY agent-reachable text surface under references/ --
+# *.md instruction/doc files plus *.j2 prompt templates (rendered into real
+# prompts by model_router). The verifier's #13857 AC3 rejection proved that
+# scanning only sub-skills/ + roles/ misses live teaching surfaces
+# (references/docs/vault-reference.md is linked FROM an allowlisted
+# sub-skill; references/prompts/research.md.j2 renders into research
+# prompts). references/skills/ (the engine package itself) is excluded: its
+# SKILL.md teaches the BAN, and the ban-prose filter already handles it.
+AUDIT_ROOT = REPO / "references"
+AUDIT_EXCLUDE = REPO / "references" / "skills"
+
+
+def _audit_files():
+    for pattern in ("*.md", "*.j2"):
+        for f in AUDIT_ROOT.rglob(pattern):
+            if AUDIT_EXCLUDE in f.parents:
+                continue
+            yield f
 
 # A grep/rg invocation aimed at the vault tree. Matches command snippets in
 # instruction sources, not prose ABOUT the ban (those lines name the ban or
@@ -40,6 +58,13 @@ V1_ALLOWLIST = {
     "references/sub-skills/roles/pm/task-intake-phases.md": 1,
     "references/sub-skills/roles/verifier/verification-issue-flow.md": 1,
     "references/sub-skills/roles/worker/implement-tasks.md": 1,
+    # Verifier-found in the #13857 AC3 rejection (outside the original scan
+    # roots): the v1 grep-mode reference doc (linked from vault-protocol's
+    # allowlisted entry; retires with vault-protocol's P4 rewrite) and the
+    # research-prompt template's vault-consult step (P4/S4.1-S4.2 rewires
+    # research context injection through the engine).
+    "references/docs/vault-reference.md": 6,
+    "references/prompts/research.md.j2": 1,
 }
 
 
@@ -54,16 +79,16 @@ def vault_grep_lines(path: Path):
 class TestRawGrepRatchet:
     def test_no_new_vault_grep_sites_in_instructions(self):
         violations = {}
-        for root in INSTRUCTION_ROOTS:
-            for md in root.rglob("*.md"):
-                rel = md.relative_to(REPO).as_posix()
-                hits = vault_grep_lines(md)
-                allowed = V1_ALLOWLIST.get(rel, 0)
-                if len(hits) > allowed:
-                    violations[rel] = hits
+        for f in _audit_files():
+            rel = f.relative_to(REPO).as_posix()
+            hits = vault_grep_lines(f)
+            allowed = V1_ALLOWLIST.get(rel, 0)
+            if len(hits) > allowed:
+                violations[rel] = hits
         assert not violations, (
-            "New raw vault-grep in agent instructions (engine boundary, "
-            f"VAULT-ARCH 6.2/8.5 -- route through the engine skill): {violations}"
+            "New raw vault-grep in agent-reachable references/ surface "
+            "(engine boundary, VAULT-ARCH 6.2/8.5 -- route through the "
+            f"engine skill): {violations}"
         )
 
     def test_allowlist_entries_still_exist(self):
