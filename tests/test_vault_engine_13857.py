@@ -287,6 +287,13 @@ class TestTelemetry:
         assert by_counter["walked"] == {"learning-token-expiry", "pattern-retry"}
         assert "used" not in by_counter  # engine never writes used
 
+    def test_task_zero_degrades_to_null_attribution(self, tmp_path):
+        """--task is optional on search; 0/negative never reach the shard as a
+        fake issue number (round-2 review finding -- mirrors record's guard)."""
+        vault = make_vault(tmp_path)
+        run_query(vault, "--entities", "auth", identity=["--instance-id", "test-uuid", "--alias", "skill", "--task", "0"])
+        assert all(e["task"] is None for e in read_events(vault))
+
     def test_top_cap_limits_events(self, tmp_path):
         vault = make_vault(tmp_path)
         run_query(vault, "--entities", "auth", "--top", "1")

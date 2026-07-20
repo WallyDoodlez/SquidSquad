@@ -441,8 +441,10 @@ export function parseArgs(argv) {
     else if (a === '--instance-id') out.instanceId = String(argv[++i] || '').trim();
     else if (a === '--alias') out.alias = String(argv[++i] || '').trim();
     else if (a === '--task') {
+      // Issue numbers start at 1; 0/negative/garbage degrade to "no task"
+      // (--task is optional here) so shard events never carry task: 0.
       const n = Number.parseInt(argv[++i], 10);
-      out.task = Number.isFinite(n) ? n : null;
+      out.task = Number.isFinite(n) && n >= 1 ? n : null;
     }
   }
   out.entities = splitList(entities);
