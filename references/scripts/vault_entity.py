@@ -8,6 +8,8 @@ for vault-remember to create/update notes.
 Usage:
     python scripts/vault_entity.py extract "<text>"
     python scripts/vault_entity.py extract --file <path>
+    python scripts/vault_entity.py template-for <type> [--vault <path>]   # #13858: resolved template path (or GENERIC)
+    python scripts/vault_entity.py create <type> <slug> [--vault <path>]  # #13858: materialize a note from its template
     python scripts/vault_entity.py --help
 
 Exit codes:
@@ -23,6 +25,57 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
+TEMPLATES_DIR = REPO_ROOT / "references" / "vault-templates"
+sys.path.insert(0, str(SCRIPT_DIR))
+
+
+# ---------------------------------------------------------------------------
+# Registry-derived template resolution (#13858, VAULT-ARCH 3.5 / 8.4)
+# ---------------------------------------------------------------------------
+
+
+def resolve_template(note_type, vault_dir=None):
+    """Resolve the template for a registered type: <type>.md from
+    references/vault-templates/, falling back to the generic skeleton for
+    custom types without a shipped template. Returns (path, is_generic).
+    Raises ValueError for a type not registered in vault-schema.json."""
+    import vault_check
+    schema = vault_check._load_schema(vault_dir)
+    if note_type not in schema["types"]:
+        raise ValueError(
+            f"type '{note_type}' is not registered in vault-schema.json "
+            f"(registered: {sorted(schema['types'])})")
+    candidate = TEMPLATES_DIR / f"{note_type}.md"
+    if candidate.is_file():
+        return candidate, False
+    return TEMPLATES_DIR / "_generic.md", True
+
+
+def create_note(note_type, slug, vault_dir=None, today=None):
+    """Materialize a template into a new note (VAULT-ARCH 8.4): resolve by
+    registered type, stamp type/created/updated, honor the type's declared
+    prefix, write into the type's registered folder. Refuses to overwrite.
+    Returns the created path."""
+    import datetime
+    import vault_check
+    vd = Path(vault_dir) if vault_dir is not None else vault_check.VAULT_DIR
+    schema = vault_check._load_schema(vd)
+    template, is_generic = resolve_template(note_type, vd)
+    reg = schema["types"][note_type]
+    prefix = reg.get("prefix") or ""
+    name = slug if not prefix or slug.startswith(prefix) else prefix + slug
+    dest_dir = vd / reg["folder"]
+    dest = dest_dir / f"{name}.md"
+    if dest.exists():
+        raise FileExistsError(f"note already exists: {dest}")
+    stamp = today or datetime.date.today().isoformat()
+    body = template.read_text(encoding="utf-8")
+    body = body.replace("type: {type}", f"type: {note_type}")
+    body = body.replace("created: YYYY-MM-DD", f"created: {stamp}")
+    body = body.replace("updated: YYYY-MM-DD", f"updated: {stamp}")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest.write_text(body, encoding="utf-8")
+    return dest
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +226,32 @@ def main():
     args = sys.argv[1:]
     if not args or args[0] in ("--help", "-h"):
         print(__doc__)
+        return 0
+
+    if args[0] == "template-for":
+        if len(args) < 2:
+            print("Usage: vault_entity.py template-for <type> [--vault <path>]", file=sys.stderr)
+            return 2
+        vault = args[args.index("--vault") + 1] if "--vault" in args else None
+        try:
+            path, is_generic = resolve_template(args[1], vault)
+        except ValueError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+        print(json.dumps({"template": str(path), "generic": is_generic}))
+        return 0
+
+    if args[0] == "create":
+        if len(args) < 3:
+            print("Usage: vault_entity.py create <type> <slug> [--vault <path>]", file=sys.stderr)
+            return 2
+        vault = args[args.index("--vault") + 1] if "--vault" in args else None
+        try:
+            dest = create_note(args[1], args[2], vault)
+        except (ValueError, FileExistsError) as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            return 2
+        print(json.dumps({"created": str(dest)}))
         return 0
 
     if args[0] != "extract":
