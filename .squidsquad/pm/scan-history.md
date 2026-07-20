@@ -1,3 +1,10 @@
+## Scan — 2026-07-20 02:13
+
+- **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check — top increment predated the entire overnight session)
+- **Findings**: none filed — team actively working (#13863), scan kept minimal by design
+- **Auto-fixed**: BRIEFING.md — prepended 2026-07-20 ~02:35 increment (v2 merge + SS9.3 amendment, PRD-VAULT-V2 + 6 phase tickets, three SS11 decisions locked, pause/resume, #13863 credential regression + account-flip race, #13561 approved) (own-domain, Tier 1)
+- **Items rejected by human**: none new
+
 ## Scan — 2026-07-19 08:12
 
 - **Files scanned**: references/roles/dm/skill/instructions.md, references/roles/pm/responsibility.md, .squidsquad/vault/BRIEFING.md
