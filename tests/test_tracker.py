@@ -51,6 +51,12 @@ class TestCheckGh:
             tracker, "_run_list",
             lambda cmd, **kw: _mock_result(stdout="ok"),
         )
+        # #13863: mock the timeout-bounded path too or the REAL write probe
+        # and push-doctor subprocess fire (the doctor mutates .git/config).
+        monkeypatch.setattr(
+            tracker, "_run_list_timeout",
+            lambda cmd, timeout, **kw: _mock_result(stdout="true\n"),
+        )
         assert tracker.check_gh() is True
 
     def test_failure(self, monkeypatch):
@@ -122,6 +128,121 @@ class TestCheckGhWriteProbe13574:
         res = tracker._run_list_timeout(["gh", "api", "x"], timeout=1)
         assert res.returncode == 124
         assert "TIMEOUT" in res.stderr
+
+
+class TestCheckGhPushDoctor13863:
+    """#13863: check_gh delegates the *git push* path to git_ops.py
+    push-doctor. The boot block is keyed on the doctor's explicit
+    definitive-failure marker on stderr -- NEVER on its exit code alone (a
+    doctor crash exits non-zero too and must not brick every boot)."""
+
+    MARKER = "__SQUIDSQUAD_PUSH_DOCTOR_BLOCK__"
+
+    def _arm(self, monkeypatch, doctor_result):
+        """Read check and write probe pass; the doctor subprocess (routed by
+        argv shape -- it is the only non-gh _run_list_timeout call) returns
+        doctor_result."""
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda cmd, **kw: _mock_result(stdout="ok"))
+
+        def route(cmd, timeout, **kw):
+            if cmd and cmd[0] == "gh":
+                return _mock_result(stdout="true\n")   # #13574 write probe
+            assert any("git_ops.py" in str(a) for a in cmd)
+            assert any("push-doctor" in str(a) for a in cmd)
+            return doctor_result
+
+        monkeypatch.setattr(tracker, "_run_list_timeout", route)
+
+    def test_doctor_ok_passes_silently(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(stdout="push-doctor: OK\n"))
+        assert tracker.check_gh() is True
+        assert "push-doctor" not in capsys.readouterr().err
+
+    def test_definitive_marker_blocks_boot(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(
+            returncode=1,
+            stderr=f"{self.MARKER}\nERROR: push capability failed "
+                   f"definitively\nRemediation (operator): ..."))
+        assert tracker.check_gh() is False
+        err = capsys.readouterr().err
+        assert "Remediation" in err
+
+    def test_nonzero_exit_without_marker_is_fail_open(self, monkeypatch,
+                                                      capsys):
+        # A doctor crash (bad import, traceback) exits non-zero with no
+        # marker -- boot must proceed.
+        self._arm(monkeypatch, _mock_result(
+            returncode=1, stderr="Traceback (most recent call last): ..."))
+        assert tracker.check_gh() is True
+
+    def test_doctor_warning_is_passed_through(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(
+            stdout="WARNING: push-doctor probe inconclusive (rc=124): "
+                   "timed out -- proceeding (fail-open, #13863).\n"))
+        assert tracker.check_gh() is True
+        assert "push-doctor probe inconclusive" in capsys.readouterr().err
+
+    def test_write_capable_probe_omits_heal_active(self, monkeypatch):
+        self._arm(monkeypatch, _mock_result(stdout="push-doctor: OK\n"))
+        seen = []
+        orig = tracker._run_list_timeout
+
+        def spy(cmd, timeout, **kw):
+            seen.append(cmd)
+            return orig(cmd, timeout, **kw)
+
+        monkeypatch.setattr(tracker, "_run_list_timeout", spy)
+        assert tracker.check_gh() is True
+        doctor_cmds = [c for c in seen
+                       if any("push-doctor" in str(a) for a in c)]
+        assert doctor_cmds and all(
+            "--heal-active" not in c for c in doctor_cmds)
+
+
+class TestCheckGhActiveAccountHeal13863:
+    """#13863 heal path: when the #13574 probe proves the active account
+    read-only, check_gh asks push-doctor to switch gh back to the pinned
+    push identity, then RE-probes before deciding to block."""
+
+    def _arm(self, monkeypatch, probe_results, doctor_result):
+        """probe_results: successive gh-api write-probe results (a list,
+        consumed in order). The doctor subprocess returns doctor_result;
+        its argv is recorded for assertions."""
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda cmd, **kw: _mock_result(stdout="ok"))
+        probes = list(probe_results)
+        recorded = {"doctor_cmds": []}
+
+        def route(cmd, timeout, **kw):
+            if cmd and cmd[0] == "gh":
+                return probes.pop(0)
+            recorded["doctor_cmds"].append(cmd)
+            return doctor_result
+
+        monkeypatch.setattr(tracker, "_run_list_timeout", route)
+        return recorded
+
+    def test_readonly_then_healed_boots_with_note(self, monkeypatch, capsys):
+        recorded = self._arm(
+            monkeypatch,
+            [_mock_result(stdout="false\n"), _mock_result(stdout="true\n")],
+            _mock_result(stdout="push-doctor: OK\n"))
+        assert tracker.check_gh() is True
+        assert "--heal-active" in recorded["doctor_cmds"][0]
+        assert "healed" in capsys.readouterr().err
+
+    def test_readonly_and_heal_fails_blocks_loudly(self, monkeypatch, capsys):
+        recorded = self._arm(
+            monkeypatch,
+            [_mock_result(stdout="false\n"), _mock_result(stdout="false\n")],
+            _mock_result(stdout="push-doctor: OK\n"))
+        assert tracker.check_gh() is False
+        assert "--heal-active" in recorded["doctor_cmds"][0]
+        err = capsys.readouterr().err
+        assert "WRITE" in err and "#13570" in err and "Remediation" in err
 
 
 class TestListIssues:
