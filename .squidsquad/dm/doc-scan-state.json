@@ -1053,6 +1053,13 @@
       "findings": 0,
       "fixes": [],
       "note": "Idle-driver scan (fresh burst after absorb-work, scan_count 0/3). Checked DM Ralph Loop (already correctly describes the operator-gate on version bump -- confirms the README fix earlier this wake was catching real drift between the two docs, not a false alarm), Label Taxonomy/Bug+Feature Flow (status:blocked, pending-human-review/setup all present and accurate), Setup Instructions (docs/INSTALLER-RUNTIME.md + all 3 referenced scripts verified to exist). Considered role:fe/role:be/role:designer vs actual repo label set (role:skill/pm/qa/dm/designer only) but held off -- ambiguous whether fe/be are intentional generic template documentation vs stale, not confident enough to edit. 0 findings."
+    },
+    {
+      "file": "#14078/#14038/#14037/#14024/#13946 post-ship delivery-integrity self-QA",
+      "date": "2026-07-20",
+      "findings": 0,
+      "fixes": [],
+      "note": "Idle-driver scan (fresh burst after absorb-work, scan_count 0/3). Self-QA of all 5 items shipped this wake (#14078 stray-artifact sweep, #14038 real-run test, #14037 tracker fail-closed flags, #14024 task_end state-lane warning, #13946 my own doc-accuracy fix). VERIFIED from forge (gh issue view, not cached): all 5 CLOSED with exactly ONE status:shipped label each (zero dual-status-label drift). Counter consistent: config.py shipped-since-bump == .ship-counter == 130. 0 findings."
     }
   ],
   "doc_inventory": {
