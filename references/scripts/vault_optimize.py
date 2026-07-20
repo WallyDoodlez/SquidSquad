@@ -11,6 +11,7 @@ Usage:
     python scripts/vault_optimize.py decay-apply [--dry-run]       # Confidence decay
     python scripts/vault_optimize.py reindex                       # Rebuild links index
     python scripts/vault_optimize.py propose-prunes [--stale-days N]  # #13859: engine-report-driven prune PROPOSALS (never auto-applied)
+    python scripts/vault_optimize.py compact-telemetry --alias <alias> [--horizon-days N]  # #13859 S3.4: compact own shard via the engine (owner-only)
     python scripts/vault_optimize.py relevance-report              # Update relevance scores
     python scripts/vault_optimize.py pending-count                 # Count pending questions
     python scripts/vault_optimize.py add-question --agent <r> --note <path> --question <q>
@@ -248,6 +249,60 @@ def propose_prunes(stale_days=90):
                               "evidence": "never surfaced by any search"})
     return {"proposals": proposals, "engineUnavailable": False,
             "counts": report.get("counts", {}), "staleDays": stale_days}
+
+
+ENGINE_COMPACT = (Path(__file__).resolve().parent.parent
+                  / "skills" / "vault-search" / "scripts"
+                  / "compact-telemetry.mjs")
+INSTANCE_ID_FILE = REPO_ROOT / ".squidsquad" / ".instance-id"
+
+
+def _read_instance_id():
+    """The engine identity contract (vault-search SKILL.md): the harness
+    instance UUID lives in the gitignored .squidsquad/.instance-id; absent
+    means the install predates the mint -- callers pass 'unprovisioned'."""
+    try:
+        val = INSTANCE_ID_FILE.read_text(encoding="utf-8").strip()
+        return val or "unprovisioned"
+    except OSError:
+        return "unprovisioned"
+
+
+def compact_telemetry(alias, horizon_days=30):
+    """#13859 (S3.4, VAULT-ARCH 6.5): quiet-cycle compaction of THIS writer's
+    own telemetry shard, via the engine's compaction tool.
+
+    Owner-only is structural on both sides: the alias is an explicit caller
+    argument (never guessed from the environment -- a wrong identity would
+    compact another writer's shard), and the engine tool itself refuses to run
+    without one. The shard store stays behind the engine boundary (8.5) --
+    Python invokes the packaged tool and relays its JSON; the aggregate and
+    shard writes (invariant 2 ordering) happen engine-side, and the caller's
+    normal cycle commit picks BOTH files up as one commit. Engine unavailable
+    degrades to an honest skip with a reason (9.9), never an exception.
+    """
+    import shutil as _shutil
+    node = _shutil.which("node")
+    if node is None or not ENGINE_COMPACT.is_file():
+        reason = "node unavailable" if node is None else "engine compact script missing"
+        return {"skipped": True, "engineUnavailable": True, "reason": reason}
+    proc = subprocess.run(
+        [node, str(ENGINE_COMPACT), "--vault", str(VAULT_DIR),
+         "--instance-id", _read_instance_id(), "--alias", alias,
+         "--horizon-days", str(horizon_days)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=120,
+    )
+    if proc.returncode != 0:
+        return {"skipped": True, "engineUnavailable": True,
+                "reason": f"compact exited {proc.returncode}: {(proc.stderr or '').strip()[:200]}"}
+    try:
+        result = json.loads(proc.stdout)
+    except ValueError as e:
+        return {"skipped": True, "engineUnavailable": True,
+                "reason": f"compact output unparseable: {e}"}
+    result["skipped"] = False
+    return result
 
 
 def prune(dry_run=False):
@@ -702,6 +757,26 @@ def main():
             except (ValueError, IndexError):
                 pass
         result = propose_prunes(stale_days=sd)
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
+    elif cmd == "compact-telemetry":
+        alias = None
+        if "--alias" in args:
+            try:
+                alias = args[args.index("--alias") + 1]
+            except IndexError:
+                pass
+        if not alias or alias.startswith("--"):
+            print("Usage: vault_optimize.py compact-telemetry --alias <alias> [--horizon-days N]",
+                  file=sys.stderr)
+            return 2
+        hd = 30
+        if "--horizon-days" in args:
+            try:
+                hd = int(args[args.index("--horizon-days") + 1])
+            except (ValueError, IndexError):
+                pass
+        result = compact_telemetry(alias, horizon_days=hd)
         print(json.dumps(result, indent=2))
         sys.exit(0)
     elif cmd == "relevance-report":

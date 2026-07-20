@@ -148,27 +148,71 @@ export function readTelemetry(vaultRoot, deps = {}) {
   const readFile = deps.readFile ?? readFileSync;
   const bySlug = new Map();
   const seen = new Set();
-  let files;
+  let entries;
   try {
-    files = readDir(join(vaultRoot, TELEMETRY_DIR)).filter((f) => f.endsWith('.jsonl'));
+    entries = readDir(join(vaultRoot, TELEMETRY_DIR));
   } catch {
     return bySlug; // no telemetry dir yet — cold start, degrade silently
   }
-  for (const f of files) {
+
+  const addCounts = (slug, imp, used, walked, lastUsed) => {
+    let agg = bySlug.get(slug);
+    if (!agg) {
+      agg = { impression: 0, used: 0, walked: 0, lastUsed: '' };
+      bySlug.set(slug, agg);
+    }
+    agg.impression += imp;
+    agg.used += used;
+    agg.walked += walked;
+    if (lastUsed && lastUsed > agg.lastUsed) agg.lastUsed = lastUsed;
+  };
+
+  // Writer keys present as live shards and/or aggregates (§6.5: readers
+  // treat aggregate + live shard as ONE logical stream per writer).
+  const shardKeys = entries.filter((f) => f.endsWith('.jsonl')).map((f) => f.slice(0, -6));
+  const aggKeys = entries.filter((f) => f.endsWith('.agg.json')).map((f) => f.slice(0, -9));
+  const writers = [...new Set([...shardKeys, ...aggKeys])];
+
+  for (const key of writers) {
+    // 1. Aggregate totals (compacted history).
+    let lastAbsorbedId = null;
+    try {
+      const parsed = JSON.parse(readFile(join(vaultRoot, TELEMETRY_DIR, `${key}.agg.json`), 'utf8'));
+      if (parsed && parsed.counts && typeof parsed.counts === 'object') {
+        lastAbsorbedId = parsed.lastAbsorbedId ?? null;
+        for (const [slug, c] of Object.entries(parsed.counts)) {
+          addCounts(slug, toCount(c.impression), toCount(c.used), toCount(c.walked), c.lastUsed || '');
+        }
+      }
+    } catch {
+      /* absent/corrupt aggregate — live shard alone (fail-open) */
+    }
+
+    // 2. Live shard events — positionally skipping the absorbed prefix when
+    // lastAbsorbedId is still present (the §6.5 crash window: aggregate
+    // written, shard not yet truncated — without this skip those events
+    // would double-count, and dedup-by-id cannot catch it after the fact).
     let raw;
     try {
-      raw = readFile(join(vaultRoot, TELEMETRY_DIR, f), 'utf8');
+      raw = readFile(join(vaultRoot, TELEMETRY_DIR, `${key}.jsonl`), 'utf8');
     } catch {
-      continue; // unreadable shard — skip, never block the read path
+      continue; // aggregate-only writer
     }
-    for (const line of raw.split('\n')) {
-      const t = line.trim();
-      if (t === '') continue;
+    const lines = raw.split('\n');
+    let skipping = lastAbsorbedId !== null
+      && lines.some((l) => l.includes(lastAbsorbedId));
+    for (const line of lines) {
+      const t2 = line.trim();
+      if (t2 === '') continue;
       let ev;
       try {
-        ev = JSON.parse(t);
+        ev = JSON.parse(t2);
       } catch {
         continue; // corrupt line (partial append, bad merge) — skip
+      }
+      if (skipping) {
+        if (ev && ev.id === lastAbsorbedId) skipping = false;
+        continue; // inside the already-absorbed prefix
       }
       if (!ev || typeof ev !== 'object') continue;
       if (typeof ev.slug !== 'string' || ev.slug === '') continue;
@@ -176,16 +220,12 @@ export function readTelemetry(vaultRoot, deps = {}) {
       if (typeof ev.id !== 'string' || ev.id === '') continue;
       if (seen.has(ev.id)) continue; // dedupe across union-merged duplicates
       seen.add(ev.id);
-      let agg = bySlug.get(ev.slug);
-      if (!agg) {
-        agg = { impression: 0, used: 0, walked: 0, lastUsed: '' };
-        bySlug.set(ev.slug, agg);
-      }
-      agg[ev.counter] += 1;
-      if (ev.counter === 'used' && typeof ev.ts === 'string') {
-        const day = ev.ts.slice(0, 10);
-        if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day > agg.lastUsed) agg.lastUsed = day;
-      }
+      const day = ev.counter === 'used' && typeof ev.ts === 'string' ? ev.ts.slice(0, 10) : '';
+      addCounts(ev.slug,
+        ev.counter === 'impression' ? 1 : 0,
+        ev.counter === 'used' ? 1 : 0,
+        ev.counter === 'walked' ? 1 : 0,
+        /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : '');
     }
   }
   return bySlug;
@@ -205,6 +245,27 @@ export function makeEvent(alias, task, slug, counter, deps = {}) {
 // from the harness (gitignored local state); the alias is the acting agent.
 export function shardPath(vaultRoot, instanceId, alias) {
   return join(vaultRoot, TELEMETRY_DIR, `${instanceId}-${alias}.jsonl`);
+}
+
+// The caller's compaction aggregate (§6.5, #13859): same writer axis as the
+// shard, naming fixed by the PRD.
+export function aggregatePath(vaultRoot, instanceId, alias) {
+  return join(vaultRoot, TELEMETRY_DIR, `${instanceId}-${alias}.agg.json`);
+}
+
+// Read one writer's aggregate: {lastAbsorbedId, counts:{slug:{impression,
+// used, walked, lastUsed}}} or null when absent/corrupt (fail-open, §9.9).
+export function readAggregate(vaultRoot, instanceId, alias, deps = {}) {
+  const readFile = deps.readFile ?? readFileSync;
+  try {
+    const parsed = JSON.parse(readFile(aggregatePath(vaultRoot, instanceId, alias), 'utf8'));
+    if (parsed && typeof parsed === 'object' && parsed.counts && typeof parsed.counts === 'object') {
+      return { lastAbsorbedId: parsed.lastAbsorbedId ?? null, counts: parsed.counts };
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
 }
 
 // Append events to the caller's own shard, one JSON line each, trailing
