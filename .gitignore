@@ -71,3 +71,11 @@ references/scripts/migrate_*.py.bak
 # versioned. Tracked gitlinks here caused persistent tracked-but-missing
 # noise (#13557) and a restore-guard false positive (#13556).
 .claude/worktrees/
+
+# External-review working artifacts (#14055): review flows may save a diff
+# for a routed reviewer; these are per-run scratch, never versioned. Two
+# committed strays from May hijacked an agentic code-review (exit 0, wrong
+# target) before being removed.
+.deepseek-*.diff
+.deepseek-*.out
+.squidsquad/*/planning/.deepseek-*
