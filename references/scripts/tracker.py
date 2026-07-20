@@ -1322,36 +1322,80 @@ def _check_merged_pr(number):
     # Mirror the gh CLI path: fetch the recent merged PRs unfiltered and
     # rely on the local `parts[-1] == str(number)` check below to match
     # by branch suffix.
+    # #13855: do NOT rely on a small global "most-recent-N merged" window.
+    # GitHub's search-backed `pr list` has brief eventual-consistency lag for
+    # a JUST-merged PR plus a boundary sort that isn't strictly mergedAt-desc,
+    # so a freshly-merged PR — the case the ship-gate hits MOST (it runs right
+    # after the merge) — can be absent from the newest 20 (live-observed on
+    # #10003/PR #13708). Query the SPECIFIC branch server-side instead
+    # (recency-independent), then fall back to a larger global scan only for
+    # non-standard branch prefixes.
+    branch = f"squidsquad/task/{number}"
+
     adapter = _get_forge_adapter()
     if adapter:
         try:
-            prs = adapter.list_prs(state="merged")
-            for pr in prs:
-                head = pr.get("headRefName", "")
-                parts = head.split("/")
-                if len(parts) >= 2 and parts[-1] == str(number):
-                    return pr.get("number"), pr.get("url", "")
+            # Exact head filter first (recency-independent). ForgejoAdapter's
+            # `search` is a client-side headRefName substring match, so the
+            # full branch name matches exactly the one PR (unlike #9999's
+            # space-bearing `squidsquad/ N`, which matched nothing).
+            hit = _scan_merged_prs(adapter.list_prs(state="merged",
+                                                    search=branch), number)
+            if hit:
+                return hit
+            # Fallback: larger global window for any non-`task` prefix.
+            hit = _scan_merged_prs(adapter.list_prs(state="merged", limit=100),
+                                   number)
+            if hit:
+                return hit
         except Exception:
             pass
         return None
 
-    # Default: gh CLI
+    # Default: gh CLI — exact server-side head filter first (#13855). `--head`
+    # matches the head branch exactly on the server, so a just-merged PR is
+    # returned regardless of its position in the global recency window.
     result = _run_list(
-        ["gh", "pr", "list", "--state", "merged",
-         "--json", "number,headRefName,url", "--limit", "20"],
+        ["gh", "pr", "list", "--head", branch, "--state", "merged",
+         "--json", "number,headRefName,url", "--limit", "10"],
         check=False,
     )
-    if result.returncode != 0:
-        return None
+    hit = _scan_merged_prs(_parse_pr_list(result), number)
+    if hit:
+        return hit
+    # Fallback: larger global window catches any non-standard branch prefix
+    # the `--head` convention above misses (the local suffix check stays the
+    # authority on what counts as a match).
+    result = _run_list(
+        ["gh", "pr", "list", "--state", "merged",
+         "--json", "number,headRefName,url", "--limit", "100"],
+        check=False,
+    )
+    return _scan_merged_prs(_parse_pr_list(result), number)
+
+
+def _parse_pr_list(result):
+    """Parse a `gh pr list --json` subprocess result into a list of PR dicts;
+    [] on any error (non-zero exit, empty, malformed JSON)."""
+    if result.returncode != 0 or not (result.stdout or "").strip():
+        return []
     try:
-        prs = json.loads(result.stdout) if result.stdout.strip() else []
-        for pr in prs:
-            head = pr.get("headRefName", "")
-            parts = head.split("/")
-            if len(parts) >= 2 and parts[-1] == str(number):
-                return pr["number"], pr.get("url", "")
-    except (json.JSONDecodeError, KeyError):
-        pass
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
+
+def _scan_merged_prs(prs, number):
+    """Return (pr_number, pr_url) for the first PR whose branch suffix (the
+    last `/`-separated segment of headRefName) equals ``number``, else None.
+    The suffix check is the authority on a match — it stays prefix-agnostic
+    so a non-`task` branch convention still resolves once the PR is in the
+    fetched set."""
+    for pr in prs or []:
+        head = pr.get("headRefName", "")
+        parts = head.split("/")
+        if len(parts) >= 2 and parts[-1] == str(number):
+            return pr.get("number"), pr.get("url", "")
     return None
 
 
