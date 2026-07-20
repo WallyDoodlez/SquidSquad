@@ -73,3 +73,17 @@ class TestCreateNote:
         dest = vault_entity.create_note("runbook", "deploy", custom_vault, today="2026-07-20")
         assert dest.parent.name == "runbooks"
         assert "type: runbook" in dest.read_text(encoding="utf-8")
+
+
+class TestSlugValidation:
+    """External-review finding (#13858): create_note must reject empty and
+    path-traversal slugs before Path construction."""
+
+    @pytest.mark.parametrize("bad", ["", "../escape", "a/../../b", "sub/dir", ".hidden", "-lead"])
+    def test_bad_slugs_rejected(self, custom_vault, bad):
+        with pytest.raises(ValueError):
+            vault_entity.create_note("decision", bad, custom_vault, today="2026-07-20")
+
+    def test_good_slug_still_works(self, custom_vault):
+        dest = vault_entity.create_note("decision", "a-b.c_d", custom_vault, today="2026-07-20")
+        assert dest.name == "decision-a-b.c_d.md"

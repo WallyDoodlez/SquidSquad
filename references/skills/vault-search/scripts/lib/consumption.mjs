@@ -87,8 +87,12 @@ export function loadConfig(vaultRoot, readFile = readFileSync) {
 // Derive the folder-level views the scanner and traversal need from the type
 // registry: scan-folder list (registration order, deduped), the set of
 // folders whose types are `traversal: budgeted`, and a per-folder default
-// weight (first-registered type's weight — used when a note's own `type:` is
-// missing/unregistered). Malformed type entries (no folder) are skipped.
+// weight — used when a note's own `type:` is missing/unregistered. NOTE the
+// documented contract: for a folder hosting several types the default is the
+// FIRST-REGISTERED type's weight, so registration order in vault-schema.json
+// is meaningful for untyped notes in shared folders (external review,
+// #13858 — an explicit per-folder default field is a possible future
+// refinement). Malformed type entries (no folder) are skipped.
 export function deriveSchema(cfg) {
   const folders = [];
   const budgetedFolders = new Set();

@@ -58,6 +58,9 @@ def create_note(note_type, slug, vault_dir=None, today=None):
     Returns the created path."""
     import datetime
     import vault_check
+    if not slug or not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", slug) or ".." in slug:
+        raise ValueError(f"invalid slug: {slug!r} (alnum start; alnum/dot/dash/"
+                         f"underscore only; no path traversal)")
     vd = Path(vault_dir) if vault_dir is not None else vault_check.VAULT_DIR
     schema = vault_check._load_schema(vd)
     template, is_generic = resolve_template(note_type, vd)

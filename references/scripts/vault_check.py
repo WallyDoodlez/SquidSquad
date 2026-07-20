@@ -23,11 +23,6 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 VAULT_DIR = REPO_ROOT / ".squidsquad" / "vault"
 
-# Fallback taxonomy when no registry is readable anywhere (matches the
-# pre-#13858 hardcode so a registry-less v1 vault validates unchanged).
-PARAG_DIRS = ["projects", "areas", "resources", "archives", "galaxy"]
-VALID_GALAXY_PREFIXES = ("decision-", "pattern-", "learning-", "style-")
-
 # Legacy prefixes grandfathered until the M-track migration (#13862)
 # reclassifies their notes (style-* -> pattern-*, VAULT-ARCH §4.2). Checks
 # accept them without a registry entry so the live vault never turns red on
@@ -49,7 +44,11 @@ def _load_schema(vault_dir=None):
                 return {"types": types}
         except (OSError, ValueError):
             continue
-    # Hardcoded fallback mirrors the v1 PARAG shape.
+    # Hardcoded last-resort fallback DELIBERATELY mirrors the pre-#13858 v1
+    # PARAG shape WITHOUT the system type: an environment with neither a
+    # vault schema nor the framework seed is a v1-era install, and demanding
+    # a systems/ dir there would turn a valid v1 vault red (9.9). The seed
+    # tier is where the P2 profile (incl. system) lives.
     return {"types": {
         "project": {"folder": "projects", "traversal": "free", "hub": True},
         "area": {"folder": "areas", "traversal": "free", "hub": True},

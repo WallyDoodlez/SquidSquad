@@ -131,11 +131,14 @@ class TestSchemaLoading:
         assert set(views["folders"]) == {"runbooks", "entries"}
 
     def test_absent_schema_falls_back_to_seed_profile(self, scratch_vault):
-        """No vault schema: the framework seed (or hardcoded PARAG shape)
-        applies -- systems/ present, galaxy budgeted, hub types declared."""
+        """No vault schema: the framework SEED applies (committed file,
+        always present in test runs) -- the P2 profile incl. the system hub
+        type. The hardcoded v1-shape tier is only reachable when the seed is
+        also gone (packaging failure), deliberately WITHOUT system."""
         views = vault_check._schema_views(vault_check._load_schema())
         assert "galaxy" in views["folders"]
-        assert "system" in views["hub_types"] or "project" in views["hub_types"]
+        assert "system" in views["hub_types"]
+        assert "systems" in views["folders"]
 
     def test_malformed_schema_falls_back(self, scratch_vault):
         (scratch_vault / "vault-schema.json").write_text("{not json", encoding="utf-8")
