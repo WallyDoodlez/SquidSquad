@@ -53,3 +53,6 @@ won't, and the commit should wait.
   a different axis of the same tooling (who refreshes an *existing* spec's
   baseline after a merge lands) rather than when to first commit a *new*
   spec's baseline.
+- [[learning-push-branch-before-triggering-harness-merge]] — a prerequisite
+  this note assumes: even a correctly-sequenced in-branch commit only lands
+  in the merge if it was actually pushed first.
