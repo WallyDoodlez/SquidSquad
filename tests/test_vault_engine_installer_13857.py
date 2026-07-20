@@ -9,7 +9,6 @@ dir's merge=union .gitattributes (8.5: installer work, not engine work).
 No real node/subprocess dependency: preflight is exercised through mocks.
 """
 
-import inspect
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -98,12 +97,11 @@ class TestInstallVaultEngine:
         result = wizard.install_vault_engine(root)
         assert result["deployed"] == []
 
-    def test_scaffold_install_wires_the_step(self):
-        """The production caller actually invokes the deploy (the
-        shipped-unwired audit pattern: check at the caller level)."""
-        src = inspect.getsource(wizard.scaffold_install)
-        assert "install_vault_engine(target_root)" in src
-        assert 'summary["vault_engine"]' in src
+    # test_scaffold_install_wires_the_step retired (#14038): the wiring is
+    # now guarded by a REAL scaffold_install run asserting the deployed
+    # artifacts on disk -- tests/test_14038_scaffold_engine_real_run.py --
+    # which a rename/move refactor cannot fool the way a getsource string
+    # match could.
 
 
 class TestConfigFlag:
