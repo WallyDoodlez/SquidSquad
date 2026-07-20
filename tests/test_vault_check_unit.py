@@ -79,7 +79,7 @@ class TestStripGalaxyPrefix:
 class TestCheckStructure:
     def test_valid_structure(self, tmp_path):
         vault = tmp_path / "vault"
-        for d in vault_check.PARAG_DIRS:
+        for d in vault_check._schema_views(vault_check._load_schema())["folders"]:
             (vault / d).mkdir(parents=True)
         (vault / "BRIEFING.md").write_text("# Briefing")
         with patch.object(vault_check, "VAULT_DIR", vault):
@@ -92,7 +92,7 @@ class TestCheckStructure:
         (vault / "BRIEFING.md").write_text("# Briefing")
         with patch.object(vault_check, "VAULT_DIR", vault):
             issues = vault_check.check_structure()
-        assert len(issues) == 5  # all 5 PARAG dirs missing
+        assert len(issues) == 6  # all registered dirs missing (PARAG + systems/, #13858)
 
     def test_missing_vault(self, tmp_path):
         with patch.object(vault_check, "VAULT_DIR", tmp_path / "nonexistent"):
@@ -102,7 +102,7 @@ class TestCheckStructure:
 
     def test_missing_briefing(self, tmp_path):
         vault = tmp_path / "vault"
-        for d in vault_check.PARAG_DIRS:
+        for d in vault_check._schema_views(vault_check._load_schema())["folders"]:
             (vault / d).mkdir(parents=True)
         with patch.object(vault_check, "VAULT_DIR", vault):
             issues = vault_check.check_structure()
@@ -215,7 +215,7 @@ class TestValidate:
     def _setup_valid_vault(self, tmp_path):
         """Create a minimal valid vault structure."""
         vault = tmp_path / "vault"
-        for d in vault_check.PARAG_DIRS:
+        for d in vault_check._schema_views(vault_check._load_schema())["folders"]:
             (vault / d).mkdir(parents=True)
         (vault / "BRIEFING.md").write_text("# Briefing", encoding="utf-8")
         return vault

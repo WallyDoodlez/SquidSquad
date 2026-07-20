@@ -72,7 +72,7 @@ class TestExtractWikilinks:
 class TestCheckStructure:
     def test_valid_structure(self, tmp_path):
         vault = tmp_path / "vault"
-        for d in vault_check.PARAG_DIRS:
+        for d in vault_check._schema_views(vault_check._load_schema())["folders"]:
             (vault / d).mkdir(parents=True)
         (vault / "BRIEFING.md").write_text("# Briefing")
         with patch.object(vault_check, "VAULT_DIR", vault):
@@ -88,11 +88,11 @@ class TestCheckStructure:
         with patch.object(vault_check, "VAULT_DIR", vault):
             issues = vault_check.check_structure()
         assert len(issues) >= 1
-        assert any("Missing PARAG" in i for i in issues)
+        assert any("Missing registered directory" in i for i in issues)
 
     def test_missing_briefing(self, tmp_path):
         vault = tmp_path / "vault"
-        for d in vault_check.PARAG_DIRS:
+        for d in vault_check._schema_views(vault_check._load_schema())["folders"]:
             (vault / d).mkdir(parents=True)
         with patch.object(vault_check, "VAULT_DIR", vault):
             issues = vault_check.check_structure()
@@ -353,7 +353,7 @@ class TestParseTagString:
 class TestValidate:
     def test_passes_on_valid_vault(self, tmp_path):
         vault = tmp_path / "vault"
-        for d in vault_check.PARAG_DIRS:
+        for d in vault_check._schema_views(vault_check._load_schema())["folders"]:
             (vault / d).mkdir(parents=True)
         (vault / "BRIEFING.md").write_text("# Briefing")
         with patch.object(vault_check, "VAULT_DIR", vault):
