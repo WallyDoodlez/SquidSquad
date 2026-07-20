@@ -51,6 +51,12 @@ class TestCheckGh:
             tracker, "_run_list",
             lambda cmd, **kw: _mock_result(stdout="ok"),
         )
+        # #13863: mock the timeout-bounded path too or the REAL write probe
+        # and push-doctor subprocess fire (the doctor mutates .git/config).
+        monkeypatch.setattr(
+            tracker, "_run_list_timeout",
+            lambda cmd, timeout, **kw: _mock_result(stdout="true\n"),
+        )
         assert tracker.check_gh() is True
 
     def test_failure(self, monkeypatch):
@@ -122,6 +128,121 @@ class TestCheckGhWriteProbe13574:
         res = tracker._run_list_timeout(["gh", "api", "x"], timeout=1)
         assert res.returncode == 124
         assert "TIMEOUT" in res.stderr
+
+
+class TestCheckGhPushDoctor13863:
+    """#13863: check_gh delegates the *git push* path to git_ops.py
+    push-doctor. The boot block is keyed on the doctor's explicit
+    definitive-failure marker on stderr -- NEVER on its exit code alone (a
+    doctor crash exits non-zero too and must not brick every boot)."""
+
+    MARKER = "__SQUIDSQUAD_PUSH_DOCTOR_BLOCK__"
+
+    def _arm(self, monkeypatch, doctor_result):
+        """Read check and write probe pass; the doctor subprocess (routed by
+        argv shape -- it is the only non-gh _run_list_timeout call) returns
+        doctor_result."""
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda cmd, **kw: _mock_result(stdout="ok"))
+
+        def route(cmd, timeout, **kw):
+            if cmd and cmd[0] == "gh":
+                return _mock_result(stdout="true\n")   # #13574 write probe
+            assert any("git_ops.py" in str(a) for a in cmd)
+            assert any("push-doctor" in str(a) for a in cmd)
+            return doctor_result
+
+        monkeypatch.setattr(tracker, "_run_list_timeout", route)
+
+    def test_doctor_ok_passes_silently(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(stdout="push-doctor: OK\n"))
+        assert tracker.check_gh() is True
+        assert "push-doctor" not in capsys.readouterr().err
+
+    def test_definitive_marker_blocks_boot(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(
+            returncode=1,
+            stderr=f"{self.MARKER}\nERROR: push capability failed "
+                   f"definitively\nRemediation (operator): ..."))
+        assert tracker.check_gh() is False
+        err = capsys.readouterr().err
+        assert "Remediation" in err
+
+    def test_nonzero_exit_without_marker_is_fail_open(self, monkeypatch,
+                                                      capsys):
+        # A doctor crash (bad import, traceback) exits non-zero with no
+        # marker -- boot must proceed.
+        self._arm(monkeypatch, _mock_result(
+            returncode=1, stderr="Traceback (most recent call last): ..."))
+        assert tracker.check_gh() is True
+
+    def test_doctor_warning_is_passed_through(self, monkeypatch, capsys):
+        self._arm(monkeypatch, _mock_result(
+            stdout="WARNING: push-doctor probe inconclusive (rc=124): "
+                   "timed out -- proceeding (fail-open, #13863).\n"))
+        assert tracker.check_gh() is True
+        assert "push-doctor probe inconclusive" in capsys.readouterr().err
+
+    def test_write_capable_probe_omits_heal_active(self, monkeypatch):
+        self._arm(monkeypatch, _mock_result(stdout="push-doctor: OK\n"))
+        seen = []
+        orig = tracker._run_list_timeout
+
+        def spy(cmd, timeout, **kw):
+            seen.append(cmd)
+            return orig(cmd, timeout, **kw)
+
+        monkeypatch.setattr(tracker, "_run_list_timeout", spy)
+        assert tracker.check_gh() is True
+        doctor_cmds = [c for c in seen
+                       if any("push-doctor" in str(a) for a in c)]
+        assert doctor_cmds and all(
+            "--heal-active" not in c for c in doctor_cmds)
+
+
+class TestCheckGhActiveAccountHeal13863:
+    """#13863 heal path: when the #13574 probe proves the active account
+    read-only, check_gh asks push-doctor to switch gh back to the pinned
+    push identity, then RE-probes before deciding to block."""
+
+    def _arm(self, monkeypatch, probe_results, doctor_result):
+        """probe_results: successive gh-api write-probe results (a list,
+        consumed in order). The doctor subprocess returns doctor_result;
+        its argv is recorded for assertions."""
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                            lambda cmd, **kw: _mock_result(stdout="ok"))
+        probes = list(probe_results)
+        recorded = {"doctor_cmds": []}
+
+        def route(cmd, timeout, **kw):
+            if cmd and cmd[0] == "gh":
+                return probes.pop(0)
+            recorded["doctor_cmds"].append(cmd)
+            return doctor_result
+
+        monkeypatch.setattr(tracker, "_run_list_timeout", route)
+        return recorded
+
+    def test_readonly_then_healed_boots_with_note(self, monkeypatch, capsys):
+        recorded = self._arm(
+            monkeypatch,
+            [_mock_result(stdout="false\n"), _mock_result(stdout="true\n")],
+            _mock_result(stdout="push-doctor: OK\n"))
+        assert tracker.check_gh() is True
+        assert "--heal-active" in recorded["doctor_cmds"][0]
+        assert "healed" in capsys.readouterr().err
+
+    def test_readonly_and_heal_fails_blocks_loudly(self, monkeypatch, capsys):
+        recorded = self._arm(
+            monkeypatch,
+            [_mock_result(stdout="false\n"), _mock_result(stdout="false\n")],
+            _mock_result(stdout="push-doctor: OK\n"))
+        assert tracker.check_gh() is False
+        assert "--heal-active" in recorded["doctor_cmds"][0]
+        err = capsys.readouterr().err
+        assert "WRITE" in err and "#13570" in err and "Remediation" in err
 
 
 class TestListIssues:
@@ -843,11 +964,11 @@ class TestCheckMergedPr:
     # --- DS 9999 F2: forge-adapter path coverage ---
 
     def test_adapter_path_happy_path(self, monkeypatch):
-        """When a forge adapter is configured (e.g. Forgejo), the
-        adapter path must invoke list_prs(state='merged') and return
-        the matching branch's PR. DS 9999 F1 regression: the call must
-        NOT pass a broken `search=` substring that would discard all
-        results client-side."""
+        """When a forge adapter is configured (e.g. Forgejo), the adapter
+        path must invoke list_prs(state='merged') and return the matching
+        branch's PR. #13855: the exact-branch search is tried FIRST (the
+        full branch name is a valid substring match, unlike #9999 F1's
+        space-bearing `squidsquad/ N` that matched nothing)."""
         adapter = MagicMock()
         adapter.list_prs.return_value = [
             {"number": 9997,
@@ -857,7 +978,10 @@ class TestCheckMergedPr:
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
         result = tracker._check_merged_pr(9967)
         assert result == (9997, "https://forge.example/owner/repo/pulls/9997")
-        adapter.list_prs.assert_called_once_with(state="merged")
+        # First call is the exact-branch search (#13855, recency-independent).
+        first = adapter.list_prs.call_args_list[0]
+        assert first.kwargs["state"] == "merged"
+        assert first.kwargs["search"] == "squidsquad/task/9967"
 
     def test_adapter_path_returns_none_when_exception(self, monkeypatch):
         """If the adapter raises (network, auth, schema mismatch), the
@@ -867,6 +991,108 @@ class TestCheckMergedPr:
         adapter.list_prs.side_effect = RuntimeError("forge unreachable")
         monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
         assert tracker._check_merged_pr(9967) is None
+
+
+class TestCheckMergedPrFreshMergeMiss13855:
+    """#13855: a just-merged squash PR the small global merged window misses
+    (GitHub search consistency lag + non-mergedAt boundary sort) must still
+    be found, because `_check_merged_pr` now queries the specific branch
+    server-side FIRST rather than paging the global recency list."""
+
+    def test_gh_primary_uses_exact_head_filter(self, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return _mock_result(stdout="[]")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        tracker._check_merged_pr(10003)
+        # First query is the exact server-side head filter for THIS branch.
+        assert "--head" in calls[0]
+        assert calls[0][calls[0].index("--head") + 1] == "squidsquad/task/10003"
+        assert calls[0][calls[0].index("--state") + 1] == "merged"
+
+    def test_gh_head_filter_finds_freshly_merged_pr(self, monkeypatch):
+        """The live #10003 shape: the global recency window (2nd call) would
+        MISS the PR, but the exact head filter (1st call) returns it."""
+        def fake_run(cmd, **kw):
+            if "--head" in cmd:
+                return _mock_result(stdout=json.dumps([{
+                    "number": 13708,
+                    "headRefName": "squidsquad/task/10003",
+                    "url": "https://github.com/example/repo/pull/13708",
+                }]))
+            return _mock_result(stdout="[]")  # global list misses it
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        assert tracker._check_merged_pr(10003) == (
+            13708, "https://github.com/example/repo/pull/13708")
+
+    def test_gh_fallback_catches_nonstandard_branch_prefix(self, monkeypatch):
+        """A non-`task` branch prefix isn't matched by `--head
+        squidsquad/task/N`; the larger global fallback (with the
+        prefix-agnostic suffix check) still resolves it."""
+        def fake_run(cmd, **kw):
+            if "--head" in cmd:
+                return _mock_result(stdout="[]")  # exact filter misses prefix
+            return _mock_result(stdout=json.dumps([{
+                "number": 5000,
+                "headRefName": "squidsquad/hotfix/9967",
+                "url": "https://github.com/example/repo/pull/5000",
+            }]))
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        assert tracker._check_merged_pr(9967) == (
+            5000, "https://github.com/example/repo/pull/5000")
+
+    def test_gh_fallback_limit_raised_above_20(self, monkeypatch):
+        calls = []
+
+        def fake_run(cmd, **kw):
+            calls.append(cmd)
+            return _mock_result(stdout="[]")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list", fake_run)
+        tracker._check_merged_pr(9967)
+        # Global fallback (the call WITHOUT --head) must fetch >20.
+        fallback = [c for c in calls if "--head" not in c][0]
+        assert int(fallback[fallback.index("--limit") + 1]) >= 100
+
+    def test_adapter_fallback_after_empty_head_search(self, monkeypatch):
+        """Adapter path: exact-branch search returns nothing (non-task
+        prefix), the larger unfiltered fetch resolves it via the suffix
+        check."""
+        adapter = MagicMock()
+        adapter.list_prs.side_effect = [
+            [],  # exact-branch search: miss
+            [{"number": 5000,
+              "headRefName": "squidsquad/hotfix/9967",
+              "url": "https://forge.example/owner/repo/pulls/5000"}],
+        ]
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: adapter)
+        assert tracker._check_merged_pr(9967) == (
+            5000, "https://forge.example/owner/repo/pulls/5000")
+        assert adapter.list_prs.call_args_list[1].kwargs["limit"] >= 100
+
+    def test_parse_pr_list_helper_fail_open(self):
+        assert tracker._parse_pr_list(_mock_result(returncode=1)) == []
+        assert tracker._parse_pr_list(_mock_result(stdout="")) == []
+        assert tracker._parse_pr_list(_mock_result(stdout="not json")) == []
+        assert tracker._parse_pr_list(_mock_result(stdout='[{"number":1}]')) \
+            == [{"number": 1}]
+
+    def test_scan_merged_prs_suffix_match_is_prefix_agnostic(self):
+        prs = [{"number": 7, "headRefName": "squidsquad/anything/9967",
+                "url": "u"}]
+        assert tracker._scan_merged_prs(prs, 9967) == (7, "u")
+        assert tracker._scan_merged_prs(prs, 1234) is None
+        assert tracker._scan_merged_prs([], 9967) is None
+        assert tracker._scan_merged_prs(None, 9967) is None
 
 
 # --- DS 9999 F3: integration test for the full ship-transition path ---
