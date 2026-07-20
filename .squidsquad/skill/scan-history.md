@@ -1,5 +1,12 @@
 # Scan History
 
+## Scan — 2026-07-20 08:41
+
+- **Files scanned**: references/scripts/git_ops.py, references/scripts/model_router.py
+- **Findings**: #14024 (task-end dirty-warning ignores _is_state_file — 4/4 live false positives this session), #14025 (model_router claims an in-process Claude fallback it does not perform + leaves a STATUS-error stub artifact — live-hit on CODE-REVIEW-13890)
+- **Items rejected by human**: none this scan
+- **Criteria note**: tracker.py's opts parser SILENTLY IGNORES unknown flags (passed --label instead of --extra-label; issue filed unlabeled, no error) — same silent-data-drop class as the Bash $null lesson. Candidate finding for next scan: unknown-flag rejection in tracker.py CLI parsing.
+
 ## Scan — 2026-07-19 13:26
 
 - **Files scanned**: references/scripts/wizard.py + config.py (suggest-targets picks; TODO/FIXME clean; corrected a false-positive duplicate-def grep of my own (`_parse_agents_v1`/`_parse_agents_v2` matched as dupes under a digit-excluding regex -- fixed pattern, no real dupes); investigated 2 em-dash hits genuinely INSIDE `raise AliasesRegistryError(...)` message text in config.py (not just comments) -- traced the concern through to compose.py's `except Exception as e: print(f"...{e}...")` catch site and confirmed it's moot: every caller in the chain (config.py, compose.py, wizard.py mains) already calls `harden_stdio()` per #13198, so individual message content doesn't matter; the real gate is entry-point wiring, not per-string unicode sweeps, for scripts already in the WIRED list. That reframing led to the actual valuable check this scan: **cross-referenced all 46 references/scripts/*.py files with a `__main__` entry against the 12-script #13198 WIRED list** (script names + non-ASCII-on-print/raise detection, all file I/O not just the WIRED subset) -- found 8 unwired scripts with non-ASCII print/raise content; the 2 highest-blast-radius (cycle_pre.py, cycle_post.py -- the harness's every-single-cycle mechanical wrappers, more heavily invoked than any already-wired script) got a full investigation and were filed; the other 6 (run_comprehension_test.py, squidsquad_cli.py, vault_check.py, vault_optimize.py, repo_scan.py, tc_coverage.py) are lower-blast-radius one-off utilities, noted in the filed issue's body for a future sweep rather than filed separately (stayed within the 2-finding cap by choice, not by exhausting it).
@@ -613,11 +620,5 @@
 
 - **Files scanned**: references/scripts/boot_remote.py, references/scripts/manifest.py
 - **Findings**: #8561 (boot_remote.py: _parse_local_config regex rejects hyphenated role names)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-16 05:34
-
-- **Files scanned**: references/scripts/wizard.py
-- **Findings**: #8547 (wizard.py: duplicate check=False kwarg crashes cmd_setup_yes — medium), #8548 (wizard.py: load_install_spec uncaught JSONDecodeError — low)
 - **Items rejected by human**: none yet
 
