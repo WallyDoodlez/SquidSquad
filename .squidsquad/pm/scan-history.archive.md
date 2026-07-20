@@ -1,5 +1,12 @@
 # Scan History Archive
 
+## Scan — 2026-06-19 14:15 (local ~11:15→ actually 18:15 UTC; 2nd burst scan)
+
+- **Files scanned**: repo-wide grep "Never Block on a Human" across *.md (post-#12853/#12800 SOUL-rename drift check — verify the rename to 'Never Stop While Work Is Pending' was complete in load-bearing source/spec files)
+- **Findings**: none — ZERO occurrences in references/ or docs/ (source + specs). All 12 *.md hits are historical records (working-state, iter logs, qa/planning QA-RESULTS/TEST-PLAN) or intentional rename references (BRIEFING, decision-agents-never-stop-while-work-pending). #12853 rename clean in source.
+- **Auto-fixed**: none
+- **Items rejected by human**: (none)
+
 ## Scan — 2026-06-19 18:42 UTC (3rd burst scan)
 
 - **Files scanned**: vault wikilink integrity (`vault_check.py check-wikilinks`) across .squidsquad/vault/
