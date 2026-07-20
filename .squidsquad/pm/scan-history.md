@@ -1,3 +1,10 @@
+## Scan — 2026-07-20 03:13
+
+- **Files scanned**: PRD-VAULT-V2 phase-ticket gating chain (#13857-#13862 live labels), references/sub-skills/roles/verifier/verification.md
+- **Findings**: none filed as tickets. Gating chain verified sound: all 6 phases approved/skill with prose GATED-on markers; worker demonstrably respecting order (working #13561 + credential fixes, not jumping a gated phase). Confirmed the prose-gate pattern is the ONLY available shape (role authority: PM can't set approved->blocked on skill's tickets; blocked is assignee-only from in-progress). verification.md has no receipt-enforcement content yet -- correct, that's unbuilt P4/S4.3 work, not drift.
+- **Auto-fixed**: none. Captured the latent risk as a vault learning ([[learning-sequential-phase-gates-are-prose-only-not-mechanical]]) -- own-domain Tier-1 vault write, not a ticket.
+- **Items rejected by human**: none new
+
 ## Scan — 2026-07-20 02:13
 
 - **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check — top increment predated the entire overnight session)
@@ -700,12 +707,5 @@
 - **Files scanned**: .squidsquad/vault/BRIEFING.md (mandatory staleness check vs forge + /status); cross-ref against this session's verified ship-states
 - **Findings**: BRIEFING.md heavily stale — Team State 4 days old ("pm inline / qa LOOP pinned"); #12506/#12853/#12442/#11394/#12408/#12585/#12824/#12820/#12749 all shipped but still listed in-flight or as active constraints; retired #12442 manual-dm-nudge workaround still listed as a live constraint
 - **Auto-fixed**: BRIEFING.md refreshed (PM own-domain) — new 2026-06-19 Active-Priorities increment (verified ships + #12895 decision + boot-pull-lag), Team State rewritten from /status (pm/dm/skill EVENT, qa POLLING-alive), Constraints updated (boot-pull-lag chronic + #12442 retired), Recently-Shipped 06-18/19 line added
-- **Items rejected by human**: (none)
-
-## Scan — 2026-06-19 14:15 (local ~11:15→ actually 18:15 UTC; 2nd burst scan)
-
-- **Files scanned**: repo-wide grep "Never Block on a Human" across *.md (post-#12853/#12800 SOUL-rename drift check — verify the rename to 'Never Stop While Work Is Pending' was complete in load-bearing source/spec files)
-- **Findings**: none — ZERO occurrences in references/ or docs/ (source + specs). All 12 *.md hits are historical records (working-state, iter logs, qa/planning QA-RESULTS/TEST-PLAN) or intentional rename references (BRIEFING, decision-agents-never-stop-while-work-pending). #12853 rename clean in source.
-- **Auto-fixed**: none
 - **Items rejected by human**: (none)
 
