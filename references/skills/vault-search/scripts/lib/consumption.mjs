@@ -199,20 +199,35 @@ export function readTelemetry(vaultRoot, deps = {}) {
       continue; // aggregate-only writer
     }
     const lines = raw.split('\n');
-    let skipping = lastAbsorbedId !== null
-      && lines.some((l) => l.includes(lastAbsorbedId));
-    for (const line of lines) {
-      const t2 = line.trim();
+    // Locate the absorbed-prefix boundary by EXACT parsed id (mirrors
+    // compact()'s search) — never by substring, which can false-positive on
+    // an id-prefix collision or a corrupt line containing the marker text
+    // and then silently drop every later event. Marker absent (the normal
+    // truncated-shard case, or a corrupt marker line) → no skip; the worst
+    // residual is a bounded transient over-count in the corrupt-marker +
+    // crash-window intersection, never unbounded silent loss.
+    let skipUntil = -1;
+    if (lastAbsorbedId !== null) {
+      for (let i = 0; i < lines.length; i++) {
+        try {
+          if (JSON.parse(lines[i]).id === lastAbsorbedId) {
+            skipUntil = i;
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+    for (let li = 0; li < lines.length; li++) {
+      if (li <= skipUntil) continue; // inside the already-absorbed prefix
+      const t2 = lines[li].trim();
       if (t2 === '') continue;
       let ev;
       try {
         ev = JSON.parse(t2);
       } catch {
         continue; // corrupt line (partial append, bad merge) — skip
-      }
-      if (skipping) {
-        if (ev && ev.id === lastAbsorbedId) skipping = false;
-        continue; // inside the already-absorbed prefix
       }
       if (!ev || typeof ev !== 'object') continue;
       if (typeof ev.slug !== 'string' || ev.slug === '') continue;

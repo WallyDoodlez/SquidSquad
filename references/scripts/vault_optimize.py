@@ -286,9 +286,20 @@ def compact_telemetry(alias, horizon_days=30):
     if node is None or not ENGINE_COMPACT.is_file():
         reason = "node unavailable" if node is None else "engine compact script missing"
         return {"skipped": True, "engineUnavailable": True, "reason": reason}
+    instance_id = _read_instance_id()
+    if instance_id == "unprovisioned":
+        # Truncation is the one destructive telemetry op: under the shared
+        # 'unprovisioned' sentinel, distinct un-minted clones with the same
+        # alias collapse onto ONE shard, so "owner-only" is not actually
+        # satisfied -- this pass could absorb another machine's appends.
+        # Reads/writes tolerate the sentinel; compaction requires a real
+        # minted identity.
+        return {"skipped": True, "engineUnavailable": False,
+                "reason": "instance-id unprovisioned -- owner-only compaction "
+                          "requires a minted identity (wizard mint step)"}
     proc = subprocess.run(
         [node, str(ENGINE_COMPACT), "--vault", str(VAULT_DIR),
-         "--instance-id", _read_instance_id(), "--alias", alias,
+         "--instance-id", instance_id, "--alias", alias,
          "--horizon-days", str(horizon_days)],
         capture_output=True, text=True, encoding="utf-8", errors="replace",
         timeout=120,

@@ -343,6 +343,29 @@ class TestKillMidCompaction:
                "--alias", "skill", "--today", TODAY)
         assert read_counts(vault) == before, "recovery changed observable counts"
 
+    def test_marker_substring_never_latches_skip(self, tmp_path):
+        """Review finding on 5e71f6e06: the skip boundary must be located by
+        EXACT parsed id. A corrupt line merely CONTAINING the marker text (or
+        an id-prefix collision) must not put the read into a skip state that
+        silently drops every later event."""
+        vault = tmp_path / "vault"
+        # Aggregate claims e2 absorbed; the shard's only trace of "e2" is a
+        # corrupt fragment plus an id ("e2x") that contains it as a prefix.
+        write_shard(vault, "uuid-a-skill", [
+            '{"corrupt line mentioning e2',
+            event("e2x", "2026-07-18T10:00:00Z", "note-a", "impression"),
+            event("e9", "2026-07-19T10:00:00Z", "note-b", "impression"),
+        ])
+        (vault / ".telemetry" / "uuid-a-skill.agg.json").write_text(
+            json.dumps({"lastAbsorbedId": "e2",
+                        "counts": {"note-a": {"impression": 1, "used": 1,
+                                              "walked": 0, "lastUsed": "2026-05-02"}}}) + "\n",
+            encoding="utf-8")
+        counts = read_counts(vault)
+        # e2x and e9 MUST both be visible: aggregate 1 + live e2x = 2.
+        assert counts["note-a"] == (2, 1, 0), "live event dropped by a latched skip"
+        assert counts["note-b"] == (1, 0, 0), "post-marker event dropped by a latched skip"
+
 
 # ---------------------------------------------------------------------------
 # T3 -- vault_optimize.py compact-telemetry wiring
@@ -361,15 +384,21 @@ class TestCompactTelemetryWiring:
         assert result["absorbed"] == 2
         assert (vault / ".telemetry" / "uuid-a-skill.agg.json").is_file()
 
-    @needs_node
-    def test_unprovisioned_instance_id_fallback(self, tmp_path, monkeypatch):
+    def test_unprovisioned_identity_refuses_to_compact(self, tmp_path, monkeypatch):
+        """Distinct un-minted clones with one alias share the 'unprovisioned'
+        shard -- owner-only does not hold there, so the destructive pass must
+        refuse (review finding on 14b632bc3)."""
         vault = tmp_path / "vault"
         write_shard(vault, "unprovisioned-skill", [OLD1])
         monkeypatch.setattr(vault_optimize, "VAULT_DIR", vault)
         monkeypatch.setattr(vault_optimize, "INSTANCE_ID_FILE", tmp_path / "absent")
         result = vault_optimize.compact_telemetry("skill")
-        assert result["skipped"] is False
-        assert result["absorbed"] == 1
+        assert result["skipped"] is True
+        assert result["engineUnavailable"] is False
+        assert "unprovisioned" in result["reason"]
+        # And the shard was not touched.
+        shard = vault / ".telemetry" / "unprovisioned-skill.jsonl"
+        assert "e1" in shard.read_text(encoding="utf-8")
 
     def test_engine_unavailable_degrades_honestly(self, tmp_path, monkeypatch):
         monkeypatch.setattr(vault_optimize, "ENGINE_COMPACT", tmp_path / "missing.mjs")
@@ -428,8 +457,11 @@ class TestInstanceIdMint:
         assert result["instance_id_minted"] is True
 
     def test_instance_id_is_gitignored(self):
-        gitignore = (REPO / ".gitignore").read_text(encoding="utf-8")
-        assert ".squidsquad/.instance-id" in gitignore
+        lines = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
+        # Exact-line match: the .tmp entry alone must not satisfy this
+        # (substring containment would -- review finding on 14b632bc3).
+        assert ".squidsquad/.instance-id" in lines
+        assert ".squidsquad/.instance-id.tmp" in lines
 
 
 # ---------------------------------------------------------------------------
