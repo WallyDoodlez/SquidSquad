@@ -203,12 +203,20 @@ class TestCheckGhThroughShim(unittest.TestCase):
             work = _make_hermetic_git_workspace(Path(tmp))
             hermetic_tracker = work / "references" / "scripts" / "tracker.py"
             env = ems.env_with_gh_shim(fixtures_dir=fdir)
-            subprocess.run(
+            proc = subprocess.run(
                 [sys.executable, str(hermetic_tracker), "check-gh"],
                 env=env, cwd=str(work),
                 capture_output=True, text=True,
                 encoding="utf-8", errors="replace",
                 timeout=60, check=False,
+            )
+            # Guard against a vacuum pass (external-review finding): if
+            # check-gh died before reaching push-doctor, no helper entries
+            # would be written either — returncode 0 proves the doctor ran
+            # and the emptiness below is its early-return, not an accident.
+            self.assertEqual(
+                proc.returncode, 0,
+                msg=f"check-gh failed: stderr={proc.stderr[:500]!r}",
             )
             helpers = subprocess.run(
                 ["git", "config", "--local", "--get-all", "credential.helper"],
