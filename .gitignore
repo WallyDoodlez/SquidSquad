@@ -71,3 +71,10 @@ references/scripts/migrate_*.py.bak
 # versioned. Tracked gitlinks here caused persistent tracked-but-missing
 # noise (#13557) and a restore-guard false positive (#13556).
 .claude/worktrees/
+
+# Wizard-deployed live Skill packages (#14054): install_vault_engine
+# materializes references/skills/ -> .claude/skills/ per clone; the copy is
+# regenerable deployment output (refreshed on upgrade), never versioned --
+# same class as .claude/worktrees/ above. Confirmed never committed in repo
+# history before this entry.
+.claude/skills/
