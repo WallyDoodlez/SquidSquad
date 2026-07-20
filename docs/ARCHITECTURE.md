@@ -78,7 +78,7 @@ Why cmd.exe is in the chain: `thin_launcher.py:184` resolves the claude binary v
 
 ### `.claude-pid` convention
 
-`.squidsquad/<role>/.claude-pid` stores the **cmd.exe** PID (the immediate parent of `claude.exe`), NOT the `claude.exe` PID itself. The name is historical — it was originally written assuming the launcher would spawn `claude.exe` directly. To find the actual agent `claude.exe` process: read `.claude-pid` → find the `claude.exe` whose `ParentProcessId` matches.
+`.squidsquad/<role>/.claude-pid` stores the **resolved `claude.exe` PID** — the actual agent process, not the `cmd.exe` wrapper. On Windows, `thin_launcher.py` spawns `claude` through the npm `claude.CMD` shim (which inserts `cmd.exe` between the launcher and `claude.exe`), then walks the descendant tree to resolve the real `claude.exe` PID and writes *that* (`_resolve_claude_exe_pid`, `thin_launcher.py:644-657`; #10101). Recording the shim/wrapper PID instead would be wrong — it exits within seconds. On POSIX there is no shim, so the launched process is `claude` directly and the resolved PID coincides with it. This file is both the singleton handle ("this alias is already running") and the fallback source `health_poll` reads as `claude_pid` (in-memory `AgentState.claude_pid` is the primary; see HARNESS-ARCH.md §7.3, and its §7.5 PID-source disambiguation for the full `.claude-pid` / `claude_pid` / `terminal_pid` split).
 
 ### Killing agents
 

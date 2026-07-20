@@ -1278,7 +1278,7 @@ The v2 build ships as 6 grouped PRs. The **letters** (A–F) are logical-groupin
 | 2 | **C — EAD + restart safety** | Last-seen-id recovery, in-flight cleanup, harness restart catch-up | low |
 | 3 | **D — alias-existence validation** | Harness validates `target_alias` against the install's registered aliases (per `.squidsquad/config.md` `## Aliases`); 404 on unknown. No class-from-class permissions. | low |
 | 4 | **B — Cursor + delivery wire** | Nudge format = literal `NUDGE\n`; forward-only ack; HTTP 200 + `evicted`/`oldest_id` marker for cursor-evicted | low |
-| 5 | **F — Observability** | TUI polls `/status`, `/agents`, `/events/recent`; lifecycle/git logs stay in iter-NNNN.md | very low |
+| 5 | **F — Observability** | TUI polls `/status`, `/agents`, `/events/lifecycle`; lifecycle/git logs stay in iter-NNNN.md | very low |
 | 6 | **E — Migration** (3 sub-phases) | E1: stop emitting deprecated types · E2: collapse `Event Reactions` to `assigned-to` only · E3: trim catalog + rewrite event_poll | highest |
 
 After all 6 land: v2 ships with event-mode as the unconditional wake-mode architecture; loop mode is the boot-time fall-back when the harness is unreachable (§9.4). No operator configuration step is required for either mode.
