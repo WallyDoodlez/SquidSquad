@@ -98,3 +98,17 @@ Options menu: ⚙ panel, first item "Change background", extensible.
 
 ## Hand-off (DONE 2026-06-19)
 This doc is the interface contract. #12801 → role:skill, status:approved. Skill decomposes (per TRD→PRD→Stories→Tasks): Story1 TUI foundation (Textual app + harness-HTTP data layer + harness `lag` endpoint + dependency wiring) → Story2 panels (Agents incl. cursor-lag bar + work-state colors, Needs You, Pipeline, Activity) + title-bar branding → Story3 action bar (Reboot/Reboot All/Force, busy-aware) + Options menu (Change background) + Bring-PM-Forward hotkey → Story4 Wake button (gated on #12495).
+
+## v2 amendment — server-authoritative observability (#13561, 2026-07-20)
+
+Origin: operator reported the shipped TUI shows wrong task info, inaccurate agent status, and no context pressure. Root-cause (`GAP-ANALYSIS-TUI-OBSERVABILITY.md`): all three are wiring gaps, not missing subsystems. This amendment supersedes the affected parts of the v1 contract above; the design principle is **the harness computes display truth server-side once; the TUI renders it verbatim — no client-side state derivation.** Full field shapes live in `HARNESS-ARCH.md §4.1.1`.
+
+- **Agents-panel columns become `Role | State | Task | Ctx | Age | Lag | Mode`.** The v1 contract already named work-state / mode / current task / age / health / lag; this fixes the ones that shipped wrong or missing.
+- **Task column** — renders `current_task` (`#N <title>`, `—` when unassigned) from server-side `assigned-to` ingestion. **Not** `current_cycle` (a loop-iteration counter), which the v1 build mis-rendered as the task. The cycle counter, if shown at all, is a small `c41` suffix in the State cell.
+- **State column** — renders server-computed `work_state` + a short `work_state_reason` string (e.g. `● working #13454`, `◌ waiting (perm prompt 3m)`, `✖ crash-loop (2/3, retry 240s)`). The v1 3-color scheme (green working / yellow idle-waiting-compacting-booting / red down) is kept, but the word+reason come from the server. This replaces v1's client-side `derive_work_state()` (which treated `current_cycle is not None` as "working" — a value set once and never cleared, so every agent read "working" forever). `derive_work_state()` survives only as a versioned fallback for pre-#13561 harnesses.
+- **Ctx column (new — v1 never specified context display, an acknowledged contract gap).** Per-agent `context_pressure`: bar + percentage, yellow ≥50%, red ≥ threshold ("restart imminent", since the harness now restarts at threshold — `HARNESS-ARCH.md §15.1`). Unknown/stale (age > 10 min) renders `—`/dim with `?`, **never a fake value**.
+- **Lag column** — renders the real server-computed `lag` (cursor-vs-deque-head). If the server field is deferred, the column is **removed**, not rendered as `0` — a dashboard must not display invented values (v1's `harness_client.py` defaulted the never-implemented field to `0`, so the bar was permanently empty).
+- **Mode column** — `event`/`polling` from the server (v1 contract required it; the shipped `_AGENT_COLUMNS` omitted it).
+- **Context churn** — agents that auto-compacted are dim-flagged; `compactions_this_session` surfaced (Phase 3).
+
+Still out of v2 scope (unchanged from v1's OUT list / #12801 remainder): Needs-You / Pipeline / Activity panels + Wake button, web dashboard (#3963), SSE/websocket push, OTEL exporter.
