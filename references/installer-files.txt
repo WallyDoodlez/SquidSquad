@@ -85,6 +85,8 @@ references/vault-schema-default.json
 references/skills/vault-search/SKILL.md
 references/skills/vault-search/scripts/vault-query.mjs
 references/skills/vault-search/scripts/record-consumption.mjs
+references/skills/vault-search/scripts/vault-impressions-report.mjs
+references/skills/vault-search/scripts/compact-telemetry.mjs
 references/skills/vault-search/scripts/lib/consumption.mjs
 references/git-hooks/pre-commit
 references/git-hooks/post-merge

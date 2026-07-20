@@ -386,3 +386,139 @@ class TestCompactTelemetryWiring:
         )
         assert proc.returncode == 2
         assert "--alias" in proc.stderr
+
+
+# ---------------------------------------------------------------------------
+# T4 -- provisional instance-id mint (wizard; P5/S5.2 replaces)
+# ---------------------------------------------------------------------------
+
+import wizard  # noqa: E402  (path inserted above)
+
+
+class TestInstanceIdMint:
+    def make_root(self, tmp_path: Path) -> Path:
+        root = tmp_path / "install"
+        (root / "references" / "skills").mkdir(parents=True)
+        return root
+
+    def test_mints_uuid_into_squidsquad_dir(self, tmp_path):
+        root = self.make_root(tmp_path)
+        result = wizard.install_vault_engine(root)
+        assert result["instance_id_minted"] is True
+        iid = (root / ".squidsquad" / ".instance-id").read_text(encoding="utf-8").strip()
+        import uuid
+        assert str(uuid.UUID(iid)) == iid, "must be a well-formed UUID"
+
+    def test_existing_id_never_reminted(self, tmp_path):
+        """Re-minting would orphan the clone's shard history under the old
+        writer name -- mint-if-absent is a hard rule."""
+        root = self.make_root(tmp_path)
+        (root / ".squidsquad").mkdir(parents=True)
+        (root / ".squidsquad" / ".instance-id").write_text("keep-me\n", encoding="utf-8")
+        result = wizard.install_vault_engine(root)
+        assert result["instance_id_minted"] is False
+        assert (root / ".squidsquad" / ".instance-id").read_text(
+            encoding="utf-8").strip() == "keep-me"
+
+    def test_empty_file_treated_as_absent(self, tmp_path):
+        root = self.make_root(tmp_path)
+        (root / ".squidsquad").mkdir(parents=True)
+        (root / ".squidsquad" / ".instance-id").write_text("", encoding="utf-8")
+        result = wizard.install_vault_engine(root)
+        assert result["instance_id_minted"] is True
+
+    def test_instance_id_is_gitignored(self):
+        gitignore = (REPO / ".gitignore").read_text(encoding="utf-8")
+        assert ".squidsquad/.instance-id" in gitignore
+
+
+# ---------------------------------------------------------------------------
+# T4 -- S3.1 live AC: two clones writing concurrently, zero conflicts
+# ---------------------------------------------------------------------------
+
+GIT = shutil.which("git")
+RECORD = SKILL_SRC / "scripts" / "record-consumption.mjs"
+
+
+@needs_node
+@pytest.mark.skipif(GIT is None, reason="git unavailable")
+class TestTwoCloneConcurrency:
+    """S3.1 AC (VAULT-ARCH 6.3): two clones, each writing its OWN shard via
+    the engine, merge with zero conflicts; dedup-by-id holds at read. Also
+    pins the merge=union backstop for the same-file case."""
+
+    def git(self, cwd, *args):
+        proc = subprocess.run(
+            [GIT, "-C", str(cwd), *args],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=60,
+        )
+        return proc
+
+    def make_clones(self, tmp_path: Path):
+        origin = tmp_path / "origin.git"
+        subprocess.run([GIT, "init", "--bare", "-b", "main", str(origin)],
+                       capture_output=True, timeout=60, check=True)
+        a, b = tmp_path / "clone-a", tmp_path / "clone-b"
+        for c in (a, b):
+            subprocess.run([GIT, "clone", str(origin), str(c)],
+                           capture_output=True, timeout=60, check=True)
+            self.git(c, "config", "user.email", "t@t")
+            self.git(c, "config", "user.name", "t")
+        # Seed vault + union attribute from clone A (the installer's job).
+        tele = a / "vault" / ".telemetry"
+        tele.mkdir(parents=True)
+        (tele / ".gitattributes").write_text("*.jsonl merge=union\n", encoding="utf-8")
+        note(a / "vault", "galaxy", "note-x", "---\ntype: learning\n---\n# x\n")
+        self.git(a, "add", "-A")
+        self.git(a, "commit", "-m", "seed")
+        self.git(a, "push", "origin", "main")
+        self.git(b, "pull", "origin", "main")
+        return a, b
+
+    def record(self, clone: Path, iid: str, alias: str):
+        proc = subprocess.run(
+            [NODE, str(RECORD), "--vault", str(clone / "vault"),
+             "--slugs", "note-x", "--task", "13859",
+             "--instance-id", iid, "--alias", alias],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=60,
+        )
+        assert proc.returncode == 0, proc.stderr
+        return proc
+
+    def test_distinct_writers_merge_with_zero_conflicts(self, tmp_path):
+        a, b = self.make_clones(tmp_path)
+        # Concurrent writes: each clone appends to its OWN shard, unpulled.
+        self.record(a, "uuid-a", "skill")
+        self.record(b, "uuid-b", "qa")
+        self.git(a, "add", "-A"); self.git(a, "commit", "-m", "a events")
+        assert self.git(a, "push", "origin", "main").returncode == 0
+        self.git(b, "add", "-A"); self.git(b, "commit", "-m", "b events")
+        merge = self.git(b, "pull", "--no-rebase", "origin", "main")
+        assert merge.returncode == 0, f"merge conflicted: {merge.stdout}{merge.stderr}"
+        assert self.git(b, "push", "origin", "main").returncode == 0
+        # Both shards present in the merged tree; dedup holds at read.
+        tele = b / "vault" / ".telemetry"
+        assert (tele / "uuid-a-skill.jsonl").is_file()
+        assert (tele / "uuid-b-qa.jsonl").is_file()
+        rep = json.loads(run_js(REPORT, "--vault", str(b / "vault"),
+                                "--today", TODAY).stdout)
+        row = {r["slug"]: r for r in rep["rows"]}["note-x"]
+        assert row["used"] == 2, "one used event per writer, deduped by id"
+
+    def test_union_merge_backstop_same_file(self, tmp_path):
+        """Same shard file appended in both clones (the pathological case the
+        .gitattributes backstop exists for): union merge keeps BOTH lines."""
+        a, b = self.make_clones(tmp_path)
+        for clone, eid in ((a, "u1"), (b, "u2")):
+            shard = clone / "vault" / ".telemetry" / "shared-w.jsonl"
+            with open(shard, "a", encoding="utf-8") as f:
+                f.write(event(eid, "2026-07-20T10:00:00Z", "note-x", "used") + "\n")
+        self.git(a, "add", "-A"); self.git(a, "commit", "-m", "a line")
+        assert self.git(a, "push", "origin", "main").returncode == 0
+        self.git(b, "add", "-A"); self.git(b, "commit", "-m", "b line")
+        merge = self.git(b, "pull", "--no-rebase", "origin", "main")
+        assert merge.returncode == 0, f"union merge failed: {merge.stdout}{merge.stderr}"
+        merged = (b / "vault" / ".telemetry" / "shared-w.jsonl").read_text(encoding="utf-8")
+        assert "u1" in merged and "u2" in merged, "union merge must keep both writers' lines"

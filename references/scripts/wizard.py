@@ -2370,6 +2370,27 @@ def install_vault_engine(target_root):
         result["schema_seeded"] = False
         print(f"  WARNING: vault-schema seed failed: {e}", file=sys.stderr)
 
+    # 5. Mint the provisional per-clone instance id (#13859, PRD-VAULT-V2 P3;
+    # P5/S5.2 replaces this with the harness-owned mint). One UUID per clone
+    # in gitignored .squidsquad/.instance-id — the writer axis of the
+    # telemetry shards (§6.3: shard name is <instance>-<alias>). Mint-if-
+    # absent only: re-minting an existing id would orphan that clone's shard
+    # history under the old name.
+    try:
+        iid_file = target_root / ".squidsquad" / ".instance-id"
+        if iid_file.is_file() and iid_file.read_text(encoding="utf-8").strip():
+            result["instance_id_minted"] = False
+        else:
+            import uuid as _uuid
+            iid_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp = iid_file.parent / ".instance-id.tmp"
+            tmp.write_text(str(_uuid.uuid4()) + "\n", encoding="utf-8")
+            tmp.replace(iid_file)
+            result["instance_id_minted"] = True
+    except Exception as e:
+        result["instance_id_minted"] = False
+        print(f"  WARNING: instance-id mint failed: {e}", file=sys.stderr)
+
     return result
 
 
