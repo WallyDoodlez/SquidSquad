@@ -1,7 +1,7 @@
 # Working State
 
 - **Task**: none (#10003 MERGED 2026-07-19 -- PR #13708 = 800bf4049; -> pending-ship for dm; SS12.2 umbrella filed as #13854 pending)
-- **RESUMED**: pause lifted by operator 2026-07-20 ~02:0x (ahead of the 6am schedule). skill+qa rebooted via boot_remote; dm never stopped. Priority order at resume: #13863 (HIGH, git-push credential fleet fix) -> flush #10003 ship + #13847 -> P1 #13857 (vault-v2 engine). Idle driver re-armed.
+- **PAUSED (operator, 2026-07-20)**: skill/qa/dm stopped via /agents/{role}/stop (intent=stopping). PM stays up for inline only. Idle driver disarmed (no scans), no cron. Vault-v2 state at pause: P1+P2 SHIPPED; P3 #13859 pending-test (telemetry impl done, in verification); P4 #13860 / P5 #13861 / M-track #13862 approved+gated. TUI #13561 at pending-human-review (PR #13945 = operator doc-review gate, UNRESOLVED). Follow-ups open: #14078 (deepseek residuals, low). Resume: boot skill/qa/dm, re-arm PM driver.
 - **Status**: Idle, event mode. Awaiting operator action on HITL items below.
 - **Updated**: 2026-07-19 05:45
 
