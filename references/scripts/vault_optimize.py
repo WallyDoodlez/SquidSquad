@@ -10,6 +10,7 @@ Usage:
     python scripts/vault_optimize.py consolidate-scan [--dry-run]  # Detect merge candidates
     python scripts/vault_optimize.py decay-apply [--dry-run]       # Confidence decay
     python scripts/vault_optimize.py reindex                       # Rebuild links index
+    python scripts/vault_optimize.py propose-prunes [--stale-days N]  # #13859: engine-report-driven prune PROPOSALS (never auto-applied)
     python scripts/vault_optimize.py relevance-report              # Update relevance scores
     python scripts/vault_optimize.py pending-count                 # Count pending questions
     python scripts/vault_optimize.py add-question --agent <r> --note <path> --question <q>
@@ -188,6 +189,66 @@ def _extract_keywords(text):
 # ---------------------------------------------------------------------------
 # Prune — auto-archive stale+orphan galaxy notes
 # ---------------------------------------------------------------------------
+
+ENGINE_REPORT = (Path(__file__).resolve().parent.parent
+                 / "skills" / "vault-search" / "scripts"
+                 / "vault-impressions-report.mjs")
+
+
+def propose_prunes(stale_days=90):
+    """#13859 (S3.3 consumption AC, VAULT-ARCH 7.3/6.4): run the ENGINE's
+    impressions report and turn its buckets into prune/archival PROPOSALS.
+
+    The report is the purge signal -- usage-based staleness (4.4), never time
+    decay. This function proposes only: output is a JSON proposal list for
+    PM's improvement scan / human triage; nothing is archived or deleted here
+    (contradiction-class actions stay human-gated, 7.3). The shard read lives
+    entirely behind the engine boundary (8.5) -- this script invokes the
+    packaged reporter, it never touches .telemetry itself. Engine unavailable
+    (node missing, script error) degrades to an honest empty proposal set
+    with a reason (9.9), never an exception.
+
+    Returns the proposal dict (also printed as JSON by the CLI wrapper).
+    """
+    import shutil as _shutil
+    node = _shutil.which("node")
+    if node is None or not ENGINE_REPORT.is_file():
+        reason = "node unavailable" if node is None else "engine report script missing"
+        return {"proposals": [], "engineUnavailable": True, "reason": reason}
+    proc = subprocess.run(
+        [node, str(ENGINE_REPORT), "--vault", str(VAULT_DIR),
+         "--stale-days", str(stale_days)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=120,
+    )
+    if proc.returncode != 0:
+        return {"proposals": [], "engineUnavailable": True,
+                "reason": f"report exited {proc.returncode}: {(proc.stderr or '').strip()[:200]}"}
+    try:
+        report = json.loads(proc.stdout)
+    except ValueError as e:
+        return {"proposals": [], "engineUnavailable": True,
+                "reason": f"report output unparseable: {e}"}
+
+    proposals = []
+    for row in report.get("rows", []):
+        if row.get("status") in ("archived", "superseded"):
+            continue  # already retired -- nothing to propose
+        if row.get("stale"):
+            proposals.append({"slug": row["slug"], "path": row["path"],
+                              "action": "archive", "bucket": "stale",
+                              "evidence": f"used {row['used']}x, last {row['lastUsed']}"})
+        elif row.get("surfacedNeverUsed"):
+            proposals.append({"slug": row["slug"], "path": row["path"],
+                              "action": "review", "bucket": "surfaced-never-used",
+                              "evidence": f"offered {row['impression']}+{row['walked']}x, never cited"})
+        elif row.get("cold"):
+            proposals.append({"slug": row["slug"], "path": row["path"],
+                              "action": "review", "bucket": "cold",
+                              "evidence": "never surfaced by any search"})
+    return {"proposals": proposals, "engineUnavailable": False,
+            "counts": report.get("counts", {}), "staleDays": stale_days}
+
 
 def prune(dry_run=False):
     """Archive galaxy notes that are both stale (>60 days) and orphaned (no inbound links).
@@ -633,6 +694,16 @@ def main():
         finally:
             _release_lock()
 
+    elif cmd == "propose-prunes":
+        sd = 90
+        if "--stale-days" in args:
+            try:
+                sd = int(args[args.index("--stale-days") + 1])
+            except (ValueError, IndexError):
+                pass
+        result = propose_prunes(stale_days=sd)
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
     elif cmd == "relevance-report":
         ok, reason = _check_guards()
         if not ok:
