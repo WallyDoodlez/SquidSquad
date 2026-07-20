@@ -55,7 +55,7 @@ Package the portable engine, invoked via the Skill tool; establish the engine bo
 - **S4.3 Verifier receipt enforcement**: verification checks receipt presence + rule compliance; missing receipt routes back (zero-gap). AC: comprehension spec for the verifier instruction change (house rule for agent-instruction changes).
 - **S4.4 Write paths**: capture-at-ship on the feature branch + end-of-cycle sweep with engine-rerouted dedup (prefer-update-over-create; threshold from `dedupThreshold` — set the shipped default here, closing §11 #6's dedup slice). AC: a duplicate-subject capture demonstrably lands as an append to the ranked hit, not a new note.
 - **S4.5 Sub-skill rewrites**: `vault-protocol` / `vault-remember` / `vault-optimize` / `vault-synthesis` rewritten engine-backed; consultation/receipt steps added; catalog entries updated (rides M4 per #13854 if sequencing demands). AC: composed CLAUDE.md outputs reach agents (compose consumption path); comprehension specs per changed instruction.
-- **Gate to resolve at P4 drafting**: §11 #3 rules-lane placement (dedicated `rule` type vs `binding: true` flag) — PM recommendation + operator call before S4.2 implementation.
+- **Gate CLEARED (2026-07-20)**: §11 #3 resolved — dedicated `rule` type (operator). P2 S2.1 registers the type; S4.2's rules matching scans the rule lane only; M1/M2 classify existing binding content into `rule-*` notes.
 
 ### P5 — Maintenance + harness hooks (TRD §9.6; → HARNESS-ARCH)
 
