@@ -54,6 +54,9 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 
+sys.path.insert(0, str(SCRIPT_DIR))
+import gh_identity  # noqa: E402  — #13865: GH_TOKEN-pinned env for gh calls
+
 # === FORGE ADAPTER (optional — falls back to direct gh calls if unavailable) ===
 
 _forge_adapter = None
@@ -571,6 +574,7 @@ def _run_list(cmd_list, check=True):
         cmd_list, capture_output=True, text=True,
         encoding="utf-8", errors="replace",
         check=check, cwd=str(REPO_ROOT),
+        env=gh_identity.gh_env(cmd_list),  # #13865: pin gh calls to the repo identity (None = inherit)
     )
 
 
@@ -588,6 +592,7 @@ def _run_list_timeout(cmd_list, timeout, check=False):
             cmd_list, capture_output=True, text=True,
             encoding="utf-8", errors="replace",
             check=check, cwd=str(REPO_ROOT), timeout=timeout,
+            env=gh_identity.gh_env(cmd_list),  # #13865
         )
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(
@@ -621,6 +626,7 @@ def _run_gh_with_body(cmd_list, body, check=True):
         capture_output=True, text=True,
         encoding="utf-8", errors="replace",
         check=check, cwd=str(REPO_ROOT),
+        env=gh_identity.gh_env(cmd_list),  # #13865
     )
 
 
@@ -694,17 +700,7 @@ def check_gh():
     perm = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
                               "-q", ".permissions.push"], timeout=15)
     verdict = (perm.stdout or "").strip().lower()
-    if perm.returncode == 0 and verdict == "false":
-        print("ERROR: forge WRITE access check failed (#13574): the gh "
-              "identity has READ but not PUSH permission on this repo - the "
-              "#13570 read-only-downgrade signature. Every transition, label "
-              "write, and git push will fail while health stays green.",
-              file=sys.stderr)
-        print("Remediation (operator): restore the identity's write role on "
-              "the repo (Settings > Collaborators), or 'gh auth login' as an "
-              "account with push access; confirm with 'git push' (403 = still "
-              "read-only).", file=sys.stderr)
-        return False
+    read_only = (perm.returncode == 0 and verdict == "false")
     if perm.returncode != 0 or verdict not in ("true", "false"):
         # Inconclusive (network blip, API shape change): the read check above
         # already proved connectivity — warn, do not block boot (fail-open on
@@ -712,6 +708,50 @@ def check_gh():
         print(f"WARNING: forge write-permission probe inconclusive "
               f"(exit={perm.returncode}, out={verdict!r}) - proceeding on the "
               f"read check alone (#13574).", file=sys.stderr)
+    # #13863: the checks above prove nothing about the *git push* path — the
+    # credential-manager entry can vanish and gh's active account can flip to
+    # a read-only identity while reads and API writes stay green. Delegate to
+    # git_ops.py push-doctor: it persists a flip-proof per-clone credential
+    # helper and dry-run-verifies non-interactive push capability, so this
+    # class fails loudly at boot instead of mid-work. When the #13574 probe
+    # above PROVED the active account read-only, also pass --heal-active so
+    # the doctor switches gh back to the pinned push identity (the first of
+    # the two manual remediation steps from the #13863 report) — then re-probe
+    # before deciding to block. Block ONLY on the doctor's explicit
+    # definitive-failure marker or a still-read-only re-probe (never on exit
+    # code alone — a doctor crash must not brick every boot; fail-open on
+    # uncertainty, same contract as #13574).
+    doctor_cmd = [sys.executable, str(SCRIPT_DIR / "git_ops.py"),
+                  "push-doctor"]
+    if read_only:
+        doctor_cmd.append("--heal-active")
+    doctor = _run_list_timeout(doctor_cmd, timeout=120)
+    doctor_err = (doctor.stderr or "")
+    if "__SQUIDSQUAD_PUSH_DOCTOR_BLOCK__" in doctor_err:
+        print(doctor_err.strip(), file=sys.stderr)
+        return False
+    if read_only:
+        reprobe = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
+                                     "-q", ".permissions.push"], timeout=15)
+        if (reprobe.stdout or "").strip().lower() == "true":
+            print("NOTE: gh active account was read-only (#13570 signature); "
+                  "push-doctor healed it back to the pinned push identity "
+                  "(#13863) - write capability re-verified.", file=sys.stderr)
+        else:
+            print("ERROR: forge WRITE access check failed (#13574): the gh "
+                  "identity has READ but not PUSH permission on this repo - "
+                  "the #13570 read-only-downgrade signature. Every "
+                  "transition, label write, and git push will fail while "
+                  "health stays green. Auto-heal (#13863) did not recover it.",
+                  file=sys.stderr)
+            print("Remediation (operator): restore the identity's write role "
+                  "on the repo (Settings > Collaborators), or 'gh auth login' "
+                  "as an account with push access; confirm with 'git push' "
+                  "(403 = still read-only).", file=sys.stderr)
+            return False
+    for stream in (doctor.stdout or "", doctor_err):
+        if "WARNING" in stream:
+            print(stream.strip(), file=sys.stderr)
     print("OK")
     return True
 
@@ -1322,36 +1362,80 @@ def _check_merged_pr(number):
     # Mirror the gh CLI path: fetch the recent merged PRs unfiltered and
     # rely on the local `parts[-1] == str(number)` check below to match
     # by branch suffix.
+    # #13855: do NOT rely on a small global "most-recent-N merged" window.
+    # GitHub's search-backed `pr list` has brief eventual-consistency lag for
+    # a JUST-merged PR plus a boundary sort that isn't strictly mergedAt-desc,
+    # so a freshly-merged PR — the case the ship-gate hits MOST (it runs right
+    # after the merge) — can be absent from the newest 20 (live-observed on
+    # #10003/PR #13708). Query the SPECIFIC branch server-side instead
+    # (recency-independent), then fall back to a larger global scan only for
+    # non-standard branch prefixes.
+    branch = f"squidsquad/task/{number}"
+
     adapter = _get_forge_adapter()
     if adapter:
         try:
-            prs = adapter.list_prs(state="merged")
-            for pr in prs:
-                head = pr.get("headRefName", "")
-                parts = head.split("/")
-                if len(parts) >= 2 and parts[-1] == str(number):
-                    return pr.get("number"), pr.get("url", "")
+            # Exact head filter first (recency-independent). ForgejoAdapter's
+            # `search` is a client-side headRefName substring match, so the
+            # full branch name matches exactly the one PR (unlike #9999's
+            # space-bearing `squidsquad/ N`, which matched nothing).
+            hit = _scan_merged_prs(adapter.list_prs(state="merged",
+                                                    search=branch), number)
+            if hit:
+                return hit
+            # Fallback: larger global window for any non-`task` prefix.
+            hit = _scan_merged_prs(adapter.list_prs(state="merged", limit=100),
+                                   number)
+            if hit:
+                return hit
         except Exception:
             pass
         return None
 
-    # Default: gh CLI
+    # Default: gh CLI — exact server-side head filter first (#13855). `--head`
+    # matches the head branch exactly on the server, so a just-merged PR is
+    # returned regardless of its position in the global recency window.
     result = _run_list(
-        ["gh", "pr", "list", "--state", "merged",
-         "--json", "number,headRefName,url", "--limit", "20"],
+        ["gh", "pr", "list", "--head", branch, "--state", "merged",
+         "--json", "number,headRefName,url", "--limit", "10"],
         check=False,
     )
-    if result.returncode != 0:
-        return None
+    hit = _scan_merged_prs(_parse_pr_list(result), number)
+    if hit:
+        return hit
+    # Fallback: larger global window catches any non-standard branch prefix
+    # the `--head` convention above misses (the local suffix check stays the
+    # authority on what counts as a match).
+    result = _run_list(
+        ["gh", "pr", "list", "--state", "merged",
+         "--json", "number,headRefName,url", "--limit", "100"],
+        check=False,
+    )
+    return _scan_merged_prs(_parse_pr_list(result), number)
+
+
+def _parse_pr_list(result):
+    """Parse a `gh pr list --json` subprocess result into a list of PR dicts;
+    [] on any error (non-zero exit, empty, malformed JSON)."""
+    if result.returncode != 0 or not (result.stdout or "").strip():
+        return []
     try:
-        prs = json.loads(result.stdout) if result.stdout.strip() else []
-        for pr in prs:
-            head = pr.get("headRefName", "")
-            parts = head.split("/")
-            if len(parts) >= 2 and parts[-1] == str(number):
-                return pr["number"], pr.get("url", "")
-    except (json.JSONDecodeError, KeyError):
-        pass
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return []
+
+
+def _scan_merged_prs(prs, number):
+    """Return (pr_number, pr_url) for the first PR whose branch suffix (the
+    last `/`-separated segment of headRefName) equals ``number``, else None.
+    The suffix check is the authority on a match — it stays prefix-agnostic
+    so a non-`task` branch convention still resolves once the PR is in the
+    fetched set."""
+    for pr in prs or []:
+        head = pr.get("headRefName", "")
+        parts = head.split("/")
+        if len(parts) >= 2 and parts[-1] == str(number):
+            return pr.get("number"), pr.get("url", "")
     return None
 
 
