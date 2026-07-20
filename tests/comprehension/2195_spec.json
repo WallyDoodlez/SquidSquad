@@ -16,5 +16,7 @@
       "question": "QA just verified issue #123 on branch squidsquad/skill/123. Where do QA's verification commits go?",
       "expected": "QA's verification results go on the issue's existing feature branch (squidsquad/skill/123) using git_ops.py commit-code. State changes (.squidsquad/ iteration logs, working state) go on main using git_ops.py commit-state."
     }
-  ]
+  ],
+  "superseded_by": 13890,
+  "superseded_reason": "both quizzed fragments deleted: roles/dm/git-commit.md and roles/qa/git-commit.md no longer exist (qa->verifier rename + sub-skill reorg)"
 }
