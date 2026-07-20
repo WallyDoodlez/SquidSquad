@@ -300,6 +300,14 @@ class TestTelemetry:
         events = read_events(vault)
         assert len(events) == 1 and events[0]["slug"] == "decision-auth-flow"
 
+    def test_negative_top_fails_closed_to_zero_events(self, tmp_path):
+        """slice(0, -1) would UNCAP the surfaced set (drop only the tail) --
+        negative --top must clamp to 0 (round-3 review finding)."""
+        vault = make_vault(tmp_path)
+        out = run_query(vault, "--entities", "auth", "--top", "-1")
+        assert out["written"]["events"] == 0
+        assert not (vault / ".telemetry").exists()
+
     def test_no_write_emits_zero_events(self, tmp_path):
         """AC4 unit pin: --no-write leaves no telemetry trace at all."""
         vault = make_vault(tmp_path)

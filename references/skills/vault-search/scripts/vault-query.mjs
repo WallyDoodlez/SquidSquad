@@ -503,7 +503,11 @@ export function main(argv = process.argv.slice(2), deps = {}) {
   }
 
   const cfg = loadConfig(args.vault);
-  const topK = args.top != null && Number.isFinite(args.top) ? args.top : cfg.searchTopK;
+  // Clamp to a non-negative integer: a negative topK would reach
+  // Array.slice(0, -N) in buildEvents and UNCAP the surfaced set (drop just
+  // the tail) instead of capping it — fail closed to 0 instead.
+  const topK = Math.max(0, Math.trunc(
+    args.top != null && Number.isFinite(args.top) ? args.top : cfg.searchTopK));
   const query = { entities: args.entities, tags: args.tags, terms: args.terms };
 
   const notes = loadVault(args.vault);
