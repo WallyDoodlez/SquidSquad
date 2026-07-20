@@ -2269,11 +2269,90 @@ def scaffold_install(spec, target_root, overwrite_existing=False):
             if not dest.exists():  # don't overwrite user customizations
                 shutil.copy2(cmd_file, dest)
 
+    # 5b. Vault consumption engine (#13857, VAULT-ARCH §7.5): materialize the
+    # packaged engine skills to .claude/skills/, preflight Node (soft
+    # prerequisite), seed the telemetry shard dir. Never fails the install —
+    # absent Node the feature degrades per §6.2/§9.9.
+    summary["vault_engine"] = install_vault_engine(target_root)
+
     # 6. Save install spec for reproducibility and upgrade re-use (#13)
     spec_path = save_install_spec(spec, target_root)
     summary["install_spec"] = spec_path
 
     return summary
+
+
+def install_vault_engine(target_root):
+    """Deploy the vault consumption engine and preflight Node (#13857).
+
+    VAULT-ARCH §7.5: the engine ships as Claude Skill packages under
+    ``references/skills/`` (the committed source of truth) and is
+    materialized to ``.claude/skills/`` (the project-level live copy) so
+    agent sessions can invoke it via the Skill tool. The copy refreshes on
+    upgrade — the engine is versioned framework code, not user content.
+
+    Node is a checkable **soft** prerequisite (§7.5): npm-mode Claude Code
+    installs imply Node, native-binary installs do not. Absent Node the
+    install still succeeds and the feature degrades per §6.2/§9.9
+    (engine-unavailable receipts, tier + recency ranking) — this function
+    never raises and never fails the install.
+
+    Also seeds ``<vault>/.telemetry/.gitattributes`` (``*.jsonl
+    merge=union``) — §8.5 names this installer work, not engine work: it
+    must exist before the first shard append so union-merge covers every
+    clone from day one (§6.3).
+
+    Returns a summary dict:
+        {"deployed": [skill names], "node": "vX.Y.Z" | None,
+         "degraded": bool, "telemetry_seeded": bool}
+    """
+    target_root = Path(target_root)
+    result = {"deployed": [], "node": None, "degraded": False,
+              "telemetry_seeded": False}
+
+    # 1. Materialize each skill package (a dir with a SKILL.md).
+    src_root = target_root / "references" / "skills"
+    dest_root = target_root / ".claude" / "skills"
+    try:
+        if src_root.is_dir():
+            for skill_dir in sorted(src_root.iterdir()):
+                if not (skill_dir / "SKILL.md").is_file():
+                    continue
+                shutil.copytree(skill_dir, dest_root / skill_dir.name,
+                                dirs_exist_ok=True)
+                result["deployed"].append(skill_dir.name)
+    except Exception as e:
+        print(f"  WARNING: vault engine skill deploy failed: {e}",
+              file=sys.stderr)
+
+    # 2. Node preflight — soft, informational.
+    node = shutil.which("node")
+    if node:
+        try:
+            proc = subprocess.run([node, "--version"], capture_output=True,
+                                  text=True, timeout=15)
+            if proc.returncode == 0:
+                result["node"] = proc.stdout.strip()
+        except Exception:
+            pass
+    if result["node"] is None:
+        result["degraded"] = True
+        print("  NOTE: node not found -- vault engine degrades until Node is "
+              "installed (engine-unavailable receipts, tier+recency ranking; "
+              "VAULT-ARCH 9.9). Install is NOT blocked.")
+
+    # 3. Seed the telemetry shard dir + merge=union .gitattributes (§6.3).
+    try:
+        tele = target_root / ".squidsquad" / "vault" / ".telemetry"
+        tele.mkdir(parents=True, exist_ok=True)
+        ga = tele / ".gitattributes"
+        if not ga.exists():
+            ga.write_text("*.jsonl merge=union\n", encoding="utf-8")
+            result["telemetry_seeded"] = True
+    except Exception as e:
+        print(f"  WARNING: telemetry-dir seed failed: {e}", file=sys.stderr)
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -3802,6 +3881,7 @@ def generate_default_spec(scan_data=None, repo_info=None, target_dir=None):
             "auto_merge": True,
             "improvement_scan": True,
             "vault_remember": True,
+            "vault_engine": True,  # #13857 — consumption engine (VAULT-ARCH §7.5)
             "diagnostics": True,
         },
         "git_branches": {

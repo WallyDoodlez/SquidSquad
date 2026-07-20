@@ -124,6 +124,7 @@ FIELD_MAP = {
     "alias-dm": ("Aliases", "dm"),
     "alias-designer": ("Aliases", "designer"),
     "alias-qa": ("Aliases", "qa"),
+    "vault-engine": ("Flags", "Vault Engine"),  # #13857 — consumption engine on/off
     "vault-remember": ("Vault Remember", "Enabled"),
     "vault-writes-per-cycle": ("Vault Remember", "Writes Per Cycle"),
     "briefing-token-budget": ("Vault Remember", "BRIEFING Token Budget"),
