@@ -2,7 +2,20 @@
 
 **Verdict: PASS → pending-ship**
 
-Round 1's only gap (TC2/TC7/TC8) is fixed: `.squidsquad/pm/planning/.deepseek-13213.diff` is now genuinely removed from `main` directly (confirmed via fresh `git fetch` + `git ls-tree origin/main` — empty). `TestArtifactHygiene` now 13/13 on the refreshed branch (merged latest main). Full static gate re-run: **PASS — 6218 gated test(s) passed (0 failures, 0 errors)**. Integration: **54/54 OK**. TC1/TC3/TC4/TC5/TC6 (the guard mechanism itself + basic sweep) already independently verified live in round 1 and unchanged since — not re-derived. → **pending-ship**.
+Round 1's only gap is fixed: `.squidsquad/pm/planning/.deepseek-13213.diff` is now genuinely removed from `main` directly (confirmed via fresh `git fetch` + `git ls-tree origin/main` — empty). Full static gate re-run: **PASS — 6218 gated test(s) passed (0 failures, 0 errors)**. Integration: **54/54 OK**.
+
+## TC Results (round 2)
+
+| TC | Result | Evidence |
+|----|--------|----------|
+| TC1 | PASS (carried from round 1, unchanged) | Root strays confirmed absent again, code unchanged since round 1. |
+| TC2 | PASS (fixed this round) | `.squidsquad/pm/planning/.deepseek-13213.diff` confirmed genuinely removed from `main` via fresh `git fetch origin main` + `git ls-tree origin/main -- <path>` (empty output). |
+| TC3 | PASS (carried from round 1, unchanged) | .gitignore patterns unchanged since round 1. |
+| TC4 | PASS (carried from round 1, unchanged) | Guard function code unchanged since round 1's live re-derivation. |
+| TC5 | PASS (carried from round 1, unchanged) | Guard function code unchanged since round 1's live re-derivation. |
+| TC6 | PASS (carried from round 1, unchanged) | Wiring code unchanged since round 1. |
+| TC7 | **PASS (fixed this round)** | `test_14055_wrong_target_review_guard.py` on the refreshed branch (merged latest main): **13/13 pass**, including `TestArtifactHygiene::test_stray_artifacts_removed_from_tree`. |
+| TC8 | **PASS (fixed this round)** | Official static gate: **PASS — 6218 gated test(s) passed (0 failures, 0 errors)**. Integration suite: **54/54 OK**. |
 
 ---
 
