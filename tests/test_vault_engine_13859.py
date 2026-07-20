@@ -539,6 +539,21 @@ class TestTwoCloneConcurrency:
         row = {r["slug"]: r for r in rep["rows"]}["note-x"]
         assert row["used"] == 2, "one used event per writer, deduped by id"
 
+    def test_real_repo_root_gitattributes_carries_the_union_backstop(self):
+        """Verifier round-1 TC9 (#13859): the merge=union backstop must exist
+        in THIS repo's tracked history, not only in wizard-seeded per-clone
+        files or test fixtures. Pinned behaviorally: git check-attr on a
+        shard path in the real repo must resolve merge=union."""
+        proc = subprocess.run(
+            [GIT, "-C", str(REPO), "check-attr", "merge",
+             ".squidsquad/vault/.telemetry/any-writer.jsonl"],
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout.strip().endswith("merge: union"), (
+            f"root .gitattributes does not give telemetry shards merge=union: "
+            f"{proc.stdout.strip()!r}")
+
     def test_union_merge_backstop_same_file(self, tmp_path):
         """Same shard file appended in both clones (the pathological case the
         .gitattributes backstop exists for): union merge keeps BOTH lines."""
