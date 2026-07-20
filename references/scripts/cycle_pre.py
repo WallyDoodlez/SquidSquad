@@ -26,12 +26,6 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-# Ensure UTF-8 output on Windows
-if sys.stdout.encoding != "utf-8":
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-if sys.stderr.encoding != "utf-8":
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 SQUID_DIR = REPO_ROOT / ".squidsquad"
@@ -1487,6 +1481,15 @@ def _reconcile_ship_counter():
 
 
 def main():
+    # Ensure UTF-8 output on Windows (#13847: CLI-entry-only, not import
+    # time — cycle_pre.py is also imported as a library elsewhere; touching
+    # a library consumer's global stdio on import would be wrong, per
+    # cli_stdio.py's documented contract).
+    if sys.stdout.encoding != "utf-8":
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stderr.encoding != "utf-8":
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     role = _parse_cli_args(sys.argv[1:])
     if not role:
         print("Usage: cycle_pre.py <role>", file=sys.stderr)
