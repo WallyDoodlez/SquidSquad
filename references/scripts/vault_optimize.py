@@ -204,7 +204,7 @@ def propose_prunes(stale_days=90):
     PM's improvement scan / human triage; nothing is archived or deleted here
     (contradiction-class actions stay human-gated, 7.3). The shard read lives
     entirely behind the engine boundary (8.5) -- this script invokes the
-    packaged reporter, it never touches .telemetry itself. Engine unavailable
+    packaged reporter; the shard store is never opened from Python. Engine unavailable
     (node missing, script error) degrades to an honest empty proposal set
     with a reason (9.9), never an exception.
 
