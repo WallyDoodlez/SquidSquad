@@ -67,3 +67,5 @@ what you pushed.
 
 - 2026-06-17 — Created by skill-lead. Discovered building #12750 (plan-in-PR).
 - 2026-07-20 — skill-lead: second failure mode (seed-commit dual-landing → GitHub auto-close, #13561/PR #13889 incident) + either-lane-never-both rule.
+
+Hub: [[pr-merge]]

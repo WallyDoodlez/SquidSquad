@@ -51,3 +51,5 @@ silently unstaged; caught only by `git show --stat` immediately after. Two rules
 
 - 2026-04-22 — Created by skill-lead. Discovered during #2008 QA rejection.
 - 2026-07-20 — skill-lead: `.claude/` filter + the #13857 vanished-deliverable incident; source-under-references rule + verify-what-landed rule.
+
+Hub: [[pr-merge]]
