@@ -166,6 +166,9 @@
  "13857_spec.json": {
   "references/skills/vault-search/SKILL.md": "9b13834138c3780fb7a45368f6132c71b182fe9a"
  },
+ "13858_spec.json": {
+  "references/sub-skills/common/vault-protocol.md": "750f4af293218935ae81adfc1c9bfe281b3d1156"
+ },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification-templates.md": "62a1b32f260d957ec806450ffffb84f8f3da7b58",

@@ -1,0 +1,27 @@
+{
+  "issue": 13858,
+  "title": "TASK: PRD-VAULT-V2 P2 -- structure: vault-schema.json registry, systems/ hub layer, registry-derived templates",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-20 11:08",
+  "ac": "S2.3 (LLM-consumed sub-skill change)",
+  "files": ["references/sub-skills/common/vault-protocol.md"],
+  "method": "Fresh agent (model: sonnet), given ONLY the modified 'Creating Notes (vault-create)' passage of references/sub-skills/common/vault-protocol.md, no other context and no access to issue #13858. Answers must come from the supplied text alone. Verifier-authored per #9184.",
+  "target": "vault-protocol.md 'Creating Notes' step 2 -- template resolution switched from folder-based to TYPE-based (vault-schema.json registry), with _generic.md fallback for custom types lacking a dedicated template",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "When you are about to create a new note, how do you determine which template file to copy -- is the template chosen based on the note's FOLDER, or based on something else?",
+      "expected": "Based on the note's TYPE (registered types per vault-schema.json), not its folder. Folder selection is a separate prior step.",
+      "must_not": "Saying the template is chosen by folder, or that folder and type are interchangeable for this purpose."
+    },
+    {
+      "id": "CQ2",
+      "q": "Suppose you're creating a note of a custom type that IS registered in vault-schema.json but has no dedicated template file under references/vault-templates/. What do you do?",
+      "expected": "Fall back to _generic.md.",
+      "must_not": "Saying creation fails, blocks, or that a bespoke template must be authored first."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-20 11:08",
+  "evidence": "Fresh sonnet agent (id a9f16bc6ddfac871e), given ONLY the excerpted 'Creating Notes' section (points 1-4), no issue context. 2/2 correct, zero must_not violations: CQ1 'chosen based on the note's TYPE, not its folder... registered types per vault-schema.json... folder is a separate, prior step'; CQ2 'You use _generic.md as the template... a custom type that lacks its own dedicated template file falls back to _generic.md, even though it is otherwise registered'."
+}
