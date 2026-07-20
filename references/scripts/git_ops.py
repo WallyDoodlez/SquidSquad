@@ -318,6 +318,32 @@ def _safe_stash_pop():
     return False
 
 
+def _stash_guarded_ff_only_merge(target_ref):
+    """Run ``git merge --ff-only <target_ref>``, stash-guarded (#13819/#13831).
+
+    A bare ``git merge --ff-only`` refuses to run when uncommitted local
+    changes touch a file the fast-forward would also update ("Your local
+    changes ... would be overwritten by merge") — routine mid-cycle state for
+    an event-mode agent. This mirrors ``_safe_checkout()``'s stash-before/
+    pop-after pattern so every fast-forward call site gets the same
+    protection instead of reimplementing it independently (#13819 fixed only
+    one of three identical call sites; this factors it out so a future fourth
+    site doesn't reintroduce the same gap). #13167-safe: only pops a stash
+    this call actually created, never a pre-existing unrelated one.
+
+    Returns the ``CompletedProcess`` from the merge attempt; callers keep
+    their own success/failure handling (fail-loud vs fail-open differs by
+    call site).
+    """
+    pre_stash_ref = _stash_top_ref()
+    _run("git stash -q", check=False)
+    stashed = _stash_top_ref() != pre_stash_ref
+    ff = _run_list(["git", "merge", "--ff-only", target_ref], check=False)
+    if stashed:
+        _safe_stash_pop()
+    return ff
+
+
 def pull(role=None):
     """Pull with merge (#5378, #5445).
 
@@ -897,7 +923,7 @@ def _checkout_and_ff_working_after_merge(working):
         # Ahead (unpushed local commits) or diverged — only a fast-forward is
         # safe here; leave it for a human/task-begin to reconcile.
         return
-    ff = _run_list(["git", "merge", "--ff-only", f"origin/{working}"], check=False)
+    ff = _stash_guarded_ff_only_merge(f"origin/{working}")
     if ff.returncode != 0:
         print(
             f"WARNING: could not fast-forward local {working} to origin/"
@@ -1311,7 +1337,7 @@ def pr_merge(pr_number, strategy="squash", _max_base_retries=3, _base_retry_dela
         # never masquerades as the race.
         if "base branch was modified" in error_lower and attempt < _max_base_retries:
             print(
-                f"PR #{pr_number}: base branch moved (batch-ship race) — "
+                f"PR #{pr_number}: base branch moved (batch-ship race) -- "
                 f"retry {attempt + 1}/{_max_base_retries} after {_base_retry_delay}s",
                 file=sys.stderr,
             )
@@ -1462,20 +1488,45 @@ def _merge_dropped_state_paths(pre_ref):
     delete with zero conflict signal (no unmerged path for
     ``_auto_resolve_state_conflicts`` to catch). Returns a sorted list of dropped
     paths (empty if none / on any git uncertainty -> fail-safe: never a spurious
-    restore)."""
+    restore).
+
+    #13723: a path absent/emptied post-merge is only a genuine DROP if the
+    CANONICAL REMOTE (``origin/<working>``) does NOT also confirm the deletion.
+    If ``origin/<working>``'s current tip also has the path absent/empty, the
+    deletion is authoritative (a teammate's own committed fix landing via
+    merge, not something the merge machinery silently ate) -- restoring from
+    ``ORIG_HEAD`` would silently revert that teammate's own fix (observed
+    live: PM's ``git rm --cached`` of two harness log files, landing via
+    merge, got reverted by this guard before the #13723 fix). Deliberately
+    checks ``origin/<working>`` specifically, NOT ``HEAD^2`` (whatever branch
+    happened to be merged in) -- the ORIGINAL #13556 incident this guard
+    protects against is exactly a throwaway/feature branch's deletion
+    silently winning over untouched canonical content, so an arbitrary
+    merged-in branch's deletion must NOT be trusted the same way a confirmed
+    canonical-remote deletion is. Any resolution failure (no ``origin`` remote
+    configured, ref not fetched, detached test repo) falls back to the
+    ORIGINAL #13556 behavior (restore) -- the new check only ever narrows
+    (opts OUT of) a restore with positive confirmation, never the reverse,
+    so an unrelated resolution failure can't defeat the core protection."""
     before = _state_blob_sizes(pre_ref)
     if not before:  # None (git failure) or {} (no protected paths) -> nothing to check
         return []
     after = _state_blob_sizes("HEAD")
     if after is None:  # DS-13556 F2: git failure on HEAD -> unknown, never a mass-restore
         return []
+    origin_state = _state_blob_sizes(f"origin/{_get_working_branch()}")
     dropped = []
     for path, size in before.items():
         if size == 0:
             continue  # was already empty pre-merge -> a later empty isn't a drop
         now = after.get(path)
-        if now is None or now == 0:  # absent, or emptied
-            dropped.append(path)
+        if now is not None and now != 0:
+            continue  # still present post-merge -> not dropped
+        if origin_state is not None:
+            origin_size = origin_state.get(path)
+            if origin_size is None or origin_size == 0:
+                continue  # #13723: canonical remote confirms the deletion -> legitimate
+        dropped.append(path)
     return sorted(dropped)
 
 
@@ -1694,7 +1745,7 @@ def _sync_working_branch_to_origin(working):
         # Something switched us away between the caller's checkout and here
         # — never merge onto the wrong branch.
         return
-    ff = _run_list(["git", "merge", "--ff-only", f"origin/{working}"], check=False)
+    ff = _stash_guarded_ff_only_merge(f"origin/{working}")
     if ff.returncode != 0:
         print(
             f"WARNING: could not fast-forward local {working} to origin/"
@@ -1712,6 +1763,10 @@ def _sync_working_branch_to_origin(working):
 def _checkout_and_sync_working(working):
     """Return to `working` and fast-forward it to origin (#13613)."""
     _safe_checkout(working)
+    print(
+        f"commit-code: switched back to '{working}' -- follow-on commits "
+        f"(e.g. commit-state) land here, not on the feature branch (#13730)"
+    )
     _sync_working_branch_to_origin(working)
 
 
@@ -1910,7 +1965,7 @@ def commit_role_scoped(role, message):
     current = _run("git branch --show-current").stdout.strip()
     if current != working:
         print(
-            f"WARNING: cycle commit skipped — current branch '{current}' "
+            f"WARNING: cycle commit skipped -- current branch '{current}' "
             f"is not the configured working branch '{working}'. Role-state "
             f"files stay on disk; the next cycle on '{working}' will commit "
             f"them. (#11083)",
@@ -2096,7 +2151,13 @@ def _sync_local_branch_to_origin(branch):
         ["git", "merge-base", "--is-ancestor", local_sha, origin_sha], check=False
     ).returncode == 0
     if behind:
-        ff = _run_list(["git", "merge", "--ff-only", f"origin/{branch}"], check=False)
+        # #13819/#13831: stash-guarded fast-forward (see
+        # _stash_guarded_ff_only_merge) -- a bare `git merge --ff-only`
+        # refuses to run when uncommitted local changes touch a file the
+        # fast-forward would also update ("Your local changes ... would be
+        # overwritten by merge"), which is routine mid-cycle state for an
+        # event-mode agent (this is the verifier re-verification path).
+        ff = _stash_guarded_ff_only_merge(f"origin/{branch}")
         if ff.returncode != 0:
             print(
                 f"ERROR: task-begin could not fast-forward {branch} to origin/"
@@ -2122,7 +2183,7 @@ def _sync_local_branch_to_origin(branch):
     print(
         f"ERROR: task-begin: local {branch} ({local_sha[:9]}) and origin/"
         f"{branch} ({origin_sha[:9]}) have DIVERGED. Resolve manually (merge "
-        f"origin, never rebase) before retrying — refusing to check out an "
+        f"origin, never rebase) before retrying -- refusing to check out an "
         f"unsynced tip (#13373).",
         file=sys.stderr,
     )
@@ -2355,6 +2416,31 @@ def guard_staged_state():
     if not state_staged:
         return []
 
+    # #13724: a staged state path whose content already matches
+    # origin/<working>'s current tip produces ZERO diff for that path in the
+    # PR either way -- stripping it back to HEAD (the feature branch's own,
+    # possibly-stale, pre-merge value) actively HURTS here: it turns a
+    # no-op path into a real revert-looking diff against main. This fires on
+    # a legitimate `git merge origin/<working>` conflict-resolution commit
+    # on a stale feature branch, where the merge's index already holds
+    # main's newer state content for these paths -- reported live this
+    # session: guard_staged_state reverting merged-in state content caused
+    # the harness /merge endpoint to reject two otherwise-clean PRs
+    # (#13712, #13713) as carrying "out-of-scope state/vault changes",
+    # when in fact the guard itself introduced that divergence from main.
+    origin_working = f"origin/{working}"
+    to_unstage = []
+    for p in state_staged:
+        matches_main = _run_list(
+            ["git", "diff", "--cached", "--quiet", origin_working, "--", p],
+            check=False)
+        if matches_main.returncode == 0:
+            continue  # identical to origin/<working> already -- leave staged
+        to_unstage.append(p)
+    if not to_unstage:
+        return []
+    state_staged = to_unstage
+
     # Unstage (reset, not restore --staged: works on older git and leaves the
     # working-tree copy untouched). Per-path so one bad path can't drop the lot.
     for p in state_staged:
@@ -2448,7 +2534,7 @@ def guard_galaxy_frontmatter():
             violations.append((p, reason))
     if violations:
         print(
-            f"ERROR: pre-commit guard BLOCKED commit — {len(violations)} galaxy "
+            f"ERROR: pre-commit guard BLOCKED commit -- {len(violations)} galaxy "
             f"note(s) lack valid YAML frontmatter (#12905; a frontmatter-less "
             f"note reds tests/test_vault.py for the whole fleet):",
             file=sys.stderr,
@@ -2585,6 +2671,18 @@ def _parse_args():
 
 
 def main():
+    # #13198/#13728: crash-proof CLI stdio (cp1252). Fails OPEN (#13728
+    # verifier round 1): the post-merge hook invokes this script from a
+    # merge-dropped-state restore path that must never raise (#13556's
+    # documented fail-safe guarantee), including in a degraded environment
+    # where cli_stdio.py isn't co-located with git_ops.py (e.g. an isolated
+    # copy of just this script) -- an ImportError here must not crash before
+    # command dispatch even runs.
+    try:
+        from cli_stdio import harden_stdio
+        harden_stdio()
+    except ImportError:
+        pass
     cmd, rest = _parse_args()
 
     # Self-heal the pre-commit state guard on every invocation except the guard

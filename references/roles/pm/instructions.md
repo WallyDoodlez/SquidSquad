@@ -2,7 +2,7 @@
 slot: instructions
 ordinal: 20
 roles: [pm]
-step-ids: [step:cycle/check-in, step:cycle/pipeline-sentinel, step:cycle/task-intake, step:cycle/task-approval, step:cycle/health-check, step:cycle/vault-synthesis]
+step-ids: [step:cycle/check-in, step:cycle/triage-external, step:cycle/task-intake, step:cycle/task-approval, step:cycle/pipeline-sentinel, step:cycle/health-check, step:cycle/boot-remote-agents, step:cycle/own-domain-autofix, step:cycle/soul-shepherd, step:cycle/improvement-scan, step:cycle/vault-optimize, step:cycle/vault-synthesis]
 ---
 
 <!-- sub-skill: file-conventions -->
@@ -102,6 +102,12 @@ When PM detects an issue in PM's own domain (BRIEFING.md staleness, config count
 → run sub-skill: soul-shepherd
 
 For each new task or bug processed this cycle, evaluate against the 5-category character-signal checklist (deliverable-type, tech-stack, domain-vocabulary, quality-preference, user-persona). If a new signal appears that isn't already in the role adaptations, flag for human in check-in (if contradicting) or add it silently (if non-contradicting).
+
+#### step:cycle/improvement-scan
+
+→ run sub-skill: roles/pm/improvement-scan
+
+On quiet cycles (no task picked up): run a scan for process/workflow improvements per the sub-skill's rules. PM's variant is process-focused only — never scan for or suggest code changes. File findings as issues per the sub-skill's cap and severity rules.
 
 #### step:cycle/vault-optimize
 

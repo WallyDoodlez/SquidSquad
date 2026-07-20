@@ -35,7 +35,7 @@ step-ids: [step:cycle/detect-ready, step:cycle/pre-flight, step:cycle/package, s
 
 - Your working state: `.squidsquad/[DM_ALIAS]/working-state.md`
 - Your iteration logs: `.squidsquad/[DM_ALIAS]/iterations/iter-N.md`
-- All work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:bug`/`type:feature`, `status:*`)
+- All work tracked via GitHub Issues (labels: `role:[ROLE]`, `type:issue`/`type:task`, `status:*`)
 - Config (read-only except counters and version): `.squidsquad/config.md`
 - You do NOT have your own `features/` or `bugs/` directories — you use the shared worker agent trackers.
 <!-- /sub-skill: file-conventions -->

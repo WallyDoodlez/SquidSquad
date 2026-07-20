@@ -8,6 +8,7 @@ into every CLI `main()`.
 
 import ast
 import io
+import re
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -64,13 +65,22 @@ class TestFleetWiring13198:
     """Every agent-facing CLI script must invoke the hardening at its entry so
     no script can reintroduce the cp1252 crash. tracker.py routes through its
     `_harden_stdio` delegate (which calls the shared helper); the other 8 call
-    `harden_stdio()` directly in main(). cycle.py is intentionally excluded — it
-    already force-reconfigures stdout to UTF-8 (a different but equally
-    crash-safe approach; aligning it is an optional cosmetic follow-on)."""
+    `harden_stdio()` directly in main(). cycle.py, cycle_pre.py, and
+    cycle_post.py are intentionally excluded — they already force-reconfigure
+    stdout/stderr to UTF-8 at import time (a different but equally crash-safe
+    approach; aligning them onto harden_stdio() is an optional cosmetic
+    follow-on). See TestUtf8ReconfigureAlternative13846 below, which verifies
+    that alternative actually holds rather than just asserting it in this
+    docstring (#13846: an improvement-scan pass initially misread the absence
+    of the `harden_stdio()` string as "unprotected" for cycle_pre.py/
+    cycle_post.py — investigation proved that false; this test class is the
+    correction, so the same false alarm doesn't get re-filed)."""
 
     WIRED = [
         "config", "subloop_driver", "model_router", "scan_index", "compose",
         "boot_remote", "add_role", "migrate_state_branch", "tracker",
+        "git_ops",  # #13728: most heavily-invoked fleet CLI, was unswept
+        "wizard",  # #13760: setup/install CLI, was unswept
     ]
 
     @pytest.mark.parametrize("mod", WIRED)
@@ -88,6 +98,78 @@ class TestFleetWiring13198:
 
     def test_shared_helper_module_exists(self):
         assert (SCRIPTS / "cli_stdio.py").exists()
+
+
+class TestUtf8ReconfigureAlternative13846:
+    """#13846: cycle.py, cycle_pre.py, and cycle_post.py use a DIFFERENT but
+    equally crash-safe strategy than `harden_stdio()` — they force
+    stdout/stderr to real UTF-8 via `.reconfigure(encoding="utf-8",
+    errors="replace")` at import time, rather than keeping the console's own
+    encoding and backstopping with `errors="backslashreplace"`.
+
+    An improvement-scan pass grepped for the literal string `harden_stdio()`
+    across every `references/scripts/*.py` with a `__main__` block, found it
+    absent from cycle_pre.py/cycle_post.py, and initially filed that as "the
+    harness's every-cycle wrapper scripts are unprotected against the cp1252
+    crash" (high severity). Investigation disproved the crash claim — see
+    `test_reconfigure_actually_prevents_the_crash` below, which reproduces
+    the exact failure mode `TestHardenStdio.test_baseline_cp1252_arrow_raises`
+    guards against and confirms the alternative guard prevents it too — but
+    surfaced a real, much narrower, lower-severity note: this alternative
+    runs at IMPORT TIME, which `cli_stdio.py`'s own module docstring flags as
+    the wrong place for stdio hardening ("these modules are also imported as
+    libraries, and reconfiguring a library consumer's global stdio would be
+    wrong") — and cycle_pre.py IS imported as a library, both by
+    cycle_post.py itself (`from cycle_pre import WS_RAW_CAP_BYTES`) and by
+    at least 9 test files. Tracked separately (not a crash, just an
+    architectural inconsistency with the documented contract) rather than
+    fixed inline here, to keep this correction narrowly scoped.
+    """
+
+    RECONFIGURE_GUARDED = ["cycle", "cycle_pre", "cycle_post"]
+
+    _RECONFIGURE_STDOUT_RE = re.compile(
+        r"""sys\.stdout\.reconfigure\(\s*encoding\s*=\s*['"]utf-8['"]"""
+    )
+
+    @pytest.mark.parametrize("mod", RECONFIGURE_GUARDED)
+    def test_module_has_utf8_reconfigure_guard(self, mod):
+        src = (SCRIPTS / f"{mod}.py").read_text(encoding="utf-8")
+        assert self._RECONFIGURE_STDOUT_RE.search(src), (
+            f"{mod}.py relies on a UTF-8 reconfigure guard instead of "
+            f"harden_stdio() (#13198/#13846) — if this guard was "
+            f"intentionally removed, add harden_stdio() to main() instead "
+            f"and move {mod!r} from TestUtf8ReconfigureAlternative13846."
+            f"RECONFIGURE_GUARDED into TestFleetWiring13198.WIRED so the "
+            f"cp1252 crash-proofing isn't silently dropped"
+        )
+
+    def test_cycle_pre_and_post_also_guard_stderr(self):
+        """cycle_pre.py/cycle_post.py reconfigure BOTH streams (unlike
+        cycle.py, which only guards stdout — its CLI never prints decorative
+        Unicode to stderr, so that gap is a documented non-issue there, not a
+        pattern to enforce on all three)."""
+        for mod in ("cycle_pre", "cycle_post"):
+            src = (SCRIPTS / f"{mod}.py").read_text(encoding="utf-8")
+            assert re.search(
+                r"""sys\.stderr\.reconfigure\(\s*encoding\s*=\s*['"]utf-8['"]""",
+                src,
+            ), f"{mod}.py must also guard stderr, not just stdout"
+
+    def test_reconfigure_actually_prevents_the_crash(self):
+        """Real reproduction (not a string match): apply the exact guard
+        these modules use to a genuinely cp1252-encoded stream — the same
+        stream shape `TestHardenStdio.test_baseline_cp1252_arrow_raises`
+        proves crashes without protection — and confirm decorative Unicode
+        (the arrow AND the squid emoji these modules print on every cycle)
+        writes without raising."""
+        stream = _cp1252_stream()
+        assert stream.encoding.lower() != "utf-8"
+        # Mirrors the exact guard: `if sys.stdout.encoding != "utf-8": ...`
+        if stream.encoding.lower() != "utf-8":
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        stream.write("[\U0001F991 12:00:00] cycle_post → done — ok\n")
+        stream.flush()  # must not raise
 
 
 class TestHarnessWiring13236:

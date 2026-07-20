@@ -137,8 +137,11 @@ python references/scripts/tracker.py create-issue \
   --body "**Observation**: [what the scan found]
 **Location**: [file:line or symbol]
 **Suggested fix**: [one-line approach]" \
-  --role [owning-role] --severity low --reporter [ROLE]-lead
+  --role [owning-role] --severity low --reporter [ROLE]-lead \
+  --extra-label improvement-scan
 ```
+
+`--extra-label improvement-scan` (#13743) is what actually applies the `improvement-scan` label the neighboring improvement-scan sub-skill instructs you to tag — `create-issue` has no other way to attach a label beyond the fixed type/severity/role/status set.
 
 **Cross-role issue** — root cause is in another agent's domain (`--role` differs from `--reporter`):
 

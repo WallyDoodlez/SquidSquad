@@ -1,5 +1,84 @@
 # Scan History
 
+## Scan — 2026-07-19 13:26
+
+- **Files scanned**: references/scripts/wizard.py + config.py (suggest-targets picks; TODO/FIXME clean; corrected a false-positive duplicate-def grep of my own (`_parse_agents_v1`/`_parse_agents_v2` matched as dupes under a digit-excluding regex -- fixed pattern, no real dupes); investigated 2 em-dash hits genuinely INSIDE `raise AliasesRegistryError(...)` message text in config.py (not just comments) -- traced the concern through to compose.py's `except Exception as e: print(f"...{e}...")` catch site and confirmed it's moot: every caller in the chain (config.py, compose.py, wizard.py mains) already calls `harden_stdio()` per #13198, so individual message content doesn't matter; the real gate is entry-point wiring, not per-string unicode sweeps, for scripts already in the WIRED list. That reframing led to the actual valuable check this scan: **cross-referenced all 46 references/scripts/*.py files with a `__main__` entry against the 12-script #13198 WIRED list** (script names + non-ASCII-on-print/raise detection, all file I/O not just the WIRED subset) -- found 8 unwired scripts with non-ASCII print/raise content; the 2 highest-blast-radius (cycle_pre.py, cycle_post.py -- the harness's every-single-cycle mechanical wrappers, more heavily invoked than any already-wired script) got a full investigation and were filed; the other 6 (run_comprehension_test.py, squidsquad_cli.py, vault_check.py, vault_optimize.py, repo_scan.py, tc_coverage.py) are lower-blast-radius one-off utilities, noted in the filed issue's body for a future sweep rather than filed separately (stayed within the 2-finding cap by choice, not by exhausting it).
+- **Findings**: 1 filed -- #13846 (HIGH, role:skill -- cycle_pre.py/cycle_post.py unwired for #13198 cp1252 crash-proofing; reproduced the underlying UnicodeEncodeError class live against my own scan tooling mid-investigation, printing a `→`-bearing line copied from cycle_post.py to this Windows console).
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 12:22
+
+- **Process note**: `scan_index.py suggest-targets` had returned the same top-5 (already-scanned) files for 3 consecutive scans -- turns out I'd only been calling `subloop_driver.py record-scan` (burst/cooldown bookkeeping), never `scan_index.py record-scan` (the churn-ranking index feeding suggest-targets), so it never learned these files were freshly covered. Ran `scan_index.py rebuild` (backfills the DB from scan-history.md's own entries) -- suggestions immediately rotated to fresh targets. Going forward, prefer `scan_index.py record-scan --role skill --files <list>` after each scan so this doesn't recur; `rebuild` is the recovery lever if it's skipped again.
+- **Files scanned**: references/roles/SOUL.md (114 lines, full read -- this is literally my own composed Soul content; cross-checked its internal self-references (*Universal Quality Gate*, *Token Consciousness*, *Never Stop While Work Is Pending*) all resolve to real sections in the same file, no drift against the live composed instructions), tests/test_harness.py (5775 lines; TODO/FIXME/XXX/HACK grep clean; skip/xfail grep clean; 53 test classes, no duplicate names).
+- **Findings**: none. Both files clean.
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 11:23
+
+- **Files scanned**: docs/COMPOSE-ARCHITECTURE.md (1708 lines; suggest-targets 5th pick, the one untouched file from the last 2 scans; TODO/FIXME/XXX/HACK grep clean (1 XXX hit was inside a quoted illustrative example string, not a real marker); cross-referenced all 3 same-doc anchor links against their target headings' GitHub slug -- 2 correct, 1 broken: `#33-l4-operations-creative-overlay` doesn't match `### 3.3 Layer operations (L2-L4 creative overlay)`'s actual slug `#33-layer-operations-l2-l4-creative-overlay`; grepped the repo for other references to the same broken anchor and found 2 more identical hits in docs/sub-skill-catalog.md (lines 266, 275) -- same root cause, not a broader link-hygiene problem in either file).
+- **Findings**: 1 filed -- #13845 (low, role:pm -- broken internal anchor link, 3 occurrences across 2 docs, cosmetic-only navigation defect; routed to PM since docs/*-ARCH.md is PM's docs-only domain, outside worker's code/code-consumed-data lane).
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 10:32
+
+- **Files scanned**: references/roles/pm/instructions.md (166 lines, full read -- cross-referenced frontmatter `step-ids` (12 entries) against all 12 `#### step:cycle/*` body anchors, still exact-match order per the #13801 fix; cross-referenced all 16 `→ run sub-skill:` marker names against docs/sub-skill-catalog.md -- all resolve), tests/test_wizard.py (3047 lines; TODO/FIXME/skip/xfail grep clean; 48 test classes, no duplicate names; em-dash sweep found ~24 hits, all in comments/docstrings -- dev-facing source prose, never on a print()/raise console-output path, not the #13728/#13760 crash-risk class).
+- **Findings**: none. Both files clean.
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 09:38
+
+- **Files scanned**: references/scripts/compose.py (2459 lines; suggest-targets top pick; TODO/FIXME/XXX/HACK grep clean; confirmed already wired to cli_stdio.harden_stdio (#13198, line 2150-2151); em-dash/decorative-unicode sweep on print()/raise/f-string literals found 2 hits (line 481 `_render_role_roster`, line 983 the DeepSeek-polish prompt template) -- both traced to non-crash-risk sinks: line 481's output flows only into composed CLAUDE.md content written via `write_text(..., encoding="utf-8")` (lines 1697/1748), never printed to console; line 983's prompt is piped to a subprocess with `subprocess.run(..., encoding="utf-8", errors="replace")` explicitly set -- neither matches the #13728/#13760 crash-risk pattern of an unencoded print()/raise on a strict-console path; cross-referenced `_inject_role_roster`'s "marker-absent steady state" docstring claim against a repo-wide grep for `{{role-roster}}` -- confirmed accurate, the literal only survives in historical/archival planning docs (#9925 CONTEXT/REVIEW, audit-e6, docs/sub-skill-catalog.md's retirement note), never in live composed output), tests/test_wizard_runbook.py (410 lines; TODO/FIXME/skip/xfail grep clean).
+- **Findings**: none. Both files clean; the 2 em-dash hits investigated and confirmed benign (explicit UTF-8 encoding at both sinks).
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 05:52
+
+- **Files scanned**: references/roles/instructions.md (288 lines, the shared L1 base cycle contract composed into every role; full read; cross-referenced every `→ run sub-skill:` marker against docs/sub-skill-catalog.md -- all resolve; cross-referenced docs/AGENT-RUNTIME.md §8.1/§8.4/§8.5 and docs/HARNESS-ARCH.md §7.4 citations -- all sections exist at the cited numbers; verified `[POLLING_FRAGMENT_PATH]`/`[INTERVAL]` placeholders substitute correctly per role, matches previously-seen composed output), tests/test_harness_deploy_12912.py (833 lines; TODO/FIXME grep clean; cross-referenced its "established pattern in test_harness.py::test_ack_stop_confirmed_guarded_by_stopping_intent" citation -- still exists).
+- **Findings**: none. Both files clean.
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 04:54
+
+- **Files scanned**: references/scripts/wizard.py (4520 lines; TODO/FIXME grep clean; AST em-dash/decorative-Unicode sweep on print() literals + f-string segments found a live hit; grepped for harden_stdio/cli_stdio wiring -- zero hits), tests/test_cli_stdio_13198.py (cross-referenced the TestFleetWiring13198.WIRED list -- wizard.py absent).
+- **Findings**: 1 filed — #13760 (low — wizard.py, the setup/install CLI, never calls cli_stdio.harden_stdio() and is absent from the #13198 fleet-wiring test's WIRED list; also has a live em-dash literal on an ERROR-path print (line ~4398, fires when a role fails to compose during setup) that would crash a strict cp1252 console instead of printing the clear error message -- same class as #13728's git_ops.py finding, different script).
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 03:22
+
+- **Files scanned**: SKILL.md (529 lines, TODO/FIXME clean, cross-referenced 9 file paths mentioned in prose -- all resolve), tests/test_tracker.py (908 lines, TODO/FIXME + skip/xfail markers grep clean), docs/INSTALLER-RUNTIME.md (light skim, PM-owned architecture doc, nothing flagged).
+- **Findings**: none.
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 02:22
+
+- **Files scanned**: references/roles/SOUL.md (114 lines, full read — clean, matches composed content, no drift), references/scripts/config.py (TODO/FIXME + AST em-dash sweep clean, already in the harden_stdio WIRED list), README.md (link-checked all 8 relative .md references — all resolve).
+- **Findings**: none.
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 01:32
+
+- **Files scanned**: docs/HARNESS-ARCH.md, references/scripts/tracker.py, references/sub-skills/common-events/event-mode-contract.md (suggest-targets top-3 for skill; tracker.py TODO/FIXME + AST em-dash sweep both clean, already wired; event-mode-contract.md checked for the append/prepend and no-action-wake wording classes touched elsewhere this session -- no matches, nothing stale found).
+- **Findings**: none.
+- **Items rejected by human**: none
+
+## Scan — 2026-07-19 00:49
+
+- **Files scanned**: references/scripts/harness.py, tests/test_git_ops.py, tests/test_harness.py (suggest-targets top-3 for skill; harness.py TODO/FIXME grep clean, AST em-dash sweep found nothing beyond the already-exempted intentional banner art per TestHarnessWiring13236).
+- **Findings**: none.
+- **Items rejected by human**: none
+
+## Scan — 2026-07-18 23:53
+
+- **Files scanned**: references/scripts/cli_stdio.py (45 lines, full read; never-scanned per name-vs-history diff — the #13198 cp1252-crash-proofing helper). Clean itself, but cross-referencing its own test suite's TestFleetWiring13198.WIRED sweep list against the codebase surfaced a real gap: references/scripts/git_ops.py is not in the 9-script sweep and never calls harden_stdio().
+- **Findings**: 1 filed — #13728 (low — git_ops.py, the most heavily-invoked CLI script in the fleet, never calls harden_stdio() and has 4 live WARNING/ERROR-path print() literals containing U+2014 em-dash, confirmed via the same AST scan the test suite itself uses; a cp1252 console hitting any of these 4 paths would crash with UnicodeEncodeError, producing exactly the false-failure-then-harmful-retry pattern #13198 was created to eliminate fleet-wide).
+- **Items rejected by human**: none
+
+## Scan — 2026-07-18 23:47
+
+- **Files scanned**: references/scripts/orphan_cleanup.py (519 lines, full read; never-scanned per name-vs-history diff — the Windows claude.exe orphan-reaper)
+- **Findings**: none. Clean after a thorough read — already heavily iterated (D1-D8 CONTEXT locks plus #9926 per-role-skip fix and #9937 PID-recycle re-verification), with both unit (test_orphan_cleanup_9688.py) and live-integration (test_feat_9688_orphan_cleanup_live.py) coverage. No forced finding.
+- **Items rejected by human**: none
+
 ## Scan — 2026-07-18 23:04
 
 - **Files scanned**: references/scripts/atomic_emit.py (330 lines, full read; never-scanned per name-vs-history diff — the §4.6 verbatim-triple atomic-write module) and references/scripts/subloop_driver.py (339 lines, full read; also never-scanned, despite heavy personal use this session as the idle-cooldown-loop driver)
@@ -540,83 +619,5 @@
 
 - **Files scanned**: references/scripts/wizard.py
 - **Findings**: #8547 (wizard.py: duplicate check=False kwarg crashes cmd_setup_yes — medium), #8548 (wizard.py: load_install_spec uncaught JSONDecodeError — low)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-16 04:03
-
-- **Files scanned**: references/scripts/harness.py
-- **Findings**: #8525 (harness.py: redundant import time as _time), #8526 (harness.py: type mismatch clone_root vs REPO_ROOT)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-16 02:33
-
-- **Files scanned**: references/scripts/vault_remember.py, references/scripts/compose.py, references/scripts/cycle.py
-- **Findings**: #8483 (cycle.py: unused imports io and json), #8484 (cycle.py: set_counter missing upsert logic)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-16 00:32
-
-- **Files scanned**: references/scripts/scan_index.py, references/scripts/vault_optimize.py, references/scripts/event_validator.py
-- **Findings**: #8435 (scan_index.py: acceptance_rate scoring always 0 for unreviewed files)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 22:52
-
-- **Files scanned**: references/sub-skills/roles/dm/prohibitions.md, references/prompts/discussion-prep.md.j2, references/prompts/improvement-scan.md.j2, references/roles/LAYERS.md, references/roles/dev/android/instructions.md
-- **Findings**: #8381 (LAYERS.md references deprecated reboot_agent.py instead of start_team.py)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 22:02
-
-- **Files scanned**: references/scripts/health_check.py, references/scripts/state_bus.py
-- **Findings**: #8350 (state_bus.py: unused import os)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-15 21:03
-
-- **Files scanned**: references/scripts/config.py, references/scripts/cycle_pre.py
-- **Findings**: #8343 (cycle_pre.py: inconsistent boolean config parsing across functions)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-15 20:03
-
-- **Files scanned**: references/scripts/cycle_post.py, references/scripts/model_router.py
-- **Findings**: #8336 (cycle_post.py: redundant import re inside two functions)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-15 18:32
-
-- **Files scanned**: references/scripts/triage.py, references/scripts/event_bus.py, tests/test_triage.py, tests/test_event_bus.py, tests/test_feat_2495_upgrade_rewrite.py
-- **Findings**: #8307 (triage.py: dead code in find_qa_rejected own-comment check)
-- **Items rejected by human**: none
-
-## Scan — 2026-05-15 17:33
-
-- **Files scanned**: references/scripts/tracker.py, references/scripts/git_ops.py, references/scripts/squidsquad_cli.py
-- **Findings**: #8268 (tracker.py get_state returns OPEN for missing state — low), #8269 (squidsquad_cli.py unused import os — low)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 16:03
-
-- **Files scanned**: references/scripts/start_team.py, references/scripts/thin_launcher.py, references/scripts/diagnostics.py
-- **Findings**: #8234 (start_team.py bare except swallows all errors — low), #8235 (diagnostics.py missing redaction keywords — medium)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 14:33
-
-- **Files scanned**: references/scripts/vault_check.py, references/scripts/vault_entity.py, references/scripts/tc_coverage.py
-- **Findings**: #8200 (vault_check.py wikilink pipe-alias not stripped — low), #8201 (vault_entity.py unhandled --file read error — low)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 13:33
-
-- **Files scanned**: references/scripts/event_bus.py, references/scripts/event_bus_reader.py, references/scripts/event_catalog.py
-- **Findings**: #8193 (unused import sys in event_bus.py and event_bus_reader.py — low)
-- **Items rejected by human**: none yet
-
-## Scan — 2026-05-15 11:33
-
-- **Files scanned**: references/scripts/compose.py, references/scripts/boot_remote.py, references/scripts/soul_adaptation.py
-- **Findings**: #8159 (compose.py redundant imports in agent_compose — low), #8160 (boot_remote.py corrupt .claude-pid silent fallthrough — low)
 - **Items rejected by human**: none yet
 

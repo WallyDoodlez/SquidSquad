@@ -50,6 +50,16 @@ EXCLUDE_DIRS = {
 # into scan-history.archive.md (never deleted, never re-read by instructions).
 SCAN_HISTORY_RETENTION = 100
 
+# #13729: PM's declared scan domain (roles/pm/improvement-scan.md) is process
+# files only -- sub-skills, role sources, CLAUDE.md/vault/config.md under
+# .squidsquad/ -- never application code. suggest_targets() has no role-aware
+# filtering at all, so PM was getting references/scripts/*.py and tests/*.py
+# in its suggestions. .squidsquad/ is already unreachable here (EXCLUDE_DIRS
+# above applies globally to every role, including PM's own declared targets
+# under it -- a deeper architecture gap, not addressed by this scoped fix);
+# this only strips the two application-code prefixes PM was concretely handed.
+PM_EXCLUDED_PREFIXES = ("references/scripts/", "tests/")
+
 # File extensions to exclude (binary / generated)
 EXCLUDE_EXTS = {
     ".pyc", ".pyo", ".exe", ".dll", ".so", ".dylib",
@@ -211,6 +221,10 @@ def suggest_targets(role, count=5, db_path=None):
 
     # Get all source files on disk
     all_files = _walk_source_files(root)
+    if role == "pm":
+        all_files = [
+            f for f in all_files if not f.startswith(PM_EXCLUDED_PREFIXES)
+        ]
     if not all_files:
         conn.close()
         return []

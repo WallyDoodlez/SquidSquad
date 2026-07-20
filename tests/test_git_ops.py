@@ -321,6 +321,81 @@ class TestStashTopRef:
         assert git_ops._stash_top_ref() == ""
 
 
+class TestStashGuardedFfOnlyMerge:
+    """#13819/#13831: the shared stash-before/pop-after wrapper around
+    `git merge --ff-only <ref>`. Factored out of _sync_local_branch_to_origin
+    (#13819, the first of 3 identical call sites fixed) so
+    _checkout_and_ff_working_after_merge (#13447) and
+    _sync_working_branch_to_origin (#13613) get the same protection instead
+    of reimplementing it independently -- and so a future 4th fast-forward
+    call site inherits the fix automatically."""
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_clean_tree_no_stash_no_pop(self, mock_run, mock_rl):
+        # _stash_top_ref() returns "" both before and after `git stash -q`
+        # (a no-op stash on a clean tree never creates an entry) -> stashed
+        # is False -> no pop attempted.
+        mock_run.side_effect = [
+            _mock_result(returncode=1),   # _stash_top_ref pre -> ""
+            _mock_result(),               # git stash -q
+            _mock_result(returncode=1),   # _stash_top_ref post -> "" (unchanged)
+        ]
+        mock_rl.return_value = _mock_result(returncode=0)
+        ff = git_ops._stash_guarded_ff_only_merge("origin/main")
+        assert ff.returncode == 0
+        mock_rl.assert_called_once_with(
+            ["git", "merge", "--ff-only", "origin/main"], check=False
+        )
+        assert mock_run.call_count == 3  # pre, stash, post -- no pop/drop
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_dirty_tree_stashes_and_pops_after_success(self, mock_run, mock_rl):
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # _stash_top_ref pre -> ""
+            _mock_result(),                      # git stash -q (creates one)
+            _mock_result(stdout="newsha"),       # _stash_top_ref post -> changed
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
+        ]
+        mock_rl.return_value = _mock_result(returncode=0)
+        ff = git_ops._stash_guarded_ff_only_merge("origin/main")
+        assert ff.returncode == 0
+        pop_calls = [c for c in mock_run.call_args_list if c.args[0] == "git stash pop"]
+        assert len(pop_calls) == 1
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_preexisting_unrelated_stash_never_popped(self, mock_run, mock_rl):
+        # A pre-existing stash present both before and after `git stash -q`
+        # (which no-ops on a clean tree) -> stashed=False -> must never pop.
+        mock_run.side_effect = [
+            _mock_result(stdout="oldsha"),   # _stash_top_ref pre: pre-existing
+            _mock_result(),                  # git stash -q (no-op, clean tree)
+            _mock_result(stdout="oldsha"),   # _stash_top_ref post: unchanged
+        ]
+        mock_rl.return_value = _mock_result(returncode=0)
+        git_ops._stash_guarded_ff_only_merge("origin/main")
+        pop_calls = [c for c in mock_run.call_args_list if c.args[0] == "git stash pop"]
+        assert not pop_calls
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    def test_ff_failure_still_restores_stash_before_returning(self, mock_run, mock_rl):
+        mock_run.side_effect = [
+            _mock_result(returncode=1),          # _stash_top_ref pre -> ""
+            _mock_result(),                      # git stash -q (creates one)
+            _mock_result(stdout="newsha"),       # _stash_top_ref post -> changed
+            _mock_result(),                      # _safe_stash_pop: git stash pop (clean)
+        ]
+        mock_rl.return_value = _mock_result(returncode=1, stderr="ff failed")
+        ff = git_ops._stash_guarded_ff_only_merge("origin/main")
+        assert ff.returncode == 1
+        pop_calls = [c for c in mock_run.call_args_list if c.args[0] == "git stash pop"]
+        assert len(pop_calls) == 1, \
+            "uncommitted work must be restored even when the ff-only merge still fails"
+
+
 # ---------------------------------------------------------------------------
 # add_all()
 # ---------------------------------------------------------------------------
@@ -1053,6 +1128,59 @@ class TestRestoreMergeDroppedState13556:
         assert restored == []  # ff → no HEAD^2 → guard is a no-op
         assert not (repo / note).exists()
 
+    def test_real_merge_of_canonical_remote_deletion_not_restored(self, tmp_path, monkeypatch):
+        """#13723 end-to-end: origin/main ITSELF deletes a protected path (a
+        teammate's own git rm --cached, exactly PM's #13714 untrack commit
+        this session), our local main is stale and diverged (an unrelated
+        local commit), and `git merge origin/main --no-edit` cleanly adopts
+        the deletion (no conflict -- our side never touched the file). The
+        guard must NOT restore it: origin/main confirms the deletion is
+        authoritative, not something the merge silently lost."""
+        bare = tmp_path / "origin.git"
+        self._git(tmp_path, "init", "--bare", str(bare))
+
+        origin_clone = tmp_path / "origin_clone"
+        self._git(tmp_path, "clone", str(bare), str(origin_clone))
+        self._git(origin_clone, "config", "user.email", "t@t")
+        self._git(origin_clone, "config", "user.name", "t")
+        self._git(origin_clone, "checkout", "-b", "main")
+        log = ".squidsquad/harness-errors.log"
+        (origin_clone / ".squidsquad").mkdir(parents=True)
+        (origin_clone / log).write_text("live log content\n")
+        self._git(origin_clone, "add", "-A")
+        self._git(origin_clone, "commit", "-m", "base: log tracked")
+        self._git(origin_clone, "push", "origin", "HEAD:main")
+
+        # local clones AFTER origin has content on main. The bare repo's HEAD
+        # symref was fixed at `init --bare` time (before "main" existed), so
+        # clone can't auto-checkout it -- explicit checkout instead.
+        local = tmp_path / "local"
+        self._git(tmp_path, "clone", str(bare), str(local))
+        self._git(local, "config", "user.email", "t@t")
+        self._git(local, "config", "user.name", "t")
+        self._git(local, "checkout", "main")
+
+        # origin: a teammate untracks the log (PM's real #13714 fix shape).
+        self._git(origin_clone, "rm", "--cached", log)
+        self._git(origin_clone, "commit", "-m", "untrack log")
+        self._git(origin_clone, "push", "origin", "HEAD:main")
+
+        # local: diverges with an unrelated commit BEFORE fetching the above.
+        (local / "code.py").write_text("x = 1\n")
+        self._git(local, "add", "code.py")
+        self._git(local, "commit", "-m", "local: unrelated code")
+
+        self._git(local, "fetch", "origin")
+        self._git(local, "merge", "origin/main", "--no-edit")
+        assert not (local / log).exists(), "setup failed to reproduce the clean delete"
+
+        monkeypatch.setattr(git_ops, "REPO_ROOT", local)
+        with patch.object(git_ops, "_emit"):
+            restored = git_ops._restore_merge_dropped_state()
+        assert restored == [], (
+            "origin/main confirms the deletion -- must not be restored")
+        assert not (local / log).exists()
+
     def test_no_orig_head_is_noop(self, tmp_path, monkeypatch):
         """A fresh repo with no merge (no ORIG_HEAD) → guard returns [] cleanly."""
         repo = tmp_path / "fresh"
@@ -1091,9 +1219,12 @@ class TestRestoreMergeDroppedState13556:
                   ".squidsquad/skill/working-state.md": 800}
         after = {".squidsquad/vault/galaxy/a.md": 0,     # emptied -> drop
                  ".squidsquad/vault/galaxy/b.md": 0}     # still empty -> not a drop
+        # #13723: incoming side still has real content for both -> genuine drops.
+        incoming = {".squidsquad/vault/galaxy/a.md": 40,
+                    ".squidsquad/skill/working-state.md": 800}
         # working-state.md absent in `after` -> dropped.
         with patch.object(git_ops, "_state_blob_sizes",
-                          side_effect=[before, after]):
+                          side_effect=[before, after, incoming]):
             assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
                 ".squidsquad/skill/working-state.md",
                 ".squidsquad/vault/galaxy/a.md",
@@ -1117,13 +1248,58 @@ class TestRestoreMergeDroppedState13556:
 
     def test_dropped_paths_genuine_empty_head_restores_all(self):
         """A merge that deleted ALL protected files (HEAD genuinely empty {}, not
-        a git failure) IS a real mass-drop → all restored."""
+        a git failure) IS a real mass-drop → all restored -- when the canonical
+        remote still has real content for them (#13723: not an upstream deletion)."""
         before = {".squidsquad/vault/galaxy/a.md": 40,
                   ".squidsquad/skill/working-state.md": 800}
+        origin_state = dict(before)  # origin/<working> never deleted these -> genuine drop
         with patch.object(git_ops, "_state_blob_sizes",
-                          side_effect=[before, {}]):  # HEAD genuinely has none
+                          side_effect=[before, {}, origin_state]):  # HEAD genuinely has none
             assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
                 ".squidsquad/skill/working-state.md",
+                ".squidsquad/vault/galaxy/a.md",
+            ]
+
+    def test_dropped_paths_origin_confirms_deletion_not_restored(self):
+        """#13723: if origin/<working>'s current tip ALSO has a path
+        absent/emptied, the deletion is authoritative (already landed on the
+        canonical remote, e.g. a teammate's own untrack commit) -- not a drop."""
+        before = {".squidsquad/vault/galaxy/a.md": 40,
+                  ".squidsquad/skill/working-state.md": 800}
+        after = {}  # both absent post-merge
+        origin_state = {".squidsquad/vault/galaxy/a.md": 0,
+                        ".squidsquad/skill/working-state.md": 40}
+        # a.md: origin also has it emptied -> legitimate, not restored.
+        # working-state.md: origin still has real content -> genuine drop.
+        with patch.object(git_ops, "_state_blob_sizes",
+                          side_effect=[before, after, origin_state]):
+            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
+                ".squidsquad/skill/working-state.md",
+            ]
+
+    def test_dropped_paths_origin_absent_entirely_not_restored(self):
+        """#13723: origin/<working> missing the path altogether (not just
+        emptied) is the same signal as an explicit delete -- not a drop."""
+        before = {".squidsquad/vault/galaxy/a.md": 40}
+        after = {}
+        origin_state = {}  # path doesn't exist on the canonical remote at all
+        with patch.object(git_ops, "_state_blob_sizes",
+                          side_effect=[before, after, origin_state]):
+            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == []
+
+    def test_dropped_paths_origin_unreadable_falls_back_to_restore(self):
+        """#13723: if origin/<working> can't be resolved (no remote configured,
+        ref not fetched, git failure -> None), the new check must NOT defeat
+        the original #13556 protection -- fall back to restoring, exactly as
+        before this fix. This is what keeps the ORIGINAL #13556 scenario
+        (an arbitrary merged-in branch's deletion, e.g. TestRestoreMergeDropped
+        State13556._repo()'s fixture, which has no origin remote at all)
+        correctly protected."""
+        before = {".squidsquad/vault/galaxy/a.md": 40}
+        after = {}
+        with patch.object(git_ops, "_state_blob_sizes",
+                          side_effect=[before, after, None]):
+            assert git_ops._merge_dropped_state_paths("ORIG_HEAD") == [
                 ".squidsquad/vault/galaxy/a.md",
             ]
 
@@ -2899,10 +3075,15 @@ class TestGuardStagedState11511:
     def test_feature_branch_unstages_state_files(self, _wb, mock_run, mock_run_list):
         mock_run.return_value = _mock_result(stdout="squidsquad/task/11511\n")
         # diff --cached lists both code and state; only state should be unstaged.
+        # #13724: each state path is first checked against origin/<working> --
+        # returncode=1 (differs) means it's a genuine own-edit leak, proceed to
+        # unstage as before.
         mock_run_list.side_effect = [
             _mock_result(stdout="references/scripts/git_ops.py\n"
                                 ".squidsquad/skill/working-state.md\n"
                                 ".claude/scheduled_tasks.json\n"),  # diff --cached
+            _mock_result(returncode=1),  # matches-origin check: working-state.md differs
+            _mock_result(returncode=1),  # matches-origin check: scheduled_tasks.json differs
             _mock_result(returncode=0),  # reset working-state.md
             _mock_result(returncode=0),  # reset scheduled_tasks.json
         ]
@@ -2915,6 +3096,24 @@ class TestGuardStagedState11511:
         assert len(reset_calls) == 2
         reset_paths = [c.args[0][-1] for c in reset_calls]
         assert "references/scripts/git_ops.py" not in reset_paths
+
+    @patch("git_ops._run_list")
+    @patch("git_ops._run")
+    @patch("git_ops._get_working_branch", return_value="main")
+    def test_feature_branch_leaves_origin_matching_state_staged(self, _wb, mock_run, mock_run_list):
+        """#13724: a staged state path identical to origin/main's current
+        content (the merge-brought-main's-own-content case) must be left
+        staged, not reverted to the feature branch's stale HEAD value."""
+        mock_run.return_value = _mock_result(stdout="squidsquad/task/11511\n")
+        mock_run_list.side_effect = [
+            _mock_result(stdout=".squidsquad/qa/working-state.md\n"),  # diff --cached
+            _mock_result(returncode=0),  # matches-origin check: identical -> skip
+        ]
+        unstaged = git_ops.guard_staged_state()
+        assert unstaged == []
+        reset_calls = [c for c in mock_run_list.call_args_list
+                       if c.args[0][:2] == ["git", "reset"]]
+        assert reset_calls == []
 
     @patch("git_ops._run_list")
     @patch("git_ops._run")

@@ -696,6 +696,7 @@ All issues and tasks are tracked as GitHub Issues with structured labels — tha
   ```bash
   python references/scripts/tracker.py comment [NUMBER] --role "skill-lead ($(python references/scripts/config.py alias skill))" --message "[message]"
   ```
+- `tracker.py` auto-prepends the role prefix to the comment body; do NOT include `**skill**` in `--message`.
 - Use Discussion to communicate with other agents — they will read your entries on their next pull.
 - If you need another agent to act, file the bug and note it in Discussion. Do not wait synchronously.
 <!-- /sub-skill: discussion-protocol -->

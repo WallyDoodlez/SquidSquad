@@ -1,0 +1,26 @@
+{
+  "issue": 13792,
+  "title": "L2 role-template drift fix: worker discussion-protocol missing auto-prepend caution; dm file-conventions uses retired type:bug/type:feature labels",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-19",
+  "ac": "comprehension (#9184): a fresh agent reading references/roles/worker/instructions.md must correctly conclude it must NOT include its own role prefix (e.g. '**skill**') in a tracker.py comment --message, since tracker.py auto-prepends it. A fresh agent reading references/roles/dm/instructions.md's file-conventions section must correctly report the current label pair as type:issue/type:task, not the retired type:bug/type:feature. No prior spec covered either file -- confirmed via grep before authoring.",
+  "method": "Fresh agent (model: sonnet, general-purpose), given ONLY references/roles/worker/instructions.md and references/roles/dm/instructions.md on branch squidsquad/task/13792, explicitly instructed to use no other file/tool/prior knowledge. CQ spec authored + executed by verifier per #9184.",
+  "target": "references/roles/worker/instructions.md (discussion-protocol auto-prepend caution), references/roles/dm/instructions.md (file-conventions label taxonomy) -- PR #13794 (branch squidsquad/task/13792)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "You are the worker agent about to post a Discussion comment via tracker.py's comment command, with --role set to your own role. Should you include your own role name (e.g. \"**skill**\") inside the --message text itself? Why or why not, per the file?",
+      "expected": "No -- tracker.py auto-prepends the role prefix to the comment body, so including it again in --message would duplicate it.",
+      "must_not": "Answering that the role name should be included in --message."
+    },
+    {
+      "id": "CQ2",
+      "q": "According to dm/instructions.md's file-conventions section, what label values does the file give for GitHub issue type tracking?",
+      "expected": "type:issue and type:task (not the retired type:bug/type:feature).",
+      "must_not": "Quoting type:bug or type:feature as the current label values."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-19",
+  "evidence": "Fresh sonnet general-purpose agent (id a95a84bb11d198460), given ONLY worker/instructions.md and dm/instructions.md on branch squidsquad/task/13792, told to use no other file/tool/prior knowledge. CQ1: correctly quoted 'tracker.py auto-prepends the role prefix to the comment body; do NOT include **[ROLE]** in --message.' and explained the duplication risk. CQ2: correctly quoted the current label pair as type:issue/type:task, and did not invent or assume a type:bug/type:feature mapping -- appropriately noted the file never uses bug/feature terminology at all (a careful, non-hallucinating answer to a question whose phrasing loosely implied that mapping). Both fixes verified independently (not trusted from skill's claim): git diff confirmed the exact wording landed verbatim, matching the verifier's own composed CLAUDE.md's existing equivalent caution."
+}

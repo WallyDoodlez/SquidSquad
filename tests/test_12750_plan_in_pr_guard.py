@@ -85,8 +85,13 @@ class TestGuardExemptsPlanBody:
             return _mock_result(stdout="squidsquad/task/12750\n")
 
         def fake_run_list(cmd, check=True):
-            if cmd[:3] == ["git", "diff", "--cached"]:
+            if cmd[:4] == ["git", "diff", "--cached", "--name-only"]:
                 return _mock_result(stdout="\n".join(staged_paths) + "\n")
+            if cmd[:3] == ["git", "diff", "--cached"] and "--quiet" in cmd:
+                # #13724: matches-origin/main check -- differs (returncode=1)
+                # so every state path proceeds to the strip path below,
+                # matching this test's "state siblings get stripped" intent.
+                return _mock_result(returncode=1)
             if cmd[:2] == ["git", "reset"]:
                 reset_calls.append(cmd[-1])  # the path arg
                 return _mock_result()

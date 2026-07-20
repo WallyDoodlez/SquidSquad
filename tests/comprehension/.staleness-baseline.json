@@ -3,15 +3,15 @@
   "references/sub-skills/common/l4-curation.md": "638aff62b51b3aeb14124e420d614c5ea43f92b8"
  },
  "10678_spec.json": {
-  "docs/COMPOSE-ARCHITECTURE.md": "3f7e41e0b17704371bdd9ef2e0f4b266226d8e76",
-  "docs/sub-skill-catalog.md": "b2165c46b6f9dc9fd3d93446d76223622a31b388"
+  "docs/COMPOSE-ARCHITECTURE.md": "e50c3b0af405f37fb311c4fd213d35b8d11ae5e2",
+  "docs/sub-skill-catalog.md": "a9c426936b2e75f103d71cfd672fe9bbcbe8dec4"
  },
  "11140_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
   "references/roles/responsibility.md": "8495bfec35fdabb092bdf164a356922c92f5e4df"
  },
  "11227_spec.json": {
-  "docs/COMPOSE-ARCHITECTURE.md": "3f7e41e0b17704371bdd9ef2e0f4b266226d8e76",
+  "docs/COMPOSE-ARCHITECTURE.md": "e50c3b0af405f37fb311c4fd213d35b8d11ae5e2",
   "references/scripts/l4_op_processor.py": "af384ef9937b94944cfd1a75ecf504bb5f30e6a0",
   "references/scripts/v2_link_stage.py": "797f2794f6987178385d0ecb3d2b7834e5617210"
  },
@@ -49,7 +49,7 @@
  },
  "12800_spec.json": {},
  "12818_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "aaf4d632617252c91c3c304bcd01042b5f00f73a"
+  ".squidsquad/pm/CLAUDE.md": "48d46f4e6ef81e4491cfef3814d50082a2c4640d"
  },
  "12825_spec.json": {
   "references/sub-skills/common/harness-restart.md": "a43cf57124e8cb35406ae1d0c243f14671e8c5ea"
@@ -99,7 +99,7 @@
   "references/sub-skills/common/harness-restart.md": "a43cf57124e8cb35406ae1d0c243f14671e8c5ea"
  },
  "13327_spec.json": {
-  "references/roles/pm/instructions.md": "d28aa4b117d9be5aed8589690a9ac2922e8bfd6f"
+  "references/roles/pm/instructions.md": "4622738c697086a4b75bc58c1b1a4c2e8b4a9384"
  },
  "13328_spec.json": {
   "docs/INSTALLER-RUNTIME.md": "d345fd45768bc3f8b16420a8b98d6a43d41441ac"
@@ -129,7 +129,7 @@
   "references/sub-skills/roles/verifier/verification.md": "e5180a9753ad4786c6406e53d6da94d928fb9202"
  },
  "13551_spec.json": {
-  "references/sub-skills/common/git-commit.md": "b94d0036f84ebed790bc70f2b47db3bf22391253"
+  "references/sub-skills/common/git-commit.md": "b2afa0b6f0d82665cdba629f8c54a91a9a46d50c"
  },
  "13563_spec.json": {
   "references/sub-skills/common/vault-remember.md": "54bc6fb99e537560fa8df7e1bc74f0761aa672bd"
@@ -138,7 +138,7 @@
   "references/roles/instructions.md": "ddd703dfe9e2929957007b0591792bea028f848b"
  },
  "13566_spec.json": {
-  "references/sub-skills/common/improvement-scan.md": "27fd175de42b184066b0affdbcd0d3ef2b0c595a"
+  "references/sub-skills/common/improvement-scan.md": "0c96478c0a33200ecdb39092bedf534fd61b4c33"
  },
  "13569_spec.json": {
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
@@ -150,9 +150,22 @@
   "references/sub-skills/roles/pm/task-approval.md": "2b68e0c9206f45edf772690dfa4ae8b0cf9fd98a",
   "references/sub-skills/roles/pm/task-intake.md": "ab2151ff0a3d2918258c032567412cd8f92021f8"
  },
+ "13711_spec.json": {
+  "references/sub-skills/common/improvement-scan.md": "0c96478c0a33200ecdb39092bedf534fd61b4c33"
+ },
+ "13735_spec.json": {
+  "references/sub-skills/roles/pm/improvement-scan.md": "d683d3ad3559aabba27831deaad6fc06ad7f4389"
+ },
+ "13746_spec.json": {
+  "references/roles/pm/instructions.md": "4622738c697086a4b75bc58c1b1a4c2e8b4a9384"
+ },
+ "13792_spec.json": {
+  "references/roles/dm/instructions.md": "5e94728963ace4bdb376d96b0cecff7ceb7825e5",
+  "references/roles/worker/instructions.md": "ffe6c41c8eb1967d4b47e8955c1156e6ef577f33"
+ },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
-  "references/sub-skills/roles/verifier/verification-templates.md": "a26674577d5fc7a6933261bdb5656edcaa709427",
+  "references/sub-skills/roles/verifier/verification-templates.md": "62a1b32f260d957ec806450ffffb84f8f3da7b58",
   "references/sub-skills/roles/verifier/verification.md": "e5180a9753ad4786c6406e53d6da94d928fb9202"
  },
  "2181_spec.json": {
@@ -191,9 +204,9 @@
   "tests/comprehension/8697_fixtures/skill_polling_CLAUDE.md": "b4c02ca4eaf7d3f370533052128c2eaea0d4e4af"
  },
  "9184_spec.json": {
-  ".squidsquad/pm/CLAUDE.md": "aaf4d632617252c91c3c304bcd01042b5f00f73a",
-  ".squidsquad/qa/CLAUDE.md": "5e280f67bf27c96071327d87702ad641e7870bc6",
-  ".squidsquad/skill/CLAUDE.md": "dae162488b92e6c6c7fe9fa9e57e741efca30ac1",
+  ".squidsquad/pm/CLAUDE.md": "48d46f4e6ef81e4491cfef3814d50082a2c4640d",
+  ".squidsquad/qa/CLAUDE.md": "047981dd6aaa3338360e0b38a60b4e38ee4dad94",
+  ".squidsquad/skill/CLAUDE.md": "f6a040277df3cd9338880e02e089c70283c6a962",
   "references/sub-skills/roles/pm/task-intake.md": "70fe77ac004801a82ddfe7dd7785f0db394a6607"
  },
  "9588_spec.json": {},

@@ -112,7 +112,16 @@ def read_state(alias):
     state = dict(_DEFAULT_STATE)
     try:
         if "armed" in data:
-            state["armed"] = bool(data["armed"])
+            # #13722: bare bool(data["armed"]) coerced a hand-edited
+            # {"armed": "false"} (JSON string) to True -- Python's
+            # bool("false") == True gotcha, the exact opposite of an
+            # operator's evident intent. Only an exact JSON `true` counts as
+            # armed; any other type (string, int, etc.) is treated as
+            # corruption and falls to False -- the safer failure direction
+            # for an idle-scan scheduler (a wrongly-disarmed driver just
+            # re-arms on the next idle wake; a wrongly-armed one keeps
+            # scanning against the operator's intent).
+            state["armed"] = data["armed"] is True
         if "scan_count" in data:
             state["scan_count"] = int(data["scan_count"])
         if "last_run" in data:

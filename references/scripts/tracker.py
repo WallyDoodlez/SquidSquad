@@ -7,8 +7,8 @@ Agents call this instead of constructing gh commands from prose.
 Usage:
     python scripts/tracker.py list-issues <role>           (alias: list-bugs)
     python scripts/tracker.py list-tasks <role> [--status] (alias: list-features)
-    python scripts/tracker.py create-issue --title <t> --body <b> --role <r> --severity <s> [--reporter <name>]  (alias: create-bug)
-    python scripts/tracker.py create-task --title <t> --body <b> --role <r> --priority <p> [--reporter <name>]   (alias: create-feature)
+    python scripts/tracker.py create-issue --title <t> --body <b> --role <r> --severity <s> [--reporter <name>] [--extra-label <label>]  (alias: create-bug)
+    python scripts/tracker.py create-task --title <t> --body <b> --role <r> --priority <p> [--reporter <name>] [--extra-label <label>]   (alias: create-feature)
     python scripts/tracker.py transition <number> <from-status> <to-status> --role <r> [--force]
     python scripts/tracker.py comment <number> --role <r> --message <m>
     python scripts/tracker.py work-assign --target-alias <alias> [--caller <alias>] [--issue <n>] [--event-context <ctx>] [--payload <json>]  # #12495 manual wake (no transition)
@@ -1072,13 +1072,20 @@ def add_labels(number, labels_str):
     print(f"#{number}: added labels {labels_str}")
 
 
-def create_issue(title, body, role, severity, reporter=None):
+def create_issue(title, body, role, severity, reporter=None, extra_label=None):
     """Create an issue with correct label format.
 
     #6274 D3 dual-aware: also emits the alias `role:*` label during the
     migration window. role=dev/qa adds role:worker/role:verifier and
     vice-versa. The doubling is removed in 6274.3 (`cleanup_labels_6274.py`
     deletes the role:dev/role:qa label classes altogether).
+
+    extra_label (#13743): an additional free-form label to tag alongside the
+    fixed type/severity/role/status set — e.g. `improvement-scan`, which
+    every documented improvement-scan finding template is instructed to
+    apply but had no way to pass through (create_issue accepted no label
+    parameter at all, so the labeled outcome the neighboring instruction
+    promised could only be achieved by a manual follow-up `gh issue edit`).
     """
     sev_label = SEVERITY_LABELS.get(severity, f"severity:{severity}")
     role_label = _filter_role_labels_to_existing(
@@ -1089,6 +1096,8 @@ def create_issue(title, body, role, severity, reporter=None):
     # issues — if issues started at `pending`, they'd sit in limbo because
     # agents interpret `pending` as "awaiting human approval".
     labels = f"type:issue,{sev_label},{role_label},squidsquad,status:open"
+    if extra_label:
+        labels = f"{labels},{extra_label}"
 
     full_body = body
     if reporter:
@@ -1131,16 +1140,20 @@ def create_issue(title, body, role, severity, reporter=None):
 create_bug = create_issue
 
 
-def create_task(title, body, role, priority, reporter=None):
+def create_task(title, body, role, priority, reporter=None, extra_label=None):
     """Create a task with correct label format.
 
     #6274 D3 dual-aware: also emits the alias `role:*` label during the
     migration window — see create_issue.
+
+    extra_label (#13743): see create_issue — same passthrough for tasks.
     """
     pri_label = PRIORITY_LABELS.get(priority, f"priority:{priority}")
     role_label = _filter_role_labels_to_existing(
         _build_dual_role_labels_6274(role), role)  # #13465
     labels = f"type:task,{pri_label},{role_label},squidsquad,status:pending"
+    if extra_label:
+        labels = f"{labels},{extra_label}"
 
     full_body = body
     if reporter:
@@ -1574,7 +1587,16 @@ def transition(number, from_status, to_status, role=None, force=False):
             sys.exit(1)
 
     # 4. Guard: TC coverage gate for pending-test -> pending-ship
-    #    (NEVER bypassed, even with --force)
+    #    (NEVER bypassed, even with --force -- but only ACTIVATES when a
+    #    TEST-PLAN-<N>.md is discovered for the issue. TEST-PLAN authorship
+    #    is task-flow-only (verification.md Step 5, AC-derived TCs);
+    #    verification-issue-flow.md's type:issue bug-fix path never produces
+    #    one -- that flow is instead gated by its own Step 4/5 requirements
+    #    (a regression test must exist + the full suite must pass), enforced
+    #    by the verifier directly rather than by this script. #13838: do not
+    #    read the absence of a TC-coverage BLOCKED here as "the gate was
+    #    skipped" for type:issue items -- it structurally never applies to
+    #    them, by design, not as an accidental gap.
     if from_label == "status:pending-test" and to_label == "status:pending-ship":
         try:
             from tc_coverage import _discover_files, check_coverage
@@ -2035,7 +2057,8 @@ def main():
                 print(f"Missing --{req}", file=sys.stderr)
                 sys.exit(1)
         create_issue(opts["title"], opts["body"], opts["role"],
-                     opts["severity"], opts.get("reporter"))
+                     opts["severity"], opts.get("reporter"),
+                     opts.get("extra-label"))
 
     elif cmd in ("create-task", "create-feature"):
         for req in ("title", "body", "role", "priority"):
@@ -2043,7 +2066,8 @@ def main():
                 print(f"Missing --{req}", file=sys.stderr)
                 sys.exit(1)
         create_task(opts["title"], opts["body"], opts["role"],
-                    opts["priority"], opts.get("reporter"))
+                    opts["priority"], opts.get("reporter"),
+                    opts.get("extra-label"))
 
     elif cmd == "transition":
         if len(pos) < 3:

@@ -1,31 +1,27 @@
 # Working State
 
-- **Task**: #10003 (VAULT-ARCH.md v2 TRD rewrite — in-progress, resumable)
-- **Status**: DRAFT COMPLETE — all sections v2, pushed (PR #13708 still draft). NEXT: DS audit (model_router.py + providers/deepseek; internal + cross-pair vs ARCHITECTURE/AGENT-RUNTIME/COMPOSE/INSTALLER per prose-drift discipline, iterate to convergence), then Claude final-pass, then PR→ready + operator review.
-- **Updated**: 2026-07-18 22:35
+- **Task**: none
+- **OPERATOR DIRECTIVE (2026-07-19 inline, one-off)**: when #13846 finishes (ship), PAUSE the team — POST /agents/{role}/stop for skill, qa, dm (individually; NOT all-stop, PM stays up for inline). While paused: idle-driver stays disarmed (no improvement scans), PM burns tokens only for inline conversation + event acks. Resume only on operator say-so.
+- **Status**: Idle, event mode. Awaiting operator action on HITL items below.
+- **Updated**: 2026-07-19 05:45
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
 
-## Session note (EVENT boot 2026-07-18 ~22:17, post-deploy respawn)
+## Session note (EVENT boot 2026-07-19 ~05:45)
 
-Booted EVENT mode post-#13565-recompose. Resumed #10003 directly.
-
-**#10003 progress**: §1–§6 now drafted+pushed on `squidsquad/task/10003` (draft PR #13708). This session: §5 (BRIEFING hot layer, prescriptive + Vault Pulse auto-digest as target state), §6 (consumption engine: 6.1 event model, 6.2 search/ranking contract, 6.3 **git-tracked per-writer telemetry shards per planning §10.5 — operator lock-in PENDING, marked in doc**, 6.4 impressions report, 6.5 compaction), §3.5 templates (registry-derived), consistency patches §2/§4.3/§4.4 (removed superseded harness-owned-store language), v1 markers on §7–§12.
-
-**DONE this session**: §10.3 verifications RESOLVED by live probe (planning §10.7: Skill-invocation CONFIRMED from harness-spawned session; Node NOT guaranteed → preflight soft-prereq). §7/§8 rewritten (engine boundary §8.5, packaging §7.5). §6.3 telemetry LOCKED by operator (planning §10.6). **NEXT**: DS audit as above; do NOT flip PR to ready before audit convergence. NOTE #13714 interaction: PM clone has .git/info/exclude for the 3 harness logs; main untracked twice (81773c447, 73429d267 via temp worktree — Windows lock workaround).
-
-Planning seed: `.squidsquad/pm/planning/VAULT-COMPARISON-DMPWEB.md` — §10 supersedes parts of §9; §10.5 = telemetry design.
+Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #13760 (wizard.py harden_stdio) and #13746 shipped cleanly by skill/verifier/dm, zero PM intervention. Post-merge recompose run for PR #13786 (touched references/scripts/wizard.py) — no composed drift. work_queue(pm) re-verified: #10690 only, still GATED (E7/#10686 OPEN). Idle driver re-armed (reidle, scan_count 0/3, cron 4,34 * * * *).
 
 ## HITL standing (advertise each check-in)
 
-- **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN.
-- ~~Vault-v2 telemetry lock-in~~ RESOLVED: operator LOCKED §6.3 inline 2026-07-18 (per-writing-clone shards, UUID instance ids). Recorded: TRD §6.3, planning §10.6, BRIEFING.
-- **Multi-instance/parallel-squads design task** — offered to operator inline (one dev, X squads, one install; state layer not instance-safe). NOT yet confirmed as requirement — re-raise at next check-in.
-- **~128 `status:pending` backlog tasks** awaiting operator go-ahead (count verified this session).
+- **#10003** — VAULT-ARCH v2 TRD, pending-human-review, PR #13708 all-gates-passed, awaiting merge approval. (verified 05:45)
+- **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN. (verified 05:45)
+- **#10377** — blocked:human-action (gated L4 DM curation task).
+- **#13807** — pending-human-setup: delete stale sibling dirs SquidSquad-web + SquidSquad-qa-omain (recovered from shipped #13793's untracked comment-only ask; PM closes on confirmation).
+- **#10024 / #8702 / #8698** — doc-realignment cluster: approve #10024 as rescoped; rule on closing #8702 (rec: supersede) and #8698 (rec: re-scope or close).
+- **~128 `status:pending` backlog tasks** awaiting operator go-ahead (verified 2026-07-18).
 
 ## PM queue
 
-- work_queue(pm approved) = #10690 only, GATED (E7/#10686 OPEN) — not pickable.
-- #10003 is my in-progress task (see above).
+- work_queue(pm approved) = #10690 only, GATED (E7/#10686 OPEN, re-verified 2026-07-19 05:45) — not pickable.
 - Parked coord-holds: #11092 / #10839 / #9968.
-- Idle-driver: cancelled at cap in a prior session; state in .subloop-driver.json; re-arm on next idle.
+- Idle-driver: re-armed 2026-07-19 05:45 (scan_count 0/3, cron job 8750c6bc).

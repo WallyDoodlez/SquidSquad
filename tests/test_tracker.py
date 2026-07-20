@@ -15,6 +15,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "references" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import tracker
+import tc_coverage
 
 
 def _mock_result(stdout="", stderr="", returncode=0):
@@ -264,6 +265,50 @@ class TestCreateIssue:
         assert title_arg == "ISSUE: already prefixed"
         assert not title_arg.startswith("ISSUE: ISSUE:")
 
+    def test_extra_label_appended_13743(self, monkeypatch):
+        """#13743: create_issue must be able to tag an extra label (e.g.
+        improvement-scan) alongside the fixed type/severity/role/status set."""
+        calls = []
+
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
+            return _mock_result(stdout="https://github.com/org/repo/issues/1\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
+        tracker.create_issue("test", "body", "skill", "low",
+                              extra_label="improvement-scan")
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
+        assert "improvement-scan" in label_arg.split(",")
+
+    def test_no_extra_label_by_default(self, monkeypatch):
+        calls = []
+
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
+            return _mock_result(stdout="https://github.com/org/repo/issues/1\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
+        tracker.create_issue("test", "body", "skill", "low")
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
+        assert "improvement-scan" not in label_arg.split(",")
+
+    def test_extra_label_via_forge_adapter(self, monkeypatch):
+        adapter_calls = []
+
+        class FakeAdapter:
+            def create_issue(self, title, body, labels=None):
+                adapter_calls.append({"labels": labels})
+                return {"number": 1, "url": "http://forge/issues/1"}
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: FakeAdapter())
+        tracker.create_issue("test", "body", "skill", "low",
+                              extra_label="improvement-scan")
+        assert "improvement-scan" in adapter_calls[0]["labels"]
+
 
 class TestCreateTask:
     def test_creates_with_pending_status(self, monkeypatch):
@@ -312,6 +357,49 @@ class TestCreateTask:
         tracker.create_task("feat", "body", "skill", "medium", reporter="skill-lead")
         # #13370: the reporter-annotated body is now passed as the stdin body arg.
         assert "**Reported By**: skill-lead" in calls[0][1]
+
+    def test_extra_label_appended_13743(self, monkeypatch):
+        """#13743: create_task mirrors create_issue's extra_label passthrough."""
+        calls = []
+
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
+            return _mock_result(stdout="https://github.com/org/repo/issues/52\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
+        tracker.create_task("feat", "body", "skill", "low",
+                             extra_label="improvement-scan")
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
+        assert "improvement-scan" in label_arg.split(",")
+
+    def test_no_extra_label_by_default(self, monkeypatch):
+        calls = []
+
+        def fake_gwb(cmd, body, **kw):
+            calls.append((cmd, body))
+            return _mock_result(stdout="https://github.com/org/repo/issues/53\n")
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_gh_with_body", fake_gwb)
+        tracker.create_task("feat", "body", "skill", "low")
+        cmd = calls[0][0]
+        label_arg = cmd[cmd.index("--label") + 1]
+        assert "improvement-scan" not in label_arg.split(",")
+
+    def test_extra_label_via_forge_adapter(self, monkeypatch):
+        adapter_calls = []
+
+        class FakeAdapter:
+            def create_issue(self, title, body, labels=None):
+                adapter_calls.append({"labels": labels})
+                return {"number": 54, "url": "http://forge/issues/54"}
+
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: FakeAdapter())
+        tracker.create_task("feat", "body", "skill", "low",
+                             extra_label="improvement-scan")
+        assert "improvement-scan" in adapter_calls[0]["labels"]
 
 
 class TestCommentNoRedundantImport:
@@ -906,3 +994,67 @@ class TestHardenStdio13185:
         src = inspect.getsource(tracker.work_assign)
         assert "→" not in src, "work-assign success print must stay ASCII (#13185)"
         assert "work-assign ->" in src
+
+
+class TestTransitionTcCoverageGateScope13838:
+    """#13838: the TC-coverage gate (transition() step 4) only ACTIVATES
+    when tc_coverage._discover_files() finds a TEST-PLAN. Task-flow items
+    author one (AC-derived TCs); type:issue bug-fix verifications never do
+    (verification-issue-flow.md gates them with its own regression-test +
+    full-suite requirements instead). No TEST-PLAN found must remain a
+    structural no-op forever, not an accidental gap that later "hardens"
+    into blocking every type:issue ship."""
+
+    def _stub_transition_environment(self, monkeypatch):
+        monkeypatch.setattr(tracker, "_check_unread_feedback", lambda *a, **kw: [])
+        monkeypatch.setattr(tracker, "_get_forge_adapter", lambda: None)
+        monkeypatch.setattr(tracker, "_run_list",
+                             lambda *a, **kw: _mock_result(stdout="ok"))
+        monkeypatch.setattr(tracker, "_get_issue_status_labels",
+                             lambda n: {"status:pending-test"})
+        monkeypatch.setattr(tracker, "_convert_draft_pr_to_ready", lambda n: None)
+        monkeypatch.setattr(tracker, "_log_diagnostic", lambda *a, **kw: None)
+
+    def test_no_test_plan_never_blocks_pending_ship(self, monkeypatch):
+        """No TEST-PLAN discovered (the type:issue case) -> transition
+        succeeds, no SystemExit. Locks the documented, by-design no-op."""
+        self._stub_transition_environment(monkeypatch)
+        monkeypatch.setattr(tc_coverage, "_discover_files", lambda n: (None, None))
+        try:
+            tracker.transition(13838, "pending-test", "pending-ship",
+                                role="verifier-lead", force=False)
+        except SystemExit:
+            pytest.fail(
+                "TC coverage gate must never block when no TEST-PLAN exists (#13838)"
+            )
+
+    def test_coverage_failure_still_blocks_when_test_plan_exists(
+        self, monkeypatch, tmp_path
+    ):
+        """A TEST-PLAN DOES exist (task-flow) and coverage fails -> the gate
+        still blocks, unaffected by the #13838 scoping clarification."""
+        self._stub_transition_environment(monkeypatch)
+        tp = tmp_path / "TEST-PLAN-13838.md"
+        qr = tmp_path / "QA-RESULTS-13838.md"
+        tp.write_text("dummy", encoding="utf-8")
+        qr.write_text("dummy", encoding="utf-8")
+        monkeypatch.setattr(tc_coverage, "_discover_files", lambda n: (tp, qr))
+        monkeypatch.setattr(tc_coverage, "check_coverage", lambda *a, **kw: 1)
+        with pytest.raises(SystemExit) as exc_info:
+            tracker.transition(13838, "pending-test", "pending-ship",
+                                role="verifier-lead", force=False)
+        assert exc_info.value.code == 1
+
+    def test_missing_qa_results_with_test_plan_still_blocks(
+        self, monkeypatch, tmp_path
+    ):
+        """A TEST-PLAN exists but QA-RESULTS doesn't (task-flow, incomplete)
+        -> still blocks, distinct from the no-TEST-PLAN-at-all no-op case."""
+        self._stub_transition_environment(monkeypatch)
+        tp = tmp_path / "TEST-PLAN-13838.md"
+        tp.write_text("dummy", encoding="utf-8")
+        monkeypatch.setattr(tc_coverage, "_discover_files", lambda n: (tp, None))
+        with pytest.raises(SystemExit) as exc_info:
+            tracker.transition(13838, "pending-test", "pending-ship",
+                                role="verifier-lead", force=False)
+        assert exc_info.value.code == 1

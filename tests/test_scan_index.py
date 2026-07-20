@@ -209,6 +209,35 @@ class TestSuggestTargets:
         assert targets == []
 
 
+class TestSuggestTargetsPmFiltersApplicationCode:
+    """#13729: PM's declared scan domain (roles/pm/improvement-scan.md) is
+    process files only -- suggest_targets("pm", ...) must never hand back
+    application code under references/scripts/ or tests/."""
+
+    def _seed_files(self, tmp_path):
+        (tmp_path / "references" / "scripts").mkdir(parents=True)
+        (tmp_path / "references" / "scripts" / "git_ops.py").write_text("x", encoding="utf-8")
+        (tmp_path / "tests").mkdir(parents=True)
+        (tmp_path / "tests" / "test_git_ops.py").write_text("x", encoding="utf-8")
+        (tmp_path / "references" / "sub-skills").mkdir(parents=True)
+        (tmp_path / "references" / "sub-skills" / "git-commit.md").write_text("x", encoding="utf-8")
+
+    def test_pm_excludes_scripts_and_tests(self, db, tmp_path):
+        self._seed_files(tmp_path)
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            targets = scan_index.suggest_targets("pm", count=10, db_path=db)
+        assert "references/scripts/git_ops.py" not in targets
+        assert "tests/test_git_ops.py" not in targets
+        assert "references/sub-skills/git-commit.md" in targets
+
+    def test_other_roles_unaffected(self, db, tmp_path):
+        self._seed_files(tmp_path)
+        with patch.object(scan_index, "REPO_ROOT", tmp_path):
+            targets = scan_index.suggest_targets("skill", count=10, db_path=db)
+        assert "references/scripts/git_ops.py" in targets
+        assert "tests/test_git_ops.py" in targets
+
+
 class TestSuggestTargetsAutoPrune:
     """#13566 follow-up: suggest_targets() is the only code path invoked
     every improvement-scan cycle (rebuild() is CLI-only), so it must

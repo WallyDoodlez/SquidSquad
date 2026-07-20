@@ -1,0 +1,32 @@
+{
+  "issue": 13746,
+  "title": "roles/pm/instructions.md: wire step:cycle/improvement-scan (roles/pm/improvement-scan.md was orphaned, unreachable via pm's compose path)",
+  "authored_by": "verifier",
+  "authored_at": "2026-07-19",
+  "ac": "comprehension (#9184): a fresh agent reading references/roles/pm/instructions.md in isolation must correctly conclude (1) improvement-scan runs only on quiet cycles (no task picked up), not every cycle, (2) PM's variant is process-focused only and must never scan for or suggest code changes, and (3) improvement-scan is sequenced BEFORE vault-optimize (whose own gating text depends on an improvement scan having already run that cycle). No prior spec covered this file/section -- confirmed via grep before authoring.",
+  "method": "Fresh agent (model: sonnet, general-purpose), given ONLY references/roles/pm/instructions.md on branch squidsquad/task/13746, explicitly instructed to use no other file/tool/prior knowledge. CQ spec authored + executed by verifier per #9184.",
+  "target": "references/roles/pm/instructions.md (new step:cycle/improvement-scan block, inserted before step:cycle/vault-optimize) -- PR #13753 (branch squidsquad/task/13746)",
+  "questions": [
+    {
+      "id": "CQ1",
+      "q": "Under what condition does PM run the improvement-scan step described in the file -- does it run every single cycle, or only under some specific condition? State the condition exactly as the file describes it.",
+      "expected": "Only on quiet cycles (no task picked up) -- not every cycle.",
+      "must_not": "Answering that it runs every cycle unconditionally."
+    },
+    {
+      "id": "CQ2",
+      "q": "What is PM's improvement-scan variant explicitly forbidden from doing, according to the file?",
+      "expected": "It must never scan for or suggest code changes -- PM's variant is process-focused only.",
+      "must_not": "Answering that PM's scan may include code changes, or omitting the process-only constraint."
+    },
+    {
+      "id": "CQ3",
+      "q": "In PM's cycle sequence as laid out in the file, does the improvement-scan step happen before or after the vault-optimize step?",
+      "expected": "Before -- improvement-scan is sequenced immediately ahead of vault-optimize, and vault-optimize's own gating text ('no improvement scan ran this cycle') presupposes it already ran.",
+      "must_not": "Answering that improvement-scan runs after vault-optimize."
+    }
+  ],
+  "result": "PASS",
+  "executed_at": "2026-07-19",
+  "evidence": "Fresh sonnet general-purpose agent (id a894bcb153d6d8415), given ONLY references/roles/pm/instructions.md on branch squidsquad/task/13746, told to use no other file/tool/prior knowledge. 3/3 correct with accurate supporting quotes, zero must_not violations. CQ1: correctly quoted 'On quiet cycles (no task picked up): run a scan...'. CQ2: correctly quoted 'PM's variant is process-focused only -- never scan for or suggest code changes.'. CQ3: correctly identified improvement-scan precedes vault-optimize, citing vault-optimize's own 'AND no improvement scan ran this cycle' condition as corroboration. Separately confirmed via a fresh `compose.py deploy pm` (reverted after inspection, not committed) that this instructions.md content actually lands in PM's composed CLAUDE.md unchanged -- closing the exact reachability gap #13746 reported (source-file wiring is necessary but not sufficient; the compose path had to be independently verified)."
+}
