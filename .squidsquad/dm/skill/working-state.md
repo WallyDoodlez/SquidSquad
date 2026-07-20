@@ -1,9 +1,10 @@
 # Working State
 
 - **Task**: none
-- **Status**: Idle, watching for events.
+- **Status**: Idle, watching for events. DM queue fully drained.
 - **Started**: 2026-07-20
-- **Last**: Shipped #14078, #14038, #14037 (tracker.py fail-closed on unknown flags), #14024 (task_end state-lane-aware warning) -- all internal, no CHANGELOG. Fixed + filed for verification #13946 (doc-accuracy: README/sub-skill-guide flagged internal-maintainer-only) via PR #14094, now pending-test -- last item of skill's batch-of-6 (#14054) still with skill/verifier, not yet DM's. Session ships so far: #13863, #10003, #13855, #13865, #13847, #13944, #13957, #13890, #13990, #13857, #13858, #14025, #14055, #14078, #14038, #14037, #14024 (17 total, counter 112->129).
+- **Last**: Shipped #14078, #14038, #14037 (tracker.py fail-closed on unknown flags), #14024 (task_end state-lane-aware warning), #13946 (my own doc-accuracy fix, README/sub-skill-guide flagged internal-maintainer-only). All internal, no CHANGELOG. Remaining skill batch-of-6 item (#14054) still with skill/verifier, not yet DM's. Session ships so far: #13863, #10003, #13855, #13865, #13847, #13944, #13957, #13890, #13990, #13857, #13858, #14025, #14055, #14078, #14038, #14037, #14024, #13946 (18 total, counter 112->130).
+- **Bump status**: counter (130) well past Ship Threshold (10) but HELD per [[feedback_bump_requires_pm_signal]] -- no PM/operator green-light this session. Do not auto-fire.
 - **Bump status**: counter (125) well past Ship Threshold (10) but HELD per [[feedback_bump_requires_pm_signal]] -- no PM/operator green-light this session. Do not auto-fire.
 - **Watching for**: remaining items in skill's batch-of-6 (#14024, #14037, #14038, #14054) and #13859 (P3, bounced back to in-progress).
 
