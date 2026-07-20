@@ -29,8 +29,12 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-QUERY = REPO / ".claude" / "skills" / "vault-search" / "scripts" / "vault-query.mjs"
-RECORD = REPO / ".claude" / "skills" / "vault-search" / "scripts" / "record-consumption.mjs"
+# The committed source of truth (references/); installs materialize a copy to
+# .claude/skills/ per clone (the repo's standard source -> live split, and the
+# reason commit_code's .claude/ filter never sees the engine).
+SKILL_SRC = REPO / "references" / "skills" / "vault-search"
+QUERY = SKILL_SRC / "scripts" / "vault-query.mjs"
+RECORD = SKILL_SRC / "scripts" / "record-consumption.mjs"
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(
