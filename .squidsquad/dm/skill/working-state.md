@@ -8,4 +8,4 @@
 - **Watching for**: remaining items in skill's batch-of-6 (#14024, #14037, #14038, #14054) and #13859 (P3, bounced back to in-progress).
 
 ## Improvement Scan
-- Status: idle, driver armed, cron 24491cdd live (21,51 * * * *, 30m interval). scan_count 2/3.
+- Status: idle, driver armed, cron 9c4e29b6 live (7,37 * * * *, 30m interval). scan_count 0/3 (reidled after processing #14078/#14038/#13946).
