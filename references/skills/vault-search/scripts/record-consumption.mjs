@@ -59,8 +59,9 @@ export function parseArgs(argv) {
     else if (a === '--instance-id') out.instanceId = String(argv[++i] || '').trim();
     else if (a === '--alias') out.alias = String(argv[++i] || '').trim();
     else if (a === '--task') {
+      // Tracker issue numbers start at 1 — 0/negative/garbage all reject.
       const n = Number.parseInt(argv[++i], 10);
-      out.task = Number.isFinite(n) ? n : null;
+      out.task = Number.isFinite(n) && n >= 1 ? n : null;
     }
   }
   out.slugs = splitList(slugs);

@@ -53,8 +53,9 @@ impressions report and gets pruned.
     {"slug": "decision-auth-flow", "path": "galaxy/decision-auth-flow.md",
      "folder": "galaxy", "type": "decision", "status": "active",
      "tier": "filename", "direct": true, "score": 2.75,
-     "title": "Auth flow decision", "used": 1, "impression": 3,
-     "walkedTotal": 0, "lastUsed": "2026-07-18", "linksOut": ["hub-auth"]}
+     "title": "Auth flow decision", "updated": "2026-07-19",
+     "used": 1, "impression": 3, "walkedTotal": 0,
+     "lastUsed": "2026-07-18", "linksOut": ["hub-auth"]}
   ],
   "traversed": [
     {"slug": "hub-auth", "tier": "walked", "direct": false,

@@ -178,6 +178,22 @@ class TestArgContract:
         assert run_record(vault, identity=[], check=False).returncode == 2
         assert run_record(vault, "--task", "1", identity=IDENTITY, check=False).returncode == 2
 
+    def test_record_rejects_task_zero(self, tmp_path):
+        """Issue numbers start at 1 -- task 0 must not slip past the
+        required-task guard (external-review finding, #13857)."""
+        vault = make_vault(tmp_path)
+        proc = run_record(
+            vault,
+            "--slugs",
+            "decision-auth-flow",
+            "--task",
+            "0",
+            identity=["--instance-id", "u", "--alias", "skill"],
+            check=False,
+        )
+        assert proc.returncode == 2
+        assert "task" in proc.stderr
+
 
 # ---- search contract (section 6.2) ------------------------------------------
 
@@ -190,6 +206,9 @@ class TestSearch:
         # Both filename hits, decision first (higher galaxy weight + recency).
         assert slugs == ["decision-auth-flow", "hub-auth"]
         assert all(r["tier"] == "filename" for r in out["results"])
+        # Metadata contract carries the note's own updated: date (external-
+        # review finding: the engine parses it for recency -- expose it).
+        assert out["results"][0]["updated"] == "2026-07-19"
         # BRIEFING.md and scaffolding files are never indexed.
         surfaced = {r["slug"] for r in out["results"] + out["traversed"]}
         assert not {"BRIEFING", "README", "INDEX", "_template"} & surfaced

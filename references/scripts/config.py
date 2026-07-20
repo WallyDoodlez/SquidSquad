@@ -234,6 +234,10 @@ def _parse_all(text):
 # Fields that default to a value when absent from config.md (rather than exiting)
 _FIELD_DEFAULTS = {
     "event-driven": "no",
+    # #13857 — pre-vault-v2 configs lack ## Flags / Vault Engine; the engine
+    # defaults on (matching generate_default_spec) and degrades at runtime
+    # per VAULT-ARCH §9.9 rather than a reader ever hard-exiting here.
+    "vault-engine": "yes",
     # #12823 — a fresh install with neither .ship-counter nor a legacy config.md
     # counter field starts the counter at 0.
     "shipped-since-bump": "0",

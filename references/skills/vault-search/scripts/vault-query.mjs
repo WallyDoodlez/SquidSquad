@@ -474,6 +474,7 @@ function toPublic(item) {
     direct: item.direct,
     score: item.score,
     title: item.title,
+    updated: item.updated || '',
     used: item.used,
     impression: item.impression,
     walkedTotal: item.walkedTotal,

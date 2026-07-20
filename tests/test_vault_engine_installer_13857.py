@@ -28,6 +28,7 @@ def make_target(tmp_path: Path) -> Path:
     (skill / "scripts" / "lib").mkdir(parents=True)
     (skill / "SKILL.md").write_text("---\nname: vault-search\n---\n", encoding="utf-8")
     (skill / "scripts" / "vault-query.mjs").write_text("// engine\n", encoding="utf-8")
+    (skill / "scripts" / "record-consumption.mjs").write_text("// record\n", encoding="utf-8")
     (skill / "scripts" / "lib" / "consumption.mjs").write_text("// lib\n", encoding="utf-8")
     # A non-skill dir (no SKILL.md) that must NOT be deployed.
     (root / "references" / "skills" / "not-a-skill").mkdir()
@@ -42,6 +43,7 @@ class TestInstallVaultEngine:
         dest = root / ".claude" / "skills" / "vault-search"
         assert (dest / "SKILL.md").is_file()
         assert (dest / "scripts" / "vault-query.mjs").is_file()
+        assert (dest / "scripts" / "record-consumption.mjs").is_file()
         assert (dest / "scripts" / "lib" / "consumption.mjs").is_file()
         assert not (root / ".claude" / "skills" / "not-a-skill").exists()
 
