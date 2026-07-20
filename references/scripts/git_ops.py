@@ -1568,6 +1568,30 @@ def _is_state_file(path):
     return any(path.startswith(p) for p in STATE_PREFIXES)
 
 
+def _classify_porcelain(porcelain_stdout):
+    """Split ``git status --porcelain`` output into (code_files, state_files).
+
+    The single porcelain→lane parse shared by ``commit_code`` and
+    ``task_end`` (#14024): 3-char ``XY `` prefix stripped, quoted paths
+    unquoted, renames resolved to the new name, then classified via
+    ``_is_state_file``. Don't strip() the raw output before splitting — that
+    removes the leading space from the first line's XY indicator.
+    """
+    code_files = []
+    state_files = []
+    for line in porcelain_stdout.splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].strip().strip('"')
+        if " -> " in path:
+            path = path.split(" -> ")[1]
+        if _is_state_file(path):
+            state_files.append(path)
+        else:
+            code_files.append(path)
+    return code_files, state_files
+
+
 def _is_plan_body(path):
     """Plan-in-PR (#12750): task plan bodies belong ON the task branch, not stripped to main.
 
@@ -1973,22 +1997,7 @@ def commit_code(role, branch, message):
         print("Nothing to commit (no changes)")
         return False
 
-    # Get list of changed files
-    # Don't strip() the full output — it removes the leading space from
-    # the first line's XY status indicator (e.g. " M file.py").
-    lines = [l for l in result.stdout.splitlines() if l.strip()]
-    code_files = []
-    state_files = []
-    for line in lines:
-        # git status --porcelain format: XY<space>filename (3-char prefix)
-        path = line[3:].strip().strip('"')
-        # Handle renames: "old -> new"
-        if " -> " in path:
-            path = path.split(" -> ")[1]
-        if _is_state_file(path):
-            state_files.append(path)
-        else:
-            code_files.append(path)
+    code_files, state_files = _classify_porcelain(result.stdout)
 
     if not code_files:
         print("No code changes to commit (only state/ephemeral changes)")
@@ -2467,11 +2476,22 @@ def task_end(role, number):
     _run_list(["git", "checkout", working, "--",
                ".squidsquad/config.md"], check=False)
 
-    # Warn about uncommitted changes
+    # Warn about uncommitted changes -- but only for CODE-lane paths (#14024).
+    # State-lane dirt (working-state.md, planning artifacts, .claude/ live
+    # copies) is by-design uncommitted here: commit-code filters those exact
+    # paths anyway and their destination is commit-state on main. Warning on
+    # them fired 4/4 false positives per session and trained agents to ignore
+    # the one warning that catches genuinely-stranded code.
     status = _run("git status --porcelain", check=False)
     if status.stdout.strip():
-        print(f"WARNING: uncommitted changes on current branch. "
-              f"Commit via commit-code before calling task-end.", file=sys.stderr)
+        code_files, state_files = _classify_porcelain(status.stdout)
+        if code_files:
+            print(f"WARNING: uncommitted CODE changes on current branch: "
+                  f"{', '.join(code_files)}. "
+                  f"Commit via commit-code before calling task-end.", file=sys.stderr)
+        elif state_files:
+            print("note: only state-lane files uncommitted -- they belong on "
+                  "main via commit-state, not on this branch.", file=sys.stderr)
 
     if not _safe_checkout(working):
         # Fallback to main if working branch checkout fails
