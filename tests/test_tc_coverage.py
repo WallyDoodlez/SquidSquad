@@ -552,3 +552,44 @@ class TestBulletDeclarations13944:
         """Un-bolded prose mentions are references, not declarations."""
         text = "- TC3 is covered by the integration run\n- see **the TC4 notes** above\n"
         assert tc_coverage.parse_tc_ids(text) == []
+
+
+# --- #13990: result-cell-only scan for table rows ---
+
+
+class TestResultCellOnly13990:
+    """#13944's first cut scanned the whole row remainder, so Evidence-column
+    prose mentioning deferred/N-A misclassified a genuine PASS as INVALID
+    (live-hit shipping QA-RESULTS-13944 itself). A result is only ever
+    declared in the Result cell; Evidence is prose."""
+
+    def test_evidence_prose_with_invalid_words_does_not_block(self):
+        """The live repro shape: PASS in the Result cell, deferred/N-A
+        wording inside the Evidence cell."""
+        text = ('| TC5 — description-pollution guard | PASS | a TC cell '
+                'description containing the literal words "deferred" and "N/A" |\n')
+        assert tc_coverage.parse_tc_results(text) == {5: "PASS"}
+
+    def test_isolated_cell_notes_column_no_longer_scanned(self):
+        """Pre-#13944 latent form of the same bug: isolated TC cell, notes
+        column mentioning an invalid token."""
+        text = "| TC-1 | PASS | scenario covers the deferred cleanup path |\n"
+        assert tc_coverage.parse_tc_results(text) == {1: "PASS"}
+
+    def test_invalid_token_in_result_cell_still_blocks(self):
+        """The invalid check still fires where it should: in the Result
+        cell itself."""
+        text = "| TC2 — edge case | deferred | will do later |\n"
+        assert tc_coverage.parse_tc_results(text) == {2: "INVALID"}
+
+    def test_empty_result_cell_is_unknown_not_scavenged(self):
+        """An empty Result cell must not scavenge a result from Evidence
+        or from subsequent lines."""
+        text = "| TC3 — desc | | evidence says PASS somewhere |\nPASS on the next line\n"
+        assert tc_coverage.parse_tc_results(text) == {3: "UNKNOWN"}
+
+    def test_result_cell_with_qualifier_prose_still_parses(self):
+        """Real-artifact shape: 'PASS (by code inspection + TC1)' in the
+        Result cell."""
+        text = "| TC2 — credential-manager-independent | PASS (by code inspection + TC1) | evidence |\n"
+        assert tc_coverage.parse_tc_results(text) == {2: "PASS"}

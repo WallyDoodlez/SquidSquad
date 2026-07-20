@@ -68,17 +68,29 @@ def _normalize_tc_id(raw_num: str) -> int:
     return int(raw_num)
 
 
-def _after_tc_cell(line: str, match_end: int) -> str:
-    """Return the table-row content after the TC cell (#13944).
+def _result_cell(line: str, match_end: int) -> str:
+    """Return ONLY the Result cell of a TC table row (#13944 → #13990).
 
     ``match_end`` is where the TC-N token ended; the rest of that cell (a
     free-text description under the merged-cell convention) runs to the next
-    ``|``. A malformed row with no closing pipe returns '' -- no result cell
-    exists, which parse_tc_results reports as UNKNOWN rather than guessing
-    a result out of description prose.
+    ``|``, and the RESULT cell is the one cell after that. #13944's first cut
+    returned the whole row remainder, so the invalid-result check also
+    scanned the Evidence column — evidence prose *describing* a scenario
+    with the words "deferred"/"N/A" misclassified a genuine PASS as INVALID
+    and blocked shipping (#13990, hit live on QA-RESULTS-13944 TC5). A
+    result is only ever declared in the Result cell; Evidence is prose.
+
+    A malformed row with no closing pipe (or no result cell at all) returns
+    '' -- parse_tc_results reports UNKNOWN rather than guessing a result out
+    of description or evidence prose.
     """
-    cell_end = line.find("|", match_end)
-    return line[cell_end:] if cell_end != -1 else ""
+    cell_start = line.find("|", match_end)
+    if cell_start == -1:
+        return ""
+    cell_end = line.find("|", cell_start + 1)
+    if cell_end == -1:
+        return line[cell_start + 1:]
+    return line[cell_start + 1:cell_end]
 
 
 def parse_tc_ids(text: str) -> list[int]:
@@ -109,25 +121,25 @@ def parse_tc_results(text: str) -> dict[int, str]:
             continue
         tc_id = _normalize_tc_id(m.group(1))
 
-        # For table rows, result is on the same line (| TC-1 | PASS |).
-        # For headings, skip the heading line to avoid matching words in
-        # the TC title like "not-applicable" (#2469). Stop at the next
-        # TC marker to avoid bleeding into adjacent TCs.
-        start = i if is_table else i + 1
-        result_lines = []
-        for j in range(start, min(i + 5, len(lines))):
-            if j != i and (_TC_HEADING_RE.match(lines[j]) or _TC_TABLE_RE.match(lines[j])):
-                break
-            if j == i and is_table:
-                # Merged-cell rows (#13944) carry a free-text description in
-                # the TC cell itself; search only the cells AFTER it so
-                # description words ("deferred cleanup", "N/A handling")
-                # can't register as the result -- the same hazard #2469
-                # fixed for heading titles.
-                result_lines.append(_after_tc_cell(lines[j], m.end()))
-            else:
+        if is_table:
+            # Table rows declare the result in the RESULT cell and nowhere
+            # else (#13990): scanning the TC-description cell (#13944/#2469
+            # hazard), the Evidence column (#13990 live false-INVALID), or
+            # subsequent lines can only misread prose as a result. This
+            # also fixes the pre-#13944 latent form: isolated-cell rows
+            # (| TC-1 | PASS | notes |) used to scan their notes column too.
+            search_block = _result_cell(line, m.end())
+        else:
+            # Headings: skip the heading line to avoid matching words in
+            # the TC title like "not-applicable" (#2469); scan the next few
+            # lines, stopping at the next TC marker to avoid bleeding into
+            # adjacent TCs.
+            result_lines = []
+            for j in range(i + 1, min(i + 5, len(lines))):
+                if _TC_HEADING_RE.match(lines[j]) or _TC_TABLE_RE.match(lines[j]):
+                    break
                 result_lines.append(lines[j])
-        search_block = "\n".join(result_lines)
+            search_block = "\n".join(result_lines)
 
         # Check for invalid results first
         if _INVALID_RESULTS_RE.search(search_block):
