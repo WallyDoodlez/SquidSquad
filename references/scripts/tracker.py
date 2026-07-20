@@ -694,17 +694,7 @@ def check_gh():
     perm = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
                               "-q", ".permissions.push"], timeout=15)
     verdict = (perm.stdout or "").strip().lower()
-    if perm.returncode == 0 and verdict == "false":
-        print("ERROR: forge WRITE access check failed (#13574): the gh "
-              "identity has READ but not PUSH permission on this repo - the "
-              "#13570 read-only-downgrade signature. Every transition, label "
-              "write, and git push will fail while health stays green.",
-              file=sys.stderr)
-        print("Remediation (operator): restore the identity's write role on "
-              "the repo (Settings > Collaborators), or 'gh auth login' as an "
-              "account with push access; confirm with 'git push' (403 = still "
-              "read-only).", file=sys.stderr)
-        return False
+    read_only = (perm.returncode == 0 and verdict == "false")
     if perm.returncode != 0 or verdict not in ("true", "false"):
         # Inconclusive (network blip, API shape change): the read check above
         # already proved connectivity — warn, do not block boot (fail-open on
@@ -712,6 +702,50 @@ def check_gh():
         print(f"WARNING: forge write-permission probe inconclusive "
               f"(exit={perm.returncode}, out={verdict!r}) - proceeding on the "
               f"read check alone (#13574).", file=sys.stderr)
+    # #13863: the checks above prove nothing about the *git push* path — the
+    # credential-manager entry can vanish and gh's active account can flip to
+    # a read-only identity while reads and API writes stay green. Delegate to
+    # git_ops.py push-doctor: it persists a flip-proof per-clone credential
+    # helper and dry-run-verifies non-interactive push capability, so this
+    # class fails loudly at boot instead of mid-work. When the #13574 probe
+    # above PROVED the active account read-only, also pass --heal-active so
+    # the doctor switches gh back to the pinned push identity (the first of
+    # the two manual remediation steps from the #13863 report) — then re-probe
+    # before deciding to block. Block ONLY on the doctor's explicit
+    # definitive-failure marker or a still-read-only re-probe (never on exit
+    # code alone — a doctor crash must not brick every boot; fail-open on
+    # uncertainty, same contract as #13574).
+    doctor_cmd = [sys.executable, str(SCRIPT_DIR / "git_ops.py"),
+                  "push-doctor"]
+    if read_only:
+        doctor_cmd.append("--heal-active")
+    doctor = _run_list_timeout(doctor_cmd, timeout=120)
+    doctor_err = (doctor.stderr or "")
+    if "__SQUIDSQUAD_PUSH_DOCTOR_BLOCK__" in doctor_err:
+        print(doctor_err.strip(), file=sys.stderr)
+        return False
+    if read_only:
+        reprobe = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
+                                     "-q", ".permissions.push"], timeout=15)
+        if (reprobe.stdout or "").strip().lower() == "true":
+            print("NOTE: gh active account was read-only (#13570 signature); "
+                  "push-doctor healed it back to the pinned push identity "
+                  "(#13863) - write capability re-verified.", file=sys.stderr)
+        else:
+            print("ERROR: forge WRITE access check failed (#13574): the gh "
+                  "identity has READ but not PUSH permission on this repo - "
+                  "the #13570 read-only-downgrade signature. Every "
+                  "transition, label write, and git push will fail while "
+                  "health stays green. Auto-heal (#13863) did not recover it.",
+                  file=sys.stderr)
+            print("Remediation (operator): restore the identity's write role "
+                  "on the repo (Settings > Collaborators), or 'gh auth login' "
+                  "as an account with push access; confirm with 'git push' "
+                  "(403 = still read-only).", file=sys.stderr)
+            return False
+    for stream in (doctor.stdout or "", doctor_err):
+        if "WARNING" in stream:
+            print(stream.strip(), file=sys.stderr)
     print("OK")
     return True
 

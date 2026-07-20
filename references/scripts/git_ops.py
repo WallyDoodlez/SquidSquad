@@ -28,6 +28,7 @@ Usage:
     python scripts/git_ops.py guard-galaxy-frontmatter   # pre-commit hook: block a staged galaxy note missing YAML frontmatter (fail-closed on violation, fail-open on error)
     python scripts/git_ops.py install-hooks              # activate the pre-commit + post-merge + post-commit guards (core.hooksPath)
     python scripts/git_ops.py restore-merge-dropped-state [role]  # post-merge hook: restore protected state/vault a merge silently dropped (#13556; fail-open)
+    python scripts/git_ops.py push-doctor       # heal clone credential path + verify non-interactive push capability (#13863; boot gate via tracker.py check-gh)
     python scripts/git_ops.py --help
 """
 
@@ -173,16 +174,93 @@ def _gh_credential_helper_available():
     return _GH_AVAILABLE_CACHE
 
 
+_PUSH_IDENTITY_CACHE = "unset"
+_PINNED_HELPER_CACHE = "unset"
+
+# check_gh (tracker.py) keys its boot block on THIS marker, not on push-doctor's
+# exit code -- a module-level crash also exits non-zero, and exit-code keying
+# would let a doctor bug brick every boot fleet-wide (same rationale as the
+# galaxy-frontmatter guard's __SQUIDSQUAD_GALAXY_FM_BLOCK__, DS-12905 F1).
+PUSH_DOCTOR_BLOCK_MARKER = "__SQUIDSQUAD_PUSH_DOCTOR_BLOCK__"
+
+
+def _resolve_push_identity():
+    """The GitHub account this clone's pushes must authenticate as (#13863).
+
+    Derived from the origin URL (https form only): an embedded userinfo
+    (``https://USER@github.com/owner/repo``) wins; otherwise the owner path
+    segment. Returns None for non-https remotes (ssh does not use credential
+    helpers), token-bearing userinfo (``user:token@``), or anything that does
+    not look like a GitHub username. Cached for the process lifetime.
+    """
+    global _PUSH_IDENTITY_CACHE
+    if _PUSH_IDENTITY_CACHE != "unset":
+        return _PUSH_IDENTITY_CACHE
+    ident = None
+    result = _run_list(["git", "remote", "get-url", "origin"],
+                       check=False, timeout=10)
+    url = (result.stdout or "").strip()
+    if result.returncode == 0 and url.startswith("https://"):
+        rest = url[len("https://"):]
+        host_part, _, path_part = rest.partition("/")
+        userinfo, at_sep, _host = host_part.rpartition("@")
+        if at_sep and userinfo and ":" not in userinfo:
+            candidate = userinfo
+        else:
+            candidate = path_part.split("/", 1)[0] if path_part else ""
+        if re.fullmatch(r"[A-Za-z0-9-]+", candidate or ""):
+            ident = candidate
+    _PUSH_IDENTITY_CACHE = ident
+    return ident
+
+
+def _pinned_credential_helper():
+    """A ``credential.helper`` value serving the pinned push identity's keyring
+    token regardless of gh's mutable active account (#13863).
+
+    ``!gh auth git-credential`` (the #9890 defense) only answers for the
+    ACTIVE gh account -- machine-global state any process can flip with
+    ``gh auth switch``. In #13863 the active account flipped to a read-only
+    identity within a minute of being corrected, and every non-interactive
+    push died at a /dev/tty prompt. ``gh auth token --user X`` is
+    flip-independent (verified against a live flipped state), so this helper
+    pins the user explicitly. Only the *command* lands in git config -- the
+    token itself is fetched from gh's keyring at each push.
+
+    Returns None (callers fall back to the generic gh helper) when no identity
+    is derivable from the origin URL or its token is not in gh's keyring.
+    Cached for the process lifetime.
+    """
+    global _PINNED_HELPER_CACHE
+    if _PINNED_HELPER_CACHE != "unset":
+        return _PINNED_HELPER_CACHE
+    helper = None
+    user = _resolve_push_identity()
+    if user and _gh_credential_helper_available():
+        probe = _run_list(["gh", "auth", "token", "--user", user],
+                          check=False, timeout=10)
+        if probe.returncode == 0 and (probe.stdout or "").strip():
+            helper = (
+                '!f() { if [ "$1" = get ]; then '
+                'echo username=%s; '
+                'echo "password=$(gh auth token --user %s)"; '
+                'fi; }; f' % (user, user)
+            )
+    _PINNED_HELPER_CACHE = helper
+    return helper
+
+
 def _git_push(push_args, timeout=60):
-    """Run `git push <push_args...>` with anti-wedge defenses (#9890).
+    """Run `git push <push_args...>` with anti-wedge defenses (#9890, #13863).
 
-    Two defenses against the silent-wedge mode observed in cycle 1244:
+    Defenses against the silent-wedge mode observed in cycle 1244:
 
-    1. **Credential helper override**: when `gh` is available and authenticated
-       (cached via `_gh_credential_helper_available()`), prepend
-       `-c credential.helper=` + `-c credential.helper=!gh auth git-credential`
-       so the push routes through the `gh` token rather than the inherited
-       helper (which on Windows defaults to GCM and can wedge on agent sessions).
+    1. **Credential helper override**: prefer the pinned-user helper
+       (`_pinned_credential_helper()`, #13863 -- immune to gh active-account
+       flips); fall back to `!gh auth git-credential` when no identity can be
+       pinned (#9890 -- still sidesteps GCM's interactive dialog). Either way
+       the inherited helper list is reset first with an empty `-c
+       credential.helper=` entry.
     2. **Timeout**: subprocess.run is called with a `timeout` so a wedge fails
        fast with a synthetic non-zero CompletedProcess (returncode 124, matching
        GNU `timeout` convention) rather than accumulating zombie git processes.
@@ -198,7 +276,13 @@ def _git_push(push_args, timeout=60):
         callers continue to work without changes.
     """
     cmd = ["git"]
-    if _gh_credential_helper_available():
+    pinned = _pinned_credential_helper()
+    if pinned:
+        cmd.extend([
+            "-c", "credential.helper=",
+            "-c", "credential.helper=" + pinned,
+        ])
+    elif _gh_credential_helper_available():
         cmd.extend([
             "-c", "credential.helper=",
             "-c", "credential.helper=!gh auth git-credential",
@@ -217,6 +301,92 @@ def _git_push(push_args, timeout=60):
             args=cmd, returncode=124, stdout="",
             stderr=f"git push timed out after {timeout}s (wedge defense per #9890)",
         )
+
+
+def push_doctor(persist=True, heal_active=False):
+    """Boot-time push-capability check + per-clone credential self-heal (#13863).
+
+    The #13574 write probe covers gh-API writes; nothing covered the *git push*
+    path, where two independent machine-global failure modes stayed invisible
+    until mid-work: the credential-manager entry vanishing (GCM prompts on a
+    nonexistent tty and dies) and gh's active account flipping to a read-only
+    identity (``!gh auth git-credential`` then answers for the wrong user).
+
+    Self-heal (``persist=True``): rewrite this clone's LOCAL helper list --
+    an empty reset entry (drops the inherited wedge-prone ``manager``) plus the
+    pinned-user helper (or the generic gh helper when no pin is derivable).
+    Persisting into ``.git/config`` matters because bare ``git push`` call
+    sites (cycle_post.py, harness.py ``_git_in_clone``) bypass ``_git_push``'s
+    per-invocation ``-c`` override entirely -- the local config is the only
+    layer that covers every push path in the clone, including a harness
+    process still running older code.
+
+    Active-account heal (``heal_active=True``): additionally run ``gh auth
+    switch --user <pinned>`` -- the FIRST of the two manual remediation steps
+    from the #13863 report (the helper persist above is the second). gh's
+    active account gates every gh-API write (tracker transitions, labels),
+    not just pushes, and it is machine-global mutable state that was observed
+    flipping to a read-only identity minutes after being corrected. The
+    switch is intentionally NOT unconditional: callers (tracker.py check_gh)
+    request it only after the #13574 write probe has *proven* the active
+    account read-only, so a working operator-chosen account is never fought.
+
+    Verdict via ``git push --dry-run`` (authenticates + permission-checks
+    without mutating the remote). Mirrors check-gh's #13574 contract: only a
+    definitive auth/permission signature blocks (returns ``(False, msg)`` with
+    ``PUSH_DOCTOR_BLOCK_MARKER`` in the message); anything inconclusive --
+    network blip, non-fast-forward, detached HEAD -- warns and passes.
+
+    Returns (ok: bool, message: str).
+    """
+    result = _run_list(["git", "remote", "get-url", "origin"],
+                       check=False, timeout=10)
+    url = (result.stdout or "").strip()
+    if result.returncode != 0 or not url.startswith("https://"):
+        return True, (f"push-doctor: origin is not an https remote ({url!r}) "
+                      f"-- credential-helper doctoring only applies to https "
+                      f"pushes; nothing to heal.")
+    pinned = _pinned_credential_helper()
+    if heal_active and pinned:
+        user = _resolve_push_identity()
+        switch = _run_list(["gh", "auth", "switch", "--user", user],
+                           check=False, timeout=15)
+        if switch.returncode != 0:
+            print(f"WARNING: push-doctor could not switch gh active account "
+                  f"to {user} (rc={switch.returncode}): "
+                  f"{(switch.stderr or '').strip()} (#13863)",
+                  file=sys.stderr)
+    if persist and (pinned or _gh_credential_helper_available()):
+        helper = pinned or "!gh auth git-credential"
+        _run_list(["git", "config", "--local", "--replace-all",
+                   "credential.helper", ""], check=False, timeout=10)
+        _run_list(["git", "config", "--local", "--add",
+                   "credential.helper", helper], check=False, timeout=10)
+    probe = _run_list(["git", "push", "--dry-run", "origin", "HEAD"],
+                      check=False, timeout=90)
+    who = _resolve_push_identity() or "(active gh account)"
+    if probe.returncode == 0:
+        return True, f"push-doctor: OK -- non-interactive push verified as {who}."
+    stderr = (probe.stderr or "").strip()
+    lowered = stderr.lower()
+    definitive = ("403" in lowered or "denied" in lowered
+                  or "could not read password" in lowered
+                  or "authentication failed" in lowered)
+    if definitive:
+        return False, (
+            f"{PUSH_DOCTOR_BLOCK_MARKER}\n"
+            f"ERROR: git push capability check failed definitively as {who} "
+            f"(#13863 signature): {stderr.splitlines()[-1] if stderr else '(no stderr)'}\n"
+            f"Every branch push and state commit from this clone will fail "
+            f"while health stays green.\n"
+            f"Remediation (operator): 'gh auth login' as an account with push "
+            f"rights to this repo (its keyring token is what the healed "
+            f"credential helper serves), or restore that account's write role "
+            f"on the repo; confirm with 'git push --dry-run origin HEAD'.")
+    return True, (f"WARNING: push-doctor probe inconclusive (rc={probe.returncode}): "
+                  f"{stderr.splitlines()[-1] if stderr else '(no stderr)'} "
+                  f"-- proceeding on the healed helper config alone (fail-open, "
+                  f"#13863).")
 
 
 def _log_diagnostic(severity, message):
@@ -2839,6 +3009,20 @@ def main():
     elif cmd == "install-hooks":
         ok = install_hooks()
         sys.exit(0 if ok else 1)
+    elif cmd == "push-doctor":
+        # #13863 boot gate: heal this clone's credential path and verify
+        # non-interactive push capability. Definitive failure carries
+        # PUSH_DOCTOR_BLOCK_MARKER on stderr; callers (tracker.py check_gh)
+        # key their block on the marker, never on the exit code alone.
+        # --heal-active additionally switches gh's active account to the
+        # pinned push identity (requested by check_gh only after the #13574
+        # probe proved the current active account read-only).
+        ok, msg = push_doctor(heal_active="--heal-active" in rest)
+        if ok:
+            print(msg)
+            sys.exit(0)
+        print(msg, file=sys.stderr)
+        sys.exit(1)
     elif cmd == "restore-merge-dropped-state":
         # #13556 post-merge hook entry point: restore any protected state/vault
         # path the just-completed merge silently dropped (modify-vs-delete).
