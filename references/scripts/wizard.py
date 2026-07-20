@@ -2352,6 +2352,24 @@ def install_vault_engine(target_root):
     except Exception as e:
         print(f"  WARNING: telemetry-dir seed failed: {e}", file=sys.stderr)
 
+    # 4. Seed the type registry (#13858, VAULT-ARCH §3.1/§3.2): every
+    # install's vault carries vault-schema.json at the vault root; the
+    # engine, validator, and templates all read it. Create-if-absent only —
+    # an install customizes its taxonomy by editing this file, and an
+    # upgrade must never clobber that.
+    try:
+        seed_src = target_root / "references" / "vault-schema-default.json"
+        schema = target_root / ".squidsquad" / "vault" / "vault-schema.json"
+        if seed_src.is_file() and not schema.exists():
+            schema.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(seed_src, schema)
+            result["schema_seeded"] = True
+        else:
+            result["schema_seeded"] = False
+    except Exception as e:
+        result["schema_seeded"] = False
+        print(f"  WARNING: vault-schema seed failed: {e}", file=sys.stderr)
+
     return result
 
 

@@ -426,3 +426,74 @@ class TestConfig:
         # weight would NOT flip the order -- 50x provably does).
         assert [r["slug"] for r in out["results"]][0] == "hub-auth"
         assert len(read_events(vault)) == 1
+
+
+# --- #13858 P2: type registry consumed by search (S2.1) ---
+
+
+class TestSchemaRegistry13858:
+    """VAULT-ARCH 3.1: nothing hardcodes a taxonomy -- scan folders,
+    traversal classes, and ranking weights all come from vault-schema.json.
+    The S2.1 AC shape: a registered custom type produces a working
+    folder/traversal config consumed by search on a scratch install."""
+
+    def make_custom_vault(self, tmp_path: Path) -> Path:
+        vault = tmp_path / "custom-vault"
+        vault.mkdir()
+        (vault / "vault-schema.json").write_text(json.dumps({
+            "traversalBudget": 1,
+            "types": {
+                "runbook": {"folder": "runbooks", "traversal": "free", "weight": 2.0, "hub": True},
+                "glossary": {"folder": "glossary", "traversal": "budgeted", "weight": 1.0},
+            },
+        }), encoding="utf-8")
+        note(vault, "runbooks", "runbook-deploy",
+             "---\ntype: runbook\nupdated: 2026-07-19\n---\n# Deploy runbook\n[[gloss-a]]\n")
+        note(vault, "glossary", "gloss-a",
+             "---\ntype: glossary\nupdated: 2026-07-01\n---\n# A\n[[gloss-b]]\n")
+        note(vault, "glossary", "gloss-b",
+             "---\ntype: glossary\nupdated: 2026-07-01\n---\n# B\n")
+        # A PARAG-named folder that is NOT in this registry -- must be invisible.
+        note(vault, "galaxy", "decision-ghost",
+             "---\ntype: decision\nupdated: 2026-07-01\n---\n# Ghost\ndeploy content\n")
+        return vault
+
+    def test_custom_type_consumed_by_search(self, tmp_path):
+        vault = self.make_custom_vault(tmp_path)
+        out = run_query(vault, "--entities", "runbook-deploy", "--no-write")
+        assert [r["slug"] for r in out["results"]] == ["runbook-deploy"]
+        assert out["results"][0]["folder"] == "runbooks"
+        assert out["results"][0]["type"] == "runbook"
+
+    def test_custom_traversal_budget_classes(self, tmp_path):
+        """runbook (free) -> gloss-a (budgeted, k=1 at budget 1) -> gloss-b
+        (k=2 > 1) : the chain stops exactly where the CUSTOM registry says."""
+        vault = self.make_custom_vault(tmp_path)
+        out = run_query(vault, "--entities", "runbook-deploy", "--no-write")
+        assert {t["slug"] for t in out["traversed"]} == {"gloss-a"}
+
+    def test_unregistered_folder_invisible(self, tmp_path):
+        """A folder on disk that no registered type claims is not scanned --
+        the registry REPLACES the default taxonomy (3.1), no phantom types."""
+        vault = self.make_custom_vault(tmp_path)
+        out = run_query(vault, "--terms", "deploy", "--no-write")
+        assert "decision-ghost" not in {r["slug"] for r in out["results"]}
+
+    def test_registered_type_weight_dominates(self, tmp_path):
+        """runbook weight 2.0 vs glossary 1.0: with equal telemetry (none)
+        and equal recency, the runbook outranks on the same tier."""
+        vault = self.make_custom_vault(tmp_path)
+        note(vault, "glossary", "gloss-deploy",
+             "---\ntype: glossary\nupdated: 2026-07-19\n---\n# Deploy gloss\n")
+        out = run_query(vault, "--entities", "deploy", "--no-write")
+        slugs = [r["slug"] for r in out["results"]]
+        assert slugs.index("runbook-deploy") < slugs.index("gloss-deploy")
+
+    def test_registry_absent_degrades_to_default_profile(self, tmp_path):
+        """No vault-schema.json: the 3.2 default profile applies -- PARAG
+        folders scanned, galaxy budgeted (the P1 behavior, now via the
+        default registry). The whole P1 suite doubles as this pin; this is
+        the explicit one-assert version."""
+        vault = make_vault(tmp_path)  # P1 fixture, no schema file
+        out = run_query(vault, "--entities", "auth", "--no-write")
+        assert [r["slug"] for r in out["results"]] == ["decision-auth-flow", "hub-auth"]
