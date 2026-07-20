@@ -94,6 +94,46 @@ MIN_OUTPUT_LENGTH = 200
 CLEAN_RESULT_SENTINELS = ("NO_FINDINGS",)
 
 
+def _review_target_tokens(input_files_str):
+    """Candidate tokens a genuine code-review of these inputs must mention:
+    each input file's basename, plus every path named in unified-diff headers
+    (``+++ b/<path>`` / ``--- a/<path>``) inside the inputs. #14055: the
+    routed reviewer runs agentically with repo access, and a stray diff file
+    in CWD can out-compete the inlined patch -- a review that references
+    NONE of these tokens reviewed the wrong target.
+    Returns a set of basenames (never empty entries); empty set when the
+    inputs are unreadable (guard then degrades to a no-op, fail-open)."""
+    tokens = set()
+    if not input_files_str:
+        return tokens
+    for fpath in input_files_str.split(","):
+        fpath = fpath.strip()
+        if not fpath:
+            continue
+        base = os.path.basename(fpath)
+        if base:
+            tokens.add(base)
+        try:
+            content = Path(fpath).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for m in re.finditer(r"^(?:\+\+\+|---) [ab]/(.+)$", content, re.MULTILINE):
+            inner = os.path.basename(m.group(1).strip())
+            if inner:
+                tokens.add(inner)
+    return tokens
+
+
+def review_references_targets(response, input_files_str):
+    """True iff the review response mentions at least one submitted target
+    token (see _review_target_tokens). Empty token set -> True (fail-open:
+    nothing to check against, never block on our own read failure)."""
+    tokens = _review_target_tokens(input_files_str)
+    if not tokens:
+        return True
+    return any(t in response for t in tokens)
+
+
 # ---------------------------------------------------------------------------
 # Config parsing
 # ---------------------------------------------------------------------------
@@ -858,6 +898,38 @@ def route(task_type, task_id, input_files, output_file, context):
         )
         # No artifact survives an error exit (#14025, supersedes #5046).
         _discard_output_artifact(output_file)
+        return 1
+
+    # Wrong-target guard (#14055, code-review only): an agentic reviewer with
+    # repo access can latch onto stray artifacts in CWD instead of the inlined
+    # patch -- silently, with exit 0. A genuine review must reference at least
+    # one submitted input basename or a path from the inputs' diff headers; a
+    # clean NO_FINDINGS legitimately names nothing, so the sentinel is exempt.
+    if task_type == "code-review" and not is_clean_sentinel and not review_references_targets(
+        stripped_response, input_files
+    ):
+        _log_diagnostic({
+            "timestamp": time.time(),
+            "task_type": task_type,
+            "task_id": task_id,
+            "model": model,
+            "provider": provider_name,
+            "action": "wrong-target-review",
+            "elapsed_seconds": round(elapsed, 1),
+        })
+        print(
+            "[model_router] code-review output references none of the submitted "
+            "input files -- wrong-target review discarded; exiting 1 so the "
+            "caller's Claude fallback fires.",
+            file=sys.stderr,
+        )
+        try:
+            Path(output_file).write_text(
+                "# STATUS: error -- wrong-target review (no submitted input referenced)\n",
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
         return 1
 
     # Write output
