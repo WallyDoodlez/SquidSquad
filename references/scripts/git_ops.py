@@ -2734,7 +2734,7 @@ def guard_galaxy_frontmatter():
             print(f"  {p}: {reason}", file=sys.stderr)
         print(
             "  Fix: prepend a '---' frontmatter block with at least a 'type:' "
-            "key (see references/vault-templates/galaxy-template.md), then "
+            "key (see the per-type templates in references/vault-templates/), then "
             "re-stage and commit.",
             file=sys.stderr,
         )

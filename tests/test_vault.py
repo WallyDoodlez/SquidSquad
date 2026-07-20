@@ -43,10 +43,19 @@ class TestVaultTemplates:
         path = REFERENCES_DIR / "vault-templates"
         assert path.exists(), "Missing references/vault-templates/"
 
+    # #13858: registry-derived per-TYPE set (VAULT-ARCH 3.5) -- one template
+    # per type in the default profile + the generic custom-type fallback +
+    # the two non-registry seeds (BRIEFING special-case keeps its v1
+    # filename deliberately; human-profile is an install seed).
     @pytest.mark.parametrize("template", [
-        "areas-template.md",
-        "galaxy-template.md",
-        "projects-template.md",
+        "project.md",
+        "area.md",
+        "resource.md",
+        "system.md",
+        "decision.md",
+        "pattern.md",
+        "learning.md",
+        "_generic.md",
         "human-profile-seed.md",
         "BRIEFING.md",
     ])

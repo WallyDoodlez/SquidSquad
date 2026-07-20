@@ -49,6 +49,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   loadConfig,
+  deriveSchema,
   readTelemetry,
   makeEvent,
   appendEvents,
@@ -56,10 +57,10 @@ import {
   tieBreakScore,
 } from './lib/consumption.mjs';
 
-// PARAG (§3): projects / areas / resources / archives / galaxy. BRIEFING.md
-// lives at the vault root, outside these folders, so it is structurally
+// Scan folders come from the vault-schema.json type registry (#13858, §3.1)
+// — nothing hardcodes a taxonomy. BRIEFING.md and vault-schema.json live at
+// the vault root, outside every registered folder, so they are structurally
 // excluded from index, ranking, and telemetry (§6.2).
-const FOLDERS = ['projects', 'areas', 'resources', 'archives', 'galaxy'];
 const DEFAULT_VAULT = join('.squidsquad', 'vault');
 
 // Files that are navigation/scaffolding, never content notes.
@@ -78,9 +79,12 @@ export function slugOf(name) {
 }
 
 // List every non-template note in the vault as { slug, folder, path, full }.
-export function listNotes(vaultRoot) {
+// `folders` defaults to the registry-derived scan list (§3.1); callers that
+// already hold a loaded config pass its derived folders explicitly.
+export function listNotes(vaultRoot, folders = null) {
   const notes = [];
-  for (const folder of FOLDERS) {
+  const scan = folders ?? deriveSchema(loadConfig(vaultRoot)).folders;
+  for (const folder of scan) {
     const dir = join(vaultRoot, folder);
     let entries;
     try {
@@ -254,11 +258,12 @@ function compareRanked(a, b) {
 
 // ---- traversal --------------------------------------------------------------
 
-// A hop through a galaxy note costs 1 unit of traversal budget (§6.2: galaxy
-// leaves are `traversal: budgeted`); the hub folders are free. Until the
-// vault-schema.json registry ships (P2) the folder IS the traversal class.
-function isBudgeted(folder) {
-  return folder === 'galaxy';
+// A hop through a `traversal: budgeted` type's folder costs 1 unit of
+// budget (§3.1/§6.2); `traversal: free` (hub) folders cost nothing. The
+// registry (#13858) is the classification source — the P1 galaxy-only
+// hardcode survives only as the default profile's registration.
+function makeIsBudgeted(derived) {
+  return (folder) => derived.budgetedFolders.has(folder);
 }
 
 // BFS outward from the direct-match set following outbound wikilinks, under
@@ -268,7 +273,7 @@ function isBudgeted(folder) {
 // "re-visitable". Wikilinks to non-existent notes are ignored. Returns a map
 // slug -> { note, walkedFrom:Set } for every note reached that is NOT itself
 // a direct match.
-export function traverse(directNotes, bySlug, budget) {
+export function traverse(directNotes, bySlug, budget, isBudgeted) {
   const directSlugs = new Set(directNotes.map((n) => n.slug));
   const visited = new Set(directNotes.map((n) => n.full)); // global, keyed by path
   const reached = new Map(); // slug -> { note, walkedFrom:Set<sourceSlug> }
@@ -307,8 +312,8 @@ export function traverse(directNotes, bySlug, budget) {
 // ---- query engine (pure over a loaded vault) --------------------------------
 
 // Load every note's content once into { slug, folder, path, full, content }.
-function loadVault(vaultRoot) {
-  const notes = listNotes(vaultRoot);
+function loadVault(vaultRoot, folders) {
+  const notes = listNotes(vaultRoot, folders);
   for (const n of notes) {
     try {
       n.content = readFileSync(n.full, 'utf8');
@@ -320,24 +325,26 @@ function loadVault(vaultRoot) {
 }
 
 // Shape one ranked entry from a note + its aggregated telemetry.
-function rankedEntry(n, tier, direct, telemetry, cfg, todayISO) {
+function rankedEntry(n, tier, direct, telemetry, cfg, todayISO, derived) {
   const agg = telemetry.get(n.slug) ?? { impression: 0, used: 0, walked: 0, lastUsed: '' };
   const status = parseField(n.content, 'status');
   const updated = parseField(n.content, 'updated');
+  const noteType = parseType(n.content) || n.folder;
   return {
     note: n,
     slug: n.slug,
     path: n.path,
     folder: n.folder,
-    type: parseType(n.content) || n.folder,
+    type: noteType,
     status,
     updated,
     tier,
     direct,
     score: tieBreakScore(
-      { used: agg.used, impression: agg.impression, walked: agg.walked, updated, folder: n.folder, status },
+      { used: agg.used, impression: agg.impression, walked: agg.walked, updated, type: noteType, folder: n.folder, status },
       cfg,
       todayISO,
+      derived,
     ),
     title: parseTitle(n.content, n.slug),
     used: agg.used,
@@ -351,7 +358,8 @@ function rankedEntry(n, tier, direct, telemetry, cfg, todayISO) {
 // Run the full query over an in-memory note list. Pure: computes results and
 // traversed, but does NOT write. `telemetry` is the shard aggregate (may be
 // empty — degraded ranking falls out of tieBreakScore, §6.2).
-export function runQuery(notes, query, cfg, telemetry, todayISO) {
+export function runQuery(notes, query, cfg, telemetry, todayISO, derived = null) {
+  const d = derived ?? deriveSchema(cfg);
   const bySlug = new Map(notes.map((n) => [n.slug, n]));
 
   // Stage 1 — direct matches with best tier, plus Stage-2 tie-break score.
@@ -360,19 +368,20 @@ export function runQuery(notes, query, cfg, telemetry, todayISO) {
     const tags = parseTags(n.content);
     const tier = matchTier(n, n.content, tags, query);
     if (!tier) continue;
-    results.push(rankedEntry(n, tier, true, telemetry, cfg, todayISO));
+    results.push(rankedEntry(n, tier, true, telemetry, cfg, todayISO, d));
   }
   results.sort(compareRanked);
 
-  // Budgeted traversal from the direct-match set (§6.2).
+  // Budgeted traversal from the direct-match set (§3.1/§6.2).
   const reached = traverse(
     results.map((r) => r.note),
     bySlug,
     cfg.traversalBudget,
+    makeIsBudgeted(d),
   );
   const traversed = [];
   for (const { note, walkedFrom } of reached.values()) {
-    const entry = rankedEntry(note, 'walked', false, telemetry, cfg, todayISO);
+    const entry = rankedEntry(note, 'walked', false, telemetry, cfg, todayISO, d);
     entry.walkedFrom = [...walkedFrom];
     traversed.push(entry);
   }
@@ -510,9 +519,10 @@ export function main(argv = process.argv.slice(2), deps = {}) {
     args.top != null && Number.isFinite(args.top) ? args.top : cfg.searchTopK));
   const query = { entities: args.entities, tags: args.tags, terms: args.terms };
 
-  const notes = loadVault(args.vault);
+  const derived = deriveSchema(cfg);
+  const notes = loadVault(args.vault, derived.folders);
   const telemetry = readTelemetry(args.vault, deps);
-  const { results, traversed } = runQuery(notes, query, cfg, telemetry, today);
+  const { results, traversed } = runQuery(notes, query, cfg, telemetry, today, derived);
 
   let written;
   if (!args.write) {

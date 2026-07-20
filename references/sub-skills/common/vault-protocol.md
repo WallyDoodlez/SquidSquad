@@ -38,7 +38,7 @@ Folder mapping: `areas/` = ongoing concerns (human-profile, code-conventions, de
 ### Creating Notes (vault-create)
 
 1. Pick the correct folder (see Entity Model). Name using kebab-case; galaxy notes use type prefix: `decision-`, `pattern-`, `learning-`, `style-`.
-2. Copy the folder's template from `references/vault-templates/` and fill in:
+2. Copy the TYPE's template (`references/vault-templates/<type>.md`; registered types per `vault-schema.json`, `_generic.md` for custom types without one) and fill in:
    - **YAML frontmatter**: type, tags, created, updated, owner, status (`active`), confidence, source, links
    - **`links`**: bare note names as YAML list (no wikilink syntax in frontmatter)
    - **`source`**: `conversation`, `code`, `review`, `observation`, or `research`

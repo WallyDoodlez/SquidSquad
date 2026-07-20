@@ -8,11 +8,13 @@ Usage:
     python scripts/vault_check.py check-frontmatter   # Validate frontmatter in galaxy notes
     python scripts/vault_check.py check-wikilinks     # Find broken wikilinks
     python scripts/vault_check.py check-size           # Warn on galaxy notes >500 lines (advisory)
-    python scripts/vault_check.py check-structure      # Validate PARAG directory structure
+    python scripts/vault_check.py check-structure      # Registry-driven layout + folder/prefix/type consistency (#13858)
+    python scripts/vault_check.py check-hub-links      # Level-2: budgeted notes with zero hub links (advisory, #13858)
     python scripts/vault_check.py list-orphans         # Notes not linked from anywhere
     python scripts/vault_check.py --help
 """
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -21,8 +23,72 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 VAULT_DIR = REPO_ROOT / ".squidsquad" / "vault"
 
-PARAG_DIRS = ["projects", "areas", "resources", "archives", "galaxy"]
-VALID_GALAXY_PREFIXES = ("decision-", "pattern-", "learning-", "style-")
+# Legacy prefixes grandfathered until the M-track migration (#13862)
+# reclassifies their notes (style-* -> pattern-*, VAULT-ARCH §4.2). Checks
+# accept them without a registry entry so the live vault never turns red on
+# content the migration owns (§9.9: vault checks never block).
+LEGACY_GRANDFATHERED_PREFIXES = ("style-",)
+
+
+def _load_schema(vault_dir=None):
+    """Load the §3.1 type registry: <vault>/vault-schema.json, falling back
+    to the framework seed, then to the pre-#13858 hardcoded PARAG shape.
+    Returns {"types": {...}} — always a dict, never raises (§9.9)."""
+    vd = Path(vault_dir) if vault_dir is not None else VAULT_DIR
+    for candidate in (vd / "vault-schema.json",
+                      REPO_ROOT / "references" / "vault-schema-default.json"):
+        try:
+            parsed = json.loads(candidate.read_text(encoding="utf-8"))
+            types = parsed.get("types")
+            if isinstance(types, dict) and types:
+                return {"types": types}
+        except (OSError, ValueError):
+            continue
+    # Hardcoded last-resort fallback DELIBERATELY mirrors the pre-#13858 v1
+    # PARAG shape WITHOUT the system type: an environment with neither a
+    # vault schema nor the framework seed is a v1-era install, and demanding
+    # a systems/ dir there would turn a valid v1 vault red (9.9). The seed
+    # tier is where the P2 profile (incl. system) lives.
+    return {"types": {
+        "project": {"folder": "projects", "traversal": "free", "hub": True},
+        "area": {"folder": "areas", "traversal": "free", "hub": True},
+        "resource": {"folder": "resources", "traversal": "free", "hub": False},
+        "decision": {"folder": "galaxy", "traversal": "budgeted", "prefix": "decision-"},
+        "pattern": {"folder": "galaxy", "traversal": "budgeted", "prefix": "pattern-"},
+        "learning": {"folder": "galaxy", "traversal": "budgeted", "prefix": "learning-"},
+        "archive": {"folder": "archives", "traversal": "free", "hub": False},
+    }}
+
+
+def _schema_views(schema):
+    """Derive the lookup views checks need from a loaded registry."""
+    types = schema["types"]
+    folders = []
+    folder_types = {}      # folder -> [type names]
+    prefix_to_type = {}    # declared prefix -> type name
+    hub_types = set()
+    budgeted_types = set()
+    for name, t in types.items():
+        if not isinstance(t, dict) or not t.get("folder"):
+            continue
+        f = t["folder"]
+        if f not in folders:
+            folders.append(f)
+        folder_types.setdefault(f, []).append(name)
+        if t.get("prefix"):
+            prefix_to_type[t["prefix"]] = name
+        if t.get("hub"):
+            hub_types.add(name)
+        if t.get("traversal") == "budgeted":
+            budgeted_types.add(name)
+    return {
+        "types": types,
+        "folders": folders,
+        "folder_types": folder_types,
+        "prefix_to_type": prefix_to_type,
+        "hub_types": hub_types,
+        "budgeted_types": budgeted_types,
+    }
 REQUIRED_FM_FIELDS = {"type", "tags", "created", "updated", "owner", "status", "confidence", "source"}
 # Galaxy notes over this many lines are flagged for splitting (#13043 /
 # VAULT-ARCH §4.3 + vault-protocol Level-1 check 5). Galaxy only — areas/
@@ -69,27 +135,64 @@ def _extract_wikilinks(text):
 
 
 def check_structure():
-    """Validate PARAG directory structure."""
+    """Validate the vault layout against the type registry (#13858).
+
+    VAULT-ARCH §4.2a, registry-driven — a custom type registered in
+    vault-schema.json gets validation for free:
+      1. every registered folder exists (+ BRIEFING.md at the root);
+      2. folder ↔ type: a note's `type:` must be registered to its folder;
+      3. prefix ↔ type: where a type declares a `prefix`, filenames carrying
+         that prefix must be that type (and prefixed-folder files must carry
+         a registered prefix).
+    Unregistered types are a WARN, not a FAIL — existing content awaiting
+    the M-track migration (#13862) must not turn the vault red (§9.9).
+    """
     issues = []
     if not VAULT_DIR.exists():
         issues.append("Vault directory missing: .squidsquad/vault/")
         print(f"FAIL: {issues[0]}")
         return issues
 
-    for dirname in PARAG_DIRS:
-        path = VAULT_DIR / dirname
-        if not path.exists():
-            issues.append(f"Missing PARAG directory: vault/{dirname}/")
+    views = _schema_views(_load_schema())
 
-    briefing = VAULT_DIR / "BRIEFING.md"
-    if not briefing.exists():
+    for dirname in views["folders"]:
+        if not (VAULT_DIR / dirname).exists():
+            issues.append(f"Missing registered directory: vault/{dirname}/")
+
+    if not (VAULT_DIR / "BRIEFING.md").exists():
         issues.append("Missing BRIEFING.md")
 
+    warns = []
+    for folder in views["folders"]:
+        fdir = VAULT_DIR / folder
+        if not fdir.exists():
+            continue
+        for md in fdir.glob("*.md"):
+            if md.name in (".gitkeep", "README.md", "INDEX.md", "_template.md"):
+                continue
+            fm = _parse_frontmatter(md.read_text(encoding="utf-8")) or {}
+            ntype = fm.get("type", "")
+            reg = views["types"].get(ntype)
+            if reg is None:
+                if not md.name.startswith(LEGACY_GRANDFATHERED_PREFIXES):
+                    warns.append(f"{folder}/{md.name}: type '{ntype}' not in "
+                                 f"vault-schema.json (M-track #13862 migrates legacy content)")
+                continue
+            if reg.get("folder") != folder:
+                issues.append(f"{folder}/{md.name}: type '{ntype}' is registered "
+                              f"to folder '{reg.get('folder')}' (folder<->type, VAULT-ARCH 4.2a)")
+            declared_prefix = reg.get("prefix")
+            if declared_prefix and not md.name.startswith(declared_prefix):
+                issues.append(f"{folder}/{md.name}: type '{ntype}' declares prefix "
+                              f"'{declared_prefix}' (prefix<->type, VAULT-ARCH 4.2a)")
+
+    for w in warns:
+        print(f"WARN: {w}")
     if issues:
         for i in issues:
             print(f"FAIL: {i}")
     else:
-        print("OK: Vault structure valid")
+        print("OK: Vault structure valid (registry-driven)")
     return issues
 
 
@@ -101,13 +204,18 @@ def check_frontmatter():
         print("SKIP: No galaxy directory")
         return issues
 
+    # Registry-declared prefixes (+ legacy grandfathered set, #13862) —
+    # replaces the hardcoded tuple (#13858).
+    views = _schema_views(_load_schema())
+    valid_prefixes = tuple(views["prefix_to_type"]) + LEGACY_GRANDFATHERED_PREFIXES
+
     for note in galaxy_dir.glob("*.md"):
         if note.name == ".gitkeep":
             continue
 
         # Check prefix
-        if not any(note.name.startswith(p) for p in VALID_GALAXY_PREFIXES):
-            issues.append(f"{note.name}: invalid prefix (expected: {VALID_GALAXY_PREFIXES})")
+        if not any(note.name.startswith(p) for p in valid_prefixes):
+            issues.append(f"{note.name}: invalid prefix (expected: {valid_prefixes})")
 
         text = note.read_text(encoding="utf-8")
         fm = _parse_frontmatter(text)
@@ -189,6 +297,42 @@ def check_wikilinks():
     else:
         print("OK: All wikilinks resolve")
     return issues
+
+
+def check_hub_links():
+    """Level-2 sweep (#13858, VAULT-ARCH §3.3): flag budgeted-type notes
+    (galaxy leaves) that wikilink to ZERO hub-type notes. "Orphaned from the
+    graph" is a distinct, cheaper-to-fix defect from "orphaned from any other
+    note" (list_orphans). Advisory only — a maintenance signal for the
+    improvement scan, never a write-time block.
+    """
+    warnings = []
+    views = _schema_views(_load_schema())
+    if not views["hub_types"] or not views["budgeted_types"]:
+        print("SKIP: registry declares no hub or no budgeted types")
+        return warnings
+
+    all_notes = _get_all_notes()
+    # slug -> type for every note, so link targets can be classified.
+    slug_type = {}
+    for rel, path in all_notes.items():
+        fm = _parse_frontmatter(path.read_text(encoding="utf-8")) or {}
+        slug_type[Path(rel).stem] = fm.get("type", "")
+
+    for rel, path in sorted(all_notes.items()):
+        ntype = slug_type.get(Path(rel).stem, "")
+        if ntype not in views["budgeted_types"]:
+            continue
+        links = _extract_wikilinks(path.read_text(encoding="utf-8"))
+        if not any(slug_type.get(l, "") in views["hub_types"] for l in links):
+            warnings.append(f"{rel}: no wikilink to any hub note "
+                            f"(graph-orphaned, VAULT-ARCH 3.3)")
+
+    for w in warnings:
+        print(f"[vault-check] WARN: {w}")
+    if not warnings:
+        print("OK: every budgeted-type note links to at least one hub")
+    return warnings
 
 
 def list_orphans():
@@ -399,6 +543,10 @@ def main():
     elif cmd == "check-size":
         # Advisory: always exits 0 (warnings, not failures).
         check_galaxy_size()
+        sys.exit(0)
+    elif cmd == "check-hub-links":
+        # Advisory Level-2 sweep (#13858, §3.3): always exits 0.
+        check_hub_links()
         sys.exit(0)
     elif cmd == "list-orphans":
         list_orphans()

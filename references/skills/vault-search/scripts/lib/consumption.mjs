@@ -28,13 +28,27 @@ import { readFileSync, readdirSync, appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-// P1 defaults (§6.2 weights operator-locked; folder weights and status
-// multipliers are the P1 default mapping, tunable via vault-schema.json).
+// Defaults (§6.2 weights operator-locked). P2 (#13858): `types` is the §3.2
+// default profile — the full registry shape of §3.1 — and is what an absent
+// or typeless vault-schema.json degrades to. `folderWeights` survives as a
+// LEGACY override layer (a pre-registry schema file may carry it; resolution
+// order is type weight → folderWeights → 1). `archives` stays listed as a
+// scan folder for v1-era vaults even though §3.4 retires the physical move.
 export const DEFAULT_CONFIG = {
   searchTopK: 12,
   traversalBudget: 2,
   tieBreakWeights: { used: 2.0, impression: 0.25, walked: 0.5, recency: 0.25 },
-  folderWeights: { galaxy: 1.0, projects: 0.8, areas: 0.8, resources: 0.7, archives: 0.5 },
+  types: {
+    project: { folder: 'projects', traversal: 'free', weight: 0.8, hub: true },
+    area: { folder: 'areas', traversal: 'free', weight: 0.8, hub: true },
+    resource: { folder: 'resources', traversal: 'free', weight: 0.6, hub: false },
+    decision: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'decision-' },
+    pattern: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'pattern-' },
+    learning: { folder: 'galaxy', traversal: 'budgeted', weight: 1.0, hub: false, prefix: 'learning-' },
+    system: { folder: 'systems', traversal: 'free', weight: 0.8, hub: true },
+    archive: { folder: 'archives', traversal: 'free', weight: 0.5, hub: false },
+  },
+  folderWeights: {},
   statusMultipliers: { superseded: 0.01, archived: 0.01 },
 };
 
@@ -47,9 +61,18 @@ export function loadConfig(vaultRoot, readFile = readFileSync) {
   try {
     const raw = readFile(join(vaultRoot, 'vault-schema.json'), 'utf8');
     const parsed = JSON.parse(raw);
+    // `types` REPLACES the default set when provided (a custom taxonomy must
+    // not inherit phantom default types, §3.1); scalars and the two legacy
+    // maps deep-merge. A present-but-empty/malformed types{} degrades to the
+    // default profile (fail-open, §6.2).
+    const parsedTypes =
+      parsed.types && typeof parsed.types === 'object' && Object.keys(parsed.types).length > 0
+        ? parsed.types
+        : DEFAULT_CONFIG.types;
     return {
       ...DEFAULT_CONFIG,
       ...parsed,
+      types: parsedTypes,
       tieBreakWeights: { ...DEFAULT_CONFIG.tieBreakWeights, ...parsed.tieBreakWeights },
       folderWeights: { ...DEFAULT_CONFIG.folderWeights, ...parsed.folderWeights },
       statusMultipliers: { ...DEFAULT_CONFIG.statusMultipliers, ...parsed.statusMultipliers },
@@ -57,6 +80,45 @@ export function loadConfig(vaultRoot, readFile = readFileSync) {
   } catch {
     return DEFAULT_CONFIG;
   }
+}
+
+// ---- registry derivation (§3.1) ---------------------------------------------
+
+// Derive the folder-level views the scanner and traversal need from the type
+// registry: scan-folder list (registration order, deduped), the set of
+// folders whose types are `traversal: budgeted`, and a per-folder default
+// weight — used when a note's own `type:` is missing/unregistered. NOTE the
+// documented contract: for a folder hosting several types the default is the
+// FIRST-REGISTERED type's weight, so registration order in vault-schema.json
+// is meaningful for untyped notes in shared folders (external review,
+// #13858 — an explicit per-folder default field is a possible future
+// refinement). Malformed type entries (no folder) are skipped.
+export function deriveSchema(cfg) {
+  const folders = [];
+  const budgetedFolders = new Set();
+  const folderDefaultWeight = {};
+  for (const t of Object.values(cfg.types || {})) {
+    if (!t || typeof t.folder !== 'string' || t.folder === '') continue;
+    if (!folders.includes(t.folder)) folders.push(t.folder);
+    if (t.traversal === 'budgeted') budgetedFolders.add(t.folder);
+    if (!(t.folder in folderDefaultWeight) && Number.isFinite(t.weight)) {
+      folderDefaultWeight[t.folder] = t.weight;
+    }
+  }
+  return { folders, budgetedFolders, folderDefaultWeight };
+}
+
+// Per-note ranking weight (§3.1 `weight` × §6.2): the note's own registered
+// type wins; unregistered/missing type falls back to the legacy
+// folderWeights override, then the folder's first-registered type weight,
+// then 1.
+export function typeWeight(cfg, noteType, folder, derived = null) {
+  const t = (cfg.types || {})[noteType];
+  if (t && Number.isFinite(t.weight)) return t.weight;
+  if (Number.isFinite(cfg.folderWeights?.[folder])) return cfg.folderWeights[folder];
+  const d = derived ?? deriveSchema(cfg);
+  if (Number.isFinite(d.folderDefaultWeight[folder])) return d.folderDefaultWeight[folder];
+  return 1;
 }
 
 // ---- scalar coercion --------------------------------------------------------
@@ -186,20 +248,21 @@ export function recencyBonus(updatedISO, todayISO) {
 
 // Stage-2 tie-break score (§6.2): telemetry-weighted —
 //   used×W.used + impression×W.impression + walked×W.walked + recency×W.recency
-// — multiplied by the folder/type weight and by the status multiplier
-// (superseded/archived rank near zero but stay discoverable). `fields` =
-// { used, impression, walked, updated, folder, status } where the three
-// counters are plain ints (missing → 0). With no telemetry at all the score
-// degrades to recency × weights — i.e. tier + recency + type weight (§6.2
-// graceful degradation) with no special-casing.
-export function tieBreakScore(fields, config, todayISO) {
+// — multiplied by the note's TYPE weight (registry-resolved via typeWeight,
+// #13858; legacy folderWeights override honored) and by the status
+// multiplier (superseded/archived rank near zero but stay discoverable).
+// `fields` = { used, impression, walked, updated, type, folder, status }
+// where the three counters are plain ints (missing → 0). With no telemetry
+// at all the score degrades to recency × weights — i.e. tier + recency +
+// type weight (§6.2 graceful degradation) with no special-casing.
+export function tieBreakScore(fields, config, todayISO, derived = null) {
   const w = config.tieBreakWeights;
   const base =
     toCount(fields.used) * (w.used ?? 0) +
     toCount(fields.impression) * (w.impression ?? 0) +
     toCount(fields.walked) * (w.walked ?? 0) +
     recencyBonus(fields.updated, todayISO) * (w.recency ?? 0);
-  const fw = config.folderWeights[fields.folder] ?? 1;
+  const fw = typeWeight(config, fields.type, fields.folder, derived);
   const sm = config.statusMultipliers[String(fields.status || '').toLowerCase()] ?? 1;
   return base * fw * sm;
 }

@@ -119,3 +119,37 @@ class TestConfigFlag:
         assert config_mod.FIELD_MAP["vault-engine"] == ("Flags", "Vault Engine")
         text = "# Config\n\n## Flags\n\n- **Vault Engine**: yes\n- **Diagnostics**: yes\n"
         assert config_mod._parse_field(text, "Flags", "Vault Engine") == "yes"
+
+
+class TestSchemaSeed13858:
+    """VAULT-ARCH 3.1: every install's vault ships vault-schema.json at the
+    vault root; the wizard seeds it create-if-absent (customizations and
+    upgrades never clobbered)."""
+
+    def make_target_with_schema_seed(self, tmp_path):
+        root = make_target(tmp_path)
+        (root / "references" / "vault-schema-default.json").write_text(
+            '{"traversalBudget": 2, "types": {"x": {"folder": "xs"}}}', encoding="utf-8"
+        )
+        return root
+
+    def test_schema_seeded_when_absent(self, tmp_path):
+        root = self.make_target_with_schema_seed(tmp_path)
+        result = wizard.install_vault_engine(root)
+        schema = root / ".squidsquad" / "vault" / "vault-schema.json"
+        assert result["schema_seeded"] is True
+        assert '"traversalBudget"' in schema.read_text(encoding="utf-8")
+
+    def test_existing_schema_never_clobbered(self, tmp_path):
+        root = self.make_target_with_schema_seed(tmp_path)
+        schema = root / ".squidsquad" / "vault" / "vault-schema.json"
+        schema.parent.mkdir(parents=True, exist_ok=True)
+        schema.write_text('{"types": {"custom": {"folder": "c"}}}', encoding="utf-8")
+        result = wizard.install_vault_engine(root)
+        assert result["schema_seeded"] is False
+        assert '"custom"' in schema.read_text(encoding="utf-8")
+
+    def test_missing_seed_source_is_harmless(self, tmp_path):
+        root = make_target(tmp_path)  # no vault-schema-default.json
+        result = wizard.install_vault_engine(root)
+        assert result["schema_seeded"] is False

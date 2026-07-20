@@ -1,7 +1,7 @@
 # SquidSquad installer file manifest
 # Every file the wizard needs, fetched by npx squidsquad before
 # launching Claude. One path per line, relative to repo root.
-# Total: 269 files
+# Total: 273 files
 #
 # Maintained alongside the wizard - when you add a new role,
 # capability, preset, or sub-skill, add its files here too.
@@ -81,6 +81,7 @@ references/scripts/vault_entity.py
 references/scripts/vault_optimize.py
 references/scripts/vault_remember.py
 references/scripts/wizard.py
+references/vault-schema-default.json
 references/skills/vault-search/SKILL.md
 references/skills/vault-search/scripts/vault-query.mjs
 references/skills/vault-search/scripts/record-consumption.mjs
@@ -242,13 +243,16 @@ references/templates/forgejo-compose.yaml
 references/tui/__init__.py
 references/tui/app.py
 references/tui/harness_client.py
-references/vault-templates/archives-template.md
-references/vault-templates/areas-template.md
 references/vault-templates/BRIEFING.md
-references/vault-templates/galaxy-template.md
+references/vault-templates/_generic.md
+references/vault-templates/area.md
+references/vault-templates/decision.md
 references/vault-templates/human-profile-seed.md
-references/vault-templates/projects-template.md
-references/vault-templates/resources-template.md
+references/vault-templates/learning.md
+references/vault-templates/pattern.md
+references/vault-templates/project.md
+references/vault-templates/resource.md
+references/vault-templates/system.md
 references/hints-worker.txt
 references/hints-dm.txt
 references/hints-pm.txt
