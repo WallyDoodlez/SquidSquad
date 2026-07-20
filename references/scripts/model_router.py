@@ -650,10 +650,26 @@ def _log_diagnostic(entry):
 # Main routing logic
 # ---------------------------------------------------------------------------
 
+def _discard_output_artifact(output_file):
+    """#14025: on any error exit, remove the output artifact (including the
+    mid-run progress stub and any stale artifact from a prior run). The
+    fallback contract is exit-code-driven and executed by the CALLER; a
+    leftover file at --output-file must never be mistakable for a completed
+    result by artifact-existence callers. Best-effort, never raises."""
+    try:
+        Path(output_file).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def route(task_type, task_id, input_files, output_file, context):
     """Route a subagent task to the configured model.
 
     Returns 0 on success, 1 on API failure (fallback), 2 on config error, 3 on timeout.
+
+    Error-exit contract (#14025): the router does NOT fall back in-process --
+    the caller falls back to Claude on any nonzero exit -- and no output
+    artifact survives an error exit (see _discard_output_artifact).
     """
     model = get_model_for_task(task_type)
 
@@ -666,16 +682,20 @@ def route(task_type, task_id, input_files, output_file, context):
             "model": "claude",
             "action": "delegate-to-agent-tool",
         })
+        # A stale artifact from a prior run must not read as this run's
+        # result (#14025) -- the caller performs the work via the Agent tool.
+        _discard_output_artifact(output_file)
         return 1
 
     # Load provider
     provider_name, manifest = _load_provider_manifest(model)
     if not manifest:
         print(
-            f"[model_router] No provider found for model '{model}'. "
-            f"Falling back to Claude.",
+            f"[model_router] No provider found for model '{model}' -- "
+            f"exiting 1; caller falls back to Claude (see agent instructions).",
             file=sys.stderr,
         )
+        _discard_output_artifact(output_file)
         return 1
 
     # Check API key — ~/.squidsquad/secrets first, then env var
@@ -692,9 +712,10 @@ def route(task_type, task_id, input_files, output_file, context):
     if auth_env and not os.environ.get(auth_env):
         print(
             f"[model_router] {auth_env} not set (checked ~/.squidsquad/secrets and env) -- "
-            f"skipping {provider_name}, falling back to Claude for {task_type}.",
+            f"skipping {provider_name}; exiting 2, caller falls back to Claude for {task_type}.",
             file=sys.stderr,
         )
+        _discard_output_artifact(output_file)
         return 2
 
     # Auto-install deps
@@ -743,10 +764,11 @@ def route(task_type, task_id, input_files, output_file, context):
             )
         else:
             print(
-                f"[model_router] Unknown provider '{provider_name}'. "
-                f"Falling back to Claude.",
+                f"[model_router] Unknown provider '{provider_name}' -- "
+                f"exiting 1; caller falls back to Claude (see agent instructions).",
                 file=sys.stderr,
             )
+            _discard_output_artifact(output_file)
             return 1
     except Exception as e:
         elapsed = time.time() - start_time
@@ -778,15 +800,10 @@ def route(task_type, task_id, input_files, output_file, context):
             "elapsed_seconds": round(elapsed, 1),
         })
 
-        # Write error status to output file (#5046)
-        try:
-            error_detail = "quota exceeded" if is_quota else str(e)[:200]
-            Path(output_file).write_text(
-                f"# STATUS: error -- {error_detail}\n",
-                encoding="utf-8",
-            )
-        except OSError:
-            pass
+        # No artifact survives an error exit (#14025, supersedes the #5046
+        # error-stub write): a stub at --output-file fooled at least one live
+        # artifact-existence caller into consuming an error as a review.
+        _discard_output_artifact(output_file)
 
         if is_quota:
             # Prominent human-visible notification — not buried in stderr
@@ -796,14 +813,18 @@ def route(task_type, task_id, input_files, output_file, context):
                 f"  Provider: {provider_name} ({model})\n"
                 f"  Error: {e}\n"
                 f"  Action: Add credits or check your plan.\n"
-                f"  Falling back to Claude for this task.\n"
+                f"  This run exits nonzero; the CALLER falls back to Claude for this task.\n"
                 f"{'=' * 60}\n"
             )
         elif is_timeout:
-            print(f"[model_router] API timeout after {round(elapsed, 1)}s. Falling back to Claude.", file=sys.stderr)
+            print(f"[model_router] API timeout after {round(elapsed, 1)}s -- "
+                  f"exiting 3; caller falls back to Claude (see agent instructions).",
+                  file=sys.stderr)
             return 3
         else:
-            print(f"[model_router] API error: {e}. Falling back to Claude.", file=sys.stderr)
+            print(f"[model_router] API error: {e} -- "
+                  f"exiting 1; caller falls back to Claude (see agent instructions).",
+                  file=sys.stderr)
         return 1
 
     elapsed = time.time() - start_time
@@ -831,17 +852,12 @@ def route(task_type, task_id, input_files, output_file, context):
         })
         print(
             f"[model_router] Output below minimum length threshold "
-            f"({len(stripped_response)} < {MIN_OUTPUT_LENGTH}). Falling back to Claude.",
+            f"({len(stripped_response)} < {MIN_OUTPUT_LENGTH}) -- "
+            f"exiting 1; caller falls back to Claude (see agent instructions).",
             file=sys.stderr,
         )
-        # Write error status instead of deleting (#5046)
-        try:
-            Path(output_file).write_text(
-                f"# STATUS: error -- output below minimum length ({len(stripped_response)} chars)\n",
-                encoding="utf-8",
-            )
-        except Exception:
-            pass
+        # No artifact survives an error exit (#14025, supersedes #5046).
+        _discard_output_artifact(output_file)
         return 1
 
     # Write output

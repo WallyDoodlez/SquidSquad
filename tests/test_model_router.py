@@ -420,11 +420,14 @@ class TestCleanResultSentinel:
         assert "no_findings" in out.read_text(encoding="utf-8").lower()
 
     def test_short_non_sentinel_response_still_returns_1(self, tmp_path):
-        """The gate must still fire for genuinely degenerate short output."""
+        """The gate must still fire for genuinely degenerate short output.
+        Contract update (#14025): error exits leave NO artifact -- the old
+        '# STATUS: error' stub fooled artifact-existence callers, so the gate
+        now discards the output file instead of stubbing it."""
         out = tmp_path / "out.md"
         code = self._route_with_response("oops", out)
         assert code == 1
-        assert "below minimum length" in out.read_text(encoding="utf-8")
+        assert not out.exists()
 
     def test_long_review_unaffected_returns_0(self, tmp_path):
         out = tmp_path / "out.md"
