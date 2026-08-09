@@ -88,6 +88,41 @@ All endpoints serve from `http://127.0.0.1:<port>`. Localhost-only; no authentic
 >
 > **Path-parameter vocabulary on lifecycle endpoints:** `{role}` on `POST /agents/{role}/start|stop|restart` and `GET /agents/{role}/*` accepts the **alias** value (same convention as event-bus endpoints §4.2). The naming predates the alias concept; the rename to `{alias}` is in #10358. There is no class-level lifecycle endpoint — every lifecycle call targets one specific alias.
 
+#### 4.1.1 Per-agent payload shape (`/status` → `agents[]`, `/agents`, `/agents/{role}`)
+
+The per-agent object is `AgentState.to_dict()` (`harness.py:647`). The **shipped** fields today:
+
+```jsonc
+{
+  "role": "skill",              // the ALIAS (no separate `alias` field until #10358)
+  "status": "running",          // §7.1.1 observed-status enum
+  "intent": "running",          // §7.5 operator-intent enum
+  "intent_set_at": 1784.0,
+  "boot_time": 1780.0, "last_health_check": 1790.0, "clone_path": "...",
+  "claude_pid": 1234, "terminal_pid": 1200,   // no shorthand `pid` until #10358
+  "current_cycle": 41, "current_phase": null, // loop-iteration counter — NOT the task identity
+  "last_cycle_start": …, "last_cycle_end": …, "last_cycle_type": …,
+  "bootup_complete": true,
+  "last_spawn_at": …, "consecutive_fast_deaths": 0, "reboot_blocked_until": null,
+  "reboot_history": […], "last_session_end": …,
+  "last_activity_at": …, "last_activity": {…},   // progress-liveness heartbeat (#12443)
+  "in_flight_until": …, "waiting_since": …, "compacting_since": …,  // pause-aware guard (#12458)
+  "last_stop_failure": …, "last_dispatch_at": …, "operator_force_at": …
+}
+```
+
+**New display-truth fields added by #13561** (harness computes once, server-side; the TUI renders verbatim — no client-side state derivation):
+
+| Field | Shape | Purpose |
+|---|---|---|
+| `current_task` | `{"issue": int\|null, "title": str\|null, "assigned_at": ts, "source": "ead"\|"manual"}` | Real task identity, ingested from the `assigned-to` event (payload already carries `issue_number`+`title`); cleared when a `status-transition` moves that issue out of an in-progress-class status; persisted in `save_state()`. Replaces the TUI's misuse of `current_cycle` as "Task". `—` when unassigned. |
+| `work_state` | `"working"\|"idle"\|"waiting"\|"compacting"\|"booting"\|"down"\|"crash-looping"` | Server-computed work state (derivation in/next to `update_health`), so the TUI stops mis-deriving it from `current_cycle is not None` (which is set once and never cleared — the "permanently working" bug). Driven by `in_cycle` (a `cycle-start`/`cycle-end` pairing `current_cycle` never had), `in_flight_until`, the pause windows, and `status`. |
+| `work_state_reason` | `str` | Short human string behind `work_state` (`"no dispatch"`, `"perm prompt 3m"`, `"zombie killed, respawning"`, `"2/3 deaths, backoff 240s"`). |
+| `context_pressure` | `{"pct": float\|null, "threshold": int, "age_seconds": float}` | The already-collected per-agent pressure (`_read_agent_pressure`), previously exposed only on `/agents/{role}/health`. `threshold` from `_read_context_threshold()` (default 70). `pct: null`/stale (age > 10 min) → TUI renders `—`/dim, never a fake value. |
+| `lag` | `int\|null` | Real cursor-vs-deque-head lag (the EventLifecycleManager owns both). Replaces the never-implemented field `harness_client.py` defaulted to `0`. If deferred, the field is omitted and the TUI drops the Lag column rather than rendering `0`. |
+| `mode` | `"event"\|"polling"` | The agent's wake mode (harness knows from the bootup event / config). |
+| `compactions_this_session` | `int` | Auto-compaction count (Phase 3), surfaced so the operator sees context churn; dim-flag agents that auto-compacted. |
+
 ### 4.2 Event bus endpoints
 
 | Method | Path | Purpose | Returns |
@@ -280,20 +315,25 @@ Transitions are HTTP-API-driven (`POST /agents/{role}/start|stop|restart`). The 
 
 ### 7.1.1 Status state machine
 
-`status` reflects what the agent is actually doing, driven by health-poller observations and lifecycle events. Valid values:
+`status` reflects what the agent is actually doing, driven by health-poller observations (`update_health`, `harness.py:954-1091`) and lifecycle events. The **shipped** enum is:
 
-| Status | Meaning |
-|---|---|
-| `booting` | Spawn initiated; harness awaiting `booted` event from agent |
-| `ready` | Agent running and has emitted `booted`; health poller confirms PID alive |
-| `stopping` | Stop in progress; harness waiting for cooperative exit or force-kill window |
-| `stopped` | Agent exited as intended (intent was `stopping`) |
-| `crashed` | Agent died unexpectedly (intent was `running` or `booting`) |
-| `crash-looping` | ≥3 consecutive fast deaths (each <60s lifetime) detected; respawn is paused under exponential backoff (§7.3, #12293). Not terminal — resumes automatically when the backoff window elapses. |
+| Status | Meaning | Set where |
+|---|---|---|
+| `unknown` | Initial / unclassified — a dead agent that fits no other category (`AgentState.__init__` default; poller fallback) | `harness.py:333`, `:1091` |
+| `starting` | Spawn initiated; boot in progress, `booted`/`bootup-complete` not yet confirmed. Preserved across polls like `crash-looping` so a booting agent isn't relabelled | `harness.py:1354`, `:1372`, `:2663`, `:2994`, `:3140` |
+| `running` | PID alive — the healthy steady state | `harness.py:984` |
+| `stopped` | Agent exited as intended (intent was `stopping`/`stopped`) | `harness.py:1049`, `:1058` |
+| `stalled` | Was `running`, then the PID died unexpectedly with intent still `running` (the old TRD's "crashed"). Triggers auto-respawn per §7.3 | `harness.py:1089` |
+| `error` | A boot/action step returned an error result (`action == "error"`) | `harness.py:1458` |
+| `crash-looping` | ≥3 consecutive fast deaths (each <60s lifetime); respawn paused under exponential backoff (§7.3, #12293). Not terminal — resumes when the backoff window elapses | `harness.py` (§7.3 breaker) |
+| `paused` | Explained-silence HOLD (#12458) — a legitimately quiet agent (e.g. waiting on a pause window) is held, not killed; has its own resume branch | `harness.py:1033`, `:1039` |
+| `deploying` | A death while `intent=deploying` — the expected deploy-halt exit; the deploy sequence owns the respawn, so the poller settles here instead of `is_dead` (#12912) | `harness.py:1059`, `:1087` |
 
-Normal lifecycle: `booting → ready → stopping → stopped`
+Normal lifecycle: `starting → running → stopped` (intended stop).
 
-Crash transitions: `booting → crashed` (boot failure — `booted` event never arrives within timeout), `ready → crashed` (runtime failure — PID dies with intent still `running`)
+Unexpected-death transitions: `starting → error` (boot step failed), `running → stalled` (runtime PID death with intent still `running`) → auto-respawn; a stall that repeats within the fast-death window escalates `stalled → crash-looping`.
+
+> **Naming note (#13561):** an earlier revision of this table documented an aspirational enum (`booting/ready/stopping/stopped/crashed/crash-looping`) that the code never produced — `booting`→`starting`, `ready`→`running`, `crashed`→`stalled`, and the shipped `unknown/error/paused/deploying` were absent. This table is now reconciled to the values the health poller actually assigns; `intent` (§7.5) carries the `stopping`/`restarting`/`deploying` *transition* state separately from these observed-`status` values.
 
 > Full transition treatment (including recovery paths and re-spawn triggers) lives in [AGENT-RUNTIME.md §8.2](AGENT-RUNTIME.md). This section is the harness-side view.
 
@@ -416,8 +456,8 @@ One file per install (at the install root). Persisted across harness restarts. S
 
 **Two distinct fields per agent** (per [AGENT-RUNTIME.md §8.2](AGENT-RUNTIME.md)):
 
-- **`intent`** — what the operator wants. Values: `running` | `stopping` | `restarting` | `stopped`. Transitions are HTTP-API-driven (per §7.1); the harness writes the new intent immediately on `POST /agents/{role}/{start|stop|restart}`.
-- **`status`** — what the agent is actually doing. Values: `booting` | `ready` | `stopping` | `stopped` | `crashed` | `crash-looping`. Driven by the health poller's observations of process state and by lifecycle events emitted from the agent (`booted`, `ack-stop`). Moves independently of intent. Transitions enumerated in §7.1.1.
+- **`intent`** — what the operator (or the harness on its behalf) wants. Values: `running` | `stopping` | `restarting` | `stopped` | `deploying`. Mostly HTTP-API-driven (per §7.1) — the harness writes the new intent immediately on `POST /agents/{role}/{start|stop|restart}` — with two harness-initiated flips: `restarting` on a context-pressure trip (§15.1) and `deploying` during a compose-drift deploy sequence (§7.6, #12912).
+- **`status`** — what the agent is actually doing. Values: `unknown` | `starting` | `running` | `stopped` | `stalled` | `error` | `crash-looping` | `paused` | `deploying`. Driven by the health poller's observations of process state and by lifecycle events emitted from the agent (`booted`, `ack-stop`). Moves independently of intent. Full value meanings and transitions in §7.1.1.
 
 Two fields, not one, so recovery semantics are explicit: after a host reboot the harness reads this file, sees `intent=running` but no live PID → respawn. If `intent` and `status` were collapsed, the harness couldn't distinguish "operator stopped this" from "this crashed". Full state machine documented in [AGENT-RUNTIME.md §8.2](AGENT-RUNTIME.md).
 
@@ -625,7 +665,9 @@ Liveness rests on two mechanisms, both **by-products of normal agent operation**
 
 The whole rule: **after dispatch, no activity AND no hook explaining the silence → dead.** A wedged loop has no explaining hook → caught; a busy / waiting / rate-limited / compacting agent has one → protected.
 
-**Context pressure is the agent's concern, not the harness's.** Claude Code auto-compacts in place when context fills — the session continues, so context pressure never causes a restart. The harness only observes it (`PreCompact` / `PostCompact`). Compaction is tuned per-clone in `settings.json` (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) to compact early with headroom, and a `## Compact Instructions` block in each role's CLAUDE.md preserves the tracker state and current task across a compaction.
+**Context pressure — the harness pre-empts Claude Code's lossy auto-compact (#13335).** Two things watch context fill, and the harness's is authoritative. Claude Code's own auto-compact summarises in place when context fills — the session continues, but the compaction is lossy. To pre-empt it, the 5-second health poller reads each running agent's `context-pressure` (written by `statusline.sh` → `.squidsquad/<role>/context-pressure`) and, when it reaches the configured `context-threshold` (`config.md` `Context Pressure / Threshold`, default 70), **flips `intent=restarting`** — the same graceful-restart machinery every other restart uses (`_enforce_context_pressure`, `harness.py:1549`). The agent checkpoints `working-state.md` at its next task boundary (event-mode-contract Case E), then the 60-second force-kill net + auto-reboot respawns it with a **fresh** context window, resuming from the checkpoint. This is the event-mode ACTOR for the threshold: in event mode nothing runs `cycle_post.py` per event, so the loop-mode exit-42 pressure path never fires; without this enforcer agents would run unbounded past the threshold until Claude Code's lossy compact or a human intervened.
+
+The enforcer is fail-open and guarded: skipped entirely under `_NO_AUTO_REBOOT` (no respawn path); only a fully-booted `running` agent whose intent is `running` is a candidate (an agent already `stopping`/`restarting` is skipped, so a repeat trip never re-arms the force-kill window); every clone/threshold/pressure read is fail-open (a bad read yields "no signal" and is skipped, never crashing the poller). The respawn is subject to the #12244 crash-loop breaker — a normal long-lived agent trips well past the fast-death window and never accumulates a death streak. The `PreCompact` / `PostCompact` hooks remain **observational** telemetry for the compaction-that-still-happens case (manual compaction, or a pressure spike between poller ticks); they are not themselves a restart trigger. Compaction is also tuned per-clone in `settings.json` (`CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`) to compact early with headroom, and a `## Compact Instructions` block in each role's CLAUDE.md preserves the tracker state and current task across any compaction that does occur.
 
 ### 15.2 Enriched tool-call signal
 
@@ -710,20 +752,28 @@ The harness instruments each agent with a curated set of Claude Code hooks, givi
 
 - **`StopFailure` → cause-aware reboot.** It names the API error (`rate_limit`, `overloaded`, `billing_error`, …), so the reboot decision is cause-aware: `rate_limit` → back off until reset; `server_error` → quick retry (§13.8).
 - **`Notification` → stall detection.** An agent blocked waiting on a permission / input decision is directly visible.
-- **`PreCompact` / `PostCompact` → compaction telemetry.** The agent is compacting context in place and continuing the same session — observational; context pressure is self-managed, not a restart (§15.1).
+- **`PreCompact` / `PostCompact` → compaction telemetry.** The agent is compacting context in place and continuing the same session — observational. Note these hooks are *not* the context-pressure restart trigger: the harness pre-empts lossy auto-compact by flipping `intent=restarting` when the polled `context-pressure` reaches `context-threshold` (§15.1); the compaction hooks fire only for compactions that still occur (manual, or a spike between poller ticks).
 - **`PostToolUseFailure` → tool-error stream** for diagnosis and display.
 
 ### 16.3 Constraints
 
 - **Observational / fail-open.** Several of these hooks *can* block the agent (exit 2 / `decision`); wired for telemetry they must not — bounded timeout, backgrounded, always succeed.
 - **Transport (two kinds).** High-frequency **activity-heartbeat** hooks — `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `PostToolUseFailure` — are async `type: command` hooks that shell out to `references/scripts/activity_hook.py` (which POSTs to `/hooks/activity`). They MUST be `command` + `async: true`, because native `type: http` hooks are **synchronous** (they block the tool call, default 600s timeout), and these fire on every tool call; `async` command hooks are fire-and-forget so they can never stall/fail the agent (§15.5 constraint 1, exit 0 always). Lower-frequency hooks — `SessionEnd`, and the pause-guard hooks (`Notification` / `Stop` / `PreCompact` etc. → `/hooks/pause`) — fire at most once per event and are wired as native `type: http` hooks. Both kinds are deployed per-clone via `settings.json` (compose / installer integration).
-- **No "context-% full" field** exists in any hook payload; `PreCompact(auto)` is the proxy for context pressure.
+- **No "context-% full" field in any *hook* payload** — but the **statusline** channel does carry it (see §16.5). The `PreCompact(auto)` hook is the *hook-stream* proxy for context pressure; the primary, quantitative source is the statusline JSON's `context_window.used_percentage`, which SquidSquad already consumes.
 
 ### 16.4 Consumers
 
 - **Liveness (§15)** — heartbeat from `UserPromptSubmit` (prompt-receipt) + `PreToolUse` / `PostToolUse` / `PostToolUseFailure` + `cycle_post`, in-flight from the `Pre`/`PostToolUse` pair; reboot reason from `SessionEnd` / `StopFailure`.
 - **Reboot decision (§13.8)** — backoff that is cause-aware from `StopFailure` (names the API error) and graceful-vs-crash (presence/absence) from `SessionEnd`.
 - **Display (#12410)** — status line, dashboard, event highlights.
+
+### 16.5 Statusline channel — the quantitative context-pressure source
+
+Separate from the hook stream above, Claude Code invokes each agent's **statusline** command every turn and passes it a JSON blob on stdin. That blob carries a full `context_window` object — `used_percentage`, `context_window_size`, and a `current_usage` token breakdown — plus `session_id`. This is a **first-class telemetry source**, not a hook: it is the only channel that reports quantitative context fill (the hook stream only signals the qualitative `PreCompact`/`PostCompact` boundary).
+
+- **Today:** `statusline.sh:65-73` extracts `used_percentage` and writes it to `.squidsquad/<role>/context-pressure` (a plain file). The health poller scrapes that file (`_read_agent_pressure`) and enforces the threshold (§15.1). This file-scrape is the shipped path.
+- **#13561 Phase 3 (v1.5):** `statusline.sh` additionally async-POSTs the full `context_window` JSON + `session_id` to a new `POST /hooks/context`, making the harness the direct consumer (the file write remains as fallback). The same phase splits the `PreCompact`/`PostCompact` hook matchers into `auto` vs `manual`, so an auto-compaction (genuine context exhaustion) is a distinct, counted event surfaced as `compactions_this_session` in `/status` (§4.1.1).
+- **Later (out of scope, noted for completeness):** an OpenTelemetry layer (`claude_code.token.usage`, `claude_code.compaction` pre/post token counts) for cross-session dashboards.
 
 ---
 
