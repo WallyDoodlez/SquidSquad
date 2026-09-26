@@ -66,6 +66,7 @@ python references/scripts/vault_consume.py cite --alias [ROLE] --task N --slugs 
    ```bash
    python references/scripts/vault_entity.py create <type> <slug>
    ```
+   It uses `references/vault-templates/<type>.md`; a custom registered type with no template of its own falls back to `_generic.md`.
 3. Fill the frontmatter: `type`, `tags` (at least one domain tag — the word a teammate would search for; `tags: []` is invalid), `created`, `updated`, `status: active`, `owner` (`pm` | `worker` | `verifier` | `dm` | `shared`). Do not add `confidence`, `source`, `links`, or any usage counter — usage is telemetry, never frontmatter.
 4. Body: bare wikilinks `[[note-name]]`, no aliases. Every galaxy note links to the `systems/` hub it is about.
 5. **Rule notes** (`rule-*`) are the binding lane that pickup matches and the verifier enforces: one imperative sentence under `## Rule`, where it applies under `## Scope`, and `## Why` linking the parent decision. Write one only when a human or PM established the rule — never promote your own opinion to a rule.
