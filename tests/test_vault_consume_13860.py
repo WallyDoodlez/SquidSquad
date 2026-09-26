@@ -373,9 +373,87 @@ class TestLineageGuardExemption:
 
     def test_issue_from_branch(self):
         assert git_ops._issue_from_branch("squidsquad/task/13860") == 13860
+        # configurable branch-pattern squidsquad/{role}/{number} (get_branch_name)
+        assert git_ops._issue_from_branch("squidsquad/skill/99") == 99
         assert git_ops._issue_from_branch("squidsquad/task/abc") is None
         assert git_ops._issue_from_branch("feature/x") is None
+        assert git_ops._issue_from_branch("feature/42") is None
         assert git_ops._issue_from_branch("") is None
+        assert git_ops._issue_from_branch(None) is None
+
+    @pytest.mark.parametrize("base,head,ok", [
+        (None, "new note #13860\n", True),                                   # new note
+        ("a\nb\n", "a\nb\nc #13860\n", True),                                # append-only
+        ("---\nupdated: 2026-01-01\n---\na\n", "---\nupdated: 2026-09-26\n---\na\nb #13860\n", True),
+        ("a\nb #13860\n", "b #13860\n", False),                              # deletion laundered by citation
+        ("status: active\na\n", "status: superseded\na #13860\n", False),    # rewrite of a base line
+        ("a\na\n", "a #13860\n", False),                                     # multiset: one copy removed
+        ("a\n", None, False),                                                # deleted in head
+    ])
+    def test_additive_capture(self, base, head, ok):
+        assert git_ops._is_additive_capture(base, head) is ok
+
+    def test_guard_strips_destructive_edit_of_existing_note(self):
+        """A note that already cites the issue on origin/<working> may not be
+        rewritten destructively on the branch (the citation is not a licence)."""
+        path = ".squidsquad/vault/galaxy/learning-old.md"
+        base = "---\ntype: learning\n---\nTeammate line.\nFrom #13860.\n"
+        staged = {path: "---\ntype: learning\n---\nFrom #13860.\n"}
+        resets = []
+
+        def fake_run_list(cmd, check=True):
+            r = MagicMock(stderr="", returncode=0, stdout="")
+            if cmd[:4] == ["git", "diff", "--cached", "--name-only"]:
+                r.stdout = "\n".join(staged) + "\n"
+            elif cmd[:3] == ["git", "diff", "--cached"] and "--quiet" in cmd:
+                r.returncode = 1
+            elif cmd[:2] == ["git", "ls-tree"]:
+                r.stdout = path + "\n"
+            elif cmd[:2] == ["git", "show"]:
+                r.stdout = base if cmd[2].startswith("origin/") else staged[cmd[2][1:]]
+            elif cmd[:2] == ["git", "reset"]:
+                resets.append(cmd[-1])
+            return r
+
+        with patch.object(git_ops, "_get_working_branch", return_value="main"), \
+                patch.object(git_ops, "_run", return_value=MagicMock(stdout="squidsquad/task/13860\n", returncode=0)), \
+                patch.object(git_ops, "_run_list", side_effect=fake_run_list):
+            assert git_ops.guard_staged_state() == [path]
+            # the append-only form of the same edit rides the branch
+            staged[path] = base + "Also #13860 follow-up.\n"
+            resets.clear()
+            assert git_ops.guard_staged_state() == []
+
+    def test_guard_strips_capture_note_when_base_undeterminable(self):
+        path = ".squidsquad/vault/galaxy/learning-x.md"
+
+        def fake_run_list(cmd, check=True):
+            r = MagicMock(stderr="", returncode=0, stdout="")
+            if cmd[:4] == ["git", "diff", "--cached", "--name-only"]:
+                r.stdout = path + "\n"
+            elif cmd[:3] == ["git", "diff", "--cached"] and "--quiet" in cmd:
+                r.returncode = 1
+            elif cmd[:2] == ["git", "ls-tree"]:
+                r.returncode = 128  # origin/main missing
+            elif cmd[:2] == ["git", "show"]:
+                r.stdout = "#13860\n"
+            return r
+
+        with patch.object(git_ops, "_get_working_branch", return_value="main"), \
+                patch.object(git_ops, "_run", return_value=MagicMock(stdout="squidsquad/task/13860\n", returncode=0)), \
+                patch.object(git_ops, "_run_list", side_effect=fake_run_list):
+            assert git_ops.guard_staged_state() == [path]
+
+    @pytest.mark.parametrize("stderr,state", [
+        ("gh: Not Found (HTTP 404)", "absent"), ("HTTP 502 Bad Gateway", "error")])
+    def test_pr_file_blob_distinguishes_absent_from_error(self, stderr, state):
+        def fake_run_list(cmd, check=True):
+            if cmd[:3] == ["gh", "pr", "view"]:
+                return MagicMock(returncode=0, stdout="main\n", stderr="")
+            return MagicMock(returncode=1, stdout="", stderr=stderr)
+
+        with patch.object(git_ops, "_run_list", side_effect=fake_run_list):
+            assert git_ops._pr_file_blob(1, ".squidsquad/vault/galaxy/x.md", "baseRefName") == (state, None)
 
 
 class TestIntakeInjection:

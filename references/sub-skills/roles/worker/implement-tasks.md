@@ -66,7 +66,6 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 7. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`), copy them to the live `.squidsquad/` location so changes take effect immediately.
 7b. **Capture-at-ship** (#13860, VAULT-ARCH §9.5): → run sub-skill: `vault-remember` — its **Capture-at-ship** section. Durable knowledge from this task (decision / root cause / pattern; chores skip) is written on this branch, cites `#[NUMBER]`, and ships in this PR.
 8. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the acceptance criteria and apply the implementation.
-   Then run `python references/scripts/vault_consume.py check-receipts [NUMBER] --diff-base origin/main` — it must exit 0 (lineage file in the PR diff with valid receipts). A failure here is a verifier reject waiting to happen.
 8b. **Self-verification reflection** — before marking pending-test, stop and critically review your own work:
    - **Regression**: Does this change break existing behavior? Read the code paths you touched — what else depends on them?
    - **Integration**: Does this work correctly with the current system setup? Is it compatible with config, compose, and the deployed state?
@@ -138,6 +137,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 8d. **Sync to latest base before the final gate + transition** (#13286). On completion, before the work is merged:
    - Sync the branch to current base AGAIN and resolve — using the **Branch sync** section of `pr-protocol` (`git merge origin/<BASE>`, NEVER rebase).
    - THEN run the full test gate on the synced tree, so the PR reflects current `main` at merge time and any contract/gate test that landed after you branched is caught here rather than by the verifier.
+   - THEN run `python references/scripts/vault_consume.py check-receipts [NUMBER] --diff-base origin/main` on the synced tree — it must exit 0 (lineage file in the PR diff with valid receipts). A failure here is a verifier reject waiting to happen.
    - **End-to-end ownership**: you are responsible for the code being correct on the *current* base — builds clean, the full gate green, no regressions — before handing off. This is the same lane the worker already owns ("ACs observably pass + tests green", `references/roles/worker/responsibility.md`), reaffirmed against the synced tree.
 
 9. If unit tests and changes exist (and code-review iteration converged):

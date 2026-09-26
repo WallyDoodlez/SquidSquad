@@ -366,7 +366,7 @@ def select_merge_target(draft_tokens, payload, threshold):
     Returns (target_or_None, qualifying_candidates)."""
     cands = []
     for hit in payload.get("results", []):
-        if not hit.get("direct", True) or hit.get("tier") not in MERGE_TIERS:
+        if hit.get("direct") is not True or hit.get("tier") not in MERGE_TIERS:
             continue
         if hit.get("status") != "active":
             continue

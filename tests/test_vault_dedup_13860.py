@@ -68,6 +68,11 @@ class TestSelectMergeTarget:
         # and a direct:false entry that leaked into results is still refused
         assert vc.select_merge_target(DRAFT, {"results": [dict(self.GOOD, direct=False)]}, 0.5)[0] is None
 
+    def test_missing_direct_flag_fails_closed(self):
+        # Only an explicit direct: true qualifies; an absent flag is not a direct hit.
+        no_flag = {k: v for k, v in self.GOOD.items() if k != "direct"}
+        assert vc.select_merge_target(DRAFT, {"results": [no_flag]}, 0.5)[0] is None
+
     @pytest.mark.parametrize("tier", ["filename", "wikilink", "tag"])
     def test_each_strong_tier_qualifies(self, tier):
         assert vc.select_merge_target(DRAFT, {"results": [dict(self.GOOD, tier=tier)]}, 0.5)[0]

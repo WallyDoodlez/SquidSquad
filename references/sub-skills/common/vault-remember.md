@@ -85,6 +85,7 @@ Remaining candidates beyond the write budget are noted in the iteration log's No
 The per-task companion to this sweep (VAULT-ARCH §9.5): before transitioning a task or fix to pending-test, decide whether it produced durable knowledge — a decision, a root cause, a pattern. **Skip** for chores: typo/doc-only edits, dependency bumps, mechanical renames, test-only changes. If it did, run the gates above for that candidate, then write (or update) the note **on the task branch** so it ships in the same PR:
 
 - The note must cite the task — include `#[NUMBER]` in its body — or the branch guard strips it back to main.
+- An update to an existing note must be append-only: keep every existing line (only `updated:` may change). Corrections or a `status` retirement are stripped from the branch — make those on main.
 - `git add` the note path explicitly and commit it on the task branch (`commit_code` does not stage `.squidsquad/`).
 - It counts against this cycle's write budget; the end-of-cycle sweep does not re-capture it.
 
