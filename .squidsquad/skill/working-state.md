@@ -1,6 +1,7 @@
 # Working State
 
-- **Task**: #14137 (vault-synthesis dormant in event mode). Then #14136.
+- **Task**: #14162 (instruction-changing bugs skip intake / no CQ ACs). Then #14136.
+- #14137: pending-test, PR #14163.
 - #14147: pending-test, PR #14161.
 - #14151: pending-test, PR #14159. #14150: pending-test, PR #14160.
 - #14114: pending-test, PR #14158 (gate PASS 6628, DS r1+r2 fixed; 14099/14109 specs superseded_by 14114; verifier authors 14114_spec).
