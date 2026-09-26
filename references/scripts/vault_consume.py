@@ -19,6 +19,7 @@ Usage:
     python scripts/vault_consume.py search --alias <a> [--task N] [--entities ..] [--tags ..]
                                            [--terms ..] [--types ..] [--top N] [--no-write]
     python scripts/vault_consume.py cite --alias <a> --task N --slugs a,b
+    python scripts/vault_consume.py dedup --alias <a> --title "<draft title>" [--tags x,y] [--slug s]
     python scripts/vault_consume.py inject-context <n> --alias <a> [--entities ..] [--tags ..] [--terms ..]
 
 Exit codes:
@@ -322,6 +323,80 @@ def cite(alias, task, slugs, vault=None, runner=subprocess.run):
     return run_engine("record-consumption.mjs", args, runner)
 
 
+# ---- write-path dedup (7.2 merge-target test) ----------------------------------
+
+DEFAULT_DEDUP_THRESHOLD = 0.5
+MERGE_TIERS = ("filename", "wikilink", "tag")  # strongest first; content never qualifies
+TOKEN = re.compile(r"[a-z0-9]+")
+
+
+def tokens(*parts):
+    """Lowercased token set over slug/title/tag strings (7.2 (c))."""
+    out = set()
+    for part in parts:
+        if isinstance(part, (list, tuple, set)):
+            out |= tokens(*part)
+        elif part:
+            out |= set(TOKEN.findall(str(part).lower()))
+    return out
+
+
+def jaccard(a, b):
+    return len(a & b) / len(a | b) if (a or b) else 0.0
+
+
+def dedup_threshold(vault=None):
+    """``dedupThreshold`` from the vault's vault-schema.json (config-overridable,
+    11 #6), else the shipped default."""
+    try:
+        cfg = json.loads((Path(vault or VAULT_DIR) / "vault-schema.json").read_text(encoding="utf-8"))
+        t = float(cfg.get("dedupThreshold", DEFAULT_DEDUP_THRESHOLD))
+        return t if 0.0 <= t <= 1.0 else DEFAULT_DEDUP_THRESHOLD
+    except (OSError, ValueError, TypeError, AttributeError):
+        return DEFAULT_DEDUP_THRESHOLD
+
+
+def select_merge_target(draft_tokens, payload, threshold):
+    """The deterministic 7.2 merge-target test over ONE search call's output.
+
+    A hit qualifies only if (a) it is a DIRECT result in a filename/wikilink/tag
+    tier, (b) ``status`` is ``active``, and (c) Jaccard(draft, slug+title+tags)
+    >= threshold. Highest similarity wins; ties -> stronger tier, then Stage-2
+    score, then slug. Traversed notes (``payload["traversed"]``) never qualify.
+    Returns (target_or_None, qualifying_candidates)."""
+    cands = []
+    for hit in payload.get("results", []):
+        if not hit.get("direct", True) or hit.get("tier") not in MERGE_TIERS:
+            continue
+        if hit.get("status") != "active":
+            continue
+        sim = jaccard(draft_tokens, tokens(hit.get("slug"), hit.get("title"), hit.get("tags") or []))
+        if sim >= threshold:
+            cands.append({"slug": hit["slug"], "path": hit.get("path"), "tier": hit["tier"],
+                          "similarity": round(sim, 4), "score": hit.get("score", 0)})
+    cands.sort(key=lambda c: (-c["similarity"], MERGE_TIERS.index(c["tier"]), -c["score"], c["slug"]))
+    return (cands[0] if cands else None), cands
+
+
+def dedup(alias, title, tags=(), slug=None, vault=None, search_fn=None):
+    """Gate 2 of vault-remember: one ``--no-write`` engine search (a dedup probe
+    is not consumption, 6.1), then the merge-target test. Returns
+    (result_dict, None) or (None, engine-unavailable reason)."""
+    search_fn = search_fn or search
+    slug = slug or "-".join(TOKEN.findall(str(title).lower()))
+    # Title words as entities reach the filename/wikilink tiers; 1-2 char words
+    # would substring-match nearly every slug, so they only count in (c).
+    entities = sorted(t for t in tokens(title) if len(t) >= 3)
+    payload, reason = search_fn(alias, None, entities=entities, tags=list(tags),
+                                terms=[title], write=False, vault=vault)
+    if payload is None:
+        return None, reason
+    threshold = dedup_threshold(vault)
+    target, cands = select_merge_target(tokens(slug, title, list(tags)), payload, threshold)
+    return {"action": "update" if target else "create", "target": target,
+            "candidates": cands, "threshold": threshold}, None
+
+
 # ---- intake injection (9.2) ----------------------------------------------------
 
 INTAKE_SECTION = "## Vault context"
@@ -423,6 +498,11 @@ def _parser():
     s.add_argument("--alias", required=True)
     for f in ("--entities", "--tags", "--terms"):
         s.add_argument(f, action="append")
+    s = sub.add_parser("dedup")
+    s.add_argument("--alias", required=True)
+    s.add_argument("--title", required=True)
+    s.add_argument("--tags", action="append")
+    s.add_argument("--slug")
     s = sub.add_parser("cite")
     s.add_argument("--alias", required=True)
     s.add_argument("--task", type=int, required=True)
@@ -453,6 +533,13 @@ def main(argv=None):
         except RuntimeError as e:
             print(f"error: {e}", file=sys.stderr)
             return 1
+        return 0
+    if args.cmd == "dedup":
+        res, reason = dedup(args.alias, args.title, _csv(args.tags), args.slug)
+        if res is None:
+            print(json.dumps({"engine_unavailable": True, "reason": reason}))
+            return 3
+        print(json.dumps(res, indent=2))
         return 0
     if args.cmd == "search":
         entities, tags, terms = _csv(args.entities), _csv(args.tags), _csv(args.terms)

@@ -1008,9 +1008,17 @@ def _pr_state_scope_violations(pr_number):
     # Only the PR's OWN issue's lineage file is exempt; an unparseable head
     # branch exempts nothing (fail-safe: refuse rather than leak state).
     issue = _pr_head_issue(pr_number)
-    return sorted(f for f in declared
-                  if _is_state_file(f)
-                  and not (issue is not None and _is_lineage_file(f, issue)))
+
+    def exempt(f):
+        if issue is None:
+            return False
+        if _is_lineage_file(f, issue):
+            return True
+        # #13860 S4.4 capture-at-ship: a vault content note citing THIS issue
+        # (content read at the PR head; a deletion has no content -> flagged).
+        return _is_capture_note_path(f) and _is_capture_note(f, issue, _pr_file_text(pr_number, f))
+
+    return sorted(f for f in declared if _is_state_file(f) and not exempt(f))
 
 
 def _merge_commit_sha(pr_number):
@@ -1640,6 +1648,51 @@ def _pr_head_issue(pr_number):
     if res.returncode != 0:
         return None
     return _issue_from_branch(res.stdout.strip())
+
+
+def _pr_file_text(pr_number, path):
+    """Text of ``path`` at the PR's head commit (GitHub contents API), or
+    ``None`` if absent (deleted in the PR) / undeterminable."""
+    head = _run_list(["gh", "pr", "view", str(pr_number), "--json", "headRefOid",
+                      "-q", ".headRefOid"], check=False)
+    if head.returncode != 0 or not head.stdout.strip():
+        return None
+    res = _run_list(["gh", "api", f"repos/{{owner}}/{{repo}}/contents/{path}?ref={head.stdout.strip()}",
+                     "-q", ".content"], check=False)
+    if res.returncode != 0:
+        return None
+    import base64  # noqa: PLC0415
+    try:
+        return base64.b64decode(res.stdout.strip()).decode("utf-8", errors="replace")
+    except ValueError:
+        return None
+
+
+def _is_capture_note_path(path):
+    """A vault CONTENT note path (capture-at-ship candidate, VAULT-ARCH 9.5/9.8):
+    ``.squidsquad/vault/<folder>/.../<name>.md``. Never ``BRIEFING.md`` or
+    ``vault-schema.json`` (vault root), never ``.telemetry/`` / ``.obsidian/``
+    -- those stay main-only."""
+    prefix = ".squidsquad/vault/"
+    if not path.startswith(prefix) or not path.endswith(".md"):
+        return False
+    parts = path[len(prefix):].split("/")
+    return len(parts) >= 2 and not parts[0].startswith(".")
+
+
+def _cites_issue(text, issue):
+    """Capture-at-ship notes carry their issue number in the references
+    (9.5 item 1): ``#<n>`` not followed by another digit."""
+    return bool(text) and re.search(rf"#{issue}(?!\d)", text) is not None
+
+
+def _is_capture_note(path, issue, text):
+    """#13860 S4.4: the ONE vault-note class that may ride a task PR -- a
+    content note (``_is_capture_note_path``) whose content at that commit cites
+    the task's own issue. Content-bound, so a branch for issue A can neither
+    carry an unrelated vault edit nor delete a note (``text is None``)."""
+    return (issue is not None and text is not None
+            and _is_capture_note_path(path) and _cites_issue(text, issue))
 
 
 def _is_lineage_file(path, issue=None):
@@ -2625,6 +2678,19 @@ def check_real_conflict(base, head):
 _HOOKS_DIR_REL = "references/git-hooks"
 
 
+def _guard_exempt(path, issue):
+    """Feature-branch guard exemption: this issue's lineage file, or a
+    capture-at-ship vault note whose STAGED content cites this issue."""
+    if issue is None:
+        return False
+    if _is_lineage_file(path, issue):
+        return True
+    if not _is_capture_note_path(path):
+        return False
+    staged = _run_list(["git", "show", f":{path}"], check=False)
+    return staged.returncode == 0 and _is_capture_note(path, issue, staged.stdout)
+
+
 def guard_staged_state():
     """Unstage transient state/ephemeral files when committing to a feature branch (#11511).
 
@@ -2683,7 +2749,7 @@ def guard_staged_state():
         p = raw.strip().strip('"')
         if not p:
             continue
-        if _is_state_file(p) and not (branch_issue is not None and _is_lineage_file(p, branch_issue)):
+        if _is_state_file(p) and not _guard_exempt(p, branch_issue):
             state_staged.append(p)
     if not state_staged:
         return []

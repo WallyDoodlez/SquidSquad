@@ -195,3 +195,34 @@ class TestSubSkillRewrites:
     def test_research_prompt_does_not_grep_vault(self):
         text = (REPO / "references" / "prompts" / "research.md.j2").read_text(encoding="utf-8")
         assert not RAW_VAULT_GREP.search(text)
+
+
+class TestWritePath:
+    """S4.4: gate 2 is the engine dedup; capture-at-ship is wired into both
+    worker flows."""
+
+    REMEMBER = read("common/vault-remember.md")
+
+    def test_gate2_is_engine_dedup(self):
+        assert "vault_consume.py dedup --alias [ROLE]" in self.REMEMBER
+        assert "dedup-check" not in self.REMEMBER  # v1 title/tag check retired (7.2)
+        assert '"action": "update"' in self.REMEMBER and '"action": "create"' in self.REMEMBER
+
+    def test_gate_order(self):
+        order = [self.REMEMBER.index(g) for g in
+                 ("**Gate 1", "**Gate 2", "**Gate 3", "**Gate 4")]
+        assert order == sorted(order)
+
+    def test_capture_at_ship_contract(self):
+        section = self.REMEMBER[self.REMEMBER.index("### Capture-at-ship"):]
+        for needle in ("#[NUMBER]", "git add", "write budget", "Skip"):
+            assert needle in section
+
+    @pytest.mark.parametrize("rel", ["roles/worker/implement-tasks.md", "roles/worker/triage-issues.md"])
+    def test_worker_flows_run_capture_before_handoff(self, rel):
+        text = read(rel)
+        assert "**Capture-at-ship**" in text and "→ run sub-skill: `vault-remember`" in text
+        assert text.index("**Capture-at-ship**") < text.index("--diff-base origin/main")
+
+    def test_no_style_category(self):
+        assert "style-" not in self.REMEMBER and "STYLES" not in self.REMEMBER

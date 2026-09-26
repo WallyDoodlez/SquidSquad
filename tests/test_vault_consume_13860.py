@@ -26,6 +26,13 @@ import vault_consume as vc  # noqa: E402
 NODE = shutil.which("node")
 
 
+@pytest.fixture(autouse=True)
+def _engine_from_source(monkeypatch):
+    """Exercise the COMMITTED engine (references/), never a possibly-stale
+    per-clone .claude/ install copy."""
+    monkeypatch.setattr(vc, "ENGINE_DIRS", (REPO / "references" / "skills" / "vault-search" / "scripts",))
+
+
 @pytest.fixture
 def sq(tmp_path):
     d = tmp_path / ".squidsquad"
@@ -296,6 +303,53 @@ class TestLineageGuardExemption:
             unstaged = git_ops.guard_staged_state()
         assert unstaged == [".squidsquad/pm/planning/CONTEXT-777.md", ".squidsquad/skill/working-state.md"]
         assert resets == unstaged
+
+    def test_guard_keeps_capture_note_citing_branch_issue(self):
+        """S4.4 capture-at-ship: a vault note whose STAGED content cites the
+        branch's issue rides the branch; an unrelated vault edit and vault
+        root files are stripped."""
+        staged = {".squidsquad/vault/galaxy/learning-new.md": "Learned in #13860.\n",
+                  ".squidsquad/vault/galaxy/decision-other.md": "About #1386 only.\n",
+                  ".squidsquad/vault/BRIEFING.md": "#13860\n"}
+        resets = []
+
+        def fake_run_list(cmd, check=True):
+            r = MagicMock(stderr="", returncode=0, stdout="")
+            if cmd[:4] == ["git", "diff", "--cached", "--name-only"]:
+                r.stdout = "\n".join(staged) + "\n"
+            elif cmd[:3] == ["git", "diff", "--cached"] and "--quiet" in cmd:
+                r.returncode = 1
+            elif cmd[:2] == ["git", "show"]:
+                r.stdout = staged.get(cmd[2][1:], "")
+            elif cmd[:2] == ["git", "reset"]:
+                resets.append(cmd[-1])
+            return r
+
+        with patch.object(git_ops, "_get_working_branch", return_value="main"), \
+                patch.object(git_ops, "_run", return_value=MagicMock(stdout="squidsquad/task/13860\n", returncode=0)), \
+                patch.object(git_ops, "_run_list", side_effect=fake_run_list):
+            unstaged = git_ops.guard_staged_state()
+        assert sorted(unstaged) == [".squidsquad/vault/BRIEFING.md", ".squidsquad/vault/galaxy/decision-other.md"]
+
+    @pytest.mark.parametrize("path,ok", [
+        (".squidsquad/vault/galaxy/learning-x.md", True),
+        (".squidsquad/vault/systems/harness.md", True),
+        (".squidsquad/vault/BRIEFING.md", False),
+        (".squidsquad/vault/vault-schema.json", False),
+        (".squidsquad/vault/.telemetry/a-skill.jsonl", False),
+        (".squidsquad/vault/.obsidian/x.md", False),
+        (".squidsquad/skill/working-state.md", False),
+    ])
+    def test_capture_note_path(self, path, ok):
+        assert git_ops._is_capture_note_path(path) is ok
+
+    @pytest.mark.parametrize("text,ok", [("ref #13860.", True), ("#13860\n", True),
+                                         ("#138600", False), ("#1386", False), ("", False)])
+    def test_cites_issue(self, text, ok):
+        assert git_ops._cites_issue(text, 13860) is ok
+
+    def test_deleted_note_never_capture_exempt(self):
+        assert git_ops._is_capture_note(".squidsquad/vault/galaxy/x.md", 13860, None) is False
 
     def test_merge_gate_allows_lineage_in_pr(self):
         declared = [".squidsquad/skill/planning/13860-fix-plan.md",

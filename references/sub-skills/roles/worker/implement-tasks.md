@@ -64,6 +64,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
 5. Run the test command: `[ROLE_TEST_CMD]` — your new unit tests must pass alongside the existing suite.
 6. **Update docs**: Update only technical documentation (API docs, code comments, architecture notes). User-facing docs are handled by DM. If the change affects user-facing behavior, comment delivery notes on the Issue.
 7. **Copy changed references to live**: If any files in `references/` were modified (e.g. `statusline.sh`, `hints-*.txt`), copy them to the live `.squidsquad/` location so changes take effect immediately.
+7b. **Capture-at-ship** (#13860, VAULT-ARCH §9.5): → run sub-skill: `vault-remember` — its **Capture-at-ship** section. Durable knowledge from this task (decision / root cause / pattern; chores skip) is written on this branch, cites `#[NUMBER]`, and ships in this PR.
 8. **Verify changes exist**: Run `python references/scripts/git_ops.py has-changes`. If output is `false`, do NOT transition — re-read the acceptance criteria and apply the implementation.
    Then run `python references/scripts/vault_consume.py check-receipts [NUMBER] --diff-base origin/main` — it must exit 0 (lineage file in the PR diff with valid receipts). A failure here is a verifier reject waiting to happen.
 8b. **Self-verification reflection** — before marking pending-test, stop and critically review your own work:

@@ -991,12 +991,28 @@ class TestPrStateScopeViolations13554:
     predicate) + the _is_plan_body/launcher exemptions to flag main-only paths a
     PR must never carry. Kept OUT of TestPrMerge (whose fixture patches it)."""
 
-    def _violations(self, declared, head_issue=13554):
-        # #13860: the lineage exemption is scoped to the PR's own issue (head
-        # branch squidsquad/task/<n>); mock the head lookup -- never live gh.
+    def _violations(self, declared, head_issue=13554, file_text=None):
+        # #13860: the lineage/capture exemptions are scoped to the PR's own
+        # issue (head branch squidsquad/task/<n>) and, for vault notes, to the
+        # note's content at the PR head; mock both lookups -- never live gh.
         with (patch("git_ops._pr_declared_files", return_value=declared),
-              patch("git_ops._pr_head_issue", return_value=head_issue)):
+              patch("git_ops._pr_head_issue", return_value=head_issue),
+              patch("git_ops._pr_file_text", side_effect=lambda pr, path: (file_text or {}).get(path))):
             return git_ops._pr_state_scope_violations(1)
+
+    def test_capture_note_citing_own_issue_exempt(self):
+        # #13860 S4.4 capture-at-ship: a vault note citing the PR's issue rides it.
+        note = ".squidsquad/vault/galaxy/learning-x.md"
+        assert self._violations({note}, file_text={note: "found in #13554 work"}) == []
+
+    def test_capture_note_citing_other_issue_flagged(self):
+        note = ".squidsquad/vault/galaxy/learning-x.md"
+        assert self._violations({note}, file_text={note: "see #135540 and #1355"}) == [note]
+
+    def test_vault_root_files_never_capture_exempt(self):
+        paths = {".squidsquad/vault/BRIEFING.md", ".squidsquad/vault/vault-schema.json",
+                 ".squidsquad/vault/.telemetry/x-skill.jsonl"}
+        assert self._violations(paths, file_text={p: "#13554" for p in paths}) == sorted(paths)
 
     def test_state_and_vault_paths_flagged(self):
         v = self._violations({
