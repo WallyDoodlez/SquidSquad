@@ -14,6 +14,7 @@ Usage:
     python scripts/cycle.py reset-counter <role>    # Reset counter to 0
     python scripts/cycle.py log-iteration <role> <n> [--quiet] [--work <w>] [--notes <n>]
     python scripts/cycle.py cleanup-iterations <role> [--keep 20]
+    python scripts/cycle.py end-session [role]      # Ask the harness to replace this session (#14114)
     python scripts/cycle.py --help
 """
 
@@ -130,6 +131,52 @@ def status_bar_self(phase, description=""):
               "(set by thin_launcher at spawn time)", file=sys.stderr)
         sys.exit(1)
     return status_bar(role, phase, description)
+
+
+def end_session(role=None, port=None, opener=None):
+    """Make "end your session" executable (#14114).
+
+    An LLM agent cannot terminate its own ``claude`` process (#13077): ending
+    the turn leaves the PID alive with intent=running, so the harness never
+    respawns it and the session sits deaf. This asks the harness for a FORCE
+    restart of the caller's own agent (``POST /agents/<role>/restart?force=
+    true``): the harness kills the PID immediately, stamps it as a requested
+    kill (never a crash, never held by the #12458 pause guard — #14132) and
+    respawns it on the next health poll.
+
+    ``role`` defaults to ``SQUIDSQUAD_ROLE``. Returns 0 when the harness
+    accepted the restart, 1 when it is unreachable or refused (the caller then
+    just ends its turn — a dead harness is restarted by the operator).
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    role = (role or os.environ.get("SQUIDSQUAD_ROLE", "")).strip()
+    if not role:
+        print("ERROR: end-session needs a role (arg or SQUIDSQUAD_ROLE)",
+              file=sys.stderr)
+        return 1
+    if port is None:
+        import event_poll
+        port = event_poll._discover_port()
+    opener = opener or urllib.request.urlopen
+    url = f"http://127.0.0.1:{port}/agents/{role}/restart?force=true"
+    try:
+        req = urllib.request.Request(url, method="POST", data=b"")
+        with opener(req, timeout=10) as resp:
+            body = json.loads(resp.read().decode("utf-8") or "{}")
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        print(f"Harness unreachable ({e}) — end your turn now; the operator "
+              f"restarts the harness.")
+        return 1
+    if body.get("success") is False:
+        print(f"Harness refused the restart ({body.get('message')}) — end "
+              f"your turn now.")
+        return 1
+    print("Restart requested — the harness is replacing this session. End "
+          "your turn now.")
+    return 0
 
 
 def _get_working_squid_path(role):
@@ -333,6 +380,8 @@ def main():
                        issues=opts.get("issues", opts.get("bugs")),
                        tasks=opts.get("tasks", opts.get("features")),
                        tests=opts.get("tests"))
+    elif cmd == "end-session":
+        sys.exit(end_session(pos[0] if pos else None))
     elif cmd == "cleanup-iterations":
         if not pos:
             print("Usage: cycle.py cleanup-iterations <role> [--keep N]", file=sys.stderr)

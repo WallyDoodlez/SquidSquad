@@ -60,9 +60,16 @@ The Monitor tool has no `persistent` option: every watch carries a deadline (`ti
 > **Monitor expiry ⇒ re-arm; any other Monitor exit ⇒ exit the session immediately (#9742, #14099).** Two different things end a Monitor watch, and they get opposite reactions:
 >
 > - **Deadline expiry — re-arm.** The tool's own expiry notice (`Monitor expired after …`) means the Monitor tool killed a healthy `event_poll.py` because the watch's `timeout_ms` ran out. Nothing is wrong: re-invoke Monitor with the identical invocation above, as soon as you next have control (finish the current atomic unit first, exactly like a mid-task `NUDGE`). No event is lost in the gap — anything that arrived is still past your cursor and nudges on the new watch's first poll. Re-arm once per expiry notice; never run two watches at once.
-> - **Anything else — end your session right away.** `event_poll.py` terminating on its own (any exit code, including the `sys.exit(2)` retry ceiling), a tool error, or a stream close means the listener or the harness is broken. Do NOT re-invoke Monitor, do NOT wait for the harness to recover, do NOT pivot to forge-direct work or polling-mode fallback mid-session. The harness / `thin_launcher.py` auto-reboot path owns recovery; the agent exiting IS the signal that recovery is needed. This applies whether the exit happens before or after `bootup-complete` is emitted. `event_poll.py --wait` has a bounded retry ceiling (10 consecutive transient failures per CONTEXT-9742) so a sustained harness outage makes it exit on its own; you do not need to enforce the ceiling yourself.
+> - **Anything else — end your session right away.** `event_poll.py` terminating on its own (any exit code, including the `sys.exit(2)` retry ceiling), a tool error, or a stream close means the listener or the harness is broken. Do NOT re-invoke Monitor, do NOT wait for the harness to recover, do NOT pivot to forge-direct work or polling-mode fallback mid-session. This applies whether the exit happens before or after `bootup-complete` is emitted. `event_poll.py --wait` has a bounded retry ceiling (10 consecutive transient failures per CONTEXT-9742) so a sustained harness outage makes it exit on its own; you do not need to enforce the ceiling yourself.
 >
-> When unsure which case you are in, the expiry notice is the only thing that means "re-arm" — every exit without it means "end the session".
+> **How to end your session (#14114).** You cannot terminate your own process — ending your turn alone leaves it alive, deaf, and never respawned. Always do both steps:
+>
+> 1. Run `python references/scripts/cycle.py end-session`. It asks the harness to replace this session. On a live harness the harness kills this process and respawns you fresh, so your turn may stop mid-command. That is expected.
+> 2. If you still have control, whatever the command printed (including "Harness unreachable"), end your turn with no further tool calls. A dead harness is restarted by the operator.
+>
+> Your respawn resumes from `working-state.md`, so keep it current (see `working-state.md` under **Always-On Rules** below).
+>
+> When unsure which case you are in, the expiry notice is the only thing that means "re-arm" — every exit without it means "end the session" (the two steps above).
 
 ---
 
@@ -125,9 +132,9 @@ The Monitor tool has no `persistent` option: every watch carries a deadline (`ti
 
 If the harness becomes unreachable at any point in an event-mode session, the agent does **NOT** pivot to forge-direct work or any degraded mode mid-session, and does not sit in a wait loop for the harness to come back. There is one recovery path (#14109):
 
-- **Listener armed** (the normal case): `event_poll.py --wait` retries transient errors with backoff and, after 10 consecutive failures, exits on its own (`sys.exit(2)`). The Monitor tool then reports that the watch ended — per the listener-exit rule in **How You Listen** above, that means you end your session.
-- **Listener not yet armed** (harness lost during boot steps 1–5 — the step-1 cursor GET, the `bootup-complete` POST, or the boot-drain `GET /events/for` still fails after the usual transient-error retries): end your session the same way. Never skip `bootup-complete` and carry on draining without it (the #13369 force-kill hazard).
+- **Listener armed** (the normal case): `event_poll.py --wait` retries transient errors with backoff and, after 10 consecutive failures, exits on its own (`sys.exit(2)`). The Monitor tool then reports that the watch ended. Per the listener-exit rule in **How You Listen** above, you end your session: run `cycle.py end-session`, then end your turn.
+- **Listener not yet armed** (harness lost during boot steps 1–5 — the step-1 cursor GET, the `bootup-complete` POST, or the boot-drain `GET /events/for` still fails after the usual transient-error retries): end your session the same way (`cycle.py end-session`, then end your turn). Never skip `bootup-complete` and carry on draining without it (the #13369 force-kill hazard).
 
-Either way, if the harness process is still alive its health poller sees your session die and respawns you; if the harness itself is dead, the operator restarts it. On any restart the boot bootstrap probes the harness and routes to polling mode if it is still unreachable (see `common/boot-bootstrap.md`).
+Either way, if the harness process is still alive, `end-session` has it replace your session (#14114); if the harness itself is dead, `end-session` reports it unreachable and the operator restarts the harness. On any restart the boot bootstrap probes the harness and routes to polling mode if it is still unreachable (see `common/boot-bootstrap.md`).
 
 Rationale: agents log everything to the forge, so state is recoverable across a restart. The bespoke "degraded mode" that ran forge-direct from a live event-mode session was removed in #9588 in favor of polling-mode fallback at boot — a battle-tested mechanism without a third execution path to reason about.
