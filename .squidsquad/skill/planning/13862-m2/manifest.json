@@ -1317,6 +1317,14 @@
    "disposition": "keep",
    "reason": "system hub (VAULT-ARCH 3.2)",
    "hubs": []
+  },
+  "decision-harness-schedules-agent-judges": {
+   "disposition": "keep",
+   "reason": "post-M0 capture-at-ship from #13861 (harness schedules, agent judges); current decision",
+   "hubs": [
+    "harness",
+    "vault"
+   ]
   }
  },
  "merged_drafts": {
