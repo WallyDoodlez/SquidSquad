@@ -7,6 +7,8 @@ without judgment lives here so the verifier gate is a script, not a reading:
   - WHERE receipts go: exactly one plan/lineage file per issue (9.3 receipt
     location rule), resolved in a fixed order.
   - WHETHER receipts are well-formed: `check-receipts` is the 9.4 gate.
+  - WHAT intake injects: `inject-context` writes the 9.2 `## Vault context`
+    section into a filed issue's body (impressions attributed to the issue).
   - HOW the engine is reached: identity resolution + honest degradation when
     node or the engine is missing (9.9 -- never a fabricated "none relevant").
 
@@ -17,6 +19,7 @@ Usage:
     python scripts/vault_consume.py search --alias <a> [--task N] [--entities ..] [--tags ..]
                                            [--terms ..] [--types ..] [--top N] [--no-write]
     python scripts/vault_consume.py cite --alias <a> --task N --slugs a,b
+    python scripts/vault_consume.py inject-context <n> --alias <a> [--entities ..] [--tags ..] [--terms ..]
 
 Exit codes:
     0 success / receipts pass (incl. engine-unavailable pass-with-note)
@@ -278,6 +281,75 @@ def cite(alias, task, slugs, vault=None, runner=subprocess.run):
     return run_engine("record-consumption.mjs", args, runner)
 
 
+# ---- intake injection (9.2) ----------------------------------------------------
+
+INTAKE_SECTION = "## Vault context"
+INTAKE_TOP = 5  # shown == impressed: the engine writes impressions for exactly this top-K
+
+
+def render_context_section(payload, reason, searched):
+    """The 9.2 issue-body section: top-K note names + one-line relevance each.
+    The relevance line is the engine's own evidence (title + match tier), so
+    the section is deterministic and matches the impressions it caused."""
+    lines = [INTAKE_SECTION, ""]
+    if payload is None:
+        lines.append(f"- Engine unavailable: {reason}")
+    else:
+        items = (payload.get("results", []) + payload.get("traversed", []))[:INTAKE_TOP]
+        if not items:
+            lines.append(f"- None relevant (searched: {searched})")
+        for it in items:
+            how = "linked from a match" if it.get("tier") == "walked" else f"{it.get('tier')} match"
+            lines.append(f"- [[{it['slug']}]] -- {it.get('title') or it['slug']} ({how})")
+    return "\n".join(lines) + "\n"
+
+
+def replace_section(body, heading, section):
+    """Replace the exact ``heading`` section (up to the next ``## ``/``# ``
+    heading) with ``section``, or append it. Idempotent re-injection."""
+    lines = body.rstrip("\n").splitlines()
+    try:
+        start = next(i for i, ln in enumerate(lines) if ln.strip() == heading)
+    except StopIteration:
+        return body.rstrip("\n") + "\n\n" + section
+    end = next((j for j in range(start + 1, len(lines))
+                if lines[j].startswith("## ") or lines[j].startswith("# ")), len(lines))
+    rest = lines[end:]
+    head = "\n".join(lines[:start]).rstrip("\n")
+    out = (head + "\n\n" if head else "") + section
+    if rest:
+        out += "\n" + "\n".join(rest) + "\n"
+    return out
+
+
+def _gh_view_body(n):
+    import tracker  # noqa: PLC0415 -- gh plumbing (resolved binary, identity env)
+    return tracker._run_list(["gh", "issue", "view", str(n), "--json", "body", "-q", ".body"],
+                             check=False)
+
+
+def _gh_edit_body(n, body):
+    import tracker  # noqa: PLC0415 -- body via stdin: non-ASCII safe on cp1252 (#13370)
+    return tracker._run_gh_with_body(["gh", "issue", "edit", str(n)], body, check=False)
+
+
+def inject_context(n, alias, entities=(), tags=(), terms=(),
+                   search_fn=None, view_fn=None, edit_fn=None):
+    """Search the vault for issue <n> (impressions attributed to <n>) and write
+    the ``## Vault context`` section into its body. Returns the section."""
+    search_fn, view_fn, edit_fn = search_fn or search, view_fn or _gh_view_body, edit_fn or _gh_edit_body
+    payload, reason = search_fn(alias, n, entities, tags, terms, top=INTAKE_TOP)
+    searched = ", ".join([*entities, *tags, *terms])
+    section = render_context_section(payload, reason, searched)
+    res = view_fn(n)
+    if res.returncode != 0:
+        raise RuntimeError(f"gh issue view #{n} failed: {(res.stderr or '').strip()[:200]}")
+    edit = edit_fn(n, replace_section(res.stdout, INTAKE_SECTION, section))
+    if edit.returncode != 0:
+        raise RuntimeError(f"gh issue edit #{n} failed: {(edit.stderr or '').strip()[:200]}")
+    return section
+
+
 # ---- CLI -----------------------------------------------------------------------
 
 def _csv(values):
@@ -305,6 +377,11 @@ def _parser():
         s.add_argument(f, action="append")
     s.add_argument("--top", type=int)
     s.add_argument("--no-write", action="store_true")
+    s = sub.add_parser("inject-context")
+    s.add_argument("n", type=int)
+    s.add_argument("--alias", required=True)
+    for f in ("--entities", "--tags", "--terms"):
+        s.add_argument(f, action="append")
     s = sub.add_parser("cite")
     s.add_argument("--alias", required=True)
     s.add_argument("--task", type=int, required=True)
@@ -325,6 +402,17 @@ def main(argv=None):
         res = check_receipts(args.n, diff_base=args.diff_base)
         print(json.dumps(res, indent=2))
         return 1 if res["verdict"] == "fail" else 0
+    if args.cmd == "inject-context":
+        entities, tags, terms = _csv(args.entities), _csv(args.tags), _csv(args.terms)
+        if not (entities or tags or terms):
+            print("error: at least one of --entities/--tags/--terms is required", file=sys.stderr)
+            return 2
+        try:
+            print(inject_context(args.n, args.alias, entities, tags, terms), end="")
+        except RuntimeError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+        return 0
     if args.cmd == "search":
         entities, tags, terms = _csv(args.entities), _csv(args.tags), _csv(args.terms)
         if not (entities or tags or terms):

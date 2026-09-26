@@ -37,7 +37,7 @@ Print: `[🦑 HH:MM:SS] Implementing #[NUMBER]...`
    **Do NOT look for a PM-side `TEST-PLAN-<NUMBER>.md`** — under the new workflow (#9184) PM does not produce one. Verifier writes its own test plan at `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` during verification. Worker's job is to implement against the AC list, not against a pre-written test plan.
 2c. **Vault consultation + receipts** (#13860, VAULT-ARCH §9.3) — mandatory, and its output is committed. Never grep the vault; every search goes through the engine wrapper.
    1. **Lineage file**: `python references/scripts/vault_consume.py lineage-path [NUMBER]`. If it prints `"exists": false`, create one: `python references/scripts/vault_consume.py init-fix-plan [NUMBER] --role [ROLE]` (bug flow already did this at pickup). This one file holds the receipts.
-   2. **Context consultation**: `python references/scripts/vault_consume.py search --alias [ROLE] --task [NUMBER] --tags <task keywords> --terms "<task subject>"`. Read the bodies of the hits that bear on the task. Append to the lineage file:
+   2. **Context consultation**: start from the issue body's `## Vault context` section (PM-injected at filing) — Read those notes first. Then `python references/scripts/vault_consume.py search --alias [ROLE] --task [NUMBER] --tags <task keywords> --terms "<task subject>"`. Read the bodies of the hits that bear on the task. Append to the lineage file:
       ```
       ## Vault context consumed
 

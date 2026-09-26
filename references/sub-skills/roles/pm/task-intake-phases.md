@@ -20,11 +20,12 @@ Write current state: `python references/scripts/cycle.py status-bar [ROLE] resea
 
 1. Read `.squidsquad/vault/BRIEFING.md` for active priorities, recent decisions, and constraints.
 2. Read `.squidsquad/vault/areas/human-profile.md` for human preferences and quality expectations.
-3. Search vault for notes related to the task:
+3. Search the vault through the engine (never grep it — VAULT-ARCH §6.2):
    ```bash
-   grep -rl "<keywords from task title>" .squidsquad/vault/ --include="*.md" | head -10
+   python references/scripts/vault_consume.py search --alias [PM_ALIAS] --tags <keywords from task title> --terms "<task subject>"
    ```
-4. Read matching notes — especially `galaxy/decision-*` (architectural constraints), `galaxy/pattern-*` (validated approaches), and `galaxy/learning-*` (past mistakes to avoid).
+   Exit code 3 means the engine is unavailable — say so in the `--context` summary; do not substitute a grep.
+4. Read the notes it returns — especially `decision-*` (architectural constraints), `rule-*` (binding rules), `pattern-*` (validated approaches), and `learning-*` (past mistakes to avoid).
 5. Include a summary of ALL relevant vault context in the `--context` argument below so the research agent can incorporate it. If no vault context is relevant, note "Vault consulted — no relevant prior context found."
 
 Route to the configured model for research:
@@ -297,6 +298,14 @@ If any answer is unclear, the AC is incomplete — refine before filing.
 - ACs include edge-case handling and side-effect mitigations from RESEARCH.md / CONTEXT.md.
 - Links to RESEARCH.md and CONTEXT.md.
 
+**Inject vault context into the filed issue** (#13860, VAULT-ARCH §9.2) — immediately after `create-task` returns the issue number:
+
+```bash
+python references/scripts/vault_consume.py inject-context [NUMBER] --alias [PM_ALIAS] --tags <task keywords> --terms "<task subject>"
+```
+
+It searches the vault (impressions attributed to `[NUMBER]`) and appends a `## Vault context` section — top matches with one-line relevance — to the issue body, so the worker receives the context with the task. Re-running replaces the section rather than duplicating it. A non-zero exit means the issue body was not updated: fix the cause and re-run; never hand-write the section.
+
 **No PM-side TEST-PLAN.md** — Phase 3 ends when the issue is filed. Verifier will produce `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-<NUMBER>.md` when picking up verification (see `qa/verification.md`).
 
 **Clear planning phase flag** after the issue is filed. Normal PM cycling auto-resumes.
@@ -317,7 +326,7 @@ After Phase 3 (AC drafting + issue filing) completes:
    matters: `task-begin` resets the working tree to `origin/main`, so writing the plan first
    would let the checkout clobber it if `[NUMBER]-body.md` were already tracked on `main`.)
 2. **Write the plan file** on the branch to `.squidsquad/[PM_ALIAS]/planning/[NUMBER]-body.md`
-   — the full spec (the same content that seeds the issue body). This committed file is the
+   — the full spec (the same content that seeds the issue body, including its injected `## Vault context` section). This committed file is the
    **source of truth** for the spec; the issue body is the synced summary copy
    (strengthens [[feedback_issue_body_must_match_context]] — one authoring location).
    RESEARCH.md / CONTEXT.md remain your planning inputs that inform this plan.

@@ -95,3 +95,25 @@ class TestBugFlow:
 
     def test_no_raw_vault_grep(self):
         assert not RAW_VAULT_GREP.search(self.TEXT)
+
+
+class TestPmIntake:
+    TEXT = read("roles/pm/task-intake-phases.md")
+
+    def test_research_search_through_engine(self):
+        assert "vault_consume.py search --alias [PM_ALIAS]" in self.TEXT
+
+    def test_filing_injects_context(self):
+        assert "vault_consume.py inject-context [NUMBER] --alias [PM_ALIAS]" in self.TEXT
+        # injection happens in Phase 3 (after create-task), before 3B seeds the plan body
+        assert self.TEXT.index("inject-context") < self.TEXT.index("### Phase 3B")
+        assert self.TEXT.index("### Phase 3 ") < self.TEXT.index("inject-context")
+
+    def test_dispatch_table_names_injection(self):
+        assert "inject-context" in read("roles/pm/task-intake.md")
+
+    def test_no_raw_vault_grep(self):
+        assert not RAW_VAULT_GREP.search(self.TEXT)
+
+    def test_worker_reads_injected_section(self):
+        assert "issue body's `## Vault context` section" in read("roles/worker/implement-tasks.md")

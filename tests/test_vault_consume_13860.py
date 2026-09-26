@@ -265,3 +265,73 @@ class TestLineageGuardExemption:
                     ".squidsquad/skill/working-state.md", "a.py"]
         with patch.object(git_ops, "_pr_declared_files", return_value=declared):
             assert git_ops._pr_state_scope_violations(1) == [".squidsquad/skill/working-state.md"]
+
+
+class TestIntakeInjection:
+    PAYLOAD = {"results": [{"slug": "decision-a", "title": "A decision", "tier": "tag"},
+                           {"slug": "rule-b", "title": "", "tier": "filename"}],
+               "traversed": [{"slug": "system-c", "title": "C hub", "tier": "walked"}]}
+
+    def test_render_cited(self):
+        out = vc.render_context_section(self.PAYLOAD, None, "x")
+        assert out.splitlines() == [
+            "## Vault context", "",
+            "- [[decision-a]] -- A decision (tag match)",
+            "- [[rule-b]] -- rule-b (filename match)",
+            "- [[system-c]] -- C hub (linked from a match)"]
+
+    def test_render_caps_at_intake_top(self):
+        many = {"results": [{"slug": f"n{i}", "title": "t", "tier": "content"} for i in range(9)],
+                "traversed": []}
+        out = vc.render_context_section(many, None, "x")
+        assert out.count("- [[") == vc.INTAKE_TOP
+
+    def test_render_none_and_unavailable(self):
+        assert "- None relevant (searched: git, merge)" in vc.render_context_section(
+            {"results": [], "traversed": []}, None, "git, merge")
+        assert "- Engine unavailable: node not installed" in vc.render_context_section(
+            None, "node not installed", "x")
+
+    def test_replace_section_appends_then_replaces(self):
+        body = "Intro\n\n## Acceptance Criteria\n1. a\n"
+        once = vc.replace_section(body, vc.INTAKE_SECTION, "## Vault context\n\n- [[x]] -- y\n")
+        assert once.endswith("## Vault context\n\n- [[x]] -- y\n")
+        twice = vc.replace_section(once, vc.INTAKE_SECTION, "## Vault context\n\n- [[z]] -- w\n")
+        assert twice.count("## Vault context") == 1 and "[[x]]" not in twice and "[[z]]" in twice
+        assert "## Acceptance Criteria\n1. a" in twice
+
+    def test_replace_keeps_following_sections(self):
+        body = "## Vault context\n\n- old\n\n## Out of scope\n- b\n"
+        out = vc.replace_section(body, vc.INTAKE_SECTION, "## Vault context\n\n- new\n")
+        assert out == "## Vault context\n\n- new\n\n## Out of scope\n- b\n"
+
+    def test_consumed_heading_is_not_the_intake_heading(self):
+        body = "## Vault context consumed\n- [[a]] -- b\n"
+        out = vc.replace_section(body, vc.INTAKE_SECTION, "## Vault context\n\n- new\n")
+        assert "## Vault context consumed\n- [[a]] -- b" in out and out.count("## Vault context\n") == 1
+
+    def test_inject_attributes_to_issue_and_writes_body(self):
+        calls = {}
+
+        def fake_search(alias, task, entities, tags, terms, top=None):
+            calls["search"] = (alias, task, tuple(tags), top)
+            return self.PAYLOAD, None
+
+        def fake_view(n):
+            return MagicMock(returncode=0, stdout="Body\n", stderr="")
+
+        def fake_edit(n, body):
+            calls["edit"] = (n, body)
+            return MagicMock(returncode=0, stderr="")
+
+        section = vc.inject_context(77, "pm", tags=["git"], search_fn=fake_search,
+                                    view_fn=fake_view, edit_fn=fake_edit)
+        assert calls["search"] == ("pm", 77, ("git",), vc.INTAKE_TOP)
+        assert calls["edit"][0] == 77 and calls["edit"][1] == "Body\n\n" + section
+
+    def test_inject_raises_when_edit_fails(self):
+        with pytest.raises(RuntimeError, match="edit"):
+            vc.inject_context(1, "pm", tags=["x"],
+                              search_fn=lambda *a, **k: (None, "node not installed"),
+                              view_fn=lambda n: MagicMock(returncode=0, stdout="B", stderr=""),
+                              edit_fn=lambda n, b: MagicMock(returncode=1, stderr="nope"))
