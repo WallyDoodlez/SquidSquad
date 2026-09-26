@@ -69,10 +69,10 @@ For each Pending Ship task that is NOT skipped:
    ```
 
    - **If `$ARTIFACTS` is empty** (bug fix or trivial task with no planning artifacts): the citation gate does not apply — proceed with the merge request below.
-   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md` (verifier-side). If **no** such reference is present, do **not** merge — route back to the verifier:
+   - **If `$ARTIFACTS` is non-empty**: scan the PR description (`body` field above) for a substring reference to any planning filename returned (e.g. `CONTEXT-[NUMBER].md`, `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md`, legacy `FEAT-*-[NUMBER]-TEST-PLAN.md`) OR a `### 5.X #[NUMBER]` bundle-CONTEXT section pointer. Under the #9184 workflow the typical citation is `CONTEXT-[NUMBER].md` (PM-side) and `.squidsquad/[VERIFIER_ALIAS]/planning/TEST-PLAN-[NUMBER].md` (verifier-side). If **no** such reference is present, do **not** merge — route back to the worker (the PR description is the worker's; `pending-ship -> in-progress` is the legal route-back edge, #14124):
      ```bash
-     python references/scripts/tracker.py transition [NUMBER] pending-ship pending-test --role dm-lead
-     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. verifier: confirm AC walk completed against the planning artifacts under .squidsquad/[PM_ALIAS]/planning/ (CONTEXT) and .squidsquad/[VERIFIER_ALIAS]/planning/ (TEST-PLAN)."
+     python references/scripts/tracker.py transition [NUMBER] pending-ship in-progress --role dm-lead
+     python references/scripts/tracker.py comment [NUMBER] --role dm-lead --message "PR does not cite the planning contract; cannot verify architectural conformance. worker: cite the planning artifacts in the PR description (CONTEXT under .squidsquad/[PM_ALIAS]/planning/, TEST-PLAN under .squidsquad/[VERIFIER_ALIAS]/planning/) and re-submit to pending-test so the verifier re-walks the ACs against them."
      ```
      Skip this item and move to the next.
 
