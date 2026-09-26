@@ -1,0 +1,15 @@
+{"id":"a49fb031-2d4f-42f5-995d-fe152a8a01fb","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"learning-git-merge-silently-drops-concurrent-large-edit-on-shared-markdown","counter":"impression"}
+{"id":"916d6728-7864-4804-a8c0-ec66ac7f11fa","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"vault","counter":"impression"}
+{"id":"9aadcd9b-d11e-492a-9585-036fd3c78df8","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"decision-vault-subagent-model-sonnet","counter":"impression"}
+{"id":"fbb09414-975a-43b8-80dd-59baff2c26fb","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"decision-vault-remember-source-agnostic","counter":"impression"}
+{"id":"652f53c6-e381-450b-a0a3-ebc246ce4e99","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"agent-communication-layer","counter":"impression"}
+{"id":"2226069c-1cf8-482b-9433-97f73bfbe72f","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"learning-stale-source-recompose-reverts-shipped-on-behind-clone","counter":"walked"}
+{"id":"5c66efe4-81ae-43c9-aaaf-cb82b0b97344","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"human-profile","counter":"walked"}
+{"id":"ed66f738-e253-4b14-a1d7-8cef17144584","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"decision-sub-skill-architecture","counter":"walked"}
+{"id":"3ec2ad15-c2db-4764-b3ce-0ab05af4e967","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"learning-atomic-migration-strategy","counter":"walked"}
+{"id":"33a48c00-75cd-4c42-b08d-2a4547159e08","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"squidsquad","counter":"walked"}
+{"id":"7304f2cc-fe29-4e76-a6fc-6345d8b4dadd","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"code-conventions","counter":"walked"}
+{"id":"c960238e-2eba-4f62-9b85-31d70ea80372","ts":"2026-09-26T17:19:24.465Z","agent":"skill","task":13860,"slug":"decision-pid-primary-liveness","counter":"walked"}
+{"id":"aa311611-290a-4855-97b5-4527855cd935","ts":"2026-09-26T17:19:50.101Z","agent":"skill","task":13860,"slug":"learning-stale-source-recompose-reverts-shipped-on-behind-clone","counter":"used"}
+{"id":"d8a50810-9aed-4e3b-9b78-cc25b99813cf","ts":"2026-09-26T17:19:50.102Z","agent":"skill","task":13860,"slug":"learning-git-merge-silently-drops-concurrent-large-edit-on-shared-markdown","counter":"used"}
+{"id":"51087a4c-3632-4c54-82d9-205362e26f9b","ts":"2026-09-26T17:19:50.102Z","agent":"skill","task":13860,"slug":"decision-vault-remember-source-agnostic","counter":"used"}

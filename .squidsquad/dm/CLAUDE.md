@@ -301,7 +301,7 @@ sequenceDiagram
     A->>A: read working-state
     A->>F: drain initial walk
     Note over A: §3 Per-nudge cycle
-    loop until Monitor exits
+    loop until session ends
         H->>A: NUDGE
         A->>F: read forge, do work, write back
         A->>H: ack cursor
@@ -388,9 +388,9 @@ Both paths share the same output gate: findings are filed via the role's `improv
 
 The "idle-wait" you see in both diagrams above is implemented by Claude's built-in `Monitor` tool. While idle — between session boot's initial walk and the first nudge, and between every cycle's ack-cursor and the next nudge — you invoke `Monitor` to stream `event_poll.py`'s stdout. Each line of stdout is a bare `NUDGE` (no payload — one per `event_poll.py` poll-tick that finds new events on the harness) that wakes you and starts one per-nudge cycle. The nudge carries no event data: per [[forge-read-pattern]] you `GET /events/for/{role}?since=<cursor>` to fetch the events and re-query the forge as the source of truth before acting.
 
-The canonical `Monitor` invocation (`command:` line, `persistent: true`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
+The canonical `Monitor` invocation (`command:` line, max `timeout_ms`, `--target` flag, role substitution) is delivered by the runtime fragments your boot-mode detection loads in event mode — see `references/sub-skills/common-events/event-mode-contract.md` for the exact form. You don't need it inlined here; you'll Read it during boot before you first arm Monitor.
 
-One unconditional rule from those fragments matters at this level: **if `Monitor` exits for any reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — end your session immediately**. Do not retry `Monitor`, do not wait for the harness to recover, do not pivot to polling mid-session. The harness's auto-respawn path owns recovery; your exit IS the signal that recovery is needed.
+One rule from those fragments matters at this level. A Monitor watch always has a deadline (at most 30 minutes); when the tool posts its **expiry notice** (`Monitor expired after …`), that is routine — **re-arm** the same invocation and carry on. **Any other Monitor exit — `event_poll.py` terminates on its own (regardless of exit code), tool error, stream close — means end your session immediately**. Do not retry `Monitor` in that case, do not wait for the harness to recover, do not pivot to forge-direct work or to polling mid-session. The harness's auto-respawn path owns recovery; your exit IS the signal that recovery is needed. The expiry notice is the only thing that means re-arm — every exit without it ends the session.
 
 #### 6. How `→ run sub-skill` markers work
 
@@ -442,7 +442,7 @@ Four things to know about inline mode:
 - **The mechanical wrappers don't fire.** There's no scheduler driving `cycle_pre.py` / `cycle_post.py` for an inline turn, so `cycle-input.json` and the iteration log don't update. This is expected behavior, not a regression — PM's pipeline sentinel should not treat an inline-mode agent as broken cycling. **The status bar is the exception**: because nothing else updates it, you self-write the current-event indicator to `inline` when a human turn begins (`python references/scripts/cycle.py status-bar-self inline ""`) and clear it back to your normal idle/working state when the inline session ends — the human signals done, the next autonomous wake fires, **or the 20-minute auto-timeout below releases you**. This makes "in a live human conversation" visible at a glance instead of leaving the bar stale — it supersedes the #9358 "treat staleness as expected" workaround.
 - **The forge is still the source of truth.** Even when responding inline, durable state changes (tracker comments, issue transitions, PR work) go through `tracker.py` — not just acknowledged in conversation. The human can read or correct your work afterwards via the forge.
 - **Inline overrides defaults, not safety gates.** Comply with reasonable human instructions even when they cut across the cycle; push back when they'd cross a role boundary, violate a vault-recorded prohibition, or require destructive/hard-to-reverse action without confirmation. Their judgment overrides defaults, not your duty to flag risks.
-- **Inline auto-timeout — 20 minutes, hardcoded.** A live human turn is the only sanctioned pause from autonomous work, but it auto-releases so a silent human never strands your queue. Because inline turns fire no wrappers, **track the human's last-inline-message time yourself**: when a human turn arrives, stamp it with `python references/scripts/cycle.py timestamp`, and whenever you next get control (a later human turn, or a wake), compare against `cycle.py timestamp` again. Once **≥20 minutes of human silence** have elapsed, exit inline and resume autonomous work — re-run `work_queue()` and continue your normal flow. The 20-minute window is **hardcoded / non-configurable** (operator directive — there is **no** config key for it; do not add one). **Resume trigger:** the next event you detect after the 20 minutes — a forge nudge in event mode, or, if the forge stays silent, the #12506 self-wake driver tick, which is the backstop that guarantees release (so a fully-silent window resumes in ≤~30 min, bounded by the driver's cool-down cadence — never permanent; the ≤30-min lag versus the nominal 20 is expected, not a bug). On release, **clear the inline status-bar indicator** with `python references/scripts/cycle.py status-bar-self idle ""` (the counterpart to the `inline` self-write above) so the bar reflects that you have left the human conversation.
+- **Inline auto-timeout — 20 minutes, hardcoded.** A live human turn is the only sanctioned pause from autonomous work, but it auto-releases so a silent human never strands your queue. Because inline turns fire no wrappers, **track the human's last-inline-message time yourself**: when a human turn arrives, stamp it with `python references/scripts/cycle.py timestamp`, and whenever you next get control (a later human turn, or a wake), compare against `cycle.py timestamp` again. Once **≥20 minutes of human silence** have elapsed, exit inline and resume autonomous work — re-run `work_queue()` and continue your normal flow. The 20-minute window is **hardcoded / non-configurable** (operator directive — there is **no** config key for it; do not add one). **Resume trigger:** the next event you detect after the 20 minutes — a forge nudge in event mode, or, if the forge stays silent, the #12506 self-wake driver tick, which is the backstop that guarantees release (so a fully-silent window resumes in ≤~30 min, bounded by the driver's cool-down cadence — never permanent; the ≤30-min lag versus the nominal 20 is expected, not a bug). On release, **clear the inline status-bar indicator** with `python references/scripts/cycle.py status-bar-self idle ""` (the counterpart to the `inline` self-write above) so the bar reflects that you have left the human conversation. In event mode, also check your Monitor watch on release: if its expiry notice arrived during the inline turn and you have not re-armed yet, re-arm the identical invocation now; if no expiry notice arrived, the watch is still armed — leave it (never two watches at once).
 
 <!-- sub-skill: boot-bootstrap -->
 ### Step 1 — step:cycle/boot
@@ -786,18 +786,19 @@ Read `.squidsquad/vault/BRIEFING.md` at boot. It contains active project priorit
 
 ### PARAG Structure
 
-The vault uses the **PARAG** taxonomy:
+The vault uses the **PARAG** taxonomy plus a `systems/` hub layer; the type registry `vault/vault-schema.json` is authoritative:
 
 | Bucket | Path | Contents |
 |--------|------|----------|
 | Projects | `vault/projects/` | Bounded, scoped work with a definition-of-done |
 | Areas | `vault/areas/` | Ongoing concerns — human prefs, conventions, team culture |
 | Resources | `vault/resources/` | Reference material, external docs, research |
-| Archives | `vault/archives/` | Shipped features, closed decisions, historical context |
-| Galaxy | `vault/galaxy/` | Atomic Zettelkasten notes: `decision-*`, `pattern-*`, `learning-*`, `style-*` |
+| Systems | `vault/systems/` | One hub note per subsystem — galaxy notes link into these |
+| Archives | `vault/archives/` | Legacy location — notes now retire by `status`, not by moving |
+| Galaxy | `vault/galaxy/` | Atomic Zettelkasten notes: `decision-*`, `pattern-*`, `learning-*`, `rule-*` (binding rules) |
 
 ### Vault Protocol
 
 → run sub-skill: vault-protocol
 
-Before starting a task, consult relevant vault notes. After completing real work, use vault-remember to capture durable learnings. The vault is shared institutional knowledge for the whole team — every role contributes patterns and learnings from its own lane (PM: coordination/decision patterns; worker: implementation patterns; verifier: testing/verification patterns; DM: delivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).
+Search the vault only through the engine (`vault_consume.py search`) — never grep it. Consultation at task pickup is mandatory and leaves committed receipts (`## Vault context consumed`, `## Applicable rules`) in the issue's lineage file, which the verifier checks. After completing real work, use vault-remember to capture durable learnings. The vault is shared institutional knowledge for the whole team — every role contributes patterns and learnings from its own lane (PM: coordination/decision patterns; worker: implementation patterns; verifier: testing/verification patterns; DM: delivery patterns). Max 2 writes per cycle; apply 4-gate logic (write budget → dedup → reusability → fresh-context test).
