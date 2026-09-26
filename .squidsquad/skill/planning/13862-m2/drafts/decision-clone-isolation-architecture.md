@@ -1,17 +1,3 @@
----
-type: decision
-tags: [architecture, clones, isolation, security, core-philosophy]
-created: 2026-04-25
-updated: 2026-09-26
-owner: pm-lead
-status: active
-confidence: high
-source: conversation
-links:
-  - decision-pid-primary-liveness
-  - decision-watchdog-supervisor
----
-
 # Clone Isolation — Each Agent in Its Own Repo Clone
 
 ## Decision
@@ -29,7 +15,7 @@ Every SquidSquad agent runs in its own git clone of the target repository. This 
 ## Branching
 
 - **Main branch** (or user-configured target): all agents push code here
-- **State branch** (`squid-squad`): RETIRED (operator, 2026-09-26, #14113; removal tracked in #14144). It used to hold iterations and working state apart from code. Event mode + harness-owned git made it redundant: agent state lives on main under `.squidsquad/<alias>/`, and `origin/squid-squad` had not moved since 2026-06-12. Do not reintroduce a separate state branch.
+- **State branch** (`squid-squad`): shared coordination data — iterations, working state, health. Exists to separate agent state from code when branch workflow is enabled (feature branches for dev work)
 - **Feature branches**: when branch workflow is on, dev work happens here before merging to main
 
 ## Why
@@ -40,6 +26,10 @@ Discovered 2026-04-25: agents with `--dangerously-skip-permissions` and global c
 3. PM spawned agents into the wrong project's repo
 
 Global clone paths are fundamentally unsafe for multi-project environments. Project-local paths eliminate cross-project contamination.
+
+## Local config takes priority over the global clone store
+
+`.squidsquad/.local-config` (project-scoped) takes priority over `~/.squidsquad/clones/` (global shared filesystem) when `boot_remote.py`/`health_check.py`'s `_parse_local_config()` resolves agent clone paths — fixed in #2750 after the global store's stale cross-project entries caused cross-project agent boot. `.local-config` is the primary source of truth: the wizard (`wizard.py`) and `compose.py` write to it, while the global store is only populated via manual `shared_fs.py write-clone` CLI calls and has no project-scoping mechanism. Alternatives considered and rejected: namespacing the global store by project (adds complexity, needs migration), validating global paths against the current project (fragile, depends on config matching), and removing the global store entirely (breaks users who rely on it as sole config).
 
 ## Rules
 
@@ -52,3 +42,4 @@ Global clone paths are fundamentally unsafe for multi-project environments. Proj
 ## Changelog
 
 - 2026-04-25 — Created by pm-lead. Established after cross-project contamination incident. Human confirmed as core philosophy.
+- **2026-09-26** — migrated to vault v2 (#13862).

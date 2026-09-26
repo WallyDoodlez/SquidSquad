@@ -1,0 +1,16 @@
+{
+  "m0_count": 185,
+  "dispositions": {
+    "keep": 170,
+    "merge-into": 5,
+    "prune": 10
+  },
+  "undispositioned": [],
+  "reconciled": true,
+  "checks": {
+    "validate": true,
+    "broken_links": [],
+    "passed": true
+  },
+  "passed": true
+}

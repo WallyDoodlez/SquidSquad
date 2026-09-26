@@ -1,0 +1,947 @@
+{
+  "dry_run": false,
+  "date": "2026-09-26",
+  "changed": 184,
+  "changed_notes": [
+    "archives/briefing-active-priorities-2026-06-15-to-07-17.md",
+    "archives/briefing-active-priorities-2026-07-18.md",
+    "archives/shipped-2026-05-19-to-2026-06-21.md",
+    "archives/shipped-pre-2026-05-19.md",
+    "areas/code-conventions.md",
+    "areas/human-profile.md",
+    "galaxy/decision-agents-never-stop-while-work-pending.md",
+    "galaxy/decision-branch-per-feature-workflow.md",
+    "galaxy/decision-class-vs-alias-routing-model.md",
+    "galaxy/decision-clone-isolation-architecture.md",
+    "galaxy/decision-comprehension-test-pipeline.md",
+    "galaxy/decision-cycle-runner-architecture.md",
+    "galaxy/decision-deterministic-testing.md",
+    "galaxy/decision-event-bus-architecture-redesign.md",
+    "galaxy/decision-general-purpose-vision.md",
+    "galaxy/decision-improvement-loop-philosophy.md",
+    "galaxy/decision-local-config-priority.md",
+    "galaxy/decision-phase-4-event-ack-lifecycle-deferred.md",
+    "galaxy/decision-pid-primary-liveness.md",
+    "galaxy/decision-reboot-kills-child.md",
+    "galaxy/decision-self-healing-sentinel.md",
+    "galaxy/decision-sub-skill-architecture.md",
+    "galaxy/decision-tui-headless-render-verification.md",
+    "galaxy/decision-vault-remember-source-agnostic.md",
+    "galaxy/decision-vault-subagent-model-sonnet.md",
+    "galaxy/decision-watchdog-supervisor.md",
+    "galaxy/learning-activity-liveness-redispatch-must-not-reset-grace.md",
+    "galaxy/learning-atomic-migration-strategy.md",
+    "galaxy/learning-audit-scope-and-source-of-truth.md",
+    "galaxy/learning-background-verification-pipe-truncation-masks-verdict.md",
+    "galaxy/learning-backtick-in-bash-doublequote-can-actually-execute.md",
+    "galaxy/learning-bare-run-tests-mutates-real-tracker-verify-after-taskstop.md",
+    "galaxy/learning-bash-cd-into-missing-worktree-runs-in-main-clone.md",
+    "galaxy/learning-branch-checkout-mid-background-test-corrupts-results.md",
+    "galaxy/learning-broadcast-deque-cannot-have-in-stream-gaps.md",
+    "galaxy/learning-bundle-branch-reconciliation.md",
+    "galaxy/learning-canonical-verifier-merge-is-harness-post-merge.md",
+    "galaxy/learning-claude-code-http-hooks-block-only-command-hooks-async.md",
+    "galaxy/learning-closing-keyword-in-state-commit-autocloses-issue.md",
+    "galaxy/learning-commit-before-merge-when-inheriting-dirty-behind-clone.md",
+    "galaxy/learning-commit-code-state-exclusion.md",
+    "galaxy/learning-commit-role-scoped-foreign-file-silent-drop.md",
+    "galaxy/learning-common-events-fragments-are-mode-agnostic.md",
+    "galaxy/learning-compose-engine-change-no-claudemd-recompose.md",
+    "galaxy/learning-comprehension-staleness-refresh-cli-silent-failure.md",
+    "galaxy/learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping.md",
+    "galaxy/learning-config-merge-ours-drops-concurrent-changes.md",
+    "galaxy/learning-confirm-composed-currency-with-zero-diff-compose-not-behind-clone-grep.md",
+    "galaxy/learning-confirm-merge-landed-before-pending-ship-transition.md",
+    "galaxy/learning-cq-applies-to-launcher-injected-prompts.md",
+    "galaxy/learning-cq-artifacts-commit-after-pr-merges-not-before.md",
+    "galaxy/learning-create-test-environments.md",
+    "galaxy/learning-cycle-pre-preserves-code-wip.md",
+    "galaxy/learning-default-port-fallback-is-live-egress-trap-in-tests.md",
+    "galaxy/learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts.md",
+    "galaxy/learning-deploy-pull-block-divergence-recover-by-merge.md",
+    "galaxy/learning-deploy-signal-boot-drain-residual-vs-live.md",
+    "galaxy/learning-dm-local-merge-when-harness-down.md",
+    "galaxy/learning-doc-first-for-architecture-changes.md",
+    "galaxy/learning-ead-status-routing-and-back-transition-dedup.md",
+    "galaxy/learning-edit-shared-fragment-run-full-static-gate.md",
+    "galaxy/learning-fail-open-claims-need-real-reader-tests.md",
+    "galaxy/learning-fix-inverting-an-invariant-is-a-regression.md",
+    "galaxy/learning-gate-collection-abort-masks-reds.md",
+    "galaxy/learning-gh-issue-list-hardcoded-limit-silently-truncates.md",
+    "galaxy/learning-gh-pr-edit-broken-use-gh-api-patch.md",
+    "galaxy/learning-git-cat-file-ref-path-false-negative-use-ls-tree.md",
+    "galaxy/learning-git-merge-silently-drops-concurrent-large-edit-on-shared-markdown.md",
+    "galaxy/learning-git-ops-clean-tree-stash-pop-recovery.md",
+    "galaxy/learning-git-ops-helpers-pin-repo-root-not-cwd.md",
+    "galaxy/learning-git-ops-run-pins-repo-root-ignores-chdir.md",
+    "galaxy/learning-git-ops-tests-patch-repo-root-not-chdir.md",
+    "galaxy/learning-git-show-ref-path-mangled-on-windows-bash.md",
+    "galaxy/learning-graceful-restart-grace-timer-on-wedged-agent.md",
+    "galaxy/learning-guarding-a-status-machine-death-decision-needs-hold-resume-and-ceilinged-signals.md",
+    "galaxy/learning-harness-merge-gate-caches-git-ops-module.md",
+    "galaxy/learning-harness-only-ship-restart-required-is-noop.md",
+    "galaxy/learning-harness-port-59999-is-deliberate-loop-pin.md",
+    "galaxy/learning-harness-pr-merge-does-not-sync-local-clone.md",
+    "galaxy/learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate.md",
+    "galaxy/learning-in-process-handler-daemon-os-exit-kills-test-suite.md",
+    "galaxy/learning-in-process-import-resolution-test-contaminates-suite.md",
+    "galaxy/learning-includes-yml-tombstoned-instructions-md-is-real-compose-source.md",
+    "galaxy/learning-instructions-md-frontmatter-step-ids-not-inlined-no-recompose-needed.md",
+    "galaxy/learning-intent-clear-on-transition-not-liveness.md",
+    "galaxy/learning-l4-only-fix-skips-pr-flow.md",
+    "galaxy/learning-merge-driver-defeated-by-delete-not-modify.md",
+    "galaxy/learning-merge-mechanism-fix-cannot-protect-its-own-landing-commit.md",
+    "galaxy/learning-migration-6274-cutover.md",
+    "galaxy/learning-monitor-persistent-do-not-rearm-per-nudge.md",
+    "galaxy/learning-narrowed-ship-scope-orphans-residual-asks.md",
+    "galaxy/learning-pending-ship-query-includes-closed.md",
+    "galaxy/learning-plan-in-pr-needs-state-guard-exemption.md",
+    "galaxy/learning-polling-agent-reads-as-inert-on-status.md",
+    "galaxy/learning-post-outage-boot-drain-repeated-assigned-to.md",
+    "galaxy/learning-powershell-start-job-cwd.md",
+    "galaxy/learning-pr-conflicting-flag-can-be-cosmetic.md",
+    "galaxy/learning-pr-create-must-run-on-feature-branch-after-commit-code.md",
+    "galaxy/learning-prove-regression-test-fails-pre-fix.md",
+    "galaxy/learning-push-branch-before-triggering-harness-merge.md",
+    "galaxy/learning-qa-boot-pickup-must-not-transition-pending-test-to-in-progress.md",
+    "galaxy/learning-qa-branch-merge-workaround.md",
+    "galaxy/learning-quarantine-clear-triage-stale-vs-blocked.md",
+    "galaxy/learning-raw-pytest-shows-known-failures-use-run-tests-static.md",
+    "galaxy/learning-read-all-comments-before-merge-not-just-transition.md",
+    "galaxy/learning-recompose-and-config-carry-across-checkout.md",
+    "galaxy/learning-reexecute-evidence-after-verifier-session-loss.md",
+    "galaxy/learning-requirements-txt-is-harness-runtime-scoped.md",
+    "galaxy/learning-restarting-intent-not-across-harness-restart.md",
+    "galaxy/learning-resume-git-tree-is-truth.md",
+    "galaxy/learning-reverify-transition-blocked-by-own-prior-reject.md",
+    "galaxy/learning-runtime-resolves-by-alias-not-role-class.md",
+    "galaxy/learning-scan-comment-vs-file-duplicate.md",
+    "galaxy/learning-sequential-phase-gates-are-prose-only-not-mechanical.md",
+    "galaxy/learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker.md",
+    "galaxy/learning-shared-fragment-reword-stales-specs-beyond-the-issue.md",
+    "galaxy/learning-shell-out-provisioning-has-three-sharp-edges.md",
+    "galaxy/learning-ship-counter-canonical-key.md",
+    "galaxy/learning-ship-gate-squash-proof-window.md",
+    "galaxy/learning-sibling-pr-additive-test-conflict-keep-both.md",
+    "galaxy/learning-silent-gate-inertness-masks-format-drift.md",
+    "galaxy/learning-single-emit-wake-nudge-needs-bounded-reemit-and-must-bypass-time-filter.md",
+    "galaxy/learning-single-static-gate-red-may-be-flake-rerun-before-reject.md",
+    "galaxy/learning-singleton-must-refuse-not-fallback-when-canonical-port-held.md",
+    "galaxy/learning-spawn-prompt-must-not-decide-wake-mode.md",
+    "galaxy/learning-squash-drops-newest-commits-of-ahead-branch.md",
+    "galaxy/learning-stale-activity-not-dead-rule-out-limit-and-inline.md",
+    "galaxy/learning-stale-remote-tracking-ref-blocks-ship-gate.md",
+    "galaxy/learning-stale-source-recompose-reverts-shipped-on-behind-clone.md",
+    "galaxy/learning-stall-vs-deepwork-before-nudging.md",
+    "galaxy/learning-state-lane-deletion-never-rides-commit-it-now.md",
+    "galaxy/learning-strip-vs-wire-audit-findings.md",
+    "galaxy/learning-sub-skill-splitting-does-not-reduce-composed-boot-size.md",
+    "galaxy/learning-suite-exit-code-not-proof-of-all-pass.md",
+    "galaxy/learning-tail-truncation-hides-pytest-failures-from-review.md",
+    "galaxy/learning-targetable-step-anchors-must-be-bare-h3.md",
+    "galaxy/learning-task-begin-does-not-auto-create-pr-for-bugs.md",
+    "galaxy/learning-test-pollution-real-clone-state.md",
+    "galaxy/learning-tests-must-not-mutate-shared-live-state.md",
+    "galaxy/learning-trd-v2-rewrite-crossref-drift-dominant-defect.md",
+    "galaxy/learning-trivial-append-conflicts-still-route-to-worker.md",
+    "galaxy/learning-verifier-verdict-may-be-off-forge-confirm-before-routeback.md",
+    "galaxy/learning-verify-absent-claims-need-fresh-fetch-all-refs.md",
+    "galaxy/learning-verify-combined-state-when-branch-behind-main-shares-files.md",
+    "galaxy/learning-verify-deletion-task-by-repo-wide-consumer-sweep.md",
+    "galaxy/learning-verify-instruction-premises-against-code-not-just-comprehension.md",
+    "galaxy/learning-verify-squash-diff-additions-only-behind-branch.md",
+    "galaxy/learning-windows-cmd-start-title-must-be-quoted.md",
+    "galaxy/learning-wire-format-specs-triplicated-across-trds.md",
+    "galaxy/pattern-chain-ship-per-item-auth.md",
+    "galaxy/pattern-deterministic-scripts-over-prose.md",
+    "galaxy/pattern-dm-citation-soft-gate-satisfied-for-qa-bugs.md",
+    "galaxy/pattern-dm-completes-stuck-in-progress-after-qa-pass.md",
+    "galaxy/pattern-event-mode-release-bump-via-worktree.md",
+    "galaxy/pattern-inspect-merge-stat-before-ship-revert-to-recover.md",
+    "galaxy/pattern-model-router-architecture.md",
+    "galaxy/pattern-no-fiction-window-main-landing-delivery.md",
+    "galaxy/pattern-parallel-axis-audit.md",
+    "galaxy/pattern-prove-side-effect-absence-via-live-state-snapshot.md",
+    "galaxy/pattern-replay-fix-against-real-incident-not-just-mocks.md",
+    "galaxy/pattern-resolve-config-against-live-install-not-test-fixture.md",
+    "galaxy/pattern-retroactive-verify-emergency-fixes-on-main.md",
+    "galaxy/pattern-runtime-loaded-subskill-change-no-recompose.md",
+    "galaxy/pattern-ship-gate-preserve-expanded-scope.md",
+    "galaxy/pattern-stale-ac-vs-canonical-arch.md",
+    "galaxy/pattern-trace-data-reads-not-just-grep-literal-strings-for-leakage-claims.md",
+    "galaxy/pattern-update-stale-test-on-behavior-reversal.md",
+    "galaxy/pattern-verify-composed-output-with-main-landing-state-applied.md",
+    "galaxy/pattern-verify-egress-guard-on-the-wire.md",
+    "galaxy/pattern-verify-liveness-lifecycle-with-independent-runtime-probe.md",
+    "galaxy/pattern-verify-new-shipped-file-in-installer-manifest.md",
+    "galaxy/pattern-verify-unmocked-paths-stubbed-by-units.md",
+    "galaxy/pattern-windows-utf8-subprocess.md",
+    "galaxy/style-operator-comms-no-internal-mechanics.md",
+    "projects/agent-communication-layer.md",
+    "projects/squidsquad.md",
+    "resources/cli-anything-research.md",
+    "systems/compose.md",
+    "systems/event-bus.md",
+    "systems/harness.md",
+    "systems/launcher.md",
+    "systems/pr-merge.md",
+    "systems/tracker.md",
+    "systems/vault.md"
+  ],
+  "renamed": [
+    [
+      "galaxy/style-operator-comms-no-internal-mechanics.md",
+      "galaxy/pattern-operator-comms-no-internal-mechanics.md"
+    ]
+  ],
+  "redirects": {
+    "style-operator-comms-no-internal-mechanics": "pattern-operator-comms-no-internal-mechanics"
+  },
+  "relevance_index_removed": true,
+  "external_references": [
+    {
+      "file": ".squidsquad/pm/planning/PLAN-STATUSLINE-V2.md",
+      "slug": "style-operator-comms-no-internal-mechanics"
+    }
+  ],
+  "flags": {
+    "learning-fail-open-claims-need-real-reader-tests": [
+      "FLAG: no tags (4.3 needs a domain tag)"
+    ],
+    "learning-merge-driver-defeated-by-delete-not-modify": [
+      "FLAG: no tags (4.3 needs a domain tag)"
+    ]
+  },
+  "per_note": {
+    "briefing-active-priorities-2026-06-15-to-07-17": [
+      "dropped confidence,source",
+      "owner skill -> worker"
+    ],
+    "briefing-active-priorities-2026-07-18": [
+      "dropped confidence,source",
+      "owner skill -> worker"
+    ],
+    "briefing-active-priorities-2026-07-19": [
+      "no frontmatter -- left untouched"
+    ],
+    "shipped-2026-05-19-to-2026-06-21": [
+      "dropped confidence,source",
+      "owner skill -> worker"
+    ],
+    "shipped-pre-2026-05-19": [
+      "dropped confidence,source"
+    ],
+    "code-conventions": [
+      "dropped confidence,links",
+      "owner skill -> worker"
+    ],
+    "human-profile": [
+      "dropped confidence,links,source"
+    ],
+    "decision-agents-never-stop-while-work-pending": [
+      "dropped confidence,links,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "decision-branch-per-feature-workflow": [
+      "dropped confidence,links,source"
+    ],
+    "decision-class-vs-alias-routing-model": [
+      "dropped confidence,source"
+    ],
+    "decision-clone-isolation-architecture": [
+      "dropped confidence,links,source",
+      "owner pm-lead -> pm"
+    ],
+    "decision-comprehension-test-pipeline": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "decision-cycle-runner-architecture": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "decision-deterministic-testing": [
+      "dropped confidence,links,source"
+    ],
+    "decision-event-bus-architecture-redesign": [
+      "dropped confidence,links,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "decision-general-purpose-vision": [
+      "dropped confidence,links,source"
+    ],
+    "decision-improvement-loop-philosophy": [
+      "dropped confidence,links,source"
+    ],
+    "decision-local-config-priority": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "decision-phase-4-event-ack-lifecycle-deferred": [
+      "dropped confidence,links,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "decision-pid-primary-liveness": [
+      "dropped confidence,links,source"
+    ],
+    "decision-reboot-kills-child": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "decision-self-healing-sentinel": [
+      "dropped confidence,links,source"
+    ],
+    "decision-sub-skill-architecture": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "decision-tui-headless-render-verification": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "decision-vault-remember-source-agnostic": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "decision-vault-subagent-model-sonnet": [
+      "dropped confidence,source"
+    ],
+    "decision-watchdog-supervisor": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-activity-liveness-redispatch-must-not-reset-grace": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-atomic-migration-strategy": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-audit-scope-and-source-of-truth": [
+      "dropped confidence,links,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-background-verification-pipe-truncation-masks-verdict": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-backtick-in-bash-doublequote-can-actually-execute": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-bare-run-tests-mutates-real-tracker-verify-after-taskstop": [
+      "dropped confidence,links,source"
+    ],
+    "learning-bash-cd-into-missing-worktree-runs-in-main-clone": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-branch-checkout-mid-background-test-corrupts-results": [
+      "dropped confidence,source"
+    ],
+    "learning-broadcast-deque-cannot-have-in-stream-gaps": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-bundle-branch-reconciliation": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-canonical-verifier-merge-is-harness-post-merge": [
+      "dropped source",
+      "owner filled: shared",
+      "status filled: active",
+      "updated filled from created"
+    ],
+    "learning-claude-code-http-hooks-block-only-command-hooks-async": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-closing-keyword-in-state-commit-autocloses-issue": [
+      "dropped confidence,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-commit-before-merge-when-inheriting-dirty-behind-clone": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-commit-code-state-exclusion": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-commit-role-scoped-foreign-file-silent-drop": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-common-events-fragments-are-mode-agnostic": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-compose-engine-change-no-claudemd-recompose": [
+      "dropped confidence,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-comprehension-staleness-refresh-cli-silent-failure": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping": [
+      "dropped confidence,links,source"
+    ],
+    "learning-config-merge-ours-drops-concurrent-changes": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm"
+    ],
+    "learning-confirm-composed-currency-with-zero-diff-compose-not-behind-clone-grep": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm"
+    ],
+    "learning-confirm-merge-landed-before-pending-ship-transition": [
+      "dropped confidence,links,source"
+    ],
+    "learning-cq-applies-to-launcher-injected-prompts": [
+      "dropped confidence,links,source"
+    ],
+    "learning-cq-artifacts-commit-after-pr-merges-not-before": [
+      "dropped confidence,links,source"
+    ],
+    "learning-create-test-environments": [
+      "dropped confidence,links,source",
+      "owner pm-lead -> pm"
+    ],
+    "learning-cycle-pre-preserves-code-wip": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-default-port-fallback-is-live-egress-trap-in-tests": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts": [
+      "dropped confidence,source"
+    ],
+    "learning-deploy-pull-block-divergence-recover-by-merge": [
+      "dropped confidence,source"
+    ],
+    "learning-deploy-signal-boot-drain-residual-vs-live": [
+      "dropped confidence,source"
+    ],
+    "learning-dm-local-merge-when-harness-down": [
+      "dropped confidence,links,source"
+    ],
+    "learning-doc-first-for-architecture-changes": [
+      "dropped confidence,metadata,name,source",
+      "non-schema keys kept for M2: description,author"
+    ],
+    "learning-ead-status-routing-and-back-transition-dedup": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-edit-shared-fragment-run-full-static-gate": [
+      "dropped confidence,links,source",
+      "owner verifier-lead -> verifier"
+    ],
+    "learning-fail-open-claims-need-real-reader-tests": [
+      "owner filled: verifier",
+      "status filled: active",
+      "updated filled from created",
+      "FLAG: no tags (4.3 needs a domain tag)",
+      "non-schema keys kept for M2: author,related"
+    ],
+    "learning-fix-inverting-an-invariant-is-a-regression": [
+      "dropped confidence,links,source"
+    ],
+    "learning-gate-collection-abort-masks-reds": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-gh-issue-list-hardcoded-limit-silently-truncates": [
+      "dropped confidence,links,source",
+      "updated filled from created"
+    ],
+    "learning-gh-pr-edit-broken-use-gh-api-patch": [
+      "dropped confidence,links,source"
+    ],
+    "learning-git-cat-file-ref-path-false-negative-use-ls-tree": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-git-merge-silently-drops-concurrent-large-edit-on-shared-markdown": [
+      "dropped confidence,links,source"
+    ],
+    "learning-git-ops-clean-tree-stash-pop-recovery": [
+      "dropped confidence,source"
+    ],
+    "learning-git-ops-helpers-pin-repo-root-not-cwd": [
+      "dropped source",
+      "owner filled: shared",
+      "status filled: active",
+      "updated filled from created"
+    ],
+    "learning-git-ops-run-pins-repo-root-ignores-chdir": [
+      "dropped confidence,links,source"
+    ],
+    "learning-git-ops-tests-patch-repo-root-not-chdir": [
+      "owner filled: verifier",
+      "status filled: active",
+      "updated filled from created",
+      "non-schema keys kept for M2: author"
+    ],
+    "learning-git-show-ref-path-mangled-on-windows-bash": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-graceful-restart-grace-timer-on-wedged-agent": [
+      "dropped confidence,links,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-guarding-a-status-machine-death-decision-needs-hold-resume-and-ceilinged-signals": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-harness-merge-gate-caches-git-ops-module": [
+      "dropped confidence,links,source"
+    ],
+    "learning-harness-only-ship-restart-required-is-noop": [
+      "dropped confidence,source",
+      "owner dm-lead -> dm",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-harness-port-59999-is-deliberate-loop-pin": [
+      "dropped confidence,links,source"
+    ],
+    "learning-harness-pr-merge-does-not-sync-local-clone": [
+      "dropped confidence,links,source"
+    ],
+    "learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-in-process-handler-daemon-os-exit-kills-test-suite": [
+      "dropped confidence,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description,author"
+    ],
+    "learning-in-process-import-resolution-test-contaminates-suite": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-includes-yml-tombstoned-instructions-md-is-real-compose-source": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm"
+    ],
+    "learning-instructions-md-frontmatter-step-ids-not-inlined-no-recompose-needed": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm"
+    ],
+    "learning-intent-clear-on-transition-not-liveness": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-l4-only-fix-skips-pr-flow": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-merge-driver-defeated-by-delete-not-modify": [
+      "dropped metadata,name",
+      "type filled: learning",
+      "owner filled: shared",
+      "status filled: active",
+      "created filled from first git commit: 2026-07-11",
+      "updated filled from created",
+      "FLAG: no tags (4.3 needs a domain tag)",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-merge-mechanism-fix-cannot-protect-its-own-landing-commit": [
+      "dropped confidence,links,source"
+    ],
+    "learning-migration-6274-cutover": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-monitor-persistent-do-not-rearm-per-nudge": [
+      "dropped confidence,links,source"
+    ],
+    "learning-narrowed-ship-scope-orphans-residual-asks": [
+      "dropped confidence,source",
+      "non-schema keys kept for M2: title,roles"
+    ],
+    "learning-pending-ship-query-includes-closed": [
+      "dropped confidence,source",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-plan-in-pr-needs-state-guard-exemption": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-polling-agent-reads-as-inert-on-status": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-post-outage-boot-drain-repeated-assigned-to": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-powershell-start-job-cwd": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-pr-conflicting-flag-can-be-cosmetic": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-pr-create-must-run-on-feature-branch-after-commit-code": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-prove-regression-test-fails-pre-fix": [
+      "dropped confidence,links,source"
+    ],
+    "learning-push-branch-before-triggering-harness-merge": [
+      "dropped confidence,source"
+    ],
+    "learning-qa-boot-pickup-must-not-transition-pending-test-to-in-progress": [
+      "dropped confidence,links,source"
+    ],
+    "learning-qa-branch-merge-workaround": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-quarantine-clear-triage-stale-vs-blocked": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-raw-pytest-shows-known-failures-use-run-tests-static": [
+      "dropped confidence,links,source"
+    ],
+    "learning-read-all-comments-before-merge-not-just-transition": [
+      "owner filled: verifier",
+      "status filled: active",
+      "updated filled from created",
+      "non-schema keys kept for M2: author"
+    ],
+    "learning-recompose-and-config-carry-across-checkout": [
+      "dropped confidence,links,source"
+    ],
+    "learning-reexecute-evidence-after-verifier-session-loss": [
+      "owner filled: verifier",
+      "status filled: active",
+      "updated filled from created",
+      "non-schema keys kept for M2: title,author"
+    ],
+    "learning-requirements-txt-is-harness-runtime-scoped": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-restarting-intent-not-across-harness-restart": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-resume-git-tree-is-truth": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-reverify-transition-blocked-by-own-prior-reject": [
+      "owner filled: shared",
+      "status filled: active",
+      "created filled from first git commit: 2026-06-26",
+      "updated filled from created",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-runtime-resolves-by-alias-not-role-class": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-scan-comment-vs-file-duplicate": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-sequential-phase-gates-are-prose-only-not-mechanical": [
+      "dropped confidence,source",
+      "non-schema keys kept for M2: title,roles"
+    ],
+    "learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-shared-fragment-reword-stales-specs-beyond-the-issue": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-shell-out-provisioning-has-three-sharp-edges": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-ship-counter-canonical-key": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-ship-gate-squash-proof-window": [
+      "dropped confidence,links,source"
+    ],
+    "learning-sibling-pr-additive-test-conflict-keep-both": [
+      "owner filled: verifier",
+      "status filled: active",
+      "updated filled from created",
+      "non-schema keys kept for M2: author"
+    ],
+    "learning-silent-gate-inertness-masks-format-drift": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-single-emit-wake-nudge-needs-bounded-reemit-and-must-bypass-time-filter": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-single-static-gate-red-may-be-flake-rerun-before-reject": [
+      "dropped confidence,links,source"
+    ],
+    "learning-singleton-must-refuse-not-fallback-when-canonical-port-held": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-spawn-prompt-must-not-decide-wake-mode": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-squash-drops-newest-commits-of-ahead-branch": [
+      "dropped confidence,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-stale-activity-not-dead-rule-out-limit-and-inline": [
+      "dropped confidence,links,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-stale-remote-tracking-ref-blocks-ship-gate": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-stale-source-recompose-reverts-shipped-on-behind-clone": [
+      "dropped confidence,links,source"
+    ],
+    "learning-stall-vs-deepwork-before-nudging": [
+      "dropped confidence,links,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-state-lane-deletion-never-rides-commit-it-now": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-strip-vs-wire-audit-findings": [
+      "dropped confidence,links,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-sub-skill-splitting-does-not-reduce-composed-boot-size": [
+      "dropped confidence,links,source"
+    ],
+    "learning-suite-exit-code-not-proof-of-all-pass": [
+      "dropped confidence,links,source"
+    ],
+    "learning-tail-truncation-hides-pytest-failures-from-review": [
+      "dropped confidence,links,source",
+      "updated filled from created"
+    ],
+    "learning-targetable-step-anchors-must-be-bare-h3": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-task-begin-does-not-auto-create-pr-for-bugs": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "learning-test-pollution-real-clone-state": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-tests-must-not-mutate-shared-live-state": [
+      "dropped confidence,links,source",
+      "owner skill-lead -> worker"
+    ],
+    "learning-trivial-append-conflicts-still-route-to-worker": [
+      "dropped confidence,links,source"
+    ],
+    "learning-verifier-verdict-may-be-off-forge-confirm-before-routeback": [
+      "owner filled: dm",
+      "status filled: active",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-verify-absent-claims-need-fresh-fetch-all-refs": [
+      "dropped confidence,source",
+      "owner qa -> verifier"
+    ],
+    "learning-verify-combined-state-when-branch-behind-main-shares-files": [
+      "dropped confidence,links,source"
+    ],
+    "learning-verify-deletion-task-by-repo-wide-consumer-sweep": [
+      "dropped confidence,source",
+      "owner qa-lead -> verifier",
+      "non-schema keys kept for M2: role"
+    ],
+    "learning-verify-instruction-premises-against-code-not-just-comprehension": [
+      "dropped confidence,source",
+      "owner qa -> verifier"
+    ],
+    "learning-verify-squash-diff-additions-only-behind-branch": [
+      "owner filled: verifier",
+      "status filled: active",
+      "updated filled from created",
+      "non-schema keys kept for M2: author"
+    ],
+    "learning-windows-cmd-start-title-must-be-quoted": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "learning-wire-format-specs-triplicated-across-trds": [
+      "dropped confidence,source"
+    ],
+    "pattern-chain-ship-per-item-auth": [
+      "dropped confidence,source",
+      "non-schema keys kept for M2: title,roles"
+    ],
+    "pattern-deterministic-scripts-over-prose": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "pattern-dm-citation-soft-gate-satisfied-for-qa-bugs": [
+      "dropped confidence,links,source"
+    ],
+    "pattern-dm-completes-stuck-in-progress-after-qa-pass": [
+      "dropped confidence,links,source"
+    ],
+    "pattern-event-mode-release-bump-via-worktree": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "pattern-inspect-merge-stat-before-ship-revert-to-recover": [
+      "dropped confidence,source",
+      "owner dm-lead -> dm",
+      "updated filled from created",
+      "non-schema keys kept for M2: role"
+    ],
+    "pattern-model-router-architecture": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "pattern-no-fiction-window-main-landing-delivery": [
+      "dropped confidence,source",
+      "owner dm-lead -> dm"
+    ],
+    "pattern-parallel-axis-audit": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "pattern-prove-side-effect-absence-via-live-state-snapshot": [
+      "dropped confidence,links,source",
+      "owner verifier-lead -> verifier"
+    ],
+    "pattern-replay-fix-against-real-incident-not-just-mocks": [
+      "dropped confidence,links,source"
+    ],
+    "pattern-resolve-config-against-live-install-not-test-fixture": [
+      "dropped confidence,links,source",
+      "owner verifier-lead -> verifier"
+    ],
+    "pattern-retroactive-verify-emergency-fixes-on-main": [
+      "dropped confidence,links,source",
+      "owner verifier-lead -> verifier"
+    ],
+    "pattern-runtime-loaded-subskill-change-no-recompose": [
+      "dropped confidence,links,source",
+      "owner dm-lead -> dm"
+    ],
+    "pattern-ship-gate-preserve-expanded-scope": [
+      "dropped confidence,source",
+      "non-schema keys kept for M2: title,roles"
+    ],
+    "pattern-stale-ac-vs-canonical-arch": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "pattern-trace-data-reads-not-just-grep-literal-strings-for-leakage-claims": [
+      "dropped confidence,links,source"
+    ],
+    "pattern-update-stale-test-on-behavior-reversal": [
+      "dropped confidence,links,metadata,name,source",
+      "owner skill -> worker",
+      "non-schema keys kept for M2: description"
+    ],
+    "pattern-verify-composed-output-with-main-landing-state-applied": [
+      "dropped confidence,links,source",
+      "owner verifier-lead -> verifier"
+    ],
+    "pattern-verify-egress-guard-on-the-wire": [
+      "dropped confidence,metadata,name,source",
+      "non-schema keys kept for M2: description"
+    ],
+    "pattern-verify-liveness-lifecycle-with-independent-runtime-probe": [
+      "dropped confidence,name,source",
+      "non-schema keys kept for M2: related"
+    ],
+    "pattern-verify-new-shipped-file-in-installer-manifest": [
+      "dropped confidence,source",
+      "non-schema keys kept for M2: lane"
+    ],
+    "pattern-verify-unmocked-paths-stubbed-by-units": [
+      "dropped confidence,links,source",
+      "owner verifier-lead -> verifier"
+    ],
+    "pattern-windows-utf8-subprocess": [
+      "dropped confidence,links,source",
+      "owner skill -> worker"
+    ],
+    "style-operator-comms-no-internal-mechanics": [
+      "dropped confidence,source",
+      "style folded into pattern: style-operator-comms-no-internal-mechanics -> pattern-operator-comms-no-internal-mechanics"
+    ],
+    "agent-communication-layer": [
+      "dropped confidence,links,source"
+    ],
+    "squidsquad": [
+      "dropped confidence,links"
+    ],
+    "cli-anything-research": [
+      "dropped confidence,links,source"
+    ]
+  }
+}

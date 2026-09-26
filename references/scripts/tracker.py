@@ -26,7 +26,8 @@ Role authority (who may call `transition`):
                                      #6274 D11 dual-aware: old `qa`/`qa-lead` still accepted (deprecation warning).
   - Assigned worker role (--role <r>) : open -> in-progress, approved -> in-progress,
                                      in-progress <-> pending-test, open -> pending-test,
-                                     in-progress -> approved (must match issue's `role:*` label),
+                                     in-progress -> approved (must match issue's `role:*` label; PM also
+                                     holds it for pipeline-sentinel stall recovery, #14125),
                                      in-progress <-> blocked (#13515: owned-but-parked self-pause;
                                      assignee only in both directions)
   - DM  (--role dm  or dm-lead)    : in-progress -> pending-ship, pending-ship -> shipped,
@@ -206,7 +207,9 @@ ROLE_AUTHORITY = {
     ("status:open", "status:pending-test"): {"_assignee"},
     ("status:approved", "status:in-progress"): {"_assignee"},
     ("status:in-progress", "status:pending-test"): {"_assignee"},
-    ("status:in-progress", "status:approved"): {"_assignee"},
+    # #14125: PM also holds this edge -- pipeline-sentinel Tier 1 returns a task
+    # held by a stalled/stopped agent to approved for re-pickup.
+    ("status:in-progress", "status:approved"): {"_assignee", "pm"},
     ("status:in-progress", "status:planning"): {"_assignee"},  # #6057 code review rejection
     ("status:in-progress", "status:pending-ship"): {"dm"},  # #6261: DM skips QA
 

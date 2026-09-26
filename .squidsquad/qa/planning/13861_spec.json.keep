@@ -1,0 +1,47 @@
+{
+ "issue": 13861,
+ "title": "PRD-VAULT-V2 P5: harness-scheduled vault-optimize maintenance window (PM event flow)",
+ "files": [
+  "references/sub-skills/common-events/event-mode-contract.md",
+  "references/sub-skills/common/vault-optimize.md",
+  "references/roles/pm/instructions.md"
+ ],
+ "questions": [
+  {
+   "id": "a-pm-runs-optimize",
+   "question": "You are the PM agent. A `vault-maintenance` event reaches you. What do you do, step by step, and how are contradictions and pruning proposals handled?",
+   "expected": "Handle it as an ordinary cared event at the next task boundary and run the vault-optimize sub-skill's maintenance-window flow: sonnet subagents judge contradictions over the queued notes only; each finding is filed via the deterministic `file-contradiction`; pruning proposals via `file-prune-review`; then `mark-optimized` stamps the queued notes; then ack-cursor the event.",
+   "must_not": "Say the PM applies the fix, edits vault notes, or analyzes notes outside the queue."
+  },
+  {
+   "id": "b-hitl-never-apply",
+   "question": "A subagent concludes that note A should replace note B. What does the PM do with the notes?",
+   "expected": "Files a HITL task (a pending task via file-contradiction) and edits nothing; the human decides.",
+   "must_not": "Say the PM edits, supersedes, archives or deletes either note itself."
+  },
+  {
+   "id": "c-dedup",
+   "question": "The same contradiction pair already has an open task. What happens when the filer runs for it again?",
+   "expected": "No duplicate is filed; the filer dedupes against the open task.",
+   "must_not": "Say a second task is filed."
+  },
+  {
+   "id": "d-quiet-no-event",
+   "question": "It is a quiet PM cycle and no `vault-maintenance` event has arrived. Does the PM run the optimize analysis on its own? What does it do for the vault on quiet cycles?",
+   "expected": "No. Analysis is harness-scheduled (or operator-forced via POST /maintenance/vault-optimize). On quiet cycles the agent only compacts its own telemetry shard (owner-only, own clone).",
+   "must_not": "Say the PM analyzes contradictions or the last_optimized queue on quiet cycles."
+  },
+  {
+   "id": "e-mid-task",
+   "question": "A `vault-maintenance` event arrives while the PM is mid-task. What happens?",
+   "expected": "Finish the current task first (Case D atomicity: note but do not act), then handle the event at the next boundary.",
+   "must_not": "Say the PM abandons the current task to run optimize."
+  },
+  {
+   "id": "f-non-pm",
+   "question": "A non-PM agent (e.g. the verifier) receives a `vault-maintenance` event. What does it do?",
+   "expected": "Nothing beyond the care filter: the event is skipped (target is pm only) and the agent still POSTs ack-cursor to advance its cursor; no optimize run.",
+   "must_not": "Say the non-PM agent runs vault-optimize."
+  }
+ ]
+}
