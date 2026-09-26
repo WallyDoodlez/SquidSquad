@@ -14,7 +14,7 @@ Usage:
     python scripts/cycle.py reset-counter <role>    # Reset counter to 0
     python scripts/cycle.py log-iteration <role> <n> [--quiet] [--work <w>] [--notes <n>]
     python scripts/cycle.py cleanup-iterations <role> [--keep 20]
-    python scripts/cycle.py end-session [role]      # Ask the harness to replace this session (#14114)
+    python scripts/cycle.py end-session             # Ask the harness to replace THIS agent's session (#14114)
     python scripts/cycle.py --help
 """
 
@@ -133,39 +133,69 @@ def status_bar_self(phase, description=""):
     return status_bar(role, phase, description)
 
 
+# Intents under which end-session must NOT restart the agent (#14114 AC2):
+# an operator stop wins, and a deploy owns its own kill + respawn.
+_END_SESSION_HANDS_OFF = {"stopping": "an operator stop is in effect",
+                          "stopped": "an operator stop is in effect",
+                          "deploying": "a deploy is replacing this session"}
+
+
 def end_session(role=None, port=None, opener=None):
     """Make "end your session" executable (#14114).
 
     An LLM agent cannot terminate its own ``claude`` process (#13077): ending
     the turn leaves the PID alive with intent=running, so the harness never
     respawns it and the session sits deaf. This asks the harness for a FORCE
-    restart of the caller's own agent (``POST /agents/<role>/restart?force=
+    restart of the caller's OWN agent (``POST /agents/<alias>/restart?force=
     true``): the harness kills the PID immediately, stamps it as a requested
-    kill (never a crash, never held by the #12458 pause guard — #14132) and
+    kill (never a crash, never held by the #12458 pause guard, #14132) and
     respawns it on the next health poll.
 
-    ``role`` defaults to ``SQUIDSQUAD_ROLE``. Returns 0 when the harness
-    accepted the restart, 1 when it is unreachable or refused (the caller then
-    just ends its turn — a dead harness is restarted by the operator).
+    Guards (AC1/AC2):
+      - own agent only: the alias is ``SQUIDSQUAD_ROLE``; a ``role`` argument
+        that differs from it is refused, so a teammate can never be targeted;
+      - intent ``stopping``/``stopped`` (operator stop) or ``deploying``: no
+        restart. The stop or deploy already owns this process's end;
+      - a second call while a respawn is in flight is harmless: the harness
+        finds the PID already dead, kills nothing, keeps the marker, and never
+        spawns from this endpoint.
+
+    Returns 0 when the harness accepted the restart or deliberately had
+    nothing to do, 1 when it is unreachable or refused, 2 on a foreign role.
+    Every outcome tells the caller to end its turn.
     """
     import json
     import urllib.error
     import urllib.request
 
-    role = (role or os.environ.get("SQUIDSQUAD_ROLE", "")).strip()
-    if not role:
-        print("ERROR: end-session needs a role (arg or SQUIDSQUAD_ROLE)",
-              file=sys.stderr)
+    caller = os.environ.get("SQUIDSQUAD_ROLE", "").strip()
+    if not caller:
+        print("ERROR: end-session needs SQUIDSQUAD_ROLE (set by thin_launcher "
+              "at spawn time) — end your turn now.", file=sys.stderr)
         return 1
+    if role and role.strip() != caller:
+        print(f"ERROR: end-session restarts only your own agent ({caller}); "
+              f"refusing to target '{role}'.", file=sys.stderr)
+        return 2
     if port is None:
         import event_poll
         port = event_poll._discover_port()
     opener = opener or urllib.request.urlopen
-    url = f"http://127.0.0.1:{port}/agents/{role}/restart?force=true"
-    try:
-        req = urllib.request.Request(url, method="POST", data=b"")
+    base = f"http://127.0.0.1:{port}/agents/{caller}"
+
+    def _call(url, method):
+        req = urllib.request.Request(
+            url, method=method, data=b"" if method == "POST" else None)
         with opener(req, timeout=10) as resp:
-            body = json.loads(resp.read().decode("utf-8") or "{}")
+            return json.loads(resp.read().decode("utf-8") or "{}")
+
+    try:
+        intent = (_call(base, "GET") or {}).get("intent")
+        if intent in _END_SESSION_HANDS_OFF:
+            print(f"Not restarting: {_END_SESSION_HANDS_OFF[intent]} "
+                  f"(intent={intent}). End your turn now.")
+            return 0
+        body = _call(f"{base}/restart?force=true", "POST")
     except (urllib.error.URLError, OSError, ValueError) as e:
         print(f"Harness unreachable ({e}) — end your turn now; the operator "
               f"restarts the harness.")

@@ -4859,6 +4859,10 @@ async def restart_agent(role: str, force: bool = False):
     # waiting_since set, so without the marker the #12458 pause guard read the
     # restart's own kill as an explained "waiting" pause and held the respawn
     # for up to WAITING_MAX_SECONDS. Left None on the graceful queued path.
+    # #14114 AC2(c): remember the marker as it was, so a call that ends up
+    # killing nothing restores it rather than clearing it (a repeat restart
+    # while a requested kill is awaiting respawn must not strip its bypass).
+    prev_force_at = agent_state.operator_force_at
     if immediate:
         agent_state.operator_force_at = time.time()
     state.set_agent(role, agent_state)
@@ -4878,22 +4882,23 @@ async def restart_agent(role: str, force: bool = False):
             except Exception as e:
                 _log(f"  {role}: WARNING — kill failed: {e}")
                 immediate = False
-                # #14132: the agent is still alive — drop the marker so a later
-                # natural death of this spawn is classified normally.
+                # #14132: the agent is still alive — undo this call's marker so
+                # a later natural death of this spawn is classified normally.
                 with state._lock:
                     _a = state.agents.get(role)
                     if _a is not None:
-                        _a.operator_force_at = None
+                        _a.operator_force_at = prev_force_at
         else:
             # Already dead — the auto-reboot loop will pick it up next tick.
             immediate = False
-            # #14132 (DS F1): this restart killed nothing, so the death is not
-            # harness-requested — drop the marker so a prior natural crash keeps
-            # its crash-streak accounting and #12458 pause handling.
+            # #14132 (DS F1): this restart killed nothing, so undo its marker —
+            # a prior natural crash keeps its crash-streak accounting and
+            # #12458 pause handling. #14114 AC2(c): restore (not clear) so an
+            # earlier requested kill still awaiting respawn keeps its bypass.
             with state._lock:
                 _a = state.agents.get(role)
                 if _a is not None:
-                    _a.operator_force_at = None
+                    _a.operator_force_at = prev_force_at
 
     if immediate:
         _kind = "force" if force else "idle"
