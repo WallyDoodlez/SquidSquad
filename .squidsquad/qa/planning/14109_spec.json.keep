@@ -1,0 +1,28 @@
+{
+  "issue": 14109,
+  "title": "Single harness-loss recovery path in event-mode-contract.md / event-driven-workflow.md",
+  "files": [
+    "references/sub-skills/common-events/event-mode-contract.md",
+    "references/sub-skills/common-events/event-driven-workflow.md"
+  ],
+  "questions": [
+    {
+      "id": "1",
+      "question": "An event-mode agent has emitted bootup-complete and armed its Monitor listener. The harness then stays unreachable for 10+ minutes. Per the two fragments, what happens to event_poll, the Monitor watch, and the agent? Name what the agent must NOT do.",
+      "expected": "event_poll.py --wait retries transient errors with backoff, hits the 10-consecutive-failure ceiling and exits on its own (sys.exit(2)). The Monitor tool reports the watch ended, and the agent ends its session. It must NOT keep retrying bootup-complete in a loop, wait for the harness to recover, re-arm Monitor, or pivot to forge-direct / degraded-mode work.",
+      "must_not": "Say the agent keeps retrying bootup-complete at a capped backoff, waits for the operator, or continues working forge-direct."
+    },
+    {
+      "id": "2",
+      "question": "The harness becomes unreachable during boot steps 4-5 (the bootup-complete POST or the boot-drain GET /events/for keeps failing) before the Monitor listener is armed. What should the agent do, and what must it never do?",
+      "expected": "End the session, same as the listener-armed case. It must never skip bootup-complete and carry on draining events without it (the #13369 force-kill hazard).",
+      "must_not": "Say to skip bootup-complete and keep draining, or to fall back to forge-direct work."
+    },
+    {
+      "id": "3",
+      "question": "After the agent ends its session because the harness was lost, who recovers, and what happens on the next boot if the harness is still unreachable?",
+      "expected": "If the harness process is alive, its health poller sees the session die and respawns the agent. If the harness itself is dead, the operator restarts it. On any restart the boot bootstrap probes the harness and routes to polling mode (/loop) if it is still unreachable.",
+      "must_not": "Say the agent itself restarts the harness or continues in a degraded event mode."
+    }
+  ]
+}

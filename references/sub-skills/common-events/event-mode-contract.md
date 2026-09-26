@@ -50,12 +50,19 @@ Invoke the Monitor tool to stream events from `event_poll.py`:
 Monitor tool invocation:
   command: python references/scripts/event_poll.py <role> --wait 5 --target
   description: Watch harness event bus for relevant events
-  persistent: true
+  timeout_ms: 1800000
 ```
+
+The Monitor tool has no `persistent` option: every watch carries a deadline (`timeout_ms`, capped at 30 minutes), after which the tool kills `event_poll.py` itself and posts one expiry notice ("Monitor expired after 30m ... Re-arm it if you still need the watch"). Arm it at the maximum deadline and re-arm on each expiry (see the rule below) — the listener is meant to live for the whole session.
 
 `event_poll.py` writes a single literal `NUDGE\n` line (no payload) to stdout whenever events arrive past your cursor. A `NUDGE` is a wake signal only — it never carries event data. On each `NUDGE` you do your own `GET /events/for/{role}?since=<cursor>` and walk the returned events through the §8.1 loop (one `ack-cursor` POST per event). False-positive nudges are harmless: the GET simply returns `[]` and you idle again.
 
-> **Monitor exit ⇒ exit the session immediately (#9742).** If the Monitor tool exits for ANY reason — `event_poll.py` terminates, non-zero exit, tool error, stream close — **end your session right away**. Do NOT attempt to re-invoke Monitor, do NOT wait for the harness to recover, do NOT pivot to forge-direct work or polling-mode fallback mid-session. The harness / `thin_launcher.py` auto-reboot path owns recovery; the agent exiting IS the signal that recovery is needed. This rule is unconditional — it applies whether Monitor exits before or after `bootup-complete` is emitted. `event_poll.py --wait` has a bounded retry ceiling (10 consecutive transient failures per CONTEXT-9742) so a sustained harness outage will cause Monitor to exit on its own; you do not need to enforce the ceiling yourself.
+> **Monitor expiry ⇒ re-arm; any other Monitor exit ⇒ exit the session immediately (#9742, #14099).** Two different things end a Monitor watch, and they get opposite reactions:
+>
+> - **Deadline expiry — re-arm.** The tool's own expiry notice (`Monitor expired after …`) means the Monitor tool killed a healthy `event_poll.py` because the watch's `timeout_ms` ran out. Nothing is wrong: re-invoke Monitor with the identical invocation above, as soon as you next have control (finish the current atomic unit first, exactly like a mid-task `NUDGE`). No event is lost in the gap — anything that arrived is still past your cursor and nudges on the new watch's first poll. Re-arm once per expiry notice; never run two watches at once.
+> - **Anything else — end your session right away.** `event_poll.py` terminating on its own (any exit code, including the `sys.exit(2)` retry ceiling), a tool error, or a stream close means the listener or the harness is broken. Do NOT re-invoke Monitor, do NOT wait for the harness to recover, do NOT pivot to forge-direct work or polling-mode fallback mid-session. The harness / `thin_launcher.py` auto-reboot path owns recovery; the agent exiting IS the signal that recovery is needed. This applies whether the exit happens before or after `bootup-complete` is emitted. `event_poll.py --wait` has a bounded retry ceiling (10 consecutive transient failures per CONTEXT-9742) so a sustained harness outage makes it exit on its own; you do not need to enforce the ceiling yourself.
+>
+> When unsure which case you are in, the expiry notice is the only thing that means "re-arm" — every exit without it means "end the session".
 
 ---
 
