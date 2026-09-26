@@ -91,7 +91,7 @@ Fix every flag that names the note you wrote before committing. Flags on other n
 
 ### BRIEFING.md
 
-`.squidsquad/vault/BRIEFING.md` is a ~50-line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Read it at boot and re-read when more than a cycle old. Its staleness check runs every cycle — see [[vault-remember]].
+`.squidsquad/vault/BRIEFING.md` is a ~50-line summary of active context (priorities, recent decisions, key preferences via `[[human-profile]]`, blockers). Read it at boot and re-read when more than a cycle old. Its staleness is checked every cycle (including quiet cycles) — see [[vault-remember]].
 
 ### Concurrent access and git
 

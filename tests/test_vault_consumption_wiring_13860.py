@@ -127,7 +127,7 @@ class TestVerifierGate:
 
     def test_rule_compliance_and_degradation(self, rel):
         text = read(rel)
-        assert "## Applicable rules" in text and "rule compliance" in text
+        assert "## Applicable rules" in text and "violate" in text
         assert "pass-with-note" in text
 
     def test_gate_precedes_verdict(self, rel):

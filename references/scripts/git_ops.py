@@ -1671,7 +1671,8 @@ def _pr_file_text(pr_number, path):
 def _is_capture_note_path(path):
     """A vault CONTENT note path (capture-at-ship candidate, VAULT-ARCH 9.5/9.8):
     ``.squidsquad/vault/<folder>/.../<name>.md``. Never ``BRIEFING.md`` or
-    ``vault-schema.json`` (vault root), never ``.telemetry/`` / ``.obsidian/``
+    ``vault-schema.json`` (vault root), never a dot-directory (engine shard
+    store, ``.obsidian/``)
     -- those stay main-only."""
     prefix = ".squidsquad/vault/"
     if not path.startswith(prefix) or not path.endswith(".md"):
