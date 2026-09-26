@@ -207,6 +207,26 @@ class TestLiveDeployStallPoller:
         assert a.intent == AgentState.INTENT_RUNNING
         assert a.status == "running"
 
+    def test_dead_past_window_with_deploy_in_flight_left_to_deploy(self):
+        """Once the live-stall recovery kills the PID (already past the window),
+        the dead-PID fallback must NOT flip it to running — that would race an
+        auto-reboot spawn against the deploy sequence's own respawn."""
+        hs = HarnessState()
+        hs.set_agent("skill", _deploying_agent(self.NOW, WINDOW + 60))
+        with harness._deploy_inflight_lock:
+            harness._deploy_inflight.add("skill")
+        try:
+            boot = _poll(hs, self.NOW, alive=False)
+            boot2 = _poll(hs, self.NOW + 5, alive=False)
+        finally:
+            with harness._deploy_inflight_lock:
+                harness._deploy_inflight.discard("skill")
+        boot.assert_not_called()
+        boot2.assert_not_called()
+        a = hs.get_agent("skill")
+        assert a.intent == AgentState.INTENT_DEPLOYING
+        assert a.status == "deploying"
+
     def test_dead_inside_window_settles_deploying(self):
         """AC3: the normal deploy-halt death inside the window settles to
         status=deploying (no crash respawn, no stall recovery)."""

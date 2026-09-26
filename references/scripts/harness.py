@@ -1138,8 +1138,16 @@ class HarnessState:
                             time.time() - agent.intent_set_at
                             if agent.intent_set_at is not None else None
                         )
+                        # #14131: never while a deploy thread is in flight for
+                        # this role — the live-stall recovery kills the PID
+                        # already PAST the window, and the deploy sequence owns
+                        # that respawn; flipping to running here would race a
+                        # second (auto-reboot) spawn against it.
+                        with _deploy_inflight_lock:
+                            _deploy_owned = role in _deploy_inflight
                         if (_deploy_age is not None
-                                and _deploy_age > _DEPLOY_WINDOW_SECONDS):
+                                and _deploy_age > _DEPLOY_WINDOW_SECONDS
+                                and not _deploy_owned):
                             _log(f"{role}: dead at intent=deploying for "
                                  f"{_deploy_age:.0f}s (> {_DEPLOY_WINDOW_SECONDS}s "
                                  f"deploy window) — deploy never completed; "
