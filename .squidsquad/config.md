@@ -74,7 +74,7 @@
 
 ## Vault Remember
 
-- **Writes Per Cycle**: 2
+- **Writes Per Cycle**: 0
 - **BRIEFING Token Budget**: 2000
 - **Confidence Decay Days**: 60
 

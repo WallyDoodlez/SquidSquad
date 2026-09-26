@@ -1,0 +1,1160 @@
+{
+  "generated": "2026-09-26",
+  "vault": ".squidsquad\\vault",
+  "count": 185,
+  "distributions": {
+    "type": {
+      "archive": 4,
+      "": 2,
+      "area": 2,
+      "decision": 20,
+      "learning": 122,
+      "pattern": 24,
+      "style": 1,
+      "project": 2,
+      "resource": 1,
+      "system": 7
+    },
+    "owner": {
+      "skill": 51,
+      "": 12,
+      "pm": 29,
+      "pm-lead": 2,
+      "skill-lead": 16,
+      "verifier": 28,
+      "dm-lead": 16,
+      "worker": 4,
+      "dm": 9,
+      "verifier-lead": 6,
+      "qa": 2,
+      "qa-lead": 1,
+      "shared": 9
+    },
+    "status": {
+      "archived": 5,
+      "": 12,
+      "active": 167,
+      "superseded": 1
+    },
+    "folder": {
+      "archives": 5,
+      "areas": 2,
+      "galaxy": 168,
+      "projects": 2,
+      "resources": 1,
+      "systems": 7
+    }
+  },
+  "notes": {
+    "briefing-active-priorities-2026-06-15-to-07-17": {
+      "path": "archives/briefing-active-priorities-2026-06-15-to-07-17.md",
+      "type": "archive",
+      "owner": "skill",
+      "status": "archived"
+    },
+    "briefing-active-priorities-2026-07-18": {
+      "path": "archives/briefing-active-priorities-2026-07-18.md",
+      "type": "archive",
+      "owner": "skill",
+      "status": "archived"
+    },
+    "briefing-active-priorities-2026-07-19": {
+      "path": "archives/briefing-active-priorities-2026-07-19.md",
+      "type": "",
+      "owner": "",
+      "status": ""
+    },
+    "shipped-2026-05-19-to-2026-06-21": {
+      "path": "archives/shipped-2026-05-19-to-2026-06-21.md",
+      "type": "archive",
+      "owner": "skill",
+      "status": "archived"
+    },
+    "shipped-pre-2026-05-19": {
+      "path": "archives/shipped-pre-2026-05-19.md",
+      "type": "archive",
+      "owner": "pm",
+      "status": "archived"
+    },
+    "code-conventions": {
+      "path": "areas/code-conventions.md",
+      "type": "area",
+      "owner": "skill",
+      "status": "active"
+    },
+    "human-profile": {
+      "path": "areas/human-profile.md",
+      "type": "area",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-agents-never-stop-while-work-pending": {
+      "path": "galaxy/decision-agents-never-stop-while-work-pending.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-branch-per-feature-workflow": {
+      "path": "galaxy/decision-branch-per-feature-workflow.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-class-vs-alias-routing-model": {
+      "path": "galaxy/decision-class-vs-alias-routing-model.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-clone-isolation-architecture": {
+      "path": "galaxy/decision-clone-isolation-architecture.md",
+      "type": "decision",
+      "owner": "pm-lead",
+      "status": "active"
+    },
+    "decision-comprehension-test-pipeline": {
+      "path": "galaxy/decision-comprehension-test-pipeline.md",
+      "type": "decision",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "decision-cycle-runner-architecture": {
+      "path": "galaxy/decision-cycle-runner-architecture.md",
+      "type": "decision",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "decision-deterministic-testing": {
+      "path": "galaxy/decision-deterministic-testing.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-event-bus-architecture-redesign": {
+      "path": "galaxy/decision-event-bus-architecture-redesign.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-general-purpose-vision": {
+      "path": "galaxy/decision-general-purpose-vision.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-improvement-loop-philosophy": {
+      "path": "galaxy/decision-improvement-loop-philosophy.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-local-config-priority": {
+      "path": "galaxy/decision-local-config-priority.md",
+      "type": "decision",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "decision-phase-4-event-ack-lifecycle-deferred": {
+      "path": "galaxy/decision-phase-4-event-ack-lifecycle-deferred.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-pid-primary-liveness": {
+      "path": "galaxy/decision-pid-primary-liveness.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "archived"
+    },
+    "decision-reboot-kills-child": {
+      "path": "galaxy/decision-reboot-kills-child.md",
+      "type": "decision",
+      "owner": "skill",
+      "status": "active"
+    },
+    "decision-self-healing-sentinel": {
+      "path": "galaxy/decision-self-healing-sentinel.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-sub-skill-architecture": {
+      "path": "galaxy/decision-sub-skill-architecture.md",
+      "type": "decision",
+      "owner": "skill",
+      "status": "active"
+    },
+    "decision-tui-headless-render-verification": {
+      "path": "galaxy/decision-tui-headless-render-verification.md",
+      "type": "decision",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "decision-vault-remember-source-agnostic": {
+      "path": "galaxy/decision-vault-remember-source-agnostic.md",
+      "type": "decision",
+      "owner": "skill",
+      "status": "active"
+    },
+    "decision-vault-subagent-model-sonnet": {
+      "path": "galaxy/decision-vault-subagent-model-sonnet.md",
+      "type": "decision",
+      "owner": "pm",
+      "status": "active"
+    },
+    "decision-watchdog-supervisor": {
+      "path": "galaxy/decision-watchdog-supervisor.md",
+      "type": "decision",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-activity-liveness-redispatch-must-not-reset-grace": {
+      "path": "galaxy/learning-activity-liveness-redispatch-must-not-reset-grace.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-atomic-migration-strategy": {
+      "path": "galaxy/learning-atomic-migration-strategy.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-audit-scope-and-source-of-truth": {
+      "path": "galaxy/learning-audit-scope-and-source-of-truth.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-background-verification-pipe-truncation-masks-verdict": {
+      "path": "galaxy/learning-background-verification-pipe-truncation-masks-verdict.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-backtick-in-bash-doublequote-can-actually-execute": {
+      "path": "galaxy/learning-backtick-in-bash-doublequote-can-actually-execute.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-bare-run-tests-mutates-real-tracker-verify-after-taskstop": {
+      "path": "galaxy/learning-bare-run-tests-mutates-real-tracker-verify-after-taskstop.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-bash-cd-into-missing-worktree-runs-in-main-clone": {
+      "path": "galaxy/learning-bash-cd-into-missing-worktree-runs-in-main-clone.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-branch-checkout-mid-background-test-corrupts-results": {
+      "path": "galaxy/learning-branch-checkout-mid-background-test-corrupts-results.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-broadcast-deque-cannot-have-in-stream-gaps": {
+      "path": "galaxy/learning-broadcast-deque-cannot-have-in-stream-gaps.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-bundle-branch-reconciliation": {
+      "path": "galaxy/learning-bundle-branch-reconciliation.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-canonical-verifier-merge-is-harness-post-merge": {
+      "path": "galaxy/learning-canonical-verifier-merge-is-harness-post-merge.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-claude-code-http-hooks-block-only-command-hooks-async": {
+      "path": "galaxy/learning-claude-code-http-hooks-block-only-command-hooks-async.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-closing-keyword-in-state-commit-autocloses-issue": {
+      "path": "galaxy/learning-closing-keyword-in-state-commit-autocloses-issue.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-commit-before-merge-when-inheriting-dirty-behind-clone": {
+      "path": "galaxy/learning-commit-before-merge-when-inheriting-dirty-behind-clone.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-commit-code-state-exclusion": {
+      "path": "galaxy/learning-commit-code-state-exclusion.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-commit-role-scoped-foreign-file-silent-drop": {
+      "path": "galaxy/learning-commit-role-scoped-foreign-file-silent-drop.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-common-events-fragments-are-mode-agnostic": {
+      "path": "galaxy/learning-common-events-fragments-are-mode-agnostic.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-compose-engine-change-no-claudemd-recompose": {
+      "path": "galaxy/learning-compose-engine-change-no-claudemd-recompose.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-comprehension-staleness-refresh-cli-silent-failure": {
+      "path": "galaxy/learning-comprehension-staleness-refresh-cli-silent-failure.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping": {
+      "path": "galaxy/learning-comprehension-staleness-refresh-is-pr-authorship-not-verifier-bookkeeping.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-config-merge-ours-drops-concurrent-changes": {
+      "path": "galaxy/learning-config-merge-ours-drops-concurrent-changes.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "superseded"
+    },
+    "learning-confirm-composed-currency-with-zero-diff-compose-not-behind-clone-grep": {
+      "path": "galaxy/learning-confirm-composed-currency-with-zero-diff-compose-not-behind-clone-grep.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-confirm-merge-landed-before-pending-ship-transition": {
+      "path": "galaxy/learning-confirm-merge-landed-before-pending-ship-transition.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-cq-applies-to-launcher-injected-prompts": {
+      "path": "galaxy/learning-cq-applies-to-launcher-injected-prompts.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-cq-artifacts-commit-after-pr-merges-not-before": {
+      "path": "galaxy/learning-cq-artifacts-commit-after-pr-merges-not-before.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-create-test-environments": {
+      "path": "galaxy/learning-create-test-environments.md",
+      "type": "learning",
+      "owner": "pm-lead",
+      "status": "active"
+    },
+    "learning-cycle-pre-preserves-code-wip": {
+      "path": "galaxy/learning-cycle-pre-preserves-code-wip.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-default-port-fallback-is-live-egress-trap-in-tests": {
+      "path": "galaxy/learning-default-port-fallback-is-live-egress-trap-in-tests.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts": {
+      "path": "galaxy/learning-deploy-error-pull-block-recover-by-discarding-composed-artifacts.md",
+      "type": "learning",
+      "owner": "worker",
+      "status": "active"
+    },
+    "learning-deploy-pull-block-divergence-recover-by-merge": {
+      "path": "galaxy/learning-deploy-pull-block-divergence-recover-by-merge.md",
+      "type": "learning",
+      "owner": "worker",
+      "status": "active"
+    },
+    "learning-deploy-signal-boot-drain-residual-vs-live": {
+      "path": "galaxy/learning-deploy-signal-boot-drain-residual-vs-live.md",
+      "type": "learning",
+      "owner": "worker",
+      "status": "active"
+    },
+    "learning-dm-local-merge-when-harness-down": {
+      "path": "galaxy/learning-dm-local-merge-when-harness-down.md",
+      "type": "learning",
+      "owner": "dm",
+      "status": "active"
+    },
+    "learning-doc-first-for-architecture-changes": {
+      "path": "galaxy/learning-doc-first-for-architecture-changes.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-ead-status-routing-and-back-transition-dedup": {
+      "path": "galaxy/learning-ead-status-routing-and-back-transition-dedup.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-edit-shared-fragment-run-full-static-gate": {
+      "path": "galaxy/learning-edit-shared-fragment-run-full-static-gate.md",
+      "type": "learning",
+      "owner": "verifier-lead",
+      "status": "active"
+    },
+    "learning-fail-open-claims-need-real-reader-tests": {
+      "path": "galaxy/learning-fail-open-claims-need-real-reader-tests.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-fix-inverting-an-invariant-is-a-regression": {
+      "path": "galaxy/learning-fix-inverting-an-invariant-is-a-regression.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-gate-collection-abort-masks-reds": {
+      "path": "galaxy/learning-gate-collection-abort-masks-reds.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-gh-issue-list-hardcoded-limit-silently-truncates": {
+      "path": "galaxy/learning-gh-issue-list-hardcoded-limit-silently-truncates.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-gh-pr-edit-broken-use-gh-api-patch": {
+      "path": "galaxy/learning-gh-pr-edit-broken-use-gh-api-patch.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-git-cat-file-ref-path-false-negative-use-ls-tree": {
+      "path": "galaxy/learning-git-cat-file-ref-path-false-negative-use-ls-tree.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-git-merge-silently-drops-concurrent-large-edit-on-shared-markdown": {
+      "path": "galaxy/learning-git-merge-silently-drops-concurrent-large-edit-on-shared-markdown.md",
+      "type": "learning",
+      "owner": "dm",
+      "status": "active"
+    },
+    "learning-git-ops-clean-tree-stash-pop-recovery": {
+      "path": "galaxy/learning-git-ops-clean-tree-stash-pop-recovery.md",
+      "type": "learning",
+      "owner": "worker",
+      "status": "active"
+    },
+    "learning-git-ops-helpers-pin-repo-root-not-cwd": {
+      "path": "galaxy/learning-git-ops-helpers-pin-repo-root-not-cwd.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-git-ops-run-pins-repo-root-ignores-chdir": {
+      "path": "galaxy/learning-git-ops-run-pins-repo-root-ignores-chdir.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-git-ops-tests-patch-repo-root-not-chdir": {
+      "path": "galaxy/learning-git-ops-tests-patch-repo-root-not-chdir.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-git-show-ref-path-mangled-on-windows-bash": {
+      "path": "galaxy/learning-git-show-ref-path-mangled-on-windows-bash.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-graceful-restart-grace-timer-on-wedged-agent": {
+      "path": "galaxy/learning-graceful-restart-grace-timer-on-wedged-agent.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-guarding-a-status-machine-death-decision-needs-hold-resume-and-ceilinged-signals": {
+      "path": "galaxy/learning-guarding-a-status-machine-death-decision-needs-hold-resume-and-ceilinged-signals.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-harness-merge-gate-caches-git-ops-module": {
+      "path": "galaxy/learning-harness-merge-gate-caches-git-ops-module.md",
+      "type": "learning",
+      "owner": "dm",
+      "status": "active"
+    },
+    "learning-harness-only-ship-restart-required-is-noop": {
+      "path": "galaxy/learning-harness-only-ship-restart-required-is-noop.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-harness-port-59999-is-deliberate-loop-pin": {
+      "path": "galaxy/learning-harness-port-59999-is-deliberate-loop-pin.md",
+      "type": "learning",
+      "owner": "dm",
+      "status": "active"
+    },
+    "learning-harness-pr-merge-does-not-sync-local-clone": {
+      "path": "galaxy/learning-harness-pr-merge-does-not-sync-local-clone.md",
+      "type": "learning",
+      "owner": "dm",
+      "status": "active"
+    },
+    "learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate": {
+      "path": "galaxy/learning-human-override-must-make-the-mutation-idempotent-not-just-skip-the-gate.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-in-process-handler-daemon-os-exit-kills-test-suite": {
+      "path": "galaxy/learning-in-process-handler-daemon-os-exit-kills-test-suite.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-in-process-import-resolution-test-contaminates-suite": {
+      "path": "galaxy/learning-in-process-import-resolution-test-contaminates-suite.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-includes-yml-tombstoned-instructions-md-is-real-compose-source": {
+      "path": "galaxy/learning-includes-yml-tombstoned-instructions-md-is-real-compose-source.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-instructions-md-frontmatter-step-ids-not-inlined-no-recompose-needed": {
+      "path": "galaxy/learning-instructions-md-frontmatter-step-ids-not-inlined-no-recompose-needed.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-intent-clear-on-transition-not-liveness": {
+      "path": "galaxy/learning-intent-clear-on-transition-not-liveness.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-l4-only-fix-skips-pr-flow": {
+      "path": "galaxy/learning-l4-only-fix-skips-pr-flow.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-merge-driver-defeated-by-delete-not-modify": {
+      "path": "galaxy/learning-merge-driver-defeated-by-delete-not-modify.md",
+      "type": "",
+      "owner": "",
+      "status": ""
+    },
+    "learning-merge-mechanism-fix-cannot-protect-its-own-landing-commit": {
+      "path": "galaxy/learning-merge-mechanism-fix-cannot-protect-its-own-landing-commit.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-migration-6274-cutover": {
+      "path": "galaxy/learning-migration-6274-cutover.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-monitor-persistent-do-not-rearm-per-nudge": {
+      "path": "galaxy/learning-monitor-persistent-do-not-rearm-per-nudge.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-narrowed-ship-scope-orphans-residual-asks": {
+      "path": "galaxy/learning-narrowed-ship-scope-orphans-residual-asks.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-pending-ship-query-includes-closed": {
+      "path": "galaxy/learning-pending-ship-query-includes-closed.md",
+      "type": "learning",
+      "owner": "dm",
+      "status": "active"
+    },
+    "learning-plan-in-pr-needs-state-guard-exemption": {
+      "path": "galaxy/learning-plan-in-pr-needs-state-guard-exemption.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-polling-agent-reads-as-inert-on-status": {
+      "path": "galaxy/learning-polling-agent-reads-as-inert-on-status.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-post-outage-boot-drain-repeated-assigned-to": {
+      "path": "galaxy/learning-post-outage-boot-drain-repeated-assigned-to.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-powershell-start-job-cwd": {
+      "path": "galaxy/learning-powershell-start-job-cwd.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-pr-conflicting-flag-can-be-cosmetic": {
+      "path": "galaxy/learning-pr-conflicting-flag-can-be-cosmetic.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-pr-create-must-run-on-feature-branch-after-commit-code": {
+      "path": "galaxy/learning-pr-create-must-run-on-feature-branch-after-commit-code.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-prove-regression-test-fails-pre-fix": {
+      "path": "galaxy/learning-prove-regression-test-fails-pre-fix.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-push-branch-before-triggering-harness-merge": {
+      "path": "galaxy/learning-push-branch-before-triggering-harness-merge.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-qa-boot-pickup-must-not-transition-pending-test-to-in-progress": {
+      "path": "galaxy/learning-qa-boot-pickup-must-not-transition-pending-test-to-in-progress.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-qa-branch-merge-workaround": {
+      "path": "galaxy/learning-qa-branch-merge-workaround.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-quarantine-clear-triage-stale-vs-blocked": {
+      "path": "galaxy/learning-quarantine-clear-triage-stale-vs-blocked.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-raw-pytest-shows-known-failures-use-run-tests-static": {
+      "path": "galaxy/learning-raw-pytest-shows-known-failures-use-run-tests-static.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-read-all-comments-before-merge-not-just-transition": {
+      "path": "galaxy/learning-read-all-comments-before-merge-not-just-transition.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-recompose-and-config-carry-across-checkout": {
+      "path": "galaxy/learning-recompose-and-config-carry-across-checkout.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-reexecute-evidence-after-verifier-session-loss": {
+      "path": "galaxy/learning-reexecute-evidence-after-verifier-session-loss.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-requirements-txt-is-harness-runtime-scoped": {
+      "path": "galaxy/learning-requirements-txt-is-harness-runtime-scoped.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-restarting-intent-not-across-harness-restart": {
+      "path": "galaxy/learning-restarting-intent-not-across-harness-restart.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-resume-git-tree-is-truth": {
+      "path": "galaxy/learning-resume-git-tree-is-truth.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-reverify-transition-blocked-by-own-prior-reject": {
+      "path": "galaxy/learning-reverify-transition-blocked-by-own-prior-reject.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-runtime-resolves-by-alias-not-role-class": {
+      "path": "galaxy/learning-runtime-resolves-by-alias-not-role-class.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-scan-comment-vs-file-duplicate": {
+      "path": "galaxy/learning-scan-comment-vs-file-duplicate.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-sequential-phase-gates-are-prose-only-not-mechanical": {
+      "path": "galaxy/learning-sequential-phase-gates-are-prose-only-not-mechanical.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker": {
+      "path": "galaxy/learning-sessionend-presence-not-stop-reason-and-spam-resistant-breaker.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-shared-fragment-reword-stales-specs-beyond-the-issue": {
+      "path": "galaxy/learning-shared-fragment-reword-stales-specs-beyond-the-issue.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-shell-out-provisioning-has-three-sharp-edges": {
+      "path": "galaxy/learning-shell-out-provisioning-has-three-sharp-edges.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-ship-counter-canonical-key": {
+      "path": "galaxy/learning-ship-counter-canonical-key.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-ship-gate-squash-proof-window": {
+      "path": "galaxy/learning-ship-gate-squash-proof-window.md",
+      "type": "learning",
+      "owner": "dm",
+      "status": "active"
+    },
+    "learning-sibling-pr-additive-test-conflict-keep-both": {
+      "path": "galaxy/learning-sibling-pr-additive-test-conflict-keep-both.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-silent-gate-inertness-masks-format-drift": {
+      "path": "galaxy/learning-silent-gate-inertness-masks-format-drift.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-single-emit-wake-nudge-needs-bounded-reemit-and-must-bypass-time-filter": {
+      "path": "galaxy/learning-single-emit-wake-nudge-needs-bounded-reemit-and-must-bypass-time-filter.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-single-static-gate-red-may-be-flake-rerun-before-reject": {
+      "path": "galaxy/learning-single-static-gate-red-may-be-flake-rerun-before-reject.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-singleton-must-refuse-not-fallback-when-canonical-port-held": {
+      "path": "galaxy/learning-singleton-must-refuse-not-fallback-when-canonical-port-held.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-spawn-prompt-must-not-decide-wake-mode": {
+      "path": "galaxy/learning-spawn-prompt-must-not-decide-wake-mode.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-squash-drops-newest-commits-of-ahead-branch": {
+      "path": "galaxy/learning-squash-drops-newest-commits-of-ahead-branch.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-stale-activity-not-dead-rule-out-limit-and-inline": {
+      "path": "galaxy/learning-stale-activity-not-dead-rule-out-limit-and-inline.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-stale-remote-tracking-ref-blocks-ship-gate": {
+      "path": "galaxy/learning-stale-remote-tracking-ref-blocks-ship-gate.md",
+      "type": "learning",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "learning-stale-source-recompose-reverts-shipped-on-behind-clone": {
+      "path": "galaxy/learning-stale-source-recompose-reverts-shipped-on-behind-clone.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-stall-vs-deepwork-before-nudging": {
+      "path": "galaxy/learning-stall-vs-deepwork-before-nudging.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-state-lane-deletion-never-rides-commit-it-now": {
+      "path": "galaxy/learning-state-lane-deletion-never-rides-commit-it-now.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-strip-vs-wire-audit-findings": {
+      "path": "galaxy/learning-strip-vs-wire-audit-findings.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-sub-skill-splitting-does-not-reduce-composed-boot-size": {
+      "path": "galaxy/learning-sub-skill-splitting-does-not-reduce-composed-boot-size.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-suite-exit-code-not-proof-of-all-pass": {
+      "path": "galaxy/learning-suite-exit-code-not-proof-of-all-pass.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-tail-truncation-hides-pytest-failures-from-review": {
+      "path": "galaxy/learning-tail-truncation-hides-pytest-failures-from-review.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-targetable-step-anchors-must-be-bare-h3": {
+      "path": "galaxy/learning-targetable-step-anchors-must-be-bare-h3.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-task-begin-does-not-auto-create-pr-for-bugs": {
+      "path": "galaxy/learning-task-begin-does-not-auto-create-pr-for-bugs.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-test-pollution-real-clone-state": {
+      "path": "galaxy/learning-test-pollution-real-clone-state.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-tests-must-not-mutate-shared-live-state": {
+      "path": "galaxy/learning-tests-must-not-mutate-shared-live-state.md",
+      "type": "learning",
+      "owner": "skill-lead",
+      "status": "active"
+    },
+    "learning-trd-v2-rewrite-crossref-drift-dominant-defect": {
+      "path": "galaxy/learning-trd-v2-rewrite-crossref-drift-dominant-defect.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "learning-trivial-append-conflicts-still-route-to-worker": {
+      "path": "galaxy/learning-trivial-append-conflicts-still-route-to-worker.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-verifier-verdict-may-be-off-forge-confirm-before-routeback": {
+      "path": "galaxy/learning-verifier-verdict-may-be-off-forge-confirm-before-routeback.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-verify-absent-claims-need-fresh-fetch-all-refs": {
+      "path": "galaxy/learning-verify-absent-claims-need-fresh-fetch-all-refs.md",
+      "type": "learning",
+      "owner": "qa",
+      "status": "active"
+    },
+    "learning-verify-combined-state-when-branch-behind-main-shares-files": {
+      "path": "galaxy/learning-verify-combined-state-when-branch-behind-main-shares-files.md",
+      "type": "learning",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "learning-verify-deletion-task-by-repo-wide-consumer-sweep": {
+      "path": "galaxy/learning-verify-deletion-task-by-repo-wide-consumer-sweep.md",
+      "type": "learning",
+      "owner": "qa-lead",
+      "status": "active"
+    },
+    "learning-verify-instruction-premises-against-code-not-just-comprehension": {
+      "path": "galaxy/learning-verify-instruction-premises-against-code-not-just-comprehension.md",
+      "type": "learning",
+      "owner": "qa",
+      "status": "active"
+    },
+    "learning-verify-squash-diff-additions-only-behind-branch": {
+      "path": "galaxy/learning-verify-squash-diff-additions-only-behind-branch.md",
+      "type": "learning",
+      "owner": "",
+      "status": ""
+    },
+    "learning-windows-cmd-start-title-must-be-quoted": {
+      "path": "galaxy/learning-windows-cmd-start-title-must-be-quoted.md",
+      "type": "learning",
+      "owner": "skill",
+      "status": "active"
+    },
+    "learning-wire-format-specs-triplicated-across-trds": {
+      "path": "galaxy/learning-wire-format-specs-triplicated-across-trds.md",
+      "type": "learning",
+      "owner": "pm",
+      "status": "active"
+    },
+    "pattern-chain-ship-per-item-auth": {
+      "path": "galaxy/pattern-chain-ship-per-item-auth.md",
+      "type": "pattern",
+      "owner": "shared",
+      "status": "active"
+    },
+    "pattern-deterministic-scripts-over-prose": {
+      "path": "galaxy/pattern-deterministic-scripts-over-prose.md",
+      "type": "pattern",
+      "owner": "skill",
+      "status": "active"
+    },
+    "pattern-dm-citation-soft-gate-satisfied-for-qa-bugs": {
+      "path": "galaxy/pattern-dm-citation-soft-gate-satisfied-for-qa-bugs.md",
+      "type": "pattern",
+      "owner": "dm",
+      "status": "active"
+    },
+    "pattern-dm-completes-stuck-in-progress-after-qa-pass": {
+      "path": "galaxy/pattern-dm-completes-stuck-in-progress-after-qa-pass.md",
+      "type": "pattern",
+      "owner": "dm",
+      "status": "active"
+    },
+    "pattern-event-mode-release-bump-via-worktree": {
+      "path": "galaxy/pattern-event-mode-release-bump-via-worktree.md",
+      "type": "pattern",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "pattern-inspect-merge-stat-before-ship-revert-to-recover": {
+      "path": "galaxy/pattern-inspect-merge-stat-before-ship-revert-to-recover.md",
+      "type": "pattern",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "pattern-model-router-architecture": {
+      "path": "galaxy/pattern-model-router-architecture.md",
+      "type": "pattern",
+      "owner": "skill",
+      "status": "active"
+    },
+    "pattern-no-fiction-window-main-landing-delivery": {
+      "path": "galaxy/pattern-no-fiction-window-main-landing-delivery.md",
+      "type": "pattern",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "pattern-parallel-axis-audit": {
+      "path": "galaxy/pattern-parallel-axis-audit.md",
+      "type": "pattern",
+      "owner": "skill",
+      "status": "active"
+    },
+    "pattern-prove-side-effect-absence-via-live-state-snapshot": {
+      "path": "galaxy/pattern-prove-side-effect-absence-via-live-state-snapshot.md",
+      "type": "pattern",
+      "owner": "verifier-lead",
+      "status": "active"
+    },
+    "pattern-replay-fix-against-real-incident-not-just-mocks": {
+      "path": "galaxy/pattern-replay-fix-against-real-incident-not-just-mocks.md",
+      "type": "pattern",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "pattern-resolve-config-against-live-install-not-test-fixture": {
+      "path": "galaxy/pattern-resolve-config-against-live-install-not-test-fixture.md",
+      "type": "pattern",
+      "owner": "verifier-lead",
+      "status": "active"
+    },
+    "pattern-retroactive-verify-emergency-fixes-on-main": {
+      "path": "galaxy/pattern-retroactive-verify-emergency-fixes-on-main.md",
+      "type": "pattern",
+      "owner": "verifier-lead",
+      "status": "active"
+    },
+    "pattern-runtime-loaded-subskill-change-no-recompose": {
+      "path": "galaxy/pattern-runtime-loaded-subskill-change-no-recompose.md",
+      "type": "pattern",
+      "owner": "dm-lead",
+      "status": "active"
+    },
+    "pattern-ship-gate-preserve-expanded-scope": {
+      "path": "galaxy/pattern-ship-gate-preserve-expanded-scope.md",
+      "type": "pattern",
+      "owner": "shared",
+      "status": "active"
+    },
+    "pattern-stale-ac-vs-canonical-arch": {
+      "path": "galaxy/pattern-stale-ac-vs-canonical-arch.md",
+      "type": "pattern",
+      "owner": "skill",
+      "status": "active"
+    },
+    "pattern-trace-data-reads-not-just-grep-literal-strings-for-leakage-claims": {
+      "path": "galaxy/pattern-trace-data-reads-not-just-grep-literal-strings-for-leakage-claims.md",
+      "type": "pattern",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "pattern-update-stale-test-on-behavior-reversal": {
+      "path": "galaxy/pattern-update-stale-test-on-behavior-reversal.md",
+      "type": "pattern",
+      "owner": "skill",
+      "status": "active"
+    },
+    "pattern-verify-composed-output-with-main-landing-state-applied": {
+      "path": "galaxy/pattern-verify-composed-output-with-main-landing-state-applied.md",
+      "type": "pattern",
+      "owner": "verifier-lead",
+      "status": "active"
+    },
+    "pattern-verify-egress-guard-on-the-wire": {
+      "path": "galaxy/pattern-verify-egress-guard-on-the-wire.md",
+      "type": "pattern",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "pattern-verify-liveness-lifecycle-with-independent-runtime-probe": {
+      "path": "galaxy/pattern-verify-liveness-lifecycle-with-independent-runtime-probe.md",
+      "type": "pattern",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "pattern-verify-new-shipped-file-in-installer-manifest": {
+      "path": "galaxy/pattern-verify-new-shipped-file-in-installer-manifest.md",
+      "type": "pattern",
+      "owner": "verifier",
+      "status": "active"
+    },
+    "pattern-verify-unmocked-paths-stubbed-by-units": {
+      "path": "galaxy/pattern-verify-unmocked-paths-stubbed-by-units.md",
+      "type": "pattern",
+      "owner": "verifier-lead",
+      "status": "active"
+    },
+    "pattern-windows-utf8-subprocess": {
+      "path": "galaxy/pattern-windows-utf8-subprocess.md",
+      "type": "pattern",
+      "owner": "skill",
+      "status": "active"
+    },
+    "style-operator-comms-no-internal-mechanics": {
+      "path": "galaxy/style-operator-comms-no-internal-mechanics.md",
+      "type": "style",
+      "owner": "pm",
+      "status": "active"
+    },
+    "agent-communication-layer": {
+      "path": "projects/agent-communication-layer.md",
+      "type": "project",
+      "owner": "pm",
+      "status": "active"
+    },
+    "squidsquad": {
+      "path": "projects/squidsquad.md",
+      "type": "project",
+      "owner": "pm",
+      "status": "active"
+    },
+    "cli-anything-research": {
+      "path": "resources/cli-anything-research.md",
+      "type": "resource",
+      "owner": "pm",
+      "status": "active"
+    },
+    "compose": {
+      "path": "systems/compose.md",
+      "type": "system",
+      "owner": "shared",
+      "status": "active"
+    },
+    "event-bus": {
+      "path": "systems/event-bus.md",
+      "type": "system",
+      "owner": "shared",
+      "status": "active"
+    },
+    "harness": {
+      "path": "systems/harness.md",
+      "type": "system",
+      "owner": "shared",
+      "status": "active"
+    },
+    "launcher": {
+      "path": "systems/launcher.md",
+      "type": "system",
+      "owner": "shared",
+      "status": "active"
+    },
+    "pr-merge": {
+      "path": "systems/pr-merge.md",
+      "type": "system",
+      "owner": "shared",
+      "status": "active"
+    },
+    "tracker": {
+      "path": "systems/tracker.md",
+      "type": "system",
+      "owner": "shared",
+      "status": "active"
+    },
+    "vault": {
+      "path": "systems/vault.md",
+      "type": "system",
+      "owner": "shared",
+      "status": "active"
+    }
+  }
+}
