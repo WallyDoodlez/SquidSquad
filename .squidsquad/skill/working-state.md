@@ -1,6 +1,10 @@
 # Working State
 
-- **Task**: #14171 (static gate staleness drift from deploy recompose). Branch squidsquad/task/14171, commits 7d62c176c + 849c42453 + receipts fix. DS review done (3 findings fixed). Step: final static gate on committed tree, then push + pr-create + pending-test. Next queue: #14133, #14130, #14128.
+- **Task**: #14183 (blocked items have no resume trigger).
+- #14130: BLOCKED on PR #14182 merge. Branch squidsquad/task/14130 pushed (2 commits), no PR yet. Same unblock steps as #14181.
+- #14133: BLOCKED on PR #14182 merge. Branch squidsquad/task/14133 pushed (2 commits), no PR yet. Same unblock steps as #14181.
+- #14171: pending-test, PR #14182.
+- #14181: BLOCKED on PR #14182 merge. Branch squidsquad/task/14181 pushed (4 commits), no PR yet. On #14182 merge: merge main in, static gate, git_ops pr-create, blocked->in-progress->pending-test.
 - #14162: pending-test, PR #14165. #14164 (BRIEFING over budget) filed to PM, fixed by PM (81b89d23e).
 - #14137: pending-test, PR #14163.
 - #14147: pending-test, PR #14161.
