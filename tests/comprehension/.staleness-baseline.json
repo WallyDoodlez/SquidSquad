@@ -174,7 +174,7 @@
   "references/sub-skills/common/vault-protocol.md": "d775f2ba26d2768657786225980cae918cd348cf",
   "references/sub-skills/common/vault-remember.md": "3d23f38de8159be7a877fe4402a4ba8f19db804e",
   "references/sub-skills/roles/pm/task-intake-phases.md": "3ec466a548131bcc4074e7526d4ec981e56b1807",
-  "references/sub-skills/roles/pm/vault-synthesis.md": "74b1339816e25c98411c5cebfc819ddfcc15ae54",
+  "references/sub-skills/roles/pm/vault-synthesis.md": "beec1214bfbae3938042917af35a59c1b6b1039f",
   "references/sub-skills/roles/verifier/verification-issue-flow.md": "e2ac5ac823209d160f3cae01f129a4bf81d9a6fc",
   "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432",
   "references/sub-skills/roles/worker/implement-tasks.md": "4e00a7ec1726e959ebc5bbcf3d86286c8590adef",
@@ -252,7 +252,7 @@
  },
  "9873_spec.json": {
   "references/scripts/event_catalog.py": "cf11a362f0c91e596f3e44699b55668f5817d5de",
-  "references/scripts/harness.py": "387876f9a21e1af70998bbae2f00a2dcdf247372"
+  "references/scripts/harness.py": "4e5bc30e319d5b73783934e45b805879cfbf9ca5"
  },
  "_note": "Initialized 2026-07-18 (#13575), re-baselined same day after merging main (the gate's first live catch: the merge moved several fragments' shas). Pairs at initialization were grandfathered WITHOUT retroactive re-review \u2014 only 13175_spec.json had a known overrule (superseded_by:13569, annotation authored by verifier). From here on, any fragment change must refresh its dependent specs' entries in the same PR (comprehension_staleness.py refresh) or mark them superseded_by."
 }
