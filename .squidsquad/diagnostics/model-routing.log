@@ -547,3 +547,20 @@
 {"timestamp": 1790455121.8358617, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 4, "elapsed_seconds": 0.0}
 {"timestamp": 1790455121.8426428, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 309, "elapsed_seconds": 0.0}
 {"timestamp": 1790455121.8530436, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 0, "elapsed_seconds": 0.0}
+{"timestamp": 1790455758.8703723, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790455758.8718994, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790455758.873767, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790455758.8863747, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success-sentinel", "response_length": 11, "elapsed_seconds": 0.0}
+{"timestamp": 1790455758.8975382, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success-sentinel", "response_length": 29, "elapsed_seconds": 0.0}
+{"timestamp": 1790455758.9060483, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 4, "elapsed_seconds": 0.0}
+{"timestamp": 1790455758.9150648, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 309, "elapsed_seconds": 0.0}
+{"timestamp": 1790455758.924379, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 0, "elapsed_seconds": 0.0}
+{"timestamp": 1790455896.7388475, "task_type": "code-review", "task_id": "14127", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 3495, "elapsed_seconds": 284.2}
+{"timestamp": 1790456082.7624002, "task_type": "research", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790456082.7624002, "task_type": "comprehension", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790456082.7624002, "task_type": "qa-execution", "task_id": "TEST", "model": "claude", "action": "delegate-to-agent-tool"}
+{"timestamp": 1790456082.7762296, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success-sentinel", "response_length": 11, "elapsed_seconds": 0.0}
+{"timestamp": 1790456082.787952, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success-sentinel", "response_length": 29, "elapsed_seconds": 0.0}
+{"timestamp": 1790456082.7945876, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 4, "elapsed_seconds": 0.0}
+{"timestamp": 1790456082.8033783, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "success", "response_length": 309, "elapsed_seconds": 0.0}
+{"timestamp": 1790456082.8110735, "task_type": "code-review", "task_id": "TEST", "model": "deepseek-v4-pro", "provider": "deepseek", "action": "quality-gate-fail", "response_length": 0, "elapsed_seconds": 0.0}

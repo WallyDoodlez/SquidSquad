@@ -99,3 +99,17 @@
 {"id":"8086d294-a05e-4da2-9002-e789ed81477b","ts":"2026-09-26T20:22:44.397Z","agent":"skill","task":14131,"slug":"learning-tests-must-not-mutate-shared-live-state","counter":"used"}
 {"id":"cbb3490a-640e-4c59-93c6-96767d894a05","ts":"2026-09-26T20:22:44.398Z","agent":"skill","task":14131,"slug":"learning-default-port-fallback-is-live-egress-trap-in-tests","counter":"used"}
 {"id":"dac773cc-0672-4f8d-abef-6fa236be52b0","ts":"2026-09-26T20:22:44.398Z","agent":"skill","task":14131,"slug":"decision-pid-primary-liveness","counter":"used"}
+{"id":"9a592fb8-0f63-490e-9ceb-63e1a1c76c1e","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"learning-git-merge-silently-drops-concurrent-large-edit-on-shared-markdown","counter":"impression"}
+{"id":"58ee2473-d2c3-47a8-b71d-1a1aee97a6c5","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"decision-vault-subagent-model-sonnet","counter":"impression"}
+{"id":"902cf932-560b-42e6-90eb-2ae3a521753f","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"learning-atomic-migration-strategy","counter":"impression"}
+{"id":"9acc2fff-fad6-4487-91ce-7d36ced190ee","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"decision-vault-remember-source-agnostic","counter":"impression"}
+{"id":"d492ddb2-c818-43eb-b455-96a2b26b441d","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"vault","counter":"impression"}
+{"id":"1dfadc90-429f-418c-a831-5aef713a0dfc","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"agent-communication-layer","counter":"impression"}
+{"id":"ff9c2857-ca62-4171-9115-2f30951bdc39","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"decision-harness-schedules-agent-judges","counter":"impression"}
+{"id":"9ee23ea6-d4ab-47ac-80ca-3d26a2789412","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"learning-requirements-txt-is-harness-runtime-scoped","counter":"impression"}
+{"id":"b2e8f53d-d252-4608-a019-f0a39ebade04","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"pattern-verify-new-shipped-file-in-installer-manifest","counter":"impression"}
+{"id":"dcfbe16d-1303-40d5-8026-e85516ee630d","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"learning-shell-out-provisioning-has-three-sharp-edges","counter":"impression"}
+{"id":"3e8569bc-2fb5-4181-a498-656b8879beaf","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"learning-bundle-branch-reconciliation","counter":"impression"}
+{"id":"78a5d6ad-3956-474a-a830-7465b8a7dd65","ts":"2026-09-26T20:46:20.384Z","agent":"skill","task":14127,"slug":"learning-migration-6274-cutover","counter":"impression"}
+{"id":"cb2cc919-0f39-46ef-b2fc-5ba64c1009cf","ts":"2026-09-26T20:46:37.415Z","agent":"skill","task":14127,"slug":"learning-atomic-migration-strategy","counter":"used"}
+{"id":"fda9f4fe-5087-486c-abd8-aea57ff45601","ts":"2026-09-26T20:46:37.416Z","agent":"skill","task":14127,"slug":"pattern-verify-new-shipped-file-in-installer-manifest","counter":"used"}
