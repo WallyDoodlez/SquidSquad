@@ -52,17 +52,7 @@ BAN_PROSE = re.compile(r"raw-grep|grep ban|never (?:raw-)?grep|not grep|instead 
 # lines. These are the pre-engine search/link snippets whose engine-backed
 # rewrite is P4 (PRD-VAULT-V2 S4.5). SHRINK ONLY -- never add an entry, never
 # raise a count. Delete entries as P4 rewrites land.
-V1_ALLOWLIST = {
-    "references/sub-skills/common/vault-protocol.md": 2,
-    "references/sub-skills/roles/pm/improvement-scan.md": 1,
-    # Verifier-found in the #13857 AC3 rejection (outside the original scan
-    # roots): the v1 grep-mode reference doc (linked from vault-protocol's
-    # allowlisted entry; retires with vault-protocol's P4 rewrite) and the
-    # research-prompt template's vault-consult step (P4/S4.1-S4.2 rewires
-    # research context injection through the engine).
-    "references/docs/vault-reference.md": 6,
-    "references/prompts/research.md.j2": 1,
-}
+V1_ALLOWLIST = {}  # #13860 (P4) rewrote every v1 site -- the ratchet is closed; keep it empty
 
 
 def vault_grep_lines(path: Path):

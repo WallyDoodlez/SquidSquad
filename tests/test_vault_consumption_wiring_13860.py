@@ -137,3 +137,61 @@ class TestVerifierGate:
 
     def test_no_raw_vault_grep(self, rel):
         assert not RAW_VAULT_GREP.search(read(rel))
+
+
+class TestSubSkillRewrites:
+    """S4.5: the four vault sub-skills are engine-backed v2 (no v1 grep modes,
+    no retired fields, no time decay, no pattern-posture-*)."""
+
+    PROTOCOL = read("common/vault-protocol.md")
+    OPTIMIZE = read("common/vault-optimize.md")
+    SYNTHESIS = read("roles/pm/vault-synthesis.md")
+
+    @pytest.mark.parametrize("rel", ["common/vault-protocol.md", "common/vault-optimize.md",
+                                     "roles/pm/vault-synthesis.md", "roles/pm/improvement-scan.md"])
+    def test_no_raw_vault_grep(self, rel):
+        assert not RAW_VAULT_GREP.search(read(rel))
+
+    def test_protocol_engine_read_contract(self):
+        assert "vault_consume.py search --alias [ROLE]" in self.PROTOCOL
+        assert "vault_consume.py cite --alias [ROLE]" in self.PROTOCOL
+        assert "Engine unavailable" in self.PROTOCOL
+
+    def test_protocol_names_all_consumption_steps(self):
+        for needle in ("inject-context", "lineage-path", "check-receipts",
+                       "## Vault context consumed", "## Applicable rules"):
+            assert needle in self.PROTOCOL
+
+    def test_protocol_v2_frontmatter_and_rule_lane(self):
+        assert "vault_entity.py create <type> <slug>" in self.PROTOCOL
+        assert "Do not add `confidence`, `source`, `links`" in self.PROTOCOL
+        assert "rule-" in self.PROTOCOL and "## Scope" in self.PROTOCOL
+
+    def test_protocol_receipt_lines_match_gate(self):
+        """The receipt line forms the protocol teaches are the ones the gate accepts."""
+        assert "- None relevant (searched: …)" in self.PROTOCOL
+        assert vc.check_section(f"{vc.CONTEXT_SECTION}\n- None relevant (searched: x)\n",
+                                vc.CONTEXT_SECTION)[0] == "none"
+        assert vc.check_section(f"{vc.RULES_SECTION}\n- [[rule-a]] -- b\n", vc.RULES_SECTION)[0] == "cited"
+
+    def test_optimize_is_propose_only(self):
+        assert "vault_optimize.py propose-prunes" in self.OPTIMIZE
+        assert "vault_optimize.py compact-telemetry --alias [ROLE]" in self.OPTIMIZE
+        # the v1 auto-archive / time-decay path is never invoked
+        for cmd in ("vault_optimize.py run\n", "```bash\npython references/scripts/vault_optimize.py run"):
+            assert cmd not in self.OPTIMIZE
+        assert "Do NOT run `vault_optimize.py run`" in self.OPTIMIZE
+
+    def test_synthesis_v2_output_target(self):
+        assert "systems/" in self.SYNTHESIS
+        assert "Never create `pattern-posture-*` notes" in self.SYNTHESIS
+        assert "vault_consume.py cite --alias [ROLE] --task" in self.SYNTHESIS
+
+    def test_l1_vault_slot_names_engine_and_receipts(self):
+        text = (REPO / "references" / "roles" / "vault.md").read_text(encoding="utf-8")
+        assert "vault_consume.py search" in text and "## Applicable rules" in text
+        assert "`rule-*`" in text and "`style-*`" not in text
+
+    def test_research_prompt_does_not_grep_vault(self):
+        text = (REPO / "references" / "prompts" / "research.md.j2").read_text(encoding="utf-8")
+        assert not RAW_VAULT_GREP.search(text)
