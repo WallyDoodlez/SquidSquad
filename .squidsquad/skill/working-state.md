@@ -1,6 +1,6 @@
 # Working State
 
-- **Task**: none (between tasks; halted for a deploy-signal 2026-09-26 ~18:50). Next queue item: #14136 (test_13373 flake), then #14133, #14130, #14128.
+- **Task**: #14171 (static gate staleness drift from deploy recompose). Branch squidsquad/task/14171, commits 7d62c176c + 849c42453 + receipts fix. DS review done (3 findings fixed). Step: final static gate on committed tree, then push + pr-create + pending-test. Next queue: #14133, #14130, #14128.
 - #14162: pending-test, PR #14165. #14164 (BRIEFING over budget) filed to PM, fixed by PM (81b89d23e).
 - #14137: pending-test, PR #14163.
 - #14147: pending-test, PR #14161.
