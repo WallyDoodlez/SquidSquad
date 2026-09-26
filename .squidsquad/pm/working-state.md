@@ -1,9 +1,9 @@
 # Working State
 
 - **Task**: none (#10003 MERGED 2026-07-19 -- PR #13708 = 800bf4049; -> pending-ship for dm; SS12.2 umbrella filed as #13854 pending)
-- **PAUSED (operator, 2026-07-20)**: skill/qa/dm stopped via /agents/{role}/stop (intent=stopping). PM stays up for inline only. Idle driver disarmed (no scans), no cron. Vault-v2 state at pause: P1+P2 SHIPPED; P3 #13859 pending-test (telemetry impl done, in verification); P4 #13860 / P5 #13861 / M-track #13862 approved+gated. TUI #13561 at pending-human-review (PR #13945 = operator doc-review gate, UNRESOLVED). Follow-ups open: #14078 (deepseek residuals, low). Resume: boot skill/qa/dm, re-arm PM driver.
-- **Status**: Idle, event mode. Awaiting operator action on HITL items below.
-- **Updated**: 2026-07-19 05:45
+- **Team resumed (2026-09-26 ~09:59)**: harness restarted, all 4 agents running (was operator-paused 2026-07-20: skill/qa/dm stopped). Uncommitted operator WIP in primary clone: CRLF-normalized compose checksum fix (compose_freshness.py + test) — not PM's, do not touch.
+- **Status**: EVENT boot 2026-09-26 14:04 (quiet), respawn after deploy-signal 8a086942e3e626e3. Boot drain 12 events, all informational: dm shipped #14054 #14095 #14096 #14098 #14108 #14123 (#14099 also shipped). No externals.
+- **Updated**: 2026-09-26 18:31 — honoring deploy-signal 0ace8614f791e357 (PR #14158 / #14114 merged; L1 instructions changed). Session work: #14113 resolved -> #14144 (merged, AC6 awaits HARNESS restart); #14148 closed; ACs added to #13861 #14114 #14147 #14137 #14162; filed #14137 #14144 #14150 #14157 #14162; BRIEFING refreshed 18:20. **ON NEXT BOOT**: open operator Qs remain — harness restart (single restart covers #14144 AC6, #13861 P5, #14131/#14132, #14137 AC2, #14114 harness bits), #13862 M3 manifest, #14157, version bump. A deploy-signal respawn is NOT a harness restart.
 
 _Lean shape per #13562/#13579 (≤8KB). History in git._
 
@@ -14,6 +14,11 @@ Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #1
 ## HITL standing (advertise each check-in)
 
 - ~~#10003~~ MERGED + shipped-track (dm). SS12.2 reconciliation umbrella: #13854 (pending, operator-paced).
+- ~~#14113~~ RESOLVED 2026-09-26: operator chose 3 (retire) -> #14144 approved (skill). Vault decision note updated (481a442c5, post-freeze; flagged on #13862).
+- **Harness restart NOW DUE (single)** — covers #14144 AC6 teardown + #13861 P5 + #14131/#14132 (PR #14152 merged 7a23f2b99). Asked operator ~16:50: restart now / self / wait. Caveats: operator WIP in .squidsquad/start.ps1 (still uncommitted); qa clone 659 unpushed state commits -> backup only copy. After respawn: qa verifies #14144 AC6; release DM held bump (0.46.0).
+- **#14157** — operator Q: do other installs with a v1 vault exist? If no -> record in PRD + close; if yes -> M1 transform ships in v0.46.0 migration. Settle before version bump.
+- **#13862 M3** — operator manifest review (185 = 170 keep / 5 merge / 10 prune; REVIEW.md at .squidsquad/skill/planning/13862-m2/). PM rec: approve as-is; optional keep git-cat-file ref-path learning (Windows quirk that still applies).
+- **#13561** — TUI observability, pending-human-review (PR #13945 operator doc-review gate).
 - **#13263** — behind-clone squash-merge, pending-human-review, KEEP OPEN. (verified 05:45)
 - **#10377** — blocked:human-action (gated L4 DM curation task).
 - **#13807** — pending-human-setup: delete stale sibling dirs SquidSquad-web + SquidSquad-qa-omain (recovered from shipped #13793's untracked comment-only ask; PM closes on confirmation).
@@ -22,6 +27,6 @@ Booted EVENT mode, quiet posture. Boot drain: 7 events, all informational — #1
 
 ## PM queue
 
-- work_queue(pm approved) = #10690 only, GATED (E7/#10686 OPEN, re-verified 2026-07-19 05:45) — not pickable.
+- work_queue(pm approved) = #13856 (vault-v2 PRD umbrella, tracking vehicle only) + #10690 GATED (E7/#10686 approved, not shipped) — neither pickable (re-verified 2026-09-26 10:20).
 - Parked coord-holds: #11092 / #10839 / #9968.
-- Idle-driver: re-armed 2026-07-19 05:45 (scan_count 0/3, cron job 8750c6bc).
+- Idle-driver: burst 3/3 complete 2026-09-26 18:18 (#14150, #14157; 3rd: BRIEFING freeze Q on #13862); cancelled at cap, cron e809558b deleted. Reidle after next forge work. BRIEFING refreshed 18:20 (confirmed outside freeze). Monitor task buwjqat5z.
