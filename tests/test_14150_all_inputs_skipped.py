@@ -82,6 +82,25 @@ def test_missing_in_repo_input_fails(wired, tmp_path):
     assert "not a readable file" in wired["diag"][0]["skipped"][0]
 
 
+def test_unreadable_in_repo_input_fails(wired, tmp_path, monkeypatch):
+    """DS F1: an existing file without read permission is skipped too (the
+    reader would only produce an ERROR stub). os.access is stubbed because
+    chmod 000 is not enforceable on Windows."""
+    real_access = model_router.os.access
+    monkeypatch.setattr(model_router.os, "access",
+                        lambda p, m: False if p.endswith("VERSION") else real_access(p, m))
+    out = tmp_path / "OUT.md"
+    code = model_router.route("code-review", "14150", IN_REPO_FILE, str(out), "ctx")
+    assert code == 2 and wired["calls"] == 0
+    assert "not a readable file" in wired["diag"][0]["skipped"][0]
+
+
+def test_exit_code_contract_documents_input_error():
+    """DS F2: exit 2 is documented as config OR input error."""
+    doc = model_router.__doc__ + model_router.route.__doc__
+    assert "every input file skipped" in doc
+
+
 def test_applies_to_every_task_type(wired, tmp_path):
     out = tmp_path / "OUT.md"
     assert model_router.route("research", "14150", str(tmp_path / "x.md"),

@@ -19,7 +19,8 @@ Task types: research, discussion-prep, test-plan, improvement-scan,
 Exit codes:
     0 — success (output file written)
     1 — API failure or claude-only task (parent should fall back to Agent tool)
-    2 — configuration error (missing API key, invalid config)
+    2 — configuration or input error (missing API key, invalid config,
+        every input file skipped -- #14150)
 """
 
 import argparse
@@ -718,7 +719,7 @@ def _classify_input_files(input_files_str):
             skipped.append((fpath, "outside repository boundary"))
         elif _is_sensitive_file(full_path_str):
             skipped.append((fpath, "sensitive file"))
-        elif not full_path.is_file():
+        elif not full_path.is_file() or not os.access(full_path_str, os.R_OK):
             skipped.append((fpath, "not a readable file"))
         else:
             readable.append(fpath)
@@ -728,7 +729,8 @@ def _classify_input_files(input_files_str):
 def route(task_type, task_id, input_files, output_file, context):
     """Route a subagent task to the configured model.
 
-    Returns 0 on success, 1 on API failure (fallback), 2 on config error, 3 on timeout.
+    Returns 0 on success, 1 on API failure (fallback), 2 on config/input error
+    (incl. every input file skipped, #14150), 3 on timeout.
 
     Error-exit contract (#14025): the router does NOT fall back in-process --
     the caller falls back to Claude on any nonzero exit -- and no output
