@@ -49,6 +49,8 @@ def _arm(monkeypatch, verdict_for_token):
 
     def fake_run(cmd, **kw):
         env = kw.get("env") or {}
+        # Bounded like the boot probe: a stalled gh must not hang PM's cycle.
+        assert kw.get("timeout") == 15 and kw.get("check") is False
         calls.append((cmd, env.get("GH_TOKEN")))
         return _result(verdict_for_token(env.get("GH_TOKEN")))
 
@@ -85,6 +87,22 @@ def test_error_or_odd_output_is_inconclusive(monkeypatch, capsys, stdout, rc):
                         lambda cmd, **kw: _result(stdout, rc))
     assert tracker.write_probe() == 2
     assert capsys.readouterr().out.strip() == "inconclusive"
+
+
+def test_check_gh_reprobe_keeps_stdout_only_heal_test(monkeypatch):
+    # DS review F1: check_gh's post-heal re-probe accepts a 'true' verdict
+    # even on a non-zero exit, exactly as before the helper refactor.
+    probes = iter([_result("false", 0), _result("true", 1)])
+
+    def fake_run(cmd, **kw):
+        if "api" in cmd:
+            return next(probes)
+        if "push-doctor" in " ".join(map(str, cmd)):
+            return _result("")
+        return _result("[]")  # gh issue list read check
+
+    monkeypatch.setattr(tracker.subprocess, "run", fake_run)
+    assert tracker.check_gh() is True
 
 
 def test_non_github_adapter_is_inconclusive(monkeypatch, capsys):

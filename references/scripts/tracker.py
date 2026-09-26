@@ -767,7 +767,11 @@ def check_gh():
         print(doctor_err.strip(), file=sys.stderr)
         return False
     if read_only:
-        if _push_permission_probe()[0] == "true":
+        # Stdout-only test (not _push_permission_probe): a 'true' verdict with
+        # a non-zero exit still counts as healed here, as before #14181.
+        reprobe = _run_list_timeout(["gh", "api", "repos/:owner/:repo",
+                                     "-q", ".permissions.push"], timeout=15)
+        if (reprobe.stdout or "").strip().lower() == "true":
             print("NOTE: gh active account was read-only (#13570 signature); "
                   "push-doctor healed it back to the pinned push identity "
                   "(#13863) - write capability re-verified.", file=sys.stderr)

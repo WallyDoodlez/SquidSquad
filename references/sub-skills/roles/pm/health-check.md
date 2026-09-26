@@ -36,5 +36,5 @@ It reports push permission for the identity tracker.py writes with (#14181). Nev
 - `false` → **infrastructure outage, not an agent problem**: every agent's writes are failing regardless of liveness. Escalate to the human immediately with the remediation (restore the gh identity's repo write role, or re-auth as an account with push access; `git push` confirming 403 = still read-only). Expect the escalation **transition itself to fail** mid-outage — fall back to whatever human-reaching surface still works (inline session, operator channel); the full handling lives in pipeline-sentinel halt class (e), which this probe result feeds (no need to re-run the probe there this cycle). Do not file per-agent stall findings for halts this explains.
 - `inconclusive` → note it and move on (the boot gate's read check covers connectivity).
 
-For programmatic use, the script accepts `--json` for structured output.
+For programmatic use, `health_check.py` accepts `--json` for structured output (`tracker.py write-probe` takes no flags).
 <!-- /sub-skill: health-check -->

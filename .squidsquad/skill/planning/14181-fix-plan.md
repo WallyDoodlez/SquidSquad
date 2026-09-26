@@ -18,8 +18,8 @@ identities. Reproduced live on 2026-09-26: with active account Naahtec
 Add a deterministic `tracker.py write-probe` command that runs the same probe
 through `_run_list_timeout`, so it is pinned by the same `gh_identity.gh_env`
 tracker writes use. It prints `true`/`false`/`inconclusive` and exits 0/1/2.
-`check_gh`'s boot probe and re-probe share the new `_push_permission_probe`
-helper, with unchanged behavior. Both PM sub-skills call `write-probe` and say
+`check_gh`'s boot probe uses the new `_push_permission_probe` helper. Its
+post-heal re-probe keeps the stdout-only test. Behavior is unchanged. Both PM sub-skills call `write-probe` and say
 why a bare probe is wrong. The #13863 active-account healing is not changed.
 
 ## Impact
