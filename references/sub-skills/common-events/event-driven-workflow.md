@@ -26,7 +26,7 @@ This fragment is a brief orientation. The full agent contract lives in the compa
 
 ### Error handling
 
-If the harness becomes unreachable mid-session, the agent does NOT pivot to forge-direct work — this is a **manual-recovery scenario**: keep retrying `bootup-complete` at the 5-minute-capped backoff; the operator restarts the agent; on restart the boot bootstrap (`common/boot-bootstrap.md`) detects the unreachable harness and routes to polling mode (#9588). Mid-session degraded operation was removed in #9588.
+If the harness becomes unreachable mid-session, the agent does NOT pivot to forge-direct work. `event_poll.py` gives up after 10 consecutive transient failures and exits, which ends the Monitor watch without an expiry notice, so the agent ends its session; the harness respawns it (or the operator restarts a dead harness), and on restart the boot bootstrap (`common/boot-bootstrap.md`) routes to polling mode if the harness is still unreachable (#9588, #14109). Mid-session degraded operation was removed in #9588. See **Harness-Loss Recovery** in [[event-mode-contract]].
 
 `event_poll.py` handles transient HTTP errors (5xx, `ConnectionError`, `Timeout`, `IncompleteRead`) automatically with exponential backoff. 4xx responses are treated as caller faults and exit non-zero.
 
