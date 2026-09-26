@@ -117,6 +117,23 @@ class TestEndSessionHelper:
         assert rc == 1
         assert "refused" in capsys.readouterr().out
 
+    @pytest.mark.parametrize("code", [404, 500])
+    def test_http_error_is_refusal_not_outage(self, as_skill, code, capsys):
+        """DS F3: a live harness answering 4xx/5xx is not 'unreachable'."""
+        def http_err(req, timeout=None):
+            raise urllib.error.HTTPError(req.full_url, code, "err", {}, None)
+        assert cycle.end_session(port=9, opener=http_err) == 1
+        out = capsys.readouterr().out
+        assert f"HTTP {code}" in out and "unreachable" not in out
+
+    @pytest.mark.parametrize("post_body", [{}, {"success": "yes"}, ["x"]])
+    def test_success_must_be_explicit(self, as_skill, post_body, capsys):
+        """DS F3: only an explicit success:true counts as accepted."""
+        calls = []
+        assert cycle.end_session(port=9, opener=_opener(
+            calls, post_body=post_body)) == 1
+        assert "refused" in capsys.readouterr().out
+
     def test_port_discovered_when_not_given(self, as_skill):
         calls = []
         with mock.patch("event_poll._discover_port", return_value=4321):
@@ -217,6 +234,17 @@ class TestInstructionsUseEndSession:
         assert "python references/scripts/cycle.py end-session" in rule
         assert "end your turn" in rule
 
+    def test_contract_steps_checkpoint_then_end_session_then_end_turn(self):
+        """AC5(b) order, and end-session is scoped to the listener-exit case."""
+        text = self.CONTRACT.read_text(encoding="utf-8")
+        block = text[text.index("**How to end your session (#14114).**"):]
+        block = block[:block.index("When unsure which case")]
+        i_ckpt = block.index("working-state.md")
+        i_run = block.index("cycle.py end-session")
+        i_end = block.index("end your turn")
+        assert i_ckpt < i_run < i_end
+        assert "operator stop" in block and "deploy-signal" in block
+
     def test_contract_harness_loss_paths_run_end_session(self):
         text = self.CONTRACT.read_text(encoding="utf-8")
         section = text[text.index("### Harness-Loss Recovery"):]
@@ -240,6 +268,12 @@ class TestInstructionsUseEndSession:
                                      "docs/HARNESS-ARCH.md"])
     def test_arch_docs_name_end_session(self, doc):
         assert "cycle.py end-session" in (REPO / doc).read_text(encoding="utf-8")
+
+    def test_harness_death_path_does_not_claim_session_ends(self):
+        """DS F4: the harness-dead path no longer says the session ends on its
+        own."""
+        text = (REPO / "docs" / "AGENT-RUNTIME.md").read_text(encoding="utf-8")
+        assert "Monitor exits → the session ends" not in text
 
     def test_no_residual_drift(self):
         """AC3: the old 'the exit itself triggers the respawn' wording is gone."""

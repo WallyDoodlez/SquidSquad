@@ -62,14 +62,15 @@ The Monitor tool has no `persistent` option: every watch carries a deadline (`ti
 > - **Deadline expiry — re-arm.** The tool's own expiry notice (`Monitor expired after …`) means the Monitor tool killed a healthy `event_poll.py` because the watch's `timeout_ms` ran out. Nothing is wrong: re-invoke Monitor with the identical invocation above, as soon as you next have control (finish the current atomic unit first, exactly like a mid-task `NUDGE`). No event is lost in the gap — anything that arrived is still past your cursor and nudges on the new watch's first poll. Re-arm once per expiry notice; never run two watches at once.
 > - **Anything else — end your session right away.** `event_poll.py` terminating on its own (any exit code, including the `sys.exit(2)` retry ceiling), a tool error, or a stream close means the listener or the harness is broken. Do NOT re-invoke Monitor, do NOT wait for the harness to recover, do NOT pivot to forge-direct work or polling-mode fallback mid-session. This applies whether the exit happens before or after `bootup-complete` is emitted. `event_poll.py --wait` has a bounded retry ceiling (10 consecutive transient failures per CONTEXT-9742) so a sustained harness outage makes it exit on its own; you do not need to enforce the ceiling yourself.
 >
-> **How to end your session (#14114).** You cannot terminate your own process — ending your turn alone leaves it alive, deaf, and never respawned. Always do both steps:
+> **How to end your session (#14114).** You cannot terminate your own process — ending your turn alone leaves it alive, deaf, and never respawned. Do these steps in order, without starting any other work:
 >
-> 1. Run `python references/scripts/cycle.py end-session`. It asks the harness to replace this session. On a live harness the harness kills this process and respawns you fresh, so your turn may stop mid-command. That is expected.
-> 2. If you still have control, whatever the command printed (including "Harness unreachable"), end your turn with no further tool calls. A dead harness is restarted by the operator.
+> 1. If you are mid-task, make one quick checkpoint write to `working-state.md` (task and current step). Your respawn resumes from it.
+> 2. Run `python references/scripts/cycle.py end-session`. It asks the harness to replace this session. On a live harness the harness kills this process and respawns you fresh, so your turn may stop mid-command. That is expected.
+> 3. If you still have control, whatever the command printed (including "Harness unreachable" or "Not restarting"), end your turn with no further tool calls. A dead harness is restarted by the operator.
 >
-> Your respawn resumes from `working-state.md`, so keep it current (see `working-state.md` under **Always-On Rules** below).
+> `end-session` is only for this listener-exit case, and only ever for your own session. Context pressure, a deploy-signal, and an operator stop are harness-driven: halt as their own rules say, and do not run it.
 >
-> When unsure which case you are in, the expiry notice is the only thing that means "re-arm" — every exit without it means "end the session" (the two steps above).
+> When unsure which case you are in, the expiry notice is the only thing that means "re-arm" — every exit without it means "end the session" (the steps above).
 
 ---
 

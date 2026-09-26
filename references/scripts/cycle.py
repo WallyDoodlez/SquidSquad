@@ -190,19 +190,27 @@ def end_session(role=None, port=None, opener=None):
             return json.loads(resp.read().decode("utf-8") or "{}")
 
     try:
-        intent = (_call(base, "GET") or {}).get("intent")
+        agent = _call(base, "GET")
+        intent = agent.get("intent") if isinstance(agent, dict) else None
         if intent in _END_SESSION_HANDS_OFF:
             print(f"Not restarting: {_END_SESSION_HANDS_OFF[intent]} "
                   f"(intent={intent}). End your turn now.")
             return 0
         body = _call(f"{base}/restart?force=true", "POST")
+    except urllib.error.HTTPError as e:
+        # A live harness answered with an error (unknown alias 404, clone
+        # resolution 500, ...) — not an outage; do not send the operator off
+        # to restart a healthy harness.
+        print(f"Harness refused the request (HTTP {e.code}) — end your turn "
+              f"now.")
+        return 1
     except (urllib.error.URLError, OSError, ValueError) as e:
         print(f"Harness unreachable ({e}) — end your turn now; the operator "
               f"restarts the harness.")
         return 1
-    if body.get("success") is False:
-        print(f"Harness refused the restart ({body.get('message')}) — end "
-              f"your turn now.")
+    if not isinstance(body, dict) or body.get("success") is not True:
+        msg = body.get("message") if isinstance(body, dict) else body
+        print(f"Harness refused the restart ({msg}) — end your turn now.")
         return 1
     print("Restart requested — the harness is replacing this session. End "
           "your turn now.")
