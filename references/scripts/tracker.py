@@ -1120,17 +1120,17 @@ def add_labels(number, labels_str):
 # Instruction surfaces: role layers, sub-skills, L4 project files, composed
 # agent files.
 _INSTRUCTION_SURFACE_RE = re.compile(
-    r"references[/\\](?:sub-skills|roles)[/\\]|\.squidsquad[/\\]project[/\\]"
+    r"references[/\\](?:sub-skills|roles)(?![\w-])|\.squidsquad[/\\]project(?![\w-])"
     r"|\bCLAUDE\.md\b|\bSOUL\.md\b")
-_CQ_MENTION_RE = re.compile(r"comprehension|\bCQ\b|_spec\.json", re.IGNORECASE)
+_CQ_MENTION_RE = re.compile(r"comprehension|\bCQ\b", re.IGNORECASE)
 _AC_HEADER_RE = re.compile(r"^##\s+Acceptance criteria\b", re.IGNORECASE | re.MULTILINE)
 _CQ_AC_LINE = (
     "- **CQ** (auto-added, #14162): this issue names agent-instruction files, "
     "so a fix that changes them needs a comprehension spec. The verifier authors "
     "`tests/comprehension/<this issue>_spec.json` over the changed fragments, "
-    "and a fresh agent must answer the fixed behavior correctly. PM: refine the "
-    "scenarios at pickup, or drop this line if the fix turns out to be "
-    "code-only.\n")
+    "and a fresh agent must answer the fixed behavior correctly. This line is "
+    "generic: the worker picking the issue up asks PM for concrete scenarios "
+    "(or to drop the line if the fix is code-only).\n")
 
 
 def _ensure_cq_acceptance_criteria(body):

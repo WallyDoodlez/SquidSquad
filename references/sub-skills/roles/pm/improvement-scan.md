@@ -64,7 +64,7 @@ Write status bar state: `scanning|🔍 Scanning process/workflow...`
 
    **Tier 2 — Larger gap fixes** (workflow changes, cross-role impact):
 
-   → run sub-skill: `tracker-protocol` — use the **Improvement-scan finding** one-liner shape (Observation / Location / Suggested-fix body plus `## Acceptance criteria`, with a CQ line when the fix changes agent instructions, #14162, with `**Found by**: [ROLE]-lead (improvement-scan)` prefix). Choose `create-task` for workflow changes / `create-issue` for defects. Set `--role [target-role]`, `--severity low` (issue) or `--priority low` (task), `--reporter [ROLE]-lead`. Tag with `improvement-scan` label. These require human discussion before approval.
+   → run sub-skill: `tracker-protocol` — use the **Improvement-scan finding** one-liner shape (Observation / Location / Suggested-fix body, with `**Found by**: [ROLE]-lead (improvement-scan)` prefix, plus `## Acceptance criteria`; include a CQ line when the fix changes agent instructions, #14162). Choose `create-task` for workflow changes / `create-issue` for defects. Set `--role [target-role]`, `--severity low` (issue) or `--priority low` (task), `--reporter [ROLE]-lead`. Tag with `improvement-scan` label. These require human discussion before approval.
 
    **Tier 3 — Creative/experimental proposals**:
 

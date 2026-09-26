@@ -63,7 +63,24 @@ class TestEnsureCqAcceptanceCriteria:
         out, added = tracker._ensure_cq_acceptance_criteria(body)
         assert not added and out == body
 
+    def test_unrelated_spec_json_is_not_a_cq_mention(self):
+        """Review F2: api_spec.json is not a comprehension spec."""
+        _, added = tracker._ensure_cq_acceptance_criteria(
+            "references/sub-skills/a.md and api_spec.json")
+        assert added
+
+    def test_auto_line_is_idempotent(self):
+        once, _ = tracker._ensure_cq_acceptance_criteria("references/roles/x.md")
+        twice, added = tracker._ensure_cq_acceptance_criteria(once)
+        assert not added and twice == once
+
+    def test_auto_line_routes_refinement_via_worker_not_pm_pickup(self):
+        assert "at pickup" not in tracker._CQ_AC_LINE
+        assert "worker picking the issue up asks PM" in tracker._CQ_AC_LINE
+
     @pytest.mark.parametrize("surface", [
+        "references/sub-skills",
+        ".squidsquad/project, and more",
         "references/roles/pm/instructions.md",
         "references\\sub-skills\\common\\x.md",
         ".squidsquad/project/worker.md",
@@ -124,7 +141,8 @@ class TestFilingShapesAndPickupGuard:
                                       "roles/pm/improvement-scan.md"])
     def test_scan_filing_steps_name_the_ac_section(self, path):
         text = (SUB / path).read_text(encoding="utf-8")
-        assert "`## Acceptance criteria`, with a CQ line when the fix changes agent instructions" in text
+        assert "`## Acceptance criteria`" in text
+        assert "CQ line when the fix changes agent instructions" in text
 
     def test_pm_issue_filing_requires_acs(self):
         text = (SUB / "roles" / "pm" / "issue-filing.md").read_text(encoding="utf-8")
@@ -136,3 +154,7 @@ class TestFilingShapesAndPickupGuard:
         guard = guard[:guard.index("\n4b.")]
         assert "PM: this fix changes agent instructions" in guard
         assert "Do not wait for PM." in guard
+        # Review F1/F4: fires on the generic auto-added line too, and the PM
+        # request goes into the step-4 --message (comments are append-only).
+        assert "(auto-added, #14162)" in guard
+        assert '--message "Picking up. Status' in guard
