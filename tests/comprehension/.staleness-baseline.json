@@ -36,7 +36,7 @@
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8"
  },
  "12493_spec.json": {
-  "references/sub-skills/roles/pm/pipeline-sentinel.md": "c91c78946cc1a3db874f9d674a9c58677cd0586a"
+  "references/sub-skills/roles/pm/pipeline-sentinel.md": "e8bd3a26d5ea35675ae24f1695d5883d23c959e0"
  },
  "12506_spec.json": {},
  "12585_spec.json": {
@@ -220,7 +220,7 @@
  "4792_spec.json": {
   ".squidsquad/project/shared-instructions.md": "d684d6ee8b2f1fc39cb7e9a9625fdc422bcb8e8f",
   "references/sub-skills/common/agent-lifecycle.md": "149b51503eb3d33b52a25f0d89615e19bedec5b8",
-  "references/sub-skills/roles/pm/health-check.md": "e5b5b164a2db265cbaf8f23a2fe7d1e2cf19469d"
+  "references/sub-skills/roles/pm/health-check.md": "0ffa7a3b4827cebd935f4be6a30b0a69d7a29388"
  },
  "8694_spec.json": {
   "references/sub-skills/common-events/comment-handling.md": "8d5a2a4ab4164fbdb3f5657f89ef08586bd5e254",
