@@ -12,17 +12,18 @@
     {
       "id": "1-mid-task-event",
       "question": "An event arrives on the stream while the agent is mid-task. What does the agent do with it?",
-      "expected": "Per Case D in event-mode-contract.md, the agent reads the event but does NOT act on it — the current task runs atomically to completion. On task completion the agent falls through to Case C (transition the item, clear the Task field, run work_queue()) and the forge-read in Case C absorbs all mid-task events. The cursor advances automatically as event_poll.py emits the event line; the agent does not perform a separate cursor write."
+      "expected": "Per Case D in event-mode-contract.md, the agent notes the NUDGE but does NOT act on it (it may leave the event unread past its cursor) — the current task runs atomically to completion, unless the agent becomes blocked on another party, in which case it parks the task at status:blocked and runs the Case C handoff. On completion the agent falls through to Case C (transition the item, clear the Task field, write the idle marker, run work_queue()); the post-task GET /events/for/{role}?since=<cursor> and forge-read absorb all mid-task events. The cursor does NOT advance automatically: the agent POSTs ack-cursor {event_id, role} (event_id inside payload) after tending each event."
     },
     {
       "id": "2-unknown-event",
       "question": "An event with an unrecognized `event_type` arrives. What does the agent do?",
-      "expected": "Per Case E in event-mode-contract.md: log a warning to stderr and do not block. The cursor advances automatically (event_poll.py persists it as the line is emitted) — there is no separate cursor-advance step for the agent. No forge read or work pickup is triggered by an unknown event type."
+      "expected": "Per Case E in event-mode-contract.md: log a warning to stderr and do not block. No forge read or work pickup is triggered by an unknown event type. The event still counts as tended, so the agent POSTs ack-cursor for it (per-event, agent-driven — the cursor never advances automatically; event_poll.py only emits NUDGE lines)."
     },
     {
       "id": "3-empty-work-queue",
       "question": "The agent runs work_queue() and gets an empty result. What does it do next?",
-      "expected": "Enter the improvement-scan cool-down loop (per event-mode-contract.md boot step 2 idle branch and idle-cooldown-loop.md). Specifically: if `Next scan after` is missing or in the past, run the next improvement scan; otherwise wait via the persistent Monitor — after each empty poll, if now >= Next scan after, run the scan. Exception: if the harness is unreachable (degraded mode), do NOT enter the cool-down loop; instead sleep a short fixed interval (e.g. 60s) and retry work_queue() — the cool-down loop requires the Monitor, which requires the harness."
+      "expected": "Enter the improvement-scan cool-down loop (idle-cooldown-loop.md Step A): run `subloop_driver.py arm <alias>`, confirm via CronList that a live driver cron exists in this session and create one with CronCreate (recurring, durable:false, off-peak minutes derived from interval_minutes) if none is listed, then re-enter the Monitor idle-wait. Each driver tick forge-reads work_queue() first, then runs `subloop_driver.py tick <alias> --drained <true|false>` and acts on the action (absorb-work / scan / wait / cancel); scans are capped per idle burst and throttled by the cool-down. 'Empty' means no autonomously-actionable item — approved items that are human-gated or dependency-blocked count as drained. There is no degraded mode: harness reachability is guaranteed once the event-mode contract is loaded (#9588).",
+      "must_not": "Describe a degraded mode that sleeps ~60s and retries work_queue(), or a working-state `Next scan after` timer as the authoritative throttle."
     },
     {
       "id": "4-dm-pr-merge-comments",
@@ -42,12 +43,13 @@
     {
       "id": "7-cursor-eviction-gap",
       "question": "The agent boots with a cursor predating the oldest event the harness still retains. What happens?",
-      "expected": "Per cursor-management.md eviction-gap rule: `GET /events?since=<old>` returns the oldest available id and an eviction-count hint. The agent logs an eviction warning naming the oldest available id and the count of evicted events, advances the cursor to that oldest available id (NOT the latest observed — eviction-gap is the exception called out in event-mode-contract.md step 4), and proceeds to a forge-read for current state. The agent does NOT crash, and the forge is authoritative regardless."
+      "expected": "Per cursor-management.md eviction-gap rule: GET /events/for/{role}?since=<old> returns HTTP 200 with \"evicted\": true, \"oldest_id\", and \"evicted_count_hint\". Recovery: read the forge for current state, then POST a single ack-cursor with event_id = oldest_id (inside payload) to fast-forward past the evicted range, then re-enter idle. The agent does NOT crash and does NOT walk the evicted range (those events are unrecoverable from the bus by design); the forge is authoritative regardless."
     },
     {
       "id": "8-harness-unreachable-boot",
       "question": "On boot the harness is unreachable. Can the agent still work? Describe the operational path.",
-      "expected": "Yes — per event-mode-contract.md step 3 unreachable branch: the agent operates in degraded mode, working directly from the forge via work_queue() and tracker.py. While in degraded mode, if work_queue() returns empty the agent sleeps a short fixed interval (e.g. 60s) and retries; if it returns work the agent picks up the top item directly (transition to in-progress, update Task field, begin work) and on completion follows Case C, then continues the degraded-mode rules. The cool-down loop is NOT entered (it requires the Monitor). Before each work_queue() call the agent attempts to POST bootup-complete with exponential backoff capped at 5 minutes; on success it exits degraded mode by skimming events forward, advancing the cursor, and entering the listening loop. bootup-complete is best-effort, not blocking."
+      "expected": "Not in event mode. The boot bootstrap (step:cycle/boot) probes the harness (port file, then fallback to 7373); if both probes fail the agent falls through to POLLING mode: it schedules `/loop` once and Reads the polling fragment, working from the forge each cycle. The event-mode contract is never loaded in that session, so there is no degraded event-mode path (removed in #9588) and no bootup-complete retry loop. Mode is sticky for the session; the next restart re-probes.",
+      "must_not": "Describe an event-mode degraded mode, sleeping ~60s between work_queue() calls, or retrying bootup-complete with backoff while working."
     },
     {
       "id": "9-forge-vs-event-payload",
@@ -56,18 +58,21 @@
     },
     {
       "id": "10-cursor-ownership",
-      "question": "Who writes the `- **Last Processed Event ID**:` line in working-state.md during normal operation, and what protocol is used? What about other fields?",
-      "expected": "During the event-listening loop, event_poll.py is the sole writer of the cursor line; the agent is the sole writer of every other field (the Task line, the ## Improvement Scan block, etc.). Both writers use the `.tmp` + `mv` (or `os.replace`) atomic-rename protocol so a reader never sees a half-written file, and each writer's read-modify-write cycle preserves the other writer's lines verbatim. The ownership discipline — not the .tmp+mv alone — is what prevents lost updates across concurrent R-M-W cycles. During boot (before the listening loop starts) the agent may also write the cursor; once the listening loop is active only event_poll.py writes it."
+      "question": "Where does the event cursor live, who writes it, and how does the agent read and advance it? What does working-state.md hold?",
+      "expected": "The cursor is harness-owned, persisted in .squidsquad/.event-state.json (one entry per alias). The agent never writes that file: it reads the cursor via GET /events/cursor/{role} (null = first boot) and advances it by POSTing ack-cursor {event_id, role} (event_id inside payload) after tending each event, cared or skipped — one ack per event, no batched end-of-walk ack; cursor regressions are rejected. working-state.md carries NO cursor line; it holds agent-private state only (the Task line, the Improvement Scan block, other agent metadata), with the agent as its sole writer. A legacy `Last Processed Event ID` line is migrated once and removed (#11329)."
     },
     {
       "id": "11-case-precedence-stop-requested",
-      "question": "The agent is idle (no in-progress task) when a `stop-requested` event arrives. Does the agent pick up new work (Case B) or exit (Case E)?",
-      "expected": "Exit. Per event-mode-contract.md case-precedence rule: when an event arrives, evaluate Case E (special events) first regardless of current state; only if the event is not special, fall through to the state-based case. `stop-requested` at a task boundary (idle counts as a boundary) means checkpoint working-state.md (preserve the cursor) and exit cleanly. The agent does NOT run work_queue() or pick up new work in this scenario."
+      "question": "The agent is idle (no in-progress task) when the harness flips its intent to `stopping`. Does the agent pick up new work or stop, and what does it emit?",
+      "expected": "Stop. A stop is intent-driven (the harness flips intent to stopping/restarting); `stop-requested` is reserved and never emitted on the bus, so there is no event to react to or ack. Idle is a task boundary: checkpoint working-state.md, then halt — cease output and end the turn (the agent cannot self-terminate; the harness's 60s force-kill net ends the process). The agent does NOT run work_queue() or pick up new work, does NOT emit ack-stop on this path, and has nothing to ack-cursor (the cursor is harness-owned and preserved automatically)."
     },
     {
       "id": "12-scan-completion-cooldown-vs-pickup",
       "question": "An improvement scan just completed. What is the very next thing the agent does, and under what circumstances does it return to the cool-down wait?",
-      "expected": "Per idle-cooldown-loop.md step 4a: immediately after writing the scan-completion fields (Status idle, Last completed, Next scan after), the agent runs work_queue(). If work_queue() returns a task, the agent exits the cool-down loop and picks up the item directly (transition to in-progress, update Task field, begin work). Only if work_queue() is empty does the agent return to step 5 (wait via the Monitor — after each empty poll, if now >= Next scan after, run the next scan). The post-scan work_queue() is required because tasks may have arrived during the scan."
+      "expected": "Per idle-cooldown-loop.md Step B `scan` branch: after the one bounded scan, run `subloop_driver.py record-scan <alias>`. If the output has at_cap: true, cancel the driver (`subloop_driver.py cancel <alias>` and CronDelete the job); otherwise leave the cron running. The agent returns to the Monitor idle-wait; the next driver tick forge-reads work_queue() first, so a task that arrived during the scan is absorbed (action absorb-work → pick up the top actionable item), and a NUDGE is handled as Case B. After processing forge work, re-idling runs `subloop_driver.py reidle <alias>` (fresh burst, cool-down preserved) and re-confirms a live cron via CronList."
     }
+  ],
+  "revisions": [
+    "2026-09-26 (#14109 AC4): questions 1,2,3,7,8,10,11,12 updated to the current contract — per-event ack-cursor (#11329), harness-owned cursor, degraded mode removed (#9588), intent-driven stop, subloop_driver cool-down (#12506)."
   ]
 }
