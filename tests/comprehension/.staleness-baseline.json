@@ -4,7 +4,7 @@
  },
  "10678_spec.json": {
   "docs/COMPOSE-ARCHITECTURE.md": "e50c3b0af405f37fb311c4fd213d35b8d11ae5e2",
-  "docs/sub-skill-catalog.md": "2a97a8a2baa04513cdff665e1734ea8aafe90a2e"
+  "docs/sub-skill-catalog.md": "5b2068d35457f3fed597e2d06a8ed389082cb273"
  },
  "11140_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
@@ -30,7 +30,7 @@
   "references/roles/worker/web/instructions.md": "e265bd74df2712a341d043cb35ff66dc92571caf"
  },
  "12451_spec.json": {
-  "references/sub-skills/common-events/event-mode-contract.md": "f0d4a21c8b1008e6c5fa1e82478bb6d9cfb32bfe"
+  "references/sub-skills/common-events/event-mode-contract.md": "005633ebfca2776ad7392c221e30e7e45eea5ba7"
  },
  "12473_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8"
@@ -99,7 +99,7 @@
   "references/sub-skills/common/harness-restart.md": "a43cf57124e8cb35406ae1d0c243f14671e8c5ea"
  },
  "13327_spec.json": {
-  "references/roles/pm/instructions.md": "4622738c697086a4b75bc58c1b1a4c2e8b4a9384"
+  "references/roles/pm/instructions.md": "98d70014d067f94d607b49cea2e69fb5281c897a"
  },
  "13328_spec.json": {
   "docs/INSTALLER-RUNTIME.md": "d345fd45768bc3f8b16420a8b98d6a43d41441ac"
@@ -108,7 +108,7 @@
   "docs/INSTALLER-RUNTIME.md": "d345fd45768bc3f8b16420a8b98d6a43d41441ac"
  },
  "13335_spec.json": {
-  "references/sub-skills/common-events/event-mode-contract.md": "f0d4a21c8b1008e6c5fa1e82478bb6d9cfb32bfe"
+  "references/sub-skills/common-events/event-mode-contract.md": "005633ebfca2776ad7392c221e30e7e45eea5ba7"
  },
  "13336_spec.json": {
   "docs/INSTALLER-RUNTIME.md": "d345fd45768bc3f8b16420a8b98d6a43d41441ac"
@@ -157,7 +157,7 @@
   "references/sub-skills/roles/pm/improvement-scan.md": "a5bae24060e115f60b7ba9745d4dd319db9ad97c"
  },
  "13746_spec.json": {
-  "references/roles/pm/instructions.md": "4622738c697086a4b75bc58c1b1a4c2e8b4a9384"
+  "references/roles/pm/instructions.md": "98d70014d067f94d607b49cea2e69fb5281c897a"
  },
  "13792_spec.json": {
   "references/roles/dm/instructions.md": "5e94728963ace4bdb376d96b0cecff7ceb7825e5",
@@ -170,7 +170,7 @@
   "references/sub-skills/common/vault-protocol.md": "d775f2ba26d2768657786225980cae918cd348cf"
  },
  "13860_spec.json": {
-  "references/sub-skills/common/vault-optimize.md": "4e4e52824d3fcc24379958637f903544a71e6472",
+  "references/sub-skills/common/vault-optimize.md": "e676b73bfad2874b14b1b971771c421185e653ef",
   "references/sub-skills/common/vault-protocol.md": "d775f2ba26d2768657786225980cae918cd348cf",
   "references/sub-skills/common/vault-remember.md": "3d23f38de8159be7a877fe4402a4ba8f19db804e",
   "references/sub-skills/roles/pm/task-intake-phases.md": "3ec466a548131bcc4074e7526d4ec981e56b1807",
@@ -183,11 +183,11 @@
  "14099_spec.json": {
   "docs/AGENT-RUNTIME.md": "f68bb00c071daa36a39d916437af00b4cbe38cb9",
   "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883",
-  "references/sub-skills/common-events/event-mode-contract.md": "f0d4a21c8b1008e6c5fa1e82478bb6d9cfb32bfe"
+  "references/sub-skills/common-events/event-mode-contract.md": "005633ebfca2776ad7392c221e30e7e45eea5ba7"
  },
  "14109_spec.json": {
   "references/sub-skills/common-events/event-driven-workflow.md": "2d47d0caa358db04f63c49d0d5fe8883d1e758d7",
-  "references/sub-skills/common-events/event-mode-contract.md": "f0d4a21c8b1008e6c5fa1e82478bb6d9cfb32bfe"
+  "references/sub-skills/common-events/event-mode-contract.md": "005633ebfca2776ad7392c221e30e7e45eea5ba7"
  },
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
@@ -215,7 +215,7 @@
  "8694_spec.json": {
   "references/sub-skills/common-events/comment-handling.md": "8d5a2a4ab4164fbdb3f5657f89ef08586bd5e254",
   "references/sub-skills/common-events/cursor-management.md": "e70f63d8d81fa0889240e64d38fbf8a0c8f0735a",
-  "references/sub-skills/common-events/event-mode-contract.md": "f0d4a21c8b1008e6c5fa1e82478bb6d9cfb32bfe",
+  "references/sub-skills/common-events/event-mode-contract.md": "005633ebfca2776ad7392c221e30e7e45eea5ba7",
   "references/sub-skills/common-events/forge-read-pattern.md": "682ba6f78e8f56c85a011ccbd3587a36224ce2c0",
   "references/sub-skills/common-events/idle-cooldown-loop.md": "acc3cebbc3acaeeac8fa179ca352ff7f311bdaa9"
  },
@@ -246,8 +246,8 @@
   "references/sub-skills/roles/dm/events/pr-merge-wait.md": "473e3275ef57a300429da2b4760383b3888b7fbf"
  },
  "9873_spec.json": {
-  "references/scripts/event_catalog.py": "8577ca61909d3d93c1221ac1b984800581f228c5",
-  "references/scripts/harness.py": "71daca2f74ca32132799a1bd089e6bf88956b4bd"
+  "references/scripts/event_catalog.py": "a98cac749a1ae5a4522249e74eef80031b48431a",
+  "references/scripts/harness.py": "c6c6701183363cc4cc3c2f563e2d82e68bab58c6"
  },
  "_note": "Initialized 2026-07-18 (#13575), re-baselined same day after merging main (the gate's first live catch: the merge moved several fragments' shas). Pairs at initialization were grandfathered WITHOUT retroactive re-review \u2014 only 13175_spec.json had a known overrule (superseded_by:13569, annotation authored by verifier). From here on, any fragment change must refresh its dependent specs' entries in the same PR (comprehension_staleness.py refresh) or mark them superseded_by."
 }
