@@ -11,9 +11,9 @@ This fragment is the entire event-mode agent contract: boot sequence, event reac
 
 ---
 
-### Boot Sequence (Case A — L1 failsafe)
+### Boot Sequence (Case A)
 
-The boot sequence MUST work even when the harness is unreachable. Forge access is the only hard prerequisite.
+You are reading this only because the boot bootstrap's probe found the harness reachable (step 3); a harness that is unreachable at session start routes you to polling mode instead. If a harness call in any step below still fails after the usual transient-error retries, follow **Harness-Loss Recovery** below — never carry on without the harness.
 
 1. **Read working-state and initial cursor.** Open `.squidsquad/<role>/working-state.md` for your agent-private state:
    - **In-progress task** — line `- **Task**: <issue-number>` (or `- **Task**: none` if idle).
@@ -125,7 +125,7 @@ The Monitor tool has no `persistent` option: every watch carries a deadline (`ti
 If the harness becomes unreachable at any point in an event-mode session, the agent does **NOT** pivot to forge-direct work or any degraded mode mid-session, and does not sit in a wait loop for the harness to come back. There is one recovery path (#14109):
 
 - **Listener armed** (the normal case): `event_poll.py --wait` retries transient errors with backoff and, after 10 consecutive failures, exits on its own (`sys.exit(2)`). The Monitor tool then reports that the watch ended — per the listener-exit rule in **How You Listen** above, that means you end your session.
-- **Listener not yet armed** (harness lost during boot steps 4–5 — the `bootup-complete` POST or the boot-drain `GET /events/for` still fails after the usual transient-error retries): end your session the same way. Never skip `bootup-complete` and carry on draining without it (the #13369 force-kill hazard).
+- **Listener not yet armed** (harness lost during boot steps 1–5 — the step-1 cursor GET, the `bootup-complete` POST, or the boot-drain `GET /events/for` still fails after the usual transient-error retries): end your session the same way. Never skip `bootup-complete` and carry on draining without it (the #13369 force-kill hazard).
 
 Either way, if the harness process is still alive its health poller sees your session die and respawns you; if the harness itself is dead, the operator restarts it. On any restart the boot bootstrap probes the harness and routes to polling mode if it is still unreachable (see `common/boot-bootstrap.md`).
 
