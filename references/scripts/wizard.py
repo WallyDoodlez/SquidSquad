@@ -2308,7 +2308,12 @@ def merge_vault_schema_defaults(schema_path, default_path):
             added.append(key)
             continue
         cval = current[key]
-        if isinstance(dval, dict) and isinstance(cval, dict):
+        if isinstance(dval, dict):
+            # A dict setting the install replaced with a non-object (e.g.
+            # `"types": []`) is hand-broken: report it rather than skip it
+            # silently (the rule type would otherwise never land).
+            if not isinstance(cval, dict):
+                raise ValueError(f"{schema_path}: '{key}' is not a JSON object")
             # `types`: add missing type names whole; an existing type entry is
             # the install's (possibly overridden) definition — leave it as is.
             # Other dict settings: add missing sub-keys only.
@@ -2317,8 +2322,11 @@ def merge_vault_schema_defaults(schema_path, default_path):
                     cval[sub] = sval
                     added.append(f"{key}.{sub}")
     if added:
-        schema_path.write_text(json.dumps(current, indent=2) + "\n",
-                               encoding="utf-8")
+        # Atomic replace: a failed write must never truncate the install's
+        # customized schema.
+        tmp = schema_path.with_name(schema_path.name + ".tmp")
+        tmp.write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+        tmp.replace(schema_path)
     return added
 
 
@@ -2344,7 +2352,8 @@ def install_vault_engine(target_root):
 
     Returns a summary dict:
         {"deployed": [skill names], "node": "vX.Y.Z" | None,
-         "degraded": bool, "telemetry_seeded": bool}
+         "degraded": bool, "telemetry_seeded": bool,
+         "schema_seeded": bool, "schema_merged": [added paths] (#14127)}
     """
     target_root = Path(target_root)
     result = {"deployed": [], "node": None, "degraded": False,

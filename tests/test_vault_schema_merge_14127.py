@@ -109,6 +109,34 @@ class TestMergeVaultSchemaDefaults:
             wizard.merge_vault_schema_defaults(schema, DEFAULT)
 
 
+    def test_non_object_types_raises_without_rewrite(self, tmp_path):
+        """DS F1: a hand-broken `types` is reported, not silently skipped (and
+        the file is not rewritten with the other additions)."""
+        _, schema = _target(tmp_path, schema=None)
+        schema.parent.mkdir(parents=True, exist_ok=True)
+        schema.write_text('{"types": []}', encoding="utf-8")
+        with pytest.raises(ValueError, match="types"):
+            wizard.merge_vault_schema_defaults(schema, DEFAULT)
+        assert schema.read_text(encoding="utf-8") == '{"types": []}'
+
+    def test_write_is_atomic_no_tmp_left(self, tmp_path):
+        """DS F2: the merge replaces the file atomically via a sibling tmp."""
+        _, schema = _target(tmp_path)
+        wizard.merge_vault_schema_defaults(schema, DEFAULT)
+        assert not (schema.parent / "vault-schema.json.tmp").exists()
+        json.loads(schema.read_text(encoding="utf-8"))
+
+    def test_failed_write_leaves_original_intact(self, tmp_path):
+        """DS F2: if the write fails, the original schema is untouched."""
+        from unittest.mock import patch
+        _, schema = _target(tmp_path)
+        before = schema.read_bytes()
+        with patch.object(Path, "replace", side_effect=OSError("disk full")):
+            with pytest.raises(OSError):
+                wizard.merge_vault_schema_defaults(schema, DEFAULT)
+        assert schema.read_bytes() == before
+
+
 class TestInstallerUpgradePath:
     def test_install_vault_engine_merges_existing_schema(self, tmp_path):
         """The installer re-run (the upgrade path) performs the merge."""
