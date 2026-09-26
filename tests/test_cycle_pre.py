@@ -636,6 +636,9 @@ class TestBuildSkillInput:
                 fake.stdout = "[]"
             return fake
 
+        # #14108: the legacy per-issue comment fetch shells out to a REAL
+        # `gh issue view`; mock it like the rest of the forge surface.
+        monkeypatch.setattr(cycle_pre, "_fetch_latest_comment", lambda n: None)
         monkeypatch.setattr(cycle_pre, "_run_script", fake_run_script)
         monkeypatch.setattr(cycle_pre, "_config_get", lambda f: {
             "interval": "30", "test-command": "",

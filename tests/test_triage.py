@@ -80,6 +80,7 @@ class TestTriageScript:
         assert hasattr(triage, "_parse_comment_role")
 
 
+@pytest.mark.live_forge  # #14108: read-only live gh smoke, opted out of the guard
 class TestTriageLiveSmoke:
     """Live smoke test against the real repo (requires gh CLI)."""
 

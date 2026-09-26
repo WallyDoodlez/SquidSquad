@@ -2168,10 +2168,15 @@ class TestBranchUtilities:
         mock_run.return_value = _mock_result(returncode=1)
         assert git_ops.branch_exists("nonexistent") is False
 
+    @patch("git_ops._git_push")
     @patch("git_ops._run_list")
-    def test_branch_delete_success(self, mock_run):
+    def test_branch_delete_success(self, mock_run, mock_push):
+        # #14108: _git_push must be mocked too -- unpatched, this test ran a
+        # REAL `git push origin --delete` against the live GitHub origin.
         mock_run.return_value = _mock_result()
         assert git_ops.branch_delete("squidsquad/skill/375") is True
+        mock_push.assert_called_once_with(
+            ["origin", "--delete", "squidsquad/skill/375"])
 
     @patch("git_ops._run")
     def test_current_branch(self, mock_run):
