@@ -20,17 +20,15 @@ Write status bar: `python references/scripts/cycle.py status-bar [ROLE] "verifyi
 
 **Step 1 — Gather recent vault writes from all agents**:
 
-Find galaxy notes created or updated since the last synthesis (or in the last 7 days if no prior synthesis):
+List the notes created or updated since the last synthesis (or in the last 7 days if there was none) — a file listing, not a content search:
 
 ```bash
-# Find recently modified galaxy notes
-find .squidsquad/vault/galaxy/ -name "*.md" -newer .squidsquad/[ROLE]/.last-synthesis 2>/dev/null || \
-find .squidsquad/vault/galaxy/ -name "*.md" -mtime -7
+find .squidsquad/vault/galaxy/ .squidsquad/vault/systems/ -name "*.md" -newer .squidsquad/[ROLE]/.last-synthesis 2>/dev/null || find .squidsquad/vault/galaxy/ .squidsquad/vault/systems/ -name "*.md" -mtime -7
 ```
 
-If no recent notes found, print: `[🦑 HH:MM:SS] No recent vault writes — skipping synthesis.` and skip.
+If none, print: `[🦑 HH:MM:SS] No recent vault writes — skipping synthesis.` and skip.
 
-Read each recent note's frontmatter (type, tags, owner) and body summary.
+Read each listed note's frontmatter (type, tags, owner) and body summary. To find related notes for a theme, search through the engine (never grep): `python references/scripts/vault_consume.py search --alias [ROLE] --tags <theme tags>`.
 
 **Step 2 — Detect recurring themes**:
 
@@ -51,12 +49,11 @@ Only surface convergences supported by 2+ distinct vault notes from different ag
 
 For each detected posture (max **1 per synthesis cycle**):
 
-1. Create a vault galaxy note using vault-create protocol:
-   - **Type**: `pattern`
-   - **Tags**: include `posture` tag + relevant domain tags
-   - **Confidence**: `medium` (agent-observed convergence, not human-confirmed)
-   - **Body**: describe the principle, cite the source notes via `[[wikilinks]]`, explain why these converge
-   - **Name**: `pattern-posture-<descriptive-name>.md`
+1. Create the posture note per vault-protocol's vault-create steps:
+   - A principle about one subsystem → append it to that subsystem's `systems/` hub note (vault-update), under a `## Postures` section.
+   - A principle spanning several subsystems → a new `pattern-<descriptive-name>` note (`vault_entity.py create pattern <descriptive-name>`) tagged `posture` + domain tags, linking every hub it spans.
+   - Body: state the principle, cite the source notes via `[[wikilinks]]`, explain why they converge.
+   - Never create `pattern-posture-*` notes (retired prefix).
 
 2. File a pending task for human review.
 
@@ -71,8 +68,9 @@ For each detected posture (max **1 per synthesis cycle**):
    If approved, this becomes active scan criteria for all agents.
    ```
    Set `--role pm`, `--priority low`, `--reporter pm-lead`.
+   Then record the source notes as used, attributed to that review task: `python references/scripts/vault_consume.py cite --alias [ROLE] --task <review task number> --slugs <source slugs>`.
 
-3. Run vault-check Level 1 on the new note.
+3. Run vault-protocol's checks after every write on the new or updated note.
 
 **Step 5 — Record synthesis**:
 
@@ -87,6 +85,6 @@ Log in iteration summary: `Vault synthesis: [N] recent notes reviewed, [M] postu
 - **Max 1 posture per synthesis** — quality over quantity, prevent noise
 - **Posture notes need human approval** before becoming active scan criteria — file as pending task
 - **Never auto-approve postures** — they shape all future agent behavior
-- **Use existing `pattern` type** — no new vault entity type needed
+- **Output is a `systems/` hub section or a `pattern-*` note** — no posture-specific type or prefix
 - **The `posture` tag** distinguishes synthesis-derived principles from regular patterns
 - **Cross-agent only** — a pattern from a single agent is not a posture; it must show convergence across 2+ sources

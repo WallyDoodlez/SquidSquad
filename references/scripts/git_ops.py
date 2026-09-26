@@ -977,7 +977,8 @@ def _pr_state_scope_violations(pr_number):
 
     Reuses the exact ``_is_state_file`` predicate the #11511 commit-time guard uses
     to strip these on feature-branch commits (``.squidsquad/`` + ``.claude/`` minus
-    the launcher-script allow-list), plus the ``_is_plan_body`` (#12750) exemption.
+    the launcher-script allow-list), plus the ``_is_lineage_file`` exemption
+    (#12750 plan bodies + #13860 CONTEXT-<n> / <n>-fix-plan lineage files).
 
     BOOTSTRAP PROPERTY (#13577, discovered live): this check evaluates against
     the merging clone's CURRENT predicate -- deliberately, since trusting the
@@ -1004,8 +1005,27 @@ def _pr_state_scope_violations(pr_number):
     declared = _pr_declared_files(pr_number)
     if declared is None:
         return None
-    return sorted(f for f in declared
-                  if _is_state_file(f) and not _is_plan_body(f))
+    # Only the PR's OWN issue's lineage file is exempt; an unparseable head
+    # branch exempts nothing (fail-safe: refuse rather than leak state).
+    issue = _pr_head_issue(pr_number)
+
+    def exempt(f):
+        if issue is None:
+            return False
+        if _is_lineage_file(f, issue):
+            return True
+        # #13860 S4.4 capture-at-ship: a vault note citing THIS issue (content
+        # read at the PR head; a deletion has no content -> flagged) that only
+        # ADDS to the base tip's version (undeterminable base -> flagged).
+        if not _is_capture_note_path(f):
+            return False
+        head = _pr_file_text(pr_number, f)
+        if not _is_capture_note(f, issue, head):
+            return False
+        state, base = _pr_file_base_text(pr_number, f)
+        return state != "error" and _is_additive_capture(base, head)
+
+    return sorted(f for f in declared if _is_state_file(f) and not exempt(f))
 
 
 def _merge_commit_sha(pr_number):
@@ -1619,6 +1639,153 @@ def _is_plan_body(path):
     return stem.isdigit()
 
 
+def _issue_from_branch(branch):
+    """``squidsquad/<segment>/<n>`` -> ``n`` (int); anything else -> ``None``.
+
+    Covers the default ``squidsquad/task/<n>`` AND the configurable
+    ``squidsquad/{role}/{number}`` branch-pattern (``get_branch_name``) --
+    the same trailing-numeric-segment parse ``pr_merge`` uses."""
+    parts = (branch or "").strip().split("/")
+    if len(parts) >= 2 and parts[0] == "squidsquad" and parts[-1].isdigit():
+        return int(parts[-1])
+    return None
+
+
+def _pr_head_issue(pr_number):
+    """Issue number of a PR's ``squidsquad/<segment>/<n>`` head branch, or ``None``."""
+    res = _run_list(["gh", "pr", "view", str(pr_number), "--json", "headRefName",
+                     "-q", ".headRefName"], check=False)
+    if res.returncode != 0:
+        return None
+    return _issue_from_branch(res.stdout.strip())
+
+
+def _pr_file_blob(pr_number, path, ref_field="headRefOid"):
+    """``path`` at the PR's ``ref_field`` (``headRefOid`` / ``baseRefName``) via
+    the GitHub contents API -> ``(state, text)``: ``("ok", text)``,
+    ``("absent", None)`` on a 404 (not in that tree), ``("error", None)`` when
+    undeterminable. Callers treat ``error`` fail-safe (no exemption)."""
+    from urllib.parse import quote  # noqa: PLC0415
+    ref = _run_list(["gh", "pr", "view", str(pr_number), "--json", ref_field,
+                     "-q", f".{ref_field}"], check=False)
+    if ref.returncode != 0 or not ref.stdout.strip():
+        return "error", None
+    res = _run_list(["gh", "api", f"repos/{{owner}}/{{repo}}/contents/{quote(path, safe='/')}?ref={quote(ref.stdout.strip(), safe='/')}",
+                     "-q", ".content"], check=False)
+    if res.returncode != 0:
+        err = f"{res.stderr or ''} {res.stdout or ''}"
+        return ("absent", None) if ("404" in err or "Not Found" in err) else ("error", None)
+    import base64  # noqa: PLC0415
+    try:
+        return "ok", base64.b64decode(res.stdout.strip()).decode("utf-8", errors="replace")
+    except ValueError:
+        return "error", None
+
+
+def _pr_file_text(pr_number, path):
+    """Text of ``path`` at the PR's head commit, or ``None`` if absent (deleted
+    in the PR) / undeterminable."""
+    return _pr_file_blob(pr_number, path, "headRefOid")[1]
+
+
+def _pr_file_base_text(pr_number, path):
+    """``(state, text)`` of ``path`` at the PR's base branch tip -- the tree the
+    squash lands on (see ``_pr_file_blob``)."""
+    return _pr_file_blob(pr_number, path, "baseRefName")
+
+
+def _is_capture_note_path(path):
+    """A vault CONTENT note path (capture-at-ship candidate, VAULT-ARCH 9.5/9.8):
+    ``.squidsquad/vault/<folder>/.../<name>.md``. Never ``BRIEFING.md`` or
+    ``vault-schema.json`` (vault root), never a dot-directory (engine shard
+    store, ``.obsidian/``)
+    -- those stay main-only."""
+    prefix = ".squidsquad/vault/"
+    if not path.startswith(prefix) or not path.endswith(".md"):
+        return False
+    parts = path[len(prefix):].split("/")
+    return len(parts) >= 2 and not parts[0].startswith(".")
+
+
+def _cites_issue(text, issue):
+    """Capture-at-ship notes carry their issue number in the references
+    (9.5 item 1): ``#<n>`` not followed by another digit."""
+    return bool(text) and re.search(rf"#{issue}(?!\d)", text) is not None
+
+
+def _is_capture_note(path, issue, text):
+    """#13860 S4.4: the ONE vault-note class that may ride a task PR -- a
+    content note (``_is_capture_note_path``) whose content at that commit cites
+    the task's own issue. Content-bound, so a branch for issue A can neither
+    carry an unrelated vault edit nor delete a note (``text is None``). Callers
+    ALSO require ``_is_additive_capture`` against the base tree, so a citation
+    cannot launder a destructive edit of an existing note."""
+    return (issue is not None and text is not None
+            and _is_capture_note_path(path) and _cites_issue(text, issue))
+
+
+def _is_additive_capture(base_text, head_text):
+    """#13860 S4.4: a capture note may only ADD to the base tree's version.
+
+    ``base_text is None`` (note absent on base) -> a new note, additive. Else
+    every base line must survive in the head (multiset containment), except the
+    frontmatter ``updated:`` line vault-update bumps. Any removed or rewritten
+    base line -- a stale branch reverting a teammate's edit (#13554 class), a
+    correction, a ``status`` retirement -- fails; that edit belongs on the
+    working branch instead."""
+    if base_text is None:
+        return True
+    if head_text is None:
+        return False
+    from collections import Counter  # noqa: PLC0415
+
+    def lines(text):
+        # Only the leading frontmatter block's ``updated:`` is mutable; a body
+        # line that happens to start with "updated:" is content like any other.
+        raw = text.splitlines()
+        fm_end = -1
+        if raw and raw[0].rstrip() == "---":
+            fm_end = next((i for i in range(1, len(raw)) if raw[i].rstrip() == "---"), -1)
+        return Counter(ln.rstrip() for i, ln in enumerate(raw)
+                       if not (0 < i < fm_end and ln.startswith("updated:")))
+
+    return not (lines(base_text) - lines(head_text))
+
+
+def _is_lineage_file(path, issue=None):
+    """#13860 (VAULT-ARCH 9.3 receipt location rule): an issue's single
+    plan/lineage file rides the task branch and ships in the PR diff.
+
+    Superset of ``_is_plan_body`` (#12750): ``.squidsquad/<role>/planning/`` +
+    one of ``<n>-body.md`` (plan-in-PR), ``CONTEXT-<n>.md`` (planned-task
+    lineage) or ``<n>-fix-plan.md`` (bug-flow lineage, created at pickup). The
+    receipts (``## Vault context consumed`` / ``## Applicable rules``) live in
+    that file, and the verifier gate (``vault_consume.py check-receipts
+    --diff-base``) requires it IN the diff -- so stripping it would make the
+    gate unpassable. Same #11511 safety argument as the plan body: each is a
+    per-issue file, never rewritten every cycle, never shared across branches.
+    Bundle ``CONTEXT.md`` and legacy ``FEAT-*-CONTEXT.md`` stay stripped.
+
+    ``issue`` scopes the exemption: when given, only THAT issue's lineage file
+    matches, so a PR/branch for issue A can never carry issue B's planning
+    state (#13860 review). The guard and the merge gate always pass it;
+    ``issue=None`` (shape-only) is for callers with no issue context."""
+    parts = path.split("/")
+    if len(parts) != 4 or parts[0] != ".squidsquad" or parts[2] != "planning":
+        return False
+    name = parts[3]
+    stem = None
+    for pre, suf in (("", "-body.md"), ("CONTEXT-", ".md"), ("", "-fix-plan.md")):
+        if name.startswith(pre) and name.endswith(suf) and len(name) > len(pre) + len(suf):
+            cand = name[len(pre):len(name) - len(suf)]
+            if cand.isdigit():
+                stem = cand
+                break
+    if stem is None:
+        return False
+    return issue is None or stem == str(issue)
+
+
 def _auto_resolve_state_conflicts():
     """Auto-resolve unmerged state files (#8653).
 
@@ -1658,7 +1825,7 @@ def _auto_resolve_state_conflicts():
 
 def _state_blob_sizes(ref):
     """#13556 -- {path: byte-size} for every protected state/vault path at ``ref``
-    (``_is_state_file`` and not ``_is_plan_body``). Uses ``git ls-tree -r -l`` so
+    (``_is_state_file`` and not ``_is_lineage_file``). Uses ``git ls-tree -r -l`` so
     the size is read straight from the tree (no working-tree dependency).
 
     Returns ``None`` on any git failure (distinct from an empty ``{}``, which means
@@ -1679,7 +1846,7 @@ def _state_blob_sizes(ref):
         if len(parts) < 4:
             continue
         path = path.strip()
-        if not (_is_state_file(path) and not _is_plan_body(path)):
+        if not (_is_state_file(path) and not _is_lineage_file(path)):
             continue
         try:
             sizes[path] = int(parts[3])
@@ -2568,6 +2735,29 @@ def check_real_conflict(base, head):
 _HOOKS_DIR_REL = "references/git-hooks"
 
 
+def _guard_exempt(path, issue):
+    """Feature-branch guard exemption: this issue's lineage file, or a
+    capture-at-ship vault note whose STAGED content cites this issue and only
+    adds to ``origin/<working>``'s version (``_is_additive_capture``)."""
+    if issue is None:
+        return False
+    if _is_lineage_file(path, issue):
+        return True
+    if not _is_capture_note_path(path):
+        return False
+    staged = _run_list(["git", "show", f":{path}"], check=False)
+    if staged.returncode != 0 or not _is_capture_note(path, issue, staged.stdout):
+        return False
+    base_ref = f"origin/{_get_working_branch()}"
+    listed = _run_list(["git", "ls-tree", "--name-only", base_ref, "--", path], check=False)
+    if listed.returncode != 0:
+        return False  # base undeterminable -> strip (fail-safe narrowing)
+    if not listed.stdout.strip():
+        return True  # new note: absent on the working branch
+    base = _run_list(["git", "show", f"{base_ref}:{path}"], check=False)
+    return base.returncode == 0 and _is_additive_capture(base.stdout, staged.stdout)
+
+
 def guard_staged_state():
     """Unstage transient state/ephemeral files when committing to a feature branch (#11511).
 
@@ -2586,11 +2776,13 @@ def guard_staged_state():
     - On the configured working branch (or a detached/unknown HEAD): no-op.
     - On any other (feature) branch: unstage every staged file classified as
       state/ephemeral by ``_is_state_file`` (the same classifier ``commit_code``
-      uses), **except plan bodies** — ``_is_plan_body`` paths
-      (``.squidsquad/<role>/planning/<n>-body.md``) are exempted so a task's
-      committed plan rides the feature branch into the PR (plan-in-PR, #12750).
-      That carve-out is guard-local: ``commit_code`` / ``commit_state`` /
-      ``_auto_resolve_state_conflicts`` still treat plan bodies as state. The
+      uses), **except lineage files** — ``_is_lineage_file`` paths
+      (``.squidsquad/<role>/planning/`` ``<n>-body.md`` / ``CONTEXT-<n>.md`` /
+      ``<n>-fix-plan.md``) are exempted so a task's committed plan and its
+      vault receipts ride the feature branch into the PR (plan-in-PR, #12750;
+      receipts, #13860). That carve-out is guard-local: ``commit_code`` /
+      ``commit_state`` / ``_auto_resolve_state_conflicts`` still treat them as
+      state, so they reach a branch only via an explicit ``git add``. The
       stripped files stay in the working tree for the next working-branch cycle
       to commit: ``.squidsquad/`` files via ``commit_state``; ``.claude/`` files
       via the working branch's normal state-commit path (``commit_state`` stages
@@ -2606,6 +2798,8 @@ def guard_staged_state():
     # check=False: a failing `git branch --show-current` (corrupt HEAD, perms)
     # must not raise mid-commit -- empty `current` falls through to fail-open.
     current = _run("git branch --show-current", check=False).stdout.strip()
+    # #13860: only THIS branch's issue's lineage file rides it (scoped exemption).
+    branch_issue = _issue_from_branch(current)
     # Empty current = detached HEAD or no branch -> can't classify; stay out of
     # the way (fail-open). On the working branch, state belongs here -> no-op.
     if not current or current == working:
@@ -2622,7 +2816,7 @@ def guard_staged_state():
         p = raw.strip().strip('"')
         if not p:
             continue
-        if _is_state_file(p) and not _is_plan_body(p):
+        if _is_state_file(p) and not _guard_exempt(p, branch_issue):
             state_staged.append(p)
     if not state_staged:
         return []

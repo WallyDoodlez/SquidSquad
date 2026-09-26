@@ -4,7 +4,7 @@
  },
  "10678_spec.json": {
   "docs/COMPOSE-ARCHITECTURE.md": "e50c3b0af405f37fb311c4fd213d35b8d11ae5e2",
-  "docs/sub-skill-catalog.md": "a9c426936b2e75f103d71cfd672fe9bbcbe8dec4"
+  "docs/sub-skill-catalog.md": "2a97a8a2baa04513cdff665e1734ea8aafe90a2e"
  },
  "11140_spec.json": {
   "references/roles/SOUL.md": "123a7e0c083d236fdd1f20ebacd02420fe0642b8",
@@ -90,7 +90,7 @@
  },
  "13286_spec.json": {
   "references/sub-skills/common/pr-protocol.md": "ea74a6fb8d77631df8d73fe84b4d20ac241d268b",
-  "references/sub-skills/roles/worker/implement-tasks.md": "2a3a996fbba351f7a5bd44fd2578fa9dcd55b9ef"
+  "references/sub-skills/roles/worker/implement-tasks.md": "4e00a7ec1726e959ebc5bbcf3d86286c8590adef"
  },
  "13291_spec.json": {
   "references/roles/identity.md": "fb99cbd648803c27b0d96bba454bbca9cedc0285"
@@ -126,13 +126,13 @@
   "references/sub-skills/common-events/event-mode-contract.md": "464e841d922600947320bd2ae96a9b18ce58f32b"
  },
  "13464_spec.json": {
-  "references/sub-skills/roles/verifier/verification.md": "e5180a9753ad4786c6406e53d6da94d928fb9202"
+  "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432"
  },
  "13551_spec.json": {
   "references/sub-skills/common/git-commit.md": "b2afa0b6f0d82665cdba629f8c54a91a9a46d50c"
  },
  "13563_spec.json": {
-  "references/sub-skills/common/vault-remember.md": "54bc6fb99e537560fa8df7e1bc74f0761aa672bd"
+  "references/sub-skills/common/vault-remember.md": "3d23f38de8159be7a877fe4402a4ba8f19db804e"
  },
  "13565_spec.json": {
   "references/roles/instructions.md": "8e83935439a7f47bf2b1a7a9812a484a66f4d883"
@@ -154,7 +154,7 @@
   "references/sub-skills/common/improvement-scan.md": "0c96478c0a33200ecdb39092bedf534fd61b4c33"
  },
  "13735_spec.json": {
-  "references/sub-skills/roles/pm/improvement-scan.md": "d683d3ad3559aabba27831deaad6fc06ad7f4389"
+  "references/sub-skills/roles/pm/improvement-scan.md": "a5bae24060e115f60b7ba9745d4dd319db9ad97c"
  },
  "13746_spec.json": {
   "references/roles/pm/instructions.md": "4622738c697086a4b75bc58c1b1a4c2e8b4a9384"
@@ -164,10 +164,10 @@
   "references/roles/worker/instructions.md": "ffe6c41c8eb1967d4b47e8955c1156e6ef577f33"
  },
  "13857_spec.json": {
-  "references/skills/vault-search/SKILL.md": "9b13834138c3780fb7a45368f6132c71b182fe9a"
+  "references/skills/vault-search/SKILL.md": "e295ba0f982877c54f386fbcf4a2047f2325962e"
  },
  "13858_spec.json": {
-  "references/sub-skills/common/vault-protocol.md": "750f4af293218935ae81adfc1c9bfe281b3d1156"
+  "references/sub-skills/common/vault-protocol.md": "d775f2ba26d2768657786225980cae918cd348cf"
  },
  "14099_spec.json": {
   "docs/AGENT-RUNTIME.md": "f68bb00c071daa36a39d916437af00b4cbe38cb9",
@@ -177,7 +177,7 @@
  "1428_spec.json": {
   "references/prompts/test-plan.md.j2": "a9676d6b26c2202869d6b1d97685927ba6622334",
   "references/sub-skills/roles/verifier/verification-templates.md": "62a1b32f260d957ec806450ffffb84f8f3da7b58",
-  "references/sub-skills/roles/verifier/verification.md": "e5180a9753ad4786c6406e53d6da94d928fb9202"
+  "references/sub-skills/roles/verifier/verification.md": "4d0a1c5078e7d5f33a2737f024ba10864ee09432"
  },
  "2181_spec.json": {
   "references/sub-skills/roles/dm/delivery-packaging.md": "5a5ea484685a605aeffdbe9c93ad2e523473a1bd"
@@ -218,7 +218,7 @@
   ".squidsquad/pm/CLAUDE.md": "25907bcad5f3c6394ed45bc50e5aec69fee4c343",
   ".squidsquad/qa/CLAUDE.md": "320553312d403dd75850e3a19929cb13aac7a5f9",
   ".squidsquad/skill/CLAUDE.md": "9971f57a275509e6afa026ab4d6d4f2d9fa042e1",
-  "references/sub-skills/roles/pm/task-intake.md": "70fe77ac004801a82ddfe7dd7785f0db394a6607"
+  "references/sub-skills/roles/pm/task-intake.md": "ab1776529857aab3abf05ad12fd8999426dddd1c"
  },
  "9588_spec.json": {},
  "9742_spec.json": {

@@ -129,9 +129,9 @@ Reusable across multiple roles.
 
 | Sub-skill | One-liner | Used by |
 |---|---|---|
-| `vault-remember` | End-of-cycle reflection; writes to vault when something is worth remembering — every role contributes patterns from its own lane | all roles |
-| `vault-optimize` | On quiet cycles, compact and de-dup vault entries | PM, worker |
-| `vault-protocol` | Full vault R/W protocol — vault is shared institutional knowledge, all roles write per their lane | all roles |
+| `vault-remember` | End-of-cycle reflection + worker capture-at-ship; writes to vault when something is worth remembering (4 gates; gate 2 = engine dedup, prefer-update-over-create) — every role contributes from its own lane | all roles |
+| `vault-optimize` | On quiet cycles, propose-only maintenance: engine-report pruning proposals + contradictions filed for human review, own-shard telemetry compaction (no auto-archive, no time decay) | PM, worker |
+| `vault-protocol` | Full vault R/W protocol, engine-backed (raw-grep ban): search/cite via `vault_consume.py`, consumption steps + receipt formats, v2 note creation (incl. `rule-*` lane) — all roles write per their lane | all roles |
 
 ### Quality, git, improvement
 
@@ -213,7 +213,7 @@ Role-specific event extras:
 | `roles/pm/improvement-scan` | PM variant — process-focused, never code (slash-bearing form per #10743; disambiguates from `common/improvement-scan`) |
 | `roles/pm/issue-filing` | PM's bug-filing protocol (behavior-only, no RCA) — slash-bearing per #10743 |
 | `roles/pm/discussion-protocol` | PM's comment format (→ retires; common/`discussion` is the canonical) — slash-bearing per #10743 |
-| `vault-synthesis` | Cross-agent pattern detection (PM-only) |
+| `vault-synthesis` | Cross-agent posture detection (PM-only); output is a `systems/` hub section or `pattern-*` note, human-gated |
 | `roles/pm/ralph-loop-overview` | Runtime-loaded polling-mode cycle contract — slash-bearing per #10743 |
 | Domain context | Per-stack PM notes: `android/`, `ios/`, `web/`, `fullstack/`, `skill/` |
 
