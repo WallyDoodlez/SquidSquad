@@ -31,7 +31,7 @@ sequenceDiagram
     A->>A: read working-state
     A->>F: drain initial walk
     Note over A: §3 Per-nudge cycle
-    loop until Monitor exits
+    loop until session ends
         H->>A: NUDGE
         A->>F: read forge, do work, write back
         A->>H: ack cursor
