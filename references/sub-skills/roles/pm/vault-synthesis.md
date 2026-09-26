@@ -10,7 +10,7 @@ Synthesize cross-agent vault knowledge into posture notes. When the same event a
 
 **Activation (#14137)**: run this step only when a `vault-maintenance` event arrives with `synthesis_due: true` in its payload. The harness sends that at most once a week (config `Vault Optimize > Synthesis Interval Days`, never below 7). You do not count quiet cycles or keep any synthesis counter; the harness schedules, and the gates below still decide whether anything is written. With the harness unreachable (loop mode) there is no window, so synthesis waits until event mode returns.
 
-**Vault write freeze**: if `python references/scripts/config.py get vault-writes-per-cycle` returns `0` (the #13862 M0–M4 freeze), run Steps 1–3 as normal, then in Step 4 make **no vault writes**: skip creating or updating the posture note and the vault checks, and put the full drafted posture in the review task body instead, so it can be written after approval once the freeze lifts. Steps 4.2 (review task) and 5 (sentinel + log line) still run.
+**Vault write freeze**: if `python references/scripts/config.py get vault-writes-per-cycle` returns `0` (the #13862 M0–M4 freeze), run Steps 1–3 as normal, then in Step 4 make **no vault writes**: skip creating or updating the posture note and the vault checks, and fill the review task's **Drafted note** field (Step 4.2) instead, so it can be written after approval once the freeze lifts. Steps 4.2 (review task) and 5 (sentinel + log line) still run.
 
 **Vault size gate**: Only run when the vault has 10+ galaxy notes. If fewer, skip — not enough data to synthesize.
 
@@ -66,6 +66,13 @@ For each detected posture (max **1 per synthesis cycle**):
    **Evidence**: [why these converge]
 
    If approved, this becomes active scan criteria for all agents.
+   ```
+   During the vault write freeze, append this field to the body (omit it otherwise):
+   ```
+   **Drafted note** (vault frozen; write after approval once the freeze lifts):
+   Target: [systems/<hub>.md `## Postures` section | new pattern-<descriptive-name> note]
+   Tags: posture, [domain tags]
+   [full markdown body, as it would have been written]
    ```
    Set `--role pm`, `--priority low`, `--reporter pm-lead`.
    Then record the source notes as used, attributed to that review task: `python references/scripts/vault_consume.py cite --alias [ROLE] --task <review task number> --slugs <source slugs>`.

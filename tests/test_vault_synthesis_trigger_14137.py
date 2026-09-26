@@ -91,6 +91,14 @@ class TestSynthesisSchedule:
                                              force_synthesis=True)
         assert window["emitted"][0]["synthesis_due"] is True
 
+    def test_force_synthesis_alone_runs_a_not_due_window(self, window):
+        """Review F2: force_synthesis without force still runs the window."""
+        harness._write_vault_maintenance_state(
+            {"last_window_at": 1000.0, "last_synthesis_signal_at": 1000.0})
+        out = harness.run_vault_maintenance_window(now=1001.0, force_synthesis=True)
+        assert out["ran"] and out["synthesis_due"] is True
+        assert window["emitted"][0]["synthesis_due"] is True
+
     def test_force_endpoint_synthesis_param(self, window, monkeypatch):
         harness._write_vault_maintenance_state({"last_synthesis_signal_at": 1e18})
         out = asyncio.run(harness.post_vault_maintenance(synthesis=True))
@@ -150,6 +158,16 @@ class TestInstructions:
         freeze = freeze[:freeze.index("\n\n")]
         assert "config.py get vault-writes-per-cycle" in freeze
         assert "no vault writes" in freeze and "review task" in freeze
+        # Review F1: the review-task template carries the frozen draft.
+        assert "**Drafted note** field" in freeze
+        step4 = text[text.index("**Step 4"):text.index("**Step 5")]
+        assert "**Drafted note** (vault frozen" in step4
+        assert "Target:" in step4
+
+    def test_optimize_runs_before_synthesis(self):
+        text = self.SYN.read_text(encoding="utf-8")
+        activation = text[:text.index("**Activation")]
+        assert "run optimize first, then synthesis" in activation
 
     def test_contract_routes_synthesis_due(self):
         text = self.CONTRACT.read_text(encoding="utf-8")
@@ -157,3 +175,9 @@ class TestInstructions:
         bullet = bullet[:bullet.index("\n- ")]
         assert "run sub-skill: `vault-synthesis`" in bullet
         assert "synthesis_due" in bullet
+        # Review F4: each condition maps to its sub-skill, optimize first.
+        i_q = bullet.index("If `queued` > 0")
+        i_opt = bullet.index("run sub-skill: `vault-optimize`")
+        i_s = bullet.index("If `synthesis_due` is true")
+        i_syn = bullet.index("run sub-skill: `vault-synthesis`")
+        assert i_q < i_opt < i_s < i_syn

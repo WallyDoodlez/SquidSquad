@@ -2916,7 +2916,8 @@ def run_vault_maintenance_window(force=False, now=None,
     that is also persisted as ``last_result``.
 
     #14137: the window also decides whether vault-synthesis is due (weekly at
-    most, see _vault_synthesis_due; ``force_synthesis`` overrides). The single
+    most, see _vault_synthesis_due; ``force_synthesis`` overrides it and also
+    runs a window that is not otherwise due). The single
     ``vault-maintenance`` event to pm carries ``synthesis_due``; it is emitted
     when notes are queued for optimize OR synthesis is due. The harness only
     schedules: the PM's sub-skill still judges (vault size, recent writes).
@@ -2929,7 +2930,7 @@ def run_vault_maintenance_window(force=False, now=None,
     with _vault_maintenance_lock:
         now = time.time() if now is None else now
         data = _read_vault_maintenance_state()
-        if not force and now < _vault_maintenance_next_due(data):
+        if not (force or force_synthesis) and now < _vault_maintenance_next_due(data):
             return {"ran": False, "reason": "not due",
                     "next_due_at": _vault_maintenance_next_due(data)}
         result = {"ran": True, "at": now, "forced": bool(force), "emitted": None}
