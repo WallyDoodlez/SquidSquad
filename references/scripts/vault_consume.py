@@ -457,14 +457,19 @@ def inject_context(n, alias, entities=(), tags=(), terms=(),
     # #14133: read the body BEFORE searching. The search writes impression
     # events, so a view failure after it left impressions for context nobody
     # was shown (breaking INTAKE_TOP's shown == impressed), and a retry
-    # double-counted them.
-    res = view_fn(n)
-    if res.returncode != 0:
-        raise RuntimeError(f"gh issue view #{n} failed: {(res.stderr or '').strip()[:200]}")
+    # double-counted them. The body is re-read after the search so an edit
+    # that lands while the engine runs is not overwritten by a stale copy.
+    def _view():
+        res = view_fn(n)
+        if res.returncode != 0:
+            raise RuntimeError(f"gh issue view #{n} failed: {(res.stderr or '').strip()[:200]}")
+        return res.stdout
+
+    _view()
     payload, reason = search_fn(alias, n, entities, tags, terms, top=INTAKE_TOP)
     searched = ", ".join([*entities, *tags, *terms])
     section = render_context_section(payload, reason, searched)
-    edit = edit_fn(n, replace_section(res.stdout, INTAKE_SECTION, section))
+    edit = edit_fn(n, replace_section(_view(), INTAKE_SECTION, section))
     if edit.returncode != 0:
         raise RuntimeError(f"gh issue edit #{n} failed: {(edit.stderr or '').strip()[:200]}")
     return section

@@ -14,12 +14,14 @@ impressions stayed even though nothing was shown. That breaks INTAKE_TOP's
 
 ## Intended direction
 
-Read the issue body first, and search only after the view succeeds. This is
-the issue's first suggested fix, and it is a pure reorder. The no-write
+Read the issue first, and search only after the view succeeds (the issue's
+first suggested fix). Then re-read the body after the search and edit from
+that copy. That keeps the read-modify-write window as narrow as it was before,
+so an edit made during the engine run is not overwritten (DS review). The no-write
 preview plus second write-search variant was rejected: it costs two engine
 runs, and a concurrent telemetry write between them could make the impressed
-set differ from the shown set. A residual window remains: an edit failing
-after a successful view and search still leaves impressions. That is a rarer
+set differ from the shown set. A residual window remains: a second view or the edit
+failing after a successful search still leaves impressions. That is a rarer
 path (the same identity just read the issue), and this change does not alter it.
 
 ## Impact

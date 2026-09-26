@@ -556,6 +556,29 @@ class TestIntakeInjection:
         assert searched == []
         assert not tele.exists()
 
+    def test_inject_edits_the_body_read_after_the_search(self):
+        # #14133 DS review: the edit must use a body read AFTER the search, so
+        # a concurrent edit during the engine run is not clobbered.
+        bodies = iter(["Old\n", "Edited meanwhile\n"])
+        order, edited = [], {}
+
+        def fake_view(n):
+            order.append("view")
+            return MagicMock(returncode=0, stdout=next(bodies), stderr="")
+
+        def fake_search(*a, **k):
+            order.append("search")
+            return self.PAYLOAD, None
+
+        def fake_edit(n, body):
+            edited["body"] = body
+            return MagicMock(returncode=0, stderr="")
+
+        section = vc.inject_context(5, "pm", tags=["x"], search_fn=fake_search,
+                                    view_fn=fake_view, edit_fn=fake_edit)
+        assert order == ["view", "search", "view"]
+        assert edited["body"] == "Edited meanwhile\n\n" + section
+
     def test_inject_raises_when_edit_fails(self):
         with pytest.raises(RuntimeError, match="edit"):
             vc.inject_context(1, "pm", tags=["x"],
