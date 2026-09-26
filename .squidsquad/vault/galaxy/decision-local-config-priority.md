@@ -8,6 +8,7 @@ status: active
 confidence: high
 source: code
 links: []
+last_optimized: 2026-09-26
 ---
 
 # Project-Local Config Is Authoritative Over Global Clone Store

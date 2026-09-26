@@ -8,6 +8,7 @@ status: active
 confidence: medium
 source: observation
 links: [code-conventions, decision-vault-remember-source-agnostic]
+last_optimized: 2026-09-26
 ---
 
 ## Overview

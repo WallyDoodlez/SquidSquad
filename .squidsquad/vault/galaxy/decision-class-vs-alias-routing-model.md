@@ -7,6 +7,7 @@ status: active
 confidence: high
 source: conversation
 owner: pm
+last_optimized: 2026-09-26
 ---
 
 # Decision — Class vs alias as routing primitive; no harness permission table

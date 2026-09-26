@@ -5,6 +5,7 @@ created: 2026-09-26
 updated: 2026-09-26
 status: active
 owner: worker
+last_optimized: 2026-09-26
 ---
 
 # Harness schedules; an agent judges
