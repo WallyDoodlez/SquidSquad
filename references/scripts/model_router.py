@@ -396,10 +396,15 @@ def _tool_grep(args):
         elif output_mode == "count":
             cmd.append("-c")
 
+        # Explicit UTF-8 (#14098): the locale default is cp1252 on Windows,
+        # where any unmappable byte in rg's output (the repo is full of
+        # em-dashes and smart quotes) killed the stdout reader thread and
+        # handed the reviewer a broken tool result.
         result = subprocess.run(
-            cmd, capture_output=True, text=True, check=False, timeout=30
+            cmd, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", check=False, timeout=30,
         )
-        output = result.stdout.strip()
+        output = (result.stdout or "").strip()
         if not output:
             return "No matches found."
         # Limit output
