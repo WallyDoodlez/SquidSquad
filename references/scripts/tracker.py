@@ -206,7 +206,9 @@ ROLE_AUTHORITY = {
     ("status:open", "status:pending-test"): {"_assignee"},
     ("status:approved", "status:in-progress"): {"_assignee"},
     ("status:in-progress", "status:pending-test"): {"_assignee"},
-    ("status:in-progress", "status:approved"): {"_assignee"},
+    # #14125: PM also holds this edge -- pipeline-sentinel Tier 1 returns a task
+    # held by a stalled/stopped agent to approved for re-pickup.
+    ("status:in-progress", "status:approved"): {"_assignee", "pm"},
     ("status:in-progress", "status:planning"): {"_assignee"},  # #6057 code review rejection
     ("status:in-progress", "status:pending-ship"): {"dm"},  # #6261: DM skips QA
 
