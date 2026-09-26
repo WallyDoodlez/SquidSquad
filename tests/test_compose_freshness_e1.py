@@ -101,6 +101,19 @@ class TestComputeChecksum:
             "tree checksum so E1 triggers a recompose at next boot"
         )
 
+    def test_line_endings_do_not_affect_checksum(self, tmp_path):
+        # core.autocrlf=true lets clones on the same commit hold the same file
+        # as LF in one checkout and CRLF in another. The boot check (primary)
+        # and the deploy bump (agent clone) must agree, or every harness boot
+        # sees drift and deploy-signals the whole team.
+        repo = _stage_minimal_repo(tmp_path)
+        cat = repo / "docs" / "sub-skill-catalog.md"
+        cat.write_bytes(b"# catalog\nline two\n")
+        a = cf.compute_compose_checksum(repo)
+        cat.write_bytes(b"# catalog\r\nline two\r\n")
+        b = cf.compute_compose_checksum(repo)
+        assert a == b, "CRLF vs LF checkouts must hash identically"
+
     def test_unrelated_file_does_not_affect_checksum(self, tmp_path):
         repo = _stage_minimal_repo(tmp_path)
         a = cf.compute_compose_checksum(repo)

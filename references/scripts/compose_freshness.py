@@ -171,7 +171,13 @@ def compute_compose_checksum(repo_root):
     rel_paths.sort(key=lambda t: t[0])
     for rel, path in rel_paths:
         try:
-            content = path.read_bytes()
+            # Normalize CRLF -> LF so the checksum is checkout-independent. With
+            # core.autocrlf=true, two clones on the same commit can hold the same
+            # file with different line endings (git sees no change); hashing raw
+            # bytes made the primary's boot checksum never match the clone-side
+            # checksum the deploy path stores → drift on EVERY harness boot →
+            # deploy-signal halts + respawns the whole team each start.
+            content = path.read_bytes().replace(b"\r\n", b"\n")
         except OSError:
             continue
         h.update(rel.encode("utf-8"))
