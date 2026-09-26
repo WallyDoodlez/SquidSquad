@@ -2838,6 +2838,11 @@ VAULT_MAINTENANCE_CHECK_INTERVAL = 600  # seconds between due-checks
 VAULT_MAINTENANCE_INITIAL_DELAY = 300  # let boot/respawn churn settle first
 VAULT_OPTIMIZE_INTERVAL_HOURS_DEFAULT = 24
 VAULT_OPTIMIZE_CUTOFF_DAYS = 14  # VAULT-ARCH 7.3 / 9.6
+# #14137: vault-synthesis rides the same window. Its signal fires at most once
+# per this many days (config `Vault Optimize > Synthesis Interval Days`), and
+# never more often than weekly (values below the floor are clamped up).
+VAULT_SYNTHESIS_INTERVAL_DAYS_DEFAULT = 7
+VAULT_SYNTHESIS_INTERVAL_DAYS_MIN = 7
 _vault_maintenance_lock = threading.Lock()
 
 
@@ -2852,6 +2857,30 @@ def _vault_optimize_interval_hours() -> float:
     except (SystemExit, Exception):
         pass
     return float(VAULT_OPTIMIZE_INTERVAL_HOURS_DEFAULT)
+
+
+def _vault_synthesis_interval_days() -> float:
+    """``Vault Optimize > Synthesis Interval Days`` from config.md (#14137),
+    default 7, clamped to the weekly floor so synthesis never runs tighter
+    than once a week."""
+    days = float(VAULT_SYNTHESIS_INTERVAL_DAYS_DEFAULT)
+    try:
+        import config as _cfg
+        parsed = float(_cfg.get_field("vault-synthesis-interval-days"))
+        if parsed > 0:
+            days = parsed
+    except (SystemExit, Exception):
+        pass
+    return max(days, float(VAULT_SYNTHESIS_INTERVAL_DAYS_MIN))
+
+
+def _vault_synthesis_due(state_data, now) -> bool:
+    """#14137: True when no synthesis signal was sent yet, or the last one is
+    at least the synthesis interval old."""
+    last = state_data.get("last_synthesis_signal_at")
+    if not isinstance(last, (int, float)):
+        return True
+    return now - last >= _vault_synthesis_interval_days() * 86400
 
 
 def _read_vault_maintenance_state() -> dict:
@@ -2881,9 +2910,17 @@ def _vault_maintenance_next_due(state_data=None) -> float:
     return last + _vault_optimize_interval_hours() * 3600
 
 
-def run_vault_maintenance_window(force=False, now=None) -> dict:
+def run_vault_maintenance_window(force=False, now=None,
+                                 force_synthesis=False) -> dict:
     """Run one maintenance window if due (or ``force``). Returns the result
     that is also persisted as ``last_result``.
+
+    #14137: the window also decides whether vault-synthesis is due (weekly at
+    most, see _vault_synthesis_due; ``force_synthesis`` overrides it and also
+    runs a window that is not otherwise due). The single
+    ``vault-maintenance`` event to pm carries ``synthesis_due``; it is emitted
+    when notes are queued for optimize OR synthesis is due. The harness only
+    schedules: the PM's sub-skill still judges (vault size, recent writes).
 
     Any completed attempt -- including an analyze-queue failure -- advances
     ``last_window_at``, so a broken vault retries next interval instead of
@@ -2893,10 +2930,12 @@ def run_vault_maintenance_window(force=False, now=None) -> dict:
     with _vault_maintenance_lock:
         now = time.time() if now is None else now
         data = _read_vault_maintenance_state()
-        if not force and now < _vault_maintenance_next_due(data):
+        if not (force or force_synthesis) and now < _vault_maintenance_next_due(data):
             return {"ran": False, "reason": "not due",
                     "next_due_at": _vault_maintenance_next_due(data)}
         result = {"ran": True, "at": now, "forced": bool(force), "emitted": None}
+        synthesis_due = bool(force_synthesis) or _vault_synthesis_due(data, now)
+        result["synthesis_due"] = synthesis_due
         proc = None
         try:
             proc = subprocess.run(
@@ -2917,20 +2956,27 @@ def run_vault_maintenance_window(force=False, now=None) -> dict:
         else:
             result["total_due"] = queue.get("total_due", 0)
             result["queued"] = len(queue.get("queue", []))
-            if result["queued"]:
-                pm_alias = ExternalActivityDetector._alias_for_role_class("pm")
-                event = _emit_event("vault-maintenance", "harness", payload={
-                    "target_alias": pm_alias,
-                    "event_context": "vault-maintenance",
-                    "total_due": result["total_due"],
-                    "queued": result["queued"],
-                    "cutoff_days": VAULT_OPTIMIZE_CUTOFF_DAYS,
-                })
-                result["emitted"] = {"event_id": event["id"], "target_alias": pm_alias}
-                _log(f"Vault maintenance window: {result['total_due']} note(s) due "
-                     f"-> vault-maintenance event to {pm_alias}")
-            else:
-                _log("Vault maintenance window: no notes due -- nothing to analyze")
+        # #14137: one event covers both jobs. An analyze failure blocks only the
+        # optimize half (queued stays 0); a due synthesis still goes out.
+        if result.get("queued") or synthesis_due:
+            pm_alias = ExternalActivityDetector._alias_for_role_class("pm")
+            event = _emit_event("vault-maintenance", "harness", payload={
+                "target_alias": pm_alias,
+                "event_context": "vault-maintenance",
+                "total_due": result.get("total_due", 0),
+                "queued": result.get("queued", 0),
+                "cutoff_days": VAULT_OPTIMIZE_CUTOFF_DAYS,
+                "synthesis_due": synthesis_due,
+            })
+            result["emitted"] = {"event_id": event["id"], "target_alias": pm_alias}
+            if synthesis_due:
+                data["last_synthesis_signal_at"] = now
+            _log(f"Vault maintenance window: {result.get('total_due', 0)} note(s) "
+                 f"due, synthesis_due={synthesis_due} -> vault-maintenance "
+                 f"event to {pm_alias}")
+        elif queue is not None:
+            _log("Vault maintenance window: no notes due, synthesis not due "
+                 "-- nothing to do")
         data["last_window_at"] = now
         data["last_result"] = result
         _write_vault_maintenance_state(data)
@@ -3417,15 +3463,19 @@ async def get_vault_maintenance():
         "cutoff_days": VAULT_OPTIMIZE_CUTOFF_DAYS,
         "last_window_at": data.get("last_window_at"),
         "next_due_at": _vault_maintenance_next_due(data),
+        "synthesis_interval_days": _vault_synthesis_interval_days(),
+        "last_synthesis_signal_at": data.get("last_synthesis_signal_at"),
         "last_result": data.get("last_result"),
     }
 
 
 @app.post("/maintenance/vault-optimize")
-async def post_vault_maintenance():
+async def post_vault_maintenance(synthesis: bool = False):
     """Force a vault maintenance window now (#13861 S5.1) -- operator or
-    verifier trigger; the scheduler's cadence restarts from this window."""
-    return await asyncio.to_thread(run_vault_maintenance_window, True)
+    verifier trigger; the scheduler's cadence restarts from this window.
+    ``?synthesis=true`` also forces the synthesis signal (#14137)."""
+    return await asyncio.to_thread(
+        run_vault_maintenance_window, True, None, synthesis)
 
 
 @app.get("/")

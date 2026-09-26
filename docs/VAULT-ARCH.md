@@ -487,7 +487,7 @@ The engine itself is *not* a sub-skill — see §7.5 for how sub-skills reach it
 
 ### 7.4 vault-synthesis — cross-agent patterns
 
-Kept from v1: PM-lane, fires on sustained quiet, proposes cross-agent posture patterns, human-gated before becoming active guidance. Output target updated per §3.2: a synthesized posture lands as a `systems/` hub note or `pattern-*` note (the `pattern-posture-*` subtype is retired).
+Kept from v1: PM-lane, proposes cross-agent posture patterns, human-gated before becoming active guidance. Trigger (#14137): the harness maintenance window (§9.6) flags `synthesis_due` on its `vault-maintenance` event at most once a week (`Vault Optimize > Synthesis Interval Days`, floor 7). The v1 quiet-cycle counter never fired in event mode. During a vault write freeze it drafts the posture into the pending review task and makes no vault writes. Output target updated per §3.2: a synthesized posture lands as a `systems/` hub note or `pattern-*` note (the `pattern-posture-*` subtype is retired).
 
 ### 7.5 Engine packaging & invocation
 
